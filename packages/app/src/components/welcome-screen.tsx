@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Pressable, Text, View, ScrollView } from "react-native";
 import { useRouter } from "expo-router";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
-import { QrCode, Link2, ClipboardPaste, ExternalLink, Settings } from "lucide-react-native";
+import { Link2, ClipboardPaste, Settings } from "lucide-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { HostProfile } from "@/types/host-connection";
 import { getHostRuntimeStore, isHostRuntimeConnected, useHosts } from "@/runtime/host-runtime";
@@ -11,19 +11,15 @@ import { AddHostModal } from "./add-host-modal";
 import { PairLinkModal } from "./pair-link-modal";
 import { Button } from "@/components/ui/button";
 import { resolveAppVersion } from "@/utils/app-version";
-import { formatVersionWithPrefix } from "@/desktop/updates/desktop-updates";
 import { buildOpenProjectRoute } from "@/utils/host-routes";
 import { PaseoLogo } from "@/components/icons/paseo-logo";
-import { openExternalUrl } from "@/utils/open-external-url";
-import { isFdroidBuild } from "@/constants/build-profile";
-import { isWeb, isNative } from "@/constants/platform";
 
 interface WelcomeAction {
-  key: "scan-qr" | "direct-connection" | "paste-pairing-link";
+  key: "direct-connection" | "paste-pairing-link";
   label: string;
   testID: string;
   primary: boolean;
-  icon: typeof QrCode;
+  icon: typeof Link2;
   onPress: () => void;
 }
 
@@ -163,7 +159,7 @@ export function WelcomeScreen({ onHostAdded }: WelcomeScreenProps) {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const appVersion = resolveAppVersion();
-  const appVersionText = formatVersionWithPrefix(appVersion);
+  const appVersionText = appVersion ? `v${appVersion}` : "";
   const [isDirectOpen, setIsDirectOpen] = useState(false);
   const [isPasteLinkOpen, setIsPasteLinkOpen] = useState(false);
   const hosts = useHosts();
@@ -178,10 +174,6 @@ export function WelcomeScreen({ onHostAdded }: WelcomeScreenProps) {
     router.replace(buildOpenProjectRoute());
   }, [router]);
 
-  const handleOpenPaseoSite = useCallback(() => {
-    void openExternalUrl("https://paseo.sh");
-  }, []);
-
   const handleOpenSettings = useCallback(() => {
     router.push("/settings");
   }, [router]);
@@ -190,9 +182,6 @@ export function WelcomeScreen({ onHostAdded }: WelcomeScreenProps) {
   const handleCloseDirect = useCallback(() => setIsDirectOpen(false), []);
   const handleOpenPasteLink = useCallback(() => setIsPasteLinkOpen(true), []);
   const handleClosePasteLink = useCallback(() => setIsPasteLinkOpen(false), []);
-  const handleScanQr = useCallback(() => {
-    router.push("/pair-scan?source=onboarding");
-  }, [router]);
 
   const handleHostSaved = useCallback(
     ({ profile }: { profile: HostProfile; serverId: string }) => {
@@ -202,52 +191,24 @@ export function WelcomeScreen({ onHostAdded }: WelcomeScreenProps) {
     [onHostAdded, finishOnboarding],
   );
 
-  const actions: WelcomeAction[] =
-    isWeb || isFdroidBuild
-      ? [
-          {
-            key: "direct-connection",
-            label: t("pairing.connectionMethods.direct.title"),
-            testID: "welcome-direct-connection",
-            primary: true,
-            icon: Link2,
-            onPress: handleOpenDirect,
-          },
-          {
-            key: "paste-pairing-link",
-            label: t("pairing.connectionMethods.pasteLink.title"),
-            testID: "welcome-paste-pairing-link",
-            primary: false,
-            icon: ClipboardPaste,
-            onPress: handleOpenPasteLink,
-          },
-        ]
-      : [
-          {
-            key: "scan-qr",
-            label: t("pairing.connectionMethods.scanQr.title"),
-            testID: "welcome-scan-qr",
-            primary: true,
-            icon: QrCode,
-            onPress: handleScanQr,
-          },
-          {
-            key: "direct-connection",
-            label: t("pairing.connectionMethods.direct.title"),
-            testID: "welcome-direct-connection",
-            primary: false,
-            icon: Link2,
-            onPress: handleOpenDirect,
-          },
-          {
-            key: "paste-pairing-link",
-            label: t("pairing.connectionMethods.pasteLink.title"),
-            testID: "welcome-paste-pairing-link",
-            primary: false,
-            icon: ClipboardPaste,
-            onPress: handleOpenPasteLink,
-          },
-        ];
+  const actions: WelcomeAction[] = [
+    {
+      key: "direct-connection",
+      label: t("pairing.connectionMethods.direct.title"),
+      testID: "welcome-direct-connection",
+      primary: true,
+      icon: Link2,
+      onPress: handleOpenDirect,
+    },
+    {
+      key: "paste-pairing-link",
+      label: t("pairing.connectionMethods.pasteLink.title"),
+      testID: "welcome-paste-pairing-link",
+      primary: false,
+      icon: ClipboardPaste,
+      onPress: handleOpenPasteLink,
+    },
+  ];
 
   const scrollContentContainerStyle = useMemo(
     () => [styles.container, { paddingBottom: theme.spacing[6] + insets.bottom }],
@@ -267,12 +228,6 @@ export function WelcomeScreen({ onHostAdded }: WelcomeScreenProps) {
           <View style={styles.copyBlock}>
             <Text style={styles.title}>{t("onboarding.title")}</Text>
             <Text style={styles.subtitle}>{t("onboarding.subtitle")}</Text>
-            {isNative ? (
-              <Pressable style={styles.setupLink} onPress={handleOpenPaseoSite}>
-                <Text style={styles.setupLinkText}>paseo.sh</Text>
-                <ExternalLink size={14} color={theme.colors.accent} />
-              </Pressable>
-            ) : null}
           </View>
 
           <View style={styles.actions}>

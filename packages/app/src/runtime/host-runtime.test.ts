@@ -20,10 +20,6 @@ import {
   type HostRuntimeStorage,
 } from "./host-runtime";
 
-vi.mock("@/browser-automation/handler", () => ({
-  mountBrowserAutomationDaemonClientHandler: vi.fn(() => () => undefined),
-}));
-
 class FakeDaemonClient {
   private state: ConnectionState = { status: "idle" };
   private listeners = new Set<(status: ConnectionState) => void>();

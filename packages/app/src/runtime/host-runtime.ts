@@ -24,7 +24,6 @@ import {
 } from "@/utils/daemon-endpoints";
 import { resolveAppVersion } from "@/utils/app-version";
 import { ConnectionOfferSchema, type ConnectionOffer } from "@getpaseo/protocol/connection-offer";
-import { shouldUseDesktopDaemon } from "@/desktop/daemon/desktop-daemon";
 import { isWeb } from "@/constants/platform";
 import { connectToDaemon } from "@/utils/test-daemon-connection";
 import { getOrCreateClientId } from "@/utils/client-id";
@@ -33,13 +32,6 @@ import {
   type ConnectionCandidate,
   type ConnectionProbeState,
 } from "@/utils/connection-selection";
-import {
-  buildLocalDaemonTransportUrl,
-  createDesktopLocalDaemonTransportFactory,
-} from "@/desktop/daemon/desktop-daemon-transport";
-import { getDesktopHost } from "@/desktop/host";
-import { CLIENT_CAPS } from "@getpaseo/protocol/client-capabilities";
-import { BROWSER_AUTOMATION_COMMAND_NAMES } from "@getpaseo/protocol/browser-automation/rpc-schemas";
 import { replaceFetchedAgentDirectory } from "@/utils/agent-directory-sync";
 import { useSessionStore } from "@/stores/session-store";
 import {
@@ -52,7 +44,6 @@ import {
   invalidateServerDataQueriesAfterReconnect,
   mountServerDataPushRouter,
 } from "@/data/push-router";
-import { mountBrowserAutomationDaemonClientHandler } from "@/browser-automation/handler";
 import { schedulesQueryBaseKey } from "@/schedules/aggregated-schedules";
 
 export type HostRuntimeConnectionStatus = "idle" | "connecting" | "online" | "offline" | "error";
@@ -528,37 +519,17 @@ function probeIntervalForConnection(
 }
 
 function createDefaultDeps(): HostRuntimeControllerDeps {
-  const browserHostAvailable =
-    typeof getDesktopHost()?.browser?.executeAutomationCommand === "function";
-  const browserAutomationCapabilities = browserHostAvailable
-    ? {
-        [CLIENT_CAPS.browserHost]: {
-          supportedCommands: [...BROWSER_AUTOMATION_COMMAND_NAMES],
-          hostKind: "desktop app",
-        },
-      }
-    : undefined;
-
   return {
     createClient: ({ host, connection, clientId, runtimeGeneration }) => {
-      const localTransportFactory = createDesktopLocalDaemonTransportFactory();
       const base = {
         suppressSendErrors: true,
         clientId,
-        clientType: "mobile" as const,
+        clientType: "browser" as const,
         appVersion: resolveAppVersion() ?? undefined,
         runtimeGeneration,
-        ...(browserAutomationCapabilities ? { capabilities: browserAutomationCapabilities } : {}),
       };
       if (connection.type === "directSocket" || connection.type === "directPipe") {
-        return new DaemonClient({
-          ...base,
-          ...(localTransportFactory ? { transportFactory: localTransportFactory } : {}),
-          url: buildLocalDaemonTransportUrl({
-            transportType: connection.type === "directSocket" ? "socket" : "pipe",
-            transportPath: connection.path,
-          }),
-        });
+        throw new Error("Local socket connections are unavailable in the browser client");
       }
       if (connection.type === "directTcp") {
         return new DaemonClient({
@@ -576,36 +547,17 @@ function createDefaultDeps(): HostRuntimeControllerDeps {
           useTls: connection.useTls ?? shouldUseTlsForDefaultHostedRelay(connection.relayEndpoint),
           serverId: host.serverId,
         }),
-        e2ee: {
-          enabled: true,
-          daemonPublicKeyB64: connection.daemonPublicKeyB64,
-        },
+        e2ee: { enabled: true, daemonPublicKeyB64: connection.daemonPublicKeyB64 },
       });
     },
     connectToDaemon: ({ host, connection, timeoutMs }) =>
       connectToDaemon(connection, {
         ...(host.serverId ? { serverId: host.serverId } : {}),
         ...(timeoutMs !== undefined ? { timeoutMs } : {}),
-        ...(browserAutomationCapabilities ? { capabilities: browserAutomationCapabilities } : {}),
       }),
     getClientId: () => getOrCreateClientId(),
-    mountClientHandlers: ({ client, host }) => {
-      const unmountServerData = mountServerDataPushRouter({
-        client,
-        queryClient,
-        serverId: host.serverId,
-      });
-      if (!browserAutomationCapabilities) {
-        return unmountServerData;
-      }
-      const unmountBrowserAutomation = mountBrowserAutomationDaemonClientHandler(client, {
-        serverId: host.serverId,
-      });
-      return () => {
-        unmountBrowserAutomation();
-        unmountServerData();
-      };
-    },
+    mountClientHandlers: ({ client, host }) =>
+      mountServerDataPushRouter({ client, queryClient, serverId: host.serverId }),
   };
 }
 
@@ -1460,10 +1412,6 @@ export class HostRuntimeStore {
       return;
     }
     if (isE2E) {
-      return;
-    }
-
-    if (shouldUseDesktopDaemon()) {
       return;
     }
 

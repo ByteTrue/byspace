@@ -220,7 +220,6 @@ const disabledCodexEntry: ProviderSnapshotEntry = {
 function makeConfig(providers: MutableDaemonConfig["providers"] = {}): MutableDaemonConfig {
   return {
     mcp: { injectIntoAgents: false },
-    browserTools: { enabled: false },
     providers,
     metadataGeneration: { providers: [] },
     autoArchiveAfterMerge: false,

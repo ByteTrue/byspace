@@ -36,8 +36,6 @@ import { HEADER_INNER_HEIGHT } from "@/constants/layout";
 import { GitDiffPane } from "@/git/diff-pane";
 import { FileExplorerPane } from "./file-explorer-pane";
 import { useKeyboardShiftStyle } from "@/hooks/use-keyboard-shift-style";
-import { useWindowControlsPadding } from "@/utils/desktop-window";
-import { TitlebarDragRegion } from "@/components/desktop/titlebar-drag-region";
 import { RetainedPanelActivity } from "@/components/retained-panel";
 import { isWeb } from "@/constants/platform";
 import { buildWorkspaceAttachmentScopeKey } from "@/attachments/workspace-attachments-store";
@@ -300,7 +298,6 @@ function ExplorerSidebarContent({
   const { theme } = useUnistyles();
   const { t } = useTranslation();
   const toast = useToast();
-  const padding = useWindowControlsPadding("explorerSidebar");
   const canQueryPullRequest = isGit && Boolean(workspaceRoot);
   const prPane = usePrPaneData({
     serverId,
@@ -325,16 +322,12 @@ function ExplorerSidebarContent({
     [serverId, workspaceId, workspaceRoot],
   );
 
-  const headerStyle = useMemo(
-    () => [styles.header, { paddingRight: padding.right }],
-    [padding.right],
-  );
+  const headerStyle = styles.header;
 
   return (
     <View style={styles.sidebarContent} pointerEvents="auto">
       {/* Header with tabs and close button */}
       <View style={headerStyle} testID="explorer-header">
-        <TitlebarDragRegion />
         <View style={styles.tabsContainer}>
           {isGit && (
             <ExplorerTabButton

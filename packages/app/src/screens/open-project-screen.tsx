@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { View, Text, Pressable } from "react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { useRouter } from "expo-router";
-import { FolderOpen, Inbox, Plug, Smartphone } from "lucide-react-native";
+import { FolderOpen, Inbox, Plug } from "lucide-react-native";
 import { PaseoLogo } from "@/components/icons/paseo-logo";
 import { CommunityLinks } from "@/components/community-links";
 import { MenuHeader } from "@/components/headers/menu-header";
@@ -16,9 +16,6 @@ import {
   HEADER_INNER_HEIGHT_MOBILE,
   HEADER_TOP_PADDING_MOBILE,
 } from "@/constants/layout";
-import { TitlebarDragRegion } from "@/components/desktop/titlebar-drag-region";
-import { useLocalDaemonServerId } from "@/hooks/use-is-local-daemon";
-import { PairDeviceModal } from "@/desktop/components/pair-device-modal";
 import { buildHostAgentDetailRoute, buildSettingsHostSectionRoute } from "@/utils/host-routes";
 import { ImportSessionSheet } from "@/components/import-session-sheet";
 import { useHostRuntimeClient } from "@/runtime/host-runtime";
@@ -31,11 +28,9 @@ export function OpenProjectScreen() {
   const openDesktopAgentList = usePanelStore((s) => s.openDesktopAgentList);
   const openProjectPicker = useOpenProjectPicker();
   const chooseHost = useHostChooser();
-  const localServerId = useLocalDaemonServerId();
   const [importServerId, setImportServerId] = useState<string | null>(null);
   const importClient = useHostRuntimeClient(importServerId ?? "");
   const openImportedProject = useOpenProject(importServerId);
-  const [isPairDeviceOpen, setIsPairDeviceOpen] = useState(false);
   const [isImportSheetOpen, setIsImportSheetOpen] = useState(false);
 
   const isCompactLayout = useIsCompactFormFactor();
@@ -49,9 +44,6 @@ export function OpenProjectScreen() {
   const handleOpenPicker = useCallback(() => {
     void openProjectPicker();
   }, [openProjectPicker]);
-
-  const handleOpenPairDevice = useCallback(() => setIsPairDeviceOpen(true), []);
-  const handleClosePairDevice = useCallback(() => setIsPairDeviceOpen(false), []);
 
   const handleOpenImportSession = useCallback(() => {
     chooseHost({
@@ -90,7 +82,6 @@ export function OpenProjectScreen() {
     <View style={styles.container}>
       <MenuHeader borderless />
       <View style={styles.content}>
-        <TitlebarDragRegion />
         <View style={styles.logo}>
           <PaseoLogo size={52} />
         </View>
@@ -117,25 +108,11 @@ export function OpenProjectScreen() {
             onPress={handleOpenProviders}
             testID="open-project-setup-providers"
           />
-          {localServerId ? (
-            <HomeTile
-              icon={Smartphone}
-              title={t("openProject.tiles.pairDevice.title")}
-              description={t("openProject.tiles.pairDevice.description")}
-              onPress={handleOpenPairDevice}
-              testID="open-project-pair-device"
-            />
-          ) : null}
         </View>
       </View>
       <View style={styles.communityRow}>
         <CommunityLinks />
       </View>
-      <PairDeviceModal
-        visible={isPairDeviceOpen}
-        onClose={handleClosePairDevice}
-        testID="open-project-pair-device-modal"
-      />
       <ImportSessionSheet
         visible={isImportSheetOpen}
         client={importClient}

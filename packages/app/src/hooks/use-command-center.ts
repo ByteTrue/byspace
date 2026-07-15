@@ -16,7 +16,6 @@ import { chordStringToShortcutKeys } from "@/keyboard/shortcut-string";
 import { getBindingIdForAction, getDefaultKeysForAction } from "@/keyboard/keyboard-shortcuts";
 import { useKeyboardShortcutOverrides } from "@/hooks/use-keyboard-shortcut-overrides";
 import { getShortcutOs } from "@/utils/shortcut-platform";
-import { getIsElectronRuntime } from "@/constants/layout";
 import { navigateToAgent } from "@/utils/navigate-to-agent";
 import { focusWithRetries } from "@/utils/web-focus";
 import { isWeb } from "@/constants/platform";
@@ -124,8 +123,7 @@ function resolveActionShortcutKeys(
 ): ShortcutKey[][] | undefined {
   if (!actionId) return undefined;
   const isMac = getShortcutOs() === "mac";
-  const isDesktopApp = getIsElectronRuntime();
-  const platform = { isMac, isDesktop: isDesktopApp };
+  const platform = { isMac, isDesktop: false };
   const bindingId = getBindingIdForAction(actionId, platform);
   if (!bindingId) return undefined;
   const override = overrides[bindingId];

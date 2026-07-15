@@ -21,7 +21,6 @@ export type WorkspaceTabTarget =
   | { kind: "agent"; agentId: string }
   | { kind: "provider_subagent"; parentAgentId: string; subagentId: string }
   | { kind: "terminal"; terminalId: string }
-  | { kind: "browser"; browserId: string }
   | WorkspaceFileTabTarget
   | { kind: "setup"; workspaceId: string };
 
@@ -522,9 +521,6 @@ function coerceWorkspaceTabTarget(raw: Record<string, unknown>): WorkspaceTabTar
   }
   if (kind === "terminal" && typeof raw.terminalId === "string") {
     return normalizeWorkspaceTabTarget({ kind: "terminal", terminalId: raw.terminalId });
-  }
-  if (kind === "browser" && typeof raw.browserId === "string") {
-    return normalizeWorkspaceTabTarget({ kind: "browser", browserId: raw.browserId });
   }
   if (kind === "file" && typeof raw.path === "string") {
     return normalizeWorkspaceTabTarget({

@@ -14,23 +14,14 @@ import {
   saveAppSettings,
   type SettingsDeps,
 } from "./storage";
-import { createFakeDesktopBridge, createInMemoryKeyValueStorage } from "./fakes";
+import { createInMemoryKeyValueStorage } from "./fakes";
 
 const LEGACY_SETTINGS_KEY = "@paseo:settings";
 
 function makeDeps(
-  overrides: {
-    storage?: ReturnType<typeof createInMemoryKeyValueStorage>;
-    desktop?: ReturnType<typeof createFakeDesktopBridge>;
-  } = {},
-): SettingsDeps & {
-  storage: ReturnType<typeof createInMemoryKeyValueStorage>;
-  desktop: ReturnType<typeof createFakeDesktopBridge>;
-} {
-  return {
-    storage: overrides.storage ?? createInMemoryKeyValueStorage(),
-    desktop: overrides.desktop ?? createFakeDesktopBridge(),
-  };
+  overrides: { storage?: ReturnType<typeof createInMemoryKeyValueStorage> } = {},
+): SettingsDeps & { storage: ReturnType<typeof createInMemoryKeyValueStorage> } {
+  return { storage: overrides.storage ?? createInMemoryKeyValueStorage() };
 }
 
 describe("loadAppSettingsFromStorage", () => {
@@ -170,94 +161,6 @@ describe("loadSettingsFromStorage", () => {
     const result = await loadSettingsFromStorage(deps);
 
     expect(result).toEqual(DEFAULT_APP_SETTINGS);
-  });
-
-  it("defaults release channel to stable when storage is empty", async () => {
-    const deps = makeDeps();
-
-    const result = await loadSettingsFromStorage(deps);
-
-    expect(result.releaseChannel).toBe("stable");
-  });
-
-  it("ignores renderer-owned daemon management state outside Electron", async () => {
-    const deps = makeDeps({
-      storage: createInMemoryKeyValueStorage({
-        [APP_SETTINGS_KEY]: JSON.stringify({
-          theme: "light",
-          manageBuiltInDaemon: false,
-        }),
-      }),
-    });
-
-    const result = await loadSettingsFromStorage(deps);
-
-    expect(result).toEqual({
-      ...DEFAULT_APP_SETTINGS,
-      theme: "light",
-    });
-  });
-
-  it("ignores renderer-owned release channel outside Electron", async () => {
-    const deps = makeDeps({
-      storage: createInMemoryKeyValueStorage({
-        [APP_SETTINGS_KEY]: JSON.stringify({ releaseChannel: "beta" }),
-      }),
-    });
-
-    const result = await loadSettingsFromStorage(deps);
-
-    expect(result.releaseChannel).toBe("stable");
-  });
-
-  it("migrates legacy desktop-owned settings through the bridge before reading effective settings", async () => {
-    const desktop = createFakeDesktopBridge({
-      isElectron: true,
-      settings: {
-        releaseChannel: "beta",
-        daemon: { manageBuiltInDaemon: false, keepRunningAfterQuit: true },
-      },
-    });
-    const deps = makeDeps({
-      storage: createInMemoryKeyValueStorage({
-        [APP_SETTINGS_KEY]: JSON.stringify({
-          theme: "light",
-          manageBuiltInDaemon: false,
-          releaseChannel: "beta",
-        }),
-      }),
-      desktop,
-    });
-
-    const result = await loadSettingsFromStorage(deps);
-
-    expect(desktop.migrationsApplied).toEqual([
-      { manageBuiltInDaemon: false, releaseChannel: "beta" },
-    ]);
-    expect(result).toEqual({
-      ...DEFAULT_APP_SETTINGS,
-      theme: "light",
-      manageBuiltInDaemon: false,
-      releaseChannel: "beta",
-    });
-  });
-
-  it("does not call the desktop bridge outside Electron", async () => {
-    const desktop = createFakeDesktopBridge({ isElectron: false });
-    const deps = makeDeps({
-      storage: createInMemoryKeyValueStorage({
-        [APP_SETTINGS_KEY]: JSON.stringify({ theme: "light" }),
-      }),
-      desktop,
-    });
-
-    const result = await loadSettingsFromStorage(deps);
-
-    expect(desktop.migrationsApplied).toEqual([]);
-    expect(result).toEqual({
-      ...DEFAULT_APP_SETTINGS,
-      theme: "light",
-    });
   });
 });
 

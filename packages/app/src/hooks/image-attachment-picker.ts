@@ -1,6 +1,3 @@
-import type { DesktopDialogBridge } from "@/desktop/host";
-import { RASTER_IMAGE_FILE_EXTENSIONS } from "@/attachments/file-types";
-import { i18n } from "@/i18n/i18next";
 import { isAbsolutePath } from "@/utils/path";
 
 export type PickedImageSource = { kind: "file_uri"; uri: string } | { kind: "blob"; blob: Blob };
@@ -58,34 +55,4 @@ export async function normalizePickedImageAssets(
       };
     }),
   );
-}
-
-function normalizeDesktopDialogSelection(selection: string | string[] | null): string[] {
-  if (!selection) {
-    return [];
-  }
-  return Array.isArray(selection) ? selection : [selection];
-}
-
-export async function openImagePathsWithDesktopDialog(
-  dialog: DesktopDialogBridge | null | undefined,
-): Promise<string[]> {
-  const options = {
-    directory: false,
-    multiple: true,
-    filters: [
-      {
-        name: i18n.t("imageAttachmentPicker.dialogFilterName"),
-        extensions: RASTER_IMAGE_FILE_EXTENSIONS,
-      },
-    ],
-    title: i18n.t("imageAttachmentPicker.dialogTitle"),
-  };
-
-  const dialogOpen = dialog?.open;
-  if (typeof dialogOpen !== "function") {
-    throw new Error("Desktop dialog API is not available.");
-  }
-
-  return normalizeDesktopDialogSelection(await dialogOpen(options));
 }

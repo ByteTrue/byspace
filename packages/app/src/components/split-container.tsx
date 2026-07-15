@@ -33,8 +33,6 @@ import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { ResizeHandle } from "@/components/resize-handle";
 import { RetainedPanel } from "@/components/retained-panel";
 import { shouldFocusPaneFromEventTarget } from "@/components/split-container-pane-focus";
-import { useWindowControlsPadding } from "@/utils/desktop-window";
-import { TitlebarDragRegion } from "@/components/desktop/titlebar-drag-region";
 import {
   computeTabDropPreview,
   type TabDropPreview,
@@ -96,8 +94,6 @@ interface SplitContainerProps {
   onCloseOtherTabs: (tabId: string, paneTabs: WorkspaceTabDescriptor[]) => Promise<void> | void;
   onCreateDraftTab: (input: { paneId?: string }) => void;
   onCreateTerminalTab: (input: { paneId?: string; profile?: TerminalProfileInput }) => void;
-  onCreateBrowserTab: (input: { paneId?: string }) => void;
-  showCreateBrowserTab?: boolean;
   buildPaneContentModel: (input: {
     paneId: string;
     tab: WorkspaceTabDescriptor;
@@ -371,8 +367,6 @@ export function SplitContainer({
   onCloseOtherTabs,
   onCreateDraftTab,
   onCreateTerminalTab,
-  onCreateBrowserTab,
-  showCreateBrowserTab,
   buildPaneContentModel,
   onFocusPane,
   onSplitPane,
@@ -588,8 +582,6 @@ export function SplitContainer({
           onCloseOtherTabs={onCloseOtherTabs}
           onCreateDraftTab={onCreateDraftTab}
           onCreateTerminalTab={onCreateTerminalTab}
-          onCreateBrowserTab={onCreateBrowserTab}
-          showCreateBrowserTab={showCreateBrowserTab}
           buildPaneContentModel={buildPaneContentModel}
           onFocusPane={onFocusPane}
           onSplitPane={onSplitPane}
@@ -731,8 +723,6 @@ function SplitNodeView({
   onCloseOtherTabs,
   onCreateDraftTab,
   onCreateTerminalTab,
-  onCreateBrowserTab,
-  showCreateBrowserTab,
   buildPaneContentModel,
   onFocusPane,
   onSplitPane,
@@ -784,8 +774,6 @@ function SplitNodeView({
         onCloseOtherTabs={onCloseOtherTabs}
         onCreateDraftTab={onCreateDraftTab}
         onCreateTerminalTab={onCreateTerminalTab}
-        onCreateBrowserTab={onCreateBrowserTab}
-        showCreateBrowserTab={showCreateBrowserTab}
         buildPaneContentModel={buildPaneContentModel}
         onFocusPane={onFocusPane}
         onSplitPane={onSplitPane}
@@ -830,8 +818,6 @@ function SplitNodeView({
               onCloseOtherTabs={onCloseOtherTabs}
               onCreateDraftTab={onCreateDraftTab}
               onCreateTerminalTab={onCreateTerminalTab}
-              onCreateBrowserTab={onCreateBrowserTab}
-              showCreateBrowserTab={showCreateBrowserTab}
               buildPaneContentModel={buildPaneContentModel}
               onFocusPane={onFocusPane}
               onSplitPane={onSplitPane}
@@ -882,8 +868,6 @@ function SplitPaneView({
   onCloseOtherTabs,
   onCreateDraftTab,
   onCreateTerminalTab,
-  onCreateBrowserTab,
-  showCreateBrowserTab,
   buildPaneContentModel,
   onFocusPane,
   onSplitPane: _onSplitPane,
@@ -898,7 +882,6 @@ function SplitPaneView({
   const { theme: _theme } = useUnistyles();
   const paneRef = useRef<View | null>(null);
   const stableOnFocusPane = useStableEvent(onFocusPane);
-  const padding = useWindowControlsPadding("tabRow");
   const paneState = useMemo(
     () =>
       deriveWorkspacePaneState({
@@ -995,16 +978,12 @@ function SplitPaneView({
     () => onSplitPaneEmpty({ targetPaneId: paneId, position: "bottom" }),
     [onSplitPaneEmpty, paneId],
   );
-  const paneTabsStyle = useMemo(
-    () => [styles.paneTabs, { paddingLeft: padding.left, paddingRight: padding.right }],
-    [padding.left, padding.right],
-  );
+  const paneTabsStyle = styles.paneTabs;
 
   return (
     <RenderProfile id={`SplitPaneView:${pane.id}`}>
       <View ref={paneRef} collapsable={false} style={styles.pane}>
         <View style={paneTabsStyle}>
-          <TitlebarDragRegion />
           <WorkspaceDesktopTabsRow
             paneId={pane.id}
             isFocused={isFocused}
@@ -1024,8 +1003,6 @@ function SplitPaneView({
             onCloseOtherTabs={handleCloseOtherTabs}
             onCreateDraftTab={onCreateDraftTab}
             onCreateTerminalTab={onCreateTerminalTab}
-            onCreateBrowserTab={onCreateBrowserTab}
-            showCreateBrowserTab={showCreateBrowserTab}
             onReorderTabs={handleReorderTabs}
             onSplitRight={handleSplitRight}
             onSplitDown={handleSplitDown}

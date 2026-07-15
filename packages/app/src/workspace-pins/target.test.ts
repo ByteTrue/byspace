@@ -5,7 +5,6 @@ describe("pinnedTargetKey", () => {
   it("uses the bare kind as the key for non-profile targets", () => {
     expect(pinnedTargetKey({ kind: "draft" })).toBe("draft");
     expect(pinnedTargetKey({ kind: "terminal" })).toBe("terminal");
-    expect(pinnedTargetKey({ kind: "browser" })).toBe("browser");
   });
 
   it("namespaces a profile target by its profile id", () => {
@@ -26,8 +25,8 @@ describe("togglePinnedTarget / isTargetPinned", () => {
   });
 
   it("unpins a target that is already pinned", () => {
-    const pinned = togglePinnedTarget([{ kind: "browser" }], { kind: "browser" });
-    expect(isTargetPinned(pinned, { kind: "browser" })).toBe(false);
+    const pinned = togglePinnedTarget([{ kind: "terminal" }], { kind: "terminal" });
+    expect(isTargetPinned(pinned, { kind: "terminal" })).toBe(false);
   });
 
   it("treats profiles with different ids as independent pins", () => {

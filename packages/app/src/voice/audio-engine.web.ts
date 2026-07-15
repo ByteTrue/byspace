@@ -1,4 +1,3 @@
-import { isElectronRuntime } from "@/desktop/host";
 import type {
   AudioEngine,
   AudioEngineCallbacks,
@@ -289,7 +288,7 @@ export function createAudioEngine(
           : true;
       const currentOrigin =
         typeof window !== "undefined" && window.location ? window.location.origin : "unknown";
-      const isDesktopApp = isElectronRuntime();
+      const isDesktopApp = false;
 
       if (missingNavigator) {
         throw new Error("Microphone capture is not supported in this environment");

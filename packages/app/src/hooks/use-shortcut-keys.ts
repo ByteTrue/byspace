@@ -4,15 +4,13 @@ import { chordStringToShortcutKeys } from "@/keyboard/shortcut-string";
 import { getBindingIdForAction, getDefaultKeysForAction } from "@/keyboard/keyboard-shortcuts";
 import { useKeyboardShortcutOverrides } from "@/hooks/use-keyboard-shortcut-overrides";
 import { getShortcutOs } from "@/utils/shortcut-platform";
-import { getIsElectronRuntime } from "@/constants/layout";
 
 export function useShortcutKeys(actionId: string): ShortcutKey[][] | null {
   const { overrides } = useKeyboardShortcutOverrides();
   const isMac = getShortcutOs() === "mac";
-  const isDesktopApp = getIsElectronRuntime();
 
   return useMemo(() => {
-    const platform = { isMac, isDesktop: isDesktopApp };
+    const platform = { isMac, isDesktop: false };
     const bindingId = getBindingIdForAction(actionId, platform);
     if (!bindingId) return null;
 
@@ -23,5 +21,5 @@ export function useShortcutKeys(actionId: string): ShortcutKey[][] | null {
 
     const defaultKeys = getDefaultKeysForAction(actionId, platform);
     return defaultKeys ? [defaultKeys] : null;
-  }, [actionId, overrides, isMac, isDesktopApp]);
+  }, [actionId, overrides, isMac]);
 }

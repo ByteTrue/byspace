@@ -15,20 +15,6 @@ export const HEADER_TOP_PADDING_MOBILE = 8;
 export const MAX_CONTENT_WIDTH = 820;
 export const COMPACT_FORM_FACTOR_WIDTH = 500;
 
-// Desktop app constants for macOS traffic light buttons
-// These buttons (close/minimize/maximize) overlay the top-left corner
-export const DESKTOP_TRAFFIC_LIGHT_WIDTH = 78;
-export const DESKTOP_TRAFFIC_LIGHT_HEIGHT = 45;
-
-// Windows/Linux window controls (minimize/maximize/close) — top-right
-export const DESKTOP_WINDOW_CONTROLS_WIDTH = 140;
-export const DESKTOP_WINDOW_CONTROLS_HEIGHT = 48;
-
-export {
-  getIsElectron as getIsElectronRuntime,
-  getIsElectronMac as getIsElectronRuntimeMac,
-} from "./platform";
-
 /**
  * Reactive hook — re-renders the component when the breakpoint changes.
  * Always use this instead of reading UnistylesRuntime.breakpoint directly.

@@ -9,7 +9,7 @@ import {
   openWorkspaceWithAgents,
 } from "./helpers/archive-tab";
 import { expectComposerVisible } from "./helpers/composer";
-import { daemonWsRoutePattern, getE2EDaemonPort } from "./helpers/daemon-port";
+import { daemonWsRoutePattern } from "./helpers/daemon-port";
 import { seedWorkspace } from "./helpers/seed-client";
 import {
   getVisibleWorkspaceAgentTabIds,
@@ -32,7 +32,6 @@ import {
 } from "./helpers/workspace-ui";
 import { clickSettingsBackToWorkspace } from "./helpers/settings";
 import { getServerId } from "./helpers/server-id";
-import { injectDesktopBridge } from "./helpers/desktop-updates";
 import { expectAppRoute } from "./helpers/route-assertions";
 
 const LOADING_WORKSPACE_TEXT_PATTERN = /Loading workspace/i;
@@ -304,12 +303,6 @@ test.describe("Workspace navigation regression", () => {
         cwd: workspace.repoPath,
         workspaceId: workspace.workspaceId,
         title: `workspace-refresh-route-${Date.now()}`,
-      });
-      await injectDesktopBridge(page, {
-        serverId,
-        manageBuiltInDaemon: true,
-        hangDaemonStart: true,
-        daemonListen: `127.0.0.1:${getE2EDaemonPort()}`,
       });
       await openWorkspaceThroughApp(page, { serverId, workspace });
       await waitForWorkspaceTabsVisible(page);

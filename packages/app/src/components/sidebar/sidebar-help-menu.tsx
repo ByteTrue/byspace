@@ -20,7 +20,6 @@ import { isNative } from "@/constants/platform";
 import { useAppDiagnosticStore } from "@/diagnostics/store";
 import { useKeyboardShortcutsStore } from "@/stores/keyboard-shortcuts-store";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
-import { formatVersionWithPrefix } from "@/desktop/updates/desktop-updates";
 import { resolveAppVersion } from "@/utils/app-version";
 import { openExternalUrl } from "@/utils/open-external-url";
 
@@ -55,7 +54,8 @@ export function SidebarHelpMenu() {
   const setShortcutsDialogOpen = useKeyboardShortcutsStore((state) => state.setShortcutsDialogOpen);
   const [open, setOpen] = useState(false);
   const showKeyboardShortcuts = !isNative && !isCompactLayout;
-  const version = formatVersionWithPrefix(resolveAppVersion());
+  const resolvedVersion = resolveAppVersion();
+  const version = resolvedVersion ? `v${resolvedVersion}` : "";
 
   const openKeyboardShortcuts = useCallback(() => {
     setShortcutsDialogOpen(true);

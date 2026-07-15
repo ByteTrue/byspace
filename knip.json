@@ -30,7 +30,6 @@
         "app/**/*.{ts,tsx}",
         "src/**/*.test.{ts,tsx}",
         "src/**/*.e2e.{ts,tsx}",
-        "src/**/*.native.{ts,tsx}",
         "e2e/**/*.{ts,tsx}",
         "playwright.config.{ts,js}",
         "vitest.config.{ts,js}",
@@ -40,7 +39,7 @@
       "paths": {
         "@server/*": ["../server/src/*"]
       },
-      "ignore": ["android/**", "ios/**", ".expo/**", "dist/**", "scripts/reset-project.js"]
+      "ignore": [".expo/**", "dist/**", "scripts/reset-project.js"]
     },
     "packages/cli": {
       "entry": ["src/index.ts", "bin/paseo", "src/**/*.test.{ts,tsx}", "tests/**/*.{ts,tsx}"],
@@ -55,16 +54,8 @@
       "project": ["src/**/*.{ts,tsx}"],
       "ignore": ["src/routeTree.gen.ts"]
     },
-    "packages/desktop": {
-      "entry": ["src/main.ts", "src/preload.ts", "src/**/*.test.ts"],
-      "project": ["src/**/*.ts"]
-    },
     "packages/highlight": {
       "entry": ["src/index.ts", "src/**/*.test.ts"],
-      "project": ["src/**/*.ts"]
-    },
-    "packages/expo-two-way-audio": {
-      "entry": ["src/index.ts"],
       "project": ["src/**/*.ts"]
     }
   },
@@ -72,25 +63,13 @@
     "sherpa-onnx-node",
     "@playwright/test",
     "material-icon-theme",
-    "eas-cli",
     "wait-on",
     "concurrently",
     "get-port-cli",
     "patch-package",
     "cross-env",
-    "expo-module-scripts",
     "buffer",
     "metro-config"
   ],
-  "ignoreBinaries": [
-    "expo-module",
-    "xed",
-    "eas",
-    "playwright",
-    "wrangler",
-    "powershell",
-    "tsx",
-    "vitest",
-    "open"
-  ]
+  "ignoreBinaries": ["playwright", "wrangler", "powershell", "tsx", "vitest", "open"]
 }

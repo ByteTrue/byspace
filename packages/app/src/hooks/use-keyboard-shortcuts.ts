@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef } from "react";
 import { usePathname, useRouter } from "expo-router";
-import { getIsElectronRuntime } from "@/constants/layout";
 import { useKeyboardShortcutsStore } from "@/stores/keyboard-shortcuts-store";
 import { setCommandCenterFocusRestoreElement } from "@/utils/command-center-focus-restore";
 import { navigateToWorkspace } from "@/stores/navigation-active-workspace-store";
@@ -21,7 +20,6 @@ import { getShortcutOs } from "@/utils/shortcut-platform";
 import { useOpenProjectPicker } from "@/hooks/use-open-project-picker";
 import { useKeyboardShortcutOverrides } from "@/hooks/use-keyboard-shortcut-overrides";
 import { isNative } from "@/constants/platform";
-import { getDesktopHost, isElectronRuntime } from "@/desktop/host";
 import { isImeComposingKeyboardEvent } from "@/utils/keyboard-ime";
 import {
   type ActiveWorkspaceSelection,
@@ -69,21 +67,15 @@ export function useKeyboardShortcuts({
     if (isNative) return;
     if (isMobile) return;
 
-    const isDesktopApp = getIsElectronRuntime();
     const isMac = getShortcutOs() === "mac";
 
     // Only the modifier that actually performs the workspace-index jump on this
     // runtime should reveal the sidebar number badges (Alt on web, Cmd on
     // desktop Mac, Ctrl on desktop non-Mac). The store ORs altDown/cmdOrCtrlDown
     // to drive badge visibility, so we set the flag matching this runtime.
-    const badgeModifierKey = getWorkspaceIndexJumpModifierKey({ isMac, isDesktop: isDesktopApp });
+    const badgeModifierKey = getWorkspaceIndexJumpModifierKey({ isMac, isDesktop: false });
     const setBadgeModifierDown = (down: boolean) => {
-      const state = useKeyboardShortcutsStore.getState();
-      if (isDesktopApp) {
-        state.setCmdOrCtrlDown(down);
-      } else {
-        state.setAltDown(down);
-      }
+      useKeyboardShortcutsStore.getState().setAltDown(down);
     };
 
     const shouldHandle = () => {
@@ -187,7 +179,7 @@ export function useKeyboardShortcuts({
         event,
         context: {
           isMac,
-          isDesktop: isDesktopApp,
+          isDesktop: false,
           focusScope,
           commandCenterOpen: store.commandCenterOpen,
         },
@@ -255,25 +247,6 @@ export function useKeyboardShortcuts({
     window.addEventListener("blur", handleBlurOrHide);
     document.addEventListener("visibilitychange", handleBlurOrHide);
 
-    const forwardedKeySubscription = isElectronRuntime()
-      ? getDesktopHost()?.events?.on?.("browser-forwarded-key", (payload) => {
-          if (!payload || typeof payload !== "object") return;
-          const p = payload as Record<string, unknown>;
-          if (typeof p.key !== "string") return;
-          window.dispatchEvent(
-            new KeyboardEvent("keydown", {
-              key: p.key,
-              code: typeof p.code === "string" ? p.code : "",
-              metaKey: p.meta === true,
-              ctrlKey: p.control === true,
-              shiftKey: p.shift === true,
-              altKey: p.alt === true,
-              bubbles: true,
-            }),
-          );
-        })
-      : null;
-
     return () => {
       if (chordStateRef.current.timeoutId !== null) {
         clearTimeout(chordStateRef.current.timeoutId);
@@ -287,11 +260,6 @@ export function useKeyboardShortcuts({
       window.removeEventListener("keyup", handleKeyUp, true);
       window.removeEventListener("blur", handleBlurOrHide);
       document.removeEventListener("visibilitychange", handleBlurOrHide);
-      if (typeof forwardedKeySubscription === "function") {
-        forwardedKeySubscription();
-      } else {
-        void forwardedKeySubscription?.then((dispose) => dispose());
-      }
     };
   }, [
     bindings,

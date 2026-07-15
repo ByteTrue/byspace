@@ -534,12 +534,6 @@ test("advertises client capabilities in hello", async () => {
     logger,
     reconnect: { enabled: false },
     transportFactory: () => mock.transport,
-    capabilities: {
-      browser_host: {
-        supportedCommands: ["list_tabs"],
-        hostKind: "desktop app",
-      },
-    },
   });
   clients.push(client);
 
@@ -558,10 +552,6 @@ test("advertises client capabilities in hello", async () => {
       provider_subagents: true,
       reasoning_merge_enum: true,
       terminal_reflowable_snapshot: true,
-      browser_host: {
-        supportedCommands: ["list_tabs"],
-        hostKind: "desktop app",
-      },
     },
   });
 });
@@ -669,42 +659,6 @@ test("sends new-agent run options when updating schedules", async () => {
     requestId: "request-1",
     schedule: null,
     error: null,
-  });
-});
-
-test("sends typed browser automation execute responses", async () => {
-  const logger = createMockLogger();
-  const mock = createMockTransport();
-
-  const client = new DaemonClient({
-    url: "ws://test",
-    clientId: "clsk_unit_test",
-    logger,
-    reconnect: { enabled: false },
-    transportFactory: () => mock.transport,
-  });
-  clients.push(client);
-
-  const connectPromise = client.connect();
-  mock.triggerOpen();
-  await connectPromise;
-
-  client.sendBrowserAutomationExecuteResponse({
-    type: "browser.automation.execute.response",
-    payload: {
-      requestId: "req-1",
-      ok: true,
-      result: { command: "list_tabs", tabs: [] },
-    },
-  });
-
-  expect(parseSentFrame(mock.sent[0])).toEqual({
-    type: "browser.automation.execute.response",
-    payload: {
-      requestId: "req-1",
-      ok: true,
-      result: { command: "list_tabs", tabs: [] },
-    },
   });
 });
 

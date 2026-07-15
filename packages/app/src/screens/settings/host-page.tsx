@@ -2,7 +2,6 @@ import {
   ArrowDown,
   ArrowUp,
   ArrowUpToLine,
-  ChevronRight,
   Globe,
   Monitor,
   Pencil,
@@ -30,19 +29,7 @@ import {
   ProfileDraft,
   TerminalProfileEditModal,
 } from "@/screens/settings/terminal-profile-edit-modal";
-import { getIsElectron } from "@/constants/platform";
-import {
-  getDesktopDaemonStatus,
-  restartDesktopDaemon,
-  startDesktopDaemon,
-  stopDesktopDaemon,
-} from "@/desktop/daemon/desktop-daemon";
-import { LocalDaemonSection } from "@/desktop/components/desktop-updates-section";
-import { useDaemonStatus } from "@/desktop/hooks/use-daemon-status";
-import { loadDesktopSettings, useDesktopSettings } from "@/desktop/settings/desktop-settings";
-import { PairDeviceModal } from "@/desktop/components/pair-device-modal";
 import { useDaemonConfig } from "@/hooks/use-daemon-config";
-import { useIsLocalDaemon } from "@/hooks/use-is-local-daemon";
 import {
   getHostRuntimeStore,
   isHostRuntimeConnected,
@@ -60,15 +47,12 @@ import { useSessionStore } from "@/stores/session-store";
 import { settingsStyles } from "@/styles/settings";
 import type { HostConnection, HostProfile } from "@/types/host-connection";
 import { confirmDialog } from "@/utils/confirm-dialog";
-import { isVersionMismatch } from "@/desktop/updates/desktop-updates";
 import { resolveAppVersion } from "@/utils/app-version";
 import { formatConnectionStatus, getConnectionStatusTone } from "@/utils/daemons";
 import { formatLatency } from "@/utils/latency";
 import { ICON_SIZE } from "@/styles/theme";
 import type { Theme } from "@/styles/theme";
 import { getProviderIcon } from "@/components/provider-icons";
-import { BrowserToolsOptInCard } from "./browser-tools-card";
-import { restartDaemonFromSettings } from "./daemon-restart";
 
 const ThemedArrowUp = withUnistyles(ArrowUp);
 const ThemedArrowDown = withUnistyles(ArrowDown);
@@ -235,23 +219,12 @@ function HostConnectionError({ serverId }: { serverId: string }) {
 }
 
 export function HostConnectionsPage({ serverId }: { serverId: string }) {
-  const { t } = useTranslation();
   const host = useHostProfile(serverId);
-  const isLocalDaemon = useIsLocalDaemon(serverId);
-
-  if (!host) {
-    return <HostNotFound />;
-  }
-
+  if (!host) return <HostNotFound />;
   return (
     <View>
       <HostConnectionError serverId={serverId} />
       <ConnectionsSection host={host} />
-      {isLocalDaemon ? (
-        <SettingsSection title={t("settings.host.pairDevices.title")}>
-          <PairDeviceRow />
-        </SettingsSection>
-      ) : null}
     </View>
   );
 }
@@ -270,7 +243,6 @@ export function HostAgentsPage({ serverId }: { serverId: string }) {
       {isConnected ? (
         <SettingsSection title={t("settings.hostSections.agents")}>
           <InjectPaseoToolsCard serverId={serverId} />
-          <BrowserToolsOptInCard serverId={serverId} />
           <AppendSystemPromptCard serverId={serverId} />
         </SettingsSection>
       ) : (
@@ -346,7 +318,6 @@ export function HostSettingsPage({
   onHostRemoved?: () => void;
 }) {
   const host = useHostProfile(serverId);
-  const isLocalDaemon = useIsLocalDaemon(serverId);
 
   if (!host) {
     return <HostNotFound />;
@@ -363,11 +334,9 @@ export function HostSettingsPage({
 
       <HostStatusBadges serverId={serverId} />
 
-      {isLocalDaemon ? <LocalDaemonSection /> : null}
+      <UpdateDaemonCard host={host} />
 
-      {!isLocalDaemon ? <UpdateDaemonCard host={host} /> : null}
-
-      <RemoveHostSection host={host} isLocalDaemon={isLocalDaemon} onRemoved={onHostRemoved} />
+      <RemoveHostSection host={host} onRemoved={onHostRemoved} />
     </View>
   );
 }
@@ -628,7 +597,7 @@ function RestartDaemonCard({ host }: { host: HostProfile }) {
   );
 
   const waitForDaemonRestart = useCallback(
-    async (restartRequest: Promise<void>) => {
+    async (restartRequest: Promise<unknown>) => {
       const disconnectTimeoutMs = 30000;
       const reconnectTimeoutMs = 30000;
       const requestFailureDisconnectGraceMs = 2000;
@@ -704,16 +673,8 @@ function RestartDaemonCard({ host }: { host: HostProfile }) {
       .then((confirmed) => {
         if (!confirmed) return;
         setIsRestarting(true);
-        const restartRequest = restartDaemonFromSettings(
-          host.serverId,
+        const restartRequest = daemonClient.restartServer(
           `settings_daemon_restart_${host.serverId}`,
-          {
-            getIsElectron,
-            getDesktopDaemonStatus,
-            getDesktopSettings: loadDesktopSettings,
-            restartDesktopDaemon,
-            restartServer: (reason) => daemonClient.restartServer(reason),
-          },
         );
         void waitForDaemonRestart(restartRequest);
         return;
@@ -774,7 +735,7 @@ function UpdateDaemonCard({ host }: { host: HostProfile }) {
   );
 
   const appVersion = resolveAppVersion();
-  const hasVersionMismatch = isVersionMismatch(appVersion, daemonVersion);
+  const hasVersionMismatch = Boolean(appVersion && daemonVersion && appVersion !== daemonVersion);
 
   useEffect(() => {
     return () => {
@@ -1196,145 +1157,45 @@ function AppendSystemPromptCard({ serverId }: { serverId: string }) {
   );
 }
 
-function PairDeviceRow() {
-  const { t } = useTranslation();
-  const { theme } = useUnistyles();
-  const [isModalOpen, setIsModalOpen] = useState(false);
-
-  const handleOpen = useCallback(() => setIsModalOpen(true), []);
-  const handleClose = useCallback(() => setIsModalOpen(false), []);
-
-  return (
-    <View style={settingsStyles.card}>
-      <Pressable
-        style={settingsStyles.row}
-        onPress={handleOpen}
-        accessibilityRole="button"
-        testID="host-page-pair-device-row"
-      >
-        <View style={settingsStyles.rowContent}>
-          <Text style={settingsStyles.rowTitle}>{t("settings.host.pairDevices.rowTitle")}</Text>
-          <Text style={settingsStyles.rowHint}>{t("settings.host.pairDevices.rowHint")}</Text>
-        </View>
-        <ChevronRight size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />
-      </Pressable>
-
-      <PairDeviceModal
-        visible={isModalOpen}
-        onClose={handleClose}
-        testID="host-page-pair-device-card"
-      />
-    </View>
-  );
-}
-
-function RemoveHostSection({
-  host,
-  isLocalDaemon,
-  onRemoved,
-}: {
-  host: HostProfile;
-  isLocalDaemon: boolean;
-  onRemoved?: () => void;
-}) {
+function RemoveHostSection({ host, onRemoved }: { host: HostProfile; onRemoved?: () => void }) {
   const { t } = useTranslation();
   const { theme } = useUnistyles();
   const { removeHost } = useHostMutations();
-  const { updateSettings } = useDesktopSettings();
-  const { data: daemonStatusData, setStatus } = useDaemonStatus();
   const [isConfirming, setIsConfirming] = useState(false);
   const [isRemoving, setIsRemoving] = useState(false);
-  const daemonStatus = daemonStatusData?.status ?? null;
   const removeHostHeader = useMemo<SheetHeader>(
-    () => ({
-      title: isLocalDaemon
-        ? t("settings.host.daemon.remove.localConfirmTitle")
-        : t("settings.host.daemon.remove.title"),
-    }),
-    [isLocalDaemon, t],
+    () => ({ title: t("settings.host.daemon.remove.title") }),
+    [t],
   );
-
   const destructiveTextStyle = useMemo(
     () => ({ color: theme.colors.destructive }),
     [theme.colors.destructive],
   );
-
-  const handleOpenConfirm = useCallback(() => setIsConfirming(true), []);
-  const handleCloseConfirm = useCallback(() => {
-    if (isRemoving) return;
-    setIsConfirming(false);
-  }, [isRemoving]);
-  const handleCancel = useCallback(() => setIsConfirming(false), []);
-  const rollbackLocalhostRemoval = useCallback(
-    async (shouldRestartDaemon: boolean) => {
-      await updateSettings({ daemon: { manageBuiltInDaemon: true } });
-      if (!shouldRestartDaemon) {
-        return;
-      }
-      setStatus(await startDesktopDaemon());
-    },
-    [setStatus, updateSettings],
-  );
-  const handleConfirmRemove = useCallback(() => {
-    setIsRemoving(true);
-    const remove = async () => {
-      let didDisableDaemonManagement = false;
-      let didStopDaemon = false;
-      if (isLocalDaemon) {
-        try {
-          await updateSettings({ daemon: { manageBuiltInDaemon: false } });
-          didDisableDaemonManagement = true;
-          if (daemonStatus?.status === "running" && daemonStatus.desktopManaged) {
-            setStatus(await stopDesktopDaemon("host_remove"));
-            didStopDaemon = true;
-          }
-          await removeHost(host.serverId);
-        } catch (error) {
-          if (didDisableDaemonManagement) {
-            try {
-              await rollbackLocalhostRemoval(didStopDaemon);
-            } catch (rollbackError) {
-              console.error("[HostPage] Failed to roll back localhost removal", rollbackError);
-            }
-          }
-          throw error;
-        }
-        return;
-      }
-      await removeHost(host.serverId);
-    };
-    void remove()
-      .then(() => {
-        setIsConfirming(false);
-        onRemoved?.();
-        return;
-      })
-      .catch((error) => {
-        console.error("[HostPage] Failed to remove host", error);
-        Alert.alert(
-          t("settings.host.daemon.remove.errorTitle"),
-          isLocalDaemon
-            ? t("settings.host.daemon.remove.localErrorMessage")
-            : t("settings.host.daemon.remove.errorMessage"),
-        );
-      })
-      .finally(() => setIsRemoving(false));
-  }, [
-    daemonStatus,
-    host.serverId,
-    isLocalDaemon,
-    onRemoved,
-    removeHost,
-    rollbackLocalhostRemoval,
-    setStatus,
-    t,
-    updateSettings,
-  ]);
-
   const removeIcon = useMemo(
     () => <Trash2 size={theme.iconSize.sm} color={theme.colors.destructive} />,
     [theme.iconSize.sm, theme.colors.destructive],
   );
+  const handleConfirmRemove = useCallback(async () => {
+    setIsRemoving(true);
+    try {
+      await removeHost(host.serverId);
+      setIsConfirming(false);
+      onRemoved?.();
+    } catch (error) {
+      console.error("[HostPage] Failed to remove host", error);
+      Alert.alert(
+        t("settings.host.daemon.remove.errorTitle"),
+        t("settings.host.daemon.remove.errorMessage"),
+      );
+    } finally {
+      setIsRemoving(false);
+    }
+  }, [host.serverId, onRemoved, removeHost, t]);
+  const handleOpenConfirm = useCallback(() => setIsConfirming(true), []);
+  const handleCloseConfirm = useCallback(() => {
+    if (!isRemoving) setIsConfirming(false);
+  }, [isRemoving]);
+  const handleCancelConfirm = useCallback(() => setIsConfirming(false), []);
 
   return (
     <SettingsSection
@@ -1342,20 +1203,11 @@ function RemoveHostSection({
       testID="host-page-remove-host-card"
     >
       <RestartDaemonCard host={host} />
-
       <View style={settingsStyles.card}>
         <View style={settingsStyles.row}>
           <View style={settingsStyles.rowContent}>
-            <Text style={settingsStyles.rowTitle}>
-              {isLocalDaemon
-                ? t("settings.host.daemon.remove.localTitle")
-                : t("settings.host.daemon.remove.title")}
-            </Text>
-            <Text style={settingsStyles.rowHint}>
-              {isLocalDaemon
-                ? t("settings.host.daemon.remove.localHint")
-                : t("settings.host.daemon.remove.hint")}
-            </Text>
+            <Text style={settingsStyles.rowTitle}>{t("settings.host.daemon.remove.title")}</Text>
+            <Text style={settingsStyles.rowHint}>{t("settings.host.daemon.remove.hint")}</Text>
           </View>
           <Button
             variant="outline"
@@ -1369,7 +1221,6 @@ function RemoveHostSection({
           </Button>
         </View>
       </View>
-
       {isConfirming ? (
         <AdaptiveModalSheet
           header={removeHostHeader}
@@ -1378,16 +1229,14 @@ function RemoveHostSection({
           testID="remove-host-confirm-modal"
         >
           <Text style={styles.confirmText}>
-            {isLocalDaemon
-              ? t("settings.host.daemon.remove.localConfirmMessage")
-              : t("settings.host.daemon.remove.confirmMessage", { name: host.label })}
+            {t("settings.host.daemon.remove.confirmMessage", { name: host.label })}
           </Text>
           <View style={styles.confirmActions}>
             <Button
               variant="secondary"
               size="sm"
               style={FLEX_1_STYLE}
-              onPress={handleCancel}
+              onPress={handleCancelConfirm}
               disabled={isRemoving}
             >
               {t("common.actions.cancel")}

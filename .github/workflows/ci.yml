@@ -20,10 +20,6 @@ env:
 jobs:
   format:
     runs-on: ubuntu-latest
-    env:
-      # This job never executes Electron. Skipping the hosted binary avoids
-      # unrelated npm ci failures when Electron's CDN returns 504.
-      ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
     steps:
       - uses: actions/checkout@v4
 
@@ -40,8 +36,6 @@ jobs:
 
   lint:
     runs-on: ubuntu-latest
-    env:
-      ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
     steps:
       - uses: actions/checkout@v4
 
@@ -64,8 +58,6 @@ jobs:
 
   typecheck:
     runs-on: ubuntu-latest
-    env:
-      ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
     steps:
       - uses: actions/checkout@v4
 
@@ -95,8 +87,6 @@ jobs:
         os: [ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     name: server-tests (${{ matrix.os }})
-    env:
-      ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
     steps:
       - uses: actions/checkout@v4
         with:
@@ -125,32 +115,8 @@ jobs:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
 
-  desktop-tests:
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, windows-latest]
-    runs-on: ${{ matrix.os }}
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-          cache: "npm"
-
-      - name: Install dependencies with retry
-        run: node scripts/npm-retry.mjs ci
-      - name: Build server stack
-        run: npm run build:server
-
-      - name: Run desktop tests
-        run: npm run test --workspace=@getpaseo/desktop
-
   app-tests:
     runs-on: ubuntu-latest
-    env:
-      ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
     steps:
       - uses: actions/checkout@v4
 
@@ -168,13 +134,17 @@ jobs:
       - name: Build app dependencies
         run: npm run build:app-deps
 
+      - name: Typecheck app
+        run: npm run typecheck --workspace=@getpaseo/app
+
+      - name: Build web app
+        run: npm run build:web --workspace=@getpaseo/app
+
       - name: Run app unit tests
         run: npm run test --workspace=@getpaseo/app
 
   sdk-tests:
     runs-on: ubuntu-latest
-    env:
-      ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
     steps:
       - uses: actions/checkout@v4
 
@@ -202,15 +172,12 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { label: "shard 1/4", shard: 1, desktop: false }
-          - { label: "shard 2/4", shard: 2, desktop: false }
-          - { label: "shard 3/4", shard: 3, desktop: false }
-          - { label: "shard 4/4", shard: 4, desktop: false }
-          - { label: "desktop overlay", shard: "desktop", desktop: true }
+          - { label: "shard 1/4", shard: 1 }
+          - { label: "shard 2/4", shard: 2 }
+          - { label: "shard 3/4", shard: 3 }
+          - { label: "shard 4/4", shard: 4 }
     name: playwright (${{ matrix.label }})
     runs-on: ubuntu-latest
-    env:
-      ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
     steps:
       - uses: actions/checkout@v4
 
@@ -232,18 +199,12 @@ jobs:
         run: npm run build:server
 
       - name: Install agent CLIs for provider tests
-        if: ${{ !matrix.desktop }}
         run: node scripts/npm-retry.mjs install -g @anthropic-ai/claude-code @openai/codex@0.105.0 opencode-ai
 
       - name: Run Playwright E2E tests
-        if: ${{ !matrix.desktop }}
         run: npm run test:e2e --workspace=@getpaseo/app -- --shard=${{ matrix.shard }}/4
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-
-      - name: Run desktop-overlay Playwright tests
-        if: ${{ matrix.desktop }}
-        run: npm run test:e2e:desktop --workspace=@getpaseo/app
 
       - name: Upload test artifacts
         uses: actions/upload-artifact@v4
@@ -257,8 +218,6 @@ jobs:
 
   relay-tests:
     runs-on: ubuntu-latest
-    env:
-      ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
     steps:
       - uses: actions/checkout@v4
 
@@ -283,8 +242,6 @@ jobs:
         shard: [1, 2, 3]
     runs-on: ubuntu-latest
     name: cli-tests (shard ${{ matrix.shard }}/3)
-    env:
-      ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
     steps:
       - uses: actions/checkout@v4
 

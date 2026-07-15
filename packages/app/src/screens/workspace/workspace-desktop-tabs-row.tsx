@@ -26,7 +26,6 @@ import {
   Pencil,
   RotateCw,
   Rows2,
-  Globe,
   Plus,
   SquarePen,
   SquareTerminal,
@@ -105,7 +104,6 @@ const ThemedPencil = withUnistyles(Pencil);
 const ThemedSquarePen = withUnistyles(SquarePen);
 const ThemedSquareTerminal = withUnistyles(SquareTerminal);
 const ThemedChevronDown = withUnistyles(ChevronDown);
-const ThemedGlobe = withUnistyles(Globe);
 const ThemedColumns2 = withUnistyles(Columns2);
 const ThemedRows2 = withUnistyles(Rows2);
 const ThemedPlus = withUnistyles(Plus);
@@ -114,11 +112,9 @@ const mutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMut
 
 const AGENT_ICON = <ThemedSquarePen size={14} uniProps={mutedColorMapping} />;
 const TERMINAL_ICON = <ThemedSquareTerminal size={14} uniProps={mutedColorMapping} />;
-const BROWSER_ICON = <ThemedGlobe size={14} uniProps={mutedColorMapping} />;
 
 const DRAFT_TARGET: PinnedTabTarget = { kind: "draft" };
 const TERMINAL_TARGET: PinnedTabTarget = { kind: "terminal" };
-const BROWSER_TARGET: PinnedTabTarget = { kind: "browser" };
 
 function newTabActionButtonStyle({ hovered, pressed }: PressableStateCallbackType) {
   return [styles.newTabActionButton, (hovered || pressed) && styles.newTabActionButtonHovered];
@@ -211,22 +207,18 @@ function WorkspaceInlineAddTabButton({
 interface WorkspaceTabRowExtrasProps {
   onCreateAgentTab: () => void;
   onCreateTerminal: () => void;
-  onCreateBrowser: () => void;
   onCreateTerminalWithProfile: (profile: TerminalProfileInput) => void;
   onEditProfiles: () => void;
   normalizedServerId: string;
-  showCreateBrowserTab: boolean;
   terminalDisabled: boolean;
 }
 
 function WorkspaceTabRowExtras({
   onCreateAgentTab,
   onCreateTerminal,
-  onCreateBrowser,
   onCreateTerminalWithProfile,
   onEditProfiles,
   normalizedServerId,
-  showCreateBrowserTab,
   terminalDisabled,
 }: WorkspaceTabRowExtrasProps) {
   const { t } = useTranslation();
@@ -240,10 +232,9 @@ function WorkspaceTabRowExtras({
     () => ({
       createDraft: onCreateAgentTab,
       createTerminal: onCreateTerminal,
-      createBrowser: onCreateBrowser,
       createTerminalWithProfile: onCreateTerminalWithProfile,
     }),
-    [onCreateAgentTab, onCreateBrowser, onCreateTerminal, onCreateTerminalWithProfile],
+    [onCreateAgentTab, onCreateTerminal, onCreateTerminalWithProfile],
   );
 
   const onLaunch = useCallback(
@@ -289,15 +280,6 @@ function WorkspaceTabRowExtras({
             disabled={terminalDisabled}
             onSelect={terminalDisabled ? undefined : onCreateTerminal}
           />
-          {showCreateBrowserTab ? (
-            <PinnableMenuItem
-              testID="workspace-new-tab-menu-browser"
-              target={BROWSER_TARGET}
-              label={t("workspace.tabs.actions.newBrowser")}
-              leading={BROWSER_ICON}
-              onSelect={onCreateBrowser}
-            />
-          ) : null}
           <DropdownMenuSeparator />
           <DropdownMenuLabel>{t("workspace.tabs.actions.terminalProfilesMenu")}</DropdownMenuLabel>
           {profiles.map((profile) => (
@@ -427,8 +409,6 @@ interface WorkspaceDesktopTabsRowProps {
   onCloseOtherTabs: (tabId: string) => Promise<void> | void;
   onCreateDraftTab: (input: { paneId?: string }) => void;
   onCreateTerminalTab: (input: { paneId?: string; profile?: TerminalProfileInput }) => void;
-  onCreateBrowserTab: (input: { paneId?: string }) => void;
-  showCreateBrowserTab?: boolean;
   disableCreateTerminal?: boolean;
   isWaitingOnTerminalReadiness?: boolean;
   onReorderTabs: (nextTabs: WorkspaceTabDescriptor[]) => void;
@@ -747,8 +727,6 @@ export function WorkspaceDesktopTabsRow({
   onCloseOtherTabs,
   onCreateDraftTab,
   onCreateTerminalTab,
-  onCreateBrowserTab,
-  showCreateBrowserTab = false,
   disableCreateTerminal = false,
   isWaitingOnTerminalReadiness = false,
   onReorderTabs,
@@ -874,10 +852,6 @@ export function WorkspaceDesktopTabsRow({
     router.push(buildSettingsHostSectionRoute(normalizedServerId, "terminals") as Href);
   }, [normalizedServerId, router]);
 
-  const handleCreateBrowser = useCallback(() => {
-    onCreateBrowserTab({ paneId });
-  }, [onCreateBrowserTab, paneId]);
-
   const terminalDisabled = disableCreateTerminal || isWaitingOnTerminalReadiness;
 
   const renderTab = useCallback(
@@ -997,11 +971,9 @@ export function WorkspaceDesktopTabsRow({
         <WorkspaceTabRowExtras
           onCreateAgentTab={handleCreateAgentTab}
           onCreateTerminal={handleCreateTerminal}
-          onCreateBrowser={handleCreateBrowser}
           onCreateTerminalWithProfile={handleCreateTerminalWithProfile}
           onEditProfiles={handleEditProfiles}
           normalizedServerId={normalizedServerId}
-          showCreateBrowserTab={showCreateBrowserTab}
           terminalDisabled={terminalDisabled}
         />
         {showPaneSplitActions ? (

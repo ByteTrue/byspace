@@ -1,42 +1,35 @@
 # Architecture
 
-Paseo is a client-server system for monitoring and controlling local AI coding agents. The daemon runs on your machine, manages agent processes, and streams their output in real time over WebSocket. Clients (mobile app, CLI, desktop app) connect to the daemon to observe and interact with agents.
+Paseo is a Web-and-CLI client-server system for monitoring and controlling local AI coding agents. The daemon runs on your machine, manages agent processes, and streams their output in real time over WebSocket.
 
 Your code never leaves your machine. Paseo is local-first.
 
 ## System overview
 
 ```
-┌─────────────┐    ┌─────────────┐    ┌─────────────┐
-│  Mobile App  │    │     CLI     │    │ Desktop App │
-│   (Expo)     │    │ (Commander) │    │ (Electron)  │
-└──────┬───────┘    └──────┬──────┘    └──────┬──────┘
-       │                   │                  │
-       │    WebSocket      │    WebSocket     │    Managed subprocess
-       │    (direct or     │    (direct)      │    + WebSocket
-       │     via relay)    │                  │
-       └───────────┬───────┴──────────────────┘
-                   │
-            ┌──────▼──────┐
-            │   Daemon    │
-            │  (Node.js)  │
-            └──────┬──────┘
-                   │
-      ┌────────────┼────────────┬────────────┬────────────┐
-      │            │            │            │            │
-┌─────▼─────┐ ┌───▼────┐ ┌──────▼─────┐ ┌────▼─────┐ ┌────▼────┐
-│  Claude   │ │ Codex  │ │  Copilot   │ │ OpenCode │ │   Pi    │
-│  Agent    │ │ Agent  │ │   Agent    │ │  Agent   │ │ Agent   │
-│  SDK      │ │ Server │ │    ACP     │ │          │ │         │
-└───────────┘ └────────┘ └────────────┘ └──────────┘ └─────────┘
+┌────────────────────┐       ┌───────────────┐
+│ Hosted Web / PWA   │       │      CLI      │
+│ (Cloudflare Pages) │       │  (Commander)  │
+└─────────┬──────────┘       └───────┬───────┘
+          │ direct or E2EE relay     │ direct
+          └──────────────┬───────────┘
+                         │
+                  ┌──────▼──────┐
+                  │ Local daemon │
+                  │   (Node.js)  │
+                  └──────┬──────┘
+                         │
+               ┌─────────▼─────────┐
+               │ Direct + ACP Agent │
+               │     providers      │
+               └────────────────────┘
 ```
 
 ## Components at a glance
 
 - **Daemon:** Local server that spawns and manages agent processes and exposes the WebSocket API.
-- **App:** Cross-platform Expo client for iOS, Android, web, and the shared UI used by desktop.
+- **Web app:** Expo/React Native Web client hosted independently or served by the daemon.
 - **CLI:** Terminal interface for agent workflows that can also start and manage the daemon.
-- **Desktop app:** Electron wrapper around the web app that bundles and auto-manages its own daemon.
 - **Relay:** Optional encrypted bridge for remote access without opening ports directly.
 
 ## Packages
@@ -85,9 +78,9 @@ facade. App and CLI may import the low-level driver from
 `@getpaseo/client/internal/daemon-client` during migration, while new SDK-shaped
 code imports from `@getpaseo/client`.
 
-### `packages/app` — Mobile + web client (Expo)
+### `packages/app` — Browser Web client (Expo)
 
-Cross-platform React Native app that connects to one or more daemons.
+Expo Router and React Native Web app that connects to one or more daemons.
 
 - Expo Router navigation (`/h/[serverId]/workspace/[workspaceId]`, `/h/[serverId]/agent/[agentId]`, etc.). The `workspaceId` URL segment is an opaque workspace id (path-shaped today and opaque-encoded for routing), not a directly meaningful filesystem path.
 - `HostRuntimeController` manages saved host connections, reconnection, and per-host runtime state
@@ -125,20 +118,6 @@ Enables remote access when the daemon is behind a firewall.
 - Self-hosted relays opt into TLS with `daemon.relay.useTls` or `PASEO_RELAY_USE_TLS=true`; the public (client-facing) TLS setting can be overridden independently via `daemon.relay.publicUseTls` or `PASEO_RELAY_PUBLIC_USE_TLS`
 
 See [SECURITY.md](../SECURITY.md) for the full threat model.
-
-### `packages/desktop` — Desktop app (Electron)
-
-Electron wrapper for macOS, Linux, and Windows.
-
-- Can spawn the daemon as a managed subprocess
-- Native file access for workspace integration
-- Same WebSocket client as mobile app
-
-**Multi-window (hybrid land-on model).** `createWindow()` in `main.ts` is reusable: `⌘⇧N`/File→New Window, relaunching the app (`second-instance`), and the sidebar "Open in new window" action each open a fresh `BrowserWindow`. Every window shows the full sidebar — there is no per-window project ownership or filtering. "Land on a project" is delivered by a per-`webContents` `PendingOpenProjectStore`: each window pulls its own pending project path on mount (`paseo:get-pending-open-project`) and runs the normal open-project flow, identical to a CLI `paseo <path>` launch.
-
-> **Window-state v1 limitation:** only the _first_ window of a session restores and persists saved geometry (size/position/maximized). Windows opened via ⌘⇧N / second-instance / "Open in new window" open at the default size, OS-cascaded, and do not persist — this avoids every window stacking on the same restored bounds and fighting over the single window-state store. Lifting this needs per-window state keys.
->
-> **In-app browser panes are not yet per-window.** Browser webviews are tracked by one process-global registry that keeps a single current `WebContents` per browser id. Human focus still records the workspace-active browser for UI state and `list_tabs` reporting, but agent automation targets only explicit browser ids returned by `browser_new_tab` or `browser_list_tabs`. The webview registration queue (`pendingBrowserWebviewIds` in `main.ts`) is still process-global. With browser panes open in two windows, a menu Reload can target the other window's webview, and near-simultaneous webview attach across windows can register under the wrong browser id. Multi-window v1 ships windows; making the browser-webview subsystem window-scoped is a follow-up.
 
 ### `packages/website` — Marketing site
 
@@ -335,6 +314,6 @@ $PASEO_HOME/
 
 ## Deployment models
 
-1. **Local daemon** (default): `paseo daemon start` on `127.0.0.1:6767`
-2. **Managed desktop**: Electron app spawns daemon as subprocess
-3. **Remote + relay**: Daemon behind firewall, relay bridges with E2E encryption
+1. **Hosted Web + local daemon** (default): the hosted app connects directly or through the E2EE relay.
+2. **Daemon-served Web**: the daemon serves the bundled Web app from its own HTTP endpoint.
+3. **Remote + relay**: a daemon behind a firewall connects outbound while clients use the encrypted relay.

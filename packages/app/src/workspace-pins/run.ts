@@ -5,7 +5,6 @@ import type { PinnedTabTarget } from "@/workspace-pins/target";
 export interface TabTargetHandlers {
   createDraft: () => void;
   createTerminal: () => void;
-  createBrowser: () => void;
   createTerminalWithProfile: (profile: TerminalProfileInput) => void;
 }
 
@@ -20,10 +19,6 @@ export function runPinnedTabTarget(
   }
   if (target.kind === "terminal") {
     handlers.createTerminal();
-    return;
-  }
-  if (target.kind === "browser") {
-    handlers.createBrowser();
     return;
   }
   const profile = profiles.find((entry) => entry.id === target.profileId);

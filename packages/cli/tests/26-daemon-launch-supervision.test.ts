@@ -16,7 +16,6 @@ const serverConnectionOfferE2ePath = join(
   repoRoot,
   "packages/server/src/server/daemon-e2e/connection-offer.e2e.test.ts",
 );
-const desktopRuntimePathsPath = join(repoRoot, "packages/desktop/src/daemon/runtime-paths.ts");
 const nixPackagePath = join(repoRoot, "nix/package.nix");
 
 function assertNoDirectWorkerLaunch(label: string, command: string): void {
@@ -82,24 +81,13 @@ assert(
 assertNoSpawnedWorkerEntrypoint("server daemon e2e process launch", serverConnectionOfferE2e);
 console.log("✓ server daemon e2e process launch enters supervisor\n");
 
-console.log("Test 4: desktop runtime and Nix wrapper point at supervisor-entrypoint");
-const desktopRuntimePaths = await readFile(desktopRuntimePathsPath, "utf-8");
-assert(
-  desktopRuntimePaths.includes('"dist", "scripts", "supervisor-entrypoint.js"'),
-  "desktop packaged daemon runner should resolve dist/scripts/supervisor-entrypoint.js",
-);
-assert(
-  desktopRuntimePaths.includes('"scripts", "supervisor-entrypoint.ts"'),
-  "desktop dev daemon runner should resolve scripts/supervisor-entrypoint.ts",
-);
-assertNoDirectWorkerLaunch("desktop runtime paths", desktopRuntimePaths);
-
+console.log("Test 4: Nix wrapper points at supervisor-entrypoint");
 const nixPackage = await readFile(nixPackagePath, "utf-8");
 assert(
   nixPackage.includes("dist/scripts/supervisor-entrypoint.js"),
   "Nix paseo-server wrapper should use dist/scripts/supervisor-entrypoint.js",
 );
 assertNoDirectWorkerLaunch("Nix package wrapper", nixPackage);
-console.log("✓ desktop runtime and Nix wrapper enter supervisor\n");
+console.log("✓ Nix wrapper enters supervisor\n");
 
 console.log("=== Daemon launch supervision regression test passed ===");

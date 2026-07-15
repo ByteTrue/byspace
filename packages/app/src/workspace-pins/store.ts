@@ -9,13 +9,22 @@ interface PinnedTargetsState {
   isPinned: (target: PinnedTabTarget) => boolean;
 }
 
-const DEFAULT_PINNED_TARGETS: PinnedTabTarget[] = [{ kind: "terminal" }, { kind: "browser" }];
+const DEFAULT_PINNED_TARGETS: PinnedTabTarget[] = [{ kind: "terminal" }];
 
-function applyDefaultPinnedTargets(pinned: PinnedTabTarget[]): PinnedTabTarget[] {
+function applyDefaultPinnedTargets(pinned: unknown[]): PinnedTabTarget[] {
   const next = [...DEFAULT_PINNED_TARGETS];
   for (const target of pinned) {
-    if (!isTargetPinned(next, target)) {
-      next.push(target);
+    if (!target || typeof target !== "object" || !("kind" in target)) continue;
+    if (target.kind !== "draft" && target.kind !== "terminal" && target.kind !== "profile")
+      continue;
+    if (
+      target.kind === "profile" &&
+      !("profileId" in target && typeof target.profileId === "string")
+    )
+      continue;
+    const supportedTarget = target as PinnedTabTarget;
+    if (!isTargetPinned(next, supportedTarget)) {
+      next.push(supportedTarget);
     }
   }
   return next;
@@ -36,7 +45,7 @@ export const usePinnedTargetsStore = create<PinnedTargetsState>()(
         return {
           ...currentState,
           ...persisted,
-          pinned: persisted?.pinned ?? applyDefaultPinnedTargets([]),
+          pinned: applyDefaultPinnedTargets(persisted?.pinned ?? []),
         };
       },
       storage: createJSONStorage(() => AsyncStorage),
