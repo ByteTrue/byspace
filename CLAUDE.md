@@ -47,6 +47,7 @@ At the start of non-trivial work, list `docs/` and skim anything relevant to the
 | [docs/ad-hoc-daemon-testing.md](docs/ad-hoc-daemon-testing.md) | Isolated in-process daemon test harness                                                                                        |
 | [docs/docker.md](docs/docker.md)                               | Running the daemon and bundled web UI in Docker, volumes, agent images, security                                               |
 | [docs/release.md](docs/release.md)                             | Release playbook, draft releases, completion checklist                                                                         |
+| [docs/upstream-sync.md](docs/upstream-sync.md)                 | Mandatory full-ledger upstream review, approval, scratch replay, and cursor workflow                                           |
 | [docs/terminal-activity.md](docs/terminal-activity.md)         | Terminal activity indicators — source-agnostic tracker, agent hook reporting, adding a new hook provider                       |
 | [SECURITY.md](SECURITY.md)                                     | Relay threat model, E2E encryption, DNS rebinding, agent auth                                                                  |
 
@@ -72,6 +73,7 @@ See [docs/development.md](docs/development.md) for full setup, build sync requir
 - **NEVER restart the main Paseo daemon on port 6767 without permission** — it manages all running agents. If you're an agent, restarting it kills your own process.
 - **NEVER assume a timeout means the service needs restarting** — timeouts can be transient.
 - **NEVER add auth checks to tests** — agent providers handle their own auth.
+- **For any upstream/Paseo update request, use the repo-local `upstream-sync` skill.** `.byspace/upstream-sync.json` is the cursor; never merge upstream wholesale, import tags, omit commits from the user ledger, or replay before approval.
 - **Before changing app routes, startup routing, remembered workspace restore, or active workspace selection, read [docs/expo-router.md](docs/expo-router.md).**
 - **NEVER run the full test suite locally.** The test suites are heavy and will freeze the machine, especially if multiple agents run them in parallel. Rules:
   - Run only the specific test file you changed: `npx vitest run <file> --bail=1`

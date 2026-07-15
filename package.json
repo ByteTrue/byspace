@@ -40,6 +40,7 @@
     "dev:website": "npm run dev --workspace=@getpaseo/website",
     "postinstall": "node scripts/postinstall-patches.mjs",
     "prepare": "lefthook install --force",
+    "upstream:check": "node scripts/check-upstream-sync-state.mjs",
     "build": "npm run build --workspaces --if-present",
     "build:highlight": "npm run build --workspace=@getpaseo/highlight",
     "build:highlight:clean": "npm run build:clean --workspace=@getpaseo/highlight",

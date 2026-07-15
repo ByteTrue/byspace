@@ -1,0 +1,95 @@
+{
+  "schemaVersion": 1,
+  "upstream": {
+    "url": "https://github.com/getpaseo/paseo.git",
+    "branch": "main"
+  },
+  "cursor": {
+    "lastReviewedCommit": "6804882761fcb9a511338f1fed19b9ed45e99e45",
+    "reviewedAt": "2026-07-15"
+  },
+  "batches": [
+    {
+      "startExclusive": "279e1aa91c0e8c1a3afa1ef0f4e1094e8ebbb239",
+      "endInclusive": "6804882761fcb9a511338f1fed19b9ed45e99e45",
+      "reviewedAt": "2026-07-15",
+      "issue": ".cs/issues/2026/07/15/open-review-upstream-updates.md",
+      "decisions": {
+        "inherited": [
+          "3b078240a84d55c88f16ee425e1489003235c678",
+          "81113d15829ccbc890096929cf0532d1f325309c",
+          "f35b16b316594b693018cb5740b096fca99d5be1",
+          "9ea58aae0cfece29a8ca0b696bc5e197e550a69b",
+          "c0b801b80590d6bc75a72ca6de501d065c193cc7",
+          "1f5283f5a36926f31ec9cbf020072fe1dc35dfa7"
+        ],
+        "applied": [
+          {
+            "upstreamCommit": "cd6c608c9e25a0a1c1332c70bb68209d4c612094",
+            "localCommit": "11463ae8e35e2c1ef59900a2bad83154841b26e3",
+            "mode": "full"
+          },
+          {
+            "upstreamCommit": "d781b687115b65058d4a8ad2b9abdc9a4d0e9ef3",
+            "localCommit": "31e803eb7de06b1740d6f4f9b13dee4e6e7a2b3e",
+            "mode": "partial"
+          },
+          {
+            "upstreamCommit": "d706c4339b0e98133b839771b756accc4ea87078",
+            "localCommit": "b3d044a4a163f2358bba859b303cb1e0bd2201a6",
+            "mode": "full"
+          },
+          {
+            "upstreamCommit": "9c40cb76371247c2249e20fc708b4e02cd3360c6",
+            "localCommit": "d8ab93274dd4bfda97e496c0e21c35a27169821e",
+            "mode": "full"
+          },
+          {
+            "upstreamCommit": "abfe955867f036e6e32d67cd9ab2d06c43c9e1b1",
+            "localCommit": "3e09fc7a76c89e4bb75d923bcc2462589ea44add",
+            "mode": "full"
+          },
+          {
+            "upstreamCommit": "4a5630bfcefc728b57cd8fcc5efc4923e786fe17",
+            "localCommit": "321e69b6672be374f04e32750223827dbc494137",
+            "mode": "partial"
+          },
+          {
+            "upstreamCommit": "7f011d16c5785f02581d53f943a44cc811b8cb78",
+            "localCommit": "184b22cc6ce33e93d75d7eb464f39c6153c7edd3",
+            "mode": "partial"
+          },
+          {
+            "upstreamCommit": "04e893417e2e95c77a25a413edb675557813d727",
+            "localCommit": "2e98b82656f860249cf2c8739235d76508064046",
+            "mode": "full"
+          },
+          {
+            "upstreamCommit": "13e92f8a3075ef815da143573c5f6a78cd2458f9",
+            "localCommit": "afebc9ca25ac4268f221c0435204d5d19a997b75",
+            "mode": "full"
+          }
+        ],
+        "deferred": [
+          "1b8af2e58ee872014f5940071a924b24e25c65f3",
+          "50ed0d0ab11d8f5d9543096329436bb37c303ff0",
+          "38e4d9ad5d2498e228bd1d6215576763b21cc719",
+          "36738464339ff6d39c983294acfd2b82db762b3d",
+          "5ddd5f3726782ef6793b6cfd304aab0097b089c0",
+          "9423b091b9ebe944dced8e1a28f698e27aa7c784"
+        ],
+        "skipped": [
+          "77f6069ec142f58f3ccb85ed016adc90d076cfa1",
+          "319d9017c225a7b2d38027959f7de7a71d320ee9",
+          "f06792ae89d6be21457b025a98d336929730e287",
+          "328361667f20a74c791f18454e6a7de8576b3279",
+          "6804882761fcb9a511338f1fed19b9ed45e99e45"
+        ]
+      },
+      "hardeningCommits": [
+        "25e19bfde3716305e6df3865ced11b1d3ead0552",
+        "7fafecb6bd3f977e27ee11a9e1d5772814b610ea"
+      ]
+    }
+  ]
+}
