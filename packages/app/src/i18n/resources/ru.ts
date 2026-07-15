@@ -777,7 +777,6 @@ export const ru: TranslationResources = {
       reportIssue: "Сообщить о проблеме",
       discord: "Discord",
       github: "Создать issue в GitHub",
-      whatsNew: "Что нового",
       version: "Paseo {{version}}",
     },
     sections: {

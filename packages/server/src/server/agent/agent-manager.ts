@@ -2175,6 +2175,14 @@ export class AgentManager {
       return { status: settlement === "completed" ? "settled" : "refused" };
     }
 
+    if (settlement === "timed_out" && run.kind === "foreground" && run.turnId === null) {
+      this.logger.warn(
+        { agentId, kind: run.kind },
+        "cancelAgentRun: turn start is still pending, cancellation was not confirmed",
+      );
+      return { status: "refused" };
+    }
+
     if (settlement === "timed_out" && run.turnId) {
       this.logger.warn(
         { agentId, turnId: run.turnId, kind: run.kind },

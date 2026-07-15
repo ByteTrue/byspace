@@ -47,6 +47,12 @@ function ensureHideScrollbarStyle(): void {
   document.head.appendChild(style);
 }
 
+export function resolveWebScrollbarGutter(
+  element: Pick<HTMLElement, "hasAttribute">,
+): "auto" | "stable" {
+  return element.hasAttribute("data-composer-input") ? "stable" : "auto";
+}
+
 function metricsChanged(a: ScrollbarMetrics, b: ScrollbarMetrics): boolean {
   return (
     Math.abs(a.offset - b.offset) > METRICS_EPSILON ||
@@ -93,7 +99,7 @@ export function useWebElementScrollbar(
     element.setAttribute("data-hide-scrollbar", "");
     style.scrollbarWidth = "none";
     style.msOverflowStyle = "none";
-    style.scrollbarGutter = "auto";
+    style.scrollbarGutter = resolveWebScrollbarGutter(element);
     ensureHideScrollbarStyle();
 
     function update() {

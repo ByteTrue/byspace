@@ -754,7 +754,6 @@ export const zhCN: TranslationResources = {
       reportIssue: "报告问题",
       discord: "Discord",
       github: "创建 GitHub Issue",
-      whatsNew: "新功能",
       version: "Paseo {{version}}",
     },
     sections: {

@@ -759,7 +759,6 @@ export const ar: TranslationResources = {
       reportIssue: "الإبلاغ عن مشكلة",
       discord: "Discord",
       github: "إنشاء مشكلة على GitHub",
-      whatsNew: "ما الجديد",
       version: "Paseo {{version}}",
     },
     sections: {

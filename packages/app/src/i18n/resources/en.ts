@@ -766,7 +766,6 @@ export const en = {
       reportIssue: "Report an issue",
       discord: "Discord",
       github: "Create GitHub issue",
-      whatsNew: "What's new",
       version: "Paseo {{version}}",
     },
     sections: {

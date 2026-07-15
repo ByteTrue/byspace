@@ -2019,6 +2019,10 @@ export class ACPAgentSession implements AgentSession, ACPClient {
     if (this.activeForegroundTurnId) {
       await this.connection.cancel({ sessionId: this.sessionId });
     }
+
+    if (this.autonomousTurnId) {
+      this.cancelAutonomousTurn("interrupted");
+    }
   }
 
   async close(): Promise<void> {
@@ -2026,6 +2030,7 @@ export class ACPAgentSession implements AgentSession, ACPClient {
       return;
     }
     this.closed = true;
+    this.clearAutonomousTurn();
 
     this.settleCommandsReady();
 
@@ -2750,17 +2755,28 @@ export class ACPAgentSession implements AgentSession, ACPClient {
     });
   }
 
-  private completeAutonomousTurn(): void {
-    if (!this.autonomousTurnId) {
-      return;
-    }
+  private clearAutonomousTurn(): string | null {
     if (this.autonomousTurnTimer) {
       clearTimeout(this.autonomousTurnTimer);
       this.autonomousTurnTimer = null;
     }
     const turnId = this.autonomousTurnId;
     this.autonomousTurnId = null;
-    this.pushEvent({ type: "turn_completed", provider: this.provider, turnId });
+    return turnId;
+  }
+
+  private completeAutonomousTurn(): void {
+    const turnId = this.clearAutonomousTurn();
+    if (turnId) {
+      this.pushEvent({ type: "turn_completed", provider: this.provider, turnId });
+    }
+  }
+
+  private cancelAutonomousTurn(reason: string): void {
+    const turnId = this.clearAutonomousTurn();
+    if (turnId) {
+      this.pushEvent({ type: "turn_canceled", provider: this.provider, turnId, reason });
+    }
   }
 
   private resetAutonomousTurnTimer(): void {

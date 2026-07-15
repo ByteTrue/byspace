@@ -1,6 +1,6 @@
 import { useCallback, useState } from "react";
 import { Text, View } from "react-native";
-import { Activity, CircleHelp, Gift, Keyboard } from "lucide-react-native";
+import { Activity, CircleHelp, Keyboard } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { DiscordIcon } from "@/components/icons/discord-icon";
@@ -28,10 +28,8 @@ import { openExternalUrl } from "@/utils/open-external-url";
 
 const DISCORD_URL = "https://discord.gg/jz8T2uahpH";
 const GITHUB_ISSUE_URL = "https://github.com/getpaseo/paseo/issues/new";
-const CHANGELOG_URL = "https://github.com/getpaseo/paseo/releases";
 const ThemedActivity = withUnistyles(Activity);
 const ThemedCircleHelp = withUnistyles(CircleHelp);
-const ThemedGift = withUnistyles(Gift);
 const ThemedKeyboard = withUnistyles(Keyboard);
 const ThemedDiscordIcon = withUnistyles(DiscordIcon);
 const ThemedGitHubIcon = withUnistyles(GitHubIcon);
@@ -50,9 +48,6 @@ const discordLeadingIcon = (
 );
 const githubLeadingIcon = (
   <ThemedGitHubIcon size={ICON_SIZE.sm} uniProps={foregroundMutedColorMapping} />
-);
-const changelogLeadingIcon = (
-  <ThemedGift size={ICON_SIZE.sm} uniProps={foregroundMutedColorMapping} />
 );
 
 function formatVersionWithPrefix(version: string | null | undefined): string {
@@ -103,10 +98,6 @@ export function SidebarHelpMenu() {
     void openExternalUrl(GITHUB_ISSUE_URL);
   }, []);
 
-  const openChangelog = useCallback(() => {
-    void openExternalUrl(CHANGELOG_URL);
-  }, []);
-
   return (
     <DropdownMenu open={open} onOpenChange={setOpen}>
       <Tooltip delayDuration={300} enabledOnDesktop={!open}>
@@ -142,13 +133,6 @@ export function SidebarHelpMenu() {
             {t("sidebar.help.shortcuts")}
           </DropdownMenuItem>
         ) : null}
-        <DropdownMenuItem
-          testID="sidebar-help-changelog"
-          leading={changelogLeadingIcon}
-          onSelect={openChangelog}
-        >
-          {t("sidebar.help.whatsNew")}
-        </DropdownMenuItem>
         <DropdownMenuItem
           testID="sidebar-help-diagnostics"
           leading={diagnosticLeadingIcon}

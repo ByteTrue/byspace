@@ -6,7 +6,6 @@ const DISCORD_DESTINATION =
   /^https:\/\/(?:discord\.gg\/jz8T2uahpH|discord\.com\/invite\/jz8T2uahpH)(?:[/?#]|$)/;
 const GITHUB_ISSUE_DESTINATION =
   /^https:\/\/github\.com\/(?:getpaseo\/paseo\/issues\/new(?:\/choose)?(?:[/?#]|$)|login\?return_to=https%3A%2F%2Fgithub\.com%2Fgetpaseo%2Fpaseo%2Fissues%2Fnew$)/;
-const CHANGELOG_DESTINATION = /^https:\/\/paseo\.sh\/changelog(?:[/?#]|$)/;
 const APP_VERSION = /^Paseo v\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
 
 async function openHelpMenu(page: Page): Promise<void> {
@@ -55,7 +54,6 @@ test("opens troubleshooting tools from the sidebar help menu", async ({ page }) 
   expect(menuBox.y + menuBox.height).toBeLessThanOrEqual(triggerBox.y);
   await expect(page.getByText("Help", { exact: true })).toBeVisible();
   await expect(page.getByText("Report an issue", { exact: true })).toBeVisible();
-  await expect(page.getByText("What's new", { exact: true })).toBeVisible();
   await expect(page.getByTestId("sidebar-help-version")).toHaveText(APP_VERSION);
 
   await page.getByTestId("sidebar-help-diagnostics").click();
@@ -76,9 +74,6 @@ test("opens support and release destinations", async ({ page }) => {
 
   await openHelpMenu(page);
   await expectExternalPage(page, "sidebar-help-github", GITHUB_ISSUE_DESTINATION);
-
-  await openHelpMenu(page);
-  await expectExternalPage(page, "sidebar-help-changelog", CHANGELOG_DESTINATION);
 });
 
 test("keeps diagnostics available from Settings after globalizing the sheet", async ({ page }) => {

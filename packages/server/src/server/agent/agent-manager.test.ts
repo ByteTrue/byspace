@@ -1483,6 +1483,71 @@ test("cancelAgentRun preserves running state when the provider interrupt hangs",
   }
 });
 
+test("cancelAgentRun refuses cancellation while startTurn is still pending", async () => {
+  const workdir = mkdtempSync(join(tmpdir(), "agent-manager-pending-start-cancel-"));
+  const startEntered = deferred<void>();
+  const allowStart = deferred<void>();
+
+  class PendingStartSession extends TestAgentSession {
+    interruptCalled = false;
+
+    override async startTurn(): Promise<{ turnId: string }> {
+      startEntered.resolve();
+      await allowStart.promise;
+      const turnId = "pending-start-turn";
+      setTimeout(() => {
+        this.pushEvent({ type: "turn_started", provider: this.provider, turnId });
+        this.pushEvent({ type: "turn_completed", provider: this.provider, turnId });
+      }, 0);
+      return { turnId };
+    }
+
+    override async interrupt(): Promise<void> {
+      this.interruptCalled = true;
+    }
+  }
+
+  const session = new PendingStartSession({ provider: "codex", cwd: workdir });
+  const client = new (class extends TestAgentClient {
+    override async createSession(): Promise<AgentSession> {
+      return session;
+    }
+  })();
+  const manager = new AgentManager({
+    clients: { codex: client },
+    registry: new AgentStorage(join(workdir, "agents"), logger),
+    logger,
+    rescueTimeouts: { interruptSessionMs: 10 },
+    idFactory: () => "00000000-0000-4000-8000-000000000307",
+  });
+
+  try {
+    const agent = await manager.createAgent({ provider: "codex", cwd: workdir }, undefined, {
+      workspaceId: undefined,
+    });
+    const firstRun = manager.streamAgent(agent.id, "pending start");
+    const firstRunDrain = (async () => {
+      for await (const _event of firstRun) {
+        // Drain until the delayed turn completes.
+      }
+    })();
+    await startEntered.promise;
+
+    await expect(manager.cancelAgentRun(agent.id)).resolves.toEqual({ status: "refused" });
+    expect(session.interruptCalled).toBe(true);
+    expect(() => manager.streamAgent(agent.id, "second run")).toThrow("already has an active run");
+
+    allowStart.resolve();
+    await firstRunDrain;
+    expect(manager.getAgent(agent.id)).toMatchObject({
+      lifecycle: "idle",
+      activeForegroundTurnId: null,
+    });
+  } finally {
+    rmSync(workdir, { recursive: true, force: true });
+  }
+});
+
 test("cancelAgentRun preserves the active turn when the provider rejects the interrupt", async () => {
   const fixture = await createControlledInterruptFixture({
     name: "interrupt-rejected",

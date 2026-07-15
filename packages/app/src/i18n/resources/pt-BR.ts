@@ -777,7 +777,6 @@ export const ptBR: TranslationResources = {
       reportIssue: "Relatar um problema",
       discord: "Discord",
       github: "Criar issue no GitHub",
-      whatsNew: "Novidades",
       version: "Paseo {{version}}",
     },
     sections: {

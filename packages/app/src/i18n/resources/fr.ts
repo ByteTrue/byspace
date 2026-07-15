@@ -785,7 +785,6 @@ export const fr: TranslationResources = {
       reportIssue: "Signaler un problème",
       discord: "Discord",
       github: "Créer un ticket GitHub",
-      whatsNew: "Nouveautés",
       version: "Paseo {{version}}",
     },
     sections: {

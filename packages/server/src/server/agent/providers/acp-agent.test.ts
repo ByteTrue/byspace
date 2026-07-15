@@ -91,6 +91,8 @@ interface ACPSessionInternals {
   configOptions: SessionConfigOption[];
   translateSessionUpdate(update: SessionUpdate): AgentStreamEvent[];
   acpMcpServers(): unknown[];
+  autonomousTurnId: string | null;
+  autonomousTurnTimer: ReturnType<typeof setTimeout> | null;
 }
 
 interface ACPModelSelectionInternals {
@@ -2292,6 +2294,77 @@ describe("ACPAgentSession", () => {
     );
     expect(turnCompleted).toBeDefined();
 
+    vi.useRealTimers();
+  });
+
+  test("interrupt cancels and clears an autonomous turn", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const session = createSession();
+    const internals = asInternals<ACPSessionInternals>(session);
+    internals.sessionId = "session-1";
+    internals.connection = { prompt: vi.fn() };
+
+    const events: AgentStreamEvent[] = [];
+    session.subscribe((event) => events.push(event));
+    await session.sessionUpdate({
+      sessionId: "session-1",
+      update: {
+        sessionUpdate: "agent_message_chunk",
+        messageId: "autonomous-before-interrupt",
+        content: { type: "text", text: "Background update" },
+      } as SessionUpdate,
+    });
+    const firstTurnId = internals.autonomousTurnId;
+    expect(firstTurnId).toEqual(expect.any(String));
+
+    await session.interrupt();
+    expect(internals.autonomousTurnId).toBeNull();
+    expect(internals.autonomousTurnTimer).toBeNull();
+    expect(events).toContainEqual({
+      type: "turn_canceled",
+      provider: "claude-acp",
+      turnId: firstTurnId,
+      reason: "interrupted",
+    });
+
+    await vi.advanceTimersByTimeAsync(ACPAgentSession["AUTONOMOUS_TURN_TIMEOUT_MS"] + 10);
+    expect(
+      events.some((event) => event.type === "turn_completed" && event.turnId === firstTurnId),
+    ).toBe(false);
+
+    await session.sessionUpdate({
+      sessionId: "session-1",
+      update: {
+        sessionUpdate: "agent_message_chunk",
+        messageId: "autonomous-after-interrupt",
+        content: { type: "text", text: "Later update" },
+      } as SessionUpdate,
+    });
+    expect(internals.autonomousTurnId).toEqual(expect.any(String));
+    expect(internals.autonomousTurnId).not.toBe(firstTurnId);
+    vi.useRealTimers();
+  });
+
+  test("close clears the autonomous turn timer and identity", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const session = createSession();
+    const internals = asInternals<ACPSessionInternals>(session);
+    internals.sessionId = "session-1";
+    internals.connection = { prompt: vi.fn() };
+    await session.sessionUpdate({
+      sessionId: "session-1",
+      update: {
+        sessionUpdate: "agent_message_chunk",
+        messageId: "autonomous-before-close",
+        content: { type: "text", text: "Background update" },
+      } as SessionUpdate,
+    });
+    expect(internals.autonomousTurnId).toEqual(expect.any(String));
+    expect(internals.autonomousTurnTimer).not.toBeNull();
+
+    await session.close();
+    expect(internals.autonomousTurnId).toBeNull();
+    expect(internals.autonomousTurnTimer).toBeNull();
     vi.useRealTimers();
   });
 
