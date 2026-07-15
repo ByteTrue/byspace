@@ -9,8 +9,8 @@ export function useSkeletonPulse(): Animated.Value {
   useEffect(() => {
     const animation = Animated.loop(
       Animated.sequence([
-        Animated.timing(pulse, { toValue: 1, duration: 1000, useNativeDriver: true }),
-        Animated.timing(pulse, { toValue: 0, duration: 1000, useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 1, duration: 1000, useNativeDriver: false }),
+        Animated.timing(pulse, { toValue: 0, duration: 1000, useNativeDriver: false }),
       ]),
     );
     animation.start();

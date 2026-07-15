@@ -62,12 +62,12 @@ export function SidebarAgentListSkeleton() {
         Animated.timing(pulse, {
           toValue: 1,
           duration: 1000,
-          useNativeDriver: true,
+          useNativeDriver: false,
         }),
         Animated.timing(pulse, {
           toValue: 0,
           duration: 1000,
-          useNativeDriver: true,
+          useNativeDriver: false,
         }),
       ]),
     );

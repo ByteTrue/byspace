@@ -29,9 +29,8 @@ buildNpmPackage rec {
         baseName = builtins.baseNameOf path;
         relPath = lib.removePrefix (toString ./..) path;
       in
-      # Exclude non-daemon workspace contents (keep package.json for workspace resolution)
-      # Exclude test fixtures and debug files
-      && !(lib.hasSuffix ".test.ts" baseName)
+      # Exclude test fixtures, local state, and generated dependency trees
+      !(lib.hasSuffix ".test.ts" baseName)
       && !(lib.hasSuffix ".e2e.test.ts" baseName)
       && baseName != "node_modules"
       && baseName != ".git"
