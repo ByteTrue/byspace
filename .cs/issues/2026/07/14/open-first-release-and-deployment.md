@@ -4,7 +4,7 @@ title: "完成首次发布与部署"
 type: feature
 status: open
 created: 2026-07-14
-epic: ".cs/epics/2026/07/14/web-only-paseo-fork/spec.md"
+epic: ".cs/epics/2026/07/14/web-only-byspace/spec.md"
 ---
 
 # 完成首次发布与部署
@@ -30,8 +30,8 @@ epic: ".cs/epics/2026/07/14/web-only-paseo-fork/spec.md"
 
 ## 归属
 
-- 隶属 epic：`.cs/epics/2026/07/14/web-only-paseo-fork/spec.md`
-- 相关 spec：`.cs/epics/2026/07/14/web-only-paseo-fork/spec.md`
+- 隶属 epic：`.cs/epics/2026/07/14/web-only-byspace/spec.md`
+- 相关 spec：`.cs/epics/2026/07/14/web-only-byspace/spec.md`
 
 ## 背景与证据
 
