@@ -10,39 +10,39 @@ category: Workspaces
 
 Git worktrees are one kind of workspace.
 
-A [workspace](/docs/workspaces) is the place where a task happens. When that workspace is backed by a git worktree, Paseo creates a separate directory on a separate branch so parallel agents never step on each other.
+A [workspace](/docs/workspaces) is the place where a task happens. When that workspace is backed by a git worktree, BySpace creates a separate directory on a separate branch so parallel agents never step on each other.
 
-This page covers the git-specific details: where worktrees live, how branches are chosen, and how to configure setup hooks, scripts, terminals, and long-running services through `paseo.json`.
+This page covers the git-specific details: where worktrees live, how branches are chosen, and how to configure setup hooks, scripts, terminals, and long-running services through `byspace.json`.
 
 ## Layout and workflow
 
 Worktrees live under `$BYSPACE_HOME/worktrees/` by default, grouped by a hash of the source checkout path. You can change the base directory with `worktrees.root` in `config.json`. Each worktree gets a random slug; the branch name is chosen when you first launch an agent.
 
 ```
-~/.paseo/worktrees/
+~/.byspace/worktrees/
 └── 1vnnm9k3/               # hash of source checkout path
     ├── tidy-fox/           # worktree slug (branch set on first agent)
     └── bold-owl/
 ```
 
-With a custom root, Paseo keeps the same hashed layout under that directory:
+With a custom root, BySpace keeps the same hashed layout under that directory:
 
 ```json
 {
   "worktrees": {
-    "root": "/mnt/fast/paseo-worktrees"
+    "root": "/mnt/fast/byspace-worktrees"
   }
 }
 ```
 
-1. Create a worktree, Paseo runs your setup hooks
+1. Create a worktree, BySpace runs your setup hooks
 2. Launch an agent, a branch is created or assigned
 3. Review the diff against the base branch
 4. Merge or archive, archive runs teardown and removes the directory
 
-## paseo.json
+## byspace.json
 
-Drop a `paseo.json` in your repo root. Paseo reads it from the committed version of the base branch you picked, so uncommitted changes in other branches don't apply.
+Drop a `byspace.json` in your repo root. BySpace reads it from the committed version of the base branch you picked, so uncommitted changes in other branches don't apply.
 
 ```json
 {
@@ -76,7 +76,7 @@ Commands run with the worktree as `cwd`. Use `$BYSPACE_SOURCE_CHECKOUT_PATH` to 
 
 ## Scripts and services
 
-`scripts` are named commands you can run inside a worktree on demand. Mark one as a _service_ and Paseo supervises it as a long-running process, assigns it a port, and routes HTTP traffic to it through the daemon's reverse proxy.
+`scripts` are named commands you can run inside a worktree on demand. Mark one as a _service_ and BySpace supervises it as a long-running process, assigns it a port, and routes HTTP traffic to it through the daemon's reverse proxy.
 
 ### Plain scripts
 
@@ -108,7 +108,7 @@ Commands run with the worktree as `cwd`. Use `$BYSPACE_SOURCE_CHECKOUT_PATH` to 
 }
 ```
 
-Omit `port` to let Paseo auto-assign one. Bind your process to `$BYSPACE_PORT` rather than hard-coding, each worktree gets a distinct port so multiple copies of the same service coexist.
+Omit `port` to let BySpace auto-assign one. Bind your process to `$BYSPACE_PORT` rather than hard-coding, each worktree gets a distinct port so multiple copies of the same service coexist.
 
 ### Reverse proxy
 
@@ -129,11 +129,11 @@ Services launched from the same workspace see each other's ports and proxy URLs.
 
 ```
 BYSPACE_PORT=3000                         # this service's port
-BYSPACE_URL=http://web--my-app.localhost:6767  # this service's proxy URL
+BYSPACE_URL=http://web--my-app.localhost:6777  # this service's proxy URL
 BYSPACE_SERVICE_API_PORT=51732
-BYSPACE_SERVICE_API_URL=http://api--my-app.localhost:6767
+BYSPACE_SERVICE_API_URL=http://api--my-app.localhost:6777
 BYSPACE_SERVICE_WEB_PORT=3000
-BYSPACE_SERVICE_WEB_URL=http://web--my-app.localhost:6767
+BYSPACE_SERVICE_WEB_URL=http://web--my-app.localhost:6777
 ```
 
 Script names are upper-cased and non-alphanumerics become `_`. Point your frontend at `$BYSPACE_SERVICE_API_URL` instead of hard-coding a port.
@@ -172,7 +172,7 @@ Services additionally get:
 ## CLI
 
 ```bash
-paseo run --worktree feature-auth --base main "implement auth"
-paseo worktree ls
-paseo worktree archive feature-auth
+byspace run --worktree feature-auth --base main "implement auth"
+byspace worktree ls
+byspace worktree archive feature-auth
 ```

@@ -54,7 +54,7 @@ interface RestartDaemonClientConfig {
 }
 
 interface SeededRestartHome {
-  paseoHome: string;
+  byspaceHome: string;
   cwd: string;
   projectId: string;
   projectDisplayName: string;
@@ -73,10 +73,10 @@ function nowIso(): string {
 }
 
 async function seedRestartHome(): Promise<SeededRestartHome> {
-  const paseoHome = mkdtempSync(path.join(tmpdir(), "paseo-playwright-restart-home-"));
-  const cwd = mkdtempSync(path.join(tmpdir(), "paseo-playwright-restart-cwd-"));
-  const projectsDir = path.join(paseoHome, "projects");
-  const agentDir = path.join(paseoHome, "agents", projectDirNameFromCwd(cwd));
+  const byspaceHome = mkdtempSync(path.join(tmpdir(), "byspace-playwright-restart-home-"));
+  const cwd = mkdtempSync(path.join(tmpdir(), "byspace-playwright-restart-cwd-"));
+  const projectsDir = path.join(byspaceHome, "projects");
+  const agentDir = path.join(byspaceHome, "agents", projectDirNameFromCwd(cwd));
   mkdirSync(projectsDir, { recursive: true });
   mkdirSync(agentDir, { recursive: true });
 
@@ -143,14 +143,14 @@ async function seedRestartHome(): Promise<SeededRestartHome> {
   );
 
   return {
-    paseoHome,
+    byspaceHome,
     cwd,
     projectId: project.projectId,
     projectDisplayName,
     workspaceA: workspaceA.workspaceId,
     workspaceB: workspaceB.workspaceId,
     cleanup: () => {
-      rmSync(paseoHome, { recursive: true, force: true });
+      rmSync(byspaceHome, { recursive: true, force: true });
       rmSync(cwd, { recursive: true, force: true });
     },
   };
@@ -232,11 +232,11 @@ async function stopProcess(child: ChildProcess): Promise<void> {
 }
 
 async function startRestartDaemon(input: {
-  paseoHome: string;
+  byspaceHome: string;
   origin: string;
 }): Promise<StartedDaemon> {
   const port = await getAvailablePort();
-  if (port === 6767 || String(port) === process.env.E2E_DAEMON_PORT) {
+  if (port === 6777 || String(port) === process.env.E2E_DAEMON_PORT) {
     return startRestartDaemon(input);
   }
 
@@ -246,7 +246,7 @@ async function startRestartDaemon(input: {
     cwd: serverDir,
     env: withDisabledE2ESpeechEnv({
       ...process.env,
-      BYSPACE_HOME: input.paseoHome,
+      BYSPACE_HOME: input.byspaceHome,
       BYSPACE_SERVER_ID: SERVER_ID,
       BYSPACE_LISTEN: `127.0.0.1:${port}`,
       BYSPACE_CORS_ORIGINS: input.origin,
@@ -306,9 +306,9 @@ function loadAppVersion(): string {
 }
 
 async function seedBrowserForDaemon(page: Page, input: { serverId: string; port: number }) {
-  await page.route(/:(6767)\b/, (route) => route.abort());
-  await page.routeWebSocket(/:(6767)\b/, async (ws) => {
-    await ws.close({ code: 1008, reason: "Blocked connection to localhost:6767 during e2e." });
+  await page.route(/:(6777)\b/, (route) => route.abort());
+  await page.routeWebSocket(/:(6777)\b/, async (ws) => {
+    await ws.close({ code: 1008, reason: "Blocked connection to localhost:6777 during e2e." });
   });
   await page.route(
     "**/*",
@@ -331,10 +331,10 @@ async function seedBrowserForDaemon(page: Page, input: { serverId: string; port:
   });
   await page.evaluate(
     ({ daemon, preferences }) => {
-      localStorage.setItem("@paseo:e2e", "1");
-      localStorage.setItem("@paseo:daemon-registry", JSON.stringify([daemon]));
-      localStorage.removeItem("@paseo:settings");
-      localStorage.setItem("@paseo:create-agent-preferences", JSON.stringify(preferences));
+      localStorage.setItem("@byspace:e2e", "1");
+      localStorage.setItem("@byspace:daemon-registry", JSON.stringify([daemon]));
+      localStorage.removeItem("@byspace:settings");
+      localStorage.setItem("@byspace:create-agent-preferences", JSON.stringify(preferences));
     },
     {
       daemon: host,
@@ -430,7 +430,7 @@ test.describe("Workspace model restart regressions", () => {
     test.setTimeout(90_000);
     const seeded = await seedRestartHome();
     const origin = new URL(baseURL ?? "http://localhost").origin;
-    const daemon = await startRestartDaemon({ paseoHome: seeded.paseoHome, origin });
+    const daemon = await startRestartDaemon({ byspaceHome: seeded.byspaceHome, origin });
     const serverId = SERVER_ID;
     const client = await connectRestartDaemonClient(daemon.port);
 

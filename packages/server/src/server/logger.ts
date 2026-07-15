@@ -3,7 +3,7 @@ import path from "node:path";
 import pino from "pino";
 import pretty from "pino-pretty";
 import type { PersistedConfig } from "./persisted-config.js";
-import { resolvePaseoHome } from "./paseo-home.js";
+import { resolveBySpaceHome } from "./byspace-home.js";
 
 export type LogLevel = "trace" | "debug" | "info" | "warn" | "error" | "fatal";
 export type LogFormat = "pretty" | "json";
@@ -28,7 +28,7 @@ interface LegacyLogConfig {
 type LoggerConfigInput = PersistedConfig | LegacyLogConfig | undefined;
 
 interface ResolveLogConfigOptions {
-  paseoHome?: string;
+  byspaceHome?: string;
   file?: boolean;
 }
 
@@ -60,8 +60,8 @@ const REDACT_PATHS = [
   "req.headers.Sec-WebSocket-Protocol",
 ];
 
-function resolveFilePath(paseoHome: string, configuredPath: string | undefined): string {
-  const fallback = path.join(paseoHome, DEFAULT_DAEMON_LOG_FILENAME);
+function resolveFilePath(byspaceHome: string, configuredPath: string | undefined): string {
+  const fallback = path.join(byspaceHome, DEFAULT_DAEMON_LOG_FILENAME);
   if (!configuredPath) {
     return fallback;
   }
@@ -70,7 +70,7 @@ function resolveFilePath(paseoHome: string, configuredPath: string | undefined):
     return configuredPath;
   }
 
-  return path.resolve(paseoHome, configuredPath);
+  return path.resolve(byspaceHome, configuredPath);
 }
 
 function minLogLevel(levels: LogLevel[]): LogLevel {
@@ -85,11 +85,11 @@ function minLogLevel(levels: LogLevel[]): LogLevel {
   return minLevel;
 }
 
-function resolveConfiguredPaseoHome(options: ResolveLogConfigOptions | undefined): string {
-  if (options?.paseoHome) {
-    return options.paseoHome;
+function resolveConfiguredBySpaceHome(options: ResolveLogConfigOptions | undefined): string {
+  if (options?.byspaceHome) {
+    return options.byspaceHome;
   }
-  return resolvePaseoHome();
+  return resolveBySpaceHome();
 }
 
 function normalizeLoggerConfigInput(config: LoggerConfigInput): PersistedConfig | undefined {
@@ -139,7 +139,7 @@ export function resolveLogConfig(
   options?: ResolveLogConfigOptions,
 ): ResolvedLogConfig {
   const persistedConfig = normalizeLoggerConfigInput(configInput);
-  const paseoHome = resolveConfiguredPaseoHome(options);
+  const byspaceHome = resolveConfiguredBySpaceHome(options);
   const persistedLog = persistedConfig?.log;
 
   const { consoleLevel, fileLevel, consoleFormat } = resolveLogLevelsAndFormat(persistedLog);
@@ -147,7 +147,7 @@ export function resolveLogConfig(
     options?.file !== false && persistedLog?.file
       ? {
           level: fileLevel ?? DEFAULT_FILE_LEVEL,
-          path: resolveFilePath(paseoHome, persistedLog.file.path),
+          path: resolveFilePath(byspaceHome, persistedLog.file.path),
         }
       : undefined;
 

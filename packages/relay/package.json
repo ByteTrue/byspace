@@ -1,7 +1,7 @@
 {
   "name": "@bytetrue/byspace-relay",
   "version": "0.1.107",
-  "description": "Paseo relay for bridging daemon and client connections",
+  "description": "BySpace relay for bridging daemon and client connections",
   "files": [
     "dist",
     "!dist/**/*.map"
@@ -49,6 +49,7 @@
     "@types/node": "^20.9.0",
     "@types/ws": "^8.5.8",
     "typescript": "^5.2.2",
-    "vitest": "^4.1.6"
+    "vitest": "^4.1.6",
+    "wrangler": "^4.105.0"
   }
 }

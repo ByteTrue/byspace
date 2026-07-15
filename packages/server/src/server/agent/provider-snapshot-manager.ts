@@ -37,7 +37,7 @@ import type { MutableDaemonConfig } from "../daemon-config-store.js";
 const DEFAULT_REFRESH_TIMEOUT_MS = 60_000;
 const DEFAULT_DIAGNOSTIC_TIMEOUT_MS = 120_000;
 const REFRESH_TIMEOUT_ENV_VAR = "BYSPACE_PROVIDER_REFRESH_TIMEOUT_MS";
-export const GLOBAL_PROVIDER_SNAPSHOT_KEY = "paseo:global";
+export const GLOBAL_PROVIDER_SNAPSHOT_KEY = "byspace:global";
 
 // Provider refresh probes can be slow on cold starts (e.g. Copilot's first
 // `copilot --acp` invocation, OpenCode workspace probes with many MCP servers).

@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, test } from "vitest";
 
-import { createTestPaseoDaemon, type TestPaseoDaemon } from "./test-utils/paseo-daemon.js";
+import { createTestBySpaceDaemon, type TestBySpaceDaemon } from "./test-utils/byspace-daemon.js";
 
 interface InitialDaemonConnectionHint {
   listen: string;
@@ -55,10 +55,10 @@ function readInjectedConnectionHint(html: string): InitialDaemonConnectionHint {
 
 describe("daemon web UI bootstrap", () => {
   let tempRoot: string | null = null;
-  let daemonHandle: TestPaseoDaemon | null = null;
+  let daemonHandle: TestBySpaceDaemon | null = null;
 
   async function createWebUiDist(): Promise<string> {
-    tempRoot = await mkdtemp(path.join(os.tmpdir(), "paseo-bootstrap-web-ui-"));
+    tempRoot = await mkdtemp(path.join(os.tmpdir(), "byspace-bootstrap-web-ui-"));
     const distDir = path.join(tempRoot, "dist");
     await mkdir(distDir, { recursive: true });
     await writeFile(
@@ -80,7 +80,7 @@ describe("daemon web UI bootstrap", () => {
   test("injects a TLS initial connection hint only for HTTPS forwarded by a trusted proxy", async () => {
     const distDir = await createWebUiDist();
 
-    daemonHandle = await createTestPaseoDaemon({
+    daemonHandle = await createTestBySpaceDaemon({
       mcpEnabled: false,
       webUi: {
         enabled: true,
@@ -113,7 +113,7 @@ describe("daemon web UI bootstrap", () => {
   test("ignores forwarded HTTPS when proxy trust is disabled", async () => {
     const distDir = await createWebUiDist();
 
-    daemonHandle = await createTestPaseoDaemon({
+    daemonHandle = await createTestBySpaceDaemon({
       mcpEnabled: false,
       trustedProxies: [],
       webUi: {

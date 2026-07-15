@@ -17,33 +17,33 @@ Root checkout dev is intentionally split across terminals:
 - `npm run dev:server` runs the daemon on `127.0.0.1:6768`.
 - `npm run dev:app` runs Expo on `http://localhost:8081` and connects to the dev daemon.
 
-`npm run dev` is only a shorthand for `npm run dev:server`. Keep `127.0.0.1:6767` for production-style `~/.paseo` state.
+`npm run dev` is only a shorthand for `npm run dev:server`. Keep `127.0.0.1:6777` for production-style `~/.byspace` state.
 
 ### BYSPACE_HOME
 
 `BYSPACE_HOME` is the directory that holds runtime state (agents, worktrees, workspace config, sockets, daemon log). Resolution rules:
 
-- The **server itself** (for example `npm run start`) defaults to `~/.paseo` (see `packages/server/src/server/paseo-home.ts`).
-- **Repo dev scripts** default to `$ROOT/.dev/paseo-home`, where `$ROOT` is the current checkout or worktree root. This keeps dev state scoped to the checkout instead of the production daemon.
-- **`npm run cli -- ...`** runs through the same dev-home wrapper as the dev scripts, so the in-repo CLI automatically targets the current checkout's `.dev/paseo-home` and configured dev daemon endpoint.
-- **Paseo-created worktrees** seed `$BYSPACE_WORKTREE_PATH/.dev/paseo-home` from `$BYSPACE_SOURCE_CHECKOUT_PATH/.dev/paseo-home` by copying durable JSON metadata. Runtime files like pid files, sockets, and logs are not copied.
+- The **server itself** (for example `npm run start`) defaults to `~/.byspace` (see `packages/server/src/server/byspace-home.ts`).
+- **Repo dev scripts** default to `$ROOT/.dev/byspace-home`, where `$ROOT` is the current checkout or worktree root. This keeps dev state scoped to the checkout instead of the production daemon.
+- **`npm run cli -- ...`** runs through the same dev-home wrapper as the dev scripts, so the in-repo CLI automatically targets the current checkout's `.dev/byspace-home` and configured dev daemon endpoint.
+- **BySpace-created worktrees** seed `$BYSPACE_WORKTREE_PATH/.dev/byspace-home` from `$BYSPACE_SOURCE_CHECKOUT_PATH/.dev/byspace-home` by copying durable JSON metadata. Runtime files like pid files, sockets, and logs are not copied.
 
 Override knobs:
 
 ```bash
-BYSPACE_HOME=~/.paseo-blue npm run dev          # explicit home
+BYSPACE_HOME=~/.byspace-blue npm run dev          # explicit home
 BYSPACE_DEV_SEED_HOME=/path/to/home npm run dev # seed from a different source home
 BYSPACE_DEV_RESET_HOME=1 npm run dev            # clear and reseed the derived worktree home
 ```
 
 ### Daemon endpoints
 
-- Production daemon: `localhost:6767`.
+- Production daemon: `localhost:6777`.
 - Root checkout dev daemon: `localhost:6768`.
 - Root checkout Expo: `http://localhost:8081`.
-- `npm run dev` (Windows): `localhost:6767` for the daemon.
+- `npm run dev` (Windows): `localhost:6777` for the daemon.
 
-In Paseo-managed worktree services, use the injected service environment rather than hardcoded root checkout ports.
+In BySpace-managed worktree services, use the injected service environment rather than hardcoded root checkout ports.
 
 ### Expo Router
 
@@ -128,7 +128,7 @@ defaults. The default rotation is `10m` x `3` files everywhere.
 
 ### Agent Tool Catalog Measurement
 
-Measure the MCP `tools/list` payload that Paseo injects into agents with:
+Measure the MCP `tools/list` payload that BySpace injects into agents with:
 
 ```bash
 npm run measure:agent-tools --workspace=@bytetrue/byspace-server
@@ -139,14 +139,14 @@ tools. It defaults to the agent-scoped catalog; use
 `-- --scope=top-level` for the unaffiliated `/mcp/agents` shape and `-- --json`
 for machine-readable output.
 
-## paseo.json service scripts
+## byspace.json service scripts
 
 `worktree.setup` and `worktree.teardown` accept either a multiline shell script or an array
 of commands. Both run sequentially.
 
 Lifecycle commands run in the worktree through a stable script shell: `bash`
 resolved from `PATH` on macOS/Linux, and PowerShell with `-NoProfile` on
-Windows. They inherit the daemon environment plus Paseo's lifecycle variables;
+Windows. They inherit the daemon environment plus BySpace's lifecycle variables;
 login and interactive shell startup files are not loaded, and Bash's `BASH_ENV`
 hook is unset. Daemon-run loop verify checks and ACP single-string terminal
 commands use the same non-login Bash behavior on macOS/Linux, but preserve their
@@ -198,13 +198,13 @@ The daemon can optionally serve the browser web client from the same HTTP server
 Enable it for a running daemon with:
 
 ```bash
-paseo daemon start --web-ui
+byspace daemon start --web-ui
 ```
 
 Or set the environment variable:
 
 ```bash
-BYSPACE_WEB_UI_ENABLED=true paseo daemon start
+BYSPACE_WEB_UI_ENABLED=true byspace daemon start
 ```
 
 Or persist it in `config.json`:
@@ -219,9 +219,9 @@ Or persist it in `config.json`:
 }
 ```
 
-When enabled, opening the daemon HTTP origin (for example `http://localhost:6767/`) serves the web app. The same HTTP server continues to serve `/api/*`, `/mcp/*`, `/public/*`, the WebSocket upgrade, and service-proxy routes. Static files load without daemon bearer auth; API and WebSocket calls still enforce auth.
+When enabled, opening the daemon HTTP origin (for example `http://localhost:6777/`) serves the web app. The same HTTP server continues to serve `/api/*`, `/mcp/*`, `/public/*`, the WebSocket upgrade, and service-proxy routes. Static files load without daemon bearer auth; API and WebSocket calls still enforce auth.
 
-The served app auto-bootstraps a connection to the same origin, so opening `http://localhost:6767/` directly usually skips the Add Host step.
+The served app auto-bootstraps a connection to the same origin, so opening `http://localhost:6777/` directly usually skips the Add Host step.
 
 Build the artifact for packaging or measurement with:
 
@@ -281,7 +281,7 @@ install.
 
 ## CLI reference
 
-Use `npm run cli` to run the in-repo CLI from source. The dev-home wrapper targets this checkout's `.dev/paseo-home` and dev daemon unless you pass an explicit override. Use the globally installed CLI for the production daemon and `npm run cli` while editing this checkout.
+Use `npm run cli` to run the in-repo CLI from source. The dev-home wrapper targets this checkout's `.dev/byspace-home` and dev daemon unless you pass an explicit override. Use the globally installed CLI for the production daemon and `npm run cli` while editing this checkout.
 
 ```bash
 npm run cli -- ls -a -g              # List all agents globally
@@ -336,7 +336,7 @@ Get the session ID from the agent JSON (`persistence.sessionId`), then:
 
 ## Testing with Playwright MCP
 
-Point Playwright MCP at the running Expo web target. For root checkout dev, `npm run dev:app` reserves `http://localhost:8081`. For Paseo-managed worktree app services, use the service URL or port shown by Paseo for that worktree.
+Point Playwright MCP at the running Expo web target. For root checkout dev, `npm run dev:app` reserves `http://localhost:8081`. For BySpace-managed worktree app services, use the service URL or port shown by BySpace for that worktree.
 
 Do NOT use browser history (back/forward). Always navigate by clicking UI elements or using `browser_navigate` with the full URL — the app uses client-side routing and browser history breaks state.
 
@@ -349,7 +349,7 @@ PWA install metadata lives in `packages/app/public/manifest.json` and is linked
 from `packages/app/public/index.html`. Keep the install icons in `public/` so
 Cloudflare serves them from stable root URLs after `expo export`.
 
-Do not add service-worker caching casually. Paseo is a live control surface for
+Do not add service-worker caching casually. BySpace is a live control surface for
 agents, and an aggressive service worker can strand installed users on stale web
 code. If offline behavior becomes a product requirement, add it deliberately
 with an update strategy and test the installed-app upgrade path.

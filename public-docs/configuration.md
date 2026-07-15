@@ -1,6 +1,6 @@
 ---
 title: Configuration
-description: Configure Paseo via config.json, environment variables, and CLI overrides.
+description: Configure BySpace via config.json, environment variables, and CLI overrides.
 nav: Configuration
 order: 40
 category: Configuration
@@ -8,21 +8,21 @@ category: Configuration
 
 # Configuration
 
-Paseo loads configuration from a single JSON file in your Paseo home directory, with optional environment variable and CLI overrides.
+BySpace loads configuration from a single JSON file in your BySpace home directory, with optional environment variable and CLI overrides.
 
 ## Where config lives
 
-By default, Paseo uses `~/.paseo` as its home directory. The configuration file is:
+By default, BySpace uses `~/.byspace` as its home directory. The configuration file is:
 
 ```bash
-~/.paseo/config.json
+~/.byspace/config.json
 ```
 
-You can change the home directory by setting `BYSPACE_HOME` or passing `--home` to `paseo daemon start`.
+You can change the home directory by setting `BYSPACE_HOME` or passing `--home` to `byspace daemon start`.
 
 ## Precedence
 
-Paseo merges configuration in this order:
+BySpace merges configuration in this order:
 
 1. Defaults
 2. `config.json`
@@ -37,10 +37,10 @@ Minimal example that configures listening address, hostnames, and MCP:
 
 ```json
 {
-  "$schema": "https://paseo.sh/schemas/paseo.config.v1.json",
+  "$schema": "https://byspace.pages.dev/schemas/byspace.config.v1.json",
   "version": 1,
   "daemon": {
-    "listen": "127.0.0.1:6767",
+    "listen": "127.0.0.1:6777",
     "hostnames": ["localhost", ".localhost"],
     "mcp": { "enabled": true }
   }
@@ -51,9 +51,9 @@ Minimal example that configures listening address, hostnames, and MCP:
 
 ## Agent providers
 
-Agent providers, both the first-class ones Paseo ships with and custom entries you add under `agents.providers`, are documented on their own page.
+Agent providers, both the first-class ones BySpace ships with and custom entries you add under `agents.providers`, are documented on their own page.
 
-See [Providers](/docs/providers) for the mental model and [Supported providers](/docs/supported-providers) for the full list of agents Paseo can launch. For pointing Claude at Anthropic-compatible endpoints (Z.AI, Alibaba/Qwen), multiple profiles, custom binaries, ACP agents, and the `additionalModels` merge behavior, see [Custom providers](/docs/custom-providers). The full field reference lives on GitHub at [docs/custom-providers.md](https://github.com/getpaseo/paseo/blob/main/docs/custom-providers.md).
+See [Providers](/docs/providers) for the mental model and [Supported providers](/docs/supported-providers) for the full list of agents BySpace can launch. For pointing Claude at Anthropic-compatible endpoints (Z.AI, Alibaba/Qwen), multiple profiles, custom binaries, ACP agents, and the `additionalModels` merge behavior, see [Custom providers](/docs/custom-providers). The full field reference lives on GitHub at [docs/custom-providers.md](https://github.com/ByteTrue/byspace/blob/main/docs/custom-providers.md).
 
 ## Worktrees
 
@@ -62,12 +62,12 @@ New worktrees are created under `$BYSPACE_HOME/worktrees` by default. To place n
 ```json
 {
   "worktrees": {
-    "root": "/mnt/fast/paseo-worktrees"
+    "root": "/mnt/fast/byspace-worktrees"
   }
 }
 ```
 
-Relative paths are resolved against `BYSPACE_HOME`. Existing worktrees remain where they are; changing this setting only changes where Paseo creates and discovers Paseo-managed worktrees going forward.
+Relative paths are resolved against `BYSPACE_HOME`. Existing worktrees remain where they are; changing this setting only changes where BySpace creates and discovers BySpace-managed worktrees going forward.
 
 ## Voice
 
@@ -77,18 +77,18 @@ For voice philosophy, architecture, and complete local/OpenAI setup examples, se
 
 ## Bundled web UI
 
-The daemon can serve the browser web client from the same HTTP server. This is enabled in the official Docker image and disabled by default for normal CLI and desktop-managed daemons.
+The daemon can serve the browser Web client from the same HTTP server. This is enabled in the official Docker image and disabled by default for normal CLI-launched daemons.
 
 Enable it from the CLI:
 
 ```bash
-paseo daemon start --web-ui
+byspace daemon start --web-ui
 ```
 
 Or set the environment variable:
 
 ```bash
-BYSPACE_WEB_UI_ENABLED=true paseo daemon start
+BYSPACE_WEB_UI_ENABLED=true byspace daemon start
 ```
 
 Or persist it in `config.json`:
@@ -103,7 +103,7 @@ Or persist it in `config.json`:
 }
 ```
 
-When enabled, open the daemon HTTP origin, for example `http://localhost:6767/`, to load the web app. Static UI files load without daemon auth; API and WebSocket requests still require the configured password.
+When enabled, open the daemon HTTP origin, for example `http://localhost:6777/`, to load the web app. Static UI files load without daemon auth; API and WebSocket requests still require the configured password.
 
 ## Logging
 
@@ -141,7 +141,7 @@ You can require a password to connect to the daemon. When set, all HTTP and WebS
 The easiest way to set a password is with the CLI:
 
 ```bash
-paseo daemon set-password
+byspace daemon set-password
 ```
 
 This prompts for a password, writes the bcrypt hash to `config.json`, and tells you to restart the daemon.
@@ -149,7 +149,7 @@ This prompts for a password, writes the bcrypt hash to `config.json`, and tells 
 Alternatively, set the `BYSPACE_PASSWORD` environment variable (plaintext, hashed automatically at startup):
 
 ```bash
-BYSPACE_PASSWORD=my-secret paseo daemon start
+BYSPACE_PASSWORD=my-secret byspace daemon start
 ```
 
 Or write the hash directly in `config.json`:
@@ -173,23 +173,23 @@ The CLI picks up a password from, in order:
 1. The `password` query parameter on a `tcp://` host URI:
 
    ```bash
-   paseo --host "tcp://192.168.1.10:6767?password=my-secret" ls
+   byspace --host "tcp://192.168.1.10:6777?password=my-secret" ls
    ```
 
-2. The `BYSPACE_PASSWORD` environment variable, used as a fallback when the host carries no embedded password (works for `localhost:6767`, bare `host:port`, or `tcp://` hosts without a `password=` query):
+2. The `BYSPACE_PASSWORD` environment variable, used as a fallback when the host carries no embedded password (works for `localhost:6777`, bare `host:port`, or `tcp://` hosts without a `password=` query):
 
    ```bash
-   BYSPACE_PASSWORD=my-secret paseo ls
-   BYSPACE_PASSWORD=my-secret paseo --host 192.168.1.10:6767 ls
+   BYSPACE_PASSWORD=my-secret byspace ls
+   BYSPACE_PASSWORD=my-secret byspace --host 192.168.1.10:6777 ls
    ```
 
 A `password=` in the URI always wins over the env var, so you can keep `BYSPACE_PASSWORD` set globally and still target a different daemon by spelling its password into the URI.
 
-In the mobile app, enter the password in the direct connection setup screen.
+In the Web app, enter the password in the direct connection setup screen.
 
 ## Common env vars
 
-- `BYSPACE_HOME`, set Paseo home directory
+- `BYSPACE_HOME`, set BySpace home directory
 - `BYSPACE_PASSWORD`, on the daemon, the password to require (plaintext, hashed at startup); on the CLI, the password used to connect when the host URI doesn't include one
 - `BYSPACE_LISTEN`, override `daemon.listen`
 - `BYSPACE_HOSTNAMES`, override/extend `daemon.hostnames`
@@ -219,5 +219,5 @@ In the mobile app, enter the password in the direct connection setup screen.
 For editor autocomplete/validation, set `$schema` to:
 
 ```
-https://paseo.sh/schemas/paseo.config.v1.json
+https://byspace.pages.dev/schemas/byspace.config.v1.json
 ```

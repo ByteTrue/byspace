@@ -1,10 +1,10 @@
 # Ad-hoc daemon testing
 
-Spin up an isolated in-process daemon test harness without touching the main daemon on port 6767.
+Spin up an isolated in-process daemon test harness without touching the main daemon on port 6777.
 
 This is for test code only. Executable daemon processes must start through
 `scripts/supervisor-entrypoint.ts` or `dist/scripts/supervisor-entrypoint.js`;
-do not use `createPaseoDaemon` as a product launch path.
+do not use `createBySpaceDaemon` as a product launch path.
 
 ## Quick start
 
@@ -13,29 +13,29 @@ import os from "node:os";
 import path from "node:path";
 import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import pino from "pino";
-import { createPaseoDaemon } from "./bootstrap.js";
+import { createBySpaceDaemon } from "./bootstrap.js";
 import { DaemonClient } from "./test-utils/daemon-client.js";
 
 const logger = pino({ level: "warn" });
-const paseoHomeRoot = await mkdtemp(path.join(os.tmpdir(), "paseo-test-"));
-const paseoHome = path.join(paseoHomeRoot, ".paseo");
-await mkdir(paseoHome, { recursive: true });
-const staticDir = await mkdtemp(path.join(os.tmpdir(), "paseo-static-"));
+const byspaceHomeRoot = await mkdtemp(path.join(os.tmpdir(), "byspace-test-"));
+const byspaceHome = path.join(byspaceHomeRoot, ".byspace");
+await mkdir(byspaceHome, { recursive: true });
+const staticDir = await mkdtemp(path.join(os.tmpdir(), "byspace-static-"));
 
-const daemon = await createPaseoDaemon(
+const daemon = await createBySpaceDaemon(
   {
     listen: "127.0.0.1:0", // OS picks a free port
-    paseoHome,
+    byspaceHome,
     corsAllowedOrigins: [],
     hostnames: true,
     mcpEnabled: false,
     staticDir,
     mcpDebug: false,
     agentClients: {},
-    agentStoragePath: path.join(paseoHome, "agents"),
+    agentStoragePath: path.join(byspaceHome, "agents"),
     relayEnabled: false,
-    relayEndpoint: "relay.paseo.sh:443",
-    appBaseUrl: "https://app.paseo.sh",
+    relayEndpoint: "byspace-relay.bytetrue.workers.dev:443",
+    appBaseUrl: "https://byspace.pages.dev",
     // Add custom config here, e.g.:
     // providerOverrides: { ... },
   },
@@ -57,7 +57,7 @@ await client.fetchAgents({ subscribe: { subscriptionId: "test" } });
 
 await client.close();
 await daemon.stop();
-await rm(paseoHomeRoot, { recursive: true, force: true });
+await rm(byspaceHomeRoot, { recursive: true, force: true });
 await rm(staticDir, { recursive: true, force: true });
 ```
 
@@ -69,13 +69,13 @@ npx tsx packages/server/src/server/your-script.ts
 
 ## Using the test helper
 
-For simpler cases, `createTestPaseoDaemon` + `DaemonClient` handles temp dirs and port selection:
+For simpler cases, `createTestBySpaceDaemon` + `DaemonClient` handles temp dirs and port selection:
 
 ```typescript
-import { createTestPaseoDaemon } from "./test-utils/paseo-daemon.js";
+import { createTestBySpaceDaemon } from "./test-utils/byspace-daemon.js";
 import { DaemonClient } from "./test-utils/daemon-client.js";
 
-const daemon = await createTestPaseoDaemon();
+const daemon = await createTestBySpaceDaemon();
 const client = new DaemonClient({
   url: `ws://127.0.0.1:${daemon.port}/ws`,
   appVersion: "0.1.70",
@@ -89,7 +89,7 @@ await client.close();
 await daemon.close(); // stops daemon + cleans up temp dirs
 ```
 
-The test helper does **not** expose `providerOverrides`. In test harnesses, use `createPaseoDaemon` directly when you need it (see quick start above).
+The test helper does **not** expose `providerOverrides`. In test harnesses, use `createBySpaceDaemon` directly when you need it (see quick start above).
 
 ## Common client methods
 
@@ -156,7 +156,7 @@ try {
 } finally {
   await client.close();
   await daemon.stop().catch(() => undefined);
-  await rm(paseoHomeRoot, { recursive: true, force: true });
+  await rm(byspaceHomeRoot, { recursive: true, force: true });
 }
 ```
 

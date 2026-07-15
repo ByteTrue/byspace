@@ -87,8 +87,8 @@ const PI_PROVIDER = "pi";
 const DEFAULT_PI_THINKING_LEVEL: PiThinkingLevel = "medium";
 const PI_BINARY_COMMAND = process.env.PI_COMMAND ?? process.env.PI_ACP_PI_COMMAND ?? "pi";
 const PI_CATALOG_REQUEST_TIMEOUT_MS = 120_000;
-const BYSPACE_PI_TREE_EXTENSION_COMMAND = "paseo_tree";
-const BYSPACE_PI_CAPTURE_EXTENSION_COMMAND = "paseo_capture_entries";
+const BYSPACE_PI_TREE_EXTENSION_COMMAND = "byspace_tree";
+const BYSPACE_PI_CAPTURE_EXTENSION_COMMAND = "byspace_capture_entries";
 const BYSPACE_PI_ENTRY_CAPTURE_MARKER = "BYSPACE_ENTRY_CAPTURE";
 const BYSPACE_PI_COMMAND_RESULT_MARKER = "BYSPACE_COMMAND_RESULT";
 const DEFAULT_PI_EXTENSION_RESULT_TIMEOUT_MS = 30_000;
@@ -552,7 +552,7 @@ function createPiMcpConfigFile(
     mcpServers[name] = toPiMcpConfig(serverConfig);
   }
 
-  const dir = mkdtempSync(join(tmpdir(), "paseo-pi-mcp-"));
+  const dir = mkdtempSync(join(tmpdir(), "byspace-pi-mcp-"));
   const filePath = join(dir, "mcp.json");
   const mergedConfig: Record<string, unknown> = { ...globalConfig, mcpServers };
   // Emit one canonical server key so a stale alias cannot shadow the injected definitions.
@@ -567,9 +567,9 @@ function createPiMcpConfigFile(
   };
 }
 
-function createPiPaseoExtensionFile(): PiTempFile {
-  const dir = mkdtempSync(join(tmpdir(), "paseo-pi-extension-"));
-  const filePath = join(dir, "paseo-integration.mjs");
+function createPiBySpaceExtensionFile(): PiTempFile {
+  const dir = mkdtempSync(join(tmpdir(), "byspace-pi-extension-"));
+  const filePath = join(dir, "byspace-integration.mjs");
   writeFileSync(
     filePath,
     `
@@ -616,7 +616,7 @@ function createPiPaseoExtensionFile(): PiTempFile {
 	  );
 	}
 	
-	export default function paseoIntegration(pi) {
+	export default function byspaceIntegration(pi) {
 	  pi.on("session_start", async (_event, ctx) => {
 	    emitEntryCapture(ctx, "session_start");
 	  });
@@ -626,7 +626,7 @@ function createPiPaseoExtensionFile(): PiTempFile {
 	  });
 
 	  pi.registerCommand("${BYSPACE_PI_CAPTURE_EXTENSION_COMMAND}", {
-	    description: "Internal Paseo entry capture bridge",
+	    description: "Internal BySpace entry capture bridge",
 	    handler: async (args, ctx) => {
 	      const payload = decodePayload(args.trim());
 	      emitEntryCapture(ctx, "command", payload.requestId);
@@ -634,7 +634,7 @@ function createPiPaseoExtensionFile(): PiTempFile {
 	  });
 
 	  pi.registerCommand("${BYSPACE_PI_TREE_EXTENSION_COMMAND}", {
-	    description: "Internal Paseo tree navigation bridge",
+	    description: "Internal BySpace tree navigation bridge",
 	    handler: async (args, ctx) => {
 	      const payload = decodePayload(args.trim());
 	      try {
@@ -2116,7 +2116,7 @@ export class PiRpcAgentClient implements AgentClient {
       ...this.runtimeSettings?.env,
       ...launchContext?.env,
     });
-    const paseoExtension = createPiPaseoExtensionFile();
+    const byspaceExtension = createPiBySpaceExtensionFile();
     let runtimeSession: PiRuntimeSession;
     try {
       runtimeSession = await this.runtime.startSession({
@@ -2131,11 +2131,11 @@ export class PiRpcAgentClient implements AgentClient {
         ),
         env: launchContext?.env,
         mcpConfigPath: mcpConfig?.path,
-        extensionPaths: [paseoExtension.path],
+        extensionPaths: [byspaceExtension.path],
       });
     } catch (error) {
       mcpConfig?.cleanup();
-      paseoExtension.cleanup();
+      byspaceExtension.cleanup();
       throw error;
     }
     try {
@@ -2144,13 +2144,13 @@ export class PiRpcAgentClient implements AgentClient {
         config,
         initialState: await runtimeSession.getState(),
         capabilities: withPiMcpCapability(mcpConfig !== null),
-        cleanup: combineCleanup([mcpConfig?.cleanup, paseoExtension.cleanup]),
+        cleanup: combineCleanup([mcpConfig?.cleanup, byspaceExtension.cleanup]),
         extensionTimeoutMs: this.providerParams.extensionTimeoutMs,
       });
     } catch (error) {
       await runtimeSession.close().catch(() => undefined);
       mcpConfig?.cleanup();
-      paseoExtension.cleanup();
+      byspaceExtension.cleanup();
       throw error;
     }
   }
@@ -2176,7 +2176,7 @@ export class PiRpcAgentClient implements AgentClient {
         ...launchContext?.env,
       },
     );
-    const paseoExtension = createPiPaseoExtensionFile();
+    const byspaceExtension = createPiBySpaceExtensionFile();
     let runtimeSession: PiRuntimeSession;
     try {
       runtimeSession = await this.runtime.startSession({
@@ -2190,11 +2190,11 @@ export class PiRpcAgentClient implements AgentClient {
           resumeConfig.config.daemonAppendSystemPrompt,
         ),
         mcpConfigPath: mcpConfig?.path,
-        extensionPaths: [paseoExtension.path],
+        extensionPaths: [byspaceExtension.path],
       });
     } catch (error) {
       mcpConfig?.cleanup();
-      paseoExtension.cleanup();
+      byspaceExtension.cleanup();
       throw error;
     }
     try {
@@ -2203,13 +2203,13 @@ export class PiRpcAgentClient implements AgentClient {
         config: resumeConfig.config,
         initialState: await runtimeSession.getState(),
         capabilities: withPiMcpCapability(mcpConfig !== null),
-        cleanup: combineCleanup([mcpConfig?.cleanup, paseoExtension.cleanup]),
+        cleanup: combineCleanup([mcpConfig?.cleanup, byspaceExtension.cleanup]),
         extensionTimeoutMs: this.providerParams.extensionTimeoutMs,
       });
     } catch (error) {
       await runtimeSession.close().catch(() => undefined);
       mcpConfig?.cleanup();
-      paseoExtension.cleanup();
+      byspaceExtension.cleanup();
       throw error;
     }
   }

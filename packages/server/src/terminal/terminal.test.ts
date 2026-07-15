@@ -724,7 +724,7 @@ describe.skipIf(isPlatform("win32"))("terminal title", () => {
     temporaryDirs.push(homeDir);
     writeFileSync(join(homeDir, ".zshrc"), "PS1='BYSPACE_CUSTOM_PROMPT> '\n");
 
-    const fakeAppRoot = join(homeDir, "Paseo.app", "Contents", "Resources");
+    const fakeAppRoot = join(homeDir, "BySpace.app", "Contents", "Resources");
     const inaccessiblePackagedIntegrationDir = join(
       fakeAppRoot,
       "app.asar",

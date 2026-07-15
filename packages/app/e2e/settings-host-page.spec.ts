@@ -17,7 +17,6 @@ import {
   expectHostNoLocalOnlyRows,
   expectRetiredSidebarSectionsAbsent,
   expectHostPageVisible,
-  expectLocalHostEntryFirst,
 } from "./helpers/settings";
 
 test.describe("Settings host page", () => {
@@ -116,47 +115,5 @@ test.describe("Settings host page", () => {
     await openHostSection(page, serverId, "host");
     await expectHostLabelDisplayed(page);
     await expectHostActionCards(page, serverId);
-  });
-
-  test("sidebar pins the local daemon host first", async ({ page }) => {
-    const serverId = getServerId();
-
-    // Simulate the Electron desktop bridge so `useIsLocalDaemon` resolves the
-    // seeded host to the local daemon. `manageBuiltInDaemon: false` (returned
-    // from get_desktop_settings) bypasses the desktop bootstrap flow so only
-    // the sidebar's status query runs against the seeded test daemon.
-    await page.addInitScript((localServerId) => {
-      (window as unknown as { paseoDesktop: unknown }).paseoDesktop = {
-        platform: "darwin",
-        invoke: async (command: string) => {
-          if (command === "desktop_daemon_status") {
-            return {
-              serverId: localServerId,
-              status: "running",
-              listen: null,
-              hostname: null,
-              pid: null,
-              home: "",
-              version: null,
-              desktopManaged: true,
-              error: null,
-            };
-          }
-          if (command === "get_desktop_settings") {
-            return {
-              releaseChannel: "stable",
-              daemon: { manageBuiltInDaemon: false, keepRunningAfterQuit: true },
-            };
-          }
-          return null;
-        },
-        getPendingOpenProject: async () => null,
-        events: { on: async () => () => undefined },
-      };
-    }, serverId);
-
-    await gotoAppShell(page);
-    await openSettings(page);
-    await expectLocalHostEntryFirst(page, serverId);
   });
 });

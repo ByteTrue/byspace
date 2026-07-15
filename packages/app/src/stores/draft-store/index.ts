@@ -384,7 +384,7 @@ export const useDraftStore = create<DraftStore>()(
       },
     }),
     {
-      name: "paseo-drafts",
+      name: "byspace-drafts",
       version: DRAFT_STORE_VERSION,
       storage: draftPersistStorage,
       migrate: (persistedState) => {

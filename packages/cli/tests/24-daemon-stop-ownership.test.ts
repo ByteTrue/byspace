@@ -1,7 +1,7 @@
 #!/usr/bin/env npx tsx
 
 /**
- * Regression: `paseo daemon stop` must only act on daemon ownership state and
+ * Regression: `byspace daemon stop` must only act on daemon ownership state and
  * must not discover/kill processes via home-scoped `ps` command heuristics.
  */
 
@@ -52,7 +52,7 @@ async function waitForRunning(pid: number, timeoutMs: number): Promise<void> {
 
 console.log("=== Daemon Stop Ownership Regression ===\n");
 
-const paseoHome = await mkdtemp(join(tmpdir(), "paseo-stop-ownership-"));
+const byspaceHome = await mkdtemp(join(tmpdir(), "byspace-stop-ownership-"));
 let decoyProcess: ChildProcess | null = null;
 
 try {
@@ -69,7 +69,7 @@ try {
     {
       env: {
         ...process.env,
-        BYSPACE_HOME: paseoHome,
+        BYSPACE_HOME: byspaceHome,
       },
       stdio: "ignore",
       detached: process.platform !== "win32",
@@ -85,7 +85,7 @@ try {
   console.log("Test 2: daemon stop should report not_running and leave decoy untouched");
 
   const stopResult =
-    await $`BYSPACE_HOME=${paseoHome} BYSPACE_LOCAL_SPEECH_AUTO_DOWNLOAD=${testEnv.BYSPACE_LOCAL_SPEECH_AUTO_DOWNLOAD} BYSPACE_DICTATION_ENABLED=${testEnv.BYSPACE_DICTATION_ENABLED} BYSPACE_VOICE_MODE_ENABLED=${testEnv.BYSPACE_VOICE_MODE_ENABLED} npx paseo daemon stop --home ${paseoHome} --json`.nothrow();
+    await $`BYSPACE_HOME=${byspaceHome} BYSPACE_LOCAL_SPEECH_AUTO_DOWNLOAD=${testEnv.BYSPACE_LOCAL_SPEECH_AUTO_DOWNLOAD} BYSPACE_DICTATION_ENABLED=${testEnv.BYSPACE_DICTATION_ENABLED} BYSPACE_VOICE_MODE_ENABLED=${testEnv.BYSPACE_VOICE_MODE_ENABLED} npx byspace daemon stop --home ${byspaceHome} --json`.nothrow();
   assert.strictEqual(stopResult.exitCode, 0, `stop should succeed: ${stopResult.stderr}`);
 
   const parsed = JSON.parse(stopResult.stdout) as { action?: unknown };
@@ -114,8 +114,8 @@ try {
     }
   }
 
-  await $`BYSPACE_HOME=${paseoHome} npx paseo daemon stop --home ${paseoHome} --force`.nothrow();
-  await rm(paseoHome, { recursive: true, force: true });
+  await $`BYSPACE_HOME=${byspaceHome} npx byspace daemon stop --home ${byspaceHome} --force`.nothrow();
+  await rm(byspaceHome, { recursive: true, force: true });
 }
 
 console.log("=== Daemon stop ownership regression test passed ===");

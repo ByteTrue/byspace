@@ -7,13 +7,13 @@ import { loadConfig } from "./config.js";
 
 const roots: string[] = [];
 
-async function createPaseoHome(config: unknown): Promise<string> {
-  const root = await mkdtemp(path.join(os.tmpdir(), "paseo-config-relay-"));
+async function createBySpaceHome(config: unknown): Promise<string> {
+  const root = await mkdtemp(path.join(os.tmpdir(), "byspace-config-relay-"));
   roots.push(root);
-  const paseoHome = path.join(root, ".paseo");
-  await mkdir(paseoHome, { recursive: true });
-  await writeFile(path.join(paseoHome, "config.json"), JSON.stringify(config, null, 2));
-  return paseoHome;
+  const byspaceHome = path.join(root, ".byspace");
+  await mkdir(byspaceHome, { recursive: true });
+  await writeFile(path.join(byspaceHome, "config.json"), JSON.stringify(config, null, 2));
+  return byspaceHome;
 }
 
 describe("daemon relay config", () => {
@@ -22,7 +22,7 @@ describe("daemon relay config", () => {
   });
 
   test("loads relay TLS from env, persisted config, and hosted relay fallback", async () => {
-    const persistedHome = await createPaseoHome({
+    const persistedHome = await createBySpaceHome({
       version: 1,
       daemon: {
         relay: {
@@ -33,7 +33,7 @@ describe("daemon relay config", () => {
     });
     expect(loadConfig(persistedHome, { env: {} }).relayUseTls).toBe(true);
 
-    const envHome = await createPaseoHome({
+    const envHome = await createBySpaceHome({
       version: 1,
       daemon: {
         relay: {
@@ -44,7 +44,7 @@ describe("daemon relay config", () => {
     });
     expect(loadConfig(envHome, { env: { BYSPACE_RELAY_USE_TLS: "true" } }).relayUseTls).toBe(true);
 
-    const hostedHome = await createPaseoHome({
+    const hostedHome = await createBySpaceHome({
       version: 1,
       daemon: { relay: {} },
     });
@@ -52,13 +52,13 @@ describe("daemon relay config", () => {
   });
 
   test("relayPublicUseTls falls back to relayUseTls when unset", async () => {
-    const home = await createPaseoHome({ version: 1, daemon: { relay: {} } });
+    const home = await createBySpaceHome({ version: 1, daemon: { relay: {} } });
     // Default: both true (hosted relay)
     expect(loadConfig(home, { env: {} }).relayPublicUseTls).toBe(true);
   });
 
   test("BYSPACE_RELAY_PUBLIC_USE_TLS overrides relayUseTls for public side", async () => {
-    const home = await createPaseoHome({ version: 1, daemon: { relay: {} } });
+    const home = await createBySpaceHome({ version: 1, daemon: { relay: {} } });
     const config = loadConfig(home, {
       env: { BYSPACE_RELAY_USE_TLS: "false", BYSPACE_RELAY_PUBLIC_USE_TLS: "true" },
     });
@@ -67,14 +67,14 @@ describe("daemon relay config", () => {
   });
 
   test("relayPublicUseTls falls back to relayUseTls when only BYSPACE_RELAY_USE_TLS is set", async () => {
-    const home = await createPaseoHome({ version: 1, daemon: { relay: {} } });
+    const home = await createBySpaceHome({ version: 1, daemon: { relay: {} } });
     const config = loadConfig(home, { env: { BYSPACE_RELAY_USE_TLS: "false" } });
     expect(config.relayUseTls).toBe(false);
     expect(config.relayPublicUseTls).toBe(false);
   });
 
   test("persisted publicUseTls overrides relayUseTls fallback", async () => {
-    const home = await createPaseoHome({
+    const home = await createBySpaceHome({
       version: 1,
       daemon: { relay: { useTls: false, publicUseTls: true } },
     });
@@ -90,7 +90,7 @@ describe("daemon service proxy config", () => {
   });
 
   test("loads public base URL from env before persisted config", async () => {
-    const home = await createPaseoHome({
+    const home = await createBySpaceHome({
       version: 1,
       daemon: {
         serviceProxy: {
@@ -110,7 +110,7 @@ describe("daemon service proxy config", () => {
   });
 
   test("does not synthesize a standalone service listener from enabled true", async () => {
-    const home = await createPaseoHome({
+    const home = await createBySpaceHome({
       version: 1,
       daemon: { serviceProxy: { enabled: true } },
     });
@@ -122,7 +122,7 @@ describe("daemon service proxy config", () => {
   });
 
   test("enabled false suppresses optional service proxy layers only", async () => {
-    const home = await createPaseoHome({
+    const home = await createBySpaceHome({
       version: 1,
       daemon: {
         serviceProxy: {
@@ -140,7 +140,7 @@ describe("daemon service proxy config", () => {
   });
 
   test("rejects invalid BYSPACE_SERVICE_PROXY_PUBLIC_BASE_URL values", async () => {
-    const home = await createPaseoHome({ version: 1 });
+    const home = await createBySpaceHome({ version: 1 });
 
     expect(() =>
       loadConfig(home, {
@@ -156,13 +156,13 @@ describe("daemon trusted proxy config", () => {
   });
 
   test("trusts loopback proxies by default", async () => {
-    const home = await createPaseoHome({ version: 1 });
+    const home = await createBySpaceHome({ version: 1 });
 
     expect(loadConfig(home, { env: {} }).trustedProxies).toEqual(["loopback"]);
   });
 
   test("loads trusted proxies from persisted config", async () => {
-    const home = await createPaseoHome({
+    const home = await createBySpaceHome({
       version: 1,
       daemon: {
         trustedProxies: ["loopback", "10.0.0.0/8"],
@@ -173,7 +173,7 @@ describe("daemon trusted proxy config", () => {
   });
 
   test("BYSPACE_TRUSTED_PROXIES overrides persisted config", async () => {
-    const home = await createPaseoHome({
+    const home = await createBySpaceHome({
       version: 1,
       daemon: {
         trustedProxies: ["loopback"],
@@ -188,12 +188,12 @@ describe("daemon trusted proxy config", () => {
   });
 
   test("BYSPACE_TRUSTED_PROXIES supports explicit trust-all and trust-none modes", async () => {
-    const trustAllHome = await createPaseoHome({ version: 1 });
+    const trustAllHome = await createBySpaceHome({ version: 1 });
     expect(
       loadConfig(trustAllHome, { env: { BYSPACE_TRUSTED_PROXIES: "true" } }).trustedProxies,
     ).toBe(true);
 
-    const trustNoneHome = await createPaseoHome({ version: 1 });
+    const trustNoneHome = await createBySpaceHome({ version: 1 });
     expect(
       loadConfig(trustNoneHome, { env: { BYSPACE_TRUSTED_PROXIES: "false" } }).trustedProxies,
     ).toEqual([]);
@@ -206,7 +206,7 @@ describe("daemon worktree root config", () => {
   });
 
   test("resolves relative worktrees.root against BYSPACE_HOME", async () => {
-    const home = await createPaseoHome({
+    const home = await createBySpaceHome({
       version: 1,
       worktrees: { root: "custom-worktrees" },
     });
@@ -215,13 +215,13 @@ describe("daemon worktree root config", () => {
   });
 
   test("keeps absolute worktrees.root absolute", async () => {
-    const home = await createPaseoHome({
+    const home = await createBySpaceHome({
       version: 1,
-      worktrees: { root: path.join(os.tmpdir(), "paseo-custom-worktrees") },
+      worktrees: { root: path.join(os.tmpdir(), "byspace-custom-worktrees") },
     });
 
     expect(loadConfig(home, { env: {} }).worktreesRoot).toBe(
-      path.join(os.tmpdir(), "paseo-custom-worktrees"),
+      path.join(os.tmpdir(), "byspace-custom-worktrees"),
     );
   });
 });

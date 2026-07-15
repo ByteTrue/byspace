@@ -61,15 +61,21 @@ epic: ".cs/epics/2026/07/14/web-only-byspace/spec.md"
 
 ## 验证
 
-- 活跃代码与配置的 `Paseo|paseo|PASEO_` 搜索只剩允许清单。
-- `npm ci`、typecheck、lint、format、Web/server/CLI/relay builds 通过。
-- Protocol/Client/Server/CLI/Provider/Pi 受影响测试通过。
-- 新 tarball 在空前缀安装后 `byspace --version/help`、daemon start/status/pair/stop 通过。
-- Pages、Relay 和配对链接使用 BySpace 自有 endpoint。
+- `npm run branding:check` 通过；活跃代码、路径、配置、文档和端口只剩精确允许的 upstream/历史证据。
+- `npm ci --dry-run`、root typecheck/lint/format、Client/Server builds、Web export、Relay Wrangler dry-run 通过。
+- 命名、配置、home/env、supervisor、CLI、协议、App runtime、i18n、Relay 等聚焦测试通过。
+- 新 tarball 的空前缀安装与 daemon start/status/pair/stop 留给首次发布 issue，在最终版本和 bundle 脚本落定后执行。
+- Pages、Relay、配对链接和 Docker source config 使用 BySpace 自有 endpoint；真实 endpoint 创建/健康验证留给部署 issue。
 
 ## 执行记录
 
-待 upstream 更新审阅与移植后执行。
+- Workspace namespace 已从 `@getpaseo/*` 原子迁移到内部 `@bytetrue/byspace-*`；公开 CLI/daemon 入口为 `@bytetrue/byspace`，lockfile 由 npm 重新生成。
+- Runtime 环境变量统一为 `BYSPACE_*`；状态目录为 `~/.byspace`，项目配置为 `byspace.json`，默认 daemon 端口为 `6777`。
+- 类型、工具、MCP、Pi extension、storage key、日志/进程/IPC 标识、文件与目录已统一为 `BySpace/byspace`；未保留旧名 runtime alias。
+- 删除了遗漏的 CLI desktop/path-open 路径、Electron process env/pid 字段、desktop i18n namespace 与相关测试/文档残留。
+- Relay 使用自己的 Workers.dev + Durable Object，不再配置 upstream proxy；Pages project 为 `byspace`。
+- 新增 `scripts/check-branding.mjs`，并接入 CI 与 release gate；检查活跃内容、文件名、旧环境前缀、旧端口、公开 package/bin 与可执行位。
+- 三轮独立 review 的 blocker 均已处理；最终 typecheck/lint/format/build 与聚焦回归保持绿色。
 
 ## 关闭回写
 

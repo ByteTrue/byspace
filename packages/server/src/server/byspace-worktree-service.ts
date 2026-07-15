@@ -20,21 +20,21 @@ import {
 import { validateBranchSlug, type WorktreeConfig } from "../utils/worktree.js";
 import { getCurrentBranch, localBranchExists, renameCurrentBranch } from "../utils/checkout-git.js";
 import {
-  markPaseoWorktreeFirstAgentBranchAutoNameAttempted,
+  markBySpaceWorktreeFirstAgentBranchAutoNameAttempted,
   normalizeBaseRefName,
-  readPaseoWorktreeMetadata,
-  writePaseoWorktreeFirstAgentBranchAutoNameMetadata,
+  readBySpaceWorktreeMetadata,
+  writeBySpaceWorktreeFirstAgentBranchAutoNameMetadata,
 } from "../utils/worktree-metadata.js";
 import type { WorktreeCreationIntent } from "./resolve-worktree-creation-intent.js";
 import { resolveFirstAgentPromptTitle } from "./agent/create-agent-title.js";
 import { buildAgentBranchNameSeed } from "./agent/prompt-attachments.js";
 import type { FirstAgentContext } from "@bytetrue/byspace-protocol/messages";
 
-export interface CreatePaseoWorktreeInput extends CreateWorktreeCoreInput {
+export interface CreateBySpaceWorktreeInput extends CreateWorktreeCoreInput {
   projectId?: string;
 }
 
-export interface CreatePaseoWorktreeResult {
+export interface CreateBySpaceWorktreeResult {
   worktree: WorktreeConfig;
   intent: WorktreeCreationIntent;
   workspace: PersistedWorkspaceRecord;
@@ -42,12 +42,12 @@ export interface CreatePaseoWorktreeResult {
   created: boolean;
 }
 
-export type CreatePaseoWorktreeFn = (
-  input: CreatePaseoWorktreeInput,
+export type CreateBySpaceWorktreeFn = (
+  input: CreateBySpaceWorktreeInput,
   options?: {
     resolveDefaultBranch?: (repoRoot: string) => Promise<string>;
   },
-) => Promise<CreatePaseoWorktreeResult>;
+) => Promise<CreateBySpaceWorktreeResult>;
 
 export interface AttemptFirstAgentBranchAutoNameResult {
   attempted: boolean;
@@ -55,16 +55,16 @@ export interface AttemptFirstAgentBranchAutoNameResult {
   branchName: string | null;
 }
 
-export interface CreatePaseoWorktreeDeps extends CreateWorktreeCoreDeps {
+export interface CreateBySpaceWorktreeDeps extends CreateWorktreeCoreDeps {
   projectRegistry: Pick<ProjectRegistry, "get" | "upsert">;
   workspaceRegistry: Pick<WorkspaceRegistry, "get" | "list" | "upsert">;
   workspaceGitService: WorkspaceGitService;
 }
 
-export async function createPaseoWorktree(
-  input: CreatePaseoWorktreeInput,
-  deps: CreatePaseoWorktreeDeps,
-): Promise<CreatePaseoWorktreeResult> {
+export async function createBySpaceWorktree(
+  input: CreateBySpaceWorktreeInput,
+  deps: CreateBySpaceWorktreeDeps,
+): Promise<CreateBySpaceWorktreeResult> {
   const createdWorktree = await createWorktreeCore(input, deps);
   maybeMarkFirstAgentBranchAutoNameEligible({ createdWorktree });
   const workspace = await upsertWorkspaceForWorktree({
@@ -104,9 +104,9 @@ export async function attemptFirstAgentBranchAutoName(options: {
     return { attempted: false, renamed: false, branchName: null };
   }
 
-  let metadata: ReturnType<typeof readPaseoWorktreeMetadata>;
+  let metadata: ReturnType<typeof readBySpaceWorktreeMetadata>;
   try {
-    metadata = readPaseoWorktreeMetadata(options.cwd);
+    metadata = readBySpaceWorktreeMetadata(options.cwd);
   } catch {
     return { attempted: false, renamed: false, branchName: null };
   }
@@ -121,11 +121,11 @@ export async function attemptFirstAgentBranchAutoName(options: {
   const getCurrentBranchImpl = options.getCurrentBranch ?? getCurrentBranch;
   const placeholderBranchName = metadata.firstAgentBranchAutoName.placeholderBranchName;
   if ((await getCurrentBranchImpl(options.cwd)) !== placeholderBranchName) {
-    markPaseoWorktreeFirstAgentBranchAutoNameAttempted(options.cwd);
+    markBySpaceWorktreeFirstAgentBranchAutoNameAttempted(options.cwd);
     return { attempted: true, renamed: false, branchName: null };
   }
 
-  markPaseoWorktreeFirstAgentBranchAutoNameAttempted(options.cwd);
+  markBySpaceWorktreeFirstAgentBranchAutoNameAttempted(options.cwd);
 
   const branchName = await options.generateBranchNameFromContext({
     cwd: options.cwd,
@@ -194,7 +194,7 @@ function maybeMarkFirstAgentBranchAutoNameEligible(options: {
     return;
   }
 
-  writePaseoWorktreeFirstAgentBranchAutoNameMetadata(createdWorktree.worktree.worktreePath, {
+  writeBySpaceWorktreeFirstAgentBranchAutoNameMetadata(createdWorktree.worktree.worktreePath, {
     placeholderBranchName: createdWorktree.worktree.branchName,
   });
 }
@@ -220,7 +220,7 @@ async function upsertWorkspaceForWorktree(options: {
   baseBranch?: string | null;
   title?: string | null;
   deps: Pick<
-    CreatePaseoWorktreeDeps,
+    CreateBySpaceWorktreeDeps,
     "projectRegistry" | "workspaceRegistry" | "workspaceGitService"
   >;
 }): Promise<PersistedWorkspaceRecord> {
@@ -422,7 +422,7 @@ async function resolveSourceProjectForWorktree(options: {
   projectId?: string;
   repoRoot: string;
   existingWorkspace: PersistedWorkspaceRecord | null;
-  deps: Pick<CreatePaseoWorktreeDeps, "projectRegistry" | "workspaceRegistry">;
+  deps: Pick<CreateBySpaceWorktreeDeps, "projectRegistry" | "workspaceRegistry">;
 }): Promise<SourceProjectForWorktree> {
   if (options.projectId) {
     return resolveExplicitProjectForWorktree({

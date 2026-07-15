@@ -1,6 +1,10 @@
 import { Command } from "commander";
 import chalk from "chalk";
-import { generateLocalPairingOffer, loadConfig, resolvePaseoHome } from "@bytetrue/byspace-server";
+import {
+  generateLocalPairingOffer,
+  loadConfig,
+  resolveBySpaceHome,
+} from "@bytetrue/byspace-server";
 import { tryConnectToDaemon } from "../../utils/client.js";
 import { resolveLocalDaemonState, resolveTcpHostFromListen } from "./local-daemon.js";
 import { addJsonOption } from "../../utils/command-options.js";
@@ -14,7 +18,7 @@ const PAIRING_DAEMON_RPC_TIMEOUT_MS = 1500;
 
 export function pairCommand(): Command {
   return addJsonOption(new Command("pair").description("Print the daemon pairing QR code and link"))
-    .option("--home <path>", "Paseo home directory (default: ~/.paseo)")
+    .option("--home <path>", "BySpace home directory (default: ~/.byspace)")
     .action(async (_options: PairOptions, command: Command) => {
       await runPairCommand(command.optsWithGlobals());
     });
@@ -25,8 +29,8 @@ export async function runPairCommand(options: PairOptions): Promise<void> {
     process.env.BYSPACE_HOME = options.home;
   }
 
-  const paseoHome = resolvePaseoHome();
-  const state = resolveLocalDaemonState({ home: paseoHome });
+  const byspaceHome = resolveBySpaceHome();
+  const state = resolveLocalDaemonState({ home: byspaceHome });
   const host = resolveTcpHostFromListen(state.listen);
 
   // Try to get the pairing offer from the running daemon first.
@@ -57,9 +61,9 @@ export async function runPairCommand(options: PairOptions): Promise<void> {
   }
 
   // Fall back to local pairing offer generation.
-  const config = loadConfig(paseoHome);
+  const config = loadConfig(byspaceHome);
   const pairing = await generateLocalPairingOffer({
-    paseoHome,
+    byspaceHome,
     relayEnabled: config.relayEnabled,
     relayEndpoint: config.relayEndpoint,
     relayPublicEndpoint: config.relayPublicEndpoint,

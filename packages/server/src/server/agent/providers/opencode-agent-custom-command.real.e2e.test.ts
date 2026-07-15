@@ -14,7 +14,7 @@ import {
   getRealProviderConfig,
 } from "../../daemon-e2e/real-provider-test-config.js";
 
-const COMMAND_NAME = "paseo-issue-903-big-pickle";
+const COMMAND_NAME = "byspace-issue-903-big-pickle";
 const COMMAND_FILE_NAME = `${COMMAND_NAME}.md`;
 const OPENCODE_REAL_TEST_MODEL = getRealProviderConfig("opencode").model;
 const EXPECTED_RESPONSE = "BYSPACE_ISSUE_903_BIG_PICKLE_OK";
@@ -32,7 +32,7 @@ describe("opencode custom command Big Pickle E2E (real)", () => {
     }
   });
 
-  test("executes a global custom command through Paseo using Big Pickle", async () => {
+  test("executes a global custom command through BySpace using Big Pickle", async () => {
     const commandDir = path.join(homedir(), ".config", "opencode", "command");
     const commandFile = path.join(commandDir, COMMAND_FILE_NAME);
     const commandDirExisted = existsSync(commandDir);
@@ -40,7 +40,7 @@ describe("opencode custom command Big Pickle E2E (real)", () => {
       throw new Error(`Refusing to overwrite existing OpenCode command file: ${commandFile}`);
     }
 
-    const projectDir = await mkdtemp(path.join(tmpdir(), "paseo-opencode-big-pickle-"));
+    const projectDir = await mkdtemp(path.join(tmpdir(), "byspace-opencode-big-pickle-"));
     const logger = pino({ level: "silent" });
     let ctx: DaemonTestContext | undefined;
 
@@ -50,7 +50,7 @@ describe("opencode custom command Big Pickle E2E (real)", () => {
         commandFile,
         [
           "---",
-          "description: Paseo issue 903 Big Pickle custom command",
+          "description: BySpace issue 903 Big Pickle custom command",
           "agent: build",
           "---",
           "",
@@ -83,7 +83,7 @@ describe("opencode custom command Big Pickle E2E (real)", () => {
         expect.arrayContaining([
           expect.objectContaining({
             name: COMMAND_NAME,
-            description: "Paseo issue 903 Big Pickle custom command",
+            description: "BySpace issue 903 Big Pickle custom command",
           }),
         ]),
       );

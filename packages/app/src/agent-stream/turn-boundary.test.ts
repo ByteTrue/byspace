@@ -67,7 +67,7 @@ describe("resolveAssistantTurnBoundaryMessageId", () => {
 });
 
 describe("resolveAssistantTurnForkBoundary", () => {
-  it("forks a failed assistant turn from its Paseo timeline cursor without a provider message id", () => {
+  it("forks a failed assistant turn from its BySpace timeline cursor without a provider message id", () => {
     const failedTurn = {
       ...assistantMessage("assistant-error", 2),
       timelineCursor: { epoch: "timeline-1", seq: 42 },

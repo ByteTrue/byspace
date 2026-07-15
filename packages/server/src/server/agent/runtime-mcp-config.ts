@@ -1,16 +1,16 @@
 import type { AgentSessionConfig, McpServerConfig } from "./agent-sdk-types.js";
 
-const BYSPACE_MCP_SERVER_NAME = "paseo";
+const BYSPACE_MCP_SERVER_NAME = "byspace";
 const BYSPACE_MCP_PATHNAME = "/mcp/agents";
 
-export function stripInternalPaseoMcpServer(config: AgentSessionConfig): AgentSessionConfig {
+export function stripInternalBySpaceMcpServer(config: AgentSessionConfig): AgentSessionConfig {
   const mcpServers = config.mcpServers;
   if (!mcpServers) {
     return config;
   }
 
-  const paseoServer = mcpServers[BYSPACE_MCP_SERVER_NAME];
-  if (!paseoServer || !isInternalPaseoMcpServer(paseoServer)) {
+  const byspaceServer = mcpServers[BYSPACE_MCP_SERVER_NAME];
+  if (!byspaceServer || !isInternalBySpaceMcpServer(byspaceServer)) {
     return config;
   }
 
@@ -26,7 +26,7 @@ export function stripInternalPaseoMcpServer(config: AgentSessionConfig): AgentSe
   return next;
 }
 
-export function withRuntimePaseoMcpServer(params: {
+export function withRuntimeBySpaceMcpServer(params: {
   config: AgentSessionConfig;
   agentId: string;
   mcpBaseUrl: string | null;
@@ -37,7 +37,7 @@ export function withRuntimePaseoMcpServer(params: {
    */
   mcpAuthToken: string | null;
 }): AgentSessionConfig {
-  const storedConfig = stripInternalPaseoMcpServer(params.config);
+  const storedConfig = stripInternalBySpaceMcpServer(params.config);
   if (!params.mcpBaseUrl || storedConfig.mcpServers?.[BYSPACE_MCP_SERVER_NAME]) {
     return storedConfig;
   }
@@ -57,7 +57,7 @@ export function withRuntimePaseoMcpServer(params: {
   };
 }
 
-function isInternalPaseoMcpServer(config: McpServerConfig): boolean {
+function isInternalBySpaceMcpServer(config: McpServerConfig): boolean {
   if (config.type !== "http" && config.type !== "sse") {
     return false;
   }

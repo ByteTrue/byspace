@@ -786,7 +786,7 @@ export const es: TranslationResources = {
       reportIssue: "Informar de un problema",
       discord: "Discord",
       github: "Crear incidencia en GitHub",
-      version: "Paseo {{version}}",
+      version: "BySpace {{version}}",
     },
     sections: {
       sessions: "Historial",
@@ -899,175 +899,9 @@ export const es: TranslationResources = {
       title: "Empezar desde",
     },
   },
-  desktop: {
-    quitting: {
-      title: "Saliendo dePaseo...",
-      detail: "Deteniendo el demonio local.",
-    },
-    daemon: {
-      title: "Daemon",
-      status: {
-        title: "Estado",
-        builtInOnly: "Aquí solo se muestra el demonio de escritorio integrado.",
-        running: "correr",
-        notRunning: "no corriendo",
-        pid: "PID{{pid}}",
-      },
-      management: {
-        title: "Administrar demonio incorporado",
-        hint: "Deje quePaseoinicie y detenga el demonio incorporado",
-        pauseTitle: "Pausar el demonio incorporado",
-        pauseMessage:
-          "Esto detendrá el demonio incorporado inmediatamente. Se detendrán los agentes en ejecución y los terminales conectados al demonio integrado.",
-        pauseAndStop: "Pausa y para",
-        registrationFailed:
-          "Built-in daemon started, but Paseo could not save the localhost connection. Toggle daemon management off and on again, or add localhost manually.",
-        pausedStopFailed:
-          "La gestión del demonio integrado se pausó, peroPaseono pudo detener el demonio.",
-        updateFailed: "No se puede actualizar la gestión de demonios integrada.",
-      },
-      keepRunning: {
-        title: "Mantener el demonio en ejecución después de salir",
-        hint: "Daemonsigue ejecutándose cuando sales dePaseo",
-      },
-      logs: {
-        title: "Archivo de registro",
-        modalTitle: "RegistrosDaemon",
-        unavailable: "Ruta de registro no disponible",
-        empty: "(el archivo de registro está vacío)",
-        copied: "Ruta de registro copiada.",
-        copyFailed: "No se puede copiar la ruta del registro.",
-        open: "Abrir registros",
-        copyPath: "Copiar ruta",
-      },
-      fullStatus: {
-        title: "Estado completo",
-        modalTitle: "EstadoDaemon",
-        hint: "Ejecuta`paseo daemon status`y muestra la salida.",
-        view: "Ver estado",
-        copied: "Estado copiado al portapapeles.",
-        fetchFailed: "No se pudo recuperar el estado del demonio:{{message}}",
-      },
-      advancedSettings: "Configuraciones avanzadas",
-      openAdvancedSettings: "Abrir configuración avanzada del demonio",
-      versionMismatch:
-        "Las versiones de la aplicación y del demonio no coinciden. Actualice ambos a la misma versión para obtener la mejor experiencia.",
-      loadFailed: "No se puede cargar el estado del demonio del escritorio.",
-    },
-    updates: {
-      status: {
-        checking: "Buscando actualizaciones de la aplicación...",
-        installing: "Instalando actualización de la aplicación...",
-        upToDate: "La aplicación está actualizada.",
-        upToDateWithLastChecked: "Up to date. Last checked at {{time}}.",
-        pending: "Le avisaremos cuando la actualización esté lista.",
-        pendingWithLastChecked:
-          "Le avisaremos cuando la actualización esté lista. Última comprobación a las {{time}}.",
-        pendingWithVersion: "Actualización encontrada: {{version}}. Descargando...",
-        pendingWithVersionAndLastChecked:
-          "Actualización encontrada: {{version}}. Descargando... Última comprobación a las {{time}}.",
-        availableWithVersion: "Actualización lista:{{version}}",
-        availableWithVersionAndLastChecked:
-          "Actualización lista:{{version}}. Última comprobación a las {{time}}.",
-        available: "Una actualización de la aplicación está lista para instalarse.",
-        availableWithLastChecked:
-          "Una actualización de la aplicación está lista para instalarse. Última comprobación a las {{time}}.",
-        installed: "Actualización de la aplicación instalada. Se requiere reinicio.",
-        failed: "No se pudo actualizar la aplicación.",
-        idle: "El estado de la actualización aún no se ha comprobado.",
-      },
-      installError: "No se puede instalar la actualización de la aplicación de escritorio.",
-      callout: {
-        installingTitle: "Instalando actualización",
-        failedTitle: "La actualización falló",
-        availableTitle: "Actualización disponible",
-        genericError: "Algo salió mal.",
-        whatsNew: "Qué hay de nuevo",
-        installingAction: "Instalando...",
-        installAndRestart: "Instalar y reiniciar",
-        installingDescription: "Instalando y reiniciando...",
-        versionReady: "{{version}}está listo para instalar.",
-        newVersionReady: "Una nueva versión está lista para instalar.",
-        restartWarning:
-          "La actualización de la aplicación dejará de ejecutar agentes y cerrará sesiones de terminal.",
-      },
-    },
-    settings: {
-      loadFailed: "No se puede cargar la configuración del escritorio.",
-      saveFailed: "No se puede guardar la configuración del escritorio.",
-    },
-    rosetta: {
-      title: "Descargue la compilaciónApple Silicon",
-      runningIntel: "Estás ejecutando la compilaciónInteldePaseoenRosettaenApple Silicon.",
-      highCpu:
-        "Esto provoca un uso elevado de la CPU. Descargue la compilaciónApple Siliconpara solucionarlo.",
-      download: "Descargar",
-    },
-    permissions: {
-      notifications: {
-        allowed: "El sistema operativo permite las notificaciones.",
-        denied: "Las notificaciones se niegan en la configuración del sistema.",
-        notGranted: "Las notificaciones aún no han sido concedidas.",
-        webOnly:
-          "El estado de notificación de escritorio solo está disponible en tiempo de ejecución web.",
-        supported: "Se admiten notificaciones de escritorio.",
-        unsupported: "Las notificaciones de escritorio no son compatibles con esta plataforma.",
-        apiUnavailable: "La API de notificación web no está disponible en este entorno.",
-        requestsWebOnly:
-          "Las solicitudes de notificación de escritorio solo están disponibles en tiempo de ejecución web.",
-        requestUnavailable: "RequestPermission() de la API de notificación web no está disponible.",
-        requestFailed: "No se pudo solicitar permiso de notificación:{{message}}",
-        unexpectedState: "Estado de permiso de notificación inesperado:{{state}}",
-      },
-      microphone: {
-        webOnly:
-          "El estado del micrófono de escritorio solo está disponible en tiempo de ejecución web.",
-        navigatorUnavailable: "Navigator no está disponible en este entorno.",
-        granted: "Se concede acceso al micrófono.",
-        denied: "El acceso al micrófono está denegado en la configuración del sistema.",
-        notGranted: "Aún no se ha concedido el permiso para el micrófono.",
-        unexpectedState: "Estado de permiso de micrófono inesperado:{{state}}",
-        statusApiUnavailable:
-          "La API de estado del micrófono no está disponible en este tiempo de ejecución. Utilice Solicitud para comprobar el acceso.",
-        queryFailed: "No se pudo consultar el estado del micrófono:{{message}}",
-        captureUnavailable: "La captura de micrófono no está disponible en este entorno.",
-        permissionApiUnavailable:
-          "La API de estado de permiso no está disponible. Utilice Solicitud para comprobar el acceso.",
-        requestsWebOnly:
-          "Las solicitudes de micrófono de escritorio solo están disponibles en tiempo de ejecución web.",
-        captureApiUnavailable: "La API de captura de micrófono no está disponible en este entorno.",
-        requestDenied: "El usuario o el sistema denegaron el permiso del micrófono.",
-        noDevice: "No se encontró ningún dispositivo de micrófono.",
-        requestFailed: "No se pudo solicitar el permiso del micrófono:{{message}}",
-      },
-      empty: {
-        notifications: "El estado de la notificación aún no se ha verificado.",
-        microphone: "El estado del micrófono aún no se ha comprobado.",
-      },
-      testNotification: {
-        title: "Prueba de notificaciónPaseo",
-        body: "Si puede ver esto, las notificaciones de escritorio funcionan.",
-        notDelivered:
-          "La notificación no fue entregada. Verifique Configuración del sistema> Notificaciones.",
-        failed: "No se pudo enviar la notificación.",
-      },
-    },
-    integrations: {
-      cli: {
-        statusFailed: "No se puede verificar el estado de instalación deCLI.",
-        installFailed: "No se puede instalar elPaseoCLI.",
-      },
-      skills: {
-        statusFailed: "No se puede comprobar el estado de las habilidades de orquestación.",
-        installFailed: "No se pueden instalar habilidades de orquestación.",
-        updateFailed: "No se pueden actualizar las habilidades de orquestación.",
-        uninstallFailed: "No se pueden desinstalar las habilidades de orquestación.",
-      },
-    },
-  },
   rootError: {
     kicker: "Algo salió mal",
-    title: "Paseo tuvo un problema.",
+    title: "BySpace tuvo un problema.",
     body: "Vuelve a intentarlo para recargar la app. Si sigue ocurriendo, incluye los detalles de abajo al reportarlo.",
     details: "Detalles",
   },
@@ -1161,7 +995,7 @@ export const es: TranslationResources = {
     },
   },
   onboarding: {
-    title: "Bienvenido aPaseo",
+    title: "Bienvenido aBySpace",
     subtitle: "Conecte su computadora para comenzar",
     actions: {
       settings: "Ajustes",
@@ -1237,7 +1071,7 @@ export const es: TranslationResources = {
     },
     direct: {
       title: "Conexión directa",
-      helper: "Ingrese la dirección de un servidorPaseo.",
+      helper: "Ingrese la dirección de un servidorBySpace.",
       fields: {
         host: "Host",
         port: "Puerto",
@@ -1317,7 +1151,7 @@ export const es: TranslationResources = {
       failedToLoadOffer: "No se pudo cargar la oferta de emparejamiento.",
       relayDisabled: "El relé no está habilitado. Habilite el relé para emparejar un dispositivo.",
       unavailable: "Oferta de maridaje no disponible.",
-      hint: "Escanee este códigoQRconPaseoen su teléfono o copie el enlace a continuación.",
+      hint: "Escanee este códigoQRconBySpaceen su teléfono o copie el enlace a continuación.",
       qrUnavailable: "CódigoQRno disponible.",
       retry: "Rever",
       copy: "Copiar",
@@ -1349,7 +1183,7 @@ export const es: TranslationResources = {
   serviceUrl: {
     title: "Servicio abiertoURL",
     message: "¿Abrir{{url}}?",
-    inPaseo: "EnPaseo",
+    inBySpace: "EnBySpace",
     externalBrowser: "Navegador externo",
     dontAskAgain: "no vuelvas a preguntar",
   },
@@ -1416,9 +1250,9 @@ export const es: TranslationResources = {
       one: "usó {{count}} herramienta adicional",
       other: "usó {{count}} herramientas adicionales",
     },
-    paseoCalls: {
-      one: "llamó a Paseo {{count}} vez",
-      other: "llamó a Paseo {{count}} veces",
+    byspaceCalls: {
+      one: "llamó a BySpace {{count}} vez",
+      other: "llamó a BySpace {{count}} veces",
     },
     and: "y",
     failed: "{{count}} con error",
@@ -1508,7 +1342,7 @@ export const es: TranslationResources = {
         description: "Dónde abrir URL desde scripts en ejecución",
         options: {
           ask: "Preguntar",
-          inApp: "EnPaseo",
+          inApp: "EnBySpace",
           external: "Navegador externo",
         },
       },
@@ -1588,7 +1422,7 @@ export const es: TranslationResources = {
         label: "Actualizaciones de aplicaciones",
         readyToInstall: "Listo para instalar:{{version}}",
         installTitle: "Instalar actualización de escritorio",
-        installMessage: "Esto actualizaPaseoen esta computadora.",
+        installMessage: "Esto actualizaBySpaceen esta computadora.",
         installConfirm: "Instalar actualización",
         update: "Actualizar",
         updateTo: "Actualización a{{version}}",
@@ -1720,11 +1554,11 @@ export const es: TranslationResources = {
         title: "Habilidades de orquestación",
         description: "Enseñe a sus agentes a orquestar a través delCLI",
         updateAvailable: "Actualización disponible",
-        updateTitle: "¿Actualizar las habilidades dePaseo?",
+        updateTitle: "¿Actualizar las habilidades deBySpace?",
         updateFallback: "Sincronice las habilidades incluidas con su máquina.",
-        uninstallTitle: "¿Desinstalar las habilidadesPaseo?",
+        uninstallTitle: "¿Desinstalar las habilidadesBySpace?",
         uninstallMessage:
-          "Elimina todas las habilidades de orquestaciónPaseode ~/.agents, ~/.claude, ~/.codex.",
+          "Elimina todas las habilidades de orquestaciónBySpacede ~/.agents, ~/.claude, ~/.codex.",
       },
       actions: {
         install: "Instalar",
@@ -1779,9 +1613,9 @@ export const es: TranslationResources = {
         title: "Orquestación",
         unavailable: "Conéctese a este host para administrar la orquestación",
         enableTools: {
-          title: "Habilitar herramientasPaseo",
+          title: "Habilitar herramientasBySpace",
           hint: "Los agentes podrán gestionar árboles de trabajo, agentes y horarios.",
-          accessibilityLabel: "Inyectar herramientasPaseo",
+          accessibilityLabel: "Inyectar herramientasBySpace",
         },
         systemPrompt: {
           title: "Aviso del sistema",
@@ -1848,10 +1682,10 @@ export const es: TranslationResources = {
             "Este host no está conectado. Espere a que se conecte antes de reiniciar.",
           offlineTitle: "Hostfuera de línea",
           offlineMessage:
-            "Este anfitrión está desconectado.Paseose vuelve a conectar automáticamente; espere hasta que vuelva a estar en línea antes de reiniciar.",
+            "Este anfitrión está desconectado.BySpacese vuelve a conectar automáticamente; espere hasta que vuelva a estar en línea antes de reiniciar.",
           requestFailedTitle: "Error",
           requestFailedMessage:
-            "No se pudo enviar la solicitud de reinicio.Paseose vuelve a conectar automáticamente; inténtelo nuevamente una vez que el host se muestre en línea.",
+            "No se pudo enviar la solicitud de reinicio.BySpacese vuelve a conectar automáticamente; inténtelo nuevamente una vez que el host se muestre en línea.",
           dialogFailedMessage:
             "No se puede abrir el cuadro de diálogo de confirmación de reinicio.",
         },
@@ -1963,14 +1797,14 @@ export const es: TranslationResources = {
         reset: "Reiniciar",
       },
       readFailures: {
-        invalidTitle: "paseo.json no se pudo analizar",
+        invalidTitle: "byspace.json no se pudo analizar",
         invalidDescription: "Fije el archivo en el disco y luego vuelva a cargarlo.",
         missingTitle: "Este anfitrión no tiene este proyecto",
         missingWithHosts: "Cambie a otro host de arriba o vuelva a cargar.",
         missingSingleHost: "El anfitrión seleccionado no tiene registro de este proyecto.",
-        transportTitle: "No se pudo cargar paseo.json",
+        transportTitle: "No se pudo cargar byspace.json",
         transportFallback: "El anfitrión no respondió.",
-        failedTitle: "No se pudo cargar paseo.json",
+        failedTitle: "No se pudo cargar byspace.json",
         failedDescription: "Vuelva a cargar para intentarlo de nuevo.",
       },
       worktree: {
@@ -2003,7 +1837,7 @@ export const es: TranslationResources = {
         newScript: "Nuevo guión",
         editScript: "Editar{{name}}",
         runAsService: "Ejecutar como servicio",
-        serviceHint: "Paseosupervisa el proceso y asigna un puerto vía $BYSPACE_PORT",
+        serviceHint: "BySpacesupervisa el proceso y asigna un puerto vía $BYSPACE_PORT",
         actions: {
           add: "Agregar guión",
           edit: "Editar",
@@ -2012,7 +1846,7 @@ export const es: TranslationResources = {
       },
       metadata: {
         title: "Generación de metadatos",
-        info: "Instrucciones específicas del proyecto inyectadas en los mensajes de IA quePaseoutiliza para generar metadatos; úselas para hacer cumplir las convenciones de su equipo, como la denominación de ramas, el estilo de confirmación o el formatoPR.",
+        info: "Instrucciones específicas del proyecto inyectadas en los mensajes de IA queBySpaceutiliza para generar metadatos; úselas para hacer cumplir las convenciones de su equipo, como la denominación de ramas, el estilo de confirmación o el formatoPR.",
         branchName: "Nombres de sucursales",
         branchNamePlaceholder: "Prefijo ramas con feat/ o fix/, mb/ para ramas personales",
         commitMessage: "Confirmar mensajes",
@@ -2023,8 +1857,8 @@ export const es: TranslationResources = {
       },
       writeFailures: {
         staleTitle: "Configuración cambiada en el disco",
-        staleDescription: "Vuelva a cargar para obtener el último paseo.json antes de guardar.",
-        failedTitle: "No se pudo guardar paseo.json",
+        staleDescription: "Vuelva a cargar para obtener el último byspace.json antes de guardar.",
+        failedTitle: "No se pudo guardar byspace.json",
         failedDescription: "Inténtelo de nuevo o vuelva a cargar la última versión desde el disco.",
       },
       actions: {

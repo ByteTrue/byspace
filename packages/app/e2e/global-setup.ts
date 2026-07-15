@@ -9,7 +9,7 @@ import { Buffer } from "node:buffer";
 import dotenv from "dotenv";
 import { loadDaemonClientConstructor } from "./helpers/daemon-client-loader";
 import { createNodeWebSocketFactory, type NodeWebSocketFactory } from "./helpers/node-ws-factory";
-import { forkPaseoHomeMetadata, resolvePaseoHomePath } from "./helpers/paseo-home-fork";
+import { forkBySpaceHomeMetadata, resolveBySpaceHomePath } from "./helpers/byspace-home-fork";
 import { withDisabledE2ESpeechEnv } from "./helpers/speech-env";
 
 const wranglerCliPath = path.resolve(__dirname, "../node_modules/wrangler/bin/wrangler.js");
@@ -39,7 +39,7 @@ async function getAvailablePort(): Promise<number> {
 
 const RESERVED_LOCAL_PORTS = new Set([
   // Default developer daemon.
-  6767,
+  6777,
   // OpenCode's default local server port. Some provider probes can spawn it
   // during daemon startup, so the E2E daemon must not choose the same port.
   61680,
@@ -168,7 +168,7 @@ function isProcessRunning(pid: number): boolean {
 
 async function readSupervisorPidLock(home: string): Promise<number | null> {
   try {
-    const content = await readFile(path.join(home, "paseo.pid"), "utf8");
+    const content = await readFile(path.join(home, "byspace.pid"), "utf8");
     const parsed = JSON.parse(content) as { pid?: unknown };
     return typeof parsed.pid === "number" ? parsed.pid : null;
   } catch {
@@ -204,14 +204,14 @@ async function stopProcessByPid(pid: number): Promise<void> {
 }
 
 async function stopCurrentDaemonFromPidLock(): Promise<void> {
-  if (!paseoHome) {
+  if (!byspaceHome) {
     return;
   }
-  if (process.env.E2E_DAEMON_PORT === "6767") {
-    throw new Error("Refusing to clean up daemon PID lock for developer daemon port 6767.");
+  if (process.env.E2E_DAEMON_PORT === "6777") {
+    throw new Error("Refusing to clean up daemon PID lock for developer daemon port 6777.");
   }
 
-  const pid = await readSupervisorPidLock(paseoHome);
+  const pid = await readSupervisorPidLock(byspaceHome);
   if (pid === null) {
     return;
   }
@@ -262,19 +262,19 @@ async function isOpenAiApiKeyUsable(apiKey: string | undefined): Promise<boolean
 
 let daemonProcess: ChildProcess | null = null;
 let metroProcess: ChildProcess | null = null;
-let paseoHome: string | null = null;
+let byspaceHome: string | null = null;
 let fakeEditorBinDir: string | null = null;
 let relayProcess: ChildProcess | null = null;
 
-function resolveOptionalPaseoHomeEnv(value: string | undefined): string | null {
+function resolveOptionalBySpaceHomeEnv(value: string | undefined): string | null {
   const trimmed = value?.trim();
   if (!trimmed) {
     return null;
   }
   if (trimmed === "current") {
-    return resolvePaseoHomePath("~/.paseo");
+    return resolveBySpaceHomePath("~/.byspace");
   }
-  return resolvePaseoHomePath(trimmed);
+  return resolveBySpaceHomePath(trimmed);
 }
 
 interface OfferPayload {
@@ -301,7 +301,7 @@ interface PairingDaemonClient {
 }
 
 async function createFakeEditorBin(): Promise<string> {
-  const binDir = await mkdtemp(path.join(tmpdir(), "paseo-e2e-editor-bin-"));
+  const binDir = await mkdtemp(path.join(tmpdir(), "byspace-e2e-editor-bin-"));
 
   const fakeEditorSource = `#!/usr/bin/env node
 const fs = require("fs");
@@ -413,12 +413,12 @@ async function loadEnvTestFile(repoRoot: string): Promise<void> {
   }
 }
 
-async function applyPaseoHomeFork(targetHome: string): Promise<void> {
-  const forkSourceHome = resolveOptionalPaseoHomeEnv(process.env.E2E_FORK_BYSPACE_HOME_FROM);
+async function applyBySpaceHomeFork(targetHome: string): Promise<void> {
+  const forkSourceHome = resolveOptionalBySpaceHomeEnv(process.env.E2E_FORK_BYSPACE_HOME_FROM);
   if (!forkSourceHome) {
     return;
   }
-  const forkResult = await forkPaseoHomeMetadata({
+  const forkResult = await forkBySpaceHomeMetadata({
     sourceHome: forkSourceHome,
     targetHome,
   });
@@ -427,13 +427,13 @@ async function applyPaseoHomeFork(targetHome: string): Promise<void> {
   process.env.E2E_FORK_COPIED_FILES = String(forkResult.copiedFiles);
   process.env.E2E_FORK_COPIED_BYTES = String(forkResult.copiedBytes);
   console.log(
-    `[e2e] Forked Paseo metadata from ${forkResult.sourceHome} to ${forkResult.targetHome} ` +
+    `[e2e] Forked BySpace metadata from ${forkResult.sourceHome} to ${forkResult.targetHome} ` +
       `(${forkResult.agentFiles} agent files, ${forkResult.projectFiles} project registry files, ` +
       `${forkResult.copiedBytes} bytes)`,
   );
   if (forkResult.skippedMissing.length > 0) {
     console.warn(
-      `[e2e] Paseo metadata fork skipped missing paths: ${forkResult.skippedMissing.join(", ")}`,
+      `[e2e] BySpace metadata fork skipped missing paths: ${forkResult.skippedMissing.join(", ")}`,
     );
   }
 }
@@ -442,7 +442,7 @@ async function logSpeechHarnessConfig(): Promise<void> {
   const openAiUsable = await isOpenAiApiKeyUsable(process.env.OPENAI_API_KEY);
   const defaultLocalModelsDir = path.join(
     process.env.HOME ?? "",
-    ".paseo",
+    ".byspace",
     "models",
     "local-speech",
   );
@@ -618,12 +618,6 @@ function startMetro(input: {
     env: {
       ...process.env,
       BROWSER: "none",
-      ...(process.env.E2E_DESKTOP_RUNTIME === "1"
-        ? {
-            BYSPACE_WEB_PLATFORM: "electron",
-            EXPO_PUBLIC_LOCAL_DAEMON: `127.0.0.1:${input.daemonPort}`,
-          }
-        : {}),
     },
     stdio: ["ignore", "pipe", "pipe"],
     detached: false,
@@ -658,7 +652,7 @@ interface DaemonSpawnArgs {
   port: number;
   relayPort: number;
   metroPort: number;
-  paseoHome: string;
+  byspaceHome: string;
   fakeEditorBinDir: string;
   editorRecordPath: string;
   buffer: ReturnType<typeof createLineBuffer>;
@@ -670,7 +664,7 @@ function startDaemon(args: DaemonSpawnArgs): ChildProcess {
   const env = withDisabledE2ESpeechEnv({
     ...process.env,
     PATH: `${args.fakeEditorBinDir}${path.delimiter}${process.env.PATH ?? ""}`,
-    BYSPACE_HOME: args.paseoHome,
+    BYSPACE_HOME: args.byspaceHome,
     BYSPACE_E2E_EDITOR_RECORD_PATH: args.editorRecordPath,
     BYSPACE_SERVER_ID: "srv_e2e_test_daemon",
     BYSPACE_LISTEN: `0.0.0.0:${args.port}`,
@@ -723,7 +717,7 @@ async function removeTempTree(targetPath: string): Promise<void> {
   });
 }
 
-async function performCleanup(shouldRemovePaseoHome: boolean): Promise<void> {
+async function performCleanup(shouldRemoveBySpaceHome: boolean): Promise<void> {
   await Promise.all([
     stopProcess(daemonProcess),
     stopProcess(metroProcess),
@@ -733,11 +727,11 @@ async function performCleanup(shouldRemovePaseoHome: boolean): Promise<void> {
   daemonProcess = null;
   metroProcess = null;
   relayProcess = null;
-  if (paseoHome && shouldRemovePaseoHome) {
-    await removeTempTree(paseoHome);
-    paseoHome = null;
-  } else if (paseoHome) {
-    console.log(`[e2e] Preserving BYSPACE_HOME: ${paseoHome}`);
+  if (byspaceHome && shouldRemoveBySpaceHome) {
+    await removeTempTree(byspaceHome);
+    byspaceHome = null;
+  } else if (byspaceHome) {
+    console.log(`[e2e] Preserving BYSPACE_HOME: ${byspaceHome}`);
   }
   if (fakeEditorBinDir) {
     await removeTempTree(fakeEditorBinDir);
@@ -752,17 +746,18 @@ export default async function globalSetup() {
 
   const port = await getAvailablePortExcluding(new Set());
   const metroPort = await getAvailablePortExcluding(new Set([port]));
-  const requestedPaseoHome = resolveOptionalPaseoHomeEnv(process.env.E2E_BYSPACE_HOME);
-  const shouldRemovePaseoHome = !requestedPaseoHome && process.env.E2E_KEEP_BYSPACE_HOME !== "1";
-  paseoHome = requestedPaseoHome ?? (await mkdtemp(path.join(tmpdir(), "paseo-e2e-home-")));
-  const editorRecordPath = path.join(paseoHome, "editor-open-records.jsonl");
+  const requestedBySpaceHome = resolveOptionalBySpaceHomeEnv(process.env.E2E_BYSPACE_HOME);
+  const shouldRemoveBySpaceHome =
+    !requestedBySpaceHome && process.env.E2E_KEEP_BYSPACE_HOME !== "1";
+  byspaceHome = requestedBySpaceHome ?? (await mkdtemp(path.join(tmpdir(), "byspace-e2e-home-")));
+  const editorRecordPath = path.join(byspaceHome, "editor-open-records.jsonl");
   fakeEditorBinDir = await createFakeEditorBin();
   const metroLineBuffer = createLineBuffer();
   const daemonLineBuffer = createLineBuffer();
 
-  await applyPaseoHomeFork(paseoHome);
+  await applyBySpaceHomeFork(byspaceHome);
 
-  const cleanup = () => performCleanup(shouldRemovePaseoHome);
+  const cleanup = () => performCleanup(shouldRemoveBySpaceHome);
 
   await logSpeechHarnessConfig();
 
@@ -777,7 +772,7 @@ export default async function globalSetup() {
       port,
       relayPort,
       metroPort,
-      paseoHome,
+      byspaceHome,
       fakeEditorBinDir,
       editorRecordPath,
       buffer: daemonLineBuffer,
@@ -785,7 +780,7 @@ export default async function globalSetup() {
 
     await Promise.all([
       waitForServer(port, {
-        label: "Paseo daemon",
+        label: "BySpace daemon",
         childProcess: daemonProcess,
         getRecentOutput: daemonLineBuffer.dump,
       }),
@@ -806,10 +801,10 @@ export default async function globalSetup() {
     process.env.E2E_SERVER_ID = offer.serverId;
     process.env.E2E_RELAY_DAEMON_PUBLIC_KEY = offer.daemonPublicKeyB64;
     process.env.E2E_METRO_PORT = String(metroPort);
-    process.env.E2E_BYSPACE_HOME = paseoHome;
+    process.env.E2E_BYSPACE_HOME = byspaceHome;
     process.env.E2E_EDITOR_RECORD_PATH = editorRecordPath;
     console.log(
-      `[e2e] Test daemon started on port ${port}, Metro on port ${metroPort}, home: ${paseoHome}`,
+      `[e2e] Test daemon started on port ${port}, Metro on port ${metroPort}, home: ${byspaceHome}`,
     );
 
     return async () => {

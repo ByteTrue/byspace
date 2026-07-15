@@ -785,7 +785,7 @@ export const fr: TranslationResources = {
       reportIssue: "Signaler un problème",
       discord: "Discord",
       github: "Créer un ticket GitHub",
-      version: "Paseo {{version}}",
+      version: "BySpace {{version}}",
     },
     sections: {
       sessions: "Historique",
@@ -898,178 +898,9 @@ export const fr: TranslationResources = {
       title: "Commencer à partir de",
     },
   },
-  desktop: {
-    quitting: {
-      title: "QuitterPaseo...",
-      detail: "Arrêt du démon local.",
-    },
-    daemon: {
-      title: "Daemon",
-      status: {
-        title: "Statut",
-        builtInOnly: "Seul le démon de bureau intégré est affiché ici",
-        running: "en cours d'exécution",
-        notRunning: "ne fonctionne pas",
-        pid: "PID{{pid}}",
-      },
-      management: {
-        title: "Gérer le démon intégré",
-        hint: "LaissezPaseodémarrer et arrêter le démon intégré",
-        pauseTitle: "Suspendre le démon intégré",
-        pauseMessage:
-          "Cela arrêtera immédiatement le démon intégré. Les agents en cours d'exécution et les terminaux connectés au démon intégré seront arrêtés.",
-        pauseAndStop: "Pause et arrêt",
-        registrationFailed:
-          "Built-in daemon started, but Paseo could not save the localhost connection. Toggle daemon management off and on again, or add localhost manually.",
-        pausedStopFailed:
-          "La gestion du démon intégré a été suspendue, maisPaseon'a ​​pas pu arrêter le démon.",
-        updateFailed: "Impossible de mettre à jour la gestion des démons intégrés.",
-      },
-      keepRunning: {
-        title: "Laisser le démon fonctionner après avoir quitté",
-        hint: "Daemoncontinue de fonctionner lorsque vous quittezPaseo",
-      },
-      logs: {
-        title: "Fichier journal",
-        modalTitle: "JournauxDaemon",
-        unavailable: "Chemin du journal indisponible",
-        empty: "(le fichier journal est vide)",
-        copied: "Chemin du journal copié.",
-        copyFailed: "Impossible de copier le chemin du journal.",
-        open: "Journaux ouverts",
-        copyPath: "Copier le chemin",
-      },
-      fullStatus: {
-        title: "Statut complet",
-        modalTitle: "StatutDaemon",
-        hint: "Exécute`paseo daemon status`et affiche la sortie",
-        view: "Afficher l'état",
-        copied: "Statut copié dans le presse-papiers.",
-        fetchFailed: "Échec de la récupération de l'état du démon:{{message}}",
-      },
-      advancedSettings: "Paramètres avancés",
-      openAdvancedSettings: "Ouvrir les paramètres avancés du démon",
-      versionMismatch:
-        "Les versions de l'application et du démon ne correspondent pas. Mettez à jour les deux vers la même version pour une meilleure expérience.",
-      loadFailed: "Impossible de charger l'état du démon de bureau.",
-    },
-    updates: {
-      status: {
-        checking: "Vérification des mises à jour de l'application...",
-        installing: "Installation de la mise à jour de l'application...",
-        upToDate: "L'application est à jour.",
-        upToDateWithLastChecked: "Up to date. Last checked at {{time}}.",
-        pending: "Nous vous informerons lorsque la mise à jour sera prête.",
-        pendingWithLastChecked:
-          "Nous vous informerons lorsque la mise à jour sera prête. Dernière vérification à {{time}}.",
-        pendingWithVersion: "Mise à jour trouvée : {{version}}. Téléchargement...",
-        pendingWithVersionAndLastChecked:
-          "Mise à jour trouvée : {{version}}. Téléchargement... Dernière vérification à {{time}}.",
-        availableWithVersion: "Mise à jour prête:{{version}}",
-        availableWithVersionAndLastChecked:
-          "Mise à jour prête:{{version}}. Dernière vérification à {{time}}.",
-        available: "Une mise à jour de l'application est prête à être installée.",
-        availableWithLastChecked:
-          "Une mise à jour de l'application est prête à être installée. Dernière vérification à {{time}}.",
-        installed: "Mise à jour de l'application installée. Redémarrage requis.",
-        failed: "Échec de la mise à jour de l'application.",
-        idle: "L'état de la mise à jour n'a pas encore été vérifié.",
-      },
-      installError: "Impossible d'installer la mise à jour de l'application de bureau.",
-      callout: {
-        installingTitle: "Installation de la mise à jour",
-        failedTitle: "La mise à jour a échoué",
-        availableTitle: "Mise à jour disponible",
-        genericError: "Quelque chose s'est mal passé.",
-        whatsNew: "Quoi de neuf",
-        installingAction: "Installation...",
-        installAndRestart: "Installer et redémarrer",
-        installingDescription: "Installation et redémarrage...",
-        versionReady: "{{version}}est prêt à être installé.",
-        newVersionReady: "Une nouvelle version est prête à être installée.",
-        restartWarning:
-          "La mise à niveau de l'application arrêtera l'exécution des agents et fermera les sessions de terminal.",
-      },
-    },
-    settings: {
-      loadFailed: "Impossible de charger les paramètres du bureau.",
-      saveFailed: "Impossible d'enregistrer les paramètres du bureau.",
-    },
-    rosetta: {
-      title: "Téléchargez la versionApple Silicon",
-      runningIntel: "Vous exécutez la versionInteldePaseosousRosettasurApple Silicon.",
-      highCpu:
-        "Cela entraîne une utilisation élevée du processeur. Téléchargez la versionApple Siliconpour le réparer.",
-      download: "Télécharger",
-    },
-    permissions: {
-      notifications: {
-        allowed: "Les notifications sont autorisées par le système d'exploitation.",
-        denied: "Les notifications sont refusées dans les paramètres système.",
-        notGranted: "Les notifications n'ont pas encore été accordées.",
-        webOnly:
-          "L’état des notifications sur le bureau est uniquement disponible sur l’exécution Web.",
-        supported: "Les notifications de bureau sont prises en charge.",
-        unsupported:
-          "Les notifications de bureau ne sont pas prises en charge sur cette plateforme.",
-        apiUnavailable: "L'API de notification Web n'est pas disponible dans cet environnement.",
-        requestsWebOnly:
-          "Les demandes de notification sur le bureau sont uniquement disponibles sur l'exécution Web.",
-        requestUnavailable: "L'API de notification Web requestPermission() n'est pas disponible.",
-        requestFailed: "Échec de la demande d'autorisation de notification:{{message}}",
-        unexpectedState: "État d'autorisation de notification inattendu:{{state}}",
-      },
-      microphone: {
-        webOnly:
-          "L’état du microphone de bureau est uniquement disponible dans l’environnement d’exécution Web.",
-        navigatorUnavailable: "Le navigateur n'est pas disponible dans cet environnement.",
-        granted: "L’accès au microphone est accordé.",
-        denied: "L'accès au microphone est refusé dans les paramètres système.",
-        notGranted: "L'autorisation du microphone n'a pas encore été accordée.",
-        unexpectedState: "État d'autorisation inattendu du microphone:{{state}}",
-        statusApiUnavailable:
-          "L’API d’état du microphone n’est pas disponible dans ce runtime. Utilisez Request pour vérifier l’accès.",
-        queryFailed: "Échec de l'interrogation de l'état du microphone:{{message}}",
-        captureUnavailable: "La capture du microphone n'est pas disponible dans cet environnement.",
-        permissionApiUnavailable:
-          "L'API d'état des autorisations n'est pas disponible. Utilisez Request pour vérifier l’accès.",
-        requestsWebOnly:
-          "Les demandes de microphone de bureau sont uniquement disponibles sur le runtime Web.",
-        captureApiUnavailable:
-          "L'API de capture de microphone n'est pas disponible dans cet environnement.",
-        requestDenied:
-          "L'autorisation du microphone a été refusée par l'utilisateur ou le système.",
-        noDevice: "Aucun microphone n'a été trouvé.",
-        requestFailed: "Échec de la demande d'autorisation du microphone:{{message}}",
-      },
-      empty: {
-        notifications: "L'état de la notification n'a pas encore été vérifié.",
-        microphone: "L'état du microphone n'a pas encore été vérifié.",
-      },
-      testNotification: {
-        title: "Test de notificationPaseo",
-        body: "Si vous pouvez voir cela, les notifications sur le bureau fonctionnent.",
-        notDelivered:
-          "La notification n'a pas été délivrée. Vérifiez Paramètres système > Notifications.",
-        failed: "Échec de l'envoi de la notification.",
-      },
-    },
-    integrations: {
-      cli: {
-        statusFailed: "Impossible de vérifier l'état de l'installation deCLI.",
-        installFailed: "Impossible d'installer lePaseoCLI.",
-      },
-      skills: {
-        statusFailed: "Impossible de vérifier l'état des compétences d'orchestration.",
-        installFailed: "Impossible d'installer les compétences d'orchestration.",
-        updateFailed: "Impossible de mettre à jour les compétences d'orchestration.",
-        uninstallFailed: "Impossible de désinstaller les compétences d'orchestration.",
-      },
-    },
-  },
   rootError: {
     kicker: "Une erreur s'est produite",
-    title: "Paseo a rencontré un problème.",
+    title: "BySpace a rencontré un problème.",
     body: "Réessayez pour recharger l'application. Si cela continue, joignez les détails ci-dessous au signalement.",
     details: "Détails",
   },
@@ -1164,7 +995,7 @@ export const fr: TranslationResources = {
     },
   },
   onboarding: {
-    title: "Bienvenue surPaseo",
+    title: "Bienvenue surBySpace",
     subtitle: "Connectez votre ordinateur pour commencer",
     actions: {
       settings: "Paramètres",
@@ -1240,7 +1071,7 @@ export const fr: TranslationResources = {
     },
     direct: {
       title: "Connexion directe",
-      helper: "Saisissez l'adresse d'un serveurPaseo.",
+      helper: "Saisissez l'adresse d'un serveurBySpace.",
       fields: {
         host: "Host",
         port: "Port",
@@ -1320,7 +1151,7 @@ export const fr: TranslationResources = {
       failedToLoadOffer: "Échec du chargement de l'offre d'association.",
       relayDisabled: "Le relais n'est pas activé. Activer le relais pour coupler un appareil.",
       unavailable: "Offre de jumelage indisponible.",
-      hint: "Scannez ce codeQRavecPaseosur votre téléphone ou copiez le lien ci-dessous.",
+      hint: "Scannez ce codeQRavecBySpacesur votre téléphone ou copiez le lien ci-dessous.",
       qrUnavailable: "CodeQRindisponible.",
       retry: "Réessayer",
       copy: "Copie",
@@ -1352,7 +1183,7 @@ export const fr: TranslationResources = {
   serviceUrl: {
     title: "Service ouvertURL",
     message: "Ouvrir{{url}}?",
-    inPaseo: "DansPaseo",
+    inBySpace: "DansBySpace",
     externalBrowser: "Navigateur externe",
     dontAskAgain: "Ne demande plus",
   },
@@ -1419,9 +1250,9 @@ export const fr: TranslationResources = {
       one: "a utilisé {{count}} autre outil",
       other: "a utilisé {{count}} autres outils",
     },
-    paseoCalls: {
-      one: "a appelé Paseo {{count}} fois",
-      other: "a appelé Paseo {{count}} fois",
+    byspaceCalls: {
+      one: "a appelé BySpace {{count}} fois",
+      other: "a appelé BySpace {{count}} fois",
     },
     and: "et",
     failed: "{{count}} en échec",
@@ -1511,7 +1342,7 @@ export const fr: TranslationResources = {
         description: "Où ouvrir les URL à partir de scripts en cours d'exécution",
         options: {
           ask: "Demander",
-          inApp: "DansPaseo",
+          inApp: "DansBySpace",
           external: "Navigateur externe",
         },
       },
@@ -1591,7 +1422,7 @@ export const fr: TranslationResources = {
         label: "Mises à jour de l'application",
         readyToInstall: "Prêt à installer:{{version}}",
         installTitle: "Installer la mise à jour du bureau",
-        installMessage: "Cela met à jourPaseosur cet ordinateur",
+        installMessage: "Cela met à jourBySpacesur cet ordinateur",
         installConfirm: "Installer la mise à jour",
         update: "Mise à jour",
         updateTo: "Mise à jour vers{{version}}",
@@ -1724,11 +1555,11 @@ export const fr: TranslationResources = {
         title: "Compétences en orchestration",
         description: "Apprenez à vos agents à orchestrer via leCLI",
         updateAvailable: "Mise à jour disponible",
-        updateTitle: "Mettre à jour les compétencesPaseo?",
+        updateTitle: "Mettre à jour les compétencesBySpace?",
         updateFallback: "Synchronisez les compétences regroupées sur votre machine.",
-        uninstallTitle: "Désinstaller les compétencesPaseo?",
+        uninstallTitle: "Désinstaller les compétencesBySpace?",
         uninstallMessage:
-          "Supprime toutes les compétences d'orchestrationPaseode ~/.agents, ~/.claude, ~/.codex.",
+          "Supprime toutes les compétences d'orchestrationBySpacede ~/.agents, ~/.claude, ~/.codex.",
       },
       actions: {
         install: "Installer",
@@ -1783,9 +1614,9 @@ export const fr: TranslationResources = {
         title: "Orchestration",
         unavailable: "Connectez-vous à cet hôte pour gérer l'orchestration",
         enableTools: {
-          title: "Activer les outilsPaseo",
+          title: "Activer les outilsBySpace",
           hint: "Les agents pourront gérer les arbres de travail, les agents et les horaires",
-          accessibilityLabel: "Injecter les outilsPaseo",
+          accessibilityLabel: "Injecter les outilsBySpace",
         },
         systemPrompt: {
           title: "Invite système",
@@ -1852,10 +1683,10 @@ export const fr: TranslationResources = {
             "Cet hôte n'est pas connecté. Attendez qu'il soit en ligne avant de redémarrer.",
           offlineTitle: "Hosthors ligne",
           offlineMessage:
-            "Cet hôte est hors ligne.Paseose reconnecte automatiquement: attendez qu'il soit de nouveau en ligne avant de redémarrer.",
+            "Cet hôte est hors ligne.BySpacese reconnecte automatiquement: attendez qu'il soit de nouveau en ligne avant de redémarrer.",
           requestFailedTitle: "Erreur",
           requestFailedMessage:
-            "Échec de l'envoi de la demande de redémarrage.Paseose reconnecte automatiquement - réessayez une fois que l'hôte apparaît comme en ligne.",
+            "Échec de l'envoi de la demande de redémarrage.BySpacese reconnecte automatiquement - réessayez une fois que l'hôte apparaît comme en ligne.",
           dialogFailedMessage:
             "Impossible d'ouvrir la boîte de dialogue de confirmation de redémarrage.",
         },
@@ -1968,14 +1799,14 @@ export const fr: TranslationResources = {
         reset: "Réinitialiser",
       },
       readFailures: {
-        invalidTitle: "paseo.json n'a pas pu être analysé",
+        invalidTitle: "byspace.json n'a pas pu être analysé",
         invalidDescription: "Corrigez le fichier sur le disque, puis rechargez.",
         missingTitle: "Cet hôte n'a pas ce projet",
         missingWithHosts: "Basculez vers un autre hôte ci-dessus ou rechargez.",
         missingSingleHost: "L'hôte sélectionné n'a aucune trace de ce projet.",
-        transportTitle: "Impossible de charger paseo.json",
+        transportTitle: "Impossible de charger byspace.json",
         transportFallback: "L'hôte n'a pas répondu.",
-        failedTitle: "Impossible de charger paseo.json",
+        failedTitle: "Impossible de charger byspace.json",
         failedDescription: "Rechargez pour réessayer.",
       },
       worktree: {
@@ -2008,7 +1839,7 @@ export const fr: TranslationResources = {
         newScript: "Nouveau scénario",
         editScript: "Modifier{{name}}",
         runAsService: "Exécuter en tant que service",
-        serviceHint: "Paseosupervise le processus et attribue un port via $BYSPACE_PORT",
+        serviceHint: "BySpacesupervise le processus et attribue un port via $BYSPACE_PORT",
         actions: {
           add: "Ajouter un script",
           edit: "Modifier",
@@ -2017,7 +1848,7 @@ export const fr: TranslationResources = {
       },
       metadata: {
         title: "Génération de métadonnées",
-        info: "Instructions spécifiques au projet injectées dans les invites de l'IA quePaseoutilise pour générer des métadonnées: utilisez-les pour appliquer les conventions de votre équipe telles que la dénomination des branches, le style de validation ou le formatPR.",
+        info: "Instructions spécifiques au projet injectées dans les invites de l'IA queBySpaceutilise pour générer des métadonnées: utilisez-les pour appliquer les conventions de votre équipe telles que la dénomination des branches, le style de validation ou le formatPR.",
         branchName: "Noms des succursales",
         branchNamePlaceholder:
           "Préfixez les branches avec feat/ ou fix/, mb/ pour les branches personnelles",
@@ -2029,8 +1860,8 @@ export const fr: TranslationResources = {
       },
       writeFailures: {
         staleTitle: "Configuration modifiée sur le disque",
-        staleDescription: "Rechargez pour récupérer le dernier paseo.json avant de sauvegarder.",
-        failedTitle: "Impossible d'enregistrer paseo.json",
+        staleDescription: "Rechargez pour récupérer le dernier byspace.json avant de sauvegarder.",
+        failedTitle: "Impossible d'enregistrer byspace.json",
         failedDescription: "Réessayez ou rechargez la dernière version à partir du disque.",
       },
       actions: {

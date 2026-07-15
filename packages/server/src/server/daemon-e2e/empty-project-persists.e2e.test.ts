@@ -6,11 +6,11 @@ import path from "node:path";
 import { afterEach, expect, test } from "vitest";
 
 import { DaemonClient } from "../test-utils/daemon-client.js";
-import { createTestPaseoDaemon, type TestPaseoDaemon } from "../test-utils/paseo-daemon.js";
+import { createTestBySpaceDaemon, type TestBySpaceDaemon } from "../test-utils/byspace-daemon.js";
 import { type PersistedProjectRecord } from "../workspace-registry.js";
 
 const cleanupPaths = new Set<string>();
-const cleanupDaemons = new Set<TestPaseoDaemon>();
+const cleanupDaemons = new Set<TestBySpaceDaemon>();
 const cleanupClients = new Set<DaemonClient>();
 
 function restoreEnv(name: string, previous: string | undefined): void {
@@ -36,21 +36,21 @@ test("project.add creates a project without creating a workspace", async () => {
   const previousSupervised = process.env.BYSPACE_SUPERVISED;
   process.env.BYSPACE_SUPERVISED = "0";
   try {
-    const repoRoot = realpathSync(mkdtempSync(path.join(os.tmpdir(), "paseo-add-project-repo-")));
-    const paseoHomeRoot = realpathSync(
-      mkdtempSync(path.join(os.tmpdir(), "paseo-add-project-home-")),
+    const repoRoot = realpathSync(mkdtempSync(path.join(os.tmpdir(), "byspace-add-project-repo-")));
+    const byspaceHomeRoot = realpathSync(
+      mkdtempSync(path.join(os.tmpdir(), "byspace-add-project-home-")),
     );
     cleanupPaths.add(repoRoot);
-    cleanupPaths.add(paseoHomeRoot);
+    cleanupPaths.add(byspaceHomeRoot);
 
     execSync("git init -b main", { cwd: repoRoot, stdio: "pipe" });
     execSync("git config user.email 'test@byspace.dev'", { cwd: repoRoot, stdio: "pipe" });
-    execSync("git config user.name 'Paseo Test'", { cwd: repoRoot, stdio: "pipe" });
+    execSync("git config user.name 'BySpace Test'", { cwd: repoRoot, stdio: "pipe" });
     writeFileSync(path.join(repoRoot, "README.md"), "# repo\n", "utf8");
     execSync("git add README.md", { cwd: repoRoot, stdio: "pipe" });
     execSync("git -c commit.gpgSign=false commit -m 'initial'", { cwd: repoRoot, stdio: "pipe" });
 
-    const daemon = await createTestPaseoDaemon({ paseoHomeRoot, cleanup: false });
+    const daemon = await createTestBySpaceDaemon({ byspaceHomeRoot, cleanup: false });
     cleanupDaemons.add(daemon);
     const client = new DaemonClient({ url: `ws://127.0.0.1:${daemon.port}/ws` });
     cleanupClients.add(client);
@@ -87,24 +87,26 @@ test("archiving the last workspace leaves the project parent with no workspaces"
   const previousSupervised = process.env.BYSPACE_SUPERVISED;
   process.env.BYSPACE_SUPERVISED = "0";
   try {
-    const repoRoot = realpathSync(mkdtempSync(path.join(os.tmpdir(), "paseo-empty-project-repo-")));
-    const paseoHomeRoot = realpathSync(
-      mkdtempSync(path.join(os.tmpdir(), "paseo-empty-project-home-")),
+    const repoRoot = realpathSync(
+      mkdtempSync(path.join(os.tmpdir(), "byspace-empty-project-repo-")),
+    );
+    const byspaceHomeRoot = realpathSync(
+      mkdtempSync(path.join(os.tmpdir(), "byspace-empty-project-home-")),
     );
     cleanupPaths.add(repoRoot);
-    cleanupPaths.add(paseoHomeRoot);
+    cleanupPaths.add(byspaceHomeRoot);
 
     execSync("git init -b main", { cwd: repoRoot, stdio: "pipe" });
     execSync("git config user.email 'test@byspace.dev'", { cwd: repoRoot, stdio: "pipe" });
-    execSync("git config user.name 'Paseo Test'", { cwd: repoRoot, stdio: "pipe" });
+    execSync("git config user.name 'BySpace Test'", { cwd: repoRoot, stdio: "pipe" });
     writeFileSync(path.join(repoRoot, "README.md"), "# repo\n", "utf8");
     execSync("git add README.md", { cwd: repoRoot, stdio: "pipe" });
     execSync("git -c commit.gpgSign=false commit -m 'initial'", { cwd: repoRoot, stdio: "pipe" });
 
-    const paseoHome = path.join(paseoHomeRoot, ".paseo");
-    const projectsPath = path.join(paseoHome, "projects", "projects.json");
+    const byspaceHome = path.join(byspaceHomeRoot, ".byspace");
+    const projectsPath = path.join(byspaceHome, "projects", "projects.json");
 
-    const daemon = await createTestPaseoDaemon({ paseoHomeRoot, cleanup: false });
+    const daemon = await createTestBySpaceDaemon({ byspaceHomeRoot, cleanup: false });
     cleanupDaemons.add(daemon);
     const client = new DaemonClient({ url: `ws://127.0.0.1:${daemon.port}/ws` });
     cleanupClients.add(client);

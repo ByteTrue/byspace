@@ -66,9 +66,9 @@ interface DaemonStatus {
   pid: number | null;
 }
 
-async function readDaemonStatus(paseoHome: string): Promise<DaemonStatus> {
+async function readDaemonStatus(byspaceHome: string): Promise<DaemonStatus> {
   const result =
-    await $`BYSPACE_HOME=${paseoHome} BYSPACE_LOCAL_SPEECH_AUTO_DOWNLOAD=${testEnv.BYSPACE_LOCAL_SPEECH_AUTO_DOWNLOAD} BYSPACE_DICTATION_ENABLED=${testEnv.BYSPACE_DICTATION_ENABLED} BYSPACE_VOICE_MODE_ENABLED=${testEnv.BYSPACE_VOICE_MODE_ENABLED} npx paseo daemon status --home ${paseoHome} --json`.nothrow();
+    await $`BYSPACE_HOME=${byspaceHome} BYSPACE_LOCAL_SPEECH_AUTO_DOWNLOAD=${testEnv.BYSPACE_LOCAL_SPEECH_AUTO_DOWNLOAD} BYSPACE_DICTATION_ENABLED=${testEnv.BYSPACE_DICTATION_ENABLED} BYSPACE_VOICE_MODE_ENABLED=${testEnv.BYSPACE_VOICE_MODE_ENABLED} npx byspace daemon status --home ${byspaceHome} --json`.nothrow();
   if (result.exitCode !== 0) {
     return { localDaemon: null, pid: null };
   }
@@ -124,7 +124,7 @@ function waitForProcessExit(processRef: ChildProcess, timeoutMs: number): Promis
 console.log("=== Daemon SIGINT (supervisor regression) ===\n");
 
 const port = await getAvailablePort();
-const paseoHome = await mkdtemp(join(tmpdir(), "paseo-sigint-supervisor-"));
+const byspaceHome = await mkdtemp(join(tmpdir(), "byspace-sigint-supervisor-"));
 const cliRoot = join(import.meta.dirname, "..");
 
 let supervisorProcess: ChildProcess | null = null;
@@ -141,7 +141,7 @@ try {
       env: {
         ...process.env,
         ...testEnv,
-        BYSPACE_HOME: paseoHome,
+        BYSPACE_HOME: byspaceHome,
         BYSPACE_LISTEN: `127.0.0.1:${port}`,
         BYSPACE_RELAY_ENABLED: "false",
         CI: "true",
@@ -160,7 +160,7 @@ try {
 
   await waitFor(
     async () => {
-      const status = await readDaemonStatus(paseoHome);
+      const status = await readDaemonStatus(byspaceHome);
       return (
         status.localDaemon === "running" && status.pid !== null && isProcessRunning(status.pid)
       );
@@ -188,7 +188,7 @@ try {
 
   await waitFor(
     async () => {
-      const status = await readDaemonStatus(paseoHome);
+      const status = await readDaemonStatus(byspaceHome);
       return status.localDaemon === "stopped";
     },
     15000,
@@ -223,8 +223,8 @@ try {
     });
   }
 
-  await $`BYSPACE_HOME=${paseoHome} BYSPACE_LOCAL_SPEECH_AUTO_DOWNLOAD=${testEnv.BYSPACE_LOCAL_SPEECH_AUTO_DOWNLOAD} BYSPACE_DICTATION_ENABLED=${testEnv.BYSPACE_DICTATION_ENABLED} BYSPACE_VOICE_MODE_ENABLED=${testEnv.BYSPACE_VOICE_MODE_ENABLED} npx paseo daemon stop --home ${paseoHome} --force`.nothrow();
-  await rm(paseoHome, { recursive: true, force: true });
+  await $`BYSPACE_HOME=${byspaceHome} BYSPACE_LOCAL_SPEECH_AUTO_DOWNLOAD=${testEnv.BYSPACE_LOCAL_SPEECH_AUTO_DOWNLOAD} BYSPACE_DICTATION_ENABLED=${testEnv.BYSPACE_DICTATION_ENABLED} BYSPACE_VOICE_MODE_ENABLED=${testEnv.BYSPACE_VOICE_MODE_ENABLED} npx byspace daemon stop --home ${byspaceHome} --force`.nothrow();
+  await rm(byspaceHome, { recursive: true, force: true });
 }
 
 if (recentSupervisorLogs.trim().length === 0) {

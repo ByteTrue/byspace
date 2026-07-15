@@ -490,7 +490,7 @@ describe("terminal-session-controller subdirectory aggregation", () => {
 
   test("keeps nested workspace terminals out of the parent workspace terminal list", async () => {
     const rootCwd = "/work/repo";
-    const worktreeCwd = "/work/repo/.dev/paseo-home/worktrees/hash/feature-a";
+    const worktreeCwd = "/work/repo/.dev/byspace-home/worktrees/hash/feature-a";
     const rootTerminal = listSession({ id: "root-term", name: "Terminal 1", cwd: rootCwd });
     const worktreeTerminal = listSession({
       id: "worktree-term",

@@ -771,7 +771,7 @@ export const ja: TranslationResources = {
       reportIssue: "問題を報告",
       discord: "Discord",
       github: "GitHub Issueを作成",
-      version: "Paseo {{version}}",
+      version: "BySpace {{version}}",
     },
     sections: {
       sessions: "履歴",
@@ -884,168 +884,9 @@ export const ja: TranslationResources = {
       title: "開始点",
     },
   },
-  desktop: {
-    quitting: {
-      title: "Paseoを終了中...",
-      detail: "ローカルデーモンを停止中。",
-    },
-    daemon: {
-      title: "デーモン",
-      status: {
-        title: "ステータス",
-        builtInOnly: "組み込みデスクトップデーモンのみここに表示されます",
-        running: "実行中",
-        notRunning: "実行していません",
-        pid: "PID {{pid}}",
-      },
-      management: {
-        title: "組み込みデーモンを管理",
-        hint: "Paseoが組み込みデーモンを起動・停止できるようにする",
-        pauseTitle: "組み込みデーモンを一時停止",
-        pauseMessage:
-          "これにより組み込みデーモンが即座に停止します。組み込みデーモンに接続されている実行中のエージェントとターミナルが停止されます。",
-        pauseAndStop: "一時停止して停止",
-        registrationFailed:
-          "組み込みデーモンは起動しましたが、Paseoがlocalhostの接続を保存できませんでした。デーモン管理をオフにしてから再度オンにするか、localhostを手動で追加してください。",
-        pausedStopFailed:
-          "組み込みデーモン管理は一時停止されましたが、Paseoがデーモンを停止できませんでした。",
-        updateFailed: "組み込みデーモン管理を更新できません。",
-      },
-      keepRunning: {
-        title: "終了後もデーモンを実行し続ける",
-        hint: "Paseoを終了してもデーモンは実行し続けます",
-      },
-      logs: {
-        title: "ログファイル",
-        modalTitle: "デーモンログ",
-        unavailable: "ログパスが利用できません",
-        empty: "（ログファイルは空です）",
-        copied: "ログパスをコピーしました。",
-        copyFailed: "ログパスをコピーできません。",
-        open: "ログを開く",
-        copyPath: "パスをコピー",
-      },
-      fullStatus: {
-        title: "詳細ステータス",
-        modalTitle: "デーモンのステータス",
-        hint: "`paseo daemon status`を実行して出力を表示します",
-        view: "ステータスを表示",
-        copied: "ステータスをクリップボードにコピーしました。",
-        fetchFailed: "デーモンのステータスの取得に失敗しました: {{message}}",
-      },
-      advancedSettings: "詳細設定",
-      openAdvancedSettings: "高度なデーモン設定を開く",
-      versionMismatch:
-        "アプリとデーモンのバージョンが一致しません。最良の体験のために両方を同じバージョンに更新してください。",
-      loadFailed: "デスクトップデーモンのステータスを読み込めません。",
-    },
-    updates: {
-      status: {
-        checking: "アプリの更新を確認中...",
-        installing: "アプリの更新をインストール中...",
-        upToDate: "アプリは最新です。",
-        upToDateWithLastChecked: "最新の状態です。最終確認: {{time}}。",
-        pending: "更新の準備ができたらお知らせします。",
-        pendingWithLastChecked: "更新の準備ができたらお知らせします。最終確認: {{time}}。",
-        pendingWithVersion: "更新が見つかりました: {{version}}。ダウンロード中...",
-        pendingWithVersionAndLastChecked:
-          "更新が見つかりました: {{version}}。ダウンロード中... 最終確認: {{time}}。",
-        availableWithVersion: "更新の準備ができました: {{version}}",
-        availableWithVersionAndLastChecked:
-          "更新の準備ができました: {{version}}。最終確認: {{time}}。",
-        available: "アプリの更新をインストールできます。",
-        availableWithLastChecked: "アプリの更新をインストールできます。最終確認: {{time}}。",
-        installed: "アプリの更新がインストールされました。再起動が必要です。",
-        failed: "アプリの更新に失敗しました。",
-        idle: "更新ステータスはまだ確認されていません。",
-      },
-      installError: "デスクトップアプリの更新をインストールできません。",
-      callout: {
-        installingTitle: "更新をインストール中",
-        failedTitle: "更新に失敗しました",
-        availableTitle: "更新が利用可能",
-        genericError: "問題が発生しました。",
-        whatsNew: "新機能",
-        installingAction: "インストール中...",
-        installAndRestart: "インストールして再起動",
-        installingDescription: "インストールして再起動中...",
-        versionReady: "{{version}}のインストール準備ができました。",
-        newVersionReady: "新しいバージョンのインストール準備ができました。",
-        restartWarning:
-          "アプリを更新すると、実行中のエージェントが停止しターミナルセッションが閉じられます。",
-      },
-    },
-    settings: {
-      loadFailed: "デスクトップ設定を読み込めません。",
-      saveFailed: "デスクトップ設定を保存できません。",
-    },
-    rosetta: {
-      title: "Apple Siliconビルドをダウンロード",
-      runningIntel: "Apple Silicon上のRosettaでPaseoのIntelビルドを実行しています。",
-      highCpu:
-        "これにより高いCPU使用率が発生します。修正するにはApple Siliconビルドをダウンロードしてください。",
-      download: "ダウンロード",
-    },
-    permissions: {
-      notifications: {
-        allowed: "通知はOSによって許可されています。",
-        denied: "通知はシステム設定で拒否されています。",
-        notGranted: "通知はまだ許可されていません。",
-        webOnly: "デスクトップ通知のステータスはWebランタイムでのみ利用できます。",
-        supported: "デスクトップ通知はサポートされています。",
-        unsupported: "デスクトップ通知はこのプラットフォームではサポートされていません。",
-        apiUnavailable: "この環境ではWeb Notification APIは利用できません。",
-        requestsWebOnly: "デスクトップ通知のリクエストはWebランタイムでのみ利用できます。",
-        requestUnavailable: "Web Notification API の requestPermission() は利用できません。",
-        requestFailed: "通知の権限リクエストに失敗しました: {{message}}",
-        unexpectedState: "予期しない通知の権限状態: {{state}}",
-      },
-      microphone: {
-        webOnly: "デスクトップマイクのステータスはWebランタイムでのみ利用できます。",
-        navigatorUnavailable: "この環境ではNavigatorは利用できません。",
-        granted: "マイクへのアクセスが許可されています。",
-        denied: "マイクへのアクセスはシステム設定で拒否されています。",
-        notGranted: "マイクの権限はまだ許可されていません。",
-        unexpectedState: "予期しないマイクの権限状態: {{state}}",
-        statusApiUnavailable:
-          "マイクステータスAPIはこのランタイムでは利用できません。アクセス確認は［許可を求める］から行ってください。",
-        queryFailed: "マイクのステータス確認に失敗しました: {{message}}",
-        captureUnavailable: "この環境ではマイクのキャプチャは利用できません。",
-        permissionApiUnavailable:
-          "権限ステータスAPIは利用できません。アクセス確認は［許可を求める］から行ってください。",
-        requestsWebOnly: "デスクトップマイクのリクエストはWebランタイムでのみ利用できます。",
-        captureApiUnavailable: "この環境ではマイクキャプチャAPIは利用できません。",
-        requestDenied: "マイクの権限はユーザーまたはシステムによって拒否されました。",
-        noDevice: "マイクデバイスが見つかりませんでした。",
-        requestFailed: "マイクの権限リクエストに失敗しました: {{message}}",
-      },
-      empty: {
-        notifications: "通知のステータスはまだ確認されていません。",
-        microphone: "マイクのステータスはまだ確認されていません。",
-      },
-      testNotification: {
-        title: "Paseo通知テスト",
-        body: "これが見えれば、デスクトップ通知は機能しています。",
-        notDelivered: "通知が届きませんでした。システム設定 > 通知を確認してください。",
-        failed: "通知の送信に失敗しました。",
-      },
-    },
-    integrations: {
-      cli: {
-        statusFailed: "CLIのインストール状態を確認できません。",
-        installFailed: "Paseo CLIをインストールできません。",
-      },
-      skills: {
-        statusFailed: "オーケストレーションスキルのステータスを確認できません。",
-        installFailed: "オーケストレーションスキルをインストールできません。",
-        updateFailed: "オーケストレーションスキルを更新できません。",
-        uninstallFailed: "オーケストレーションスキルをアンインストールできません。",
-      },
-    },
-  },
   rootError: {
     kicker: "問題が発生しました",
-    title: "Paseo で問題が発生しました。",
+    title: "BySpace で問題が発生しました。",
     body: "アプリを再読み込みするにはもう一度お試しください。繰り返し発生する場合は、以下の詳細を添えて報告してください。",
     details: "詳細",
   },
@@ -1139,7 +980,7 @@ export const ja: TranslationResources = {
     },
   },
   onboarding: {
-    title: "Paseoへようこそ",
+    title: "BySpaceへようこそ",
     subtitle: "始めるにはコンピューターに接続してください",
     actions: {
       settings: "設定",
@@ -1215,7 +1056,7 @@ export const ja: TranslationResources = {
     },
     direct: {
       title: "直接接続",
-      helper: "Paseoサーバーのアドレスを入力してください。",
+      helper: "BySpaceサーバーのアドレスを入力してください。",
       fields: {
         host: "ホスト",
         port: "ポート",
@@ -1295,7 +1136,7 @@ export const ja: TranslationResources = {
       relayDisabled:
         "リレーが有効になっていません。デバイスをペアリングするにはリレーを有効にしてください。",
       unavailable: "ペアリングオファーが利用できません。",
-      hint: "スマートフォンのPaseoでこのQRコードをスキャンするか、以下のリンクをコピーしてください。",
+      hint: "スマートフォンのBySpaceでこのQRコードをスキャンするか、以下のリンクをコピーしてください。",
       qrUnavailable: "QRコードが利用できません。",
       retry: "再試行",
       copy: "コピー",
@@ -1327,7 +1168,7 @@ export const ja: TranslationResources = {
   serviceUrl: {
     title: "サービスURLを開く",
     message: "{{url}}を開きますか？",
-    inPaseo: "Paseoで",
+    inBySpace: "BySpaceで",
     externalBrowser: "外部ブラウザ",
     dontAskAgain: "次回から確認しない",
   },
@@ -1394,9 +1235,9 @@ export const ja: TranslationResources = {
       one: "その他のツールを{{count}}回使用",
       other: "その他のツールを{{count}}回使用",
     },
-    paseoCalls: {
-      one: "Paseoを{{count}}回呼び出し",
-      other: "Paseoを{{count}}回呼び出し",
+    byspaceCalls: {
+      one: "BySpaceを{{count}}回呼び出し",
+      other: "BySpaceを{{count}}回呼び出し",
     },
     and: "および",
     failed: "{{count}}件失敗",
@@ -1484,7 +1325,7 @@ export const ja: TranslationResources = {
         description: "実行中のスクリプトからURLを開く場所",
         options: {
           ask: "確認する",
-          inApp: "Paseoで",
+          inApp: "BySpaceで",
           external: "外部ブラウザ",
         },
       },
@@ -1563,7 +1404,7 @@ export const ja: TranslationResources = {
         label: "アプリの更新",
         readyToInstall: "インストール準備完了: {{version}}",
         installTitle: "デスクトップの更新をインストール",
-        installMessage: "このコンピューターのPaseoを更新します",
+        installMessage: "このコンピューターのBySpaceを更新します",
         installConfirm: "更新をインストール",
         update: "更新",
         updateTo: "{{version}}に更新",
@@ -1696,11 +1537,11 @@ export const ja: TranslationResources = {
         title: "オーケストレーションスキル",
         description: "エージェントがCLI経由でオーケストレーションできるようにします。",
         updateAvailable: "更新が利用可能",
-        updateTitle: "Paseoスキルを更新しますか？",
+        updateTitle: "BySpaceスキルを更新しますか？",
         updateFallback: "バンドルされたスキルをマシンに同期します。",
-        uninstallTitle: "Paseoスキルをアンインストールしますか？",
+        uninstallTitle: "BySpaceスキルをアンインストールしますか？",
         uninstallMessage:
-          "~/.agents、~/.claude、~/.codexからすべてのPaseoオーケストレーションスキルを削除します。",
+          "~/.agents、~/.claude、~/.codexからすべてのBySpaceオーケストレーションスキルを削除します。",
       },
       actions: {
         install: "インストール",
@@ -1755,9 +1596,9 @@ export const ja: TranslationResources = {
         title: "オーケストレーション",
         unavailable: "オーケストレーションを管理するにはこのホストに接続してください",
         enableTools: {
-          title: "Paseoツールを有効にする",
+          title: "BySpaceツールを有効にする",
           hint: "エージェントがワークツリー、エージェント、スケジュールを管理できるようになります",
-          accessibilityLabel: "Paseoツールを有効にする",
+          accessibilityLabel: "BySpaceツールを有効にする",
         },
         systemPrompt: {
           title: "システムプロンプト",
@@ -1825,10 +1666,10 @@ export const ja: TranslationResources = {
             "このホストは接続されていません。再起動する前にオンラインになるまでお待ちください。",
           offlineTitle: "ホストオフライン",
           offlineMessage:
-            "このホストはオフラインです。Paseoが自動再接続します。再起動は、ホストがオンラインに戻ってから行ってください。",
+            "このホストはオフラインです。BySpaceが自動再接続します。再起動は、ホストがオンラインに戻ってから行ってください。",
           requestFailedTitle: "エラー",
           requestFailedMessage:
-            "再起動リクエストの送信に失敗しました。Paseoは自動的に再接続します。ホストがオンラインになったら再試行してください。",
+            "再起動リクエストの送信に失敗しました。BySpaceは自動的に再接続します。ホストがオンラインになったら再試行してください。",
           dialogFailedMessage: "再起動確認ダイアログを開けませんでした。",
         },
         update: {
@@ -1941,14 +1782,14 @@ export const ja: TranslationResources = {
         reset: "リセット",
       },
       readFailures: {
-        invalidTitle: "paseo.jsonを解析できませんでした",
+        invalidTitle: "byspace.jsonを解析できませんでした",
         invalidDescription: "ディスク上のファイルを修正してから再読み込みしてください。",
         missingTitle: "このホストにはこのプロジェクトがありません",
         missingWithHosts: "上で別のホストに切り替えるか、再読み込みしてください。",
         missingSingleHost: "選択したホストにはこのプロジェクトの記録がありません。",
-        transportTitle: "paseo.jsonを読み込めませんでした",
+        transportTitle: "byspace.jsonを読み込めませんでした",
         transportFallback: "ホストが応答しませんでした。",
-        failedTitle: "paseo.jsonを読み込めませんでした",
+        failedTitle: "byspace.jsonを読み込めませんでした",
         failedDescription: "再読み込みして再試行してください。",
       },
       worktree: {
@@ -1981,7 +1822,7 @@ export const ja: TranslationResources = {
         newScript: "新しいスクリプト",
         editScript: "{{name}}を編集",
         runAsService: "サービスとして実行",
-        serviceHint: "Paseoがプロセスを監督し、$BYSPACE_PORTを通じてポートを割り当てます",
+        serviceHint: "BySpaceがプロセスを監督し、$BYSPACE_PORTを通じてポートを割り当てます",
         actions: {
           add: "スクリプトを追加",
           edit: "編集",
@@ -1990,7 +1831,7 @@ export const ja: TranslationResources = {
       },
       metadata: {
         title: "メタデータ生成",
-        info: "Paseoがメタデータ生成に使うAIプロンプトへ追加する、プロジェクト固有の指示です。ブランチ名、コミット形式、PR形式など、チームの規約を反映するために使います。",
+        info: "BySpaceがメタデータ生成に使うAIプロンプトへ追加する、プロジェクト固有の指示です。ブランチ名、コミット形式、PR形式など、チームの規約を反映するために使います。",
         branchName: "ブランチ名",
         branchNamePlaceholder: "ブランチ名は feat/ または fix/ で始め、個人ブランチは mb/ にする",
         commitMessage: "コミットメッセージ",
@@ -2000,8 +1841,8 @@ export const ja: TranslationResources = {
       },
       writeFailures: {
         staleTitle: "設定がディスク上で変更されました",
-        staleDescription: "保存する前に最新のpaseo.jsonを取得するために再読み込みしてください。",
-        failedTitle: "paseo.jsonを保存できませんでした",
+        staleDescription: "保存する前に最新のbyspace.jsonを取得するために再読み込みしてください。",
+        failedTitle: "byspace.jsonを保存できませんでした",
         failedDescription: "再試行するか、ディスクから最新バージョンを再読み込みしてください。",
       },
       actions: {

@@ -23,7 +23,7 @@ function checkoutStatus(overrides: Partial<CheckoutStatusPayload> = {}): Checkou
     error: null,
     requestId: "checkout-status-1",
     isGit: true,
-    isPaseoOwnedWorktree: false,
+    isBySpaceOwnedWorktree: false,
     repoRoot: cwd,
     currentBranch: "main",
     isDirty: false,
@@ -32,7 +32,7 @@ function checkoutStatus(overrides: Partial<CheckoutStatusPayload> = {}): Checkou
     aheadOfOrigin: 0,
     behindOfOrigin: 0,
     hasRemote: true,
-    remoteUrl: "git@github.com:getpaseo/paseo.git",
+    remoteUrl: "git@github.com:ByteTrue/byspace.git",
     ...overrides,
   } as CheckoutStatusPayload;
 }
@@ -41,7 +41,7 @@ function prStatus(overrides: Partial<CheckoutPrStatusPayload> = {}): CheckoutPrS
   return {
     cwd,
     status: {
-      url: "https://github.com/getpaseo/paseo/pull/42",
+      url: "https://github.com/ByteTrue/byspace/pull/42",
       title: "My PR",
       state: "open",
       baseRefName: "main",

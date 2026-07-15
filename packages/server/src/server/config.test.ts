@@ -25,7 +25,7 @@ describe("server config", () => {
   });
 
   test("resolves bundled web UI path from globally installed compiled modules", async () => {
-    const packageRoot = await mkdtemp(path.join(os.tmpdir(), "paseo-config-compiled-"));
+    const packageRoot = await mkdtemp(path.join(os.tmpdir(), "byspace-config-compiled-"));
     roots.push(packageRoot);
     await mkdir(path.join(packageRoot, "dist", "server", "web-ui"), { recursive: true });
 
@@ -37,7 +37,7 @@ describe("server config", () => {
   });
 
   test("resolves packaged desktop web UI path from resources app-dist", async () => {
-    const packageRoot = await mkdtemp(path.join(os.tmpdir(), "paseo-config-packaged-"));
+    const packageRoot = await mkdtemp(path.join(os.tmpdir(), "byspace-config-packaged-"));
     roots.push(packageRoot);
     await mkdir(path.join(packageRoot, "app-dist"), { recursive: true });
 

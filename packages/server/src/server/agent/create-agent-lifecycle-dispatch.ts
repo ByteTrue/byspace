@@ -2,15 +2,15 @@ import { randomUUID } from "node:crypto";
 import type pino from "pino";
 
 import type { GitHubService } from "../../services/github-service.js";
-import { isPaseoOwnedWorktreeCwd } from "../../utils/worktree.js";
+import { isBySpaceOwnedWorktreeCwd } from "../../utils/worktree.js";
 import {
   archiveByScope,
   type ActiveWorkspaceRef,
   resolveWorkspaceIdAtPath,
 } from "../workspace-archive-service.js";
 import type {
-  CreatePaseoWorktreeWorkflowFn,
-  CreatePaseoWorktreeWorkflowResult,
+  CreateBySpaceWorktreeWorkflowFn,
+  CreateBySpaceWorktreeWorkflowResult,
 } from "../worktree-session.js";
 import type { WorkspaceGitService } from "../workspace-git-service.js";
 import type {
@@ -22,13 +22,13 @@ import type { AgentManager } from "./agent-manager.js";
 import type { AgentStorage } from "./agent-storage.js";
 
 interface CreateAgentLifecycleDispatchDependencies {
-  paseoHome: string;
+  byspaceHome: string;
   worktreesRoot?: string;
   agentManager: AgentManager;
   agentStorage: AgentStorage;
   github: GitHubService;
   workspaceGitService: WorkspaceGitService;
-  createPaseoWorktreeWorkflow: CreatePaseoWorktreeWorkflowFn;
+  createBySpaceWorktreeWorkflow: CreateBySpaceWorktreeWorkflowFn;
   archiveAgentForClose: (agentId: string) => Promise<unknown>;
   findWorkspaceIdForCwd: (cwd: string) => Promise<string | null>;
   listActiveWorkspaces: () => Promise<ActiveWorkspaceRef[]>;
@@ -52,7 +52,7 @@ export class CreateAgentLifecycleDispatch {
     target: CreateAgentWorktreeTarget | undefined;
     firstAgentContext: FirstAgentContext;
     hasLegacyGitOptions: boolean;
-  }): Promise<CreatePaseoWorktreeWorkflowResult | null> {
+  }): Promise<CreateBySpaceWorktreeWorkflowResult | null> {
     if (input.target && input.hasLegacyGitOptions) {
       throw new Error("create_agent_request worktree cannot be combined with git options");
     }
@@ -66,7 +66,7 @@ export class CreateAgentLifecycleDispatch {
   registerAutoArchiveIfRequested(input: {
     autoArchive: boolean | undefined;
     agentId: string;
-    createdWorktree: CreatePaseoWorktreeWorkflowResult | null;
+    createdWorktree: CreateBySpaceWorktreeWorkflowResult | null;
   }): void {
     if (input.autoArchive !== true) {
       return;
@@ -79,7 +79,7 @@ export class CreateAgentLifecycleDispatch {
   }
 
   async cleanupCreatedWorktreeAfterFailedAgentCreate(input: {
-    createdWorktree: CreatePaseoWorktreeWorkflowResult | null;
+    createdWorktree: CreateBySpaceWorktreeWorkflowResult | null;
     createdAgentId: string | null;
   }): Promise<void> {
     const { createdWorktree, createdAgentId } = input;
@@ -106,18 +106,18 @@ export class CreateAgentLifecycleDispatch {
     cwd: string,
     target: CreateAgentWorktreeTarget,
     firstAgentContext: FirstAgentContext,
-  ): Promise<CreatePaseoWorktreeWorkflowResult> {
+  ): Promise<CreateBySpaceWorktreeWorkflowResult> {
     const baseInput = {
       cwd,
       firstAgentContext,
       runSetup: false,
-      paseoHome: this.dependencies.paseoHome,
+      byspaceHome: this.dependencies.byspaceHome,
       worktreesRoot: this.dependencies.worktreesRoot,
     } as const;
 
     switch (target.mode) {
       case "branch-off":
-        return this.dependencies.createPaseoWorktreeWorkflow(
+        return this.dependencies.createBySpaceWorktreeWorkflow(
           {
             ...baseInput,
             worktreeSlug: target.newBranch,
@@ -127,13 +127,13 @@ export class CreateAgentLifecycleDispatch {
           target.base ? { resolveDefaultBranch: async () => target.base! } : undefined,
         );
       case "checkout-branch":
-        return this.dependencies.createPaseoWorktreeWorkflow({
+        return this.dependencies.createBySpaceWorktreeWorkflow({
           ...baseInput,
           action: "checkout",
           refName: target.branch,
         });
       case "checkout-pr":
-        return this.dependencies.createPaseoWorktreeWorkflow({
+        return this.dependencies.createBySpaceWorktreeWorkflow({
           ...baseInput,
           action: "checkout",
           githubPrNumber: target.prNumber,
@@ -196,12 +196,12 @@ export class CreateAgentLifecycleDispatch {
     worktreePath: string;
     repoRoot: string | null;
   }): Promise<void> {
-    const ownership = await isPaseoOwnedWorktreeCwd(options.worktreePath, {
-      paseoHome: this.dependencies.paseoHome,
+    const ownership = await isBySpaceOwnedWorktreeCwd(options.worktreePath, {
+      byspaceHome: this.dependencies.byspaceHome,
       worktreesRoot: this.dependencies.worktreesRoot,
     });
     if (!ownership.allowed) {
-      throw new Error("Auto-created worktree is not a Paseo-owned worktree");
+      throw new Error("Auto-created worktree is not a BySpace-owned worktree");
     }
 
     const workspaceId = await resolveWorkspaceIdAtPath(
@@ -220,8 +220,8 @@ export class CreateAgentLifecycleDispatch {
     } else {
       await archiveByScope(
         {
-          paseoHome: this.dependencies.paseoHome,
-          paseoWorktreesBaseRoot: this.dependencies.worktreesRoot,
+          byspaceHome: this.dependencies.byspaceHome,
+          byspaceWorktreesBaseRoot: this.dependencies.worktreesRoot,
           github: this.dependencies.github,
           workspaceGitService: this.dependencies.workspaceGitService,
           agentManager: this.dependencies.agentManager,
@@ -239,7 +239,7 @@ export class CreateAgentLifecycleDispatch {
         {
           scope: { kind: "workspace", workspaceId },
           repoRoot: options.repoRoot ?? ownership.repoRoot ?? null,
-          paseoWorktreesBaseRoot: this.dependencies.worktreesRoot,
+          byspaceWorktreesBaseRoot: this.dependencies.worktreesRoot,
           requestId: randomUUID(),
         },
       );

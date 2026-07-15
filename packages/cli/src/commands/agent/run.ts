@@ -266,7 +266,7 @@ function validateRunOptions(prompt: string, options: AgentRunOptions, outputSche
     throw {
       code: "MISSING_PROMPT",
       message: "A prompt is required",
-      details: "Usage: paseo agent run [options] <prompt>",
+      details: "Usage: byspace agent run [options] <prompt>",
     } satisfies CommandError;
   }
 
@@ -274,7 +274,7 @@ function validateRunOptions(prompt: string, options: AgentRunOptions, outputSche
     throw {
       code: "INVALID_OPTIONS",
       message: "--base can only be used with --worktree",
-      details: "Usage: paseo agent run --worktree <name> --base <branch> <prompt>",
+      details: "Usage: byspace agent run --worktree <name> --base <branch> <prompt>",
     } satisfies CommandError;
   }
 
@@ -400,7 +400,7 @@ async function connectToDaemonOrThrow(
     throw {
       code: "DAEMON_NOT_RUNNING",
       message: `Cannot connect to daemon at ${host}: ${message}`,
-      details: "Start the daemon with: paseo daemon start",
+      details: "Start the daemon with: byspace daemon start",
     } satisfies CommandError;
   }
 }
@@ -413,7 +413,7 @@ interface RunWorkspace {
   cwd: string;
 }
 
-// Workspace policy for `paseo run`. Precedence:
+// Workspace policy for `byspace run`. Precedence:
 //   1. --workspace <id>            -> run in that existing workspace
 //   2. $BYSPACE_WORKSPACE_ID         -> exported by workspace terminals
 //   3. --worktree <name>           -> mint a new worktree-backed workspace
@@ -490,7 +490,7 @@ export async function runRunCommand(
         code: "INVALID_THINKING_OPTION",
         message: "--thinking cannot be empty",
         details:
-          'Provide a thinking option ID. Use "paseo provider models <provider> --thinking" to list valid IDs.',
+          'Provide a thinking option ID. Use "byspace provider models <provider> --thinking" to list valid IDs.',
       };
       throw error;
     }

@@ -101,7 +101,7 @@ test.describe("Project picker search", () => {
 
     const input = page.getByTestId("project-picker-input");
     await expect(input).toBeVisible({ timeout: 30_000 });
-    await input.fill("paseo-loading-state-no-match");
+    await input.fill("byspace-loading-state-no-match");
 
     await expect(page.getByText("Start typing a path", { exact: true })).toHaveCount(0);
     await expect(page.getByText("Searching...", { exact: true })).toBeVisible();

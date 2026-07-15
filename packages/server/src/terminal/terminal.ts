@@ -6,7 +6,7 @@ import { tmpdir, userInfo } from "node:os";
 import { basename, delimiter, dirname, extname, join, resolve as resolvePath } from "node:path";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
-import { createExternalProcessEnv } from "../server/paseo-env.js";
+import { createExternalProcessEnv } from "../server/byspace-env.js";
 import { writePrivateFileAtomicSync } from "../server/private-files.js";
 import { findExecutable } from "../executable-resolution/executable-resolution.js";
 import type { TerminalCell, TerminalState } from "@bytetrue/byspace-protocol/messages";
@@ -19,7 +19,7 @@ import type {
 
 const { Terminal } = xterm;
 const require = createRequire(import.meta.url);
-const BYSPACE_CLI_BIN_ENTRY = "@bytetrue/byspace-cli/bin/paseo";
+const BYSPACE_CLI_BIN_ENTRY = "@bytetrue/byspace/bin/byspace";
 let nodePtySpawnHelperChecked = false;
 const TERMINAL_TITLE_DEBOUNCE_MS = 150;
 const TERMINAL_EXIT_OUTPUT_LINE_LIMIT = 12;
@@ -156,8 +156,8 @@ interface BuildTerminalEnvironmentInput {
   shell: string;
   env: Record<string, string>;
   zshShellIntegrationDir?: string;
-  paseoCliBinDir?: string | null;
-  paseoHookCliPath?: string | null;
+  byspaceCliBinDir?: string | null;
+  byspaceHookCliPath?: string | null;
 }
 
 interface EnsureNodePtySpawnHelperExecutableOptions {
@@ -310,8 +310,8 @@ function resolveExternalProcessPath(filePath: string): string {
   return filePath.replace(/\.asar(?=[/\\]|$)/, ".asar.unpacked");
 }
 
-export function resolvePaseoCliBinDir(): string | null {
-  const cliEntrypoint = resolvePaseoCliBinEntrypoint();
+export function resolveBySpaceCliBinDir(): string | null {
+  const cliEntrypoint = resolveBySpaceCliBinEntrypoint();
   if (!cliEntrypoint) {
     return null;
   }
@@ -320,8 +320,8 @@ export function resolvePaseoCliBinDir(): string | null {
   return findNpmBinDir(dirname(externalCliEntrypoint)) ?? dirname(externalCliEntrypoint);
 }
 
-export function resolvePaseoCliExecutablePath(): string | null {
-  const cliEntrypoint = resolvePaseoCliBinEntrypoint();
+export function resolveBySpaceCliExecutablePath(): string | null {
+  const cliEntrypoint = resolveBySpaceCliBinEntrypoint();
   if (!cliEntrypoint) {
     return null;
   }
@@ -329,7 +329,7 @@ export function resolvePaseoCliExecutablePath(): string | null {
   const externalCliEntrypoint = resolveExternalProcessPath(cliEntrypoint);
   const npmBinDir = findNpmBinDir(dirname(externalCliEntrypoint));
   if (npmBinDir) {
-    const shim = resolvePaseoCliShim(npmBinDir);
+    const shim = resolveBySpaceCliShim(npmBinDir);
     if (shim) {
       return shim;
     }
@@ -338,7 +338,7 @@ export function resolvePaseoCliExecutablePath(): string | null {
   return externalCliEntrypoint;
 }
 
-function resolvePaseoCliBinEntrypoint(): string | null {
+function resolveBySpaceCliBinEntrypoint(): string | null {
   try {
     return require.resolve(BYSPACE_CLI_BIN_ENTRY);
   } catch {
@@ -350,7 +350,7 @@ function findNpmBinDir(startPath: string): string | null {
   let current = startPath;
   while (true) {
     const candidate = join(current, "node_modules", ".bin");
-    if (hasPaseoCliShim(candidate)) {
+    if (hasBySpaceCliShim(candidate)) {
       return candidate;
     }
 
@@ -362,12 +362,12 @@ function findNpmBinDir(startPath: string): string | null {
   }
 }
 
-function hasPaseoCliShim(binDir: string): boolean {
-  return resolvePaseoCliShim(binDir) !== null;
+function hasBySpaceCliShim(binDir: string): boolean {
+  return resolveBySpaceCliShim(binDir) !== null;
 }
 
-function resolvePaseoCliShim(binDir: string): string | null {
-  for (const name of paseoCliShimNames()) {
+function resolveBySpaceCliShim(binDir: string): string | null {
+  for (const name of byspaceCliShimNames()) {
     const candidate = join(binDir, name);
     if (existsSync(candidate)) {
       return candidate;
@@ -376,8 +376,8 @@ function resolvePaseoCliShim(binDir: string): string | null {
   return null;
 }
 
-function paseoCliShimNames(): string[] {
-  return process.platform === "win32" ? ["paseo.cmd", "paseo.exe", "paseo"] : ["paseo"];
+function byspaceCliShimNames(): string[] {
+  return process.platform === "win32" ? ["byspace.cmd", "byspace.exe", "byspace"] : ["byspace"];
 }
 
 function resolveZshShellIntegrationRuntimeDir(): string {
@@ -387,7 +387,7 @@ function resolveZshShellIntegrationRuntimeDir(): string {
   } catch {
     // keep fallback
   }
-  return join(tmpdir(), `${username}-paseo-zsh`);
+  return join(tmpdir(), `${username}-byspace-zsh`);
 }
 
 function prepareZshShellIntegrationRuntimeDir(sourceDir = resolveZshShellIntegrationDir()): string {
@@ -400,8 +400,8 @@ function prepareZshShellIntegrationRuntimeDir(sourceDir = resolveZshShellIntegra
     readFileSync(join(readableSourceDir, ".zshenv")),
   );
   writePrivateFileAtomicSync(
-    join(runtimeDir, "paseo-integration.zsh"),
-    readFileSync(join(readableSourceDir, "paseo-integration.zsh")),
+    join(runtimeDir, "byspace-integration.zsh"),
+    readFileSync(join(readableSourceDir, "byspace-integration.zsh")),
   );
   return runtimeDir;
 }
@@ -413,13 +413,15 @@ export function buildTerminalEnvironment(
     TERM: "xterm-256color",
     TERM_PROGRAM: "kitty",
   });
-  const envWithAgentHooks = prependPaseoCliToPath(
+  const envWithAgentHooks = prependBySpaceCliToPath(
     baseEnv,
-    input.paseoCliBinDir === undefined ? resolvePaseoCliBinDir() : input.paseoCliBinDir,
+    input.byspaceCliBinDir === undefined ? resolveBySpaceCliBinDir() : input.byspaceCliBinDir,
   );
-  const envWithHookCli = injectPaseoHookCli(
+  const envWithHookCli = injectBySpaceHookCli(
     envWithAgentHooks,
-    input.paseoHookCliPath === undefined ? resolvePaseoCliExecutablePath() : input.paseoHookCliPath,
+    input.byspaceHookCliPath === undefined
+      ? resolveBySpaceCliExecutablePath()
+      : input.byspaceHookCliPath,
   );
 
   if (basename(input.shell) !== "zsh") {
@@ -434,7 +436,7 @@ export function buildTerminalEnvironment(
   };
 }
 
-function injectPaseoHookCli(
+function injectBySpaceHookCli(
   env: Record<string, string>,
   cliPath: string | null,
 ): Record<string, string> {
@@ -448,7 +450,7 @@ function injectPaseoHookCli(
   };
 }
 
-function prependPaseoCliToPath(
+function prependBySpaceCliToPath(
   env: Record<string, string>,
   cliBinDir: string | null,
 ): Record<string, string> {

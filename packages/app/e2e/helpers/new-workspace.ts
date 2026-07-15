@@ -7,15 +7,15 @@ import { expectWorkspaceHeader } from "./workspace-ui";
 
 type NewWorkspaceDaemonClient = Pick<
   InternalDaemonClient,
-  | "archivePaseoWorktree"
+  | "archiveBySpaceWorktree"
   | "archiveWorkspace"
   | "checkoutRefresh"
   | "close"
   | "connect"
-  | "createPaseoWorktree"
+  | "createBySpaceWorktree"
   | "createWorkspace"
   | "fetchWorkspaces"
-  | "getPaseoWorktreeList"
+  | "getBySpaceWorktreeList"
   | "getDaemonConfig"
   | "patchDaemonConfig"
   | "removeProject"
@@ -110,7 +110,7 @@ export async function archiveWorkspaceFromDaemon(
   workspaceDirectory: string,
   options?: { scope?: "workspace" | "worktree" },
 ): Promise<void> {
-  const payload = await client.archivePaseoWorktree({
+  const payload = await client.archiveBySpaceWorktree({
     worktreePath: workspaceDirectory,
     ...(options?.scope !== undefined ? { scope: options.scope } : {}),
   });
@@ -139,7 +139,7 @@ export async function createWorktreeViaDaemon(
   client: NewWorkspaceDaemonClient,
   input: { cwd: string; slug: string },
 ): Promise<OpenedProject> {
-  const payload = await client.createPaseoWorktree({
+  const payload = await client.createBySpaceWorktree({
     cwd: input.cwd,
     worktreeSlug: input.slug,
   });

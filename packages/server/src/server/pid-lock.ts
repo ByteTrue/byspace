@@ -10,7 +10,6 @@ export const pidLockInfoSchema = z.object({
   hostname: z.string(),
   uid: z.number(),
   listen: z.string().nullable(),
-  desktopManaged: z.boolean().optional(),
 });
 
 export interface PidLockInfo extends z.infer<typeof pidLockInfoSchema> {}
@@ -43,8 +42,8 @@ function isPidRunning(pid: number): boolean {
   }
 }
 
-function getPidFilePath(paseoHome: string): string {
-  return join(paseoHome, "paseo.pid");
+function getPidFilePath(byspaceHome: string): string {
+  return join(byspaceHome, "byspace.pid");
 }
 
 function resolveOwnerPid(ownerPid?: number): number {
@@ -55,15 +54,15 @@ function resolveOwnerPid(ownerPid?: number): number {
 }
 
 export async function acquirePidLock(
-  paseoHome: string,
+  byspaceHome: string,
   listen: string | null,
   options?: { ownerPid?: number },
 ): Promise<void> {
-  const pidPath = getPidFilePath(paseoHome);
+  const pidPath = getPidFilePath(byspaceHome);
 
-  // Ensure paseoHome directory exists
-  if (!existsSync(paseoHome)) {
-    await mkdir(paseoHome, { recursive: true });
+  // Ensure byspaceHome directory exists
+  if (!existsSync(byspaceHome)) {
+    await mkdir(byspaceHome, { recursive: true });
   }
 
   // Try to read existing lock
@@ -84,7 +83,7 @@ export async function acquirePidLock(
       }
 
       throw new PidLockError(
-        `Another Paseo daemon is already running (PID ${existingLock.pid}, started ${existingLock.startedAt})`,
+        `Another BySpace daemon is already running (PID ${existingLock.pid}, started ${existingLock.startedAt})`,
         existingLock,
       );
     }
@@ -99,7 +98,6 @@ export async function acquirePidLock(
     hostname: hostname(),
     uid: process.getuid?.() ?? 0,
     listen,
-    ...(process.env.BYSPACE_DESKTOP_MANAGED === "1" ? { desktopManaged: true } : {}),
   };
 
   let fd;
@@ -115,7 +113,7 @@ export async function acquirePidLock(
         const raceLock = parsePidLockInfo(JSON.parse(content));
         if (raceLock) {
           throw new PidLockError(
-            `Another Paseo daemon is already running (PID ${raceLock.pid})`,
+            `Another BySpace daemon is already running (PID ${raceLock.pid})`,
             raceLock,
           );
         }
@@ -132,11 +130,11 @@ export async function acquirePidLock(
 }
 
 export async function updatePidLock(
-  paseoHome: string,
+  byspaceHome: string,
   patch: { listen: string },
   options?: { ownerPid?: number },
 ): Promise<void> {
-  const pidPath = getPidFilePath(paseoHome);
+  const pidPath = getPidFilePath(byspaceHome);
   const lockOwnerPid = resolveOwnerPid(options?.ownerPid);
   const content = await readFile(pidPath, "utf-8");
   const existingLock = parsePidLockInfo(JSON.parse(content));
@@ -163,10 +161,10 @@ export async function updatePidLock(
 }
 
 export async function releasePidLock(
-  paseoHome: string,
+  byspaceHome: string,
   options?: { ownerPid?: number },
 ): Promise<void> {
-  const pidPath = getPidFilePath(paseoHome);
+  const pidPath = getPidFilePath(byspaceHome);
   const lockOwnerPid = resolveOwnerPid(options?.ownerPid);
   try {
     // Only remove if it's our lock
@@ -180,8 +178,8 @@ export async function releasePidLock(
   }
 }
 
-export async function getPidLockInfo(paseoHome: string): Promise<PidLockInfo | null> {
-  const pidPath = getPidFilePath(paseoHome);
+export async function getPidLockInfo(byspaceHome: string): Promise<PidLockInfo | null> {
+  const pidPath = getPidFilePath(byspaceHome);
   try {
     const content = await readFile(pidPath, "utf-8");
     return parsePidLockInfo(JSON.parse(content));
@@ -191,9 +189,9 @@ export async function getPidLockInfo(paseoHome: string): Promise<PidLockInfo | n
 }
 
 export async function isLocked(
-  paseoHome: string,
+  byspaceHome: string,
 ): Promise<{ locked: boolean; info?: PidLockInfo }> {
-  const info = await getPidLockInfo(paseoHome);
+  const info = await getPidLockInfo(byspaceHome);
   if (!info) {
     return { locked: false };
   }

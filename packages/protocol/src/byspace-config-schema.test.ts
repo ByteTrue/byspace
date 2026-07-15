@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
-  PaseoConfigRawSchema,
-  PaseoConfigSchema,
-} from "@bytetrue/byspace-protocol/paseo-config-schema";
+  BySpaceConfigRawSchema,
+  BySpaceConfigSchema,
+} from "@bytetrue/byspace-protocol/byspace-config-schema";
 
-describe("paseo config schema", () => {
+describe("byspace config schema", () => {
   it("parses an empty config without metadata generation", () => {
-    const parsed = PaseoConfigSchema.parse({});
+    const parsed = BySpaceConfigSchema.parse({});
 
     expect(parsed).toEqual({});
     expect(parsed.metadataGeneration).toBeUndefined();
@@ -27,7 +27,7 @@ describe("paseo config schema", () => {
       },
     };
 
-    expect(PaseoConfigSchema.parse(config)).toEqual({
+    expect(BySpaceConfigSchema.parse(config)).toEqual({
       worktree: {
         setup: ["npm install"],
         teardown: ["npm run clean"],
@@ -38,7 +38,7 @@ describe("paseo config schema", () => {
 
   it("normalizes partial worktree lifecycle config without dropping present commands", () => {
     expect(
-      PaseoConfigSchema.parse({
+      BySpaceConfigSchema.parse({
         worktree: {
           setup: 'echo "setup ran" > setup.log',
         },
@@ -51,7 +51,7 @@ describe("paseo config schema", () => {
     });
 
     expect(
-      PaseoConfigSchema.parse({
+      BySpaceConfigSchema.parse({
         worktree: {
           teardown: ["npm run clean"],
         },
@@ -66,7 +66,7 @@ describe("paseo config schema", () => {
 
   it("parses all metadata generation instruction entries", () => {
     expect(
-      PaseoConfigSchema.parse({
+      BySpaceConfigSchema.parse({
         metadataGeneration: {
           title: { instructions: "Keep titles to a few words." },
           branchName: { instructions: "Prefix branches with feat/." },
@@ -85,7 +85,7 @@ describe("paseo config schema", () => {
   });
 
   it("parses partial metadata generation instructions with missing entries undefined", () => {
-    const parsed = PaseoConfigSchema.parse({
+    const parsed = BySpaceConfigSchema.parse({
       metadataGeneration: {
         branchName: { instructions: "Keep it short." },
       },
@@ -100,7 +100,7 @@ describe("paseo config schema", () => {
 
   it("preserves legacy agentTitle metadata instructions as passthrough", () => {
     expect(
-      PaseoConfigSchema.parse({
+      BySpaceConfigSchema.parse({
         metadataGeneration: {
           agentTitle: { instructions: "Use concise titles." },
         },
@@ -114,7 +114,7 @@ describe("paseo config schema", () => {
 
   it("passes through unknown metadata generation fields", () => {
     expect(
-      PaseoConfigSchema.parse({
+      BySpaceConfigSchema.parse({
         metadataGeneration: {
           futureField: 42,
         },
@@ -128,7 +128,7 @@ describe("paseo config schema", () => {
 
   it("passes through unknown metadata generator entry fields", () => {
     expect(
-      PaseoConfigSchema.parse({
+      BySpaceConfigSchema.parse({
         metadataGeneration: {
           branchName: {
             instructions: "Use concise titles.",
@@ -148,7 +148,7 @@ describe("paseo config schema", () => {
 
   it("falls back to an empty metadata generator entry when instructions has an invalid type", () => {
     expect(
-      PaseoConfigSchema.parse({
+      BySpaceConfigSchema.parse({
         metadataGeneration: {
           branchName: { instructions: 42 },
         },
@@ -178,12 +178,12 @@ describe("paseo config schema", () => {
       },
     };
 
-    expect(PaseoConfigRawSchema.parse(config)).toEqual(config);
+    expect(BySpaceConfigRawSchema.parse(config)).toEqual(config);
   });
 
   it("raw schema falls back to an empty metadata generator entry when instructions has an invalid type", () => {
     expect(
-      PaseoConfigRawSchema.parse({
+      BySpaceConfigRawSchema.parse({
         metadataGeneration: {
           branchName: { instructions: 42 },
         },

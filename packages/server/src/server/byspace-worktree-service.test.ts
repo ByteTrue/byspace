@@ -14,10 +14,10 @@ import type {
 import {
   attemptFirstAgentBranchAutoName,
   createLocalCheckoutWorkspace,
-  createPaseoWorktree,
-  type CreatePaseoWorktreeDeps,
-} from "./paseo-worktree-service.js";
-import { readPaseoWorktreeMetadata } from "../utils/worktree-metadata.js";
+  createBySpaceWorktree,
+  type CreateBySpaceWorktreeDeps,
+} from "./byspace-worktree-service.js";
+import { readBySpaceWorktreeMetadata } from "../utils/worktree-metadata.js";
 import { createWorktree } from "../utils/worktree.js";
 import { isPlatform } from "../test-utils/platform.js";
 import { existsSync } from "node:fs";
@@ -51,12 +51,12 @@ test("creates a worktree and registers it in the source workspace project withou
   deps.workspaces.set(sourceWorkspace.workspaceId, sourceWorkspace);
   deps.workspaceGitService.getSnapshot = vi.fn(deps.workspaceGitService.getSnapshot);
 
-  const result = await createPaseoWorktree(
+  const result = await createBySpaceWorktree(
     {
       cwd: repoDir,
       worktreeSlug: "feature-one",
       runSetup: false,
-      paseoHome: path.join(tempDir, ".paseo"),
+      byspaceHome: path.join(tempDir, ".byspace"),
     },
     deps,
   );
@@ -94,13 +94,13 @@ test("registers a new worktree in the existing root project after the main check
   deps.projects.set(sourceProject.projectId, sourceProject);
   deps.workspaces.set(existingWorktree.workspaceId, existingWorktree);
 
-  const result = await createPaseoWorktree(
+  const result = await createBySpaceWorktree(
     {
       cwd: repoDir,
       projectId: sourceProject.projectId,
       worktreeSlug: "second-worktree",
       runSetup: false,
-      paseoHome: path.join(tempDir, ".paseo"),
+      byspaceHome: path.join(tempDir, ".byspace"),
     },
     deps,
   );
@@ -115,14 +115,14 @@ test.skipIf(isPlatform("win32"))(
   async () => {
     const { repoDir, tempDir } = createGitRepo();
     cleanupPaths.push(tempDir);
-    const paseoHome = path.join(tempDir, ".paseo");
+    const byspaceHome = path.join(tempDir, ".byspace");
     const firstDeps = createDeps();
-    const first = await createPaseoWorktree(
+    const first = await createBySpaceWorktree(
       {
         cwd: repoDir,
         worktreeSlug: "reuse-me",
         runSetup: false,
-        paseoHome,
+        byspaceHome,
       },
       firstDeps,
     );
@@ -133,12 +133,12 @@ test.skipIf(isPlatform("win32"))(
       workspaces: firstDeps.workspaces,
     });
 
-    const second = await createPaseoWorktree(
+    const second = await createBySpaceWorktree(
       {
         cwd: repoDir,
         worktreeSlug: "reuse-me",
         runSetup: false,
-        paseoHome,
+        byspaceHome,
       },
       deps,
     );
@@ -170,18 +170,18 @@ test("renames an eligible unnamed branch-off worktree once on first agent contex
   cleanupPaths.push(tempDir);
   const deps = createDeps();
 
-  const created = await createPaseoWorktree(
+  const created = await createBySpaceWorktree(
     {
       cwd: repoDir,
       worktreeSlug: "dazzling-yak",
       runSetup: false,
-      paseoHome: path.join(tempDir, ".paseo"),
+      byspaceHome: path.join(tempDir, ".byspace"),
     },
     deps,
   );
 
   expect(created.worktree.branchName).toBe("dazzling-yak");
-  expect(readPaseoWorktreeMetadata(created.worktree.worktreePath)).toMatchObject({
+  expect(readBySpaceWorktreeMetadata(created.worktree.worktreePath)).toMatchObject({
     version: 2,
     firstAgentBranchAutoName: {
       status: "pending",
@@ -208,7 +208,7 @@ test("renames an eligible unnamed branch-off worktree once on first agent contex
     branchName: "renamed-from-agent-context",
   });
   expect(branchAfterFirst).toBe("renamed-from-agent-context");
-  expect(readPaseoWorktreeMetadata(created.worktree.worktreePath)).toMatchObject({
+  expect(readBySpaceWorktreeMetadata(created.worktree.worktreePath)).toMatchObject({
     version: 2,
     firstAgentBranchAutoName: {
       status: "attempted",
@@ -239,12 +239,12 @@ test("falls back to a numeric suffix when the desired branch name already exists
   execFileSync("git", ["branch", "renamed-from-agent-context"], { cwd: repoDir, stdio: "pipe" });
   execFileSync("git", ["branch", "renamed-from-agent-context-2"], { cwd: repoDir, stdio: "pipe" });
 
-  const created = await createPaseoWorktree(
+  const created = await createBySpaceWorktree(
     {
       cwd: repoDir,
       worktreeSlug: "dazzling-yak",
       runSetup: false,
-      paseoHome: path.join(tempDir, ".paseo"),
+      byspaceHome: path.join(tempDir, ".byspace"),
     },
     createDeps(),
   );
@@ -275,13 +275,13 @@ test("renames the branch even when the app supplies a random placeholder slug", 
   cleanupPaths.push(tempDir);
   const deps = createDeps();
 
-  const created = await createPaseoWorktree(
+  const created = await createBySpaceWorktree(
     {
       cwd: repoDir,
       worktreeSlug: "dazzling-yak",
       firstAgentContext: { prompt: "Investigate the failing login flow" },
       runSetup: false,
-      paseoHome: path.join(tempDir, ".paseo"),
+      byspaceHome: path.join(tempDir, ".byspace"),
     },
     deps,
   );
@@ -313,7 +313,7 @@ test("renames the branch from a github_pr attachment when no prompt is supplied"
   cleanupPaths.push(tempDir);
   const deps = createDeps();
 
-  const created = await createPaseoWorktree(
+  const created = await createBySpaceWorktree(
     {
       cwd: repoDir,
       worktreeSlug: "dazzling-yak",
@@ -329,7 +329,7 @@ test("renames the branch from a github_pr attachment when no prompt is supplied"
         ],
       },
       runSetup: false,
-      paseoHome: path.join(tempDir, ".paseo"),
+      byspaceHome: path.join(tempDir, ".byspace"),
     },
     deps,
   );
@@ -368,13 +368,13 @@ test("renames the branch from a github_pr attachment when no prompt is supplied"
 test("leaves the branch alone when generated branch text is invalid", async () => {
   const { repoDir, tempDir } = createGitRepo();
   cleanupPaths.push(tempDir);
-  const created = await createPaseoWorktree(
+  const created = await createBySpaceWorktree(
     {
       cwd: repoDir,
       worktreeSlug: "dazzling-yak",
       firstAgentContext: { prompt: "Name this branch" },
       runSetup: false,
-      paseoHome: path.join(tempDir, ".paseo"),
+      byspaceHome: path.join(tempDir, ".byspace"),
     },
     createDeps(),
   );
@@ -395,7 +395,7 @@ test("leaves the branch alone when generated branch text is invalid", async () =
       .toString()
       .trim(),
   ).toBe("dazzling-yak");
-  expect(readPaseoWorktreeMetadata(created.worktree.worktreePath)).toMatchObject({
+  expect(readBySpaceWorktreeMetadata(created.worktree.worktreePath)).toMatchObject({
     version: 2,
     firstAgentBranchAutoName: {
       status: "attempted",
@@ -413,18 +413,18 @@ test("does not mark checkout branch worktrees as eligible for first-agent rename
   execFileSync("git", ["commit", "-m", "dev"], { cwd: repoDir, stdio: "pipe" });
   execFileSync("git", ["checkout", "main"], { cwd: repoDir, stdio: "pipe" });
 
-  const created = await createPaseoWorktree(
+  const created = await createBySpaceWorktree(
     {
       cwd: repoDir,
       action: "checkout",
       refName: "dev",
       runSetup: false,
-      paseoHome: path.join(tempDir, ".paseo"),
+      byspaceHome: path.join(tempDir, ".byspace"),
     },
     createDeps(),
   );
 
-  expect(readPaseoWorktreeMetadata(created.worktree.worktreePath)).toMatchObject({
+  expect(readBySpaceWorktreeMetadata(created.worktree.worktreePath)).toMatchObject({
     version: 1,
     baseRefName: "dev",
   });
@@ -452,18 +452,18 @@ test("does not mark GitHub PR checkout worktrees as eligible for first-agent ren
   const { repoDir, tempDir } = createGitHubPrRemoteRepo();
   cleanupPaths.push(tempDir);
 
-  const created = await createPaseoWorktree(
+  const created = await createBySpaceWorktree(
     {
       cwd: repoDir,
       action: "checkout",
       githubPrNumber: 123,
       runSetup: false,
-      paseoHome: path.join(tempDir, ".paseo"),
+      byspaceHome: path.join(tempDir, ".byspace"),
     },
     createDeps(),
   );
 
-  expect(readPaseoWorktreeMetadata(created.worktree.worktreePath)).toMatchObject({
+  expect(readBySpaceWorktreeMetadata(created.worktree.worktreePath)).toMatchObject({
     version: 1,
     baseRefName: "main",
   });
@@ -485,17 +485,17 @@ test("does not mark GitHub PR checkout worktrees as eligible for first-agent ren
 });
 
 test("does not mutate registries or broadcast when core worktree creation fails", async () => {
-  const tempDir = mkdtempSync(path.join(tmpdir(), "paseo-worktree-service-"));
+  const tempDir = mkdtempSync(path.join(tmpdir(), "byspace-worktree-service-"));
   cleanupPaths.push(tempDir);
   const deps = createDeps();
 
   await expect(
-    createPaseoWorktree(
+    createBySpaceWorktree(
       {
         cwd: tempDir,
         worktreeSlug: "not-git",
         runSetup: false,
-        paseoHome: path.join(tempDir, ".paseo"),
+        byspaceHome: path.join(tempDir, ".byspace"),
       },
       deps,
     ),
@@ -505,14 +505,14 @@ test("does not mutate registries or broadcast when core worktree creation fails"
   expect(deps.workspaces.size).toBe(0);
 });
 
-// Worktree restore (Unit 3): recreate a deleted Paseo-owned worktree from its
+// Worktree restore (Unit 3): recreate a deleted BySpace-owned worktree from its
 // kept branch via createWorktree's checkout-branch source.
 test.skipIf(isPlatform("win32"))(
   "recreates a deleted worktree on the same kept branch without creating a suffixed branch",
   async () => {
     const { repoDir, tempDir } = createGitRepo();
     cleanupPaths.push(tempDir);
-    const paseoHome = path.join(tempDir, ".paseo");
+    const byspaceHome = path.join(tempDir, ".byspace");
 
     execFileSync("git", ["branch", "restore-me"], { cwd: repoDir, stdio: "pipe" });
 
@@ -521,7 +521,7 @@ test.skipIf(isPlatform("win32"))(
       worktreeSlug: "restore-me",
       source: { kind: "checkout-branch", branchName: "restore-me" },
       runSetup: false,
-      paseoHome,
+      byspaceHome,
     });
     expect(existsSync(created.worktreePath)).toBe(true);
 
@@ -536,7 +536,7 @@ test.skipIf(isPlatform("win32"))(
       worktreeSlug: "restore-me",
       source: { kind: "checkout-branch", branchName: "restore-me" },
       runSetup: false,
-      paseoHome,
+      byspaceHome,
     });
 
     expect(recreated.worktreePath).toBe(created.worktreePath);
@@ -562,7 +562,7 @@ test.skipIf(isPlatform("win32"))(
 );
 
 // The default archive path (scope "workspace", worktreePath only) resolves
-// repoRoot=null, so deletePaseoWorktree's `git worktree remove`/`prune` is
+// repoRoot=null, so deleteBySpaceWorktree's `git worktree remove`/`prune` is
 // skipped: the directory is rm-ed but the admin registration survives, pinning
 // the branch as "already checked out". Restore must self-heal by pruning the
 // stale registration before recreating, regardless of how it was archived.
@@ -571,7 +571,7 @@ test.skipIf(isPlatform("win32"))(
   async () => {
     const { repoDir, tempDir } = createGitRepo();
     cleanupPaths.push(tempDir);
-    const paseoHome = path.join(tempDir, ".paseo");
+    const byspaceHome = path.join(tempDir, ".byspace");
 
     execFileSync("git", ["branch", "restore-me"], { cwd: repoDir, stdio: "pipe" });
 
@@ -580,7 +580,7 @@ test.skipIf(isPlatform("win32"))(
       worktreeSlug: "restore-me",
       source: { kind: "checkout-branch", branchName: "restore-me" },
       runSetup: false,
-      paseoHome,
+      byspaceHome,
     });
     expect(existsSync(created.worktreePath)).toBe(true);
 
@@ -603,7 +603,7 @@ test.skipIf(isPlatform("win32"))(
         worktreeSlug: "restore-me",
         source: { kind: "checkout-branch", branchName: "restore-me" },
         runSetup: false,
-        paseoHome,
+        byspaceHome,
       }),
     ).rejects.toMatchObject({ name: "BranchAlreadyCheckedOutError" });
 
@@ -615,7 +615,7 @@ test.skipIf(isPlatform("win32"))(
       worktreeSlug: "restore-me",
       source: { kind: "checkout-branch", branchName: "restore-me" },
       runSetup: false,
-      paseoHome,
+      byspaceHome,
     });
 
     expect(recreated.worktreePath).toBe(created.worktreePath);
@@ -643,7 +643,7 @@ test.skipIf(isPlatform("win32"))(
         worktreeSlug: "gone-branch",
         source: { kind: "checkout-branch", branchName: "gone-branch" },
         runSetup: false,
-        paseoHome: path.join(tempDir, ".paseo"),
+        byspaceHome: path.join(tempDir, ".byspace"),
       }),
     ).rejects.toMatchObject({ name: "UnknownBranchError" });
   },
@@ -654,7 +654,7 @@ test.skipIf(isPlatform("win32"))(
   async () => {
     const { repoDir, tempDir } = createGitRepo();
     cleanupPaths.push(tempDir);
-    const paseoHome = path.join(tempDir, ".paseo");
+    const byspaceHome = path.join(tempDir, ".byspace");
 
     execFileSync("git", ["branch", "busy-branch"], { cwd: repoDir, stdio: "pipe" });
     const first = await createWorktree({
@@ -662,7 +662,7 @@ test.skipIf(isPlatform("win32"))(
       worktreeSlug: "busy-branch",
       source: { kind: "checkout-branch", branchName: "busy-branch" },
       runSetup: false,
-      paseoHome,
+      byspaceHome,
     });
     expect(existsSync(first.worktreePath)).toBe(true);
 
@@ -672,13 +672,13 @@ test.skipIf(isPlatform("win32"))(
         worktreeSlug: "busy-branch-again",
         source: { kind: "checkout-branch", branchName: "busy-branch" },
         runSetup: false,
-        paseoHome,
+        byspaceHome,
       }),
     ).rejects.toMatchObject({ name: "BranchAlreadyCheckedOutError" });
   },
 );
 
-interface TestDeps extends CreatePaseoWorktreeDeps {
+interface TestDeps extends CreateBySpaceWorktreeDeps {
   projectRegistry: Pick<ProjectRegistry, "get" | "list" | "upsert">;
   projects: Map<string, PersistedProjectRecord>;
   workspaces: Map<string, PersistedWorkspaceRecord>;
@@ -791,7 +791,7 @@ function createWorkspaceGitServiceStub(): WorkspaceGitService {
       currentBranch: null,
       remoteUrl: null,
       worktreeRoot: null,
-      isPaseoOwnedWorktree: false,
+      isBySpaceOwnedWorktree: false,
       mainRepoRoot: null,
     }),
     getSnapshot: async (cwd) => createWorkspaceGitSnapshot(cwd),
@@ -844,7 +844,7 @@ function createWorkspaceGitSnapshot(cwd: string): WorkspaceGitRuntimeSnapshot {
       mainRepoRoot,
       currentBranch,
       remoteUrl: null,
-      isPaseoOwnedWorktree: repoRoot !== mainRepoRoot,
+      isBySpaceOwnedWorktree: repoRoot !== mainRepoRoot,
       isDirty: false,
       baseRef: "main",
       aheadBehind: null,
@@ -862,7 +862,7 @@ function createWorkspaceGitSnapshot(cwd: string): WorkspaceGitRuntimeSnapshot {
 }
 
 function createGitRepo(): { tempDir: string; repoDir: string } {
-  const tempDir = mkdtempSync(path.join(tmpdir(), "paseo-worktree-service-"));
+  const tempDir = mkdtempSync(path.join(tmpdir(), "byspace-worktree-service-"));
   const repoDir = path.join(tempDir, "repo");
   execFileSync("git", ["init", repoDir], { stdio: "pipe" });
   execFileSync("git", ["config", "user.email", "test@example.com"], {

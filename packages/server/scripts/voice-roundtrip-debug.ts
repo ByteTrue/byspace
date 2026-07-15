@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import pino from "pino";
 
-import { createTestPaseoDaemon } from "../src/server/test-utils/paseo-daemon.js";
+import { createTestBySpaceDaemon } from "../src/server/test-utils/byspace-daemon.js";
 import { DaemonClient } from "../src/server/test-utils/daemon-client.js";
 import { OpenAITTS } from "../src/server/speech/providers/openai/tts.js";
 import { withTimeout } from "../src/utils/promise-timeout.js";
@@ -23,7 +23,7 @@ async function main(): Promise<void> {
   }
 
   const logger = pino({ level: process.env.BYSPACE_LOG_LEVEL ?? "info" });
-  const daemon = await createTestPaseoDaemon({
+  const daemon = await createTestBySpaceDaemon({
     logger,
     agentClients: {},
     openai: { stt: { apiKey }, tts: { apiKey } },

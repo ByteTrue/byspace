@@ -1,15 +1,8 @@
 const BYSPACE_NODE_ENV = "BYSPACE_NODE_ENV";
-const ELECTRON_RUN_AS_NODE = "ELECTRON_RUN_AS_NODE";
 
-const RUNTIME_CONTROL_ENV_KEYS = [
-  BYSPACE_NODE_ENV,
-  "BYSPACE_DESKTOP_MANAGED",
-  "BYSPACE_SUPERVISED",
-  ELECTRON_RUN_AS_NODE,
-  "ELECTRON_NO_ATTACH_CONSOLE",
-] as const;
+const RUNTIME_CONTROL_ENV_KEYS = [BYSPACE_NODE_ENV, "BYSPACE_SUPERVISED"] as const;
 
-export type PaseoNodeEnv = "development" | "production" | "test";
+export type BySpaceNodeEnv = "development" | "production" | "test";
 export type ProcessEnvRecord = Record<string, string | undefined>;
 export type ExternalProcessEnv = NodeJS.ProcessEnv & Record<string, string>;
 
@@ -33,7 +26,7 @@ function buildExternalProcessEnv(
   return sanitized as ExternalProcessEnv;
 }
 
-export function createPaseoInternalEnv(baseEnv: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+export function createBySpaceInternalEnv(baseEnv: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   return buildInternalProcessEnv(baseEnv);
 }
 
@@ -62,7 +55,7 @@ export function buildSelfNodeCommand(
   env: ExternalProcessEnv;
 } {
   const env = buildExternalProcessEnv(process.env, []);
-  Object.assign(env, { [ELECTRON_RUN_AS_NODE]: "1" }, envOverlay);
+  Object.assign(env, envOverlay);
   for (const [key, value] of Object.entries(env)) {
     if (value === undefined) {
       delete env[key];
@@ -75,7 +68,7 @@ export function buildSelfNodeCommand(
   };
 }
 
-export function resolvePaseoNodeEnv(env: NodeJS.ProcessEnv): PaseoNodeEnv | undefined {
+export function resolveBySpaceNodeEnv(env: NodeJS.ProcessEnv): BySpaceNodeEnv | undefined {
   const value = env[BYSPACE_NODE_ENV];
   return value === "development" || value === "production" || value === "test" ? value : undefined;
 }

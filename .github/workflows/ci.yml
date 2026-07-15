@@ -47,6 +47,9 @@ jobs:
       - name: Install dependencies
         run: node scripts/npm-retry.mjs ci
 
+      - name: Verify BySpace identity
+        run: npm run branding:check
+
       - name: Lint lockfile
         run: npx --yes lockfile-lint --path package-lock.json --type npm --allowed-hosts npm --validate-https --validate-integrity
 
@@ -257,7 +260,7 @@ jobs:
         run: node scripts/npm-retry.mjs install -g @anthropic-ai/claude-code @openai/codex@0.105.0 opencode-ai
 
       - name: Run CLI tests
-        run: npm run test --workspace=@bytetrue/byspace-cli
+        run: npm run test --workspace=@bytetrue/byspace
         env:
           BYSPACE_LOCAL_SPEECH_AUTO_DOWNLOAD: "0"
           BYSPACE_DICTATION_ENABLED: "0"

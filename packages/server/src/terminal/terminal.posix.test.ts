@@ -253,7 +253,7 @@ function lastNonEmptyLineIsPrompt(state: ReturnType<TerminalSession["getState"]>
 }
 
 function removeZshShellIntegrationRuntimeDir(): void {
-  rmSync(join(tmpdir(), `${userInfo().username || "unknown"}-paseo-zsh`), {
+  rmSync(join(tmpdir(), `${userInfo().username || "unknown"}-byspace-zsh`), {
     recursive: true,
     force: true,
   });
@@ -264,26 +264,26 @@ describe.skipIf(isPlatform("win32"))("terminal POSIX-only", () => {
     const resolvedEnv = buildTerminalEnvironment({
       shell: "/bin/zsh",
       env: {
-        HOME: "/tmp/paseo-home",
-        ZDOTDIR: "/tmp/paseo-zdotdir",
+        HOME: "/tmp/byspace-home",
+        ZDOTDIR: "/tmp/byspace-zdotdir",
       },
     });
 
     expect(resolvedEnv.TERM).toBe("xterm-256color");
     expect(resolvedEnv.TERM_PROGRAM).toBe("kitty");
-    expect(resolvedEnv.BYSPACE_ZSH_ZDOTDIR).toBe("/tmp/paseo-zdotdir");
-    expect(resolvedEnv.ZDOTDIR).not.toBe("/tmp/paseo-zdotdir");
+    expect(resolvedEnv.BYSPACE_ZSH_ZDOTDIR).toBe("/tmp/byspace-zdotdir");
+    expect(resolvedEnv.ZDOTDIR).not.toBe("/tmp/byspace-zdotdir");
     expect(existsSync(join(resolvedEnv.ZDOTDIR, ".zshenv"))).toBe(true);
-    expect(existsSync(join(resolvedEnv.ZDOTDIR, "paseo-integration.zsh"))).toBe(true);
+    expect(existsSync(join(resolvedEnv.ZDOTDIR, "byspace-integration.zsh"))).toBe(true);
   });
 
   it("reuses zsh shell integration copied from read-only source files", () => {
-    const integrationSourceDir = mkdtempSync(join(tmpdir(), "paseo-zsh-readonly-source-"));
-    const tmpHome = mkdtempSync(join(tmpdir(), "paseo-zsh-readonly-home-"));
+    const integrationSourceDir = mkdtempSync(join(tmpdir(), "byspace-zsh-readonly-source-"));
+    const tmpHome = mkdtempSync(join(tmpdir(), "byspace-zsh-readonly-home-"));
     temporaryDirs.push(integrationSourceDir, tmpHome);
     cpSync(resolveZshShellIntegrationDir(), integrationSourceDir, { recursive: true });
     chmodSync(join(integrationSourceDir, ".zshenv"), 0o444);
-    chmodSync(join(integrationSourceDir, "paseo-integration.zsh"), 0o444);
+    chmodSync(join(integrationSourceDir, "byspace-integration.zsh"), 0o444);
     removeZshShellIntegrationRuntimeDir();
 
     const buildEnvironment = () =>
@@ -615,7 +615,7 @@ describe.skipIf(isPlatform("win32"))("terminal POSIX-only", () => {
       temporaryDirs.push(homeDir);
       writeFileSync(join(homeDir, ".zshrc"), "PS1='BYSPACE_CUSTOM_PROMPT> '\n");
 
-      const fakeAppRoot = join(homeDir, "Paseo.app", "Contents", "Resources");
+      const fakeAppRoot = join(homeDir, "BySpace.app", "Contents", "Resources");
       const inaccessiblePackagedIntegrationDir = join(
         fakeAppRoot,
         "app.asar",

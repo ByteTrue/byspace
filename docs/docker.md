@@ -1,6 +1,6 @@
-# Running Paseo in Docker
+# Running BySpace in Docker
 
-Paseo publishes a container image for running the daemon on a server, VM, NAS,
+BySpace publishes a container image for running the daemon on a server, VM, NAS,
 or homelab box. The image also serves the bundled browser web UI, so one
 container gives you both the daemon API and a self-hosted UI.
 
@@ -10,14 +10,14 @@ The image source lives in [`docker/`](../docker/).
 
 The official image:
 
-- builds `@bytetrue/byspace-server` and `@bytetrue/byspace-cli` from source-built workspace tarballs
-- runs the daemon as the non-root `paseo` user
-- listens on `0.0.0.0:6767` inside the container
+- builds `@bytetrue/byspace-server` and `@bytetrue/byspace` from source-built workspace tarballs
+- runs the daemon as the non-root `byspace` user
+- listens on `0.0.0.0:6777` inside the container
 - enables the bundled daemon web UI with `BYSPACE_WEB_UI_ENABLED=true`
-- stores daemon state and agent credentials under `/home/paseo`
+- stores daemon state and agent credentials under `/home/byspace`
 - leaves agent CLIs out of the base image
 
-Open the container's HTTP origin, for example `http://localhost:6767`, to load
+Open the container's HTTP origin, for example `http://localhost:6777`, to load
 the web UI. The served app receives a same-origin connection hint and connects
 back to that daemon. Static UI files load without daemon auth; API and
 WebSocket requests still require `BYSPACE_PASSWORD` when one is configured.
@@ -25,22 +25,22 @@ WebSocket requests still require `BYSPACE_PASSWORD` when one is configured.
 ## Quick Start
 
 ```bash
-docker run -d --name paseo \
-  -p 6767:6767 \
+docker run -d --name byspace \
+  -p 6777:6777 \
   -e BYSPACE_PASSWORD=change-me \
-  -v "$PWD/paseo-home:/home/paseo" \
+  -v "$PWD/byspace-home:/home/byspace" \
   -v "$PWD:/workspace" \
-  ghcr.io/getpaseo/paseo:latest
+  ghcr.io/bytetrue/byspace:latest
 ```
 
 Then open:
 
 ```text
-http://localhost:6767
+http://localhost:6777
 ```
 
 If you set `BYSPACE_PASSWORD`, enter the same password when adding the direct
-daemon connection in the web UI or another Paseo client.
+daemon connection in the web UI or another BySpace client.
 
 ## Docker Compose
 
@@ -56,28 +56,28 @@ Minimal example:
 
 ```yaml
 services:
-  paseo:
-    image: ghcr.io/getpaseo/paseo:latest
+  byspace:
+    image: ghcr.io/bytetrue/byspace:latest
     restart: unless-stopped
     ports:
-      - "6767:6767"
+      - "6777:6777"
     environment:
       BYSPACE_PASSWORD: "change-me"
     volumes:
-      - ./paseo-home:/home/paseo
+      - ./byspace-home:/home/byspace
       - ./workspace:/workspace
 ```
 
 ## Installing Agents
 
 The base image does not preinstall Claude Code, Codex, OpenCode, Copilot, Pi, or
-other agent CLIs. That keeps the default image small and avoids coupling Paseo
+other agent CLIs. That keeps the default image small and avoids coupling BySpace
 releases to third-party agent release cycles.
 
 Create a child image for the agents you use:
 
 ```Dockerfile
-FROM ghcr.io/getpaseo/paseo:latest
+FROM ghcr.io/bytetrue/byspace:latest
 
 USER root
 RUN npm install -g @openai/codex @anthropic-ai/claude-code opencode-ai
@@ -86,14 +86,14 @@ RUN npm install -g @openai/codex @anthropic-ai/claude-code opencode-ai
 Build it:
 
 ```bash
-docker build -f Dockerfile -t paseo-with-agents .
+docker build -f Dockerfile -t byspace-with-agents .
 ```
 
-Then use `image: paseo-with-agents` in Compose.
+Then use `image: byspace-with-agents` in Compose.
 
 Leave the child image user as root. The base entrypoint uses root only for
 first-run directory setup, then drops the daemon and launched agents to the
-non-root `paseo` user.
+non-root `byspace` user.
 
 An example child image is in
 [`docker/Dockerfile.agents.example`](../docker/Dockerfile.agents.example).
@@ -102,45 +102,45 @@ You can also mount credentials from the host or run agent login once inside the
 container:
 
 ```bash
-docker exec -it --user paseo paseo codex
-docker exec -it --user paseo paseo claude
+docker exec -it --user byspace byspace codex
+docker exec -it --user byspace byspace claude
 ```
 
-Agent credentials and config persist in `/home/paseo`, alongside daemon state.
+Agent credentials and config persist in `/home/byspace`, alongside daemon state.
 Provider environment variables such as `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`,
 `OPENAI_BASE_URL`, or `ANTHROPIC_BASE_URL` can be passed through `docker run -e`
-or `compose.environment`; Paseo passes them to launched agents.
+or `compose.environment`; BySpace passes them to launched agents.
 
 ## Volumes
 
-| Mount         | Purpose                                                                  |
-| ------------- | ------------------------------------------------------------------------ |
-| `/home/paseo` | Paseo state under `.paseo` plus agent config such as `.codex`, `.claude` |
-| `/workspace`  | Code that Paseo and launched agents can read and write                   |
+| Mount           | Purpose                                                                      |
+| --------------- | ---------------------------------------------------------------------------- |
+| `/home/byspace` | BySpace state under `.byspace` plus agent config such as `.codex`, `.claude` |
+| `/workspace`    | Code that BySpace and launched agents can read and write                     |
 
 The image defaults:
 
-| Variable         | Default              |
-| ---------------- | -------------------- |
-| `HOME`           | `/home/paseo`        |
-| `BYSPACE_HOME`   | `/home/paseo/.paseo` |
-| `BYSPACE_LISTEN` | `0.0.0.0:6767`       |
+| Variable         | Default                  |
+| ---------------- | ------------------------ |
+| `HOME`           | `/home/byspace`          |
+| `BYSPACE_HOME`   | `/home/byspace/.byspace` |
+| `BYSPACE_LISTEN` | `0.0.0.0:6777`           |
 
 If you bind-mount host directories on Linux, make sure the container user can
-write them. The built-in `paseo` user has uid/gid `1000:1000`. For a different
+write them. The built-in `byspace` user has uid/gid `1000:1000`. For a different
 host uid/gid, either adjust ownership on the mounted directories or run the
 container with Docker's `--user` / Compose `user:` option.
 
 ## Reverse Proxies
 
-When serving Paseo behind a reverse proxy, forward normal HTTP requests and
+When serving BySpace behind a reverse proxy, forward normal HTTP requests and
 WebSocket upgrades to the same daemon port.
 
 Caddy example:
 
 ```caddy
-paseo.example.com {
-  reverse_proxy 127.0.0.1:6767
+byspace.example.com {
+  reverse_proxy 127.0.0.1:6777
 }
 ```
 
@@ -149,10 +149,10 @@ Nginx example:
 ```nginx
 server {
     listen 443 ssl;
-    server_name paseo.example.com;
+    server_name byspace.example.com;
 
     location / {
-        proxy_pass http://127.0.0.1:6767;
+        proxy_pass http://127.0.0.1:6777;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
@@ -167,7 +167,7 @@ validation allows that name:
 
 ```yaml
 environment:
-  BYSPACE_HOSTNAMES: "paseo.example.com,.lan"
+  BYSPACE_HOSTNAMES: "byspace.example.com,.lan"
 ```
 
 IPs and `localhost` are allowed by default.
@@ -176,11 +176,11 @@ IPs and `localhost` are allowed by default.
 
 - Set `BYSPACE_PASSWORD` for any published port or network-reachable deployment.
 - Prefer HTTPS at the reverse proxy for direct browser access.
-- Use the Paseo relay for untrusted networks or mobile access when you do not
+- Use the BySpace relay for untrusted networks or mobile access when you do not
   want to expose the daemon port directly.
 - The container is the isolation boundary for agents. Agents can read and write
   whatever you mount into `/workspace` and whatever credentials you place in
-  `/home/paseo`.
+  `/home/byspace`.
 - The bundled web UI static files are public on the daemon origin. The daemon
   API and WebSocket remain protected by password auth when configured.
 
@@ -189,7 +189,7 @@ See [SECURITY.md](../SECURITY.md) for the daemon trust model.
 ## Building Locally
 
 ```bash
-docker build -f docker/base/Dockerfile -t paseo:local .
+docker build -f docker/base/Dockerfile -t byspace:local .
 ```
 
 To assert the source tree version while building:
@@ -197,16 +197,16 @@ To assert the source tree version while building:
 ```bash
 docker build \
   --build-arg BYSPACE_VERSION=0.1.102 \
-  -t paseo:0.1.102 \
+  -t byspace:0.1.102 \
   -f docker/base/Dockerfile \
   .
 ```
 
 The Docker workflow builds the image on pull requests and on `main` as a
 non-publishing check. Stable `vX.Y.Z` tag pushes publish
-`ghcr.io/getpaseo/paseo:X.Y.Z` and `ghcr.io/getpaseo/paseo:latest`. Beta tags
+`ghcr.io/bytetrue/byspace:X.Y.Z` and `ghcr.io/bytetrue/byspace:latest`. Beta tags
 publish only the exact prerelease tag, such as
-`ghcr.io/getpaseo/paseo:0.1.102-beta.1`, and do not update `latest`.
+`ghcr.io/bytetrue/byspace:0.1.102-beta.1`, and do not update `latest`.
 
 To replace a Docker image in place without rebuilding desktop, APK, or EAS
 mobile release artifacts, dispatch the Docker workflow manually instead of
@@ -215,11 +215,11 @@ pushing a `v*` release tag:
 ```bash
 gh workflow run docker.yml \
   --ref main \
-  -f paseo_version=0.1.102-beta.1 \
+  -f byspace_version=0.1.102-beta.1 \
   -f publish=true
 ```
 
-Manual Docker publishes require an explicit `paseo_version`. The workflow builds
+Manual Docker publishes require an explicit `byspace_version`. The workflow builds
 from the checked-out source tree and publishes only the exact prerelease image
 tag for prerelease versions.
 
@@ -234,5 +234,5 @@ The published image is multi-arch for `linux/amd64` and `linux/arm64`.
   runtime where the binary is on `PATH`.
 - **Permission errors in `/workspace`**: make the mounted directory writable by
   uid/gid `1000:1000`, or run the container as the host uid/gid.
-- **Logs**: inspect `docker logs paseo` or
-  `/home/paseo/.paseo/daemon.log` inside the container.
+- **Logs**: inspect `docker logs byspace` or
+  `/home/byspace/.byspace/daemon.log` inside the container.

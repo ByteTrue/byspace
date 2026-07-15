@@ -759,7 +759,7 @@ export const ar: TranslationResources = {
       reportIssue: "الإبلاغ عن مشكلة",
       discord: "Discord",
       github: "إنشاء مشكلة على GitHub",
-      version: "Paseo {{version}}",
+      version: "BySpace {{version}}",
     },
     sections: {
       sessions: "السجل",
@@ -872,166 +872,9 @@ export const ar: TranslationResources = {
       title: "ابدأ من",
     },
   },
-  desktop: {
-    quitting: {
-      title: "جارٍ إنهاء Paseo...",
-      detail: "إيقاف البرنامج الخفي المحلي.",
-    },
-    daemon: {
-      title: "Daemon",
-      status: {
-        title: "حالة",
-        builtInOnly: "يتم عرض البرنامج الخفي لسطح المكتب المدمج فقط هنا",
-        running: "جري",
-        notRunning: "لا يعمل",
-        pid: "PID{{pid}}",
-      },
-      management: {
-        title: "إدارة البرنامج الخفي المدمج",
-        hint: "اسمح لـ Paseo ببدء تشغيل البرنامج الخفي المدمج وإيقافه",
-        pauseTitle: "وقفة المدمج في البرنامج الخفي",
-        pauseMessage:
-          "سيؤدي هذا إلى إيقاف البرنامج الخفي المدمج على الفور. سيتم إيقاف تشغيل الوكلاء والمحطات الطرفية المتصلة بالبرنامج الخفي المدمج.",
-        pauseAndStop: "وقفة وتوقف",
-        registrationFailed:
-          "Built-in daemon started, but Paseo could not save the localhost connection. Toggle daemon management off and on again, or add localhost manually.",
-        pausedStopFailed:
-          "تم إيقاف إدارة البرنامج الخفي المضمنة مؤقتًا، لكن لم يتمكن Paseo من إيقاف البرنامج الخفي.",
-        updateFailed: "غير قادر على تحديث إدارة البرنامج الخفي المضمنة.",
-      },
-      keepRunning: {
-        title: "استمر في تشغيل البرنامج الخفي بعد الإقلاع عن التدخين",
-        hint: "يستمر تشغيل Daemon عند إنهاء Paseo",
-      },
-      logs: {
-        title: "ملف السجل",
-        modalTitle: "سجلات Daemon",
-        unavailable: "مسار السجل غير متاح",
-        empty: "(ملف السجل فارغ)",
-        copied: "تم نسخ مسار السجل.",
-        copyFailed: "غير قادر على نسخ مسار السجل.",
-        open: "فتح السجلات",
-        copyPath: "نسخ المسار",
-      },
-      fullStatus: {
-        title: "الوضع الكامل",
-        modalTitle: "حالة Daemon",
-        hint: "يقوم بتشغيل`paseo daemon status`ويظهر الإخراج",
-        view: "عرض الحالة",
-        copied: "تم نسخ الحالة إلى الحافظة.",
-        fetchFailed: "فشل جلب حالة البرنامج الخفي:{{message}}",
-      },
-      advancedSettings: "الإعدادات المتقدمة",
-      openAdvancedSettings: "افتح إعدادات البرنامج الخفي المتقدمة",
-      versionMismatch:
-        "إصدارا التطبيق والبرنامج الخفي غير متطابقين. قم بتحديث كلاهما إلى نفس الإصدار للحصول على أفضل تجربة.",
-      loadFailed: "غير قادر على تحميل حالة البرنامج الخفي لسطح المكتب.",
-    },
-    updates: {
-      status: {
-        checking: "جارٍ التحقق من وجود تحديثات للتطبيق...",
-        installing: "جارٍ تثبيت تحديث التطبيق...",
-        upToDate: "التطبيق محدث.",
-        upToDateWithLastChecked: "Up to date. Last checked at {{time}}.",
-        pending: "سنخبرك عندما يصبح التحديث جاهزًا.",
-        pendingWithLastChecked: "سنخبرك عندما يصبح التحديث جاهزًا. آخر فحص في {{time}}.",
-        pendingWithVersion: "تم العثور على تحديث: {{version}}. جارٍ التنزيل...",
-        pendingWithVersionAndLastChecked:
-          "تم العثور على تحديث: {{version}}. جارٍ التنزيل... آخر فحص في {{time}}.",
-        availableWithVersion: "التحديث جاهز:{{version}}",
-        availableWithVersionAndLastChecked: "التحديث جاهز:{{version}}. آخر فحص في {{time}}.",
-        available: "تحديث التطبيق جاهز للتثبيت.",
-        availableWithLastChecked: "تحديث التطبيق جاهز للتثبيت. آخر فحص في {{time}}.",
-        installed: "تم تثبيت تحديث التطبيق. إعادة التشغيل مطلوبة.",
-        failed: "فشل في تحديث التطبيق.",
-        idle: "لم يتم التحقق من حالة التحديث بعد.",
-      },
-      installError: "غير قادر على تثبيت تحديث تطبيق سطح المكتب.",
-      callout: {
-        installingTitle: "تثبيت التحديث",
-        failedTitle: "فشل التحديث",
-        availableTitle: "التحديث متاح",
-        genericError: "حدث خطأ ما.",
-        whatsNew: "ما هو الجديد",
-        installingAction: "جارٍ التثبيت...",
-        installAndRestart: "التثبيت وإعادة التشغيل",
-        installingDescription: "التثبيت وإعادة التشغيل...",
-        versionReady: "{{version}}جاهز للتثبيت.",
-        newVersionReady: "إصدار جديد جاهز للتثبيت.",
-        restartWarning: "ستؤدي ترقية التطبيق إلى إيقاف تشغيل الوكلاء وإغلاق الجلسات الطرفية.",
-      },
-    },
-    settings: {
-      loadFailed: "غير قادر على تحميل إعدادات سطح المكتب.",
-      saveFailed: "غير قادر على حفظ إعدادات سطح المكتب.",
-    },
-    rosetta: {
-      title: "قم بتنزيل نسخة Apple Silicon",
-      runningIntel: "أنت تقوم بتشغيل إصدار Intel من Paseo ضمن Rosetta على Apple Silicon.",
-      highCpu:
-        "يؤدي هذا إلى ارتفاع استخدام وحدة المعالجة المركزية. قم بتنزيل إصدار Apple Silicon لإصلاحه.",
-      download: "تحميل",
-    },
-    permissions: {
-      notifications: {
-        allowed: "يسمح نظام التشغيل بالإشعارات.",
-        denied: "تم رفض الإخطارات في إعدادات النظام.",
-        notGranted: "لم يتم منح الإخطارات بعد.",
-        webOnly: "حالة إشعار سطح المكتب متاحة فقط في وقت تشغيل الويب.",
-        supported: "يتم دعم إشعارات سطح المكتب.",
-        unsupported: "إشعارات سطح المكتب غير مدعومة على هذا النظام الأساسي.",
-        apiUnavailable: "واجهة برمجة تطبيقات إشعارات الويب غير متاحة في هذه البيئة.",
-        requestsWebOnly: "طلبات إعلام سطح المكتب متاحة فقط في وقت تشغيل الويب.",
-        requestUnavailable: "واجهة برمجة تطبيقات إشعارات الويب requestPermission() غير متاحة.",
-        requestFailed: "فشل طلب إذن الإعلام:{{message}}",
-        unexpectedState: "حالة إذن الإعلام غير المتوقعة:{{state}}",
-      },
-      microphone: {
-        webOnly: "حالة ميكروفون سطح المكتب متاحة فقط في وقت تشغيل الويب.",
-        navigatorUnavailable: "Navigator غير متوفر في هذه البيئة.",
-        granted: "تم منح الوصول إلى الميكروفون.",
-        denied: "تم رفض الوصول إلى الميكروفون في إعدادات النظام.",
-        notGranted: "لم يتم منح إذن الميكروفون بعد.",
-        unexpectedState: "حالة إذن الميكروفون غير متوقعة:{{state}}",
-        statusApiUnavailable:
-          "واجهة برمجة التطبيقات لحالة الميكروفون غير متاحة في وقت التشغيل هذا. استخدم الطلب للتحقق من الوصول.",
-        queryFailed: "فشل الاستعلام عن حالة الميكروفون:{{message}}",
-        captureUnavailable: "التقاط الميكروفون غير متوفر في هذه البيئة.",
-        permissionApiUnavailable:
-          "واجهة برمجة تطبيقات حالة الإذن غير متاحة. استخدم الطلب للتحقق من الوصول.",
-        requestsWebOnly: "طلبات ميكروفون سطح المكتب متاحة فقط في وقت تشغيل الويب.",
-        captureApiUnavailable: "واجهة برمجة تطبيقات التقاط الميكروفون غير متاحة في هذه البيئة.",
-        requestDenied: "تم رفض إذن الميكروفون من قبل المستخدم أو النظام.",
-        noDevice: "لم يتم العثور على جهاز ميكروفون.",
-        requestFailed: "فشل طلب إذن الميكروفون:{{message}}",
-      },
-      empty: {
-        notifications: "لم يتم التحقق من حالة الإخطار بعد.",
-        microphone: "لم يتم التحقق من حالة الميكروفون بعد.",
-      },
-      testNotification: {
-        title: "اختبار الإخطار Paseo",
-        body: "إذا كان بإمكانك رؤية ذلك، فهذا يعني أن إشعارات سطح المكتب تعمل.",
-        notDelivered: "لم يتم تسليم الإخطار. تحقق من إعدادات النظام > الإشعارات.",
-        failed: "فشل في إرسال الإخطار.",
-      },
-    },
-    integrations: {
-      cli: {
-        statusFailed: "غير قادر على التحقق من حالة تثبيت CLI.",
-        installFailed: "غير قادر على تثبيت PaseoCLI.",
-      },
-      skills: {
-        statusFailed: "غير قادر على التحقق من حالة مهارات التنسيق.",
-        installFailed: "غير قادر على تثبيت مهارات التنسيق.",
-        updateFailed: "غير قادر على تحديث مهارات التنسيق.",
-        uninstallFailed: "غير قادر على إلغاء تثبيت مهارات التنسيق.",
-      },
-    },
-  },
   rootError: {
     kicker: "حدث خطأ",
-    title: "واجه Paseo مشكلة.",
+    title: "واجه BySpace مشكلة.",
     body: "جرّب مرة أخرى لإعادة تحميل التطبيق. إذا استمر حدوث ذلك، فأرفق التفاصيل أدناه عند الإبلاغ عنه.",
     details: "التفاصيل",
   },
@@ -1124,7 +967,7 @@ export const ar: TranslationResources = {
     },
   },
   onboarding: {
-    title: "مرحبا بكم في Paseo",
+    title: "مرحبا بكم في BySpace",
     subtitle: "قم بتوصيل جهاز الكمبيوتر الخاص بك للبدء",
     actions: {
       settings: "إعدادات",
@@ -1200,7 +1043,7 @@ export const ar: TranslationResources = {
     },
     direct: {
       title: "اتصال مباشر",
-      helper: "أدخل عنوان خادم Paseo.",
+      helper: "أدخل عنوان خادم BySpace.",
       fields: {
         host: "Host",
         port: "ميناء",
@@ -1278,7 +1121,7 @@ export const ar: TranslationResources = {
       failedToLoadOffer: "فشل تحميل عرض الاقتران.",
       relayDisabled: "لم يتم تمكين التتابع. تمكين التتابع لإقران جهاز.",
       unavailable: "عرض الاقتران غير متاح.",
-      hint: "قم بمسح رمز QR هذا باستخدام Paseo على هاتفك، أو انسخ الرابط أدناه.",
+      hint: "قم بمسح رمز QR هذا باستخدام BySpace على هاتفك، أو انسخ الرابط أدناه.",
       qrUnavailable: "رمز QR غير متاح.",
       retry: "أعد المحاولة",
       copy: "ينسخ",
@@ -1310,7 +1153,7 @@ export const ar: TranslationResources = {
   serviceUrl: {
     title: "افتح الخدمة URL",
     message: "افتح{{url}}؟",
-    inPaseo: "في Paseo",
+    inBySpace: "في BySpace",
     externalBrowser: "متصفح خارجي",
     dontAskAgain: "لا تسأل مرة أخرى",
   },
@@ -1377,9 +1220,9 @@ export const ar: TranslationResources = {
       one: "استخدم {{count}} أداة أخرى",
       other: "استخدم {{count}} أدوات أخرى",
     },
-    paseoCalls: {
-      one: "استدعى Paseo {{count}} مرة",
-      other: "استدعى Paseo {{count}} مرات",
+    byspaceCalls: {
+      one: "استدعى BySpace {{count}} مرة",
+      other: "استدعى BySpace {{count}} مرات",
     },
     and: "و",
     failed: "فشل {{count}}",
@@ -1468,7 +1311,7 @@ export const ar: TranslationResources = {
         description: "مكان فتح عناوين URL من تشغيل البرامج النصية",
         options: {
           ask: "بسأل",
-          inApp: "في Paseo",
+          inApp: "في BySpace",
           external: "متصفح خارجي",
         },
       },
@@ -1547,7 +1390,7 @@ export const ar: TranslationResources = {
         label: "تحديثات التطبيق",
         readyToInstall: "جاهز للتثبيت:{{version}}",
         installTitle: "تثبيت تحديث سطح المكتب",
-        installMessage: "يؤدي هذا إلى تحديث Paseo على هذا الكمبيوتر",
+        installMessage: "يؤدي هذا إلى تحديث BySpace على هذا الكمبيوتر",
         installConfirm: "تثبيت التحديث",
         update: "تحديث",
         updateTo: "التحديث إلى{{version}}",
@@ -1678,10 +1521,10 @@ export const ar: TranslationResources = {
         title: "مهارات التنسيق",
         description: "قم بتعليم عملائك كيفية التنسيق من خلال CLI",
         updateAvailable: "التحديث متاح",
-        updateTitle: "تحديث مهارات Paseo ؟",
+        updateTitle: "تحديث مهارات BySpace ؟",
         updateFallback: "مزامنة المهارات المجمعة لجهازك.",
-        uninstallTitle: "إلغاء تثبيت مهارات Paseo ؟",
-        uninstallMessage: "يزيل جميع مهارات تنسيق Paseo من ~/.agents ، ~/.claude ، ~/.codex.",
+        uninstallTitle: "إلغاء تثبيت مهارات BySpace ؟",
+        uninstallMessage: "يزيل جميع مهارات تنسيق BySpace من ~/.agents ، ~/.claude ، ~/.codex.",
       },
       actions: {
         install: "ثَبَّتَ",
@@ -1736,9 +1579,9 @@ export const ar: TranslationResources = {
         title: "التنسيق",
         unavailable: "اتصل بهذا المضيف لإدارة التنسيق",
         enableTools: {
-          title: "تمكين أدوات Paseo",
+          title: "تمكين أدوات BySpace",
           hint: "سيتمكن الوكلاء من إدارة أشجار العمل والوكلاء والجداول الزمنية",
-          accessibilityLabel: "حقن أدوات Paseo",
+          accessibilityLabel: "حقن أدوات BySpace",
         },
         systemPrompt: {
           title: "موجه النظام",
@@ -1804,10 +1647,10 @@ export const ar: TranslationResources = {
             "هذا المضيف غير متصل. انتظر حتى يصبح متصلاً بالإنترنت قبل إعادة التشغيل.",
           offlineTitle: "Host غير متصل",
           offlineMessage:
-            "هذا المضيف غير متصل.  يقوم Paseo بإعادة الاتصال تلقائيًا - انتظر حتى يتم الاتصال بالإنترنت مرة أخرى قبل إعادة التشغيل.",
+            "هذا المضيف غير متصل.  يقوم BySpace بإعادة الاتصال تلقائيًا - انتظر حتى يتم الاتصال بالإنترنت مرة أخرى قبل إعادة التشغيل.",
           requestFailedTitle: "خطأ",
           requestFailedMessage:
-            "فشل في إرسال طلب إعادة التشغيل.  يقوم Paseo بإعادة الاتصال تلقائيًا - حاول مرة أخرى بمجرد ظهور المضيف على أنه متصل بالإنترنت.",
+            "فشل في إرسال طلب إعادة التشغيل.  يقوم BySpace بإعادة الاتصال تلقائيًا - حاول مرة أخرى بمجرد ظهور المضيف على أنه متصل بالإنترنت.",
           dialogFailedMessage: "غير قادر على فتح مربع حوار تأكيد إعادة التشغيل.",
         },
         update: {
@@ -1918,14 +1761,14 @@ export const ar: TranslationResources = {
         reset: "إعادة ضبط",
       },
       readFailures: {
-        invalidTitle: "تعذر تحليل paseo.json",
+        invalidTitle: "تعذر تحليل byspace.json",
         invalidDescription: "قم بإصلاح الملف على القرص، ثم أعد تحميله.",
         missingTitle: "هذا المضيف ليس لديه هذا المشروع",
         missingWithHosts: "قم بالتبديل إلى مضيف آخر أعلاه، أو أعد التحميل.",
         missingSingleHost: "المضيف المحدد ليس لديه سجل لهذا المشروع.",
-        transportTitle: "تعذر تحميل paseo.json",
+        transportTitle: "تعذر تحميل byspace.json",
         transportFallback: "المضيف لم يستجب.",
-        failedTitle: "تعذر تحميل paseo.json",
+        failedTitle: "تعذر تحميل byspace.json",
         failedDescription: "أعد التحميل للمحاولة مرة أخرى.",
       },
       worktree: {
@@ -1957,7 +1800,7 @@ export const ar: TranslationResources = {
         newScript: "نص جديد",
         editScript: "تحرير{{name}}",
         runAsService: "تشغيل كخدمة",
-        serviceHint: "يشرف Paseo على العملية ويعين منفذًا عبر $BYSPACE_PORT",
+        serviceHint: "يشرف BySpace على العملية ويعين منفذًا عبر $BYSPACE_PORT",
         actions: {
           add: "إضافة البرنامج النصي",
           edit: "يحرر",
@@ -1966,7 +1809,7 @@ export const ar: TranslationResources = {
       },
       metadata: {
         title: "توليد البيانات الوصفية",
-        info: "تعليمات خاصة بالمشروع يتم إدخالها في الذكاء الاصطناعي الذي يستخدمه Paseo لإنشاء بيانات التعريف - استخدمها لفرض اصطلاحات فريقك مثل تسمية الفرع أو نمط الالتزام أو تنسيق PR",
+        info: "تعليمات خاصة بالمشروع يتم إدخالها في الذكاء الاصطناعي الذي يستخدمه BySpace لإنشاء بيانات التعريف - استخدمها لفرض اصطلاحات فريقك مثل تسمية الفرع أو نمط الالتزام أو تنسيق PR",
         branchName: "اسماء الفروع",
         branchNamePlaceholder: "بادئة الفروع بـ fet/ أو Fix/, mb/ للفروع الشخصية",
         commitMessage: "ارتكاب الرسائل",
@@ -1976,8 +1819,8 @@ export const ar: TranslationResources = {
       },
       writeFailures: {
         staleTitle: "تم تغيير التكوين على القرص",
-        staleDescription: "أعد التحميل لجلب أحدث ملف paseo.json قبل الحفظ.",
-        failedTitle: "تعذر حفظ paseo.json",
+        staleDescription: "أعد التحميل لجلب أحدث ملف byspace.json قبل الحفظ.",
+        failedTitle: "تعذر حفظ byspace.json",
         failedDescription: "حاول مرة أخرى، أو أعد تحميل الإصدار الأحدث من القرص.",
       },
       actions: {

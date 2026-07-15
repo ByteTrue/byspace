@@ -31,8 +31,8 @@ function createTempDir(prefix: string): string {
 }
 
 function createFakeCliBinDir(): string {
-  const dir = createTempDir("paseo-cli-bin-");
-  writeFileSync(join(dir, "paseo"), "");
+  const dir = createTempDir("byspace-cli-bin-");
+  writeFileSync(join(dir, "byspace"), "");
   return dir;
 }
 
@@ -69,7 +69,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 describe("Claude terminal agent hooks", () => {
   it("installs registered provider hooks idempotently", () => {
-    const configDir = createTempDir("paseo-claude-config-");
+    const configDir = createTempDir("byspace-claude-config-");
     const provider = AGENT_HOOK_PROVIDERS.claude;
     const install = provider.install;
 
@@ -78,19 +78,19 @@ describe("Claude terminal agent hooks", () => {
 
     const settings = readSettings(configDir);
     for (const event of provider.events) {
-      const paseoCommands = hookCommands(settings, event.event).filter((command) =>
+      const byspaceCommands = hookCommands(settings, event.event).filter((command) =>
         command.includes(install.hookMarker),
       );
-      expect(paseoCommands).toHaveLength(1);
-      expect(paseoCommands[0]).toBe(
-        `if [ -n "$BYSPACE_TERMINAL_ID" ]; then "\${BYSPACE_HOOK_CLI:-paseo}" hooks ${provider.id} ${event.event}; fi`,
+      expect(byspaceCommands).toHaveLength(1);
+      expect(byspaceCommands[0]).toBe(
+        `if [ -n "$BYSPACE_TERMINAL_ID" ]; then "\${BYSPACE_HOOK_CLI:-byspace}" hooks ${provider.id} ${event.event}; fi`,
       );
     }
     expect(registeredAgentHooksAreInstalled({ configDir })).toBe(true);
   });
 
   it("preserves unrelated user hooks", () => {
-    const configDir = createTempDir("paseo-claude-config-preserve-");
+    const configDir = createTempDir("byspace-claude-config-preserve-");
     writeFileSync(
       join(configDir, "settings.json"),
       `${JSON.stringify(
@@ -121,7 +121,7 @@ describe("Claude terminal agent hooks", () => {
   });
 
   it("uninstalls only marker-matched hooks", () => {
-    const configDir = createTempDir("paseo-claude-config-uninstall-");
+    const configDir = createTempDir("byspace-claude-config-uninstall-");
     installRegisteredAgentHooks({ configDir });
     const settings = readSettings(configDir);
     settings.hooks = {
@@ -148,7 +148,7 @@ describe("Claude terminal agent hooks", () => {
     const command = buildAgentHookShellCommand(provider, provider.events[0]);
 
     expect(command).toBe(
-      'if [ -n "$BYSPACE_TERMINAL_ID" ]; then "${BYSPACE_HOOK_CLI:-paseo}" hooks claude UserPromptSubmit; fi',
+      'if [ -n "$BYSPACE_TERMINAL_ID" ]; then "${BYSPACE_HOOK_CLI:-byspace}" hooks claude UserPromptSubmit; fi',
     );
   });
 
@@ -159,7 +159,7 @@ describe("Claude terminal agent hooks", () => {
       const command = buildAgentHookShellCommand(provider, event);
 
       const result = spawnSync("/bin/sh", ["-c", command], {
-        env: { PATH: process.env.PATH ?? "", BYSPACE_HOOK_CLI: "paseo" },
+        env: { PATH: process.env.PATH ?? "", BYSPACE_HOOK_CLI: "byspace" },
         stdio: "ignore",
       });
 
@@ -181,15 +181,15 @@ describe("Claude terminal agent hooks", () => {
     }
   });
 
-  it("prepends the paseo CLI directory and injects the hook CLI path", () => {
+  it("prepends the byspace CLI directory and injects the hook CLI path", () => {
     const cliBinDir = createFakeCliBinDir();
-    const hookCliPath = join(cliBinDir, "paseo");
+    const hookCliPath = join(cliBinDir, "byspace");
 
     const env = buildTerminalEnvironment({
       shell: "/bin/sh",
       env: { PATH: ["/usr/bin", "/bin"].join(delimiter) },
-      paseoCliBinDir: cliBinDir,
-      paseoHookCliPath: hookCliPath,
+      byspaceCliBinDir: cliBinDir,
+      byspaceHookCliPath: hookCliPath,
     });
 
     expect(env.PATH?.split(delimiter)).toEqual([cliBinDir, "/usr/bin", "/bin"]);
@@ -200,7 +200,7 @@ describe("Claude terminal agent hooks", () => {
     const env = buildTerminalEnvironment({
       shell: "/bin/sh",
       env: { PATH: ["/usr/bin", "/bin"].join(delimiter) },
-      paseoCliBinDir: null,
+      byspaceCliBinDir: null,
     });
 
     expect(env.PATH?.split(delimiter)).toEqual(["/usr/bin", "/bin"]);

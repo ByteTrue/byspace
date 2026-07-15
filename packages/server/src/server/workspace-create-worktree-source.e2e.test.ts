@@ -5,7 +5,7 @@ import path from "node:path";
 import { expect, test } from "vitest";
 
 import { DaemonClient } from "./test-utils/index.js";
-import { createTestPaseoDaemon } from "./test-utils/paseo-daemon.js";
+import { createTestBySpaceDaemon } from "./test-utils/byspace-daemon.js";
 
 // The reshaped workspace.create.request forwards its worktree `source`
 // (action/refName/githubPrNumber/worktreeSlug) verbatim into createWorktreeCore.
@@ -22,7 +22,7 @@ function createGitRepoWithBranch(): { repoDir: string; tempRoot: string } {
     cwd: repoDir,
     stdio: "pipe",
   });
-  execFileSync("git", ["config", "user.name", "Paseo Test"], { cwd: repoDir, stdio: "pipe" });
+  execFileSync("git", ["config", "user.name", "BySpace Test"], { cwd: repoDir, stdio: "pipe" });
   execFileSync("git", ["-c", "commit.gpgsign=false", "commit", "--allow-empty", "-m", "initial"], {
     cwd: repoDir,
     stdio: "pipe",
@@ -33,7 +33,7 @@ function createGitRepoWithBranch(): { repoDir: string; tempRoot: string } {
 }
 
 test("workspace.create worktree source forwards action=checkout + refName into the real worktree", async () => {
-  const daemon = await createTestPaseoDaemon();
+  const daemon = await createTestBySpaceDaemon();
   const { repoDir, tempRoot } = createGitRepoWithBranch();
   const client = new DaemonClient({
     url: `ws://127.0.0.1:${daemon.port}/ws`,
@@ -65,7 +65,7 @@ test("workspace.create worktree source forwards action=checkout + refName into t
 }, 180000);
 
 test("workspace.create worktree source forwards branch-off + refName as the new branch", async () => {
-  const daemon = await createTestPaseoDaemon();
+  const daemon = await createTestBySpaceDaemon();
   const { repoDir, tempRoot } = createGitRepoWithBranch();
   const client = new DaemonClient({
     url: `ws://127.0.0.1:${daemon.port}/ws`,

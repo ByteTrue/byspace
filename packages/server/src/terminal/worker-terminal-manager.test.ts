@@ -11,8 +11,8 @@ import type {
   TerminalWorkspaceContributionChangedEvent,
 } from "./terminal-manager.js";
 import {
-  resolvePaseoCliBinDir,
-  resolvePaseoCliExecutablePath,
+  resolveBySpaceCliBinDir,
+  resolveBySpaceCliExecutablePath,
   type TerminalSession,
 } from "./terminal.js";
 import type { TerminalState } from "@bytetrue/byspace-protocol/messages";
@@ -484,18 +484,18 @@ it("injects parent-minted terminal activity env through the worker", async () =>
     hookCli?: string;
     path?: string;
   };
-  const paseoCliBinDir = resolvePaseoCliBinDir();
-  const paseoCliPath = resolvePaseoCliExecutablePath();
-  expect(paseoCliBinDir).not.toBeNull();
-  expect(paseoCliPath).not.toBeNull();
+  const byspaceCliBinDir = resolveBySpaceCliBinDir();
+  const byspaceCliPath = resolveBySpaceCliExecutablePath();
+  expect(byspaceCliBinDir).not.toBeNull();
+  expect(byspaceCliPath).not.toBeNull();
   expect(env.terminalId).toBe(session.id);
   expect(env.token).toEqual(expect.any(String));
   expect(env.token).not.toBe("");
   expect(env.url).toBe(activityUrl);
-  expect(env.hookCli).toBe(paseoCliPath);
+  expect(env.hookCli).toBe(byspaceCliPath);
   expect(manager.validateTerminalActivityToken(session.id, env.token ?? "")).toBe("valid");
   await expect(manager.setTerminalActivity(session.id, "attention")).resolves.toBe(true);
-  expect(env.path?.split(delimiter)[0]).toBe(paseoCliBinDir);
+  expect(env.path?.split(delimiter)[0]).toBe(byspaceCliBinDir);
 });
 
 it("starts the default shell through the worker and accepts quoted commands", async () => {

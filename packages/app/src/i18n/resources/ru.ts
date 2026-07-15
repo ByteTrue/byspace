@@ -777,7 +777,7 @@ export const ru: TranslationResources = {
       reportIssue: "Сообщить о проблеме",
       discord: "Discord",
       github: "Создать issue в GitHub",
-      version: "Paseo {{version}}",
+      version: "BySpace {{version}}",
     },
     sections: {
       sessions: "История",
@@ -890,173 +890,9 @@ export const ru: TranslationResources = {
       title: "Начать с",
     },
   },
-  desktop: {
-    quitting: {
-      title: "Выход из Paseo...",
-      detail: "Остановка локального демона.",
-    },
-    daemon: {
-      title: "Daemon",
-      status: {
-        title: "Статус",
-        builtInOnly: "Здесь показан только встроенный демон рабочего стола.",
-        running: "бег",
-        notRunning: "не работает",
-        pid: "PID{{pid}}",
-      },
-      management: {
-        title: "Управление встроенным демоном",
-        hint: "Позвольте Paseo запустить и остановить встроенный демон.",
-        pauseTitle: "Приостановить встроенный демон",
-        pauseMessage:
-          "Это немедленно остановит встроенный демон. Запущенные агенты и терминалы, подключенные к встроенному демону, будут остановлены.",
-        pauseAndStop: "Пауза и остановка",
-        registrationFailed:
-          "Built-in daemon started, but Paseo could not save the localhost connection. Toggle daemon management off and on again, or add localhost manually.",
-        pausedStopFailed:
-          "Встроенное управление демоном было приостановлено, но Paseo не смог остановить демон.",
-        updateFailed: "Невозможно обновить встроенное управление демонами.",
-      },
-      keepRunning: {
-        title: "Продолжать работу демона после выхода",
-        hint: "Daemon продолжает работать, когда вы выходите из Paseo",
-      },
-      logs: {
-        title: "Файл журнала",
-        modalTitle: "Журналы Daemon",
-        unavailable: "Путь к журналу недоступен",
-        empty: "(файл журнала пуст)",
-        copied: "Путь к журналу скопирован.",
-        copyFailed: "Невозможно скопировать путь к журналу.",
-        open: "Открыть журналы",
-        copyPath: "Копировать путь",
-      },
-      fullStatus: {
-        title: "Полный статус",
-        modalTitle: "Статус Daemon",
-        hint: "Запускает`paseo daemon status`и показывает результат",
-        view: "Посмотреть статус",
-        copied: "Статус скопирован в буфер обмена.",
-        fetchFailed: "Не удалось получить статус демона:{{message}}.",
-      },
-      advancedSettings: "Расширенные настройки",
-      openAdvancedSettings: "Открыть дополнительные настройки демона",
-      versionMismatch:
-        "Версии приложения и демона не совпадают. Обновите обе версии до одной и той же версии для лучшего опыта.",
-      loadFailed: "Невозможно загрузить статус демона рабочего стола.",
-    },
-    updates: {
-      status: {
-        checking: "Проверка обновлений приложения...",
-        installing: "Установка обновления приложения...",
-        upToDate: "Приложение актуально.",
-        upToDateWithLastChecked: "Up to date. Last checked at {{time}}.",
-        pending: "Мы сообщим вам, когда обновление будет готово.",
-        pendingWithLastChecked:
-          "Мы сообщим вам, когда обновление будет готово. Последняя проверка в {{time}}.",
-        pendingWithVersion: "Найдено обновление: {{version}}. Загрузка...",
-        pendingWithVersionAndLastChecked:
-          "Найдено обновление: {{version}}. Загрузка... Последняя проверка в {{time}}.",
-        availableWithVersion: "Обновление готово:{{version}}",
-        availableWithVersionAndLastChecked:
-          "Обновление готово:{{version}}. Последняя проверка в {{time}}.",
-        available: "Обновление приложения готово к установке.",
-        availableWithLastChecked:
-          "Обновление приложения готово к установке. Последняя проверка в {{time}}.",
-        installed: "Обновление приложения установлено. Требуется перезагрузка.",
-        failed: "Не удалось обновить приложение.",
-        idle: "Статус обновления еще не проверен.",
-      },
-      installError: "Невозможно установить обновление настольного приложения.",
-      callout: {
-        installingTitle: "Установка обновления",
-        failedTitle: "Обновление не выполнено",
-        availableTitle: "Доступно обновление",
-        genericError: "Что- то пошло не так.",
-        whatsNew: "Что нового",
-        installingAction: "Установка...",
-        installAndRestart: "Установить и перезапустить",
-        installingDescription: "Установка и перезапуск...",
-        versionReady: "{{version}}готов к установке.",
-        newVersionReady: "Новая версия готова к установке.",
-        restartWarning:
-          "Обновление приложения приведет к остановке работы агентов и закрытию сеансов терминала.",
-      },
-    },
-    settings: {
-      loadFailed: "Невозможно загрузить настройки рабочего стола.",
-      saveFailed: "Невозможно сохранить настройки рабочего стола.",
-    },
-    rosetta: {
-      title: "Загрузите сборку Apple Silicon",
-      runningIntel: "Вы используете сборку Intel для Paseo под Rosetta на Apple Silicon.",
-      highCpu:
-        "Это приводит к высокой загрузке ЦП. Загрузите сборку Apple Silicon, чтобы исправить это.",
-      download: "Скачать",
-    },
-    permissions: {
-      notifications: {
-        allowed: "Уведомления разрешены операционной системой.",
-        denied: "Уведомления запрещены в настройках системы.",
-        notGranted: "Уведомления еще не были предоставлены.",
-        webOnly: "Статус уведомлений на рабочем столе доступен только в веб- среде выполнения.",
-        supported: "Уведомления на рабочем столе поддерживаются.",
-        unsupported: "Уведомления на рабочем столе не поддерживаются на этой платформе.",
-        apiUnavailable: "API веб- уведомлений недоступен в этой среде.",
-        requestsWebOnly:
-          "Запросы уведомлений на рабочем столе доступны только в веб- среде выполнения.",
-        requestUnavailable: "API веб- уведомлений requestPermission() недоступен.",
-        requestFailed: "Не удалось запросить разрешение на уведомление:{{message}}.",
-        unexpectedState: "Состояние разрешения на непредвиденное уведомление:{{state}}.",
-      },
-      microphone: {
-        webOnly: "Статус настольного микрофона доступен только в веб- среде выполнения.",
-        navigatorUnavailable: "Навигатор недоступен в этой среде.",
-        granted: "Доступ к микрофону разрешен.",
-        denied: "Доступ к микрофону запрещен в настройках системы.",
-        notGranted: "Разрешение на использование микрофона еще не получено.",
-        unexpectedState: "Неожиданное состояние разрешения микрофона:{{state}}.",
-        statusApiUnavailable:
-          "API состояния микрофона недоступен в этой среде выполнения. Используйте Запрос, чтобы проверить доступ.",
-        queryFailed: "Не удалось запросить статус микрофона:{{message}}.",
-        captureUnavailable: "В этой среде захват микрофона недоступен.",
-        permissionApiUnavailable:
-          "API статуса разрешения недоступен. Используйте Запрос, чтобы проверить доступ.",
-        requestsWebOnly: "Запросы настольного микрофона доступны только в веб- среде выполнения.",
-        captureApiUnavailable: "API захвата микрофона недоступен в этой среде.",
-        requestDenied:
-          "Разрешение на использование микрофона было отклонено пользователем или системой.",
-        noDevice: "Микрофонное устройство не обнаружено.",
-        requestFailed: "Не удалось запросить разрешение микрофона:{{message}}.",
-      },
-      empty: {
-        notifications: "Статус уведомления еще не проверен.",
-        microphone: "Состояние микрофона еще не проверялось.",
-      },
-      testNotification: {
-        title: "Тест уведомлений Paseo",
-        body: "Если вы это видите, уведомления на рабочем столе работают.",
-        notDelivered:
-          "Уведомление не было доставлено. Проверьте Системные настройки > Уведомления.",
-        failed: "Не удалось отправить уведомление.",
-      },
-    },
-    integrations: {
-      cli: {
-        statusFailed: "Невозможно проверить статус установки CLI.",
-        installFailed: "Невозможно установить PaseoCLI.",
-      },
-      skills: {
-        statusFailed: "Невозможно проверить статус навыков оркестровки.",
-        installFailed: "Невозможно установить навыки оркестровки.",
-        updateFailed: "Невозможно обновить навыки оркестровки.",
-        uninstallFailed: "Невозможно удалить навыки оркестровки.",
-      },
-    },
-  },
   rootError: {
     kicker: "Что-то пошло не так",
-    title: "В Paseo возникла проблема.",
+    title: "В BySpace возникла проблема.",
     body: "Попробуйте снова перезагрузить приложение. Если это повторяется, приложите приведенные ниже подробности к отчету.",
     details: "Подробности",
   },
@@ -1152,7 +988,7 @@ export const ru: TranslationResources = {
     },
   },
   onboarding: {
-    title: "Добро пожаловать в Paseo",
+    title: "Добро пожаловать в BySpace",
     subtitle: "Подключите компьютер, чтобы начать",
     actions: {
       settings: "Настройки",
@@ -1228,7 +1064,7 @@ export const ru: TranslationResources = {
     },
     direct: {
       title: "Прямое подключение",
-      helper: "Введите адрес сервера Paseo.",
+      helper: "Введите адрес сервера BySpace.",
       fields: {
         host: "Host",
         port: "Порт",
@@ -1308,7 +1144,7 @@ export const ru: TranslationResources = {
       failedToLoadOffer: "Не удалось загрузить предложение сопряжения.",
       relayDisabled: "Реле не включено. Включите реле для сопряжения устройства.",
       unavailable: "Предложение по сопряжению недоступно.",
-      hint: "Отсканируйте этот код QR с помощью Paseo на своем телефоне или скопируйте ссылку ниже.",
+      hint: "Отсканируйте этот код QR с помощью BySpace на своем телефоне или скопируйте ссылку ниже.",
       qrUnavailable: "Код QR недоступен.",
       retry: "Повторить попытку",
       copy: "Копировать",
@@ -1340,7 +1176,7 @@ export const ru: TranslationResources = {
   serviceUrl: {
     title: "Открыть сервис URL",
     message: "Открыть{{url}}?",
-    inPaseo: "В Paseo",
+    inBySpace: "В BySpace",
     externalBrowser: "Внешний браузер",
     dontAskAgain: "Не спрашивай больше",
   },
@@ -1407,9 +1243,9 @@ export const ru: TranslationResources = {
       one: "использован {{count}} другой инструмент",
       other: "использовано {{count}} других инструментов",
     },
-    paseoCalls: {
-      one: "Paseo вызван {{count}} раз",
-      other: "Paseo вызван {{count}} раз",
+    byspaceCalls: {
+      one: "BySpace вызван {{count}} раз",
+      other: "BySpace вызван {{count}} раз",
     },
     and: "и",
     failed: "С ошибкой: {{count}}",
@@ -1497,7 +1333,7 @@ export const ru: TranslationResources = {
         description: "Где открыть URL- адреса запущенных скриптов",
         options: {
           ask: "Просить",
-          inApp: "В Paseo",
+          inApp: "В BySpace",
           external: "Внешний браузер",
         },
       },
@@ -1578,7 +1414,7 @@ export const ru: TranslationResources = {
         label: "Обновления приложений",
         readyToInstall: "Готово к установке:{{version}}",
         installTitle: "Установить обновление рабочего стола",
-        installMessage: "Это обновит Paseo на этом компьютере.",
+        installMessage: "Это обновит BySpace на этом компьютере.",
         installConfirm: "Установить обновление",
         update: "Обновлять",
         updateTo: "Обновление до{{version}}",
@@ -1711,10 +1547,11 @@ export const ru: TranslationResources = {
         title: "Навыки оркестровки",
         description: "Научите своих агентов организовывать работу через CLI",
         updateAvailable: "Доступно обновление",
-        updateTitle: "Обновить навыки Paseo?",
+        updateTitle: "Обновить навыки BySpace?",
         updateFallback: "Синхронизируйте связанные навыки с вашим компьютером.",
-        uninstallTitle: "Удалить навыки Paseo?",
-        uninstallMessage: "Удаляет все навыки оркестровки Paseo из ~/.agents, ~/.claude, ~/.codex.",
+        uninstallTitle: "Удалить навыки BySpace?",
+        uninstallMessage:
+          "Удаляет все навыки оркестровки BySpace из ~/.agents, ~/.claude, ~/.codex.",
       },
       actions: {
         install: "Установить",
@@ -1770,9 +1607,9 @@ export const ru: TranslationResources = {
         title: "оркестровка",
         unavailable: "Подключитесь к этому хосту, чтобы управлять оркестрацией.",
         enableTools: {
-          title: "Включить инструменты Paseo",
+          title: "Включить инструменты BySpace",
           hint: "Агенты смогут управлять рабочими деревьями, агентами и расписаниями.",
-          accessibilityLabel: "Инструменты внедрения Paseo",
+          accessibilityLabel: "Инструменты внедрения BySpace",
         },
         systemPrompt: {
           title: "Системная подсказка",
@@ -1839,10 +1676,10 @@ export const ru: TranslationResources = {
             "Этот хост не подключен. Подождите, пока он подключится к сети, прежде чем перезапустить.",
           offlineTitle: "Host оффлайн",
           offlineMessage:
-            "Этот хост не в сети.Paseo автоматически повторно подключается — подождите, пока он снова подключится к сети, прежде чем перезапускаться.",
+            "Этот хост не в сети.BySpace автоматически повторно подключается — подождите, пока он снова подключится к сети, прежде чем перезапускаться.",
           requestFailedTitle: "Ошибка",
           requestFailedMessage:
-            "Не удалось отправить запрос на перезапуск.Paseo автоматически повторно подключается. Повторите попытку, как только хост окажется в сети.",
+            "Не удалось отправить запрос на перезапуск.BySpace автоматически повторно подключается. Повторите попытку, как только хост окажется в сети.",
           dialogFailedMessage: "Невозможно открыть диалоговое окно подтверждения перезапуска.",
         },
         update: {
@@ -1954,14 +1791,14 @@ export const ru: TranslationResources = {
         reset: "Перезагрузить",
       },
       readFailures: {
-        invalidTitle: "paseo.json не удалось разобрать",
+        invalidTitle: "byspace.json не удалось разобрать",
         invalidDescription: "Исправьте файл на диске, затем перезагрузите.",
         missingTitle: "У этого хоста нет этого проекта",
         missingWithHosts: "Переключитесь на другой хост выше или перезагрузите компьютер.",
         missingSingleHost: "У выбранного хоста нет записей об этом проекте.",
-        transportTitle: "Не удалось загрузить paseo.json.",
+        transportTitle: "Не удалось загрузить byspace.json.",
         transportFallback: "Хозяин не ответил.",
-        failedTitle: "Не удалось загрузить paseo.json.",
+        failedTitle: "Не удалось загрузить byspace.json.",
         failedDescription: "Перезагрузите, чтобы попробовать еще раз.",
       },
       worktree: {
@@ -1994,7 +1831,7 @@ export const ru: TranslationResources = {
         newScript: "Новый сценарий",
         editScript: "Изменить{{name}}",
         runAsService: "Запуск как служба",
-        serviceHint: "Paseo контролирует процесс и назначает порт через $BYSPACE_PORT.",
+        serviceHint: "BySpace контролирует процесс и назначает порт через $BYSPACE_PORT.",
         actions: {
           add: "Добавить скрипт",
           edit: "Редактировать",
@@ -2003,7 +1840,7 @@ export const ru: TranslationResources = {
       },
       metadata: {
         title: "Генерация метаданных",
-        info: "Инструкции для конкретного проекта, внедренные в подсказки ИИ, которые Paseo использует для генерации метаданных. Используйте их для обеспечения соблюдения соглашений вашей команды, таких как наименование ветвей, стиль фиксации или формат PR.",
+        info: "Инструкции для конкретного проекта, внедренные в подсказки ИИ, которые BySpace использует для генерации метаданных. Используйте их для обеспечения соблюдения соглашений вашей команды, таких как наименование ветвей, стиль фиксации или формат PR.",
         branchName: "Названия ветвей",
         branchNamePlaceholder: "Префиксные ветки с feat/ или fix/, mb/ для личных веток",
         commitMessage: "Фиксировать сообщения",
@@ -2015,8 +1852,8 @@ export const ru: TranslationResources = {
       writeFailures: {
         staleTitle: "Конфигурация изменена на диске",
         staleDescription:
-          "Перед сохранением перезагрузите компьютер, чтобы получить последнюю версию файла paseo.json.",
-        failedTitle: "Не удалось сохранить paseo.json.",
+          "Перед сохранением перезагрузите компьютер, чтобы получить последнюю версию файла byspace.json.",
+        failedTitle: "Не удалось сохранить byspace.json.",
         failedDescription: "Попробуйте еще раз или перезагрузите последнюю версию с диска.",
       },
       actions: {

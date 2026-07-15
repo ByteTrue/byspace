@@ -13,12 +13,12 @@
     "test": "vitest run",
     "test:browser": "vitest run --project browser",
     "test:e2e": "playwright test --project='Desktop Chrome'",
-    "test:e2e:real": "cross-env E2E_FORK_BYSPACE_HOME_FROM=../../.dev/paseo-home playwright test --project=real-provider",
+    "test:e2e:real": "cross-env E2E_FORK_BYSPACE_HOME_FROM=../../.dev/byspace-home playwright test --project=real-provider",
     "test:e2e:ui": "playwright test --ui",
     "build": "npm run build:web",
     "build:web": "npm --prefix ../.. run build:app-deps && expo export --platform web",
     "profile:workspace-tabs": "node ./scripts/profile-workspace-tabs.mjs",
-    "deploy:web": "npm run build:web && wrangler pages deploy dist --project-name paseo-app --branch main",
+    "deploy:web": "npm run build:web && wrangler pages deploy dist --project-name byspace --branch main",
     "build:terminal-webview": "node ./scripts/build-terminal-webview-html.mjs"
   },
   "dependencies": {

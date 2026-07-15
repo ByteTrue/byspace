@@ -230,7 +230,7 @@ describe("sendOsNotification", () => {
     const { sendOsNotification } = await loadModule();
 
     const sent = await sendOsNotification({
-      title: "Paseo notification test",
+      title: "BySpace notification test",
       body: "If you can see this, desktop notifications work.",
     });
 

@@ -1207,7 +1207,7 @@ describe("workspace-layout-store actions", () => {
   });
 
   it("convertDraftToAgent removes the draft and focuses the existing canonical agent tab", () => {
-    useWorkspaceLayoutIds("67676767-6767-6767-6767-676767676767");
+    useWorkspaceLayoutIds("67776777-6777-6777-6777-677767776777");
     const workspaceKey = createWorkspaceKey();
     const store = workspaceLayoutStore.getState();
 
@@ -1225,7 +1225,7 @@ describe("workspace-layout-store actions", () => {
     const nextTabId = store.convertDraftToAgent(workspaceKey, draftTabId!, "agent-1");
     const layout = workspaceLayoutStore.getState().layoutByWorkspace[workspaceKey];
 
-    expect(splitPaneId).toBe("pane_67676767-6767-6767-6767-676767676767");
+    expect(splitPaneId).toBe("pane_67776777-6777-6777-6777-677767776777");
     expect(nextTabId).toBe("agent_agent-1");
     expect(collectAllTabs(layout.root).map((tab) => tab.tabId)).toEqual(["agent_agent-1"]);
     expect(layout.focusedPaneId).toBe(splitPaneId);

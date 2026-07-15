@@ -18,7 +18,7 @@ function main() {
     unrepresentable: "any",
     io: "input",
   });
-  schema.title = "PaseoConfigV1";
+  schema.title = "BySpaceConfigV1";
 
   fs.writeFileSync(outPath, JSON.stringify(schema, null, 2) + "\n", "utf8");
   process.stdout.write(`Wrote ${outPath}\n`);

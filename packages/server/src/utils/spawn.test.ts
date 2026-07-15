@@ -4,15 +4,12 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, test, vi } from "vitest";
 
-import { buildSelfNodeCommand } from "../server/paseo-env.js";
+import { buildSelfNodeCommand } from "../server/byspace-env.js";
 import { execCommand, spawnProcess } from "./spawn.js";
 
 const printEnvScript = `
 const keys = [
   "CUSTOM",
-  "ELECTRON_NO_ATTACH_CONSOLE",
-  "ELECTRON_RUN_AS_NODE",
-  "BYSPACE_DESKTOP_MANAGED",
   "BYSPACE_NODE_ENV",
   "BYSPACE_SUPERVISED",
 ];
@@ -74,7 +71,6 @@ describe("execCommand", () => {
   test("treats env as the replacement base and finalizes external command env", async () => {
     const result = await execCommand(process.execPath, ["-e", printEnvScript], {
       baseEnv: {
-        ELECTRON_RUN_AS_NODE: "0",
         CUSTOM: "from-base",
         PATH: process.env.PATH,
         BYSPACE_NODE_ENV: "production",
@@ -82,21 +78,15 @@ describe("execCommand", () => {
       },
       env: {
         CUSTOM: "from-env",
-        ELECTRON_NO_ATTACH_CONSOLE: "1",
-        BYSPACE_DESKTOP_MANAGED: "1",
         BYSPACE_NODE_ENV: "test",
       },
       envOverlay: {
         CUSTOM: "from-overlay",
-        ELECTRON_RUN_AS_NODE: undefined,
       },
     });
 
     expect(parsePrintedEnv(result.stdout)).toEqual({
       CUSTOM: "from-overlay",
-      ELECTRON_NO_ATTACH_CONSOLE: null,
-      ELECTRON_RUN_AS_NODE: null,
-      BYSPACE_DESKTOP_MANAGED: null,
       BYSPACE_NODE_ENV: null,
       BYSPACE_SUPERVISED: null,
     });
@@ -127,7 +117,6 @@ describe("execCommand", () => {
   test("spawnProcess finalizes external command env", async () => {
     const child = spawnProcess(process.execPath, ["-e", printEnvScript], {
       baseEnv: {
-        ELECTRON_RUN_AS_NODE: "0",
         PATH: process.env.PATH,
         BYSPACE_NODE_ENV: "production",
       },
@@ -151,19 +140,15 @@ describe("execCommand", () => {
     expect(exitCode).toBe(0);
     expect(parsePrintedEnv(Buffer.concat(stdoutChunks).toString())).toEqual({
       CUSTOM: "spawn-overlay",
-      ELECTRON_NO_ATTACH_CONSOLE: null,
-      ELECTRON_RUN_AS_NODE: null,
-      BYSPACE_DESKTOP_MANAGED: null,
       BYSPACE_NODE_ENV: null,
       BYSPACE_SUPERVISED: null,
     });
   });
 
-  test("internal env mode preserves Paseo-owned launcher env", async () => {
+  test("internal env mode preserves BySpace-owned launcher env", async () => {
     const result = await execCommand(process.execPath, ["-e", printEnvScript], {
       envMode: "internal",
       baseEnv: {
-        ELECTRON_RUN_AS_NODE: "1",
         PATH: process.env.PATH,
         BYSPACE_NODE_ENV: "production",
       },
@@ -175,9 +160,6 @@ describe("execCommand", () => {
 
     expect(parsePrintedEnv(result.stdout)).toEqual({
       CUSTOM: "internal",
-      ELECTRON_NO_ATTACH_CONSOLE: null,
-      ELECTRON_RUN_AS_NODE: "1",
-      BYSPACE_DESKTOP_MANAGED: null,
       BYSPACE_NODE_ENV: "production",
       BYSPACE_SUPERVISED: "1",
     });
@@ -196,7 +178,7 @@ describe("execCommand", () => {
     expect(realpathSpy).not.toHaveBeenCalled();
   });
 
-  test("self node command explicitly enables Electron node mode", async () => {
+  test("builds a self node command with external-safe env", async () => {
     const command = buildSelfNodeCommand(["-e", printEnvScript], {
       CUSTOM: "from-helper",
     });
@@ -208,9 +190,6 @@ describe("execCommand", () => {
 
     expect(parsePrintedEnv(result.stdout)).toEqual({
       CUSTOM: "from-helper",
-      ELECTRON_NO_ATTACH_CONSOLE: null,
-      ELECTRON_RUN_AS_NODE: "1",
-      BYSPACE_DESKTOP_MANAGED: null,
       BYSPACE_NODE_ENV: null,
       BYSPACE_SUPERVISED: null,
     });

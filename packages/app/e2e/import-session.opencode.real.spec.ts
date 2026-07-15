@@ -40,7 +40,7 @@ test.afterEach(async () => {
 });
 
 test("imports a real OpenCode session from the workspace import sheet", async ({ page }) => {
-  const scenario = await seedPaseoWorkspaceWithOpenCodeSession();
+  const scenario = await seedBySpaceWorkspaceWithOpenCodeSession();
   workspace = scenario.workspace;
   const importableSession = await waitForImportableOpenCodeSession(scenario);
   await openWorkspace(page, scenario.workspace);
@@ -51,7 +51,7 @@ test("imports a real OpenCode session from the workspace import sheet", async ({
   await expectImportedSessionOpen(page, scenario);
 });
 
-async function seedPaseoWorkspaceWithOpenCodeSession(): Promise<OpenCodeImportScenario> {
+async function seedBySpaceWorkspaceWithOpenCodeSession(): Promise<OpenCodeImportScenario> {
   const response = `BYSPACE_OPENCODE_IMPORT_E2E_OK_${randomUUID().slice(0, 8)}`;
   const prompt = `Do not use tools. Reply with exactly: ${response}`;
   const promptPreview = JSON.stringify(prompt);

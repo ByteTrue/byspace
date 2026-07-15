@@ -45,7 +45,7 @@ class FakeDaemonProbe {
     resolveAppVersion: () => null,
     createLocalTransportFactory: () => null,
     buildLocalTransportUrl: ({ transportType, transportPath }) =>
-      `paseo+local://${transportType}?path=${encodeURIComponent(transportPath)}`,
+      `byspace+local://${transportType}?path=${encodeURIComponent(transportPath)}`,
     createClient: (config) => {
       const client = new FakeDaemonClient(this, config);
       this.createdClients.push(client);
@@ -75,9 +75,9 @@ describe("test-daemon-connection connectToDaemon", () => {
     const { connectToDaemon } = await import("./test-daemon-connection");
     const first = await connectToDaemon(
       {
-        id: "direct:lan:6767",
+        id: "direct:lan:6777",
         type: "directTcp",
-        endpoint: "lan:6767",
+        endpoint: "lan:6777",
       },
       undefined,
       probe.deps,
@@ -86,9 +86,9 @@ describe("test-daemon-connection connectToDaemon", () => {
 
     const second = await connectToDaemon(
       {
-        id: "direct:lan:6767",
+        id: "direct:lan:6777",
         type: "directTcp",
-        endpoint: "lan:6767",
+        endpoint: "lan:6777",
       },
       undefined,
       probe.deps,
@@ -105,25 +105,27 @@ describe("test-daemon-connection connectToDaemon", () => {
     const { connectToDaemon } = await import("./test-daemon-connection");
     const result = await connectToDaemon(
       {
-        id: "socket:/tmp/paseo.sock",
+        id: "socket:/tmp/byspace.sock",
         type: "directSocket",
-        path: "/tmp/paseo.sock",
+        path: "/tmp/byspace.sock",
       },
       undefined,
       probe.deps,
     );
     await result.client.close();
 
-    expect(probe.createdConfigs()[0]?.url).toBe("paseo+local://socket?path=%2Ftmp%2Fpaseo.sock");
+    expect(probe.createdConfigs()[0]?.url).toBe(
+      "byspace+local://socket?path=%2Ftmp%2Fbyspace.sock",
+    );
   });
 
   it("passes direct TCP connection passwords into the client config", async () => {
     const { connectToDaemon } = await import("./test-daemon-connection");
     const result = await connectToDaemon(
       {
-        id: "direct:lan:6767",
+        id: "direct:lan:6777",
         type: "directTcp",
-        endpoint: "lan:6767",
+        endpoint: "lan:6777",
         password: "shared-secret",
       },
       undefined,
@@ -151,9 +153,9 @@ describe("test-daemon-connection connectToDaemon", () => {
 
     const plainResult = await connectToDaemon(
       {
-        id: "relay:relay.paseo.sh:443",
+        id: "relay:byspace-relay.bytetrue.workers.dev:443",
         type: "relay",
-        relayEndpoint: "relay.paseo.sh:443",
+        relayEndpoint: "byspace-relay.bytetrue.workers.dev:443",
         useTls: false,
         daemonPublicKeyB64: "pubkey",
       },
@@ -163,7 +165,7 @@ describe("test-daemon-connection connectToDaemon", () => {
     await plainResult.client.close();
 
     expect(probe.createdConfigs()[0]?.url).toMatch(/^wss:\/\/\[::1\]\/ws\?/);
-    expect(probe.createdConfigs()[1]?.url).toMatch(/^ws:\/\/relay\.paseo\.sh:443\/ws\?/);
+    expect(probe.createdConfigs()[1]?.url).toMatch(/^ws:\/\/relay\.byspace\.sh:443\/ws\?/);
   });
 
   it("surfaces auth rejection as an incorrect password", async () => {
@@ -176,9 +178,9 @@ describe("test-daemon-connection connectToDaemon", () => {
     await expect(
       connectToDaemon(
         {
-          id: "direct:lan:6767",
+          id: "direct:lan:6777",
           type: "directTcp",
-          endpoint: "lan:6767",
+          endpoint: "lan:6777",
           password: "wrong-secret",
         },
         undefined,
@@ -196,9 +198,9 @@ describe("test-daemon-connection connectToDaemon", () => {
     await expect(
       connectToDaemon(
         {
-          id: "direct:lan:6767",
+          id: "direct:lan:6777",
           type: "directTcp",
-          endpoint: "lan:6767",
+          endpoint: "lan:6777",
           password: "shared-secret",
         },
         undefined,

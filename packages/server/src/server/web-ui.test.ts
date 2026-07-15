@@ -97,7 +97,7 @@ describe("daemon web UI route module", () => {
   let publicDir: string;
 
   beforeEach(async () => {
-    tempRoot = await mkdtemp(path.join(os.tmpdir(), "paseo-web-ui-"));
+    tempRoot = await mkdtemp(path.join(os.tmpdir(), "byspace-web-ui-"));
     distDir = path.join(tempRoot, "dist");
     publicDir = path.join(tempRoot, "public");
     await mkdir(path.join(distDir, "_expo", "static", "js", "web"), { recursive: true });

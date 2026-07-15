@@ -17,7 +17,7 @@ const MODE_MASK = 0o777;
 const PERMISSIVE_FILE_MODE = 0o644;
 
 function tmpHome(): string {
-  return mkdtempSync(path.join(tmpdir(), "paseo-server-id-"));
+  return mkdtempSync(path.join(tmpdir(), "byspace-server-id-"));
 }
 
 function modeOf(filePath: string): number {

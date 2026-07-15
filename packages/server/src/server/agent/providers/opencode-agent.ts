@@ -2885,7 +2885,7 @@ class OpenCodeAgentSession implements AgentSession {
   private readonly subscribers = new Set<(event: AgentStreamEvent) => void>();
   private nextTurnOrdinal = 0;
   private activeForegroundTurnId: string | null = null;
-  private activeForegroundTurnSource: "paseo" | "external" | null = null;
+  private activeForegroundTurnSource: "byspace" | "external" | null = null;
   private readonly runningToolCalls = new Map<string, ToolCallTimelineItem>();
   private subAgentsByCallId = new Map<string, OpenCodeSubAgentActivityState>();
   private subAgentCallIdByChildSessionId = new Map<string, string>();
@@ -3057,7 +3057,7 @@ class OpenCodeAgentSession implements AgentSession {
   ): Promise<{ turnId: string }> {
     if (this.activeForegroundTurnId) {
       if (this.activeForegroundTurnSource === "external") {
-        // A direct Paseo prompt owns the foreground; close the adopted child run first.
+        // A direct BySpace prompt owns the foreground; close the adopted child run first.
         this.finishForegroundTurn(
           { type: "turn_completed", provider: "opencode", usage: undefined },
           this.activeForegroundTurnId,
@@ -3096,7 +3096,7 @@ class OpenCodeAgentSession implements AgentSession {
 
     const turnId = this.createTurnId();
     this.activeForegroundTurnId = turnId;
-    this.activeForegroundTurnSource = "paseo";
+    this.activeForegroundTurnSource = "byspace";
     this.notifySubscribers({ type: "turn_started", provider: "opencode" }, turnId);
 
     const slashCommand = await this.resolveSlashCommandInvocation(prompt);

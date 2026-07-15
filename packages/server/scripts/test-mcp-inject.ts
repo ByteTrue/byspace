@@ -11,7 +11,7 @@ import {
   isProviderAvailable,
 } from "../src/server/daemon-e2e/agent-configs.js";
 import { DaemonClient } from "../src/server/test-utils/daemon-client.js";
-import { createTestPaseoDaemon } from "../src/server/test-utils/paseo-daemon.js";
+import { createTestBySpaceDaemon } from "../src/server/test-utils/byspace-daemon.js";
 
 function collectAssistantText(entries: Array<{ item: { type: string; text?: string } }>): string {
   return entries
@@ -50,7 +50,7 @@ async function verifyInjectedMcpForProvider(
   try {
     const prompt = [
       "List all your available MCP tools.",
-      "If you have a tool called list_agents or create_agent from a paseo MCP server, call list_agents once.",
+      "If you have a tool called list_agents or create_agent from a byspace MCP server, call list_agents once.",
       "After checking, reply with exactly BYSPACE_MCP_FOUND.",
       "If you do not have those tools, reply with exactly BYSPACE_MCP_NOT_FOUND.",
       "Do not say anything else.",
@@ -84,14 +84,14 @@ async function verifyInjectedMcpForProvider(
 
     if (!assistantText.includes("BYSPACE_MCP_FOUND")) {
       throw new Error(
-        `Expected assistant to confirm Paseo MCP availability. Assistant text:\n${assistantText}`,
+        `Expected assistant to confirm BySpace MCP availability. Assistant text:\n${assistantText}`,
       );
     }
 
     const listAgentsCalls = toolCalls.filter(
       (call) =>
         call.name === "list_agents" ||
-        call.name === "paseo.list_agents" ||
+        call.name === "byspace.list_agents" ||
         call.name.endsWith("__list_agents"),
     );
     if (listAgentsCalls.length === 0) {
@@ -132,10 +132,10 @@ async function main(): Promise<void> {
   const codexAvailable = await isProviderAvailable("codex");
 
   const logger = pino({ level: "silent" });
-  const rootCwd = await mkdtemp(path.join(os.tmpdir(), "paseo-mcp-inject-real-"));
+  const rootCwd = await mkdtemp(path.join(os.tmpdir(), "byspace-mcp-inject-real-"));
   const claudeCwd = path.join(rootCwd, "claude");
   const codexCwd = path.join(rootCwd, "codex");
-  const daemon = await createTestPaseoDaemon({
+  const daemon = await createTestBySpaceDaemon({
     agentClients: {
       claude: new ClaudeAgentClient({ logger }),
       ...(codexAvailable ? { codex: new CodexAppServerAgentClient(logger) } : {}),

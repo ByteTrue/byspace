@@ -31,7 +31,6 @@ interface DaemonStatus {
   cliNode: string;
   cliVersion: string;
   daemonVersion: string | null;
-  desktopManaged: boolean;
   providers: ProviderBinaryStatus[];
   note?: string;
 }
@@ -408,7 +407,6 @@ export async function runStatusCommand(
     cliNode,
     cliVersion,
     daemonVersion,
-    desktopManaged: state.pidInfo?.desktopManaged === true,
     providers,
     note,
   };

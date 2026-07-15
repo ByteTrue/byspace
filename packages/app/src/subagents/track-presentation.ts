@@ -4,7 +4,7 @@ import type { SubagentRow } from "./select";
 import { providerSubagentLifecycleStatus } from "./provider-store";
 
 function presentationStatus(row: SubagentRow) {
-  if (row.kind === "paseo") return row.status;
+  if (row.kind === "byspace") return row.status;
   return providerSubagentLifecycleStatus(row.status);
 }
 

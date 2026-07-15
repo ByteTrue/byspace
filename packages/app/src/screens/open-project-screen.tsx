@@ -4,7 +4,7 @@ import { View, Text, Pressable } from "react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { useRouter } from "expo-router";
 import { FolderOpen, Inbox, Plug } from "lucide-react-native";
-import { PaseoLogo } from "@/components/icons/paseo-logo";
+import { BySpaceLogo } from "@/components/icons/byspace-logo";
 import { CommunityLinks } from "@/components/community-links";
 import { MenuHeader } from "@/components/headers/menu-header";
 import { useOpenProjectPicker } from "@/hooks/use-open-project-picker";
@@ -83,7 +83,7 @@ export function OpenProjectScreen() {
       <MenuHeader borderless />
       <View style={styles.content}>
         <View style={styles.logo}>
-          <PaseoLogo size={52} />
+          <BySpaceLogo size={52} />
         </View>
         <View style={styles.tiles}>
           <HomeTile

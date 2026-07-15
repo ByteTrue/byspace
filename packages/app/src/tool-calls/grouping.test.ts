@@ -139,7 +139,7 @@ describe("compactToolCallRuns", () => {
       toolCall("3", { type: "fetch", url: "https://github.com/org/repo" }),
       toolCall(
         "4",
-        { type: "search", query: "paseo", toolName: "web_search" },
+        { type: "search", query: "byspace", toolName: "web_search" },
         { status: "failed" },
       ),
       toolCall("5", { type: "fetch", url: "not a url" }),
@@ -179,34 +179,38 @@ describe("compactToolCallRuns", () => {
     });
   });
 
-  it("counts Paseo calls separately from other tools", () => {
+  it("counts BySpace calls separately from other tools", () => {
     const calls = [
-      toolCall("1", { type: "unknown", input: null, output: null }, { name: "paseo.list_agents" }),
+      toolCall(
+        "1",
+        { type: "unknown", input: null, output: null },
+        { name: "byspace.list_agents" },
+      ),
       toolCall(
         "2",
         { type: "unknown", input: null, output: null },
-        { name: "mcp__paseo__list_worktrees" },
+        { name: "mcp__byspace__list_worktrees" },
       ),
-      toolCall("3", { type: "fetch", url: "https://paseo.sh" }),
-      toolCall("4", { type: "fetch", url: "https://github.com/getpaseo" }),
+      toolCall("3", { type: "fetch", url: "https://byspace.pages.dev" }),
+      toolCall("4", { type: "fetch", url: "https://github.com/ByteTrue" }),
     ];
 
     const result = compactToolCallRuns({ tail: calls, head: [], enabled: true });
 
     expect(result.groupsByHostId.get("1")).toMatchObject({
       otherToolCount: 2,
-      paseoCallCount: 2,
+      byspaceCallCount: 2,
     });
   });
 
-  it("classifies direct Brave and Paseo runtime tool names", () => {
+  it("classifies direct Brave and BySpace runtime tool names", () => {
     const unknownDetail = { type: "unknown" as const, input: null, output: null };
     const calls = [
       toolCall("1", unknownDetail, { name: "brave-search_brave_web_search" }),
       toolCall("2", unknownDetail, { name: "brave-search_brave_llm_context" }),
-      toolCall("3", unknownDetail, { name: "paseo_list_providers" }),
-      toolCall("4", unknownDetail, { name: "paseo_list_worktrees" }),
-      toolCall("5", unknownDetail, { name: "paseo_list_worktrees" }),
+      toolCall("3", unknownDetail, { name: "byspace_list_providers" }),
+      toolCall("4", unknownDetail, { name: "byspace_list_worktrees" }),
+      toolCall("5", unknownDetail, { name: "byspace_list_worktrees" }),
       toolCall("6", unknownDetail, { name: "mcp__exa__web_search" }),
     ];
 
@@ -215,7 +219,7 @@ describe("compactToolCallRuns", () => {
     expect(result.groupsByHostId.get("1")).toMatchObject({
       searchCount: 3,
       otherToolCount: 0,
-      paseoCallCount: 3,
+      byspaceCallCount: 3,
     });
   });
 

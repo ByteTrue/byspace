@@ -7,7 +7,7 @@ import { acquirePidLock, getPidLockInfo, releasePidLock, updatePidLock } from ".
 
 describe("pid-lock ownership", () => {
   test("writes and releases lock for explicit owner pid", async () => {
-    const paseoHome = await mkdtemp(join(tmpdir(), "paseo-pid-lock-owner-"));
+    const byspaceHome = await mkdtemp(join(tmpdir(), "byspace-pid-lock-owner-"));
     const ownerPid = process.pid + 10_000;
 
     try {
@@ -17,9 +17,9 @@ describe("pid-lock ownership", () => {
           sockPath: string | null,
           options: { ownerPid: number },
         ) => Promise<void>
-      )(paseoHome, null, { ownerPid });
+      )(byspaceHome, null, { ownerPid });
 
-      const lock = await getPidLockInfo(paseoHome);
+      const lock = await getPidLockInfo(byspaceHome);
       expect(lock?.pid).toBe(ownerPid);
       expect(lock?.listen).toBeNull();
 
@@ -29,24 +29,24 @@ describe("pid-lock ownership", () => {
           patch: { listen: string },
           options: { ownerPid: number },
         ) => Promise<void>
-      )(paseoHome, { listen: "127.0.0.1:6767" }, { ownerPid });
+      )(byspaceHome, { listen: "127.0.0.1:6777" }, { ownerPid });
 
-      const updatedLock = await getPidLockInfo(paseoHome);
-      expect(updatedLock?.listen).toBe("127.0.0.1:6767");
+      const updatedLock = await getPidLockInfo(byspaceHome);
+      expect(updatedLock?.listen).toBe("127.0.0.1:6777");
 
       await (
         releasePidLock as unknown as (home: string, options: { ownerPid: number }) => Promise<void>
-      )(paseoHome, { ownerPid: ownerPid + 1 });
-      const lockAfterWrongOwnerRelease = await getPidLockInfo(paseoHome);
+      )(byspaceHome, { ownerPid: ownerPid + 1 });
+      const lockAfterWrongOwnerRelease = await getPidLockInfo(byspaceHome);
       expect(lockAfterWrongOwnerRelease?.pid).toBe(ownerPid);
 
       await (
         releasePidLock as unknown as (home: string, options: { ownerPid: number }) => Promise<void>
-      )(paseoHome, { ownerPid });
-      const lockAfterOwnerRelease = await getPidLockInfo(paseoHome);
+      )(byspaceHome, { ownerPid });
+      const lockAfterOwnerRelease = await getPidLockInfo(byspaceHome);
       expect(lockAfterOwnerRelease).toBeNull();
     } finally {
-      await rm(paseoHome, { recursive: true, force: true });
+      await rm(byspaceHome, { recursive: true, force: true });
     }
   });
 });

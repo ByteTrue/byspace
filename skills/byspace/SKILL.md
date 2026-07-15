@@ -1,9 +1,9 @@
 ---
-name: paseo
-description: Paseo reference for managing agents and worktrees. Load whenever you need to create agents, send them prompts, or manage worktrees.
+name: byspace
+description: BySpace reference for managing agents and worktrees. Load whenever you need to create agents, send them prompts, or manage worktrees.
 ---
 
-Paseo is a daemon that supervises AI coding agents on your machine. Control it through tools or a CLI.
+BySpace is a daemon that supervises AI coding agents on your machine. Control it through tools or a CLI.
 
 ## Worktrees
 
@@ -15,7 +15,7 @@ Paseo is a daemon that supervises AI coding agents on your machine. Control it t
 
 Returns `{ branchName, worktreePath, workspaceId }`. Pass `cwd` to target a specific repo.
 
-In `branch-off`, `worktreeSlug` controls the worktree path slug and `branchName` controls the git branch. If `branchName` is omitted, Paseo defaults it from `worktreeSlug`. The returned `branchName` is authoritative; checkout and PR flows may return a branch name that differs from any requested slug.
+In `branch-off`, `worktreeSlug` controls the worktree path slug and `branchName` controls the git branch. If `branchName` is omitted, BySpace defaults it from `worktreeSlug`. The returned `branchName` is authoritative; checkout and PR flows may return a branch name that differs from any requested slug.
 
 **`list_worktrees`** — current repo (or pass `cwd`).
 **`archive_worktree`** — `{ worktreePath }` or `{ worktreeSlug }`. Removes worktree and branch.
@@ -76,7 +76,7 @@ Only set feature IDs returned by `inspect_provider`. For Codex fast mode, look f
 
 ## Orchestration preferences
 
-User-specific configuration at `~/.paseo/orchestration-preferences.json`. **Before any Paseo skill chooses a provider or creates an agent, it must read this file.** Reading means an actual file read, not relying on these examples or defaults. Never hardcode a provider string in another skill — resolve through this file.
+User-specific configuration at `~/.byspace/orchestration-preferences.json`. **Before any BySpace skill chooses a provider or creates an agent, it must read this file.** Reading means an actual file read, not relying on these examples or defaults. Never hardcode a provider string in another skill — resolve through this file.
 
 Two parts:
 
@@ -112,25 +112,25 @@ Don't poll `list_agents` or `get_agent_status` to "check on" a running agent. Th
 
 ## CLI parity
 
-The `paseo` CLI is a thin wrapper over the same daemon. Same surface:
+The `byspace` CLI is a thin wrapper over the same daemon. Same surface:
 
 ```bash
-paseo run --provider codex/gpt-5.4 --mode full-access --worktree feat/x "<prompt>"
-paseo send <agent-id> "<follow-up>"
-paseo ls
-paseo worktree ls
-paseo schedule create --cron "*/15 * * * *" "ping main build"
+byspace run --provider codex/gpt-5.4 --mode full-access --worktree feat/x "<prompt>"
+byspace send <agent-id> "<follow-up>"
+byspace ls
+byspace worktree ls
+byspace schedule create --cron "*/15 * * * *" "ping main build"
 ```
 
-Discover with `paseo --help` and `paseo <cmd> --help`.
+Discover with `byspace --help` and `byspace <cmd> --help`.
 
-**If `paseo` isn't on PATH but the desktop app is installed**, the bundled CLI is at:
+**If `byspace` isn't on PATH but the desktop app is installed**, the bundled CLI is at:
 
-- macOS: `/Applications/Paseo.app/Contents/Resources/bin/paseo`
-- Linux: `<install-dir>/resources/bin/paseo`
-- Windows: `C:\Program Files\Paseo\resources\bin\paseo.cmd`
+- macOS: `/Applications/BySpace.app/Contents/Resources/bin/byspace`
+- Linux: `<install-dir>/resources/bin/byspace`
+- Windows: `C:\Program Files\BySpace\resources\bin\byspace.cmd`
 
-The desktop app's first-run hook (`installCli`) symlinks this to `~/.local/bin/paseo` (macOS/Linux) or drops a `.cmd` trampoline (Windows) and adds `~/.local/bin` to PATH via shell rc files. If that didn't take, offer to symlink it — don't do it silently.
+The desktop app's first-run hook (`installCli`) symlinks this to `~/.local/bin/byspace` (macOS/Linux) or drops a `.cmd` trampoline (Windows) and adds `~/.local/bin` to PATH via shell rc files. If that didn't take, offer to symlink it — don't do it silently.
 
 ## Ops and debugging
 
@@ -138,18 +138,18 @@ Daemon-client architecture: the daemon owns agent lifecycle, state, and the WebS
 
 |                | Default                                                           |
 | -------------- | ----------------------------------------------------------------- |
-| Listen address | `127.0.0.1:6767` (override `BYSPACE_LISTEN`)                      |
-| Home           | `~/.paseo` (override `BYSPACE_HOME`)                              |
+| Listen address | `127.0.0.1:6777` (override `BYSPACE_LISTEN`)                      |
+| Home           | `~/.byspace` (override `BYSPACE_HOME`)                            |
 | Daemon log     | `$BYSPACE_HOME/daemon.log`                                        |
 | Agent state    | `$BYSPACE_HOME/agents/<id>.json`                                  |
 | Worktrees      | `$BYSPACE_HOME/worktrees/` (or `worktrees.root` in `config.json`) |
-| PID file       | `$BYSPACE_HOME/paseo.pid`                                         |
-| Health         | `GET http://127.0.0.1:6767/api/health`                            |
+| PID file       | `$BYSPACE_HOME/byspace.pid`                                       |
+| Health         | `GET http://127.0.0.1:6777/api/health`                            |
 
 Debug order:
 
-1. `tail -n 200 ~/.paseo/daemon.log`.
-2. `paseo daemon status` for liveness.
-3. `curl -s localhost:6767/api/health` if the CLI itself is suspect.
+1. `tail -n 200 ~/.byspace/daemon.log`.
+2. `byspace daemon status` for liveness.
+3. `curl -s localhost:6777/api/health` if the CLI itself is suspect.
 
 **Never restart the daemon without explicit user approval** — it kills every running agent, including, often, the one asking.

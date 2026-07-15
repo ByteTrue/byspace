@@ -52,7 +52,7 @@ function createEntry(agent: AgentSnapshotPayload): FetchAgentsEntry {
         currentBranch: null,
         remoteUrl: null,
         worktreeRoot: null,
-        isPaseoOwnedWorktree: false,
+        isBySpaceOwnedWorktree: false,
         mainRepoRoot: null,
       },
     },

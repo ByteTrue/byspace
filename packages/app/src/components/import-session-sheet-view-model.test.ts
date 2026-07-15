@@ -20,7 +20,7 @@ function entry(
     providerId: "claude",
     providerLabel: "Claude Code",
     providerHandleId: "thread-1",
-    cwd: "/repo/paseo",
+    cwd: "/repo/byspace",
     title: null,
     firstPromptPreview: null,
     lastPromptPreview: null,

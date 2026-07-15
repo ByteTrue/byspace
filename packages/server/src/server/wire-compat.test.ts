@@ -13,7 +13,7 @@ import {
 import { Session, type SessionOptions } from "./session.js";
 import { createProviderSnapshotManagerStub } from "./test-utils/session-stubs.js";
 import type { AgentTimelineRow } from "./agent/agent-manager.js";
-import { handleCreatePaseoWorktreeRequest } from "./worktree-session.js";
+import { handleCreateBySpaceWorktreeRequest } from "./worktree-session.js";
 
 const LegacyTimelineEntryPayloadSchema = z.object({
   provider: z.enum(["claude", "codex", "opencode"]),
@@ -241,7 +241,7 @@ function createSessionForWireCompatTest(options?: {
     logger: pino({ level: "silent" }),
     downloadTokenStore: {} as SessionOptions["downloadTokenStore"],
     pushTokenStore: {} as SessionOptions["pushTokenStore"],
-    paseoHome: "/tmp/paseo-home",
+    byspaceHome: "/tmp/byspace-home",
     agentManager: new InMemoryAgentManager(rows) as unknown as SessionOptions["agentManager"],
     agentStorage: new EmptyAgentStorage() as unknown as SessionOptions["agentStorage"],
     projectRegistry: new EmptyProjectRegistry() as unknown as SessionOptions["projectRegistry"],
@@ -466,7 +466,7 @@ describe("wire compatibility", () => {
     const workflow = new InMemoryWorktreeWorkflow();
 
     const dependencies = {
-      paseoHome: "/tmp/paseo-home",
+      byspaceHome: "/tmp/byspace-home",
       describeWorkspaceRecord: async () =>
         ({
           id: "ws-1",
@@ -483,11 +483,11 @@ describe("wire compatibility", () => {
         }) as never,
       emit() {},
       sessionLogger: pino({ level: "silent" }),
-      createPaseoWorktreeWorkflow: workflow.create.bind(workflow),
+      createBySpaceWorktreeWorkflow: workflow.create.bind(workflow),
     };
 
     const legacyRequest = SessionInboundMessageSchema.parse({
-      type: "create_paseo_worktree_request",
+      type: "create_byspace_worktree_request",
       requestId: "req-legacy",
       cwd: "/tmp/repo",
       worktreeSlug: "legacy-worktree",
@@ -498,13 +498,13 @@ describe("wire compatibility", () => {
           mimeType: "application/github-issue",
           number: 55,
           title: "Improve startup error details",
-          url: "https://github.com/getpaseo/paseo/issues/55",
+          url: "https://github.com/ByteTrue/byspace/issues/55",
         },
       ],
     });
 
     const newRequest = SessionInboundMessageSchema.parse({
-      type: "create_paseo_worktree_request",
+      type: "create_byspace_worktree_request",
       requestId: "req-new",
       cwd: "/tmp/repo",
       worktreeSlug: "legacy-worktree",
@@ -516,21 +516,21 @@ describe("wire compatibility", () => {
             mimeType: "application/github-issue",
             number: 55,
             title: "Improve startup error details",
-            url: "https://github.com/getpaseo/paseo/issues/55",
+            url: "https://github.com/ByteTrue/byspace/issues/55",
           },
         ],
       },
     });
 
-    if (legacyRequest.type !== "create_paseo_worktree_request") {
+    if (legacyRequest.type !== "create_byspace_worktree_request") {
       throw new Error("Expected legacy worktree request");
     }
-    if (newRequest.type !== "create_paseo_worktree_request") {
+    if (newRequest.type !== "create_byspace_worktree_request") {
       throw new Error("Expected new worktree request");
     }
 
-    await handleCreatePaseoWorktreeRequest(dependencies, legacyRequest);
-    await handleCreatePaseoWorktreeRequest(dependencies, newRequest);
+    await handleCreateBySpaceWorktreeRequest(dependencies, legacyRequest);
+    await handleCreateBySpaceWorktreeRequest(dependencies, newRequest);
 
     expect(workflow.capturedInputs).toHaveLength(2);
     expect(workflow.capturedInputs[0]).toEqual(workflow.capturedInputs[1]);
@@ -545,7 +545,7 @@ describe("wire compatibility", () => {
             mimeType: "application/github-issue",
             number: 55,
             title: "Improve startup error details",
-            url: "https://github.com/getpaseo/paseo/issues/55",
+            url: "https://github.com/ByteTrue/byspace/issues/55",
           },
         ],
       },
@@ -553,7 +553,7 @@ describe("wire compatibility", () => {
       action: undefined,
       githubPrNumber: undefined,
       runSetup: false,
-      paseoHome: "/tmp/paseo-home",
+      byspaceHome: "/tmp/byspace-home",
     });
   });
 });

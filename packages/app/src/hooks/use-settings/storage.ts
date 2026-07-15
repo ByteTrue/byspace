@@ -3,9 +3,9 @@ import type { QueryClient } from "@tanstack/react-query";
 import { parseAppLanguage, type AppLanguage } from "@/i18n/locales";
 import { THEME_TO_UNISTYLES, type ThemeName } from "@/styles/theme";
 
-export const APP_SETTINGS_KEY = "@paseo:app-settings";
+export const APP_SETTINGS_KEY = "@byspace:app-settings";
 export const APP_SETTINGS_QUERY_KEY = ["app-settings"];
-const LEGACY_SETTINGS_KEY = "@paseo:settings";
+const LEGACY_SETTINGS_KEY = "@byspace:settings";
 
 export type SendBehavior = "interrupt" | "queue";
 export type ServiceUrlBehavior = "ask" | "in-app" | "external";

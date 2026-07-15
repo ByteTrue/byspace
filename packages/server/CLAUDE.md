@@ -1,10 +1,10 @@
-# AGENTS.md — Paseo Server Development Guide
+# AGENTS.md — BySpace Server Development Guide
 
 For AI coding agents working in `packages/server`. Supplements [CLAUDE.md](../CLAUDE.md) at the repo root.
 
 ## Project Overview
 
-Paseo is a mobile + CLI app for monitoring and controlling local AI coding agents (Claude Code, Codex, GitHub Copilot, OpenCode, Pi). The daemon runs on your machine, manages agent processes, and streams their output over WebSocket to clients.
+BySpace is a mobile + CLI app for monitoring and controlling local AI coding agents (Claude Code, Codex, GitHub Copilot, OpenCode, Pi). The daemon runs on your machine, manages agent processes, and streams their output over WebSocket to clients.
 
 ---
 
@@ -145,7 +145,7 @@ Tests prove behavior, not structure. Every test should answer: "what user-visibl
 
 ## Critical Rules
 
-1. **NEVER restart the daemon on port 6767** — it kills your own process
+1. **NEVER restart the daemon on port 6777** — it kills your own process
 2. **NEVER assume timeouts need a restart** — they can be transient
 3. **Always run `npm run typecheck` after changes**
 4. **NEVER add auth checks to tests** — agent providers handle their own auth

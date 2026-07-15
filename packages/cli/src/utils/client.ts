@@ -1,5 +1,5 @@
 import { existsSync, readFileSync } from "node:fs";
-import { loadConfig, resolvePaseoHome } from "@bytetrue/byspace-server";
+import { loadConfig, resolveBySpaceHome } from "@bytetrue/byspace-server";
 import {
   buildDaemonWebSocketUrl,
   buildRelayWebSocketUrl,
@@ -28,9 +28,9 @@ export interface DaemonConnectionCommandError {
   details: string;
 }
 
-const DEFAULT_HOST = "localhost:6767";
+const DEFAULT_HOST = "localhost:6777";
 const DEFAULT_TIMEOUT = 15000;
-const PID_FILENAME = "paseo.pid";
+const PID_FILENAME = "byspace.pid";
 
 type DaemonTarget =
   | {
@@ -59,7 +59,7 @@ export function buildDaemonConnectionCommandError(options: {
   return {
     code: "DAEMON_NOT_RUNNING",
     message: `Cannot connect to daemon at ${host}: ${message}`,
-    details: "Start the daemon with: paseo daemon start",
+    details: "Start the daemon with: byspace daemon start",
   };
 }
 
@@ -126,8 +126,8 @@ function isTcpDaemonHost(host: string | null): host is string {
   return host !== null && !isIpcDaemonHost(host);
 }
 
-function readPidSocketTarget(paseoHome: string): string | null {
-  const pidPath = path.join(paseoHome, PID_FILENAME);
+function readPidSocketTarget(byspaceHome: string): string | null {
+  const pidPath = path.join(byspaceHome, PID_FILENAME);
   if (!existsSync(pidPath)) {
     return null;
   }
@@ -145,38 +145,44 @@ function readPidSocketTarget(paseoHome: string): string | null {
   }
 }
 
-function resolveConfiguredIpcDaemonHost(env: NodeJS.ProcessEnv, paseoHome: string): string | null {
+function resolveConfiguredIpcDaemonHost(
+  env: NodeJS.ProcessEnv,
+  byspaceHome: string,
+): string | null {
   const directEnvHost = normalizeDaemonHost(env.BYSPACE_LISTEN ?? "");
   if (isIpcDaemonHost(directEnvHost)) {
     return directEnvHost;
   }
 
-  const pidHost = normalizeDaemonHost(readPidSocketTarget(paseoHome) ?? "");
+  const pidHost = normalizeDaemonHost(readPidSocketTarget(byspaceHome) ?? "");
   if (isIpcDaemonHost(pidHost)) {
     return pidHost;
   }
 
-  const config = loadConfig(paseoHome, { env });
+  const config = loadConfig(byspaceHome, { env });
   const configuredHost = normalizeDaemonHost(config.listen);
   return isIpcDaemonHost(configuredHost) ? configuredHost : null;
 }
 
-function resolveConfiguredTcpDaemonHost(env: NodeJS.ProcessEnv, paseoHome: string): string | null {
-  const configuredHost = normalizeDaemonHost(loadConfig(paseoHome, { env }).listen);
+function resolveConfiguredTcpDaemonHost(
+  env: NodeJS.ProcessEnv,
+  byspaceHome: string,
+): string | null {
+  const configuredHost = normalizeDaemonHost(loadConfig(byspaceHome, { env }).listen);
   if (!isTcpDaemonHost(configuredHost)) {
     return null;
   }
-  return configuredHost === "127.0.0.1:6767" ? null : configuredHost;
+  return configuredHost === "127.0.0.1:6777" ? null : configuredHost;
 }
 
 export function resolveDefaultDaemonHosts(env: NodeJS.ProcessEnv = process.env): string[] {
-  const paseoHome = resolvePaseoHome(env);
+  const byspaceHome = resolveBySpaceHome(env);
   const candidates: string[] = [];
-  const configuredIpcHost = resolveConfiguredIpcDaemonHost(env, paseoHome);
+  const configuredIpcHost = resolveConfiguredIpcDaemonHost(env, byspaceHome);
   if (configuredIpcHost) {
     candidates.push(configuredIpcHost);
   }
-  const configuredTcpHost = resolveConfiguredTcpDaemonHost(env, paseoHome);
+  const configuredTcpHost = resolveConfiguredTcpDaemonHost(env, byspaceHome);
   if (configuredTcpHost) {
     candidates.push(configuredTcpHost);
   }
@@ -364,7 +370,7 @@ export async function connectToDaemon(options?: ConnectOptions): Promise<DaemonC
   async function tryNext(index: number, lastError: unknown): Promise<DaemonClient> {
     if (index >= hosts.length) {
       if (lastError instanceof Error) throw lastError;
-      throw new Error(`Unable to connect to Paseo daemon via ${hosts.join(", ")}`);
+      throw new Error(`Unable to connect to BySpace daemon via ${hosts.join(", ")}`);
     }
     const host = hosts[index];
     const password = resolveDaemonPassword(host);

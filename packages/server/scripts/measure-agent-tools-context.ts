@@ -48,7 +48,7 @@ interface CatalogMeasurement {
 
 const DEFAULT_TOP_COUNT = 15;
 const MEASUREMENT_AGENT_ID = "agent-tools-measurement";
-const MEASUREMENT_CWD = "/tmp/paseo-agent-tools-measurement";
+const MEASUREMENT_CWD = "/tmp/byspace-agent-tools-measurement";
 const MEASUREMENT_WORKSPACE_ID = "workspace_agent_tools_measurement";
 const FIELD_NAMES = [
   "name",
@@ -104,7 +104,7 @@ function parseCliOptions(args: string[]): CliOptions {
 function printHelp(): void {
   process.stdout.write(`Usage: npm run measure:agent-tools -- [options]
 
-Measures the MCP tools/list payload for Paseo agent tools.
+Measures the MCP tools/list payload for BySpace agent tools.
 
 Options:
   --scope=agent|top-level  Catalog shape to measure. Defaults to agent.
@@ -183,7 +183,7 @@ async function measureCatalog(params: {
     callerAgentId: params.scope === "agent" ? MEASUREMENT_AGENT_ID : undefined,
     logger: pino({ level: "silent" }),
   });
-  const client = new Client({ name: "paseo-agent-tools-measurement", version: "0.0.0" });
+  const client = new Client({ name: "byspace-agent-tools-measurement", version: "0.0.0" });
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
 
   await server.connect(serverTransport);
@@ -217,7 +217,7 @@ function formatInteger(value: number): string {
 
 function formatMarkdown(measurements: CatalogMeasurement[], top: number): string {
   const lines: string[] = [];
-  lines.push("# Paseo Agent Tool Catalog Context");
+  lines.push("# BySpace Agent Tool Catalog Context");
   lines.push("");
   lines.push("Token counts are estimates from compact JSON bytes / 4.");
   lines.push("");

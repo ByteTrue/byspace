@@ -195,19 +195,19 @@ import {
 import { shouldEmitPendingBootstrapUpdate } from "./workspace-bootstrap-dedupe.js";
 import {
   createLocalCheckoutWorkspace,
-  createPaseoWorktree,
-  type CreatePaseoWorktreeInput,
-  type CreatePaseoWorktreeResult,
-} from "./paseo-worktree-service.js";
+  createBySpaceWorktree,
+  type CreateBySpaceWorktreeInput,
+  type CreateBySpaceWorktreeResult,
+} from "./byspace-worktree-service.js";
 import { WorkspaceAutoName } from "./workspace-auto-name.js";
 import {
   buildAgentSessionConfig as buildWorktreeAgentSessionConfig,
-  createPaseoWorktreeWorkflow as createWorktreeWorkflow,
-  type CreatePaseoWorktreeSetupContinuationInput,
-  type CreatePaseoWorktreeWorkflowResult,
-  handleCreatePaseoWorktreeRequest as handleCreateWorktreeRequest,
-  handlePaseoWorktreeArchiveRequest as handleWorktreeArchiveRequest,
-  handlePaseoWorktreeListRequest as handleWorktreeListRequest,
+  createBySpaceWorktreeWorkflow as createWorktreeWorkflow,
+  type CreateBySpaceWorktreeSetupContinuationInput,
+  type CreateBySpaceWorktreeWorkflowResult,
+  handleCreateBySpaceWorktreeRequest as handleCreateWorktreeRequest,
+  handleBySpaceWorktreeArchiveRequest as handleWorktreeArchiveRequest,
+  handleBySpaceWorktreeListRequest as handleWorktreeListRequest,
   handleWorkspaceSetupStatusRequest as handleWorkspaceSetupStatusRequestMessage,
 } from "./worktree-session.js";
 import { archiveByScope, type ActiveWorkspaceRef } from "./workspace-archive-service.js";
@@ -259,7 +259,7 @@ function buildWorkspaceCheckout(
       currentBranch: null,
       remoteUrl: null,
       worktreeRoot: null,
-      isPaseoOwnedWorktree: false,
+      isBySpaceOwnedWorktree: false,
       mainRepoRoot: null,
     };
   }
@@ -271,7 +271,7 @@ function buildWorkspaceCheckout(
       currentBranch,
       remoteUrl: null,
       worktreeRoot: workspace.cwd,
-      isPaseoOwnedWorktree: true,
+      isBySpaceOwnedWorktree: true,
       mainRepoRoot: project.rootPath,
     };
   }
@@ -281,7 +281,7 @@ function buildWorkspaceCheckout(
     currentBranch,
     remoteUrl: null,
     worktreeRoot: workspace.cwd,
-    isPaseoOwnedWorktree: false,
+    isBySpaceOwnedWorktree: false,
     mainRepoRoot: null,
   };
 }
@@ -409,7 +409,7 @@ export interface SessionOptions {
   logger: pino.Logger;
   downloadTokenStore: DownloadTokenStore;
   pushTokenStore: PushTokenStore;
-  paseoHome: string;
+  byspaceHome: string;
   worktreesRoot?: string;
   agentManager: AgentManager;
   agentStorage: AgentStorage;
@@ -535,7 +535,7 @@ export class Session {
   private readonly getTransportBufferedAmount: () => number | null;
   private readonly onLifecycleIntent: ((intent: SessionLifecycleIntent) => void) | null;
   private readonly sessionLogger: pino.Logger;
-  private readonly paseoHome: string;
+  private readonly byspaceHome: string;
   private readonly worktreesRoot: string | undefined;
 
   private agentManager: AgentManager;
@@ -600,7 +600,7 @@ export class Session {
       logger,
       downloadTokenStore,
       pushTokenStore,
-      paseoHome,
+      byspaceHome,
       worktreesRoot,
       agentManager,
       agentStorage,
@@ -647,7 +647,7 @@ export class Session {
     this.getTransportBufferedAmount = getTransportBufferedAmount ?? (() => 0);
     this.onLifecycleIntent = onLifecycleIntent ?? null;
     this.pushTokenStore = pushTokenStore;
-    this.paseoHome = paseoHome;
+    this.byspaceHome = byspaceHome;
     this.worktreesRoot = worktreesRoot;
     this.sessionLogger = logger.child({
       module: "session",
@@ -661,7 +661,7 @@ export class Session {
         hasBinaryChannel: () => this.onBinaryMessage !== null,
       },
       downloadTokenStore,
-      paseoHome,
+      byspaceHome,
       logger: this.sessionLogger,
     });
     this.agentManager = agentManager;
@@ -704,7 +704,7 @@ export class Session {
           getFocusedSelection: (cwd) => this.getFocusedAgentSelectionForCwd(cwd),
         }),
       }),
-      paseoHome: this.paseoHome,
+      byspaceHome: this.byspaceHome,
       worktreesRoot: this.worktreesRoot,
       logger: this.sessionLogger,
     });
@@ -782,7 +782,7 @@ export class Session {
         emitLifecycleIntent: (intent) => this.emitLifecycleIntent(intent),
       },
       clientId: this.clientId,
-      paseoHome: this.paseoHome,
+      byspaceHome: this.byspaceHome,
       serverId,
       daemonVersion,
       daemonRuntimeConfig,
@@ -819,14 +819,14 @@ export class Session {
       logger: this.sessionLogger,
     });
     this.createAgentLifecycleDispatch = new CreateAgentLifecycleDispatch({
-      paseoHome: this.paseoHome,
+      byspaceHome: this.byspaceHome,
       worktreesRoot: this.worktreesRoot,
       agentManager: this.agentManager,
       agentStorage: this.agentStorage,
       github: this.github,
       workspaceGitService: this.workspaceGitService,
-      createPaseoWorktreeWorkflow: (input, workflowOptions) =>
-        this.createPaseoWorktreeWorkflow(input, workflowOptions),
+      createBySpaceWorktreeWorkflow: (input, workflowOptions) =>
+        this.createBySpaceWorktreeWorkflow(input, workflowOptions),
       archiveAgentForClose: (agentId) => this.archiveAgentForClose(agentId),
       findWorkspaceIdForCwd: (cwd) => this.findWorkspaceIdForCwd(cwd),
       listActiveWorkspaces: () => this.listActiveWorkspaceRefs(),
@@ -1615,12 +1615,12 @@ export class Session {
     switch (msg.type) {
       case "fetch_workspaces_request":
         return this.handleFetchWorkspacesRequest(msg);
-      case "paseo_worktree_list_request":
-        return this.handlePaseoWorktreeListRequest(msg);
-      case "paseo_worktree_archive_request":
-        return this.handlePaseoWorktreeArchiveRequest(msg);
-      case "create_paseo_worktree_request":
-        return this.handleCreatePaseoWorktreeRequest(msg);
+      case "byspace_worktree_list_request":
+        return this.handleBySpaceWorktreeListRequest(msg);
+      case "byspace_worktree_archive_request":
+        return this.handleBySpaceWorktreeArchiveRequest(msg);
+      case "create_byspace_worktree_request":
+        return this.handleCreateBySpaceWorktreeRequest(msg);
       case "workspace_setup_status_request":
         return this.handleWorkspaceSetupStatusRequest(msg);
       // COMPAT(desktopEditorBridge): added in v0.1.88, remove after 2026-12-03 once old clients no longer call daemon editor RPCs.
@@ -2461,7 +2461,7 @@ export class Session {
       }`,
     );
 
-    let createdWorktreeForCleanup: CreatePaseoWorktreeWorkflowResult | null = null;
+    let createdWorktreeForCleanup: CreateBySpaceWorktreeWorkflowResult | null = null;
     let createdAgentId: string | null = null;
     try {
       const trimmedPrompt = initialPrompt?.trim();
@@ -2500,7 +2500,7 @@ export class Session {
           agentManager: this.agentManager,
           agentStorage: this.agentStorage,
           logger: this.sessionLogger,
-          paseoHome: this.paseoHome,
+          byspaceHome: this.byspaceHome,
           worktreesRoot: this.worktreesRoot,
           providerSnapshotManager: this.providerSnapshotManager,
         },
@@ -2891,17 +2891,17 @@ export class Session {
     firstAgentContext?: FirstAgentContext,
   ): Promise<{
     sessionConfig: AgentSessionConfig;
-    setupContinuation?: CreatePaseoWorktreeWorkflowResult["setupContinuation"];
+    setupContinuation?: CreateBySpaceWorktreeWorkflowResult["setupContinuation"];
     createdWorkspaceId?: string;
   }> {
     return buildWorktreeAgentSessionConfig(
       {
-        paseoHome: this.paseoHome,
+        byspaceHome: this.byspaceHome,
         worktreesRoot: this.worktreesRoot,
         sessionLogger: this.sessionLogger,
         workspaceGitService: this.workspaceGitService,
-        createPaseoWorktree: (input, serviceOptions) =>
-          this.createPaseoWorktreeWorkflow(input, {
+        createBySpaceWorktree: (input, serviceOptions) =>
+          this.createBySpaceWorktreeWorkflow(input, {
             ...serviceOptions,
             setupContinuation: {
               kind: "agent",
@@ -3183,26 +3183,26 @@ export class Session {
     }
   }
 
-  private async handlePaseoWorktreeListRequest(
-    msg: Extract<SessionInboundMessage, { type: "paseo_worktree_list_request" }>,
+  private async handleBySpaceWorktreeListRequest(
+    msg: Extract<SessionInboundMessage, { type: "byspace_worktree_list_request" }>,
   ): Promise<void> {
     return handleWorktreeListRequest(
       {
         emit: (message) => this.emit(message),
-        paseoHome: this.paseoHome,
+        byspaceHome: this.byspaceHome,
         workspaceGitService: this.workspaceGitService,
       },
       msg,
     );
   }
 
-  private async handlePaseoWorktreeArchiveRequest(
-    msg: Extract<SessionInboundMessage, { type: "paseo_worktree_archive_request" }>,
+  private async handleBySpaceWorktreeArchiveRequest(
+    msg: Extract<SessionInboundMessage, { type: "byspace_worktree_archive_request" }>,
   ): Promise<void> {
     return handleWorktreeArchiveRequest(
       {
-        paseoHome: this.paseoHome,
-        paseoWorktreesBaseRoot: this.worktreesRoot,
+        byspaceHome: this.byspaceHome,
+        byspaceWorktreesBaseRoot: this.worktreesRoot,
         github: this.github,
         workspaceGitService: this.workspaceGitService,
         agentManager: this.agentManager,
@@ -3641,7 +3641,7 @@ export class Session {
     return {
       currentBranch: snapshot.git.currentBranch,
       remoteUrl: snapshot.git.remoteUrl,
-      isPaseoOwnedWorktree: snapshot.git.isPaseoOwnedWorktree,
+      isBySpaceOwnedWorktree: snapshot.git.isBySpaceOwnedWorktree,
       isDirty: snapshot.git.isDirty,
       aheadBehind: snapshot.git.aheadBehind,
       aheadOfOrigin: snapshot.git.aheadOfOrigin,
@@ -3682,7 +3682,7 @@ export class Session {
   }
 
   private async describeCreatedWorktreeWorkspace(
-    result: CreatePaseoWorktreeResult,
+    result: CreateBySpaceWorktreeResult,
   ): Promise<WorkspaceDescriptorPayload> {
     const projectRecord = await this.projectRegistry.get(result.workspace.projectId);
     return {
@@ -3711,7 +3711,7 @@ export class Session {
       gitRuntime: {
         currentBranch: result.worktree.branchName || null,
         remoteUrl: null,
-        isPaseoOwnedWorktree: true,
+        isBySpaceOwnedWorktree: true,
         isDirty: false,
         aheadBehind: null,
         aheadOfOrigin: null,
@@ -3902,7 +3902,7 @@ export class Session {
     }
 
     // Archiving through the default path (scope "workspace", worktreePath only)
-    // resolves repoRoot=null, so deletePaseoWorktree's `git worktree remove`/
+    // resolves repoRoot=null, so deleteBySpaceWorktree's `git worktree remove`/
     // `prune` is skipped and the admin registration survives — pinning the
     // branch as "already checked out". Prune here frees any stale registration
     // whose working dir is missing (a no-op for live worktrees) so the recreate
@@ -3920,7 +3920,7 @@ export class Session {
         worktreeSlug: basename(workspace.cwd),
         source: { kind: "checkout-branch", branchName: branch },
         runSetup: false,
-        paseoHome: this.paseoHome,
+        byspaceHome: this.byspaceHome,
         worktreesRoot: this.worktreesRoot,
       });
     } catch (error) {
@@ -3935,13 +3935,13 @@ export class Session {
     }
   }
 
-  private async createPaseoWorktree(
-    input: CreatePaseoWorktreeInput,
+  private async createBySpaceWorktree(
+    input: CreateBySpaceWorktreeInput,
     options?: {
       resolveDefaultBranch?: (repoRoot: string) => Promise<string>;
     },
-  ): Promise<CreatePaseoWorktreeResult> {
-    const result = await createPaseoWorktree(input, {
+  ): Promise<CreateBySpaceWorktreeResult> {
+    const result = await createBySpaceWorktree(input, {
       github: this.github,
       ...(options?.resolveDefaultBranch
         ? { resolveDefaultBranch: options.resolveDefaultBranch }
@@ -4564,7 +4564,7 @@ export class Session {
       projectId: source.projectId,
     });
 
-    const result = await this.createPaseoWorktreeWorkflow(
+    const result = await this.createBySpaceWorktreeWorkflow(
       {
         cwd: sourceCwd,
         projectId: source.projectId,
@@ -4797,7 +4797,7 @@ export class Session {
         }
       }
 
-      const cloneStagingPath = await mkdtemp(resolve(targetParent, ".paseo-clone-"));
+      const cloneStagingPath = await mkdtemp(resolve(targetParent, ".byspace-clone-"));
       try {
         await runGitCommand(["clone", repo.cloneUrl, cloneStagingPath], {
           cwd: targetParent,
@@ -4885,7 +4885,7 @@ export class Session {
       payload: {
         requestId: request.requestId,
         editors: [],
-        error: "Editor opening moved to the desktop app and is no longer supported by the daemon",
+        error: "Editor opening is not supported by the daemon",
       },
     });
   }
@@ -4897,40 +4897,40 @@ export class Session {
       type: "open_in_editor_response",
       payload: {
         requestId: request.requestId,
-        error: "Editor opening moved to the desktop app and is no longer supported by the daemon",
+        error: "Editor opening is not supported by the daemon",
       },
     });
   }
 
-  private async handleCreatePaseoWorktreeRequest(
-    request: Extract<SessionInboundMessage, { type: "create_paseo_worktree_request" }>,
+  private async handleCreateBySpaceWorktreeRequest(
+    request: Extract<SessionInboundMessage, { type: "create_byspace_worktree_request" }>,
   ): Promise<void> {
     return handleCreateWorktreeRequest(
       {
-        paseoHome: this.paseoHome,
+        byspaceHome: this.byspaceHome,
         worktreesRoot: this.worktreesRoot,
         describeWorkspaceRecord: (result) => this.describeCreatedWorktreeWorkspace(result),
         emit: (message) => this.emit(message),
         sessionLogger: this.sessionLogger,
-        createPaseoWorktreeWorkflow: (input) => this.createPaseoWorktreeWorkflow(input),
+        createBySpaceWorktreeWorkflow: (input) => this.createBySpaceWorktreeWorkflow(input),
       },
       request,
     );
   }
 
-  private async createPaseoWorktreeWorkflow(
-    input: CreatePaseoWorktreeInput,
+  private async createBySpaceWorktreeWorkflow(
+    input: CreateBySpaceWorktreeInput,
     options?: {
       resolveDefaultBranch?: (repoRoot: string) => Promise<string>;
-      setupContinuation?: CreatePaseoWorktreeSetupContinuationInput;
+      setupContinuation?: CreateBySpaceWorktreeSetupContinuationInput;
     },
-  ): Promise<CreatePaseoWorktreeWorkflowResult> {
+  ): Promise<CreateBySpaceWorktreeWorkflowResult> {
     return createWorktreeWorkflow(
       {
-        paseoHome: this.paseoHome,
+        byspaceHome: this.byspaceHome,
         worktreesRoot: this.worktreesRoot,
-        createPaseoWorktree: (workflowInput, serviceOptions) =>
-          this.createPaseoWorktree(workflowInput, serviceOptions),
+        createBySpaceWorktree: (workflowInput, serviceOptions) =>
+          this.createBySpaceWorktree(workflowInput, serviceOptions),
         warmWorkspaceGitData: (workspace) => this.warmWorkspaceGitDataForWorkspace(workspace),
         autoNameWorkspaceBranchForFirstAgent: (autoNameInput) =>
           this.workspaceAutoName.scheduleForWorktree(autoNameInput, {
@@ -4987,8 +4987,8 @@ export class Session {
 
       await archiveByScope(
         {
-          paseoHome: this.paseoHome,
-          paseoWorktreesBaseRoot: this.worktreesRoot,
+          byspaceHome: this.byspaceHome,
+          byspaceWorktreesBaseRoot: this.worktreesRoot,
           github: this.github,
           workspaceGitService: this.workspaceGitService,
           agentManager: this.agentManager,
@@ -5008,7 +5008,7 @@ export class Session {
         {
           scope: { kind: "workspace", workspaceId: existing.workspaceId },
           repoRoot,
-          paseoWorktreesBaseRoot: this.worktreesRoot,
+          byspaceWorktreesBaseRoot: this.worktreesRoot,
           requestId: request.requestId,
         },
       );

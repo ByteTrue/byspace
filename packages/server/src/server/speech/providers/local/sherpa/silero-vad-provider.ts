@@ -18,8 +18,8 @@ const SILERO_VAD_FILE = "silero_vad.onnx";
 
 /**
  * Ensure the Silero VAD ONNX model exists in modelsDir where native code can
- * read it. The bundled asset lives inside Electron's app.asar which native C++
- * cannot open, so we copy it out on first run using Node.js fs (asar-aware).
+ * read it. Copy the bundled asset to a normal writable filesystem path before
+ * loading it through the native runtime.
  */
 export async function ensureSileroVadModel(modelsDir: string, logger: Logger): Promise<string> {
   const destDir = path.join(modelsDir, SILERO_VAD_DIR);

@@ -1,5 +1,5 @@
 import type { ToolCallDetail } from "@bytetrue/byspace-protocol/agent-types";
-import { isPaseoToolName } from "@bytetrue/byspace-protocol/tool-name-normalization";
+import { isBySpaceToolName } from "@bytetrue/byspace-protocol/tool-name-normalization";
 import { getFileNameFromPath } from "@/attachments/utils";
 import type { StreamItem, ToolCallItem } from "@/types/stream";
 import { buildToolCallDisplayModel } from "@/utils/tool-call-display";
@@ -7,7 +7,7 @@ import { resolveToolCallIconName, type ToolCallIcon } from "@/utils/tool-call-ic
 
 export const MIN_COMPACT_TOOL_CALLS = 4;
 
-const DIRECT_BYSPACE_TOOL_PREFIX = "paseo_";
+const DIRECT_BYSPACE_TOOL_PREFIX = "byspace_";
 const DIRECT_SEARCH_TOOL_SUFFIX_PATTERN = /(?:^|[_.:/])(?:web_search|llm_context)$/;
 
 export interface ToolCallCategorySummary {
@@ -31,7 +31,7 @@ export interface CompactToolCallGroup {
   readFileCount: number;
   searchCount: number;
   otherToolCount: number;
-  paseoCallCount: number;
+  byspaceCallCount: number;
   categories: ToolCallCategorySummary[];
 }
 
@@ -98,7 +98,7 @@ function isCompactableToolCall(item: StreamItem): item is ToolCallItem {
   return descriptor.detail.type !== "plan" && descriptor.name.trim().toLowerCase() !== "speak";
 }
 
-function isDirectPaseoToolName(name: string): boolean {
+function isDirectBySpaceToolName(name: string): boolean {
   return name.startsWith(DIRECT_BYSPACE_TOOL_PREFIX);
 }
 
@@ -129,8 +129,8 @@ function categoryIdentity(input: {
   normalizedName: string;
   displayName: string;
 }): { key: string; label: string; iconName: ToolCallIcon } {
-  if (isPaseoToolName(input.descriptor.name) || isDirectPaseoToolName(input.normalizedName)) {
-    return { key: "paseo", label: "Paseo", iconName: "paseo" };
+  if (isBySpaceToolName(input.descriptor.name) || isDirectBySpaceToolName(input.normalizedName)) {
+    return { key: "byspace", label: "BySpace", iconName: "byspace" };
   }
   if (
     (input.descriptor.detail.type === "search" &&
@@ -166,7 +166,7 @@ function buildCompactToolCallGroup(calls: ToolCallItem[]) {
   let commandCount = 0;
   let searchCount = 0;
   let otherToolCount = 0;
-  let paseoCallCount = 0;
+  let byspaceCallCount = 0;
 
   for (const call of calls) {
     const descriptor = describeToolCall(call);
@@ -214,8 +214,8 @@ function buildCompactToolCallGroup(calls: ToolCallItem[]) {
       }
     }
 
-    if (isPaseoToolName(descriptor.name) || isDirectPaseoToolName(normalizedName)) {
-      paseoCallCount += 1;
+    if (isBySpaceToolName(descriptor.name) || isDirectBySpaceToolName(normalizedName)) {
+      byspaceCallCount += 1;
       continue;
     }
     if (descriptor.detail.type === "edit" || descriptor.detail.type === "write") {
@@ -252,7 +252,7 @@ function buildCompactToolCallGroup(calls: ToolCallItem[]) {
     readFileCount: readFiles.size,
     searchCount,
     otherToolCount,
-    paseoCallCount,
+    byspaceCallCount,
     categories: [...categories.values()],
   } satisfies CompactToolCallGroup;
 }

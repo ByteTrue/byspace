@@ -1,11 +1,11 @@
 ---
-name: paseo-advisor
+name: byspace-advisor
 description: Spin up a single agent as an advisor — second opinion on the current task. Use when the user says "advisor", "second opinion", "what does X think", or wants an outside take without delegating the work itself.
 user-invocable: true
 argument-hint: "[--provider <name>] <question or topic>"
 ---
 
-# Paseo Advisor
+# BySpace Advisor
 
 Single agent. Reads the situation you're in. Gives a judgment. You decide what to do — the advisor doesn't drive the work.
 
@@ -13,7 +13,7 @@ Single agent. Reads the situation you're in. Gives a judgment. You decide what t
 
 ## Prerequisites
 
-Read the **paseo** skill. Before choosing a provider, read `~/.paseo/orchestration-preferences.json` unless the user explicitly named a provider in this request. Do not create the advisor until you have read it.
+Read the **byspace** skill. Before choosing a provider, read `~/.byspace/orchestration-preferences.json` unless the user explicitly named a provider in this request. Do not create the advisor until you have read it.
 
 ## Picking the advisor
 
@@ -43,9 +43,9 @@ This is analysis only. Do NOT edit, create, or delete any files. Do NOT write co
 
 If `$ARGUMENTS` contains another skill reference — `/unslop`, `/unslop-risk`, `$unslop`, etc. — the user is asking the advisor to run that skill against the current task. Examples:
 
-- `/paseo-advisor /unslop` → advisor runs `/unslop` on the current diff.
-- `/paseo-advisor /unslop-risk` → advisor does an unslop-risk review.
-- `/paseo-advisor $diagnose this build failure` → advisor invokes `/diagnose`.
+- `/byspace-advisor /unslop` → advisor runs `/unslop` on the current diff.
+- `/byspace-advisor /unslop-risk` → advisor does an unslop-risk review.
+- `/byspace-advisor $diagnose this build failure` → advisor invokes `/diagnose`.
 
 Parse the forwarded skill name out of `$ARGUMENTS` (`/<name>` or `$<name>`). In the briefing, tell the advisor explicitly:
 
@@ -57,7 +57,7 @@ Pass through any remaining arguments after the skill name as the skill's own inp
 
 ## Launch and synthesize
 
-Create the advisor agent via Paseo with a `[Advisor] <topic>` title and the briefing as the initial prompt. Wait for it to finish. Read its response. Synthesize for the user — the advisor's verdict + your recommendation.
+Create the advisor agent via BySpace with a `[Advisor] <topic>` title and the briefing as the initial prompt. Wait for it to finish. Read its response. Synthesize for the user — the advisor's verdict + your recommendation.
 
 ## Persistent advisor
 

@@ -85,7 +85,7 @@ console.log("Test 4: Nix wrapper points at supervisor-entrypoint");
 const nixPackage = await readFile(nixPackagePath, "utf-8");
 assert(
   nixPackage.includes("dist/scripts/supervisor-entrypoint.js"),
-  "Nix paseo-server wrapper should use dist/scripts/supervisor-entrypoint.js",
+  "Nix byspace-server wrapper should use dist/scripts/supervisor-entrypoint.js",
 );
 assertNoDirectWorkerLaunch("Nix package wrapper", nixPackage);
 console.log("✓ Nix wrapper enters supervisor\n");

@@ -4,8 +4,8 @@
 .dev
 .playwright-mcp
 **/.playwright-mcp
-.paseo
-**/.paseo-provider-history
+.byspace
+**/.byspace-provider-history
 .plans
 .tasks
 .valknut
@@ -34,8 +34,6 @@ valknut-report.json
 **/test-results
 **/*.tsbuildinfo
 artifacts
-packages/app/android
-packages/desktop/release
 plan.*.log
 *.log
 CLAUDE.local.md

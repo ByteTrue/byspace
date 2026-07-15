@@ -1,7 +1,7 @@
 {
   "name": "@bytetrue/byspace-server",
   "version": "0.1.107",
-  "description": "Paseo backend server",
+  "description": "BySpace backend server",
   "files": [
     "dist/server",
     "dist/src",

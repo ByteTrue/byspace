@@ -11,13 +11,13 @@ $.verbose = false;
 
 console.log("=== Onboarding Command ===\n");
 
-const paseoHome = await mkdtemp(join(tmpdir(), "paseo-onboard-home-"));
+const byspaceHome = await mkdtemp(join(tmpdir(), "byspace-onboard-home-"));
 const port = await getAvailablePort();
 
 try {
-  console.log("Test 1: `paseo` runs blocking onboarding and prints pairing info");
+  console.log("Test 1: `byspace` runs blocking onboarding and prints pairing info");
   const onboard =
-    await $`BYSPACE_HOME=${paseoHome} BYSPACE_LISTEN=127.0.0.1:${port} BYSPACE_PAIRING_QR=0 npx paseo`.nothrow();
+    await $`BYSPACE_HOME=${byspaceHome} BYSPACE_LISTEN=127.0.0.1:${port} BYSPACE_PAIRING_QR=0 npx byspace`.nothrow();
 
   assert.strictEqual(
     onboard.exitCode,
@@ -34,26 +34,32 @@ try {
     onboard.stdout.includes("CLI quick reference"),
     "onboard output should include CLI quick reference",
   );
-  assert(onboard.stdout.includes("paseo --help"), "onboard output should include --help shortcut");
-  assert(onboard.stdout.includes("paseo ls"), "onboard output should include ls shortcut");
   assert(
-    onboard.stdout.includes('paseo run "your prompt"'),
+    onboard.stdout.includes("byspace --help"),
+    "onboard output should include --help shortcut",
+  );
+  assert(onboard.stdout.includes("byspace ls"), "onboard output should include ls shortcut");
+  assert(
+    onboard.stdout.includes('byspace run "your prompt"'),
     "onboard output should include run shortcut",
   );
-  assert(onboard.stdout.includes("paseo status"), "onboard output should include status shortcut");
   assert(
-    onboard.stdout.includes(join(paseoHome, "daemon.log")),
+    onboard.stdout.includes("byspace status"),
+    "onboard output should include status shortcut",
+  );
+  assert(
+    onboard.stdout.includes(join(byspaceHome, "daemon.log")),
     "onboard output should include daemon log path",
   );
 
   const status =
-    await $`BYSPACE_HOME=${paseoHome} npx paseo daemon status --home ${paseoHome}`.nothrow();
+    await $`BYSPACE_HOME=${byspaceHome} npx byspace daemon status --home ${byspaceHome}`.nothrow();
   assert.strictEqual(status.exitCode, 0, `daemon status should succeed: ${status.stderr}`);
   assert(status.stdout.includes("running"), "daemon should be running when onboarding exits");
   console.log("✓ onboarding prints pairing info and waits for daemon readiness\n");
 
   console.log("Test 2: non-interactive onboarding persists voice disabled config");
-  const configRaw = await readFile(join(paseoHome, "config.json"), "utf-8");
+  const configRaw = await readFile(join(byspaceHome, "config.json"), "utf-8");
   const config = JSON.parse(configRaw) as {
     features?: {
       dictation?: { enabled?: boolean };
@@ -71,15 +77,15 @@ try {
     false,
     "voiceMode.enabled should be false",
   );
-  const daemonLog = await readFile(join(paseoHome, "daemon.log"), "utf-8");
+  const daemonLog = await readFile(join(byspaceHome, "daemon.log"), "utf-8");
   assert(
     !daemonLog.includes("Ensuring local speech models"),
     "daemon should not attempt local speech model setup when voice is disabled",
   );
   console.log("✓ non-interactive run persisted voice disabled choices\n");
 } finally {
-  await $`BYSPACE_HOME=${paseoHome} npx paseo daemon stop --home ${paseoHome} --force`.nothrow();
-  await rm(paseoHome, { recursive: true, force: true });
+  await $`BYSPACE_HOME=${byspaceHome} npx byspace daemon stop --home ${byspaceHome} --force`.nothrow();
+  await rm(byspaceHome, { recursive: true, force: true });
 }
 
 console.log("=== Onboarding tests passed ===");

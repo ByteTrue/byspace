@@ -79,7 +79,7 @@ import type { ComposerAttachment, UserComposerAttachment } from "@/attachments/t
 import { useDraftWorkspaceAttachmentScopeKey } from "@/attachments/workspace-attachments-store";
 import type { MessagePayload } from "@/composer/types";
 import type { AgentAttachment, GitHubSearchItem } from "@bytetrue/byspace-protocol/messages";
-import type { CreatePaseoWorktreeInput } from "@bytetrue/byspace-client/internal/daemon-client";
+import type { CreateBySpaceWorktreeInput } from "@bytetrue/byspace-client/internal/daemon-client";
 import type { AgentProvider } from "@bytetrue/byspace-protocol/agent-types";
 import type { WorkspaceDraftTabSetup, WorkspaceTabTarget } from "@/stores/workspace-tabs-store";
 import { isEmptyWorkspaceSubmission, runCreateEmptyWorkspace } from "./new-workspace-empty";
@@ -835,7 +835,7 @@ interface WorkspaceDraftSubmissionConfig {
 async function createAndMergeWorkspace(input: {
   client: NonNullable<ReturnType<typeof useHostRuntimeClient>>;
   createInput: Parameters<
-    NonNullable<ReturnType<typeof useHostRuntimeClient>>["createPaseoWorktree"]
+    NonNullable<ReturnType<typeof useHostRuntimeClient>>["createBySpaceWorktree"]
   >[0];
   mergeWorkspaces: (
     serverId: string,
@@ -844,7 +844,7 @@ async function createAndMergeWorkspace(input: {
   serverId: string;
   createFailedMessage: string;
 }): Promise<ReturnType<typeof normalizeWorkspaceDescriptor>> {
-  const payload = await input.client.createPaseoWorktree(input.createInput);
+  const payload = await input.client.createBySpaceWorktree(input.createInput);
   if (payload.error || !payload.workspace) {
     throw new Error(payload.error ?? input.createFailedMessage);
   }
@@ -1954,7 +1954,7 @@ export function NewWorkspaceScreen({
       cwd: string;
       prompt: string;
       attachments: AgentAttachment[];
-    }): CreatePaseoWorktreeInput => {
+    }): CreateBySpaceWorktreeInput => {
       if (!selectedProject) {
         throw new Error("Choose a project");
       }

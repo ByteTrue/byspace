@@ -87,9 +87,9 @@ interface DaemonStatus {
   pid: number | null;
 }
 
-async function readDaemonStatus(paseoHome: string): Promise<DaemonStatus> {
+async function readDaemonStatus(byspaceHome: string): Promise<DaemonStatus> {
   const result =
-    await $`BYSPACE_HOME=${paseoHome} BYSPACE_LOCAL_SPEECH_AUTO_DOWNLOAD=${testEnv.BYSPACE_LOCAL_SPEECH_AUTO_DOWNLOAD} BYSPACE_DICTATION_ENABLED=${testEnv.BYSPACE_DICTATION_ENABLED} BYSPACE_VOICE_MODE_ENABLED=${testEnv.BYSPACE_VOICE_MODE_ENABLED} npx paseo daemon status --home ${paseoHome} --json`.nothrow();
+    await $`BYSPACE_HOME=${byspaceHome} BYSPACE_LOCAL_SPEECH_AUTO_DOWNLOAD=${testEnv.BYSPACE_LOCAL_SPEECH_AUTO_DOWNLOAD} BYSPACE_DICTATION_ENABLED=${testEnv.BYSPACE_DICTATION_ENABLED} BYSPACE_VOICE_MODE_ENABLED=${testEnv.BYSPACE_VOICE_MODE_ENABLED} npx byspace daemon status --home ${byspaceHome} --json`.nothrow();
   if (result.exitCode !== 0) {
     return { localDaemon: null, pid: null };
   }
@@ -111,7 +111,7 @@ async function readDaemonStatus(paseoHome: string): Promise<DaemonStatus> {
 console.log("=== Daemon Worker Supervisor Disconnect Regression ===\n");
 
 const port = await getAvailablePort();
-const paseoHome = await mkdtemp(join(tmpdir(), "paseo-worker-supervisor-disconnect-"));
+const byspaceHome = await mkdtemp(join(tmpdir(), "byspace-worker-supervisor-disconnect-"));
 const cliRoot = join(import.meta.dirname, "..");
 
 let supervisorProcess: ChildProcess | null = null;
@@ -128,7 +128,7 @@ try {
       env: {
         ...process.env,
         ...testEnv,
-        BYSPACE_HOME: paseoHome,
+        BYSPACE_HOME: byspaceHome,
         BYSPACE_LISTEN: `127.0.0.1:${port}`,
         BYSPACE_RELAY_ENABLED: "false",
         CI: "true",
@@ -146,7 +146,7 @@ try {
 
   await waitFor(
     async () => {
-      const status = await readDaemonStatus(paseoHome);
+      const status = await readDaemonStatus(byspaceHome);
       return (
         status.localDaemon === "running" && status.pid !== null && isProcessRunning(status.pid)
       );
@@ -155,7 +155,7 @@ try {
     "daemon did not become running in time",
   );
 
-  const statusBeforeKill = await readDaemonStatus(paseoHome);
+  const statusBeforeKill = await readDaemonStatus(byspaceHome);
   const supervisorPid = statusBeforeKill.pid;
   assert(supervisorPid !== null, "supervisor pid should exist once daemon starts");
   const workerPid = readWorkerPid(supervisorPid);
@@ -181,8 +181,8 @@ try {
     supervisorProcess.kill("SIGKILL");
   }
 
-  await $`BYSPACE_HOME=${paseoHome} BYSPACE_LOCAL_SPEECH_AUTO_DOWNLOAD=${testEnv.BYSPACE_LOCAL_SPEECH_AUTO_DOWNLOAD} BYSPACE_DICTATION_ENABLED=${testEnv.BYSPACE_DICTATION_ENABLED} BYSPACE_VOICE_MODE_ENABLED=${testEnv.BYSPACE_VOICE_MODE_ENABLED} npx paseo daemon stop --home ${paseoHome} --force`.nothrow();
-  await rm(paseoHome, { recursive: true, force: true });
+  await $`BYSPACE_HOME=${byspaceHome} BYSPACE_LOCAL_SPEECH_AUTO_DOWNLOAD=${testEnv.BYSPACE_LOCAL_SPEECH_AUTO_DOWNLOAD} BYSPACE_DICTATION_ENABLED=${testEnv.BYSPACE_DICTATION_ENABLED} BYSPACE_VOICE_MODE_ENABLED=${testEnv.BYSPACE_VOICE_MODE_ENABLED} npx byspace daemon stop --home ${byspaceHome} --force`.nothrow();
+  await rm(byspaceHome, { recursive: true, force: true });
 }
 
 if (recentSupervisorLogs.trim().length === 0) {

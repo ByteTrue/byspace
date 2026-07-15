@@ -79,13 +79,13 @@ if (process.platform === "win32") {
   process.exit(0);
 }
 
-const paseoHome = await mkdtemp(join(tmpdir(), "paseo-stop-tree-kill-"));
-const childPidPath = join(paseoHome, "descendant.pid");
+const byspaceHome = await mkdtemp(join(tmpdir(), "byspace-stop-tree-kill-"));
+const childPidPath = join(byspaceHome, "descendant.pid");
 let ownerProcess: ChildProcess | null = null;
 let descendantPid: number | null = null;
 
 try {
-  await mkdir(paseoHome, { recursive: true });
+  await mkdir(byspaceHome, { recursive: true });
 
   console.log("Test 1: start daemon-owner fixture with a detached descendant");
   ownerProcess = spawn(
@@ -115,7 +115,7 @@ try {
 
   assert(ownerProcess.pid, "owner pid should exist");
   await writeFile(
-    join(paseoHome, "paseo.pid"),
+    join(byspaceHome, "byspace.pid"),
     JSON.stringify({
       pid: ownerProcess.pid,
       listen: "127.0.0.1:1",
@@ -139,7 +139,7 @@ try {
 
   console.log("Test 2: forced daemon stop kills owner and separate-PGID descendant");
   const stopResult =
-    await $`BYSPACE_HOME=${paseoHome} BYSPACE_LOCAL_SPEECH_AUTO_DOWNLOAD=${testEnv.BYSPACE_LOCAL_SPEECH_AUTO_DOWNLOAD} BYSPACE_DICTATION_ENABLED=${testEnv.BYSPACE_DICTATION_ENABLED} BYSPACE_VOICE_MODE_ENABLED=${testEnv.BYSPACE_VOICE_MODE_ENABLED} npx paseo daemon stop --home ${paseoHome} --json --timeout 1 --force --kill-timeout 2`.nothrow();
+    await $`BYSPACE_HOME=${byspaceHome} BYSPACE_LOCAL_SPEECH_AUTO_DOWNLOAD=${testEnv.BYSPACE_LOCAL_SPEECH_AUTO_DOWNLOAD} BYSPACE_DICTATION_ENABLED=${testEnv.BYSPACE_DICTATION_ENABLED} BYSPACE_VOICE_MODE_ENABLED=${testEnv.BYSPACE_VOICE_MODE_ENABLED} npx byspace daemon stop --home ${byspaceHome} --json --timeout 1 --force --kill-timeout 2`.nothrow();
   assert.strictEqual(stopResult.exitCode, 0, `stop should succeed: ${stopResult.stderr}`);
   const parsed = JSON.parse(stopResult.stdout) as {
     action?: unknown;
@@ -176,7 +176,7 @@ try {
 } finally {
   killIfRunning(ownerProcess?.pid ?? null);
   killIfRunning(descendantPid);
-  await rm(paseoHome, { recursive: true, force: true });
+  await rm(byspaceHome, { recursive: true, force: true });
 }
 
 console.log("=== Daemon stop tree kill regression test passed ===");

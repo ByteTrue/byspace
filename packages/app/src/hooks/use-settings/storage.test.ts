@@ -16,7 +16,7 @@ import {
 } from "./storage";
 import { createInMemoryKeyValueStorage } from "./fakes";
 
-const LEGACY_SETTINGS_KEY = "@paseo:settings";
+const LEGACY_SETTINGS_KEY = "@byspace:settings";
 
 function makeDeps(
   overrides: { storage?: ReturnType<typeof createInMemoryKeyValueStorage> } = {},

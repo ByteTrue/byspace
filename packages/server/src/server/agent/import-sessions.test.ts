@@ -279,7 +279,7 @@ test("listImportableProviderSessions filters out metadata generation sessions", 
 });
 
 test("listImportableProviderSessions keeps realpath-equivalent cwd matches", async () => {
-  const root = mkdtempSync(path.join(tmpdir(), "paseo-import-cwd-"));
+  const root = mkdtempSync(path.join(tmpdir(), "byspace-import-cwd-"));
   const realCwd = path.join(root, "real-project");
   const linkedCwd = path.join(root, "linked-project");
   mkdirSync(realCwd, { recursive: true });

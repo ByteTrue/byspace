@@ -132,7 +132,7 @@ describe("DictationStreamManager (provider-agnostic provider)", () => {
     persisted?: unknown;
   }): string {
     const result = resolveSpeechConfig({
-      paseoHome: "/tmp/paseo-home",
+      byspaceHome: "/tmp/byspace-home",
       env: params.env ?? ({} as NodeJS.ProcessEnv),
       persisted: PersistedConfigSchema.parse(params.persisted ?? {}),
     });

@@ -178,13 +178,13 @@ export const ToolCallGroup = memo(function ToolCallGroup({
         ),
       );
     }
-    if (group.paseoCallCount > 0) {
+    if (group.byspaceCallCount > 0) {
       parts.push(
         t(
-          group.paseoCallCount === 1
-            ? "toolCallGroup.paseoCalls.one"
-            : "toolCallGroup.paseoCalls.other",
-          { count: group.paseoCallCount },
+          group.byspaceCallCount === 1
+            ? "toolCallGroup.byspaceCalls.one"
+            : "toolCallGroup.byspaceCalls.other",
+          { count: group.byspaceCallCount },
         ),
       );
     }

@@ -4,7 +4,7 @@ export interface AgentWorkingDirectorySource {
   lastActivityAt?: Date | null;
 }
 
-const BYSPACE_WORKTREE_PATH_PATTERN = /(^|\/)\.paseo\/worktrees(\/|$)/;
+const BYSPACE_WORKTREE_PATH_PATTERN = /(^|\/)\.byspace\/worktrees(\/|$)/;
 
 export function collectAgentWorkingDirectorySuggestions(
   sources: Iterable<AgentWorkingDirectorySource>,
@@ -16,7 +16,7 @@ export function collectAgentWorkingDirectorySuggestions(
     if (!cwd) {
       continue;
     }
-    if (isPaseoOwnedWorktreePath(cwd)) {
+    if (isBySpaceOwnedWorktreePath(cwd)) {
       continue;
     }
 
@@ -38,7 +38,7 @@ export function collectAgentWorkingDirectorySuggestions(
     .map(([cwd]) => cwd);
 }
 
-function isPaseoOwnedWorktreePath(cwd: string): boolean {
+function isBySpaceOwnedWorktreePath(cwd: string): boolean {
   return BYSPACE_WORKTREE_PATH_PATTERN.test(cwd.replace(/\\/g, "/"));
 }
 

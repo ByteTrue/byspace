@@ -8,7 +8,7 @@ import { createTestAgentClients } from "../../test-utils/fake-agent-client.js";
 import { createProviderSnapshotManagerStub } from "../../test-utils/session-stubs.js";
 import { AgentManager } from "../agent-manager.js";
 import { AgentStorage } from "../agent-storage.js";
-import type { CreatePaseoWorktreeWorkflowResult } from "../../worktree-session.js";
+import type { CreateBySpaceWorktreeWorkflowResult } from "../../worktree-session.js";
 import { createAgentCommand } from "./create.js";
 import type { ManagedAgent } from "../agent-manager.js";
 
@@ -28,7 +28,7 @@ function createRealAgentManager(storage: AgentStorage): AgentManager {
 function fakeWorktreeCreator(args: { repoRoot: string; createdWorkspaceId: string }) {
   const worktreePath = join(args.repoRoot, "worktree");
   mkdirSync(worktreePath, { recursive: true });
-  return async (): Promise<CreatePaseoWorktreeWorkflowResult> =>
+  return async (): Promise<CreateBySpaceWorktreeWorkflowResult> =>
     ({
       worktree: { worktreePath },
       intent: {},
@@ -36,14 +36,14 @@ function fakeWorktreeCreator(args: { repoRoot: string; createdWorkspaceId: strin
       repoRoot: args.repoRoot,
       created: true,
       setupContinuation: { kind: "agent" as const, startAfterAgentCreate: () => {} },
-    }) as unknown as CreatePaseoWorktreeWorkflowResult;
+    }) as unknown as CreateBySpaceWorktreeWorkflowResult;
 }
 
 test("session create forwards clientMessageId to the initial prompt run options", async () => {
   const snapshot = {
     id: "agent-1",
     provider: "codex",
-    cwd: "/tmp/paseo-create-test",
+    cwd: "/tmp/byspace-create-test",
     runtimeInfo: null,
   } as ManagedAgent;
   const streamAgent = vi.fn(() => (async function* noop() {})());
@@ -63,7 +63,7 @@ test("session create forwards clientMessageId to the initial prompt run options"
 
   await createAgentCommand(dependencies, {
     kind: "session",
-    config: { provider: "codex", cwd: "/tmp/paseo-create-test" },
+    config: { provider: "codex", cwd: "/tmp/byspace-create-test" },
     workspaceId: "ws-create-test",
     initialPrompt: "hello from create",
     clientMessageId: "msg-create-1",
@@ -82,7 +82,7 @@ test("session create validates the requested mode against the provider's modes",
   const snapshot = {
     id: "agent-1",
     provider: "opencode",
-    cwd: "/tmp/paseo-create-test",
+    cwd: "/tmp/byspace-create-test",
     runtimeInfo: null,
   } as ManagedAgent;
   const createAgent = vi.fn(async () => snapshot);
@@ -102,7 +102,7 @@ test("session create validates the requested mode against the provider's modes",
   await expect(
     createAgentCommand(dependencies, {
       kind: "session",
-      config: { provider: "opencode", cwd: "/tmp/paseo-create-test", modeId: "plan" },
+      config: { provider: "opencode", cwd: "/tmp/byspace-create-test", modeId: "plan" },
       workspaceId: "ws-create-test",
       labels: {},
       provisionalTitle: null,
@@ -114,7 +114,7 @@ test("session create validates the requested mode against the provider's modes",
   expect(stub.resolveCreateConfig).toHaveBeenCalledWith(
     expect.objectContaining({
       provider: "opencode",
-      cwd: "/tmp/paseo-create-test",
+      cwd: "/tmp/byspace-create-test",
       requestedMode: "plan",
     }),
   );
@@ -125,7 +125,7 @@ test("session create applies the resolved mode from the provider create config",
   const snapshot = {
     id: "agent-1",
     provider: "opencode",
-    cwd: "/tmp/paseo-create-test",
+    cwd: "/tmp/byspace-create-test",
     runtimeInfo: null,
   } as ManagedAgent;
   const createAgent = vi.fn(async () => snapshot);
@@ -146,7 +146,7 @@ test("session create applies the resolved mode from the provider create config",
 
   await createAgentCommand(dependencies, {
     kind: "session",
-    config: { provider: "opencode", cwd: "/tmp/paseo-create-test", modeId: "build" },
+    config: { provider: "opencode", cwd: "/tmp/byspace-create-test", modeId: "build" },
     workspaceId: "ws-create-test",
     labels: {},
     provisionalTitle: null,
@@ -168,7 +168,7 @@ test("mcp create accepts provider-only internal input and leaves model undefined
   const snapshot = {
     id: "agent-1",
     provider: "claude",
-    cwd: "/tmp/paseo-create-test",
+    cwd: "/tmp/byspace-create-test",
     runtimeInfo: null,
   } as ManagedAgent;
   const createAgent = vi.fn(async () => snapshot);
@@ -190,7 +190,7 @@ test("mcp create accepts provider-only internal input and leaves model undefined
   await createAgentCommand(dependencies, {
     kind: "mcp",
     provider: "claude",
-    cwd: "/tmp/paseo-create-test",
+    cwd: "/tmp/byspace-create-test",
     workspaceId: "ws-create-test",
     title: "provider default",
     initialPrompt: "hello",
@@ -302,7 +302,7 @@ test("mcp create stamps the new worktree's workspaceId, not the parent's", async
         agentStorage: storage,
         logger,
         providerSnapshotManager,
-        createPaseoWorktree: fakeWorktreeCreator({
+        createBySpaceWorktree: fakeWorktreeCreator({
           repoRoot: workdir,
           createdWorkspaceId: "ws-new-worktree",
         }),

@@ -37,9 +37,9 @@ import type {
 } from "./agent/agent-sdk-types.js";
 import { createWorktree, UnknownBranchError } from "../utils/worktree.js";
 import {
-  readPaseoWorktreeMetadata,
-  writePaseoWorktreeFirstAgentBranchAutoNameMetadata,
-  writePaseoWorktreeMetadata,
+  readBySpaceWorktreeMetadata,
+  writeBySpaceWorktreeFirstAgentBranchAutoNameMetadata,
+  writeBySpaceWorktreeMetadata,
 } from "../utils/worktree-metadata.js";
 import { WorktreeRequestError, toWorktreeRequestError } from "./worktree-errors.js";
 import type { WorkspaceGitRuntimeSnapshot } from "./workspace-git-service.js";
@@ -145,7 +145,7 @@ interface SessionTestAccess {
   reconcileAndEmitWorkspaceUpdates(...args: unknown[]): Promise<unknown>;
   handleArchiveAgentRequest(agentId: string, requestId: string): Promise<unknown>;
   handleMessage(message: unknown): Promise<unknown>;
-  handleCreatePaseoWorktreeRequest(params: unknown): Promise<unknown>;
+  handleCreateBySpaceWorktreeRequest(params: unknown): Promise<unknown>;
   listAgentPayloads(...args: unknown[]): Promise<unknown[]>;
   listFetchWorkspacesEntries(params: unknown): Promise<ListFetchResult>;
   listFetchAgentsEntries(params: unknown): Promise<ListFetchResult>;
@@ -162,7 +162,7 @@ interface SessionTestAccess {
   emitWorkspaceUpdatesForWorkspaceIds(...args: unknown[]): Promise<unknown>;
   emit(message: unknown): void;
   onMessage(message: unknown): void;
-  paseoHome: string;
+  byspaceHome: string;
   terminalManager: {
     killTerminal(id: string): unknown;
     clearTerminalAttention?(id: string): Promise<boolean>;
@@ -387,7 +387,7 @@ function createWorkspaceRuntimeSnapshot(
       mainRepoRoot: null,
       currentBranch: "main",
       remoteUrl: "https://github.com/acme/repo.git",
-      isPaseoOwnedWorktree: false,
+      isBySpaceOwnedWorktree: false,
       isDirty: false,
       baseRef: "main",
       aheadBehind: { ahead: 0, behind: 0 },
@@ -538,7 +538,7 @@ function createSessionForWorkspaceTests(
     projectRegistry?: SessionOptions["projectRegistry"];
     workspaceRegistry?: SessionOptions["workspaceRegistry"];
     github?: GitHubService;
-    paseoHome?: string;
+    byspaceHome?: string;
     worktreesRoot?: string;
     renameCurrentBranch?: (
       cwd: string,
@@ -622,7 +622,7 @@ function createSessionForWorkspaceTests(
       logger: asSessionLogger(logger),
       downloadTokenStore: asDownloadTokenStore(),
       pushTokenStore: asPushTokenStore(),
-      paseoHome: options.paseoHome ?? "/tmp/paseo-test",
+      byspaceHome: options.byspaceHome ?? "/tmp/byspace-test",
       worktreesRoot: options.worktreesRoot,
       agentManager,
       agentStorage: asAgentStorage({
@@ -739,7 +739,7 @@ test("client heartbeat clears attention for the focused terminal", async () => {
 });
 
 test("create_agent_request keeps requested child cwd when grouped under an existing parent workspace", async () => {
-  const workdir = mkdtempSync(path.join(tmpdir(), "paseo-create-agent-cwd-"));
+  const workdir = mkdtempSync(path.join(tmpdir(), "byspace-create-agent-cwd-"));
   try {
     const parent = path.join(workdir, "parent");
     const child = path.join(parent, "child");
@@ -775,7 +775,7 @@ test("create_agent_request keeps requested child cwd when grouped under an exist
         currentBranch: "main",
         remoteUrl: null,
         worktreeRoot: parent,
-        isPaseoOwnedWorktree: false,
+        isBySpaceOwnedWorktree: false,
         mainRepoRoot: null,
       }),
     });
@@ -811,7 +811,7 @@ test("create_agent_request keeps requested child cwd when grouped under an exist
         logger: asSessionLogger(logger),
         downloadTokenStore: asDownloadTokenStore(),
         pushTokenStore: asPushTokenStore(),
-        paseoHome: path.join(workdir, "paseo-home"),
+        byspaceHome: path.join(workdir, "byspace-home"),
         agentManager,
         agentStorage,
         projectRegistry,
@@ -873,7 +873,7 @@ test("create_agent_request keeps requested child cwd when grouped under an exist
 
 test("create_agent_request does not title an existing workspace from the agent prompt", async () => {
   vi.useFakeTimers();
-  const workdir = mkdtempSync(path.join(tmpdir(), "paseo-create-agent-existing-title-"));
+  const workdir = mkdtempSync(path.join(tmpdir(), "byspace-create-agent-existing-title-"));
   try {
     const cwd = path.join(workdir, "repo");
     mkdirSync(cwd, { recursive: true });
@@ -934,7 +934,7 @@ test("create_agent_request does not title an existing workspace from the agent p
         logger: asSessionLogger(logger),
         downloadTokenStore: asDownloadTokenStore(),
         pushTokenStore: asPushTokenStore(),
-        paseoHome: path.join(workdir, "paseo-home"),
+        byspaceHome: path.join(workdir, "byspace-home"),
         agentManager,
         agentStorage,
         projectRegistry,
@@ -1061,7 +1061,7 @@ test("unsupported persisted agents are excluded from active lists but preserved 
 });
 
 test("workspace reconciliation reports archived workspaces to subscribed clients", async () => {
-  const missingCwd = path.join(tmpdir(), `paseo-missing-workspace-${Date.now()}`);
+  const missingCwd = path.join(tmpdir(), `byspace-missing-workspace-${Date.now()}`);
   rmSync(missingCwd, { recursive: true, force: true });
   const projects = new Map([
     [
@@ -1255,7 +1255,7 @@ test("archive emits an authoritative agent_update upsert for subscribed clients"
       logger: asSessionLogger(logger),
       downloadTokenStore: asDownloadTokenStore(),
       pushTokenStore: asPushTokenStore(),
-      paseoHome: "/tmp/paseo-test",
+      byspaceHome: "/tmp/byspace-test",
       agentManager: asAgentManager({
         subscribe: () => () => {},
         listAgents: () => [],
@@ -1620,7 +1620,7 @@ test("close_items_request archives agents and kills terminals in one batch", asy
       logger: asSessionLogger(sessionLogger),
       downloadTokenStore: asDownloadTokenStore(),
       pushTokenStore: asPushTokenStore(),
-      paseoHome: "/tmp/paseo-test",
+      byspaceHome: "/tmp/byspace-test",
       agentManager: asAgentManager({
         subscribe: () => () => {},
         listAgents: () => [],
@@ -1788,7 +1788,7 @@ test("close_items_request archives stored agents that are not currently loaded",
       logger: asSessionLogger(sessionLogger),
       downloadTokenStore: asDownloadTokenStore(),
       pushTokenStore: asPushTokenStore(),
-      paseoHome: "/tmp/paseo-test",
+      byspaceHome: "/tmp/byspace-test",
       agentManager: asAgentManager({
         subscribe: () => () => {},
         listAgents: () => [],
@@ -1947,7 +1947,7 @@ test("close_items_request continues after an archive failure", async () => {
       logger: asSessionLogger(sessionLogger),
       downloadTokenStore: asDownloadTokenStore(),
       pushTokenStore: asPushTokenStore(),
-      paseoHome: "/tmp/paseo-test",
+      byspaceHome: "/tmp/byspace-test",
       agentManager: asAgentManager({
         subscribe: () => () => {},
         listAgents: () => [],
@@ -2786,7 +2786,7 @@ test("fetch_agent_request still resolves archived historical agents", async () =
       currentBranch: null,
       remoteUrl: null,
       worktreeRoot: null,
-      isPaseoOwnedWorktree: false,
+      isBySpaceOwnedWorktree: false,
       mainRepoRoot: null,
     },
   });
@@ -2842,7 +2842,7 @@ test("git branch workspace uses branch as canonical name", async () => {
       currentBranch: "feature/name-from-server",
       remoteUrl: "https://github.com/acme/repo-branch.git",
       worktreeRoot: cwd,
-      isPaseoOwnedWorktree: false,
+      isBySpaceOwnedWorktree: false,
       mainRepoRoot: null,
     },
   });
@@ -2958,7 +2958,7 @@ test("workspace update stream keeps persisted workspace visible after agents sto
       logger: asSessionLogger(logger),
       downloadTokenStore: asDownloadTokenStore(),
       pushTokenStore: asPushTokenStore(),
-      paseoHome: "/tmp/paseo-test",
+      byspaceHome: "/tmp/byspace-test",
       agentManager: asAgentManager({
         subscribe: () => () => {},
         listAgents: () => [],
@@ -3341,13 +3341,13 @@ test("project.remove.request removes an already-empty project", async () => {
   ]);
 });
 
-test("create paseo worktree request returns a registered workspace descriptor", async () => {
+test("create byspace worktree request returns a registered workspace descriptor", async () => {
   const emitted: SessionOutboundMessage[] = [];
   const createdAt = "2026-05-12T12:00:00.000Z";
   vi.setSystemTime(new Date(createdAt));
   const tempDir = realpathSync(mkdtempSync(path.join(tmpdir(), "session-worktree-test-")));
   const repoDir = path.join(tempDir, "repo");
-  const paseoHome = path.join(tempDir, "paseo-home");
+  const byspaceHome = path.join(tempDir, "byspace-home");
   mkdirSync(repoDir, { recursive: true });
   execFileSync("git", ["init", "-b", "main"], { cwd: repoDir, stdio: "pipe" });
   execFileSync("git", ["config", "user.email", "test@test.com"], {
@@ -3369,7 +3369,7 @@ test("create paseo worktree request returns a registered workspace descriptor", 
           repoRoot: repoDir,
           currentBranch: "main",
           remoteUrl: null,
-          isPaseoOwnedWorktree: false,
+          isBySpaceOwnedWorktree: false,
           mainRepoRoot: null,
         },
       });
@@ -3381,7 +3381,7 @@ test("create paseo worktree request returns a registered workspace descriptor", 
           repoRoot: cwd,
           currentBranch: "worktree-123",
           remoteUrl: null,
-          isPaseoOwnedWorktree: true,
+          isBySpaceOwnedWorktree: true,
           mainRepoRoot: repoDir,
         },
       });
@@ -3392,7 +3392,7 @@ test("create paseo worktree request returns a registered workspace descriptor", 
         repoRoot: cwd,
         currentBranch: "main",
         remoteUrl: null,
-        isPaseoOwnedWorktree: false,
+        isBySpaceOwnedWorktree: false,
         mainRepoRoot: null,
       },
     });
@@ -3405,7 +3405,7 @@ test("create paseo worktree request returns a registered workspace descriptor", 
 
   const workspaces = new Map();
   const projects = new Map();
-  session.paseoHome = paseoHome;
+  session.byspaceHome = byspaceHome;
   session.workspaceRegistry.get = async (lookupWorkspaceId: string) =>
     workspaces.get(lookupWorkspaceId) ?? null;
   session.workspaceRegistry.list = async () => Array.from(workspaces.values());
@@ -3425,8 +3425,8 @@ test("create paseo worktree request returns a registered workspace descriptor", 
     if (isSessionOutboundMessage(message)) emitted.push(message);
   };
   try {
-    await session.handleCreatePaseoWorktreeRequest({
-      type: "create_paseo_worktree_request",
+    await session.handleCreateBySpaceWorktreeRequest({
+      type: "create_byspace_worktree_request",
       cwd: repoDir,
       worktreeSlug: "worktree-123",
       requestId: "req-worktree",
@@ -3436,7 +3436,7 @@ test("create paseo worktree request returns a registered workspace descriptor", 
     rmSync(tempDir, { recursive: true, force: true });
   }
 
-  const response = findByType(emitted, "create_paseo_worktree_response");
+  const response = findByType(emitted, "create_byspace_worktree_response");
 
   expect(response?.payload.error).toBeNull();
   expect(response?.payload.workspace).toMatchObject({
@@ -3566,7 +3566,7 @@ test("open_project_request registers a workspace before any agent exists", async
       currentBranch: null,
       remoteUrl: null,
       worktreeRoot: null,
-      isPaseoOwnedWorktree: false,
+      isBySpaceOwnedWorktree: false,
       mainRepoRoot: null,
     },
   });
@@ -3621,7 +3621,7 @@ test("import_agent_request registers a workspace for a never-seen cwd", async ()
       currentBranch: null,
       remoteUrl: null,
       worktreeRoot: null,
-      isPaseoOwnedWorktree: false,
+      isBySpaceOwnedWorktree: false,
       mainRepoRoot: null,
     },
   });
@@ -3727,7 +3727,7 @@ test("open_project_response returns immediately even when the GitHub fetch is sl
     currentBranch: "main",
     remoteUrl: "https://github.com/acme/slow.git",
     worktreeRoot: requestedCwd,
-    isPaseoOwnedWorktree: false,
+    isBySpaceOwnedWorktree: false,
     mainRepoRoot: null,
   });
   let resolveSnapshot: (snapshot: WorkspaceGitRuntimeSnapshot) => void = () => {};
@@ -3794,7 +3794,7 @@ test("open_project_request emits a workspace_update with githubRuntime once the 
     currentBranch: "main",
     remoteUrl: "https://github.com/acme/repo.git",
     worktreeRoot: requestedCwd,
-    isPaseoOwnedWorktree: false,
+    isBySpaceOwnedWorktree: false,
     mainRepoRoot: null,
   });
   session.workspaceGitService.peekSnapshot = () => peeked.value;
@@ -3858,7 +3858,7 @@ test("open_project_request does not match a new child directory to an existing p
   const projects = new Map<string, ReturnType<typeof createPersistedProjectRecord>>();
   const workspaces = new Map<string, ReturnType<typeof createPersistedWorkspaceRecord>>();
   const home = path.resolve("/home/developer");
-  const worktree = path.join(home, ".paseo", "worktrees", "project-config-lifecycle-textarea");
+  const worktree = path.join(home, ".byspace", "worktrees", "project-config-lifecycle-textarea");
 
   projects.set(
     home,
@@ -3924,7 +3924,7 @@ test("open_project_request does not unarchive an archived parent workspace for a
   const projects = new Map<string, ReturnType<typeof createPersistedProjectRecord>>();
   const workspaces = new Map<string, ReturnType<typeof createPersistedWorkspaceRecord>>();
   const home = path.resolve("/home/developer");
-  const worktree = path.join(home, ".paseo", "worktrees", "project-config-lifecycle-textarea");
+  const worktree = path.join(home, ".byspace", "worktrees", "project-config-lifecycle-textarea");
   const archivedAt = "2026-04-24T08:00:00.000Z";
 
   projects.set(
@@ -3991,15 +3991,15 @@ test("open_project_request reclassifies an archived directory workspace when git
   const session = createSessionForWorkspaceTests();
   const projects = new Map<string, ReturnType<typeof createPersistedProjectRecord>>();
   const workspaces = new Map<string, ReturnType<typeof createPersistedWorkspaceRecord>>();
-  const repoRoot = path.resolve("/home/developer/dev/paseo");
+  const repoRoot = path.resolve("/home/developer/dev/byspace");
   const cwd = path.join(
     path.resolve("/home/developer"),
-    ".paseo",
+    ".byspace",
     "worktrees",
     "orchestrate",
     "desktop-daemon-settings",
   );
-  const remoteProjectId = "remote:github.com/getpaseo/paseo";
+  const remoteProjectId = "remote:github.com/ByteTrue/byspace";
   const archivedAt = "2026-04-24T09:48:36.168Z";
   const workspaceId = "ws-desktop-daemon-settings";
 
@@ -4051,9 +4051,9 @@ test("open_project_request reclassifies an archived directory workspace when git
     cwd,
     isGit: true,
     currentBranch: "feature/desktop-daemon-settings",
-    remoteUrl: "git@github.com:getpaseo/paseo.git",
+    remoteUrl: "git@github.com:ByteTrue/byspace.git",
     worktreeRoot: cwd,
-    isPaseoOwnedWorktree: false,
+    isBySpaceOwnedWorktree: false,
     mainRepoRoot: repoRoot,
   });
   session.workspaceGitService.getSnapshot = async () =>
@@ -4062,8 +4062,8 @@ test("open_project_request reclassifies an archived directory workspace when git
         isGit: true,
         repoRoot: cwd,
         currentBranch: "feature/desktop-daemon-settings",
-        remoteUrl: "git@github.com:getpaseo/paseo.git",
-        isPaseoOwnedWorktree: false,
+        remoteUrl: "git@github.com:ByteTrue/byspace.git",
+        isBySpaceOwnedWorktree: false,
         mainRepoRoot: repoRoot,
       },
     });
@@ -4090,10 +4090,10 @@ test("open_project_request reclassifies an active directory workspace when git m
   const session = createSessionForWorkspaceTests();
   const projects = new Map<string, ReturnType<typeof createPersistedProjectRecord>>();
   const workspaces = new Map<string, ReturnType<typeof createPersistedWorkspaceRecord>>();
-  const repoRoot = path.resolve("/home/developer/dev/paseo");
+  const repoRoot = path.resolve("/home/developer/dev/byspace");
   const cwd = path.join(
     path.resolve("/home/developer"),
-    ".paseo",
+    ".byspace",
     "worktrees",
     "orchestrate",
     "desktop-daemon-settings",
@@ -4116,13 +4116,13 @@ test("open_project_request reclassifies an active directory workspace when git m
       projectId: repoRoot,
       rootPath: repoRoot,
       kind: "git",
-      displayName: "paseo",
+      displayName: "byspace",
       createdAt: "2026-04-24T09:40:00.000Z",
       updatedAt: "2026-04-24T09:40:00.000Z",
     }),
   );
   const workspaceId = "ws-desktop-daemon-settings-active";
-  const repoWorkspaceId = "ws-paseo-main";
+  const repoWorkspaceId = "ws-byspace-main";
   workspaces.set(
     workspaceId,
     createPersistedWorkspaceRecord({
@@ -4170,9 +4170,9 @@ test("open_project_request reclassifies an active directory workspace when git m
     cwd: requestedCwd,
     isGit: true,
     currentBranch: requestedCwd === repoRoot ? "main" : "feature/desktop-daemon-settings",
-    remoteUrl: "git@github.com:getpaseo/paseo.git",
+    remoteUrl: "git@github.com:ByteTrue/byspace.git",
     worktreeRoot: requestedCwd,
-    isPaseoOwnedWorktree: false,
+    isBySpaceOwnedWorktree: false,
     mainRepoRoot: requestedCwd === repoRoot ? null : repoRoot,
   });
   session.workspaceGitService.getSnapshot = async (requestedCwd: string) =>
@@ -4181,8 +4181,8 @@ test("open_project_request reclassifies an active directory workspace when git m
         isGit: true,
         repoRoot: requestedCwd,
         currentBranch: requestedCwd === repoRoot ? "main" : "feature/desktop-daemon-settings",
-        remoteUrl: "git@github.com:getpaseo/paseo.git",
-        isPaseoOwnedWorktree: false,
+        remoteUrl: "git@github.com:ByteTrue/byspace.git",
+        isBySpaceOwnedWorktree: false,
         mainRepoRoot: requestedCwd === repoRoot ? null : repoRoot,
       },
     });
@@ -4208,10 +4208,10 @@ test("open_project_request groups a plain git worktree under an existing repo pr
   const session = createSessionForWorkspaceTests();
   const projects = new Map<string, ReturnType<typeof createPersistedProjectRecord>>();
   const workspaces = new Map<string, ReturnType<typeof createPersistedWorkspaceRecord>>();
-  const repoRoot = path.resolve("/home/developer/dev/paseo");
+  const repoRoot = path.resolve("/home/developer/dev/byspace");
   const cwd = path.join(
     path.resolve("/home/developer"),
-    ".paseo",
+    ".byspace",
     "worktrees",
     "orchestrate",
     "desktop-daemon-settings",
@@ -4223,7 +4223,7 @@ test("open_project_request groups a plain git worktree under an existing repo pr
       projectId: repoRoot,
       rootPath: repoRoot,
       kind: "git",
-      displayName: "paseo",
+      displayName: "byspace",
       createdAt: "2026-04-24T09:46:43.146Z",
       updatedAt: "2026-04-24T09:46:43.146Z",
     }),
@@ -4263,9 +4263,9 @@ test("open_project_request groups a plain git worktree under an existing repo pr
     cwd: requestedCwd,
     isGit: true,
     currentBranch: requestedCwd === repoRoot ? "main" : "feature/desktop-daemon-settings",
-    remoteUrl: "git@github.com:getpaseo/paseo.git",
+    remoteUrl: "git@github.com:ByteTrue/byspace.git",
     worktreeRoot: requestedCwd,
-    isPaseoOwnedWorktree: false,
+    isBySpaceOwnedWorktree: false,
     mainRepoRoot: requestedCwd === repoRoot ? null : repoRoot,
   });
   session.workspaceGitService.getSnapshot = async (requestedCwd: string) =>
@@ -4274,8 +4274,8 @@ test("open_project_request groups a plain git worktree under an existing repo pr
         isGit: true,
         repoRoot: requestedCwd,
         currentBranch: requestedCwd === repoRoot ? "main" : "feature/desktop-daemon-settings",
-        remoteUrl: "git@github.com:getpaseo/paseo.git",
-        isPaseoOwnedWorktree: false,
+        remoteUrl: "git@github.com:ByteTrue/byspace.git",
+        isBySpaceOwnedWorktree: false,
         mainRepoRoot: requestedCwd === repoRoot ? null : repoRoot,
       },
     });
@@ -4435,7 +4435,7 @@ test("refresh_agent_request unarchives the owning workspace when its directory e
   const projects = new Map<string, ReturnType<typeof createPersistedProjectRecord>>();
   const workspaces = new Map<string, ReturnType<typeof createPersistedWorkspaceRecord>>();
 
-  const cwd = path.resolve("/tmp/paseo-unit2-existing-dir");
+  const cwd = path.resolve("/tmp/byspace-unit2-existing-dir");
   session.filesystem.isDirectory = async () => true;
   const workspaceId = "ws-repo-archived";
   const agentId = "agent-archived";
@@ -4533,7 +4533,7 @@ test("refresh_agent_request leaves the owning workspace archived when its direct
   const projects = new Map<string, ReturnType<typeof createPersistedProjectRecord>>();
   const workspaces = new Map<string, ReturnType<typeof createPersistedWorkspaceRecord>>();
 
-  const cwd = path.resolve("/tmp/paseo-missing-workspace-dir");
+  const cwd = path.resolve("/tmp/byspace-missing-workspace-dir");
   session.filesystem.isDirectory = async () => false;
   const workspaceId = "ws-missing-dir";
   const agentId = "agent-missing-dir";
@@ -4622,7 +4622,7 @@ test("refresh_agent_request recreates a deleted worktree directory and unarchive
   const projects = new Map<string, ReturnType<typeof createPersistedProjectRecord>>();
   const workspaces = new Map<string, ReturnType<typeof createPersistedWorkspaceRecord>>();
 
-  const cwd = path.resolve("/tmp/paseo-deleted-worktree-dir");
+  const cwd = path.resolve("/tmp/byspace-deleted-worktree-dir");
   session.filesystem.isDirectory = async () => false;
   const workspaceId = "ws-deleted-worktree";
   const agentId = "agent-deleted-worktree";
@@ -4729,7 +4729,7 @@ test("refresh_agent_request leaves the worktree archived and surfaces a typed er
   const projects = new Map<string, ReturnType<typeof createPersistedProjectRecord>>();
   const workspaces = new Map<string, ReturnType<typeof createPersistedWorkspaceRecord>>();
 
-  const cwd = path.resolve("/tmp/paseo-deleted-worktree-fail");
+  const cwd = path.resolve("/tmp/byspace-deleted-worktree-fail");
   session.filesystem.isDirectory = async () => false;
   const workspaceId = "ws-deleted-worktree-fail";
   const agentId = "agent-deleted-worktree-fail";
@@ -4816,14 +4816,14 @@ test("refresh_agent_request leaves the worktree archived and surfaces a typed er
 });
 
 function createRecreateWorktreeRepo(): { tempDir: string; repoDir: string } {
-  const tempDir = realpathSync(mkdtempSync(path.join(tmpdir(), "paseo-recreate-worktree-")));
+  const tempDir = realpathSync(mkdtempSync(path.join(tmpdir(), "byspace-recreate-worktree-")));
   const repoDir = path.join(tempDir, "repo");
   execFileSync("git", ["init", "-b", "main", repoDir], { stdio: "pipe" });
   execFileSync("git", ["config", "user.email", "test@byspace.local"], {
     cwd: repoDir,
     stdio: "pipe",
   });
-  execFileSync("git", ["config", "user.name", "Paseo Test"], { cwd: repoDir, stdio: "pipe" });
+  execFileSync("git", ["config", "user.name", "BySpace Test"], { cwd: repoDir, stdio: "pipe" });
   execFileSync("git", ["config", "commit.gpgsign", "false"], { cwd: repoDir, stdio: "pipe" });
   writeFileSync(path.join(repoDir, "README.md"), "main\n");
   execFileSync("git", ["add", "README.md"], { cwd: repoDir, stdio: "pipe" });
@@ -4837,13 +4837,13 @@ test("refresh_agent_request recreates a real deleted worktree against a temp git
   execFileSync("git", ["branch", branch], { cwd: repoDir, stdio: "pipe" });
 
   const worktreesRoot = path.join(tempDir, "worktrees");
-  const paseoHome = path.join(tempDir, "paseo-home");
+  const byspaceHome = path.join(tempDir, "byspace-home");
   const created = await createWorktree({
     cwd: repoDir,
     worktreeSlug: "keep",
     source: { kind: "checkout-branch", branchName: branch },
     runSetup: false,
-    paseoHome,
+    byspaceHome,
     worktreesRoot,
   });
   const worktreePath = realpathSync(created.worktreePath);
@@ -4854,7 +4854,7 @@ test("refresh_agent_request recreates a real deleted worktree against a temp git
 
   const emitted: SessionOutboundMessage[] = [];
   const session = createSessionForWorkspaceTests({
-    paseoHome,
+    byspaceHome,
     worktreesRoot,
     onMessage: (message) => {
       if (isSessionOutboundMessage(message)) emitted.push(message);
@@ -4961,18 +4961,18 @@ test("recreateOwningWorktreeForRestore throws a typed WorktreeRequestError and l
   execFileSync("git", ["branch", branch], { cwd: repoDir, stdio: "pipe" });
 
   const worktreesRoot = path.join(tempDir, "worktrees");
-  const paseoHome = path.join(tempDir, "paseo-home");
+  const byspaceHome = path.join(tempDir, "byspace-home");
   const created = await createWorktree({
     cwd: repoDir,
     worktreeSlug: "keep",
     source: { kind: "checkout-branch", branchName: branch },
     runSetup: false,
-    paseoHome,
+    byspaceHome,
     worktreesRoot,
   });
   const worktreePath = realpathSync(created.worktreePath);
 
-  const session = createSessionForWorkspaceTests({ paseoHome, worktreesRoot });
+  const session = createSessionForWorkspaceTests({ byspaceHome, worktreesRoot });
   const projects = new Map<string, ReturnType<typeof createPersistedProjectRecord>>();
   const workspaces = new Map<string, ReturnType<typeof createPersistedWorkspaceRecord>>();
   const workspaceId = "ws-missing-root";
@@ -5052,7 +5052,7 @@ test.skip("open_project_request collapses a git subdirectory onto the repo root 
       currentBranch: "main",
       remoteUrl: null,
       worktreeRoot: repoRoot,
-      isPaseoOwnedWorktree: false,
+      isBySpaceOwnedWorktree: false,
       mainRepoRoot: null,
     },
   });
@@ -5090,12 +5090,8 @@ test("legacy editor RPC requests return daemon unsupported errors", async () => 
   const listResponse = findByType(emitted, "list_available_editors_response");
   const openResponse = findByType(emitted, "open_in_editor_response");
   expect(listResponse?.payload.editors).toEqual([]);
-  expect(listResponse?.payload.error).toBe(
-    "Editor opening moved to the desktop app and is no longer supported by the daemon",
-  );
-  expect(openResponse?.payload.error).toBe(
-    "Editor opening moved to the desktop app and is no longer supported by the daemon",
-  );
+  expect(listResponse?.payload.error).toBe("Editor opening is not supported by the daemon");
+  expect(openResponse?.payload.error).toBe("Editor opening is not supported by the daemon");
 });
 
 test("archive_workspace_request hides non-destructive workspace records", async () => {
@@ -5143,13 +5139,13 @@ test("archive_workspace_request archives a worktree-kind workspace and removes t
     cwd: repoDir,
     stdio: "pipe",
   });
-  execFileSync("git", ["config", "user.name", "Paseo Test"], { cwd: repoDir, stdio: "pipe" });
+  execFileSync("git", ["config", "user.name", "BySpace Test"], { cwd: repoDir, stdio: "pipe" });
   execFileSync("git", ["-c", "commit.gpgsign=false", "commit", "--allow-empty", "-m", "initial"], {
     cwd: repoDir,
     stdio: "pipe",
   });
 
-  const paseoHome = path.join(tempDir, ".paseo");
+  const byspaceHome = path.join(tempDir, ".byspace");
   const worktree = await createWorktree({
     cwd: repoDir,
     worktreeSlug: "worktree-kind-archive",
@@ -5159,7 +5155,7 @@ test("archive_workspace_request archives a worktree-kind workspace and removes t
       branchName: "worktree-kind-archive",
     },
     runSetup: false,
-    paseoHome,
+    byspaceHome,
   });
 
   const workspaceId = "ws-worktree-kind-archive";
@@ -5193,7 +5189,7 @@ test("archive_workspace_request archives a worktree-kind workspace and removes t
           mainRepoRoot: repoDir,
           currentBranch: "worktree-kind-archive",
           remoteUrl: null,
-          isPaseoOwnedWorktree: true,
+          isBySpaceOwnedWorktree: true,
           isDirty: false,
           baseRef: null,
           aheadBehind: null,
@@ -5210,7 +5206,7 @@ test("archive_workspace_request archives a worktree-kind workspace and removes t
       }),
     }),
   });
-  session.paseoHome = paseoHome;
+  session.byspaceHome = byspaceHome;
   session.emit = (message) => {
     if (isSessionOutboundMessage(message)) emitted.push(message);
   };
@@ -5247,7 +5243,7 @@ test.skip("opening a new worktree reconciles older local workspaces into the rem
 
   const tempDir = realpathSync(mkdtempSync(path.join(tmpdir(), "session-workspace-reconcile-")));
   const mainWorkspaceId = path.join(tempDir, "inkwell");
-  const worktreeWorkspaceId = path.join(mainWorkspaceId, ".paseo", "worktrees", "feature-a");
+  const worktreeWorkspaceId = path.join(mainWorkspaceId, ".byspace", "worktrees", "feature-a");
   const localProjectId = mainWorkspaceId;
   const remoteProjectId = "remote:github.com/zimakki/inkwell";
 
@@ -5317,7 +5313,7 @@ test.skip("opening a new worktree reconciles older local workspaces into the rem
       currentBranch: cwd === mainWorkspaceId ? "main" : "feature-a",
       remoteUrl: "https://github.com/zimakki/inkwell.git",
       worktreeRoot: cwd,
-      isPaseoOwnedWorktree: cwd !== mainWorkspaceId,
+      isBySpaceOwnedWorktree: cwd !== mainWorkspaceId,
       mainRepoRoot: cwd === mainWorkspaceId ? null : mainWorkspaceId,
     },
   });
@@ -5357,7 +5353,7 @@ test.skip("fetch_workspaces_request reconciles remote URL changes for existing w
 
   const tempDir = realpathSync(mkdtempSync(path.join(tmpdir(), "session-workspace-fetch-")));
   const mainWorkspaceId = path.join(tempDir, "inkwell");
-  const worktreeWorkspaceId = path.join(mainWorkspaceId, ".paseo", "worktrees", "feature-a");
+  const worktreeWorkspaceId = path.join(mainWorkspaceId, ".byspace", "worktrees", "feature-a");
   const oldProjectId = "remote:github.com/old-owner/inkwell";
   const newProjectId = "remote:github.com/new-owner/inkwell";
 
@@ -5423,7 +5419,7 @@ test.skip("fetch_workspaces_request reconciles remote URL changes for existing w
       currentBranch: cwd === mainWorkspaceId ? "main" : "feature-a",
       remoteUrl: "https://github.com/new-owner/inkwell.git",
       worktreeRoot: cwd,
-      isPaseoOwnedWorktree: cwd !== mainWorkspaceId,
+      isBySpaceOwnedWorktree: cwd !== mainWorkspaceId,
       mainRepoRoot: cwd === mainWorkspaceId ? null : mainWorkspaceId,
     },
   });
@@ -5524,7 +5520,7 @@ test.skip("reconcile archives stale subdirectory workspace records when collapsi
       currentBranch: "main",
       remoteUrl: "https://github.com/acme/repo.git",
       worktreeRoot: repoRoot,
-      isPaseoOwnedWorktree: false,
+      isBySpaceOwnedWorktree: false,
       mainRepoRoot: null,
     },
   });
@@ -6110,7 +6106,7 @@ test("fetch_workspaces_response reads runtime fields from passive workspace git 
       currentBranch: runtimeSnapshot.git.currentBranch,
       remoteUrl: runtimeSnapshot.git.remoteUrl,
       worktreeRoot: cwd,
-      isPaseoOwnedWorktree: false,
+      isBySpaceOwnedWorktree: false,
       mainRepoRoot: null,
     },
   });
@@ -6131,7 +6127,7 @@ test("fetch_workspaces_response reads runtime fields from passive workspace git 
       gitRuntime: {
         currentBranch: "runtime-branch",
         remoteUrl: "https://github.com/acme/repo.git",
-        isPaseoOwnedWorktree: false,
+        isBySpaceOwnedWorktree: false,
         isDirty: true,
         aheadBehind: { ahead: 3, behind: 1 },
         aheadOfOrigin: 3,
@@ -6282,7 +6278,7 @@ test("workspace_update includes updated runtime fields", async () => {
       currentBranch: runtimeSnapshot.git.currentBranch,
       remoteUrl: runtimeSnapshot.git.remoteUrl,
       worktreeRoot: cwd,
-      isPaseoOwnedWorktree: false,
+      isBySpaceOwnedWorktree: false,
       mainRepoRoot: null,
     },
   });
@@ -6843,7 +6839,7 @@ async function waitForWorkspaceUpdate(
 
 test("title-only terminal change does not build workspace descriptors or emit workspace_update", async () => {
   const emitted: SessionOutboundMessage[] = [];
-  const cwd = mkdtempSync(path.join(tmpdir(), "paseo-session-title-"));
+  const cwd = mkdtempSync(path.join(tmpdir(), "byspace-session-title-"));
   const workspace = createPersistedWorkspaceRecord({
     workspaceId: "ws-title",
     projectId: "proj-title",
@@ -6887,7 +6883,7 @@ test("title-only terminal change does not build workspace descriptors or emit wo
 
 test("terminal activity contribution change updates the correct workspace", async () => {
   const emitted: SessionOutboundMessage[] = [];
-  const cwd = mkdtempSync(path.join(tmpdir(), "paseo-session-activity-"));
+  const cwd = mkdtempSync(path.join(tmpdir(), "byspace-session-activity-"));
   const workspace = createPersistedWorkspaceRecord({
     workspaceId: "ws-activity",
     projectId: "proj-activity",
@@ -6936,7 +6932,7 @@ test("terminal activity contribution change updates the correct workspace", asyn
 
 test("same-cwd terminal activity updates only the workspace that owns the terminal", async () => {
   const emitted: SessionOutboundMessage[] = [];
-  const cwd = mkdtempSync(path.join(tmpdir(), "paseo-session-same-cwd-"));
+  const cwd = mkdtempSync(path.join(tmpdir(), "byspace-session-same-cwd-"));
   const workspaceA = createPersistedWorkspaceRecord({
     workspaceId: "ws-same-a",
     projectId: "proj-same",
@@ -6997,7 +6993,7 @@ test("same-cwd terminal activity updates only the workspace that owns the termin
 
 test("a worktree terminal updates only the workspace that owns it", async () => {
   const emitted: SessionOutboundMessage[] = [];
-  const rootCwd = mkdtempSync(path.join(tmpdir(), "paseo-session-nested-"));
+  const rootCwd = mkdtempSync(path.join(tmpdir(), "byspace-session-nested-"));
   const worktreeCwd = path.join(rootCwd, "worktree");
   const terminalCwd = path.join(worktreeCwd, "subdir");
   mkdirSync(terminalCwd, { recursive: true });
@@ -7062,7 +7058,7 @@ test("a worktree terminal updates only the workspace that owns it", async () => 
 
 test("removing an idle terminal does not update workspace status", async () => {
   const emitted: SessionOutboundMessage[] = [];
-  const cwd = mkdtempSync(path.join(tmpdir(), "paseo-session-remove-idle-"));
+  const cwd = mkdtempSync(path.join(tmpdir(), "byspace-session-remove-idle-"));
   const workspace = createPersistedWorkspaceRecord({
     workspaceId: "ws-remove-idle",
     projectId: "proj-remove-idle",
@@ -7101,7 +7097,7 @@ test("removing an idle terminal does not update workspace status", async () => {
 
 test("removing a contributing terminal clears workspace status", async () => {
   const emitted: SessionOutboundMessage[] = [];
-  const cwd = mkdtempSync(path.join(tmpdir(), "paseo-session-remove-contrib-"));
+  const cwd = mkdtempSync(path.join(tmpdir(), "byspace-session-remove-contrib-"));
   const workspace = createPersistedWorkspaceRecord({
     workspaceId: "ws-remove-contrib",
     projectId: "proj-remove-contrib",
@@ -7162,7 +7158,7 @@ test("removing a contributing terminal clears workspace status", async () => {
 interface WorkspaceCreatePrRepoFixture {
   tempDir: string;
   repoDir: string;
-  paseoHome: string;
+  byspaceHome: string;
   headRef: string;
   prFileName: string;
   prNumber: number;
@@ -7172,7 +7168,7 @@ function createWorkspaceCreatePrRepo(): WorkspaceCreatePrRepoFixture {
   const tempDir = realpathSync(mkdtempSync(path.join(tmpdir(), "workspace-create-pr-")));
   const repoDir = path.join(tempDir, "repo");
   const remoteDir = path.join(tempDir, "origin.git");
-  const paseoHome = path.join(tempDir, ".paseo");
+  const byspaceHome = path.join(tempDir, ".byspace");
   const prNumber = 123;
   const headRef = "feature/review-pr";
   const prFileName = "pr-123.txt";
@@ -7182,7 +7178,7 @@ function createWorkspaceCreatePrRepo(): WorkspaceCreatePrRepoFixture {
     cwd: repoDir,
     stdio: "pipe",
   });
-  execFileSync("git", ["config", "user.name", "Paseo Test"], { cwd: repoDir, stdio: "pipe" });
+  execFileSync("git", ["config", "user.name", "BySpace Test"], { cwd: repoDir, stdio: "pipe" });
   execFileSync("git", ["config", "commit.gpgsign", "false"], { cwd: repoDir, stdio: "pipe" });
   writeFileSync(path.join(repoDir, "README.md"), "main\n");
   execFileSync("git", ["add", "README.md"], { cwd: repoDir, stdio: "pipe" });
@@ -7211,7 +7207,7 @@ function createWorkspaceCreatePrRepo(): WorkspaceCreatePrRepoFixture {
   execFileSync("git", ["branch", "-D", headRef], { cwd: repoDir, stdio: "pipe" });
   execFileSync("git", ["remote", "add", "origin", remoteDir], { cwd: repoDir, stdio: "pipe" });
 
-  return { tempDir, repoDir, paseoHome, headRef, prFileName, prNumber };
+  return { tempDir, repoDir, byspaceHome, headRef, prFileName, prNumber };
 }
 
 function createPrCheckoutGitHubService(params: { headRef: string }): GitHubService {
@@ -7309,7 +7305,7 @@ test("workspace.create worktree source checks out a GitHub PR from githubPrNumbe
     github: createPrCheckoutGitHubService({
       headRef: fixture.headRef,
     }),
-    paseoHome: fixture.paseoHome,
+    byspaceHome: fixture.byspaceHome,
     projectRegistry,
     workspaceRegistry,
     workspaceGitService: createNoopWorkspaceGitService({
@@ -7491,14 +7487,14 @@ test("workspace auto-name applies title once when branch auto-name is rejected",
     cwd: repoDir,
     stdio: "pipe",
   });
-  execFileSync("git", ["config", "user.name", "Paseo Test"], { cwd: repoDir, stdio: "pipe" });
+  execFileSync("git", ["config", "user.name", "BySpace Test"], { cwd: repoDir, stdio: "pipe" });
   execFileSync("git", ["config", "commit.gpgsign", "false"], { cwd: repoDir, stdio: "pipe" });
   writeFileSync(path.join(repoDir, "README.md"), "hello\n");
   execFileSync("git", ["add", "README.md"], { cwd: repoDir, stdio: "pipe" });
   execFileSync("git", ["commit", "-m", "initial"], { cwd: repoDir, stdio: "pipe" });
   execFileSync("git", ["branch", "-M", "placeholder-branch"], { cwd: repoDir, stdio: "pipe" });
-  writePaseoWorktreeMetadata(repoDir, { baseRefName: "main" });
-  writePaseoWorktreeFirstAgentBranchAutoNameMetadata(repoDir, {
+  writeBySpaceWorktreeMetadata(repoDir, { baseRefName: "main" });
+  writeBySpaceWorktreeFirstAgentBranchAutoNameMetadata(repoDir, {
     placeholderBranchName: "placeholder-branch",
   });
 
@@ -7561,7 +7557,7 @@ test("workspace auto-name applies title once when branch auto-name is rejected",
         .toString()
         .trim(),
     ).toBe("placeholder-branch");
-    expect(readPaseoWorktreeMetadata(repoDir)).toMatchObject({
+    expect(readBySpaceWorktreeMetadata(repoDir)).toMatchObject({
       version: 2,
       firstAgentBranchAutoName: {
         status: "attempted",
