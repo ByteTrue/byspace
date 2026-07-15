@@ -1,5 +1,5 @@
 name = "byspace-relay"
-account_id = "10ed39a1dbf316e30abd0c409bed40d6"
+account_id = "835cd580057df97323a7854a8069c5f1"
 main = "src/cloudflare-adapter.ts"
 compatibility_date = "2024-12-01"
 

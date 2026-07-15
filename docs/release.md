@@ -52,13 +52,15 @@ Use `vX.Y.Z-beta.N`, mark the GitHub release as prerelease, and publish npm only
 
 ## Cloudflare deployment
 
-`Deploy App` builds the browser export and deploys Pages project `byspace`. `Deploy Relay` deploys Worker `byspace-relay`; no upstream proxy is configured, so traffic terminates in the BySpace Durable Object. Both workflows require the repository secret `CLOUDFLARE_API_TOKEN`.
+`Deploy App` and `Deploy Relay` run only after the `CI` workflow succeeds for a pushed `main` commit, then deploy that exact SHA with serialized production concurrency. Pages uses project `byspace`; the relay uses Worker `byspace-relay` and its own Durable Object, with no upstream proxy. Both workflows require the repository secret `CLOUDFLARE_API_TOKEN`.
 
 Local emergency deployment uses the same workspace scripts after `wrangler whoami` confirms the intended Cloudflare account.
 
 ## npm publishing
 
-The public entry is only `@bytetrue/byspace`. Internal workspace packages are bundled into its tarball and are not user-facing install targets. Publishing requires npm authentication or Trusted Publishing configured for `ByteTrue/byspace`.
+The public entry is only `@bytetrue/byspace`. Internal workspace packages are bundled into its tarball and are not user-facing install targets. `release:check` packs, clean-installs, and smoke-tests one artifact; publication uses that same tarball without rebuilding it.
+
+For the first release only, wait for `main` CI, run `npm login`, rerun `release:check` on that exact commit, and execute `npm run release:publish` before pushing the tag. Then configure npm Trusted Publishing for repository `ByteTrue/byspace` and workflow `npm-release.yml`. The tag workflow is idempotent: it skips npm publication when the exact version already exists, then creates the GitHub release. Subsequent releases publish through OIDC and require npm 11.5.1+ plus `id-token: write`, with no long-lived token.
 
 After publishing:
 

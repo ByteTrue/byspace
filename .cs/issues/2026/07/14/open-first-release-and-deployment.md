@@ -40,38 +40,47 @@ epic: ".cs/epics/2026/07/14/web-only-byspace/spec.md"
 - npm 当前返回未认证；`byspace` 与 `@bytetrue/byspace` 查询不到现有包，但实际命名与发布权限仍需登录后确认。
 - 用户已明确授权创建仓库、推送、发布和 Cloudflare Pages 部署。
 
-## 待确认问题
+## 已确认决策
 
-- 正式名称是否为 `byspace`，GitHub 仓库是否公开。
-- 首个版本是否为 `v0.1.0`。
-- CLI 使用 npm、GitHub Release 或两者；若 npm，发布采用哪个用户/scope。
-- Pages 首版是否接受 `byspace.pages.dev`，是否同时部署 relay。
+- 正式显示名 `BySpace`；公开仓库 `ByteTrue/byspace`，首版公开可见。
+- 首个版本 `v0.1.0`。
+- 用户安装入口只有 `@bytetrue/byspace`；一个 tarball 内嵌 5 个内部 workspace，外部依赖在目标平台正常安装。
+- Pages 使用 `byspace.pages.dev`；Relay 使用 `byspace-relay.bytetrue.workers.dev` 和自己的 Durable Object；不设置自定义域名或 upstream proxy。
 
 ## 现状如何工作
 
-Paseo 当前通过独立 GitHub workflows 部署 Cloudflare Pages、relay、网站、桌面与移动产物，并通过多 workspace npm 发布 protocol/client/server/relay/CLI。Fork 基线完成后，发布面只剩 Web、必要 relay 和本地 CLI/daemon，需要把仓库身份、包依赖、版本同步、CI secrets 与 Cloudflare 项目一起迁移。
+发布拓扑已经收缩为四条独立但有门禁的链路：`main` CI 通过后部署 Pages 与 Relay；`vX.Y.Z` / `vX.Y.Z-beta.N` tag 触发单包 npm 发布和 GitHub Release；Docker tag workflow 构建可选镜像；Nix hash workflow 在 lockfile 变化后计算并提交正确 hash。首个 npm 版本因包尚不存在，需要一次本机 `npm login` bootstrap，随后改用 `npm-release.yml` 的 OIDC Trusted Publishing。
 
 ## 影响范围
 
 - 必须修改：Git remotes、包名与元数据、版本/发布脚本、GitHub workflows、Cloudflare Pages 配置、安装说明。
 - 需要验证：全新机器/目录安装 CLI、daemon 启动、Web 连接、release 资产、CI 权限与 secret、Pages 回滚入口。
-- 仍待调查：精简后的 CLI 是否继续发布多个内部 npm 包，还是形成单包交付；仓库可见性和 npm 身份确认后决定。
+- 已决定：CLI/daemon 形成一个公开 npm 包，内部 workspace 不作为用户安装入口。
 
 ## 方案判断
 
-先完成 fork 基线再设计最终交付形状。优先复用现有 npm workspace 发布能力，避免为首次版本引入新的 bundler 或安装器；若 npm 身份暂时阻塞，则先完成 GitHub Release 和 Pages 部署，但不能把仅能在源码 checkout 运行误报为已交付 CLI。
+使用 npm 原生 bundled dependencies 只内嵌 BySpace 内部 runtime packages；不打包外部依赖，避免把构建机的原生二进制错误带到其他平台。发布脚本从 workspace 产物构建临时 staging package，CI 在 Linux/macOS/Windows 空前缀安装并启动隔离 daemon。
 
 ## 实现设计
 
-- 等待基线 issue 完成和发布身份确认后补齐。
+- `scripts/pack-byspace.mjs` 构建 Server/Web，打包并内嵌 highlight/protocol/client/relay/server。
+- `scripts/smoke-byspace-package.mjs` 选择临时端口与 home，禁用 relay，轮询 readiness，并 force-stop 验证 cleanup。
+- `scripts/publish-byspace.mjs` 只发布已验证 tarball，stable/beta dist-tag 明确。
+- CI deployment 通过 `workflow_run` 只消费 `main` 成功 CI 的精确 SHA，并对生产目标加 concurrency。
+- npm tag workflow 校验严格 tag 格式；只有 npm 成功或该版本已存在后才创建 GitHub Release。
 
 ## 验证
 
-- 待执行。
+- `npm run release:check` 通过：branding/upstream gate、typecheck、lint、format、package build、clean install、daemon smoke、npm dry-run。
+- Tarball 内含 5 个内部 packages，59 个外部 runtime dependencies 无缺失/冲突；外部 native 依赖未从构建机 bundle。
+- 空前缀 `byspace --version`、`--help`、daemon start/status/pair/stop 已通过；隔离 home/listen 与自有 pairing endpoints 正确。
+- Workflow YAML 解析通过；多轮独立 review 的 packaging/lifecycle/CI blocker 已修复。
+- 待外部验证：GitHub Actions、Pages、Relay、npm 真实 endpoint 与 GitHub Release。
 
 ## 执行记录
 
-- 待执行。
+- 已完成 v0.1.0 metadata、changelog、单包脚本、三平台 CI distribution job、CI-gated Pages/Relay、npm OIDC/tag workflow、Docker tag 验证和 Nix hash bot workflow。
+- 当前外部阻碍：仓库尚未创建；Cloudflare resources 尚未在当前 ByteTrue account 部署；GitHub 尚无 Cloudflare API token secret；npm 尚未认证且包不存在。
 
 ## 关闭回写
 

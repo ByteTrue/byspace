@@ -6,6 +6,6 @@ user-invocable: true
 
 # Release stable
 
-Read `docs/release.md` in the BySpace repo and follow the **Standard release (patch)** flow if cutting fresh, or the **Beta flow** promotion step if promoting an existing beta. Run the **Stable release (or promotion)** completion checklist at the bottom of that doc.
+Read `docs/release.md` completely and follow **Required checks** and **Stable release** end-to-end. Do not publish or push a tag until CI has passed on the exact release commit.
 
-The doc covers the changelog (required for stable), the pre-release sanity check (required for stable), and the post-release babysit pattern. Don't skip steps.
+Publish only the generated `@bytetrue/byspace` artifact. Push only the intended `vX.Y.Z` tag; never push all local/upstream tags. Verify npm, GitHub Release, Pages, relay, and Docker endpoints before declaring completion.

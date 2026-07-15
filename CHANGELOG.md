@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.1.0 - 2026-07-15
+
+### Added
+
+- First BySpace release: hosted browser Web/PWA, local CLI and daemon, encrypted Cloudflare relay, and the complete direct/ACP provider catalog.
+- A single public `@bytetrue/byspace` package that installs the `byspace` CLI and bundles the internal BySpace runtime packages.
+- Durable upstream-sync cursor, full-commit review workflow, and repository branding gate.
+
+### Improved
+
+- Pi local slash commands complete correctly without leaving turns stuck.
+- Agent cancellation, provider-created subagents, ACP autonomous updates, failed-turn forks, draft persistence, and provider image paths incorporate selected upstream fixes.
+
+### Changed
+
+- Product identity is consistently `BySpace`, `byspace`, and `BYSPACE_*`; runtime state uses `~/.byspace`, project config uses `byspace.json`, and the default daemon port is `6777`.
+- The supported graphical surface is browser Web only. Electron, native iOS/Android clients, in-app Browser automation, and the marketing website were removed.
+
 ## 0.1.107 - 2026-07-13
 
 ### Added

@@ -6,6 +6,6 @@ user-invocable: true
 
 # Release beta
 
-Read `docs/release.md` in the BySpace repo and follow the **Beta flow** section end-to-end. Run the **Beta release** completion checklist at the bottom of that doc.
+Read `docs/release.md` completely and follow **Required checks** and **Beta release** end-to-end.
 
-Key rules the doc enforces — each beta updates an in-place `CHANGELOG.md` entry (`## X.Y.Z-beta.N`) that gets overwritten at promotion (never leave a stale `-beta.N` heading behind), and betas publish npm only with the explicit `beta` dist-tag.
+Use a `vX.Y.Z-beta.N` tag and publish only the generated `@bytetrue/byspace` artifact with the explicit `beta` dist-tag. Never move npm `latest`, never push all local/upstream tags, and never publish before CI passes on the exact beta commit.
