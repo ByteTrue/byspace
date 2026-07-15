@@ -28,6 +28,10 @@ function ensureHideScrollbarStyle(): void {
       scrollbar-gutter: auto;
     }
 
+    [data-composer-input] {
+      scrollbar-gutter: stable;
+    }
+
     [data-hide-scrollbar]::-webkit-scrollbar {
       display: none;
       width: 0;
