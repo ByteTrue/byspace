@@ -3,7 +3,7 @@
 import "@/test/window-local-storage";
 import { QueryClient } from "@tanstack/react-query";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { CheckoutStatusUpdate } from "@getpaseo/protocol/messages";
+import type { CheckoutStatusUpdate } from "@bytetrue/byspace-protocol/messages";
 import { checkoutPrStatusQueryKey, checkoutStatusQueryKey } from "@/git/query-keys";
 import { prPaneTimelineQueryKey } from "@/git/pull-request-panel/query-keys";
 import { resetReviewDraftStore, useReviewDraftStore } from "@/review/store";

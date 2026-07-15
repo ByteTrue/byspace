@@ -3,7 +3,7 @@ import {
   type AttachmentMetadata,
   type UserComposerAttachment,
 } from "@/attachments/types";
-import { GitHubSearchItemSchema } from "@getpaseo/protocol/messages";
+import { GitHubSearchItemSchema } from "@bytetrue/byspace-protocol/messages";
 
 export const DRAFT_STORE_VERSION = 5;
 export const FINALIZED_DRAFT_TTL_MS = 5 * 60 * 1000;

@@ -12,7 +12,6 @@ This is an npm workspace monorepo:
 - `packages/app` — Browser Web client (Expo + React Native Web)
 - `packages/cli` — Docker-style CLI (`paseo run/ls/logs/wait`)
 - `packages/relay` — E2E encrypted relay for remote access
-- `packages/website` — Marketing site (paseo.sh)
 
 ## Docs
 

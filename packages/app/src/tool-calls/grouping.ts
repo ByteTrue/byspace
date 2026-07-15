@@ -1,5 +1,5 @@
-import type { ToolCallDetail } from "@getpaseo/protocol/agent-types";
-import { isPaseoToolName } from "@getpaseo/protocol/tool-name-normalization";
+import type { ToolCallDetail } from "@bytetrue/byspace-protocol/agent-types";
+import { isPaseoToolName } from "@bytetrue/byspace-protocol/tool-name-normalization";
 import { getFileNameFromPath } from "@/attachments/utils";
 import type { StreamItem, ToolCallItem } from "@/types/stream";
 import { buildToolCallDisplayModel } from "@/utils/tool-call-display";

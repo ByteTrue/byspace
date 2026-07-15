@@ -68,15 +68,15 @@ All paths are under `packages/server/src/`.
 
 The source of truth for WebSocket messages, binary frame codecs, endpoint parsing,
 agent timeline types, provider config schemas, and other values shared by daemon
-and clients. Server, app, CLI, and `@getpaseo/client` all depend on this package;
+and clients. Server, app, CLI, and `@bytetrue/byspace-client` all depend on this package;
 it does not depend on the server.
 
 ### `packages/client` — Daemon client library and SDK facade
 
 Owns the low-level daemon WebSocket driver plus the higher-level `PaseoClient`
 facade. App and CLI may import the low-level driver from
-`@getpaseo/client/internal/daemon-client` during migration, while new SDK-shaped
-code imports from `@getpaseo/client`.
+`@bytetrue/byspace-client/internal/daemon-client` during migration, while new SDK-shaped
+code imports from `@bytetrue/byspace-client`.
 
 ### `packages/app` — Browser Web client (Expo)
 
@@ -118,10 +118,6 @@ Enables remote access when the daemon is behind a firewall.
 - Self-hosted relays opt into TLS with `daemon.relay.useTls` or `PASEO_RELAY_USE_TLS=true`; the public (client-facing) TLS setting can be overridden independently via `daemon.relay.publicUseTls` or `PASEO_RELAY_PUBLIC_USE_TLS`
 
 See [SECURITY.md](../SECURITY.md) for the full threat model.
-
-### `packages/website` — Marketing site
-
-TanStack Router + Cloudflare Workers. Serves paseo.sh.
 
 ## WebSocket protocol
 

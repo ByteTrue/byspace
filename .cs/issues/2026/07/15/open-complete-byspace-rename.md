@@ -16,7 +16,7 @@ epic: ".cs/epics/2026/07/14/web-only-byspace/spec.md"
 
 ## 现状如何工作
 
-当前 fork 已完成 Web-only 裁剪，但大多数活跃标识仍继承 upstream：npm workspace 使用 `@getpaseo/*`，CLI 与 daemon 读取 `PASEO_*`，默认状态和配置使用 `.paseo` / `paseo.json`，协议工具和类型包含 `Paseo/paseo`。只改页面标题会留下两套长期命名，并让发布包、日志、配置和搜索持续混淆。
+当前 fork 已完成 Web-only 裁剪，但大多数活跃标识仍继承 upstream：npm workspace 使用 `@bytetrue/byspace-*`，CLI 与 daemon 读取 `PASEO_*`，默认状态和配置使用 `.paseo` / `paseo.json`，协议工具和类型包含 `Paseo/paseo`。只改页面标题会留下两套长期命名，并让发布包、日志、配置和搜索持续混淆。
 
 ## 影响范围
 

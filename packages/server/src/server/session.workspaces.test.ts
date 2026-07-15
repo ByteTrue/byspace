@@ -17,7 +17,10 @@ import { createTestLogger } from "../test-utils/test-logger.js";
 import { Session } from "./session.js";
 import type { SessionOptions } from "./session.js";
 import type { AgentUpdatesService } from "./session/agent-updates/agent-updates-service.js";
-import type { AgentSnapshotPayload, SessionOutboundMessage } from "@getpaseo/protocol/messages";
+import type {
+  AgentSnapshotPayload,
+  SessionOutboundMessage,
+} from "@bytetrue/byspace-protocol/messages";
 import type { TerminalManager } from "../terminal/terminal-manager.js";
 import { createTerminalManager } from "../terminal/terminal-manager.js";
 import { AgentManager } from "./agent/agent-manager.js";
@@ -4816,7 +4819,7 @@ function createRecreateWorktreeRepo(): { tempDir: string; repoDir: string } {
   const tempDir = realpathSync(mkdtempSync(path.join(tmpdir(), "paseo-recreate-worktree-")));
   const repoDir = path.join(tempDir, "repo");
   execFileSync("git", ["init", "-b", "main", repoDir], { stdio: "pipe" });
-  execFileSync("git", ["config", "user.email", "test@getpaseo.local"], {
+  execFileSync("git", ["config", "user.email", "test@byspace.local"], {
     cwd: repoDir,
     stdio: "pipe",
   });
@@ -5136,7 +5139,7 @@ test("archive_workspace_request archives a worktree-kind workspace and removes t
   const repoDir = path.join(tempDir, "repo");
   mkdirSync(repoDir, { recursive: true });
   execFileSync("git", ["init", "-b", "main"], { cwd: repoDir, stdio: "pipe" });
-  execFileSync("git", ["config", "user.email", "test@getpaseo.local"], {
+  execFileSync("git", ["config", "user.email", "test@byspace.local"], {
     cwd: repoDir,
     stdio: "pipe",
   });
@@ -7175,7 +7178,7 @@ function createWorkspaceCreatePrRepo(): WorkspaceCreatePrRepoFixture {
   const prFileName = "pr-123.txt";
 
   execFileSync("git", ["init", "-b", "main", repoDir], { stdio: "pipe" });
-  execFileSync("git", ["config", "user.email", "test@getpaseo.local"], {
+  execFileSync("git", ["config", "user.email", "test@byspace.local"], {
     cwd: repoDir,
     stdio: "pipe",
   });
@@ -7484,7 +7487,7 @@ test("workspace auto-name applies title once when branch auto-name is rejected",
   const repoDir = path.join(tempDir, "repo");
   mkdirSync(repoDir);
   execFileSync("git", ["init", repoDir], { stdio: "pipe" });
-  execFileSync("git", ["config", "user.email", "test@getpaseo.local"], {
+  execFileSync("git", ["config", "user.email", "test@byspace.local"], {
     cwd: repoDir,
     stdio: "pipe",
   });

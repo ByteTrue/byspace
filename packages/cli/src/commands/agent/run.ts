@@ -1,6 +1,6 @@
 import { Command, Option } from "commander";
-import { getStructuredAgentResponse, StructuredAgentResponseError } from "@getpaseo/server";
-import type { AgentSnapshotPayload } from "@getpaseo/protocol/messages";
+import { getStructuredAgentResponse, StructuredAgentResponseError } from "@bytetrue/byspace-server";
+import type { AgentSnapshotPayload } from "@bytetrue/byspace-protocol/messages";
 import { connectToDaemon, getDaemonHost } from "../../utils/client.js";
 import type {
   CommandOptions,

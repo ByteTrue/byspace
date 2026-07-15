@@ -1,8 +1,8 @@
 import { useCallback, useMemo } from "react";
 import { useMutation, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import type { AgentProvider, ProviderSnapshotEntry } from "@getpaseo/protocol/agent-types";
-import type { DaemonClient } from "@getpaseo/client/internal/daemon-client";
+import type { AgentProvider, ProviderSnapshotEntry } from "@bytetrue/byspace-protocol/agent-types";
+import type { DaemonClient } from "@bytetrue/byspace-client/internal/daemon-client";
 import { useHostRuntimeClient, useHostRuntimeIsConnected } from "@/runtime/host-runtime";
 import { useSessionStore } from "@/stores/session-store";
 import { useReplicaQuery } from "@/data/query";

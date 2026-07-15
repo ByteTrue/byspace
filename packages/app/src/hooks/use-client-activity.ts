@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import type { DaemonClient } from "@getpaseo/client/internal/daemon-client";
+import type { DaemonClient } from "@bytetrue/byspace-client/internal/daemon-client";
 import {
   type ClientActivityTracker,
   createClientActivityTracker,

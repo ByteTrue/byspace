@@ -5,8 +5,8 @@ import { useHostRuntimeClient, useHostRuntimeIsConnected } from "@/runtime/host-
 import type {
   CheckoutPrStatusResponse,
   PullRequestTimelineResponse,
-} from "@getpaseo/protocol/messages";
-import type { DaemonClient } from "@getpaseo/client/internal/daemon-client";
+} from "@bytetrue/byspace-protocol/messages";
+import type { DaemonClient } from "@bytetrue/byspace-client/internal/daemon-client";
 import { useCheckoutPrStatusQuery } from "@/git/use-pr-status-query";
 import { i18n } from "@/i18n/i18next";
 import { mapPrPaneData, type PrPaneData } from "./data";

@@ -1,10 +1,13 @@
-import type { AgentModelDefinition, ProviderSnapshotEntry } from "@getpaseo/protocol/agent-types";
-import { normalizeAgentModelDefinition } from "@getpaseo/protocol/agent-types";
+import type {
+  AgentModelDefinition,
+  ProviderSnapshotEntry,
+} from "@bytetrue/byspace-protocol/agent-types";
+import { normalizeAgentModelDefinition } from "@bytetrue/byspace-protocol/agent-types";
 import type {
   GetProvidersSnapshotResponseMessage,
   ListProviderModelsResponseMessage,
   SessionOutboundMessage,
-} from "@getpaseo/protocol/messages";
+} from "@bytetrue/byspace-protocol/messages";
 
 type ListProviderModelsPayload = ListProviderModelsResponseMessage["payload"];
 type GetProvidersSnapshotPayload = GetProvidersSnapshotResponseMessage["payload"];

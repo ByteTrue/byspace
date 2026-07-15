@@ -10,9 +10,12 @@ import {
   fetchProjectedTimelineItems,
   LIVE_HISTORY_FETCH_TIMEOUT_MS,
 } from "../../utils/timeline.js";
-import type { DaemonClient } from "@getpaseo/client/internal/daemon-client";
-import type { AgentTimelineItem } from "@getpaseo/protocol/agent-types";
-import type { AgentStreamEventPayload, AgentStreamMessage } from "@getpaseo/protocol/messages";
+import type { DaemonClient } from "@bytetrue/byspace-client/internal/daemon-client";
+import type { AgentTimelineItem } from "@bytetrue/byspace-protocol/agent-types";
+import type {
+  AgentStreamEventPayload,
+  AgentStreamMessage,
+} from "@bytetrue/byspace-protocol/messages";
 
 export interface AgentAttachOptions {
   host?: string;

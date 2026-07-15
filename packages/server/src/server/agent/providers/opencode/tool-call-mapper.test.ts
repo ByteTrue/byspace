@@ -303,7 +303,7 @@ describe("opencode tool-call mapper", () => {
         callId: "opencode-edit-camel",
         status: "completed",
         input: {
-          filePath: "/workspaces/paseo/packages/website/src/data/agent-pages.ts",
+          filePath: "/workspaces/byspace/packages/app/src/data/providers-snapshot.ts",
           oldString: 'metaTitle: "Agent page"',
           newString: 'metaTitle: "Updated agent page"',
         },
@@ -313,7 +313,7 @@ describe("opencode tool-call mapper", () => {
 
     expect(item.detail).toEqual({
       type: "edit",
-      filePath: "/workspaces/paseo/packages/website/src/data/agent-pages.ts",
+      filePath: "/workspaces/byspace/packages/app/src/data/providers-snapshot.ts",
       oldString: 'metaTitle: "Agent page"',
       newString: 'metaTitle: "Updated agent page"',
     });

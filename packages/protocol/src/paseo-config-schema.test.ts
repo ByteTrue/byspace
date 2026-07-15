@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { PaseoConfigRawSchema, PaseoConfigSchema } from "@getpaseo/protocol/paseo-config-schema";
+import {
+  PaseoConfigRawSchema,
+  PaseoConfigSchema,
+} from "@bytetrue/byspace-protocol/paseo-config-schema";
 
 describe("paseo config schema", () => {
   it("parses an empty config without metadata generation", () => {

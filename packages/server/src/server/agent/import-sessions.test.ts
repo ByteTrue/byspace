@@ -8,7 +8,7 @@ import type {
   ManagedImportableProviderSession,
 } from "./agent-manager.js";
 import type { AgentStorage, StoredAgentRecord } from "./agent-storage.js";
-import type { FetchRecentProviderSessionsRequestMessage } from "@getpaseo/protocol/messages";
+import type { FetchRecentProviderSessionsRequestMessage } from "@bytetrue/byspace-protocol/messages";
 import type { AgentTimelineItem } from "./agent-sdk-types.js";
 import {
   ImportSessionsRequestError,

@@ -6,7 +6,7 @@ import {
   type ConnectionState,
   type FetchAgentsEntry,
   type FetchAgentsOptions,
-} from "@getpaseo/client/internal/daemon-client";
+} from "@bytetrue/byspace-client/internal/daemon-client";
 import {
   connectionFromListen,
   normalizeStoredHostProfile,
@@ -23,7 +23,10 @@ import {
   shouldUseTlsForDefaultHostedRelay,
 } from "@/utils/daemon-endpoints";
 import { resolveAppVersion } from "@/utils/app-version";
-import { ConnectionOfferSchema, type ConnectionOffer } from "@getpaseo/protocol/connection-offer";
+import {
+  ConnectionOfferSchema,
+  type ConnectionOffer,
+} from "@bytetrue/byspace-protocol/connection-offer";
 import { isWeb } from "@/constants/platform";
 import { connectToDaemon } from "@/utils/test-daemon-connection";
 import { getOrCreateClientId } from "@/utils/client-id";

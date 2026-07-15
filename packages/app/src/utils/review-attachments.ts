@@ -1,4 +1,4 @@
-import type { AgentAttachment, GitHubSearchItem } from "@getpaseo/protocol/messages";
+import type { AgentAttachment, GitHubSearchItem } from "@bytetrue/byspace-protocol/messages";
 
 export function buildGitHubAttachmentFromSearchItem(
   item: GitHubSearchItem | null,

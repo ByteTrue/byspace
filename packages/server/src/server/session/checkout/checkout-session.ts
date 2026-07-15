@@ -1,6 +1,6 @@
 import type pino from "pino";
-import { getErrorMessage } from "@getpaseo/protocol/error-utils";
-import { validateBranchSlug } from "@getpaseo/protocol/branch-slug";
+import { getErrorMessage } from "@bytetrue/byspace-protocol/error-utils";
+import { validateBranchSlug } from "@bytetrue/byspace-protocol/branch-slug";
 import type {
   BranchSuggestionsRequest,
   CheckoutRefreshRequest,

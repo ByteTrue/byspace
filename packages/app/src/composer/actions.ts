@@ -1,4 +1,4 @@
-import type { GitHubSearchItem } from "@getpaseo/protocol/messages";
+import type { GitHubSearchItem } from "@bytetrue/byspace-protocol/messages";
 import type {
   AttachmentMetadata,
   ComposerAttachment,

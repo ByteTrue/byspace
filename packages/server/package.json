@@ -1,5 +1,5 @@
 {
-  "name": "@getpaseo/server",
+  "name": "@bytetrue/byspace-server",
   "version": "0.1.107",
   "description": "Paseo backend server",
   "files": [
@@ -67,10 +67,10 @@
     "@agentclientprotocol/sdk": "^0.17.1",
     "@anthropic-ai/claude-agent-sdk": "^0.3.195",
     "@anthropic-ai/sdk": "^0.104.2",
-    "@getpaseo/client": "0.1.107",
-    "@getpaseo/highlight": "0.1.107",
-    "@getpaseo/protocol": "0.1.107",
-    "@getpaseo/relay": "0.1.107",
+    "@bytetrue/byspace-client": "0.1.107",
+    "@bytetrue/byspace-highlight": "0.1.107",
+    "@bytetrue/byspace-protocol": "0.1.107",
+    "@bytetrue/byspace-relay": "0.1.107",
     "@isaacs/ttlcache": "^2.1.4",
     "@modelcontextprotocol/sdk": "^1.20.1",
     "@opencode-ai/sdk": "1.14.46",
@@ -102,6 +102,7 @@
   "devDependencies": {
     "@playwright/test": "^1.56.1",
     "@types/express": "^4.17.20",
+    "@types/express-serve-static-core": "^4.19.9",
     "@types/node": "^20.9.0",
     "@types/qrcode": "^1.5.6",
     "@types/uuid": "^9.0.7",

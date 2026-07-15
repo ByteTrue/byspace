@@ -30,8 +30,6 @@ buildNpmPackage rec {
         relPath = lib.removePrefix (toString ./..) path;
       in
       # Exclude non-daemon workspace contents (keep package.json for workspace resolution)
-      !(lib.hasPrefix "/packages/website/src" relPath)
-      && !(lib.hasPrefix "/packages/website/public" relPath)
       # Exclude test fixtures and debug files
       && !(lib.hasSuffix ".test.ts" baseName)
       && !(lib.hasSuffix ".e2e.test.ts" baseName)

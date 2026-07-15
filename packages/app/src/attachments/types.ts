@@ -2,7 +2,7 @@ import type {
   AgentAttachment,
   GitHubSearchItem,
   UploadedFileAttachment,
-} from "@getpaseo/protocol/messages";
+} from "@bytetrue/byspace-protocol/messages";
 
 export type AttachmentStorageType = "web-indexeddb" | "desktop-file" | "native-file";
 

@@ -1,5 +1,8 @@
 import { afterEach, describe, expect, it } from "vitest";
-import type { DaemonClient, FetchAgentsEntry } from "@getpaseo/client/internal/daemon-client";
+import type {
+  DaemonClient,
+  FetchAgentsEntry,
+} from "@bytetrue/byspace-client/internal/daemon-client";
 import { useSessionStore, type Agent } from "@/stores/session-store";
 import { deriveWorkspaceAgentVisibility } from "@/workspace-tabs/agent-visibility";
 import {

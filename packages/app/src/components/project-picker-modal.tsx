@@ -35,7 +35,7 @@ import { useRecommendedProjectPaths } from "@/stores/session-store-hooks";
 import { shortenPath } from "@/utils/shorten-path";
 import { isNative } from "@/constants/platform";
 import { ProjectPickerBrowseButton } from "./project-picker-browse-button";
-import { isCompleteGitRemote } from "@getpaseo/protocol/git-remote";
+import { isCompleteGitRemote } from "@bytetrue/byspace-protocol/git-remote";
 import { buildProjectPickerOptions, type ProjectPickerOption } from "./project-picker-options";
 
 type ProjectPickerMode = "local" | "github";

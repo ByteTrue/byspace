@@ -1,5 +1,5 @@
 {
-  "name": "@getpaseo/client",
+  "name": "@bytetrue/byspace-client",
   "version": "0.1.107",
   "description": "Paseo client SDK package",
   "files": [
@@ -27,7 +27,7 @@
   },
   "scripts": {
     "clean": "node ../../scripts/clean-package-dist.mjs",
-    "build": "npm run build --workspace=@getpaseo/protocol && tsc -p tsconfig.json --incremental false",
+    "build": "npm run build --workspace=@bytetrue/byspace-protocol && tsc -p tsconfig.json --incremental false",
     "build:clean": "npm run clean && npm run build",
     "prepack": "npm run build:clean",
     "typecheck": "tsgo --noEmit",
@@ -35,8 +35,8 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@getpaseo/protocol": "0.1.107",
-    "@getpaseo/relay": "0.1.107",
+    "@bytetrue/byspace-protocol": "0.1.107",
+    "@bytetrue/byspace-relay": "0.1.107",
     "zod": "^4.4.3"
   },
   "devDependencies": {

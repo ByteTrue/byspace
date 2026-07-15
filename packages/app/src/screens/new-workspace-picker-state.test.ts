@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { UserComposerAttachment } from "@/attachments/types";
-import type { GitHubSearchItem } from "@getpaseo/protocol/messages";
+import type { GitHubSearchItem } from "@bytetrue/byspace-protocol/messages";
 import {
   clearPickerPrAttachmentForTargetChange,
   findCheckoutHintPrAttachment,

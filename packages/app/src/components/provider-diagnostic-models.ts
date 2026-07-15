@@ -1,4 +1,4 @@
-import type { AgentModelDefinition } from "@getpaseo/protocol/agent-types";
+import type { AgentModelDefinition } from "@bytetrue/byspace-protocol/agent-types";
 
 export interface ProviderDiscoveredModelsCache {
   serverId: string;

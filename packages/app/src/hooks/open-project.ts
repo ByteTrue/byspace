@@ -1,5 +1,8 @@
-import type { DaemonClient } from "@getpaseo/client/internal/daemon-client";
-import type { ProjectAddResponse, WorkspaceGithubCloneProtocol } from "@getpaseo/protocol/messages";
+import type { DaemonClient } from "@bytetrue/byspace-client/internal/daemon-client";
+import type {
+  ProjectAddResponse,
+  WorkspaceGithubCloneProtocol,
+} from "@bytetrue/byspace-protocol/messages";
 import {
   normalizeEmptyProjectDescriptor as normalizeProjectWithoutWorkspacesDescriptor,
   normalizeWorkspaceDescriptor,

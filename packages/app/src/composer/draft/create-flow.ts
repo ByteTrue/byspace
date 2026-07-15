@@ -10,7 +10,7 @@ import {
   type StreamItem,
   type UserMessageImageAttachment,
 } from "@/types/stream";
-import type { AgentAttachment } from "@getpaseo/protocol/messages";
+import type { AgentAttachment } from "@bytetrue/byspace-protocol/messages";
 
 const EMPTY_STREAM_ITEMS: StreamItem[] = [];
 

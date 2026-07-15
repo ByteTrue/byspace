@@ -1,4 +1,7 @@
-import type { CreateTerminalResponse, ListTerminalsResponse } from "@getpaseo/protocol/messages";
+import type {
+  CreateTerminalResponse,
+  ListTerminalsResponse,
+} from "@bytetrue/byspace-protocol/messages";
 
 type TerminalListEntry = ListTerminalsResponse["payload"]["terminals"][number];
 type CreatedTerminal = NonNullable<CreateTerminalResponse["payload"]["terminal"]>;

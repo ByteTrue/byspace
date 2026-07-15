@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import { useReplicaQuery } from "@/data/query";
 import { checkoutDiffPushRoute } from "@/data/push-router";
 import { useHostRuntimeIsConnected } from "@/runtime/host-runtime";
-import type { SubscribeCheckoutDiffResponse } from "@getpaseo/protocol/messages";
+import type { SubscribeCheckoutDiffResponse } from "@bytetrue/byspace-protocol/messages";
 import { checkoutDiffQueryKey } from "@/git/query-keys";
 
 interface UseCheckoutDiffQueryOptions {

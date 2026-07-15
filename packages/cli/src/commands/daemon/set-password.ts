@@ -6,7 +6,7 @@ import {
   loadPersistedConfig,
   savePersistedConfig,
   type PersistedConfig,
-} from "@getpaseo/server";
+} from "@bytetrue/byspace-server";
 import type {
   CommandError,
   CommandOptions,

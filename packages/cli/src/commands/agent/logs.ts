@@ -5,10 +5,10 @@ import {
   fetchProjectedTimelineItems,
   LIVE_HISTORY_FETCH_TIMEOUT_MS,
 } from "../../utils/timeline.js";
-import type { DaemonClient } from "@getpaseo/client/internal/daemon-client";
-import type { AgentTimelineItem } from "@getpaseo/protocol/agent-types";
-import type { AgentStreamMessage } from "@getpaseo/protocol/messages";
-import { curateAgentActivity } from "@getpaseo/server";
+import type { DaemonClient } from "@bytetrue/byspace-client/internal/daemon-client";
+import type { AgentTimelineItem } from "@bytetrue/byspace-protocol/agent-types";
+import type { AgentStreamMessage } from "@bytetrue/byspace-protocol/messages";
+import { curateAgentActivity } from "@bytetrue/byspace-server";
 
 export function addLogsOptions(cmd: Command): Command {
   return cmd

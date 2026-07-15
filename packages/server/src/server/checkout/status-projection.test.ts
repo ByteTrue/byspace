@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 
-import { CheckoutPrStatusSchema } from "@getpaseo/protocol/messages";
+import { CheckoutPrStatusSchema } from "@bytetrue/byspace-protocol/messages";
 import { normalizeCheckoutPrStatusPayload } from "./status-projection.js";
 
 describe("checkout status projection", () => {

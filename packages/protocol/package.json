@@ -1,5 +1,5 @@
 {
-  "name": "@getpaseo/protocol",
+  "name": "@bytetrue/byspace-protocol",
   "version": "0.1.107",
   "description": "Paseo shared protocol schemas and wire types",
   "files": [

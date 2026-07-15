@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="packages/website/public/logo.svg" width="64" height="64" alt="Paseo logo">
+  <img src="packages/app/assets/images/icon.png" width="64" height="64" alt="Paseo logo">
 </p>
 
 <h1 align="center">Paseo</h1>
@@ -77,7 +77,7 @@ Paseo 会运行一个名为 daemon 的本地服务，用来管理你的 coding a
 安装 CLI 并启动 Paseo：
 
 ```bash
-npm install -g @getpaseo/cli
+npm install -g @bytetrue/byspace-cli
 paseo
 ```
 
@@ -130,7 +130,6 @@ Monorepo 包结构速览：
 - `packages/cli`：用于 daemon 和 agent 工作流的 `paseo` CLI
 - `packages/desktop`：Electron 桌面 app
 - `packages/relay`：用于远程连接的 relay 包
-- `packages/website`：营销站点和文档（`paseo.sh`）
 
 常用命令：
 
@@ -141,8 +140,6 @@ npm run dev
 # 单独运行某个界面
 npm run dev:server
 npm run dev:app
-npm run dev:desktop
-npm run dev:website
 
 # 构建 server stack
 npm run build:server

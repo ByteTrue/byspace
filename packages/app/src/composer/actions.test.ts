@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import type { AgentAttachment, GitHubSearchItem } from "@getpaseo/protocol/messages";
+import type { AgentAttachment, GitHubSearchItem } from "@bytetrue/byspace-protocol/messages";
 import type {
   AttachmentMetadata,
   ComposerAttachment,
