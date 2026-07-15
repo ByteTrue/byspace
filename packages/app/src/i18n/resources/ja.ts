@@ -1348,6 +1348,8 @@ export const ja: TranslationResources = {
     detachTooltip: "サブエージェントを切り離す",
     archiveAction: "{{label}}をアーカイブ",
     archiveTooltip: "サブエージェントをアーカイブ",
+    archiveFinishedAction: "完了したサブエージェントをアーカイブ",
+    archiveFinishedTooltip: "完了した項目をアーカイブ",
   },
   panels: {
     draft: {
