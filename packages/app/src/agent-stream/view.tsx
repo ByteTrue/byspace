@@ -139,6 +139,7 @@ function renderStreamItemWithTurnFooter(input: {
   content: ReactNode;
   layoutItem: StreamLayoutItem;
   strategy: TurnContentStrategy;
+  supportsTimelineCursor: boolean;
   onForkAssistantTurn?: AssistantTurnForkHandler;
 }): ReactNode {
   if (!input.content) {
@@ -152,6 +153,7 @@ function renderStreamItemWithTurnFooter(input: {
       items={footerHost.items}
       timing={footerHost.timing}
       startIndex={footerHost.startIndex}
+      supportsTimelineCursor={input.supportsTimelineCursor}
       onForkAssistantTurn={input.onForkAssistantTurn}
     />
   ) : null;
@@ -278,6 +280,7 @@ function buildChatHistoryAttachment(input: {
       serverId: input.serverId,
       agentId: input.agentId,
       boundaryMessageId: input.payload.boundaryMessageId,
+      boundaryCursor: input.payload.boundaryCursor,
       itemCount: input.payload.itemCount,
     },
   };
@@ -364,6 +367,10 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
       (state) =>
         !readOnly &&
         state.sessions[resolvedServerId]?.serverInfo?.features?.agentForkContext === true,
+    );
+    const supportsAgentForkContextCursor = useSessionStore(
+      (state) =>
+        state.sessions[resolvedServerId]?.serverInfo?.features?.agentForkContextCursor === true,
     );
 
     const workspaceRoot = context.cwd?.trim() || "";
@@ -462,7 +469,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
     });
 
     const handleForkAssistantTurn: AssistantTurnForkHandler = useStableEvent(
-      async ({ target, boundaryMessageId }) => {
+      async ({ target, boundary }) => {
         try {
           if (!supportsAgentForkContext) {
             toast?.error(t("message.actions.forkUnavailable"));
@@ -474,10 +481,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
           const draftSetup = buildForkDraftSetup(context);
           const prepareForkDraft = async () => {
             const draftId = generateDraftId();
-            const payload = await client.buildAgentForkContext(
-              agentId,
-              boundaryMessageId ? { boundaryMessageId } : {},
-            );
+            const payload = await client.buildAgentForkContext(agentId, boundary);
             const attachment = buildChatHistoryAttachment({
               draftId,
               serverId: resolvedServerId,
@@ -826,10 +830,17 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
           content,
           layoutItem,
           strategy: streamRenderStrategy,
+          supportsTimelineCursor: supportsAgentForkContextCursor,
           onForkAssistantTurn: readOnly ? undefined : handleForkAssistantTurn,
         });
       },
-      [handleForkAssistantTurn, readOnly, renderStreamItemContent, streamRenderStrategy],
+      [
+        handleForkAssistantTurn,
+        readOnly,
+        renderStreamItemContent,
+        streamRenderStrategy,
+        supportsAgentForkContextCursor,
+      ],
     );
 
     const pendingPermissionItems = useMemo(
@@ -854,6 +865,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
             inFlightTurnStartedAt={baseRenderModel.turnTiming.runningStartedAt}
             host={bottomTurnFooterHost}
             strategy={streamRenderStrategy}
+            supportsTimelineCursor={supportsAgentForkContextCursor}
             onForkAssistantTurn={readOnly ? undefined : handleForkAssistantTurn}
           />
         ) : null,
@@ -864,6 +876,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
         baseRenderModel.turnTiming.runningStartedAt,
         bottomTurnFooterHost,
         streamRenderStrategy,
+        supportsAgentForkContextCursor,
       ],
     );
     const renderModel = useMemo<AgentStreamRenderModel>(() => {
