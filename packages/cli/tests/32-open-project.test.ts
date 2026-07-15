@@ -55,8 +55,8 @@ process.stderr.write = ((chunk: string | Uint8Array) => {
 
 const previousExitCode = process.exitCode;
 process.exitCode = undefined;
-const previousDesktopCli = process.env.PASEO_DESKTOP_CLI;
-process.env.PASEO_DESKTOP_CLI = "1";
+const previousDesktopCli = process.env.BYSPACE_DESKTOP_CLI;
+process.env.BYSPACE_DESKTOP_CLI = "1";
 
 await openDesktopWithProject(existingProject);
 
@@ -64,7 +64,7 @@ process.stderr.write = originalWrite;
 assert.equal(process.exitCode, 1);
 assert.match(stderrChunks.join(""), /desktop CLI passthrough mode/);
 process.exitCode = previousExitCode;
-process.env.PASEO_DESKTOP_CLI = previousDesktopCli;
+process.env.BYSPACE_DESKTOP_CLI = previousDesktopCli;
 console.log("  ✅ desktop CLI passthrough mode is rejected");
 
 console.log("\n✅ Phase 32: Open Project CLI Tests PASSED");

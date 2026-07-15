@@ -4,7 +4,7 @@
  * Critical rules from design doc:
  * 1. Port: Random port via 10000 + Math.floor(Math.random() * 50000) - NEVER 6767
  * 2. Protocol: WebSocket ONLY - daemon has no HTTP endpoints
- * 3. Temp dirs: Create temp directories for PASEO_HOME and agent --cwd
+ * 3. Temp dirs: Create temp directories for BYSPACE_HOME and agent --cwd
  * 4. Model: Always --provider claude with haiku model for agent tests
  * 5. Cleanup: Kill daemon and remove temp dirs after each test
  */
@@ -15,9 +15,9 @@ import { tmpdir } from "os";
 import { join } from "path";
 
 const TEST_ENV_DEFAULTS = {
-  PASEO_LOCAL_SPEECH_AUTO_DOWNLOAD: process.env.PASEO_LOCAL_SPEECH_AUTO_DOWNLOAD ?? "0",
-  PASEO_DICTATION_ENABLED: process.env.PASEO_DICTATION_ENABLED ?? "0",
-  PASEO_VOICE_MODE_ENABLED: process.env.PASEO_VOICE_MODE_ENABLED ?? "0",
+  BYSPACE_LOCAL_SPEECH_AUTO_DOWNLOAD: process.env.BYSPACE_LOCAL_SPEECH_AUTO_DOWNLOAD ?? "0",
+  BYSPACE_DICTATION_ENABLED: process.env.BYSPACE_DICTATION_ENABLED ?? "0",
+  BYSPACE_VOICE_MODE_ENABLED: process.env.BYSPACE_VOICE_MODE_ENABLED ?? "0",
 };
 
 function killPidTree(pid: number, signal: NodeJS.Signals): void {
@@ -50,7 +50,7 @@ function killPidTree(pid: number, signal: NodeJS.Signals): void {
 export interface TestContext {
   /** Random port for test daemon (never 6767) */
   port: number;
-  /** Temp directory for PASEO_HOME */
+  /** Temp directory for BYSPACE_HOME */
   paseoHome: string;
   /** Temp directory for agent working directory */
   workDir: string;
@@ -85,7 +85,7 @@ export async function createTempDirs(): Promise<{ paseoHome: string; workDir: st
  */
 async function probeDaemon(port: number): Promise<boolean> {
   try {
-    const result = await $`PASEO_HOST=localhost:${port} paseo agent ls`.nothrow();
+    const result = await $`BYSPACE_HOST=localhost:${port} paseo agent ls`.nothrow();
     return result.exitCode === 0;
   } catch {
     return false;
@@ -111,7 +111,7 @@ export async function waitForDaemon(port: number, timeout = 30000): Promise<void
 export async function startDaemon(port: number, paseoHome: string): Promise<ProcessPromise> {
   $.verbose = false;
   const daemon =
-    $`PASEO_HOME=${paseoHome} PASEO_LISTEN=127.0.0.1:${port} PASEO_RELAY_ENABLED=false PASEO_LOCAL_SPEECH_AUTO_DOWNLOAD=${TEST_ENV_DEFAULTS.PASEO_LOCAL_SPEECH_AUTO_DOWNLOAD} PASEO_DICTATION_ENABLED=${TEST_ENV_DEFAULTS.PASEO_DICTATION_ENABLED} PASEO_VOICE_MODE_ENABLED=${TEST_ENV_DEFAULTS.PASEO_VOICE_MODE_ENABLED} CI=true paseo daemon start --foreground`.nothrow();
+    $`BYSPACE_HOME=${paseoHome} BYSPACE_LISTEN=127.0.0.1:${port} BYSPACE_RELAY_ENABLED=false BYSPACE_LOCAL_SPEECH_AUTO_DOWNLOAD=${TEST_ENV_DEFAULTS.BYSPACE_LOCAL_SPEECH_AUTO_DOWNLOAD} BYSPACE_DICTATION_ENABLED=${TEST_ENV_DEFAULTS.BYSPACE_DICTATION_ENABLED} BYSPACE_VOICE_MODE_ENABLED=${TEST_ENV_DEFAULTS.BYSPACE_VOICE_MODE_ENABLED} CI=true paseo daemon start --foreground`.nothrow();
   return daemon;
 }
 
@@ -125,7 +125,7 @@ export async function createTestContext(): Promise<TestContext> {
   // Helper to run CLI commands against test daemon
   const paseo = (args: string[]): ProcessPromise => {
     $.verbose = false;
-    return $`PASEO_HOST=localhost:${port} PASEO_LOCAL_SPEECH_AUTO_DOWNLOAD=${TEST_ENV_DEFAULTS.PASEO_LOCAL_SPEECH_AUTO_DOWNLOAD} PASEO_DICTATION_ENABLED=${TEST_ENV_DEFAULTS.PASEO_DICTATION_ENABLED} PASEO_VOICE_MODE_ENABLED=${TEST_ENV_DEFAULTS.PASEO_VOICE_MODE_ENABLED} paseo ${args}`.nothrow();
+    return $`BYSPACE_HOST=localhost:${port} BYSPACE_LOCAL_SPEECH_AUTO_DOWNLOAD=${TEST_ENV_DEFAULTS.BYSPACE_LOCAL_SPEECH_AUTO_DOWNLOAD} BYSPACE_DICTATION_ENABLED=${TEST_ENV_DEFAULTS.BYSPACE_DICTATION_ENABLED} BYSPACE_VOICE_MODE_ENABLED=${TEST_ENV_DEFAULTS.BYSPACE_VOICE_MODE_ENABLED} paseo ${args}`.nothrow();
   };
 
   // Cleanup function

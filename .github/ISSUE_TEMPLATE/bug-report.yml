@@ -100,7 +100,7 @@ body:
       description: |
         Paste relevant log output. Strongly preferred for crashes and daemon issues.
 
-        - **Daemon log:** `~/.paseo/daemon.log` (override with `$PASEO_HOME`)
+        - **Daemon log:** `~/.paseo/daemon.log` (override with `$BYSPACE_HOME`)
         - **Electron log (macOS):** `~/Library/Logs/Paseo/main.log`
         - **Electron log (Windows):** `%APPDATA%\Paseo\logs\main.log`
         - **Electron log (Linux):** `~/.config/Paseo/logs/main.log`

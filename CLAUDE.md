@@ -63,7 +63,7 @@ npm run format                       # Auto-format with Biome
 npm run format:check                 # Check formatting without writing
 ```
 
-Repo dev commands use checkout-local state by default. In this checkout, `PASEO_HOME` resolves to `.dev/paseo-home`, and `npm run cli -- ...` targets that same dev home automatically. Production-style daemons use `~/.paseo` on port `6767`.
+Repo dev commands use checkout-local state by default. In this checkout, `BYSPACE_HOME` resolves to `.dev/paseo-home`, and `npm run cli -- ...` targets that same dev home automatically. Production-style daemons use `~/.paseo` on port `6767`.
 
 See [docs/development.md](docs/development.md) for full setup, build sync requirements, and debugging.
 
@@ -119,4 +119,4 @@ The only supported graphical client is the browser Web app. `packages/app` still
 
 ## Debugging
 
-Find the complete daemon logs and traces in the $PASEO_HOME/daemon.log
+Find the complete daemon logs and traces in the $BYSPACE_HOME/daemon.log

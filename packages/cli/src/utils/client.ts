@@ -146,7 +146,7 @@ function readPidSocketTarget(paseoHome: string): string | null {
 }
 
 function resolveConfiguredIpcDaemonHost(env: NodeJS.ProcessEnv, paseoHome: string): string | null {
-  const directEnvHost = normalizeDaemonHost(env.PASEO_LISTEN ?? "");
+  const directEnvHost = normalizeDaemonHost(env.BYSPACE_LISTEN ?? "");
   if (isIpcDaemonHost(directEnvHost)) {
     return directEnvHost;
   }
@@ -185,7 +185,7 @@ export function resolveDefaultDaemonHosts(env: NodeJS.ProcessEnv = process.env):
 }
 
 function resolveDaemonHostCandidates(options?: ConnectOptions): string[] {
-  const explicitHost = options?.host ?? process.env.PASEO_HOST;
+  const explicitHost = options?.host ?? process.env.BYSPACE_HOST;
   if (explicitHost) {
     return [explicitHost];
   }
@@ -241,7 +241,7 @@ export function resolveDaemonPassword(host: string): string | undefined {
     const fromUri = parseConnectionUri(trimmed).password;
     if (fromUri) return fromUri;
   }
-  const fromEnv = process.env.PASEO_PASSWORD;
+  const fromEnv = process.env.BYSPACE_PASSWORD;
   return fromEnv && fromEnv.length > 0 ? fromEnv : undefined;
 }
 
@@ -353,7 +353,7 @@ export async function connectToDaemon(options?: ConnectOptions): Promise<DaemonC
   const clientId = await getOrCreateCliClientId();
   const nodeWebSocketFactory = createNodeWebSocketFactory();
 
-  const explicitHost = options?.host ?? process.env.PASEO_HOST;
+  const explicitHost = options?.host ?? process.env.BYSPACE_HOST;
   const offer = parseHostOfferOrNull(explicitHost);
   if (offer) {
     return connectViaRelayOffer(offer, clientId, timeout, nodeWebSocketFactory);

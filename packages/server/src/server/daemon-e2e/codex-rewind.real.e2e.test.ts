@@ -104,7 +104,7 @@ function editPrompt(input: {
   doneToken: string;
 }): string {
   return [
-    `PASEO_CODEX_REWIND_PROMPT_${input.promptToken}.`,
+    `BYSPACE_CODEX_REWIND_PROMPT_${input.promptToken}.`,
     `Use apply_patch to make ${input.fileName} contain exactly:`,
     "```",
     input.content.trimEnd(),
@@ -115,7 +115,7 @@ function editPrompt(input: {
 
 function singleCreatePrompt(): string {
   return [
-    "PASEO_CODEX_REWIND_PROMPT_SINGLE_CREATE.",
+    "BYSPACE_CODEX_REWIND_PROMPT_SINGLE_CREATE.",
     "Use apply_patch to create codex-dummy.txt with exactly CODEX_CREATED.",
     "When the file is saved, reply exactly: CODEX_SINGLE_CREATE_DONE",
   ].join("\n");

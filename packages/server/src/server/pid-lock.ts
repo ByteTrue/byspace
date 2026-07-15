@@ -99,7 +99,7 @@ export async function acquirePidLock(
     hostname: hostname(),
     uid: process.getuid?.() ?? 0,
     listen,
-    ...(process.env.PASEO_DESKTOP_MANAGED === "1" ? { desktopManaged: true } : {}),
+    ...(process.env.BYSPACE_DESKTOP_MANAGED === "1" ? { desktopManaged: true } : {}),
   };
 
   let fd;

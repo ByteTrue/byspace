@@ -43,7 +43,7 @@ describe("daemon bearer auth", () => {
   beforeEach(() => {
     vi.useRealTimers();
     vi.restoreAllMocks();
-    process.env = { ...originalEnv, PASEO_SUPERVISED: "0" };
+    process.env = { ...originalEnv, BYSPACE_SUPERVISED: "0" };
   });
 
   test("leaves HTTP and WebSocket open when no password is configured", async () => {

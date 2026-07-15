@@ -11,7 +11,7 @@ import { getFullAccessConfig } from "./daemon-e2e/agent-configs.js";
 // local-backed createWorkspace for a cwd mints a fresh, distinct workspace,
 // createAgent stamps the agent with the workspaceId it is given, and attaching
 // to an existing workspace by id creates no new record. The CLI's own flag
-// precedence (--workspace > $PASEO_WORKSPACE_ID > --worktree > bare) is covered
+// precedence (--workspace > $BYSPACE_WORKSPACE_ID > --worktree > bare) is covered
 // in packages/cli/src/commands/agent/run.test.ts; this test only proves the
 // daemon behaviors the CLI builds on.
 
@@ -75,7 +75,7 @@ test("daemon mints a distinct local workspace per run and stamps agents by id", 
     expect(idsAfterTwoMints).toContain(secondWorkspaceId);
 
     // Attaching to an existing workspace by id (how --workspace and
-    // $PASEO_WORKSPACE_ID land a run) creates no new workspace record: the
+    // $BYSPACE_WORKSPACE_ID land a run) creates no new workspace record: the
     // agent lands in the named workspace and the workspace set is unchanged.
     const idsBeforeAttach = await workspaceIds(client);
     const attachedAgent = await client.createAgent({

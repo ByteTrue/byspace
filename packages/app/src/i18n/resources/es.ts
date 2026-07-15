@@ -2003,7 +2003,7 @@ export const es: TranslationResources = {
         newScript: "Nuevo guión",
         editScript: "Editar{{name}}",
         runAsService: "Ejecutar como servicio",
-        serviceHint: "Paseosupervisa el proceso y asigna un puerto vía $PASEO_PORT",
+        serviceHint: "Paseosupervisa el proceso y asigna un puerto vía $BYSPACE_PORT",
         actions: {
           add: "Agregar guión",
           edit: "Editar",

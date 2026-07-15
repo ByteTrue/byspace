@@ -38,7 +38,7 @@ export function addRunOptions(cmd: Command): Command {
     .option("--base <branch>", "Base branch for worktree (default: current branch)")
     .option(
       "--workspace <id>",
-      "Run in an existing workspace (default: a new workspace is created per run; falls back to $PASEO_WORKSPACE_ID)",
+      "Run in an existing workspace (default: a new workspace is created per run; falls back to $BYSPACE_WORKSPACE_ID)",
     )
     .option(
       "--image <path>",
@@ -286,12 +286,12 @@ function validateRunOptions(prompt: string, options: AgentRunOptions, outputSche
     } satisfies CommandError;
   }
 
-  if (options.worktree && !options.workspace && process.env.PASEO_WORKSPACE_ID) {
+  if (options.worktree && !options.workspace && process.env.BYSPACE_WORKSPACE_ID) {
     throw {
       code: "INVALID_OPTIONS",
-      message: "--worktree cannot be combined with an ambient PASEO_WORKSPACE_ID",
+      message: "--worktree cannot be combined with an ambient BYSPACE_WORKSPACE_ID",
       details:
-        "PASEO_WORKSPACE_ID selects an existing workspace; --worktree mints a new one. Unset PASEO_WORKSPACE_ID to use --worktree.",
+        "BYSPACE_WORKSPACE_ID selects an existing workspace; --worktree mints a new one. Unset BYSPACE_WORKSPACE_ID to use --worktree.",
     } satisfies CommandError;
   }
 
@@ -415,11 +415,11 @@ interface RunWorkspace {
 
 // Workspace policy for `paseo run`. Precedence:
 //   1. --workspace <id>            -> run in that existing workspace
-//   2. $PASEO_WORKSPACE_ID         -> exported by workspace terminals
+//   2. $BYSPACE_WORKSPACE_ID         -> exported by workspace terminals
 //   3. --worktree <name>           -> mint a new worktree-backed workspace
 //   4. bare run                    -> mint a new local-backed workspace for cwd
 // --worktree is rejected alongside both --workspace and an ambient
-// $PASEO_WORKSPACE_ID (validateRunOptions), so worktree resolution here never
+// $BYSPACE_WORKSPACE_ID (validateRunOptions), so worktree resolution here never
 // races an existing-workspace selection.
 async function resolveRunWorkspace(
   client: ConnectedDaemonClient,
@@ -427,10 +427,10 @@ async function resolveRunWorkspace(
   cwd: string,
 ): Promise<RunWorkspace> {
   // An explicit --worktree mints its own workspace; --workspace and an ambient
-  // PASEO_WORKSPACE_ID are both rejected alongside --worktree upstream.
+  // BYSPACE_WORKSPACE_ID are both rejected alongside --worktree upstream.
   const explicit = options.worktree
     ? undefined
-    : options.workspace?.trim() || process.env.PASEO_WORKSPACE_ID?.trim();
+    : options.workspace?.trim() || process.env.BYSPACE_WORKSPACE_ID?.trim();
   if (explicit) {
     console.error(`Using workspace ${explicit}`);
     return { id: explicit, cwd };
@@ -460,7 +460,7 @@ async function resolveRunWorkspace(
   const label = branch ? `${result.workspace.name} (${branch})` : result.workspace.name;
   console.error(`Created workspace ${result.workspace.id} - ${label}`);
   console.error(
-    "Tip: pass --workspace <id> (or set PASEO_WORKSPACE_ID) to run in an existing workspace.",
+    "Tip: pass --workspace <id> (or set BYSPACE_WORKSPACE_ID) to run in an existing workspace.",
   );
   return { id: result.workspace.id, cwd: result.workspace.workspaceDirectory ?? cwd };
 }

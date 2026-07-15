@@ -2008,7 +2008,7 @@ export const fr: TranslationResources = {
         newScript: "Nouveau scénario",
         editScript: "Modifier{{name}}",
         runAsService: "Exécuter en tant que service",
-        serviceHint: "Paseosupervise le processus et attribue un port via $PASEO_PORT",
+        serviceHint: "Paseosupervise le processus et attribue un port via $BYSPACE_PORT",
         actions: {
           add: "Ajouter un script",
           edit: "Modifier",

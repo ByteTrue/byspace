@@ -136,15 +136,15 @@ The desktop app's first-run hook (`installCli`) symlinks this to `~/.local/bin/p
 
 Daemon-client architecture: the daemon owns agent lifecycle, state, and the WebSocket API. Tools, CLI, mobile, and desktop apps are all clients.
 
-|                | Default                                                         |
-| -------------- | --------------------------------------------------------------- |
-| Listen address | `127.0.0.1:6767` (override `PASEO_LISTEN`)                      |
-| Home           | `~/.paseo` (override `PASEO_HOME`)                              |
-| Daemon log     | `$PASEO_HOME/daemon.log`                                        |
-| Agent state    | `$PASEO_HOME/agents/<id>.json`                                  |
-| Worktrees      | `$PASEO_HOME/worktrees/` (or `worktrees.root` in `config.json`) |
-| PID file       | `$PASEO_HOME/paseo.pid`                                         |
-| Health         | `GET http://127.0.0.1:6767/api/health`                          |
+|                | Default                                                           |
+| -------------- | ----------------------------------------------------------------- |
+| Listen address | `127.0.0.1:6767` (override `BYSPACE_LISTEN`)                      |
+| Home           | `~/.paseo` (override `BYSPACE_HOME`)                              |
+| Daemon log     | `$BYSPACE_HOME/daemon.log`                                        |
+| Agent state    | `$BYSPACE_HOME/agents/<id>.json`                                  |
+| Worktrees      | `$BYSPACE_HOME/worktrees/` (or `worktrees.root` in `config.json`) |
+| PID file       | `$BYSPACE_HOME/paseo.pid`                                         |
+| Health         | `GET http://127.0.0.1:6767/api/health`                            |
 
 Debug order:
 

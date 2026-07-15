@@ -5,9 +5,9 @@ import {
 } from "@bytetrue/byspace-server/agent-hooks";
 
 interface HookEnvironment {
-  PASEO_TERMINAL_ID?: string;
-  PASEO_ACTIVITY_TOKEN?: string;
-  PASEO_TERMINAL_ACTIVITY_URL?: string;
+  BYSPACE_TERMINAL_ID?: string;
+  BYSPACE_ACTIVITY_TOKEN?: string;
+  BYSPACE_TERMINAL_ACTIVITY_URL?: string;
 }
 
 interface HookInput {
@@ -55,9 +55,9 @@ export async function runHooksCommand(
 }
 
 function resolveTarget(env: HookEnvironment) {
-  const terminalId = env.PASEO_TERMINAL_ID;
-  const token = env.PASEO_ACTIVITY_TOKEN;
-  const url = env.PASEO_TERMINAL_ACTIVITY_URL;
+  const terminalId = env.BYSPACE_TERMINAL_ID;
+  const token = env.BYSPACE_ACTIVITY_TOKEN;
+  const url = env.BYSPACE_TERMINAL_ACTIVITY_URL;
 
   if (!terminalId || !token || !url) return null;
   return { terminalId, token, url };

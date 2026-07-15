@@ -31,7 +31,7 @@ async function runCli(args: string[]) {
 }
 
 async function runDelete(args: string[]) {
-  return $`PASEO_HOST=localhost:${port} PASEO_HOME=${paseoHome} npm --prefix ${repoRoot} run cli -- delete ${args}`.nothrow();
+  return $`BYSPACE_HOST=localhost:${port} BYSPACE_HOME=${paseoHome} npm --prefix ${repoRoot} run cli -- delete ${args}`.nothrow();
 }
 
 try {
@@ -111,7 +111,7 @@ try {
   {
     console.log("Test 8: -q (quiet) flag is accepted with delete");
     const result =
-      await $`PASEO_HOST=localhost:${port} PASEO_HOME=${paseoHome} npm --prefix ${repoRoot} run cli -- -q delete abc123`.nothrow();
+      await $`BYSPACE_HOST=localhost:${port} BYSPACE_HOME=${paseoHome} npm --prefix ${repoRoot} run cli -- -q delete abc123`.nothrow();
     const output = result.stdout + result.stderr;
     assert(!output.includes("unknown option"), "should accept -q flag");
     assert(!output.includes("error: option"), "should not have option parsing error");

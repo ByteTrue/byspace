@@ -130,7 +130,7 @@ paseo daemon status            # Check status
 paseo daemon stop              # Stop the daemon
 ```
 
-Use `PASEO_HOME` to run multiple isolated daemon instances.
+Use `BYSPACE_HOME` to run multiple isolated daemon instances.
 
 ## Connecting to a remote daemon
 
@@ -149,7 +149,7 @@ paseo ls --host 'https://app.paseo.sh/#offer=eyJ2IjoyLC...'
 paseo run --host "$OFFER_URL" "fix the failing tests"
 ```
 
-You can also set it once via `PASEO_HOST` instead of passing `--host` on every command.
+You can also set it once via `BYSPACE_HOST` instead of passing `--host` on every command.
 
 ## Multi-agent workflows
 

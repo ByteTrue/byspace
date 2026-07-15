@@ -17,7 +17,7 @@ import {
 const COMMAND_NAME = "paseo-issue-903-big-pickle";
 const COMMAND_FILE_NAME = `${COMMAND_NAME}.md`;
 const OPENCODE_REAL_TEST_MODEL = getRealProviderConfig("opencode").model;
-const EXPECTED_RESPONSE = "PASEO_ISSUE_903_BIG_PICKLE_OK";
+const EXPECTED_RESPONSE = "BYSPACE_ISSUE_903_BIG_PICKLE_OK";
 
 describe("opencode custom command Big Pickle E2E (real)", () => {
   let canRun = false;

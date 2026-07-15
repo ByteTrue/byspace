@@ -267,7 +267,7 @@ export class FakePiSession implements PiRuntimeSession {
       type: "extension_ui_request",
       id: `capture-${requestId ?? reason}`,
       method: "notify",
-      message: `PASEO_ENTRY_CAPTURE ${JSON.stringify({
+      message: `BYSPACE_ENTRY_CAPTURE ${JSON.stringify({
         reason,
         requestId,
         entries: this.capturedUserEntries,
@@ -283,7 +283,7 @@ export class FakePiSession implements PiRuntimeSession {
       type: "extension_ui_request",
       id: `command-${requestId}`,
       method: "notify",
-      message: `PASEO_COMMAND_RESULT ${JSON.stringify({ requestId, ...result })}`,
+      message: `BYSPACE_COMMAND_RESULT ${JSON.stringify({ requestId, ...result })}`,
     });
   }
 }

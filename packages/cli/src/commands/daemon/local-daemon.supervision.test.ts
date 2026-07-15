@@ -46,7 +46,7 @@ class FakeDaemonRuntime implements DaemonLaunchRuntime {
   }
 
   resolveHome(env: NodeJS.ProcessEnv): string {
-    return env.PASEO_HOME ?? "/tmp/paseo";
+    return env.BYSPACE_HOME ?? "/tmp/paseo";
   }
 
   spawnDetached(
@@ -151,7 +151,7 @@ describe("local daemon launch supervision", () => {
     const launch = runtime.recordedLaunches[0];
     expect(launch?.mode).toBe("foreground");
     expect(launch?.args).toContain("--relay-use-tls");
-    expect(launch?.options?.env?.PASEO_RELAY_USE_TLS).toBe("true");
+    expect(launch?.options?.env?.BYSPACE_RELAY_USE_TLS).toBe("true");
   });
 
   test("web UI flag is passed to the supervised daemon", async () => {
@@ -170,7 +170,7 @@ describe("local daemon launch supervision", () => {
     const launch = runtime.recordedLaunches[0];
     expect(launch?.mode).toBe("foreground");
     expect(launch?.args).toContain("--web-ui");
-    expect(launch?.options?.env?.PASEO_WEB_UI_ENABLED).toBe("true");
+    expect(launch?.options?.env?.BYSPACE_WEB_UI_ENABLED).toBe("true");
   });
 
   test("no-web UI flag is passed to the supervised daemon", async () => {
@@ -189,7 +189,7 @@ describe("local daemon launch supervision", () => {
     const launch = runtime.recordedLaunches[0];
     expect(launch?.mode).toBe("foreground");
     expect(launch?.args).toContain("--no-web-ui");
-    expect(launch?.options?.env?.PASEO_WEB_UI_ENABLED).toBe("false");
+    expect(launch?.options?.env?.BYSPACE_WEB_UI_ENABLED).toBe("false");
   });
 
   test("local daemon state keeps public relay TLS separate from daemon relay TLS", async () => {

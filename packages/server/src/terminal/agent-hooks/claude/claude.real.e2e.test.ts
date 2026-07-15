@@ -145,9 +145,9 @@ describe.skipIf(!claudeAvailability.available)(
             cwd,
             env: {
               ...process.env,
-              PASEO_TERMINAL_ID: terminalId,
-              PASEO_ACTIVITY_TOKEN: token,
-              PASEO_TERMINAL_ACTIVITY_URL: recorder.url,
+              BYSPACE_TERMINAL_ID: terminalId,
+              BYSPACE_ACTIVITY_TOKEN: token,
+              BYSPACE_TERMINAL_ACTIVITY_URL: recorder.url,
               PATH: [paseoCliBinDir, process.env.PATH].filter(isString).join(delimiter),
             },
           },

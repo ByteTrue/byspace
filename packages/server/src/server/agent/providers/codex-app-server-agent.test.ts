@@ -152,7 +152,7 @@ async function runCustomCodexProviderTurn(
     `
 const fs = require("node:fs");
 
-const capturePath = process.env.PASEO_FAKE_CODEX_CAPTURE;
+const capturePath = process.env.BYSPACE_FAKE_CODEX_CAPTURE;
 let buffer = "";
 
 fs.appendFileSync(capturePath, JSON.stringify({
@@ -202,7 +202,7 @@ process.stdin.on("data", (chunk) => {
         env: {
           OPENAI_API_KEY: "sk-custom",
           OPENAI_BASE_URL: baseUrl,
-          PASEO_FAKE_CODEX_CAPTURE: capturedRequestsPath,
+          BYSPACE_FAKE_CODEX_CAPTURE: capturedRequestsPath,
         },
       },
     },
@@ -1608,22 +1608,22 @@ describe("Codex app-server provider", () => {
   test("builds app-server env from launch-context env overrides", () => {
     const launchContext: AgentLaunchContext = {
       env: {
-        PASEO_AGENT_ID: "00000000-0000-4000-8000-000000000301",
-        PASEO_TEST_FLAG: "codex-launch-value",
+        BYSPACE_AGENT_ID: "00000000-0000-4000-8000-000000000301",
+        BYSPACE_TEST_FLAG: "codex-launch-value",
       },
     };
     const env = buildCodexAppServerEnv(
       {
         env: {
-          PASEO_AGENT_ID: "runtime-value",
-          PASEO_TEST_FLAG: "runtime-test-value",
+          BYSPACE_AGENT_ID: "runtime-value",
+          BYSPACE_TEST_FLAG: "runtime-test-value",
         },
       },
       launchContext.env,
     );
 
-    expect(env.PASEO_AGENT_ID).toBe(launchContext.env?.PASEO_AGENT_ID);
-    expect(env.PASEO_TEST_FLAG).toBe(launchContext.env?.PASEO_TEST_FLAG);
+    expect(env.BYSPACE_AGENT_ID).toBe(launchContext.env?.BYSPACE_AGENT_ID);
+    expect(env.BYSPACE_TEST_FLAG).toBe(launchContext.env?.BYSPACE_TEST_FLAG);
   });
 
   test("projects request_user_input into a question permission and running timeline tool call", () => {

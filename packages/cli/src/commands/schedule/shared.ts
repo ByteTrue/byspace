@@ -92,7 +92,7 @@ function resolveScheduleTarget(args: {
   createNewAgentTarget: () => ScheduleTarget;
 }): ScheduleTarget {
   const { targetValue, hasExplicitNewAgentOption, createNewAgentTarget } = args;
-  const currentAgentId = process.env.PASEO_AGENT_ID?.trim();
+  const currentAgentId = process.env.BYSPACE_AGENT_ID?.trim();
 
   if (!targetValue) {
     if (currentAgentId && !hasExplicitNewAgentOption) {

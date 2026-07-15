@@ -17,7 +17,8 @@ import {
   type RewindFlowProvider,
 } from "./helpers/rewind-flow";
 
-const FILE_PROMPT = "Use the Write tool to create ./qa.txt with the exact content: PASEO_QA_TOKEN";
+const FILE_PROMPT =
+  "Use the Write tool to create ./qa.txt with the exact content: BYSPACE_QA_TOKEN";
 
 interface RewindFlowCase {
   provider: RewindFlowProvider;
@@ -61,7 +62,7 @@ export function defineRewindFlowSpec(input: RewindFlowCase): void {
         ]);
 
         await sendMessage(handle, FILE_PROMPT);
-        await assertFileContains(path.join(cwd, "qa.txt"), "PASEO_QA_TOKEN");
+        await assertFileContains(path.join(cwd, "qa.txt"), "BYSPACE_QA_TOKEN");
         await assertChatTranscript(handle, [
           { role: "user", text: "hello" },
           { role: "assistant", text: /.+/ },

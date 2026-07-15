@@ -111,8 +111,8 @@ describe("supervisor durable logging", () => {
         },
       },
       {
-        PASEO_LOG_ROTATE_SIZE: "200m",
-        PASEO_LOG_ROTATE_COUNT: "12",
+        BYSPACE_LOG_ROTATE_SIZE: "200m",
+        BYSPACE_LOG_ROTATE_COUNT: "12",
       },
     );
 
@@ -128,8 +128,8 @@ describe("supervisor durable logging", () => {
       paseoHome,
       {},
       {
-        PASEO_LOG_ROTATE_SIZE: "50m",
-        PASEO_LOG_ROTATE_COUNT: "8",
+        BYSPACE_LOG_ROTATE_SIZE: "50m",
+        BYSPACE_LOG_ROTATE_COUNT: "8",
       },
     );
 

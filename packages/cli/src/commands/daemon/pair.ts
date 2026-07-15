@@ -22,7 +22,7 @@ export function pairCommand(): Command {
 
 export async function runPairCommand(options: PairOptions): Promise<void> {
   if (options.home) {
-    process.env.PASEO_HOME = options.home;
+    process.env.BYSPACE_HOME = options.home;
   }
 
   const paseoHome = resolvePaseoHome();

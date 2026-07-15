@@ -146,11 +146,11 @@ describe("worktree shell selection", () => {
         branchName: "main",
         cleanupOnFailure: false,
         runtimeEnv: {
-          PASEO_SOURCE_CHECKOUT_PATH: worktreePath,
-          PASEO_ROOT_PATH: worktreePath,
-          PASEO_WORKTREE_PATH: worktreePath,
-          PASEO_BRANCH_NAME: "main",
-          PASEO_WORKTREE_PORT: "12345",
+          BYSPACE_SOURCE_CHECKOUT_PATH: worktreePath,
+          BYSPACE_ROOT_PATH: worktreePath,
+          BYSPACE_WORKTREE_PATH: worktreePath,
+          BYSPACE_BRANCH_NAME: "main",
+          BYSPACE_WORKTREE_PORT: "12345",
         },
         onEvent: () => {},
       });

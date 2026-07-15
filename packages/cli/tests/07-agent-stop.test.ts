@@ -48,7 +48,7 @@ try {
   {
     console.log("Test 2: stop requires ID, --all, or --cwd");
     const result =
-      await $`PASEO_HOST=localhost:${port} PASEO_HOME=${paseoHome} npx paseo stop`.nothrow();
+      await $`BYSPACE_HOST=localhost:${port} BYSPACE_HOME=${paseoHome} npx paseo stop`.nothrow();
     assert.notStrictEqual(result.exitCode, 0, "should fail without id, --all, or --cwd");
     const output = result.stdout + result.stderr;
     const hasError =
@@ -64,7 +64,7 @@ try {
   {
     console.log("Test 3: stop handles daemon not running");
     const result =
-      await $`PASEO_HOST=localhost:${port} PASEO_HOME=${paseoHome} npx paseo stop abc123`.nothrow();
+      await $`BYSPACE_HOST=localhost:${port} BYSPACE_HOME=${paseoHome} npx paseo stop abc123`.nothrow();
     // Should fail because daemon not running
     assert.notStrictEqual(result.exitCode, 0, "should fail when daemon not running");
     const output = result.stdout + result.stderr;
@@ -80,7 +80,7 @@ try {
   {
     console.log("Test 4: stop --all flag is accepted");
     const result =
-      await $`PASEO_HOST=localhost:${port} PASEO_HOME=${paseoHome} npx paseo stop --all`.nothrow();
+      await $`BYSPACE_HOST=localhost:${port} BYSPACE_HOME=${paseoHome} npx paseo stop --all`.nothrow();
     const output = result.stdout + result.stderr;
     assert(!output.includes("unknown option"), "should accept --all flag");
     assert(!output.includes("error: option"), "should not have option parsing error");
@@ -91,7 +91,7 @@ try {
   {
     console.log("Test 5: stop --cwd flag is accepted");
     const result =
-      await $`PASEO_HOST=localhost:${port} PASEO_HOME=${paseoHome} npx paseo stop --cwd /tmp`.nothrow();
+      await $`BYSPACE_HOST=localhost:${port} BYSPACE_HOME=${paseoHome} npx paseo stop --cwd /tmp`.nothrow();
     const output = result.stdout + result.stderr;
     assert(!output.includes("unknown option"), "should accept --cwd flag");
     assert(!output.includes("error: option"), "should not have option parsing error");
@@ -102,7 +102,7 @@ try {
   {
     console.log("Test 6: stop with ID and --host flag is accepted");
     const result =
-      await $`PASEO_HOST=localhost:${port} PASEO_HOME=${paseoHome} npx paseo stop abc123 --host localhost:${port}`.nothrow();
+      await $`BYSPACE_HOST=localhost:${port} BYSPACE_HOME=${paseoHome} npx paseo stop abc123 --host localhost:${port}`.nothrow();
     const output = result.stdout + result.stderr;
     assert(!output.includes("unknown option"), "should accept --host flag");
     assert(!output.includes("error: option"), "should not have option parsing error");
@@ -122,7 +122,7 @@ try {
   {
     console.log("Test 8: -q (quiet) flag is accepted with stop");
     const result =
-      await $`PASEO_HOST=localhost:${port} PASEO_HOME=${paseoHome} npx paseo -q stop abc123`.nothrow();
+      await $`BYSPACE_HOST=localhost:${port} BYSPACE_HOME=${paseoHome} npx paseo -q stop abc123`.nothrow();
     const output = result.stdout + result.stderr;
     assert(!output.includes("unknown option"), "should accept -q flag");
     assert(!output.includes("error: option"), "should not have option parsing error");

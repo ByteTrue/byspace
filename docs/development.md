@@ -19,21 +19,21 @@ Root checkout dev is intentionally split across terminals:
 
 `npm run dev` is only a shorthand for `npm run dev:server`. Keep `127.0.0.1:6767` for production-style `~/.paseo` state.
 
-### PASEO_HOME
+### BYSPACE_HOME
 
-`PASEO_HOME` is the directory that holds runtime state (agents, worktrees, workspace config, sockets, daemon log). Resolution rules:
+`BYSPACE_HOME` is the directory that holds runtime state (agents, worktrees, workspace config, sockets, daemon log). Resolution rules:
 
 - The **server itself** (for example `npm run start`) defaults to `~/.paseo` (see `packages/server/src/server/paseo-home.ts`).
 - **Repo dev scripts** default to `$ROOT/.dev/paseo-home`, where `$ROOT` is the current checkout or worktree root. This keeps dev state scoped to the checkout instead of the production daemon.
 - **`npm run cli -- ...`** runs through the same dev-home wrapper as the dev scripts, so the in-repo CLI automatically targets the current checkout's `.dev/paseo-home` and configured dev daemon endpoint.
-- **Paseo-created worktrees** seed `$PASEO_WORKTREE_PATH/.dev/paseo-home` from `$PASEO_SOURCE_CHECKOUT_PATH/.dev/paseo-home` by copying durable JSON metadata. Runtime files like pid files, sockets, and logs are not copied.
+- **Paseo-created worktrees** seed `$BYSPACE_WORKTREE_PATH/.dev/paseo-home` from `$BYSPACE_SOURCE_CHECKOUT_PATH/.dev/paseo-home` by copying durable JSON metadata. Runtime files like pid files, sockets, and logs are not copied.
 
 Override knobs:
 
 ```bash
-PASEO_HOME=~/.paseo-blue npm run dev          # explicit home
-PASEO_DEV_SEED_HOME=/path/to/home npm run dev # seed from a different source home
-PASEO_DEV_RESET_HOME=1 npm run dev            # clear and reseed the derived worktree home
+BYSPACE_HOME=~/.paseo-blue npm run dev          # explicit home
+BYSPACE_DEV_SEED_HOME=/path/to/home npm run dev # seed from a different source home
+BYSPACE_DEV_RESET_HOME=1 npm run dev            # clear and reseed the derived worktree home
 ```
 
 ### Daemon endpoints
@@ -59,11 +59,11 @@ to measure with `RenderProfile`, then open the app with `?renderProfile=1`. When
 the query param is absent, `RenderProfile` returns children directly and records
 nothing.
 
-Captured samples are exposed on `globalThis.__PASEO_RENDER_PROFILE__`. Call
-`globalThis.__PASEO_RESET_RENDER_PROFILE__?.()` after warm-up and before the
+Captured samples are exposed on `globalThis.__BYSPACE_RENDER_PROFILE__`. Call
+`globalThis.__BYSPACE_RESET_RENDER_PROFILE__?.()` after warm-up and before the
 interaction you want to measure. If a memo comparator or subscription boundary
 needs explanation, call `recordRenderProfileReasons(id, reasons)` while profiling;
-reason counts are exposed on `globalThis.__PASEO_RENDER_PROFILE_REASONS__`.
+reason counts are exposed on `globalThis.__BYSPACE_RENDER_PROFILE_REASONS__`.
 
 Use this workflow for any render investigation:
 
@@ -96,9 +96,9 @@ Existing scenario script: workspace agent/terminal tab switching. Start Expo on
 web, keep a daemon available, then run:
 
 ```bash
-PASEO_PROFILE_SERVER_ID=<server-id> \
-PASEO_PROFILE_WORKSPACE_ID=<workspace-path> \
-PASEO_PROFILE_AGENT_ID=<agent-id> \
+BYSPACE_PROFILE_SERVER_ID=<server-id> \
+BYSPACE_PROFILE_WORKSPACE_ID=<workspace-path> \
+BYSPACE_PROFILE_AGENT_ID=<agent-id> \
   npm run profile:workspace-tabs --workspace=@bytetrue/byspace-app
 ```
 
@@ -108,22 +108,22 @@ Profiler timings, then removes the temporary terminal. It is an example of the
 workflow above, not the only way to use the profiler. Useful knobs:
 
 ```bash
-PASEO_PROFILE_APP_URL=http://localhost:19010 # Expo web URL
-PASEO_PROFILE_SWITCH_COUNT=1                # number of agent/terminal switch pairs
-PASEO_PROFILE_SWITCH_WAIT_MS=250            # delay after each click
-PASEO_PROFILE_IDLE_WAIT_MS=3000             # idle baseline before switching
-PASEO_PROFILE_DUMP_COMMITS=1                # include per-commit profiler samples
+BYSPACE_PROFILE_APP_URL=http://localhost:19010 # Expo web URL
+BYSPACE_PROFILE_SWITCH_COUNT=1                # number of agent/terminal switch pairs
+BYSPACE_PROFILE_SWITCH_WAIT_MS=250            # delay after each click
+BYSPACE_PROFILE_IDLE_WAIT_MS=3000             # idle baseline before switching
+BYSPACE_PROFILE_DUMP_COMMITS=1                # include per-commit profiler samples
 ```
 
 ### Daemon logs
 
-Check `$PASEO_HOME/daemon.log` for daemon logs. The default level is `info`; set
-`PASEO_LOG_LEVEL=trace` before launching the daemon when you need full provider,
+Check `$BYSPACE_HOME/daemon.log` for daemon logs. The default level is `info`; set
+`BYSPACE_LOG_LEVEL=trace` before launching the daemon when you need full provider,
 session, and agent-manager traces for stuck-state debugging.
 
 The supervisor rotates `daemon.log`. Persisted `log.file.rotate` settings in
-`$PASEO_HOME/config.json` win first. Without persisted config, the optional
-`PASEO_LOG_ROTATE_SIZE` and `PASEO_LOG_ROTATE_COUNT` env vars override the
+`$BYSPACE_HOME/config.json` win first. Without persisted config, the optional
+`BYSPACE_LOG_ROTATE_SIZE` and `BYSPACE_LOG_ROTATE_COUNT` env vars override the
 defaults. The default rotation is `10m` x `3` files everywhere.
 
 ### Agent Tool Catalog Measurement
@@ -156,7 +156,7 @@ they launch in a terminal and receive the service environment described below.
 ```json
 {
   "worktree": {
-    "setup": "npm ci\ncp \"$PASEO_SOURCE_CHECKOUT_PATH/.env\" .env\nnpm run db:migrate",
+    "setup": "npm ci\ncp \"$BYSPACE_SOURCE_CHECKOUT_PATH/.env\" .env\nnpm run db:migrate",
     "teardown": "npm run db:drop || true"
   }
 }
@@ -164,13 +164,13 @@ they launch in a terminal and receive the service environment described below.
 
 Every `scripts` entry with `"type": "service"` receives these environment variables:
 
-| Variable                    | Value                                                                                                                     |
-| --------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| `PASEO_SERVICE_<NAME>_URL`  | Proxied URL for a declared peer service. Prefer this for peer discovery; it survives peer restarts.                       |
-| `PASEO_SERVICE_<NAME>_PORT` | Raw ephemeral port for a declared peer service. Use only as a bypass escape hatch; it can go stale if that peer restarts. |
-| `PASEO_URL`                 | Self alias for `PASEO_SERVICE_<SELF>_URL`.                                                                                |
-| `PASEO_PORT`                | Self alias for `PASEO_SERVICE_<SELF>_PORT`.                                                                               |
-| `HOST`                      | Bind host for the service process.                                                                                        |
+| Variable                      | Value                                                                                                                     |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `BYSPACE_SERVICE_<NAME>_URL`  | Proxied URL for a declared peer service. Prefer this for peer discovery; it survives peer restarts.                       |
+| `BYSPACE_SERVICE_<NAME>_PORT` | Raw ephemeral port for a declared peer service. Use only as a bypass escape hatch; it can go stale if that peer restarts. |
+| `BYSPACE_URL`                 | Self alias for `BYSPACE_SERVICE_<SELF>_URL`.                                                                              |
+| `BYSPACE_PORT`                | Self alias for `BYSPACE_SERVICE_<SELF>_PORT`.                                                                             |
+| `HOST`                        | Bind host for the service process.                                                                                        |
 
 Service proxy hostnames use the double-dash shape: `web--feature-auth--project.localhost` or, on the default branch, `web--project.localhost`. Optional public aliases use the same leftmost label under the configured public base host.
 
@@ -183,7 +183,7 @@ Service proxy hostnames use the double-dash shape: `web--feature-auth--project.l
   "scripts": {
     "web": {
       "type": "service",
-      "command": "PORT=$PASEO_PORT npm run dev:web"
+      "command": "PORT=$BYSPACE_PORT npm run dev:web"
     }
   }
 }
@@ -204,7 +204,7 @@ paseo daemon start --web-ui
 Or set the environment variable:
 
 ```bash
-PASEO_WEB_UI_ENABLED=true paseo daemon start
+BYSPACE_WEB_UI_ENABLED=true paseo daemon start
 ```
 
 Or persist it in `config.json`:
@@ -303,19 +303,19 @@ npm run cli -- --host localhost:7777 ls -a
 Agent data lives at:
 
 ```
-$PASEO_HOME/agents/{cwd-with-dashes}/{agent-id}.json
+$BYSPACE_HOME/agents/{cwd-with-dashes}/{agent-id}.json
 ```
 
 Find an agent by ID:
 
 ```bash
-find $PASEO_HOME/agents -name "{agent-id}.json"
+find $BYSPACE_HOME/agents -name "{agent-id}.json"
 ```
 
 Find by content:
 
 ```bash
-rg -l "some title text" $PASEO_HOME/agents/
+rg -l "some title text" $BYSPACE_HOME/agents/
 ```
 
 ## Provider session files

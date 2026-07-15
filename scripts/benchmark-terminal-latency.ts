@@ -1,7 +1,7 @@
 /**
  * Reproducible terminal latency benchmark (Node-only, isolated daemon).
  *
- * Boots its OWN isolated daemon subprocess (fresh mkdtemp PASEO_HOME, random
+ * Boots its OWN isolated daemon subprocess (fresh mkdtemp BYSPACE_HOME, random
  * port) — it NEVER touches the developer daemon on port 6767 — and measures:
  *   A) terminal echo latency  (single-byte input -> first echoed output frame)
  *   B) terminal output jitter (inter-frame gaps while a command drains ~2MB)
@@ -186,10 +186,10 @@ async function bootDaemon(): Promise<BootedDaemon> {
     cwd: SERVER_DIR,
     env: {
       ...process.env,
-      PASEO_HOME: paseoHome,
-      PASEO_SERVER_ID: "srv_terminal_bench",
-      PASEO_LISTEN: `127.0.0.1:${port}`,
-      PASEO_NODE_ENV: "development",
+      BYSPACE_HOME: paseoHome,
+      BYSPACE_SERVER_ID: "srv_terminal_bench",
+      BYSPACE_LISTEN: `127.0.0.1:${port}`,
+      BYSPACE_NODE_ENV: "development",
       NODE_ENV: "development",
     },
     stdio: ["ignore", "pipe", "pipe"],
@@ -667,7 +667,7 @@ function getCommitHash(): string {
 async function main(): Promise<void> {
   const commit = getCommitHash();
   console.log(`Terminal latency benchmark — commit ${commit}`);
-  console.log("Booting isolated daemon (random port, fresh PASEO_HOME)...");
+  console.log("Booting isolated daemon (random port, fresh BYSPACE_HOME)...");
 
   let daemon: BootedDaemon | null = null;
   let client: DaemonClientLike | null = null;

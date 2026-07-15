@@ -61,8 +61,8 @@ try {
   {
     console.log("Test 3: paseo ls handles daemon not running");
     const result = await runLocalPaseo(["ls"], {
-      PASEO_HOST: `localhost:${port}`,
-      PASEO_HOME: paseoHome,
+      BYSPACE_HOST: `localhost:${port}`,
+      BYSPACE_HOME: paseoHome,
     });
     // Should fail because daemon not running
     assert.notStrictEqual(result.exitCode, 0, "should fail when daemon not running");
@@ -73,7 +73,7 @@ try {
       output.toLowerCase().includes("cannot");
     assert(hasError, "error message should mention connection issue");
     assert(output.includes("--host <host:port>"), "error message should mention --host");
-    assert(output.includes("PASEO_HOST"), "error message should mention PASEO_HOST");
+    assert(output.includes("BYSPACE_HOST"), "error message should mention BYSPACE_HOST");
     console.log("✓ paseo ls handles daemon not running\n");
   }
 
@@ -81,8 +81,8 @@ try {
   {
     console.log("Test 4: paseo ls --json handles errors");
     const result = await runLocalPaseo(["ls", "--json"], {
-      PASEO_HOST: `localhost:${port}`,
-      PASEO_HOME: paseoHome,
+      BYSPACE_HOST: `localhost:${port}`,
+      BYSPACE_HOME: paseoHome,
     });
     // Should still fail (daemon not running)
     assert.notStrictEqual(result.exitCode, 0, "should fail when daemon not running");
@@ -105,8 +105,8 @@ try {
   {
     console.log("Test 5: paseo ls -a flag is accepted");
     const result = await runLocalPaseo(["ls", "-a"], {
-      PASEO_HOST: `localhost:${port}`,
-      PASEO_HOME: paseoHome,
+      BYSPACE_HOST: `localhost:${port}`,
+      BYSPACE_HOME: paseoHome,
     });
     // Will fail due to no daemon, but flag should be parsed without error
     // (no "unknown option" error)
@@ -120,8 +120,8 @@ try {
   {
     console.log("Test 6: paseo ls -g flag is accepted");
     const result = await runLocalPaseo(["ls", "-g"], {
-      PASEO_HOST: `localhost:${port}`,
-      PASEO_HOME: paseoHome,
+      BYSPACE_HOST: `localhost:${port}`,
+      BYSPACE_HOME: paseoHome,
     });
     const output = result.stdout + result.stderr;
     assert(!output.includes("unknown option"), "should accept -g flag");
@@ -133,8 +133,8 @@ try {
   {
     console.log("Test 7: paseo ls -ag combined flags are accepted");
     const result = await runLocalPaseo(["ls", "-ag"], {
-      PASEO_HOST: `localhost:${port}`,
-      PASEO_HOME: paseoHome,
+      BYSPACE_HOST: `localhost:${port}`,
+      BYSPACE_HOME: paseoHome,
     });
     const output = result.stdout + result.stderr;
     assert(!output.includes("unknown option"), "should accept -ag flags");
@@ -146,8 +146,8 @@ try {
   {
     console.log("Test 8: -q (quiet) flag is accepted");
     const result = await runLocalPaseo(["-q", "ls"], {
-      PASEO_HOST: `localhost:${port}`,
-      PASEO_HOME: paseoHome,
+      BYSPACE_HOST: `localhost:${port}`,
+      BYSPACE_HOME: paseoHome,
     });
     const output = result.stdout + result.stderr;
     assert(!output.includes("unknown option"), "should accept -q flag");
@@ -159,8 +159,8 @@ try {
   {
     console.log("Test 9: paseo ls --ui is rejected");
     const result = await runLocalPaseo(["ls", "--ui"], {
-      PASEO_HOST: `localhost:${port}`,
-      PASEO_HOME: paseoHome,
+      BYSPACE_HOST: `localhost:${port}`,
+      BYSPACE_HOME: paseoHome,
     });
     assert.notStrictEqual(result.exitCode, 0, "should fail for removed --ui flag");
     const output = result.stdout + result.stderr;

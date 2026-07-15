@@ -2,19 +2,19 @@
   "worktree": {
     "setup": [
       "npm ci",
-      "PASEO_DEV_MANAGED_HOME=1 PASEO_DEV_SEED_HOME=\"$PASEO_SOURCE_CHECKOUT_PATH/.dev/paseo-home\" PASEO_HOME=\"$PWD/.dev/paseo-home\" ./scripts/dev-home.sh",
+      "BYSPACE_DEV_MANAGED_HOME=1 BYSPACE_DEV_SEED_HOME=\"$BYSPACE_SOURCE_CHECKOUT_PATH/.dev/paseo-home\" BYSPACE_HOME=\"$PWD/.dev/paseo-home\" ./scripts/dev-home.sh",
       "npm run build:server",
-      "cp \"$PASEO_SOURCE_CHECKOUT_PATH/packages/server/.env\" \"$PWD/packages/server/.env\""
+      "cp \"$BYSPACE_SOURCE_CHECKOUT_PATH/packages/server/.env\" \"$PWD/packages/server/.env\""
     ]
   },
   "scripts": {
     "daemon": {
       "type": "service",
-      "command": "PASEO_DEV_MANAGED_HOME=1 PASEO_DEV_ROOT=\"${PASEO_WORKTREE_PATH:-$PWD}\" PASEO_HOME=\"${PASEO_WORKTREE_PATH:-$PWD}/.dev/paseo-home\" PASEO_SKIP_DEV_SERVER_BUILD=1 PASEO_LISTEN=0.0.0.0:${PASEO_PORT:-6768} ./scripts/dev-daemon.sh"
+      "command": "BYSPACE_DEV_MANAGED_HOME=1 BYSPACE_DEV_ROOT=\"${BYSPACE_WORKTREE_PATH:-$PWD}\" BYSPACE_HOME=\"${BYSPACE_WORKTREE_PATH:-$PWD}/.dev/paseo-home\" BYSPACE_SKIP_DEV_SERVER_BUILD=1 BYSPACE_LISTEN=0.0.0.0:${BYSPACE_PORT:-6768} ./scripts/dev-daemon.sh"
     },
     "app": {
       "type": "service",
-      "command": "PASEO_DEV_MANAGED_HOME=1 PASEO_DEV_ROOT=\"${PASEO_WORKTREE_PATH:-$PWD}\" PASEO_HOME=\"${PASEO_WORKTREE_PATH:-$PWD}/.dev/paseo-home\" PASEO_LISTEN=0.0.0.0:${PASEO_SERVICE_DAEMON_PORT:-6768} PASEO_DEV_DAEMON_ENDPOINT=localhost:${PASEO_SERVICE_DAEMON_PORT:-6768} EXPO_PORT=${PASEO_PORT:-} ./scripts/dev-app.sh"
+      "command": "BYSPACE_DEV_MANAGED_HOME=1 BYSPACE_DEV_ROOT=\"${BYSPACE_WORKTREE_PATH:-$PWD}\" BYSPACE_HOME=\"${BYSPACE_WORKTREE_PATH:-$PWD}/.dev/paseo-home\" BYSPACE_LISTEN=0.0.0.0:${BYSPACE_SERVICE_DAEMON_PORT:-6768} BYSPACE_DEV_DAEMON_ENDPOINT=localhost:${BYSPACE_SERVICE_DAEMON_PORT:-6768} EXPO_PORT=${BYSPACE_PORT:-} ./scripts/dev-app.sh"
     },
     "typecheck": {
       "command": "npm run typecheck"

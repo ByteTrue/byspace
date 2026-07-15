@@ -53,11 +53,11 @@ export interface WorktreeConfig {
 
 export interface WorktreeRuntimeEnv {
   [key: string]: string;
-  PASEO_SOURCE_CHECKOUT_PATH: string;
-  PASEO_ROOT_PATH: string;
-  PASEO_WORKTREE_PATH: string;
-  PASEO_BRANCH_NAME: string;
-  PASEO_WORKTREE_PORT: string;
+  BYSPACE_SOURCE_CHECKOUT_PATH: string;
+  BYSPACE_ROOT_PATH: string;
+  BYSPACE_WORKTREE_PATH: string;
+  BYSPACE_BRANCH_NAME: string;
+  BYSPACE_WORKTREE_PORT: string;
 }
 
 export interface WorktreeSetupCommandResult {
@@ -696,12 +696,12 @@ export async function resolveWorktreeRuntimeEnv(options: {
     // Source checkout path is the original git repo root (shared across worktrees), not the
     // worktree itself. This allows setup scripts to copy local files (e.g. .env) from the
     // source checkout.
-    PASEO_SOURCE_CHECKOUT_PATH: repoRootPath,
+    BYSPACE_SOURCE_CHECKOUT_PATH: repoRootPath,
     // Backward-compatible alias.
-    PASEO_ROOT_PATH: repoRootPath,
-    PASEO_WORKTREE_PATH: options.worktreePath,
-    PASEO_BRANCH_NAME: branchName,
-    PASEO_WORKTREE_PORT: String(worktreePort),
+    BYSPACE_ROOT_PATH: repoRootPath,
+    BYSPACE_WORKTREE_PATH: options.worktreePath,
+    BYSPACE_BRANCH_NAME: branchName,
+    BYSPACE_WORKTREE_PORT: String(worktreePort),
   };
 }
 
@@ -727,12 +727,12 @@ export async function runWorktreeTeardownCommands(options: {
       // Source checkout path is the original git repo root (shared across worktrees), not the
       // worktree itself. This allows lifecycle scripts to copy or clean resources using paths
       // from the source checkout.
-      PASEO_SOURCE_CHECKOUT_PATH: repoRootPath,
+      BYSPACE_SOURCE_CHECKOUT_PATH: repoRootPath,
       // Backward-compatible alias.
-      PASEO_ROOT_PATH: repoRootPath,
-      PASEO_WORKTREE_PATH: options.worktreePath,
-      PASEO_BRANCH_NAME: branchName,
-      ...(worktreePort !== null ? { PASEO_WORKTREE_PORT: String(worktreePort) } : {}),
+      BYSPACE_ROOT_PATH: repoRootPath,
+      BYSPACE_WORKTREE_PATH: options.worktreePath,
+      BYSPACE_BRANCH_NAME: branchName,
+      ...(worktreePort !== null ? { BYSPACE_WORKTREE_PORT: String(worktreePort) } : {}),
     }),
   );
 

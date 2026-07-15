@@ -17,7 +17,7 @@ const port = await getAvailablePort();
 try {
   console.log("Test 1: `paseo` runs blocking onboarding and prints pairing info");
   const onboard =
-    await $`PASEO_HOME=${paseoHome} PASEO_LISTEN=127.0.0.1:${port} PASEO_PAIRING_QR=0 npx paseo`.nothrow();
+    await $`BYSPACE_HOME=${paseoHome} BYSPACE_LISTEN=127.0.0.1:${port} BYSPACE_PAIRING_QR=0 npx paseo`.nothrow();
 
   assert.strictEqual(
     onboard.exitCode,
@@ -47,7 +47,7 @@ try {
   );
 
   const status =
-    await $`PASEO_HOME=${paseoHome} npx paseo daemon status --home ${paseoHome}`.nothrow();
+    await $`BYSPACE_HOME=${paseoHome} npx paseo daemon status --home ${paseoHome}`.nothrow();
   assert.strictEqual(status.exitCode, 0, `daemon status should succeed: ${status.stderr}`);
   assert(status.stdout.includes("running"), "daemon should be running when onboarding exits");
   console.log("✓ onboarding prints pairing info and waits for daemon readiness\n");
@@ -78,7 +78,7 @@ try {
   );
   console.log("✓ non-interactive run persisted voice disabled choices\n");
 } finally {
-  await $`PASEO_HOME=${paseoHome} npx paseo daemon stop --home ${paseoHome} --force`.nothrow();
+  await $`BYSPACE_HOME=${paseoHome} npx paseo daemon stop --home ${paseoHome} --force`.nothrow();
   await rm(paseoHome, { recursive: true, force: true });
 }
 

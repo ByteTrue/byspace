@@ -7,7 +7,7 @@ import { resolveToolCallIconName, type ToolCallIcon } from "@/utils/tool-call-ic
 
 export const MIN_COMPACT_TOOL_CALLS = 4;
 
-const DIRECT_PASEO_TOOL_PREFIX = "paseo_";
+const DIRECT_BYSPACE_TOOL_PREFIX = "paseo_";
 const DIRECT_SEARCH_TOOL_SUFFIX_PATTERN = /(?:^|[_.:/])(?:web_search|llm_context)$/;
 
 export interface ToolCallCategorySummary {
@@ -99,7 +99,7 @@ function isCompactableToolCall(item: StreamItem): item is ToolCallItem {
 }
 
 function isDirectPaseoToolName(name: string): boolean {
-  return name.startsWith(DIRECT_PASEO_TOOL_PREFIX);
+  return name.startsWith(DIRECT_BYSPACE_TOOL_PREFIX);
 }
 
 function isDirectSearchToolName(name: string): boolean {

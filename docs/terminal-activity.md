@@ -40,12 +40,12 @@ Path-prefix routing is only a legacy fallback for unowned terminal activity cont
 
 Terminals receive four environment variables when the daemon creates the shell:
 
-- `PASEO_TERMINAL_ID`
-- `PASEO_ACTIVITY_TOKEN`
-- `PASEO_TERMINAL_ACTIVITY_URL`
-- `PASEO_HOOK_CLI` — absolute path to the current `paseo` CLI executable.
+- `BYSPACE_TERMINAL_ID`
+- `BYSPACE_ACTIVITY_TOKEN`
+- `BYSPACE_TERMINAL_ACTIVITY_URL`
+- `BYSPACE_HOOK_CLI` — absolute path to the current `paseo` CLI executable.
 
-The generated shell command uses `PASEO_HOOK_CLI` to run the current CLI. `paseo hooks <agent> <event>` then reads the terminal id, token, and activity URL, asks the agent hook provider registry to resolve the event to a coarse activity state, and silently posts `{ terminalId, token, state }` to the activity URL. Missing env, unsupported agents/events, malformed hook input, and daemon/network failures are no-ops so agent hooks never break the user's terminal session.
+The generated shell command uses `BYSPACE_HOOK_CLI` to run the current CLI. `paseo hooks <agent> <event>` then reads the terminal id, token, and activity URL, asks the agent hook provider registry to resolve the event to a coarse activity state, and silently posts `{ terminalId, token, state }` to the activity URL. Missing env, unsupported agents/events, malformed hook input, and daemon/network failures are no-ops so agent hooks never break the user's terminal session.
 
 Claude hook mapping:
 
@@ -91,22 +91,22 @@ When enabled, Paseo installs provider hooks globally:
 - Codex hooks are written to `~/.codex/hooks.json` (or `CODEX_HOME/hooks.json` when that override is set). Codex supports a native `commandWindows`, so each Paseo hook includes both POSIX and Windows commands. Non-managed Codex hooks are trust-gated by Codex; users may see Codex's hook review prompt before the hook runs.
 - OpenCode gets a self-contained plugin at `$XDG_CONFIG_HOME/opencode/plugins/paseo-terminal-activity.js` (or `~/.config/opencode/plugins/paseo-terminal-activity.js` when XDG is unset; `OPENCODE_CONFIG_DIR` still wins when set).
 
-Installation is marker-based/idempotent for config hooks and exact-file/idempotent for the OpenCode plugin. Paseo preserves user hooks, removes only its own marker-matched command hooks, and leaves hooks installed across daemon shutdown. Outside a Paseo terminal they are inert because the command or plugin is gated on `PASEO_TERMINAL_ID`.
+Installation is marker-based/idempotent for config hooks and exact-file/idempotent for the OpenCode plugin. Paseo preserves user hooks, removes only its own marker-matched command hooks, and leaves hooks installed across daemon shutdown. Outside a Paseo terminal they are inert because the command or plugin is gated on `BYSPACE_TERMINAL_ID`.
 
 Provider variation lives in `AGENT_HOOK_PROVIDERS`: provider id, installed events, config install metadata, and runtime event-to-activity resolution. The daemon calls `installRegisteredAgentHooks()` once; the CLI calls `resolveHookActivity(provider, event, input)`. Adding a provider should add one provider entry and register it in `AGENT_HOOK_PROVIDERS`, without editing the generic CLI command or daemon bootstrap.
 
 The installed hook command keeps the config portable and resolves the CLI at runtime:
 
 ```sh
-[ -n "$PASEO_TERMINAL_ID" ] && "${PASEO_HOOK_CLI:-paseo}" hooks claude <event>
+[ -n "$BYSPACE_TERMINAL_ID" ] && "${BYSPACE_HOOK_CLI:-paseo}" hooks claude <event>
 ```
 
 Codex also receives the Windows equivalent:
 
 ```bat
-if defined PASEO_TERMINAL_ID (if defined PASEO_HOOK_CLI ("%PASEO_HOOK_CLI%" hooks codex <event>) else (paseo hooks codex <event>))
+if defined BYSPACE_TERMINAL_ID (if defined BYSPACE_HOOK_CLI ("%BYSPACE_HOOK_CLI%" hooks codex <event>) else (paseo hooks codex <event>))
 ```
 
-Paseo injects `PASEO_HOOK_CLI` so Codex's hook shell cannot pick up a stale global `paseo` before the current one. The command still falls back to bare `paseo` if the env is missing, and it still no-ops outside Paseo terminals because the `PASEO_TERMINAL_ID` gate remains first. Paseo also prepends the CLI binary directory to each terminal `PATH` as a secondary fallback. All other behavior lives in `paseo hooks`: read the env, map the event, POST activity, and no-op/fail-open when anything is missing or unavailable.
+Paseo injects `BYSPACE_HOOK_CLI` so Codex's hook shell cannot pick up a stale global `paseo` before the current one. The command still falls back to bare `paseo` if the env is missing, and it still no-ops outside Paseo terminals because the `BYSPACE_TERMINAL_ID` gate remains first. Paseo also prepends the CLI binary directory to each terminal `PATH` as a secondary fallback. All other behavior lives in `paseo hooks`: read the env, map the event, POST activity, and no-op/fail-open when anything is missing or unavailable.
 
 If config installation fails, daemon startup and terminal spawn continue without terminal activity hooks.

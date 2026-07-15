@@ -12,8 +12,8 @@ const cleanupClients = new Set<DaemonClient>();
 let previousSupervised: string | undefined;
 
 beforeEach(() => {
-  previousSupervised = process.env.PASEO_SUPERVISED;
-  process.env.PASEO_SUPERVISED = "0";
+  previousSupervised = process.env.BYSPACE_SUPERVISED;
+  process.env.BYSPACE_SUPERVISED = "0";
 });
 
 afterEach(async () => {
@@ -30,11 +30,11 @@ afterEach(async () => {
 
 function restoreSupervisedEnv(): void {
   if (previousSupervised === undefined) {
-    delete process.env.PASEO_SUPERVISED;
+    delete process.env.BYSPACE_SUPERVISED;
     return;
   }
 
-  process.env.PASEO_SUPERVISED = previousSupervised;
+  process.env.BYSPACE_SUPERVISED = previousSupervised;
 }
 
 // Repro for the "project flashes in the sidebar then disappears" report.

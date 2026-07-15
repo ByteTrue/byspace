@@ -1,7 +1,7 @@
 import type { AgentSessionConfig, McpServerConfig } from "./agent-sdk-types.js";
 
-const PASEO_MCP_SERVER_NAME = "paseo";
-const PASEO_MCP_PATHNAME = "/mcp/agents";
+const BYSPACE_MCP_SERVER_NAME = "paseo";
+const BYSPACE_MCP_PATHNAME = "/mcp/agents";
 
 export function stripInternalPaseoMcpServer(config: AgentSessionConfig): AgentSessionConfig {
   const mcpServers = config.mcpServers;
@@ -9,13 +9,13 @@ export function stripInternalPaseoMcpServer(config: AgentSessionConfig): AgentSe
     return config;
   }
 
-  const paseoServer = mcpServers[PASEO_MCP_SERVER_NAME];
+  const paseoServer = mcpServers[BYSPACE_MCP_SERVER_NAME];
   if (!paseoServer || !isInternalPaseoMcpServer(paseoServer)) {
     return config;
   }
 
   const nextMcpServers = { ...mcpServers };
-  delete nextMcpServers[PASEO_MCP_SERVER_NAME];
+  delete nextMcpServers[BYSPACE_MCP_SERVER_NAME];
 
   const next = { ...config };
   if (Object.keys(nextMcpServers).length > 0) {
@@ -38,14 +38,14 @@ export function withRuntimePaseoMcpServer(params: {
   mcpAuthToken: string | null;
 }): AgentSessionConfig {
   const storedConfig = stripInternalPaseoMcpServer(params.config);
-  if (!params.mcpBaseUrl || storedConfig.mcpServers?.[PASEO_MCP_SERVER_NAME]) {
+  if (!params.mcpBaseUrl || storedConfig.mcpServers?.[BYSPACE_MCP_SERVER_NAME]) {
     return storedConfig;
   }
 
   return {
     ...storedConfig,
     mcpServers: {
-      [PASEO_MCP_SERVER_NAME]: {
+      [BYSPACE_MCP_SERVER_NAME]: {
         type: "http",
         url: `${params.mcpBaseUrl}?callerAgentId=${params.agentId}`,
         ...(params.mcpAuthToken
@@ -63,7 +63,7 @@ function isInternalPaseoMcpServer(config: McpServerConfig): boolean {
   }
 
   try {
-    return new URL(config.url).pathname === PASEO_MCP_PATHNAME;
+    return new URL(config.url).pathname === BYSPACE_MCP_PATHNAME;
   } catch {
     return false;
   }

@@ -51,7 +51,7 @@ describe("OpenCode terminal agent hooks", () => {
     expect(source).toContain('event?.type === "permission.asked"');
     expect(source).toContain('event?.type === "permission.replied"');
     expect(source).toContain('Bun.spawn(["paseo", "hooks", "opencode", event]');
-    expect(source).toContain("PASEO_TERMINAL_ID");
+    expect(source).toContain("BYSPACE_TERMINAL_ID");
   });
 
   it("uninstalls the OpenCode plugin file", () => {

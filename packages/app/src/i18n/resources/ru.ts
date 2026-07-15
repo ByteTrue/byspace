@@ -1994,7 +1994,7 @@ export const ru: TranslationResources = {
         newScript: "Новый сценарий",
         editScript: "Изменить{{name}}",
         runAsService: "Запуск как служба",
-        serviceHint: "Paseo контролирует процесс и назначает порт через $PASEO_PORT.",
+        serviceHint: "Paseo контролирует процесс и назначает порт через $BYSPACE_PORT.",
         actions: {
           add: "Добавить скрипт",
           edit: "Редактировать",

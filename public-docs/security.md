@@ -29,7 +29,7 @@ The relay is the simplest way to connect from your phone. It requires no VPN set
 
 ### How it works
 
-1. The daemon generates a persistent ECDH keypair and stores it in `$PASEO_HOME/daemon-keypair.json`
+1. The daemon generates a persistent ECDH keypair and stores it in `$BYSPACE_HOME/daemon-keypair.json`
 2. When you scan the QR code or click the pairing link, your phone receives the daemon's public key
 3. Your phone sends a handshake message with its own public key. The daemon will not accept any commands until this handshake completes.
 4. Both sides perform a Curve25519 ECDH key exchange to derive a shared key. All subsequent
@@ -116,9 +116,9 @@ The official Docker image runs the daemon and bundled web UI in one container. I
 
 For Docker deployments:
 
-- Set `PASEO_PASSWORD` before publishing the port to a LAN, VPN, or public address.
+- Set `BYSPACE_PASSWORD` before publishing the port to a LAN, VPN, or public address.
 - Use HTTPS at your reverse proxy for browser access outside localhost.
-- Set `PASEO_HOSTNAMES` for any DNS names you use to reach the container.
+- Set `BYSPACE_HOSTNAMES` for any DNS names you use to reach the container.
 - Keep `/workspace` mounts scoped to repositories the agents should be able to read and write.
 - Treat `/home/paseo` as sensitive, it can contain daemon state and provider credentials.
 

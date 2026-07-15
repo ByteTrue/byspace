@@ -103,8 +103,8 @@ function resolveLogConfigFromEnv(
   env: NodeJS.ProcessEnv,
   persisted: ReturnType<typeof loadPersistedConfig>,
 ): PersistedConfig["log"] {
-  const envLogLevel = LogLevelSchema.safeParse(normalizeLogEnv(env.PASEO_LOG_LEVEL));
-  const envLogFormat = LogFormatSchema.safeParse(normalizeLogEnv(env.PASEO_LOG_FORMAT));
+  const envLogLevel = LogLevelSchema.safeParse(normalizeLogEnv(env.BYSPACE_LOG_LEVEL));
+  const envLogFormat = LogFormatSchema.safeParse(normalizeLogEnv(env.BYSPACE_LOG_FORMAT));
 
   if (!envLogLevel.success && !envLogFormat.success) {
     return persisted.log;
@@ -212,26 +212,26 @@ function resolveTlsFromEnv(
 function resolveRelayConfig(input: ResolveRelayInput): ResolvedRelay {
   const enabled =
     input.cliRelayEnabled ??
-    parseBooleanEnv(input.env.PASEO_RELAY_ENABLED) ??
+    parseBooleanEnv(input.env.BYSPACE_RELAY_ENABLED) ??
     input.persisted.daemon?.relay?.enabled ??
     true;
   const endpoint =
-    input.env.PASEO_RELAY_ENDPOINT ??
+    input.env.BYSPACE_RELAY_ENDPOINT ??
     input.persisted.daemon?.relay?.endpoint ??
     DEFAULT_RELAY_ENDPOINT;
   const publicEndpoint =
-    input.env.PASEO_RELAY_PUBLIC_ENDPOINT ??
+    input.env.BYSPACE_RELAY_PUBLIC_ENDPOINT ??
     input.persisted.daemon?.relay?.publicEndpoint ??
     endpoint;
   const useTls =
     input.cliRelayUseTls ??
     resolveTlsFromEnv(
-      input.env.PASEO_RELAY_USE_TLS,
+      input.env.BYSPACE_RELAY_USE_TLS,
       input.persisted.daemon?.relay?.useTls,
       endpoint === DEFAULT_RELAY_ENDPOINT,
     );
   const publicUseTls = resolveTlsFromEnv(
-    input.env.PASEO_RELAY_PUBLIC_USE_TLS,
+    input.env.BYSPACE_RELAY_PUBLIC_USE_TLS,
     input.persisted.daemon?.relay?.publicUseTls,
     useTls,
   );
@@ -251,7 +251,7 @@ function resolveServiceProxyPublicBaseUrl(value: string | null): string | null {
   try {
     return new URL(value).toString().replace(/\/$/, "");
   } catch {
-    throw new Error(`Invalid PASEO_SERVICE_PROXY_PUBLIC_BASE_URL: ${value}`);
+    throw new Error(`Invalid BYSPACE_SERVICE_PROXY_PUBLIC_BASE_URL: ${value}`);
   }
 }
 
@@ -260,20 +260,20 @@ function resolveServiceProxyConfig(
   persisted: ReturnType<typeof loadPersistedConfig>,
 ): ResolvedServiceProxy {
   const enabledShim =
-    parseBooleanEnv(env.PASEO_SERVICE_PROXY_ENABLED) ?? persisted.daemon?.serviceProxy?.enabled;
+    parseBooleanEnv(env.BYSPACE_SERVICE_PROXY_ENABLED) ?? persisted.daemon?.serviceProxy?.enabled;
   // COMPAT(serviceProxyEnabled): added 2026-06-02, remove after 2026-12-02.
   // `enabled=false` used to disable the separate service proxy listener. Localhost
   // service proxying is now always enabled; this only suppresses optional layers.
   const optionalLayersEnabled = enabledShim !== false;
   const publicBaseUrl = optionalLayersEnabled
     ? resolveServiceProxyPublicBaseUrl(
-        env.PASEO_SERVICE_PROXY_PUBLIC_BASE_URL ??
+        env.BYSPACE_SERVICE_PROXY_PUBLIC_BASE_URL ??
           persisted.daemon?.serviceProxy?.publicBaseUrl ??
           null,
       )
     : null;
   const standaloneListen = optionalLayersEnabled
-    ? (env.PASEO_SERVICE_PROXY_LISTEN ?? persisted.daemon?.serviceProxy?.listen ?? null)
+    ? (env.BYSPACE_SERVICE_PROXY_LISTEN ?? persisted.daemon?.serviceProxy?.listen ?? null)
     : null;
 
   return { publicBaseUrl, standaloneListen };
@@ -292,10 +292,10 @@ function resolveWebUiConfig(
 ): ResolvedWebUi {
   const enabled =
     cli?.webUiEnabled ??
-    parseBooleanEnv(env.PASEO_WEB_UI_ENABLED) ??
+    parseBooleanEnv(env.BYSPACE_WEB_UI_ENABLED) ??
     persisted.features?.webUi?.enabled ??
     false;
-  const rawDistDir = env.PASEO_WEB_UI_DIST_DIR ?? persisted.features?.webUi?.distDir;
+  const rawDistDir = env.BYSPACE_WEB_UI_DIST_DIR ?? persisted.features?.webUi?.distDir;
   const trimmedDistDir = rawDistDir?.trim();
   const distDir = trimmedDistDir
     ? path.resolve(path.isAbsolute(trimmedDistDir) ? trimmedDistDir : paseoHome, trimmedDistDir)
@@ -310,7 +310,7 @@ function resolveVoiceLlmConfig(
   env: NodeJS.ProcessEnv,
   persisted: ReturnType<typeof loadPersistedConfig>,
 ): ResolvedVoiceLlm {
-  const envVoiceLlmProvider = parseOptionalVoiceLlmProvider(env.PASEO_VOICE_LLM_PROVIDER);
+  const envVoiceLlmProvider = parseOptionalVoiceLlmProvider(env.BYSPACE_VOICE_LLM_PROVIDER);
   const persistedVoiceLlmProvider = parseOptionalVoiceLlmProvider(
     persisted.features?.voiceMode?.llm?.provider,
   );
@@ -325,8 +325,8 @@ function resolveCorsAllowedOrigins(
   env: NodeJS.ProcessEnv,
   persisted: ReturnType<typeof loadPersistedConfig>,
 ): string[] {
-  const envCorsOrigins = env.PASEO_CORS_ORIGINS
-    ? env.PASEO_CORS_ORIGINS.split(",").map((s) => s.trim())
+  const envCorsOrigins = env.BYSPACE_CORS_ORIGINS
+    ? env.BYSPACE_CORS_ORIGINS.split(",").map((s) => s.trim())
     : [];
   const persistedCorsOrigins = persisted.daemon?.cors?.allowedOrigins ?? [];
   return Array.from(
@@ -359,13 +359,13 @@ function resolveTrustedProxiesConfig(
   persisted: ReturnType<typeof loadPersistedConfig>,
 ): TrustedProxiesConfig {
   return (
-    parseTrustedProxiesEnv(env.PASEO_TRUSTED_PROXIES) ??
+    parseTrustedProxiesEnv(env.BYSPACE_TRUSTED_PROXIES) ??
     persisted.daemon?.trustedProxies ??
     DEFAULT_TRUSTED_PROXIES
   );
 }
 
-// PASEO_LISTEN can be:
+// BYSPACE_LISTEN can be:
 // - host:port (TCP)
 // - /path/to/socket (Unix socket)
 // - unix:///path/to/socket (Unix socket)
@@ -377,7 +377,7 @@ function resolveListenAddress(
 ): string {
   return (
     cli?.listen ??
-    env.PASEO_LISTEN ??
+    env.BYSPACE_LISTEN ??
     persisted.daemon?.listen ??
     `127.0.0.1:${env.PORT ?? DEFAULT_PORT}`
   );
@@ -387,7 +387,7 @@ function resolveAuthConfig(
   env: NodeJS.ProcessEnv,
   persisted: ReturnType<typeof loadPersistedConfig>,
 ): PaseoDaemonConfig["auth"] {
-  const envPassword = env.PASEO_PASSWORD?.trim();
+  const envPassword = env.BYSPACE_PASSWORD?.trim();
   if (envPassword) {
     return { password: hashDaemonPassword(envPassword) };
   }
@@ -429,11 +429,11 @@ function resolveStaticLoadConfigSettings(
     terminalProfiles: persisted.daemon?.terminalProfiles,
     hostnames: mergeHostnames([
       persisted.daemon?.hostnames,
-      parseHostnamesEnv(env.PASEO_HOSTNAMES ?? env.PASEO_ALLOWED_HOSTS),
+      parseHostnamesEnv(env.BYSPACE_HOSTNAMES ?? env.BYSPACE_ALLOWED_HOSTS),
       cli?.hostnames,
     ]),
     trustedProxies: resolveTrustedProxiesConfig(env, persisted),
-    appBaseUrl: env.PASEO_APP_BASE_URL ?? persisted.app?.baseUrl ?? DEFAULT_APP_BASE_URL,
+    appBaseUrl: env.BYSPACE_APP_BASE_URL ?? persisted.app?.baseUrl ?? DEFAULT_APP_BASE_URL,
   };
 }
 

@@ -2,7 +2,7 @@
 
 Paseo uses **file-based JSON persistence** instead of a traditional database. All data is validated at runtime with Zod schemas. Most stores write atomically (write to temp file, then rename); a few still use plain `writeFile` — see each section. There is no schema-versioning/migration framework — schemas rely on optional fields with defaults for forward compatibility, with a small amount of inline normalization in `persisted-config.ts` for legacy provider/speech entries.
 
-All server-side stores live under `$PASEO_HOME` (defaults to `~/.paseo`).
+All server-side stores live under `$BYSPACE_HOME` (defaults to `~/.paseo`).
 
 ## Store Surface Rules
 
@@ -13,7 +13,7 @@ Store APIs own persistence atomicity and should not make services coordinate raw
 ## Directory layout
 
 ```
-$PASEO_HOME/
+$BYSPACE_HOME/
 ├── config.json                          # Daemon configuration
 ├── server-id                            # Stable daemon identifier (plain text, "srv_<base64url>")
 ├── daemon-keypair.json                  # E2EE keypair for relay (mode 0600)
@@ -43,7 +43,7 @@ The `agents/{sanitized-cwd}/` directory name is derived from the agent's `cwd` b
 
 ## 1. Agent Record
 
-**Path:** `$PASEO_HOME/agents/{project-dir}/{agentId}.json`
+**Path:** `$BYSPACE_HOME/agents/{project-dir}/{agentId}.json`
 
 Each agent is stored as a separate JSON file, grouped by project directory.
 
@@ -144,7 +144,7 @@ Terminal activity contributes to the workspace status bucket **per `workspaceId`
 
 ## 2. Daemon Configuration
 
-**Path:** `$PASEO_HOME/config.json`
+**Path:** `$BYSPACE_HOME/config.json`
 
 Single file, validated with `PersistedConfigSchema`.
 
@@ -165,7 +165,7 @@ Single file, validated with `PersistedConfigSchema`.
     baseUrl: string
   },
   worktrees?: {
-    root?: string            // optional root for new worktrees; defaults to $PASEO_HOME/worktrees
+    root?: string            // optional root for new worktrees; defaults to $BYSPACE_HOME/worktrees
   },
   providers: {
     openai: {
@@ -205,11 +205,11 @@ Local speech model ids are intentionally narrow: STT uses `parakeet-tdt-0.6b-v2-
 
 Set these to select OpenAI instead of local speech:
 
-| Env var                        | Applies to                      |
-| ------------------------------ | ------------------------------- |
-| `PASEO_VOICE_STT_PROVIDER`     | Voice mode STT provider         |
-| `PASEO_DICTATION_STT_PROVIDER` | Composer dictation STT provider |
-| `PASEO_VOICE_TTS_PROVIDER`     | Voice mode TTS provider         |
+| Env var                          | Applies to                      |
+| -------------------------------- | ------------------------------- |
+| `BYSPACE_VOICE_STT_PROVIDER`     | Voice mode STT provider         |
+| `BYSPACE_DICTATION_STT_PROVIDER` | Composer dictation STT provider |
+| `BYSPACE_VOICE_TTS_PROVIDER`     | Voice mode TTS provider         |
 
 OpenAI speech can be configured under `providers.openai`. STT and TTS resolve independently, so they can point at different endpoints:
 
@@ -242,7 +242,7 @@ Paseo uses these paths under the configured OpenAI base URL:
 
 ## 3. Schedule
 
-**Path:** `$PASEO_HOME/schedules/{id}.json`
+**Path:** `$BYSPACE_HOME/schedules/{id}.json`
 
 One file per schedule. ID is 8 hex characters.
 
@@ -290,7 +290,7 @@ One file per schedule. ID is 8 hex characters.
 
 ## 4. Chat
 
-**Path:** `$PASEO_HOME/chat/rooms.json`
+**Path:** `$BYSPACE_HOME/chat/rooms.json`
 
 Single file containing all rooms and messages.
 
@@ -327,7 +327,7 @@ Single file containing all rooms and messages.
 
 ## 5. Loop
 
-**Path:** `$PASEO_HOME/loops/loops.json`
+**Path:** `$BYSPACE_HOME/loops/loops.json`
 
 Single file containing an array of all loop records. Writes are direct (not atomic) and serialized through an in-memory queue. On daemon startup any record with `status: "running"` is recovered as `"stopped"` with an interruption log entry.
 
@@ -416,7 +416,7 @@ Single file containing an array of all loop records. Writes are direct (not atom
 
 ## 6. Project Registry
 
-**Path:** `$PASEO_HOME/projects/projects.json`
+**Path:** `$BYSPACE_HOME/projects/projects.json`
 
 Array of project records.
 
@@ -440,7 +440,7 @@ emptied duplicate.
 
 ## 7. Workspace Registry
 
-**Path:** `$PASEO_HOME/projects/workspaces.json`
+**Path:** `$BYSPACE_HOME/projects/workspaces.json`
 
 Array of workspace records. A workspace is a specific working directory within a project.
 
@@ -469,7 +469,7 @@ than treating it as valid.
 
 ## 8. Push Token Store
 
-**Path:** `$PASEO_HOME/push-tokens.json`
+**Path:** `$BYSPACE_HOME/push-tokens.json`
 
 ```json
 {
@@ -483,13 +483,13 @@ Simple set of Expo push notification tokens. Loaded with permissive parsing (fil
 
 ## 9. Daemon meta files
 
-These small files are not validated as full Zod schemas but are persisted under `$PASEO_HOME` for daemon identity and runtime coordination.
+These small files are not validated as full Zod schemas but are persisted under `$BYSPACE_HOME` for daemon identity and runtime coordination.
 
 | Path                  | Format                                                         | Notes                                                                             |
 | --------------------- | -------------------------------------------------------------- | --------------------------------------------------------------------------------- |
-| `server-id`           | Plain text, e.g. `srv_<base64url>`                             | Stable per-`$PASEO_HOME` daemon ID. Overridable via `PASEO_SERVER_ID` env.        |
+| `server-id`           | Plain text, e.g. `srv_<base64url>`                             | Stable per-`$BYSPACE_HOME` daemon ID. Overridable via `BYSPACE_SERVER_ID` env.    |
 | `daemon-keypair.json` | `{ v: 2, publicKeyB64, secretKeyB64 }` (libsodium box keypair) | E2EE relay identity. Written with mode `0600`. Regenerated if file is unreadable. |
-| `paseo.pid`           | JSON `{ pid, startedAt, ... }`                                 | PID lock; prevents two daemons sharing one `$PASEO_HOME`.                         |
+| `paseo.pid`           | JSON `{ pid, startedAt, ... }`                                 | PID lock; prevents two daemons sharing one `$BYSPACE_HOME`.                       |
 | `daemon.log`          | Pino log output                                                | Default location; path/rotation configurable via `log.file` in `config.json`.     |
 
 ---

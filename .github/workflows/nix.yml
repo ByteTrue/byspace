@@ -51,22 +51,22 @@ jobs:
         run: |
           set -euo pipefail
 
-          export PASEO_HOME
-          PASEO_HOME="$(mktemp -d)"
-          export PASEO_LISTEN=127.0.0.1:6767
+          export BYSPACE_HOME
+          BYSPACE_HOME="$(mktemp -d)"
+          export BYSPACE_LISTEN=127.0.0.1:6767
 
-          WRAPPER_LOG="$PASEO_HOME/paseo-server-wrapper.log"
+          WRAPPER_LOG="$BYSPACE_HOME/paseo-server-wrapper.log"
 
           cleanup() {
             if [[ -n "${DAEMON_PID:-}" ]] && kill -0 "$DAEMON_PID" 2>/dev/null; then
               kill "$DAEMON_PID"
               wait "$DAEMON_PID" || true
             fi
-            rm -rf "$PASEO_HOME"
+            rm -rf "$BYSPACE_HOME"
           }
           trap cleanup EXIT
 
-          PASEO_WEB_UI_ENABLED=true ./result/bin/paseo-server --no-relay >"$WRAPPER_LOG" 2>&1 &
+          BYSPACE_WEB_UI_ENABLED=true ./result/bin/paseo-server --no-relay >"$WRAPPER_LOG" 2>&1 &
           DAEMON_PID=$!
 
           deadline=$((SECONDS + 30))
@@ -74,8 +74,8 @@ jobs:
             if STATUS_JSON="$(./result/bin/paseo daemon status --json)" \
               && jq -e '.connectedDaemon == "reachable"' <<<"$STATUS_JSON" >/dev/null; then
               echo "$STATUS_JSON"
-              curl --fail --silent --show-error http://127.0.0.1:6767/ >"$PASEO_HOME/web-ui.html"
-              [[ -s "$PASEO_HOME/web-ui.html" ]]
+              curl --fail --silent --show-error http://127.0.0.1:6767/ >"$BYSPACE_HOME/web-ui.html"
+              [[ -s "$BYSPACE_HOME/web-ui.html" ]]
               exit 0
             fi
 
@@ -88,7 +88,7 @@ jobs:
           done
 
           echo "::group::daemon.log"
-          cat "$PASEO_HOME/daemon.log" 2>/dev/null || echo "<missing>"
+          cat "$BYSPACE_HOME/daemon.log" 2>/dev/null || echo "<missing>"
           echo "::endgroup::"
 
           echo "::group::paseo-server stdout/stderr"

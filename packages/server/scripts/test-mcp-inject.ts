@@ -51,8 +51,8 @@ async function verifyInjectedMcpForProvider(
     const prompt = [
       "List all your available MCP tools.",
       "If you have a tool called list_agents or create_agent from a paseo MCP server, call list_agents once.",
-      "After checking, reply with exactly PASEO_MCP_FOUND.",
-      "If you do not have those tools, reply with exactly PASEO_MCP_NOT_FOUND.",
+      "After checking, reply with exactly BYSPACE_MCP_FOUND.",
+      "If you do not have those tools, reply with exactly BYSPACE_MCP_NOT_FOUND.",
       "Do not say anything else.",
     ].join(" ");
 
@@ -82,7 +82,7 @@ async function verifyInjectedMcpForProvider(
         status: entry.item.status,
       }));
 
-    if (!assistantText.includes("PASEO_MCP_FOUND")) {
+    if (!assistantText.includes("BYSPACE_MCP_FOUND")) {
       throw new Error(
         `Expected assistant to confirm Paseo MCP availability. Assistant text:\n${assistantText}`,
       );

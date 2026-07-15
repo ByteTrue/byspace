@@ -215,10 +215,10 @@ it("delivers rapid small writes complete and in order through worker coalescing"
     await manager.createTerminal({
       workspaceId: "ws-test",
       cwd,
-      env: { PASEO_TERMINAL_BURST_GATE: burstGatePath },
+      env: { BYSPACE_TERMINAL_BURST_GATE: burstGatePath },
       ...nodeTerminalCommand(`
       const fs = require("node:fs");
-      const gatePath = process.env.PASEO_TERMINAL_BURST_GATE;
+      const gatePath = process.env.BYSPACE_TERMINAL_BURST_GATE;
       const gate = setInterval(() => {
         if (!gatePath || !fs.existsSync(gatePath)) {
           return;
@@ -425,7 +425,7 @@ it("keeps registered cwd env inheritance behind the worker manager interface", a
 
   manager.registerCwdEnv({
     cwd,
-    env: { PASEO_WORKER_TERMINAL_TEST: "worker-env" },
+    env: { BYSPACE_WORKER_TERMINAL_TEST: "worker-env" },
   });
   trackTerminal(
     await manager.createTerminal({
@@ -434,7 +434,7 @@ it("keeps registered cwd env inheritance behind the worker manager interface", a
       ...nodeTerminalCommand(`
       require("node:fs").writeFileSync(
         ${JSON.stringify(markerPath)},
-        process.env.PASEO_WORKER_TERMINAL_TEST ?? "",
+        process.env.BYSPACE_WORKER_TERMINAL_TEST ?? "",
       );
       setInterval(() => {}, 1000);
     `),
@@ -463,10 +463,10 @@ it("injects parent-minted terminal activity env through the worker", async () =>
         require("node:fs").writeFileSync(
           ${JSON.stringify(envPath)},
           JSON.stringify({
-            terminalId: process.env.PASEO_TERMINAL_ID,
-            token: process.env.PASEO_ACTIVITY_TOKEN,
-            url: process.env.PASEO_TERMINAL_ACTIVITY_URL,
-            hookCli: process.env.PASEO_HOOK_CLI,
+            terminalId: process.env.BYSPACE_TERMINAL_ID,
+            token: process.env.BYSPACE_ACTIVITY_TOKEN,
+            url: process.env.BYSPACE_TERMINAL_ACTIVITY_URL,
+            hookCli: process.env.BYSPACE_HOOK_CLI,
             path: process.env.PATH ?? process.env.Path,
           }),
         );

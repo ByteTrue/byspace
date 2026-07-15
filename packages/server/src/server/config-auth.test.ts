@@ -39,7 +39,7 @@ describe("daemon auth config", () => {
     );
   });
 
-  test("lets PASEO_PASSWORD override config.json auth password hash", async () => {
+  test("lets BYSPACE_PASSWORD override config.json auth password hash", async () => {
     const paseoHome = await createPaseoHome({
       version: 1,
       daemon: {
@@ -48,7 +48,7 @@ describe("daemon auth config", () => {
     });
 
     const config = loadConfig(paseoHome, {
-      env: { PASEO_PASSWORD: "from-env" },
+      env: { BYSPACE_PASSWORD: "from-env" },
     });
 
     expect(config.auth?.password).not.toBe(CONFIG_PASSWORD_HASH);

@@ -227,7 +227,7 @@ async function waitForRelayWebSocketReady(port: number, timeout = 60000): Promis
   };
 
   test("daemon connects to relay and client ping/pong works through relay", async () => {
-    process.env.PASEO_PRIMARY_LAN_IP = "192.168.1.12";
+    process.env.BYSPACE_PRIMARY_LAN_IP = "192.168.1.12";
 
     const { logger, lines } = createCapturingLogger();
     await startRelay();
@@ -363,7 +363,7 @@ async function waitForRelayWebSocketReady(port: number, timeout = 60000): Promis
   }, 90000);
 
   test("daemon keeps relay socket open while idle (no handshake timeout loop)", async () => {
-    process.env.PASEO_PRIMARY_LAN_IP = "192.168.1.12";
+    process.env.BYSPACE_PRIMARY_LAN_IP = "192.168.1.12";
 
     const { logger, lines } = createCapturingLogger();
     await startRelay();
@@ -504,7 +504,7 @@ async function waitForRelayWebSocketReady(port: number, timeout = 60000): Promis
   }, 90000);
 
   test("daemon accepts a relay client that pipelines app hello after E2EE hello", async () => {
-    process.env.PASEO_PRIMARY_LAN_IP = "192.168.1.12";
+    process.env.BYSPACE_PRIMARY_LAN_IP = "192.168.1.12";
 
     const { logger, lines } = createCapturingLogger();
     await startRelay();

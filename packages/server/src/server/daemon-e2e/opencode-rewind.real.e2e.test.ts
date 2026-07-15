@@ -174,7 +174,7 @@ function editPrompt(input: {
   doneToken: string;
 }): string {
   return [
-    `PASEO_OPENCODE_REWIND_PROMPT_${input.promptToken}.`,
+    `BYSPACE_OPENCODE_REWIND_PROMPT_${input.promptToken}.`,
     `Use the edit or write tool, not shell commands, to make ${input.fileName} contain exactly:`,
     "```",
     input.content.trimEnd(),
@@ -291,7 +291,7 @@ describe("daemon E2E (real opencode) - rewind", () => {
       harness,
       "opencode-plain-text-user-message-real",
     );
-    const prompt = "PASEO_OPENCODE_PLAIN_TEXT_DUP_CHECK. Reply exactly: OPENCODE_PLAIN_TEXT_DONE";
+    const prompt = "BYSPACE_OPENCODE_PLAIN_TEXT_DUP_CHECK. Reply exactly: OPENCODE_PLAIN_TEXT_DONE";
 
     try {
       await harness.client.sendMessage(session.agentId, prompt);
@@ -315,7 +315,7 @@ describe("daemon E2E (real opencode) - rewind", () => {
       await harness.client.sendMessage(
         session.agentId,
         [
-          "PASEO_OPENCODE_REWIND_PROMPT_READ_ONLY.",
+          "BYSPACE_OPENCODE_REWIND_PROMPT_READ_ONLY.",
           `Inspect ${path.basename(session.scratchPath)} without editing files.`,
           "Reply exactly: OPENCODE_READ_ONLY_DONE",
         ].join(" "),
@@ -360,7 +360,7 @@ describe("daemon E2E (real opencode) - rewind", () => {
       await harness.client.sendMessage(
         session.agentId,
         [
-          "PASEO_OPENCODE_REWIND_PROMPT_MULTI_EDIT.",
+          "BYSPACE_OPENCODE_REWIND_PROMPT_MULTI_EDIT.",
           "Create opencode-multi-a.txt with exactly OPENCODE_MULTI_A.",
           "Create opencode-multi-b.txt with exactly OPENCODE_MULTI_B.",
           "Do not use shell commands.",

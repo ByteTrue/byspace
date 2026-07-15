@@ -11,7 +11,7 @@ import {
   type ConnectionOffer,
 } from "@bytetrue/byspace-protocol/connection-offer";
 
-const relayEndpoint = process.env.PASEO_LIVE_RELAY_ENDPOINT ?? "paseo-relay-next.fly.dev:443";
+const relayEndpoint = process.env.BYSPACE_LIVE_RELAY_ENDPOINT ?? "paseo-relay-next.fly.dev:443";
 const liveTest = process.env.RUN_LIVE_RELAY_E2E === "1" ? test : test.skip;
 
 function requireOffer(url: string): ConnectionOffer {

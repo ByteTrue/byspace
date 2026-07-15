@@ -51,7 +51,7 @@ try {
   {
     console.log("Test 2: logs requires ID argument");
     const result =
-      await $`PASEO_HOST=localhost:${port} PASEO_HOME=${paseoHome} npx paseo logs`.nothrow();
+      await $`BYSPACE_HOST=localhost:${port} BYSPACE_HOME=${paseoHome} npx paseo logs`.nothrow();
     assert.notStrictEqual(result.exitCode, 0, "should fail without id");
     const output = result.stdout + result.stderr;
     const hasError =
@@ -67,7 +67,7 @@ try {
   {
     console.log("Test 3: logs handles daemon not running");
     const result =
-      await $`PASEO_HOST=localhost:${port} PASEO_HOME=${paseoHome} npx paseo logs abc123`.nothrow();
+      await $`BYSPACE_HOST=localhost:${port} BYSPACE_HOME=${paseoHome} npx paseo logs abc123`.nothrow();
     // Should fail because daemon not running
     assert.notStrictEqual(result.exitCode, 0, "should fail when daemon not running");
     const output = result.stdout + result.stderr;
@@ -84,7 +84,7 @@ try {
     console.log("Test 4: logs -f (follow) flag is accepted");
     // Use timeout to avoid hanging on follow mode
     const result =
-      await $`timeout 1 bash -c 'PASEO_HOST=localhost:${port} PASEO_HOME=${paseoHome} npx paseo logs -f abc123' || true`.nothrow();
+      await $`timeout 1 bash -c 'BYSPACE_HOST=localhost:${port} BYSPACE_HOME=${paseoHome} npx paseo logs -f abc123' || true`.nothrow();
     const output = result.stdout + result.stderr;
     assert(!output.includes("unknown option"), "should accept -f flag");
     assert(!output.includes("error: option"), "should not have option parsing error");
@@ -95,7 +95,7 @@ try {
   {
     console.log("Test 5: logs --follow flag is accepted");
     const result =
-      await $`timeout 1 bash -c 'PASEO_HOST=localhost:${port} PASEO_HOME=${paseoHome} npx paseo logs --follow abc123' || true`.nothrow();
+      await $`timeout 1 bash -c 'BYSPACE_HOST=localhost:${port} BYSPACE_HOME=${paseoHome} npx paseo logs --follow abc123' || true`.nothrow();
     const output = result.stdout + result.stderr;
     assert(!output.includes("unknown option"), "should accept --follow flag");
     assert(!output.includes("error: option"), "should not have option parsing error");
@@ -106,7 +106,7 @@ try {
   {
     console.log("Test 6: logs --tail flag is accepted");
     const result =
-      await $`PASEO_HOST=localhost:${port} PASEO_HOME=${paseoHome} npx paseo logs --tail 50 abc123`.nothrow();
+      await $`BYSPACE_HOST=localhost:${port} BYSPACE_HOME=${paseoHome} npx paseo logs --tail 50 abc123`.nothrow();
     const output = result.stdout + result.stderr;
     assert(!output.includes("unknown option"), "should accept --tail flag");
     assert(!output.includes("error: option"), "should not have option parsing error");
@@ -117,7 +117,7 @@ try {
   {
     console.log("Test 7: logs with ID and --host flag is accepted");
     const result =
-      await $`PASEO_HOST=localhost:${port} PASEO_HOME=${paseoHome} npx paseo logs abc123 --host localhost:${port}`.nothrow();
+      await $`BYSPACE_HOST=localhost:${port} BYSPACE_HOME=${paseoHome} npx paseo logs abc123 --host localhost:${port}`.nothrow();
     const output = result.stdout + result.stderr;
     assert(!output.includes("unknown option"), "should accept --host flag");
     assert(!output.includes("error: option"), "should not have option parsing error");
@@ -137,7 +137,7 @@ try {
   {
     console.log("Test 9: -q (quiet) flag is accepted with logs");
     const result =
-      await $`PASEO_HOST=localhost:${port} PASEO_HOME=${paseoHome} npx paseo -q logs abc123`.nothrow();
+      await $`BYSPACE_HOST=localhost:${port} BYSPACE_HOME=${paseoHome} npx paseo -q logs abc123`.nothrow();
     const output = result.stdout + result.stderr;
     assert(!output.includes("unknown option"), "should accept -q flag");
     assert(!output.includes("error: option"), "should not have option parsing error");

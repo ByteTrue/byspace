@@ -15,7 +15,7 @@ export const OPENCODE_PLUGIN_SOURCE = [
   "}",
   "",
   "function runPaseoHook(event) {",
-  "  if (!process.env.PASEO_TERMINAL_ID) return;",
+  "  if (!process.env.BYSPACE_TERMINAL_ID) return;",
   "  try {",
   '    const child = Bun.spawn(["paseo", "hooks", "opencode", event], {',
   '      stdin: "ignore",',
