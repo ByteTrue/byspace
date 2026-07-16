@@ -2,7 +2,7 @@
 kind: issue
 title: "完成首次发布与部署"
 type: feature
-status: open
+status: closed
 created: 2026-07-14
 epic: ".cs/epics/2026/07/14/web-only-byspace/spec.md"
 ---
@@ -82,21 +82,20 @@ epic: ".cs/epics/2026/07/14/web-only-byspace/spec.md"
 ## 执行记录
 
 - 已完成 v0.1.0 metadata、changelog、单包脚本、三平台 CI distribution job、CI-gated Pages/Relay、npm OIDC/tag workflow、Docker tag 验证和 Nix hash bot workflow。
-- `ByteTrue/byspace` public repository 已创建并配置 `origin`；Cloudflare Pages `byspace` 与 Worker `byspace-relay` 已在 ByteTrue account 部署。长期 API token 尚未写入 GitHub，故 `CLOUDFLARE_DEPLOY_ENABLED=false`，当前使用本机 OAuth 手动部署。
+- `ByteTrue/byspace` public repository 已创建并配置 `origin`；Cloudflare Pages `byspace` 与 Worker `byspace-relay` 已在 ByteTrue account 部署。
+- GitHub Secret `CLOUDFLARE_API_TOKEN` 只具有目标 account 的 Workers Scripts Edit + Cloudflare Pages Edit，`CLOUDFLARE_DEPLOY_ENABLED=true`；App run `29505394675` 与 Relay run `29505398465` 已通过显式 workflow dispatch 验证部署步骤、凭据和生产资源。自动 `workflow_run` 触发会在下一次 `main` CI 后自然观测。
 - 首包 `@bytetrue/byspace@0.1.0` 已从绿灯 CI artifact bootstrap 发布；npm Trusted Publisher 已绑定 `ByteTrue/byspace` + `npm-release.yml`，只允许 `npm publish`。
 - `v0.1.0` 指向绿灯 SHA；GitHub Release 与 amd64/arm64 Docker `0.1.0`/`latest` 已发布。首次 tag workflow 因 shallow checkout 无法验证 upstream cursor，Release 由同一 changelog 脚本补建，并为后续发布修复 `fetch-depth: 0`。
 
 ## 关闭回写
 
-- epic spec：回写正式身份、发布拓扑、安装路径与实际验证。
-- project spec：仅在 epic 关闭时毕业。
-- notes：记录 Cloudflare/npm/GitHub 发布中的可复用坑点。
-- AGENTS.md / CLAUDE.md：只写每次发布前都必须知道的短规则或 notes 指针。
-- tools：发布流程稳定重复后再考虑脚本化。
+- Epic / Project Spec：回写正式身份、发布拓扑、安装路径、精确 SHA 门禁、最小凭据约束与实际验证。
+- 流程文档：重复发布和回滚操作由 `docs/release.md` 保存；本 issue 只保留首次发布证据。
+- Agent 指令与 tools：现有发布规则和脚本已覆盖，不新增重复入口。
 
 ## 关闭结论
 
-- 关闭判断：待用户在发布验证完成后授权关闭。
-- 验证摘要：待执行。
-- 回写位置：待关闭。
-- 遗留事项：待执行确认。
+- 关闭判断：目标已达成。GitHub、npm、Pages、Relay、GitHub Release 和双架构 Docker 均可访问，单包安装与生产 CI/CD 可重复执行。
+- 验证摘要：release tag `v0.1.0` 指向最终绿灯 SHA `855e9ff603bd013087bbb767dcc2634d8a339e3b`；CI run `29483121410` 全绿；registry 全新安装验证 version/help 与隔离 daemon start/status/stop；Pages、文档 redirects、Relay health、GitHub Release、Docker manifests 和两条显式 Cloudflare GitHub Actions 部署均在线。
+- 回写位置：正式身份、使用路径、发行拓扑、精确 SHA 发布门禁、单包 npm 与最小凭据约束已合并到所属 Epic，并在 Epic 关闭时毕业到 `.cs/spec/index.md` 的“能力地图”“使用路径”“发布”和“关键考量”；重复操作由 `docs/release.md` 承担。
+- 遗留事项：`0.1.0` 是人工 bootstrap 发布；下一版本首次通过 OIDC 发布时验证 Trusted Publisher，再把 npm publishing access 收紧为禁止传统 token。Cloudflare 自动 `workflow_run` 触发同样在下一次 `main` CI 后自然验证；这两项不影响当前发布与已验证的显式部署通道。

@@ -2,7 +2,7 @@
 kind: issue
 title: "建立 Web-only fork 基线"
 type: feature
-status: open
+status: closed
 created: 2026-07-14
 epic: ".cs/epics/2026/07/14/web-only-byspace/spec.md"
 ---
@@ -139,7 +139,7 @@ epic: ".cs/epics/2026/07/14/web-only-byspace/spec.md"
 
 ## 关闭结论
 
-- 关闭判断：待用户在实现与验证完成后授权关闭。
-- 验证摘要：待执行。
-- 回写位置：待关闭。
-- 遗留事项：首次发布与部署由后续 issue 承接。
+- 关闭判断：目标已达成。仓库只保留浏览器 Web、daemon/CLI、Relay 和完整 Provider 接入面；Electron、原生 iOS/Android 与内置 Browser automation 已按完整能力切片删除。
+- 验证摘要：干净安装、Web export、Server/CLI build、Protocol/Client/App/Server 聚焦测试、Nix build、Provider registry 与残留搜索均通过；首发 CI 又在 Linux/macOS/Windows 和 4 个 Playwright shards 上验证了同一基线。
+- 回写位置：稳定的 Web-only、local-first、Provider 保留和完整能力切片边界已合并到所属 Epic，并在 Epic 关闭时毕业到 `.cs/spec/index.md` 的“能力地图”“当前边界”和“关键考量”。
+- 遗留事项：本 issue 无未完成项；Pi 专属优化按真实使用问题另行切 issue。

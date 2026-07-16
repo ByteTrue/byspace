@@ -1,7 +1,7 @@
 ---
 kind: issue
 title: "完整迁移项目身份到 BySpace"
-status: open
+status: closed
 created: 2026-07-15
 epic: ".cs/epics/2026/07/14/web-only-byspace/spec.md"
 ---
@@ -80,3 +80,10 @@ epic: ".cs/epics/2026/07/14/web-only-byspace/spec.md"
 ## 关闭回写
 
 - 命名规则和禁止双命名边界先回写 epic；epic 关闭时毕业到 project spec 与根 Agent 指令。
+
+## 关闭结论
+
+- 关闭判断：活跃项目身份已统一为 `BySpace` / `byspace` / `BYSPACE_*`，没有旧名 runtime alias 或双命名 fallback；允许保留的 Paseo 痕迹只存在于归属、Git/upstream 和历史证据边界。
+- 验证摘要：branding gate、root typecheck/lint/format、Client/Server/Web builds、Relay dry-run、聚焦 runtime/CLI/协议测试和最终发行 tarball 均通过；branding gate 已接入 CI 与 release gate。
+- 回写位置：统一语言、机器标识、旧名保留边界和 branding 约束已合并到所属 Epic，并在 Epic 关闭时毕业到 `.cs/spec/index.md` 的“统一语言”“当前边界”和“关键考量”。
+- 遗留事项：无；后续 upstream 移植继续由 branding gate 阻止旧名重新进入活跃边界。

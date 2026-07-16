@@ -52,7 +52,7 @@ Use `vX.Y.Z-beta.N`, mark the GitHub release as prerelease, and publish npm only
 
 ## Cloudflare deployment
 
-`Deploy App` and `Deploy Relay` run only after the `CI` workflow succeeds for a pushed `main` commit, then deploy that exact SHA with serialized production concurrency. Pages uses project `byspace`; the relay uses Worker `byspace-relay` and its own Durable Object, with no upstream proxy. Both workflows require the repository secret `CLOUDFLARE_API_TOKEN`.
+For pushed `main` commits, `Deploy App` and `Deploy Relay` run only after the `CI` workflow succeeds and deploy that exact SHA with serialized production concurrency. Both workflows also expose an explicit `workflow_dispatch` operator override for manual redeployment; that path does not assert a prior CI result. Pages uses project `byspace`; the relay uses Worker `byspace-relay` and its own Durable Object, with no upstream proxy. Both workflows require the repository secret `CLOUDFLARE_API_TOKEN`.
 
 Local emergency deployment uses the same workspace scripts after `wrangler whoami` confirms the intended Cloudflare account.
 
