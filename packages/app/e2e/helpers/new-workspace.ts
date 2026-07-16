@@ -17,6 +17,8 @@ type NewWorkspaceDaemonClient = Pick<
   | "fetchWorkspaces"
   | "getBySpaceWorktreeList"
   | "getDaemonConfig"
+  | "inspectWorkspaceRecovery"
+  | "on"
   | "patchDaemonConfig"
   | "removeProject"
 >;

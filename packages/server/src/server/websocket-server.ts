@@ -1003,6 +1003,13 @@ export class VoiceAssistantWebSocketServer {
       onLifecycleIntent: (intent) => {
         this.onLifecycleIntent?.(intent);
       },
+      onWorkspaceRecovered: async (workspace) => {
+        await Promise.all(
+          this.listActiveSessions().map((activeSession) =>
+            activeSession.refreshRecoveredWorkspaceForExternalMutation(workspace),
+          ),
+        );
+      },
       logger: connectionLogger.child({ module: "session" }),
       downloadTokenStore: this.downloadTokenStore,
       pushTokenStore: this.pushTokenStore,
@@ -1218,8 +1225,10 @@ export class VoiceAssistantWebSocketServer {
         projectRemove: true,
         // COMPAT(projectAdd): added in v0.1.97, drop the gate when floor >= v0.1.97.
         projectAdd: true,
-        // COMPAT(worktreeRestore): added in v0.1.97, drop the gate when floor >= v0.1.97
+        // COMPAT(worktreeRestore): added in v0.1.97, drop the gate when floor >= v0.1.97.
         worktreeRestore: true,
+        // COMPAT(workspaceRecovery): added in BySpace v0.1.2; remove after 2027-01-17 once daemon floor >= v0.1.2.
+        workspaceRecovery: true,
         // COMPAT(providerUsageList): added in v0.1.98, drop the gate when daemon floor >= v0.1.98.
         providerUsageList: true,
         // COMPAT(agentDetach): added in v0.1.98, remove gate after 2026-12-19 once daemon floor >= v0.1.98.

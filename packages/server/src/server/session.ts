@@ -168,6 +168,10 @@ import {
   type WorkspaceProvisioningService,
 } from "./session/workspace-provisioning/workspace-provisioning-service.js";
 import {
+  createWorkspaceRecoveryService,
+  type WorkspaceRecoveryService,
+} from "./session/workspace-recovery/workspace-recovery-service.js";
+import {
   createAgentUpdatesService,
   matchesAgentUpdatesFilter,
   type AgentUpdatesService,
@@ -231,6 +235,7 @@ import { type WorktreeConfig, createWorktree } from "../utils/worktree.js";
 import { runGitCommand } from "../utils/run-git-command.js";
 import { CreateAgentLifecycleDispatch } from "./agent/create-agent-lifecycle-dispatch.js";
 
+const MIN_VERSION_EXPLICIT_WORKSPACE_RECOVERY = "0.1.2";
 function errorToFriendlyMessage(error: unknown): string {
   if (error instanceof Error) return error.message;
   if (typeof error === "string") return error;
@@ -291,6 +296,23 @@ function buildWorkspaceCheckout(
   };
 }
 
+function isAppVersionAtLeast(appVersion: string | null, minVersion: string): boolean {
+  if (!appVersion) return false;
+  const parts = appVersion.replace(/-.*$/, "").split(".").map(Number);
+  const minParts = minVersion.split(".").map(Number);
+  for (let i = 0; i < minParts.length; i++) {
+    const part = parts[i] ?? 0;
+    const minPart = minParts[i] ?? 0;
+    if (part !== minPart) return part > minPart;
+  }
+  return true;
+}
+
+function clientUsesLegacyWorkspaceRestore(appVersion: string | null): boolean {
+  return (
+    appVersion !== null && !isAppVersionAtLeast(appVersion, MIN_VERSION_EXPLICIT_WORKSPACE_RECOVERY)
+  );
+}
 type DeleteFencedAgentStorage = AgentStorage & {
   beginDelete(agentId: string): void;
 };
@@ -396,6 +418,7 @@ export interface SessionOptions {
   onBinaryMessage?: (frame: Uint8Array) => void;
   getTransportBufferedAmount?: () => number | null;
   onLifecycleIntent?: (intent: SessionLifecycleIntent) => void;
+  onWorkspaceRecovered?: (workspace: PersistedWorkspaceRecord) => Promise<void>;
   logger: pino.Logger;
   downloadTokenStore: DownloadTokenStore;
   pushTokenStore: PushTokenStore;
@@ -524,6 +547,9 @@ export class Session {
   private readonly onBinaryMessage: ((frame: Uint8Array) => void) | null;
   private readonly getTransportBufferedAmount: () => number | null;
   private readonly onLifecycleIntent: ((intent: SessionLifecycleIntent) => void) | null;
+  private readonly onWorkspaceRecovered:
+    | ((workspace: PersistedWorkspaceRecord) => Promise<void>)
+    | null;
   private readonly sessionLogger: pino.Logger;
   private readonly byspaceHome: string;
   private readonly worktreesRoot: string | undefined;
@@ -539,6 +565,7 @@ export class Session {
   private readonly workspaceAutoName: WorkspaceAutoName;
   private readonly gitMutation: GitMutationService;
   private readonly workspaceProvisioning: WorkspaceProvisioningService;
+  private readonly workspaceRecovery: WorkspaceRecoveryService;
   private readonly daemonConfigStore: DaemonConfigStore;
   private readonly pushTokenStore: PushTokenStore;
   private unsubscribeAgentEvents: (() => void) | null = null;
@@ -587,6 +614,7 @@ export class Session {
       onBinaryMessage,
       getTransportBufferedAmount,
       onLifecycleIntent,
+      onWorkspaceRecovered,
       logger,
       downloadTokenStore,
       pushTokenStore,
@@ -636,6 +664,7 @@ export class Session {
     this.onBinaryMessage = onBinaryMessage ?? null;
     this.getTransportBufferedAmount = getTransportBufferedAmount ?? (() => 0);
     this.onLifecycleIntent = onLifecycleIntent ?? null;
+    this.onWorkspaceRecovered = onWorkspaceRecovered ?? null;
     this.pushTokenStore = pushTokenStore;
     this.byspaceHome = byspaceHome;
     this.worktreesRoot = worktreesRoot;
@@ -672,6 +701,15 @@ export class Session {
       workspaceRegistry: this.workspaceRegistry,
       projectRegistry: this.projectRegistry,
       workspaceGitService: this.workspaceGitService,
+    });
+    this.workspaceRecovery = createWorkspaceRecoveryService({
+      getWorkspace: (workspaceId) => this.workspaceRegistry.get(workspaceId),
+      getProject: (projectId) => this.projectRegistry.get(projectId),
+      isDirectory: (path) => this.filesystem.isDirectory(path),
+      recreateWorktree: (workspace) => this.recreateArchivedWorktree(workspace),
+      unarchiveWorkspace: async (workspace) => {
+        await this.workspaceProvisioning.ensureWorkspaceRecordUnarchived(workspace);
+      },
     });
     this.checkoutSession = new CheckoutSession({
       host: {
@@ -948,6 +986,27 @@ export class Session {
 
   async warmWorkspaceGitDataForWorkspace(workspace: PersistedWorkspaceRecord): Promise<void> {
     await this.workspaceGitObserver.warmGitData(workspace);
+  }
+
+  async refreshRecoveredWorkspaceForExternalMutation(
+    workspace: PersistedWorkspaceRecord,
+  ): Promise<void> {
+    try {
+      await this.workspaceGitObserver.warmGitData(workspace);
+    } catch (error) {
+      this.sessionLogger.warn(
+        { err: error, workspaceId: workspace.workspaceId },
+        "Failed to warm git observer after workspace recovery",
+      );
+      try {
+        await this.emitWorkspaceUpdateForWorkspaceId(workspace.workspaceId);
+      } catch (emitError) {
+        this.sessionLogger.warn(
+          { err: emitError, workspaceId: workspace.workspaceId },
+          "Failed to emit workspace update after recovery",
+        );
+      }
+    }
   }
 
   /**
@@ -1362,6 +1421,7 @@ export class Session {
       this.dispatchAgentLifecycleMessage(msg) ??
       this.dispatchAgentConfigMessage(msg) ??
       this.dispatchCheckoutMessage(msg) ??
+      this.dispatchWorkspaceRecoveryMessage(msg) ??
       this.dispatchWorkspaceAndProjectMessage(msg) ??
       this.dispatchWorkspaceFileMessage(msg) ??
       this.dispatchProviderMessage(msg) ??
@@ -1656,6 +1716,17 @@ export class Session {
       case "file.upload.request":
         this.workspaceFilesSession.handleFileUploadRequest(msg);
         return undefined;
+      default:
+        return undefined;
+    }
+  }
+
+  private dispatchWorkspaceRecoveryMessage(msg: SessionInboundMessage): Promise<void> | undefined {
+    switch (msg.type) {
+      case "workspace.recovery.inspect.request":
+        return this.handleWorkspaceRecoveryInspectRequest(msg);
+      case "workspace.recovery.restore.request":
+        return this.handleWorkspaceRecoveryRestoreRequest(msg);
       default:
         return undefined;
     }
@@ -2376,6 +2447,51 @@ export class Session {
     }
   }
 
+  private async handleWorkspaceRecoveryInspectRequest(
+    request: Extract<SessionInboundMessage, { type: "workspace.recovery.inspect.request" }>,
+  ): Promise<void> {
+    const state = await this.workspaceRecovery.inspect(request.workspaceId);
+    this.emit({
+      type: "workspace.recovery.inspect.response",
+      payload: {
+        requestId: request.requestId,
+        state,
+      },
+    });
+  }
+
+  private async handleWorkspaceRecoveryRestoreRequest(
+    request: Extract<SessionInboundMessage, { type: "workspace.recovery.restore.request" }>,
+  ): Promise<void> {
+    try {
+      await this.restoreWorkspaceAndEmit(request.workspaceId);
+      this.emit({
+        type: "workspace.recovery.restore.response",
+        payload: {
+          requestId: request.requestId,
+          workspaceId: request.workspaceId,
+          accepted: true,
+          error: null,
+        },
+      });
+    } catch (error) {
+      const message = getErrorMessageOr(error, "Failed to recover workspace");
+      this.sessionLogger.warn(
+        { err: error, workspaceId: request.workspaceId, requestId: request.requestId },
+        "session: workspace.recovery.restore.request rejected",
+      );
+      this.emit({
+        type: "workspace.recovery.restore.response",
+        payload: {
+          requestId: request.requestId,
+          workspaceId: request.workspaceId,
+          accepted: false,
+          error: message,
+        },
+      });
+    }
+  }
+
   /**
    * Handle text message to agent (with optional image attachments)
    */
@@ -2738,8 +2854,8 @@ export class Session {
     this.sessionLogger.info({ agentId }, `Refreshing agent ${agentId} from persistence`);
 
     try {
+      await this.restoreOwningWorkspaceForLegacyAgentRefresh(agentId);
       await unarchiveAgentState(this.agentStorage, this.agentManager, agentId);
-      await this.unarchiveOwningWorkspaceForAgent(agentId);
       let snapshot: ManagedAgent;
       const existing = this.agentManager.getAgent(agentId);
       if (existing) {
@@ -3849,35 +3965,14 @@ export class Session {
     };
   }
 
-  private async unarchiveOwningWorkspaceForAgent(agentId: string): Promise<void> {
-    const record = await this.agentStorage.get(agentId);
-    if (!record?.workspaceId) {
-      return;
+  private async recreateArchivedWorktree(workspace: PersistedWorkspaceRecord): Promise<void> {
+    const branch = workspace.branch;
+    if (!branch) {
+      throw new WorktreeRequestError({
+        code: "unknown",
+        message: `Workspace ${workspace.workspaceId} has no branch to restore`,
+      });
     }
-    const workspace = await this.workspaceRegistry.get(record.workspaceId);
-    if (!workspace?.archivedAt) {
-      return;
-    }
-
-    const directoryExists = await this.filesystem.isDirectory(record.cwd).catch(() => false);
-    if (!directoryExists) {
-      if (workspace.kind !== "worktree" || !workspace.branch) {
-        return;
-      }
-      // Recreate the worktree directory from its kept branch BEFORE clearing
-      // archivedAt — the reconciler re-archives workspaces whose directory is
-      // missing, so the record must point at a real directory first.
-      await this.recreateOwningWorktreeForRestore(workspace, workspace.branch);
-    }
-
-    await this.workspaceProvisioning.ensureWorkspaceRecordUnarchived(workspace);
-    await this.emitWorkspaceUpdatesForWorkspaceIds([workspace.workspaceId]);
-  }
-
-  private async recreateOwningWorktreeForRestore(
-    workspace: PersistedWorkspaceRecord,
-    branch: string,
-  ): Promise<void> {
     const project = await this.projectRegistry.get(workspace.projectId);
     if (!project) {
       throw new WorktreeRequestError({
@@ -3927,6 +4022,43 @@ export class Session {
         message: `Recreated worktree diverged from ${workspace.cwd}: ${result.worktreePath}`,
       });
     }
+  }
+
+  private async restoreWorkspaceAndEmit(workspaceId: string): Promise<void> {
+    await this.workspaceRecovery.restore(workspaceId);
+    const workspace = await this.workspaceRegistry.get(workspaceId);
+    if (!workspace) {
+      throw new Error(`Recovered workspace record not found: ${workspaceId}`);
+    }
+    if (this.onWorkspaceRecovered) {
+      try {
+        await this.onWorkspaceRecovered(workspace);
+        return;
+      } catch (error) {
+        this.sessionLogger.warn(
+          { err: error, workspaceId },
+          "Failed to publish workspace recovery to active sessions",
+        );
+      }
+    }
+    await this.refreshRecoveredWorkspaceForExternalMutation(workspace);
+  }
+
+  private async restoreOwningWorkspaceForLegacyAgentRefresh(agentId: string): Promise<void> {
+    // COMPAT(workspaceRecovery): clients before BySpace v0.1.2 used refresh_agent_request
+    // as their explicit recovery RPC. Remove after 2027-01-17.
+    if (!clientUsesLegacyWorkspaceRestore(this.appVersion)) {
+      return;
+    }
+    const record = await this.agentStorage.get(agentId);
+    if (!record?.workspaceId) {
+      return;
+    }
+    const recovery = await this.workspaceRecovery.inspect(record.workspaceId);
+    if (recovery.kind !== "recoverable") {
+      return;
+    }
+    await this.restoreWorkspaceAndEmit(record.workspaceId);
   }
 
   private async createBySpaceWorktree(
