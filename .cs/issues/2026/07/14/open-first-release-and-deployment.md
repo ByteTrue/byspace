@@ -76,13 +76,15 @@ epic: ".cs/epics/2026/07/14/web-only-byspace/spec.md"
 - 空前缀 `byspace --version`、`--help`、daemon start/status/pair/stop 已通过；隔离 home/listen 与自有 pairing endpoints 正确。
 - Workflow YAML 解析通过；多轮独立 review 的 packaging/lifecycle/CI blocker 已修复。
 - 首次远端 CI 暴露版本重置门禁、旧品牌测试断言、Wrangler exports、Windows npm spawn 与 Web-only 后残留 E2E；均已按根因修复，最新本地 release gate、217 个聚焦测试和此前 CI 硬失败对应的 31 个 Playwright 用例通过。
-- 待外部验证：GitHub Actions、Pages、Relay、npm 真实 endpoint 与 GitHub Release。
+- 最终 CI `29483121410` 在精确 SHA `855e9ff603bd013087bbb767dcc2634d8a339e3b` 全绿：Linux/macOS/Windows distribution、App/Server/CLI/Relay、4 个 Playwright shards、typecheck/lint/format 均通过。
+- Registry 全新安装 `@bytetrue/byspace@0.1.0` 后，version/help 与隔离 daemon start/status/stop 通过；Pages、Relay health、GitHub Release 和双架构 Docker manifest 均在线。
 
 ## 执行记录
 
 - 已完成 v0.1.0 metadata、changelog、单包脚本、三平台 CI distribution job、CI-gated Pages/Relay、npm OIDC/tag workflow、Docker tag 验证和 Nix hash bot workflow。
-- `ByteTrue/byspace` public repository 已创建并配置 `origin`；Cloudflare Pages `byspace` 与 Worker `byspace-relay` 已在 ByteTrue account 首次部署，GitHub Cloudflare secret 已配置。
-- 首次 `main` CI 未通过，因此按门禁未创建 tag、未发布 npm/GitHub Release；当前修复待第二次 CI 验证。首次 npm 包仍需完成 bootstrap publication 后再配置 Trusted Publishing。
+- `ByteTrue/byspace` public repository 已创建并配置 `origin`；Cloudflare Pages `byspace` 与 Worker `byspace-relay` 已在 ByteTrue account 部署。长期 API token 尚未写入 GitHub，故 `CLOUDFLARE_DEPLOY_ENABLED=false`，当前使用本机 OAuth 手动部署。
+- 首包 `@bytetrue/byspace@0.1.0` 已从绿灯 CI artifact bootstrap 发布；npm Trusted Publisher 已绑定 `ByteTrue/byspace` + `npm-release.yml`，只允许 `npm publish`。
+- `v0.1.0` 指向绿灯 SHA；GitHub Release 与 amd64/arm64 Docker `0.1.0`/`latest` 已发布。首次 tag workflow 因 shallow checkout 无法验证 upstream cursor，Release 由同一 changelog 脚本补建，并为后续发布修复 `fetch-depth: 0`。
 
 ## 关闭回写
 
