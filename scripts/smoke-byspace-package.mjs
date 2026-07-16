@@ -42,6 +42,19 @@ function spawnBinary(args, options = {}) {
   return spawnSync(process.execPath, [...binaryArgs, ...args], options);
 }
 
+function removeInstallRoot() {
+  try {
+    rmSync(installRoot, { recursive: true, force: true, maxRetries: 30, retryDelay: 1_000 });
+  } catch (error) {
+    const code = error instanceof Error && "code" in error ? error.code : undefined;
+    if (process.platform === "win32" && ["EBUSY", "EPERM", "ENOTEMPTY"].includes(String(code))) {
+      console.warn(`Windows kept the stopped smoke-test directory locked: ${installRoot}`);
+      return;
+    }
+    throw error;
+  }
+}
+
 function sleep(milliseconds) {
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, milliseconds);
 }
@@ -142,7 +155,7 @@ try {
     }
   }
   if (!cleanupFailure) {
-    rmSync(installRoot, { recursive: true, force: true, maxRetries: 30, retryDelay: 1_000 });
+    removeInstallRoot();
   }
 }
 
