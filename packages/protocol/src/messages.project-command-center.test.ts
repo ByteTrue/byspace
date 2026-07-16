@@ -157,7 +157,57 @@ describe("project command-center protocol", () => {
     ).toBe(" byspace ");
   });
 
-  it("keeps both feature flags optional for older server_info payloads", () => {
+  it("accepts both project and legacy workspace GitHub clone RPCs", () => {
+    expect(
+      SessionInboundMessageSchema.safeParse({
+        type: "project.github.clone.request",
+        repo: "ByteTrue/byspace",
+        targetDirectory: "/tmp",
+        requestId: "req-project-clone",
+      }).success,
+    ).toBe(true);
+    expect(
+      SessionInboundMessageSchema.safeParse({
+        type: "workspace.github.clone.request",
+        repo: "ByteTrue/byspace",
+        targetDirectory: "/tmp",
+        requestId: "req-workspace-clone",
+      }).success,
+    ).toBe(true);
+
+    expect(
+      SessionOutboundMessageSchema.safeParse({
+        type: "project.github.clone.response",
+        payload: {
+          requestId: "req-project-clone",
+          repo: "ByteTrue/byspace",
+          checkoutPath: "/tmp/byspace",
+          project: {
+            projectId: "remote:github.com/ByteTrue/byspace",
+            projectDisplayName: "byspace",
+            projectCustomName: null,
+            projectRootPath: "/tmp/byspace",
+            projectKind: "git",
+          },
+          error: null,
+        },
+      }).success,
+    ).toBe(true);
+    expect(
+      SessionOutboundMessageSchema.safeParse({
+        type: "workspace.github.clone.response",
+        payload: {
+          requestId: "req-workspace-clone",
+          repo: "ByteTrue/byspace",
+          checkoutPath: "/tmp/byspace",
+          workspace: null,
+          error: "legacy failure",
+        },
+      }).success,
+    ).toBe(true);
+  });
+
+  it("keeps project command feature flags optional for older server_info payloads", () => {
     const parsed = parseServerInfoStatusPayload({
       status: "server_info",
       serverId: "server-old",
@@ -165,6 +215,8 @@ describe("project command-center protocol", () => {
     });
 
     expect(parsed.features?.workspaceGithubRepositorySearch).toBeUndefined();
+    expect(parsed.features?.projectGithubClone).toBeUndefined();
+    expect(parsed.features?.workspaceGithubClone).toBeUndefined();
     expect(parsed.features?.projectCreateDirectory).toBeUndefined();
   });
 });

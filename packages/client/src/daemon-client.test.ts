@@ -2220,6 +2220,86 @@ test("searches GitHub repositories through the dotted RPC", async () => {
   });
 });
 
+test("sends both project and legacy workspace GitHub clone RPCs", async () => {
+  const logger = createMockLogger();
+  const mock = createMockTransport();
+  const client = new DaemonClient({
+    url: "ws://test",
+    clientId: "clsk_unit_test",
+    logger,
+    reconnect: { enabled: false },
+    transportFactory: () => mock.transport,
+  });
+  clients.push(client);
+
+  const connectPromise = client.connect();
+  mock.triggerOpen();
+  await connectPromise;
+
+  const projectPromise = client.cloneGithubProject(
+    { repo: "ByteTrue/byspace", targetDirectory: "/tmp" },
+    "req-project-clone",
+  );
+  expect(parseSentFrame(mock.sent[0])).toEqual({
+    type: "project.github.clone.request",
+    repo: "ByteTrue/byspace",
+    targetDirectory: "/tmp",
+    requestId: "req-project-clone",
+  });
+  mock.triggerMessage(
+    wrapSessionMessage({
+      type: "project.github.clone.response",
+      payload: {
+        requestId: "req-project-clone",
+        repo: "ByteTrue/byspace",
+        checkoutPath: "/tmp/byspace",
+        project: {
+          projectId: "remote:github.com/ByteTrue/byspace",
+          projectDisplayName: "byspace",
+          projectCustomName: null,
+          projectRootPath: "/tmp/byspace",
+          projectKind: "git",
+        },
+        error: null,
+      },
+    }),
+  );
+  await expect(projectPromise).resolves.toMatchObject({
+    requestId: "req-project-clone",
+    checkoutPath: "/tmp/byspace",
+  });
+
+  const workspacePromise = client.cloneGithubWorkspace(
+    { repo: "ByteTrue/byspace", targetDirectory: "/tmp" },
+    "req-workspace-clone",
+  );
+  expect(parseSentFrame(mock.sent[1])).toEqual({
+    type: "workspace.github.clone.request",
+    repo: "ByteTrue/byspace",
+    targetDirectory: "/tmp",
+    requestId: "req-workspace-clone",
+  });
+  mock.triggerMessage(
+    wrapSessionMessage({
+      type: "workspace.github.clone.response",
+      payload: {
+        requestId: "req-workspace-clone",
+        repo: "ByteTrue/byspace",
+        checkoutPath: null,
+        workspace: null,
+        error: "legacy failure",
+      },
+    }),
+  );
+  await expect(workspacePromise).resolves.toEqual({
+    requestId: "req-workspace-clone",
+    repo: "ByteTrue/byspace",
+    checkoutPath: null,
+    workspace: null,
+    error: "legacy failure",
+  });
+});
+
 test("creates and registers a project directory through the dotted RPC", async () => {
   const logger = createMockLogger();
   const mock = createMockTransport();

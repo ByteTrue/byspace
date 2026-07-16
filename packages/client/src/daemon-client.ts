@@ -58,6 +58,8 @@ import type {
   ProjectCreateDirectoryResponse,
   OpenProjectResponseMessage,
   WorkspaceGithubSearchRepositoriesResponse,
+  ProjectGithubCloneProtocol,
+  ProjectGithubCloneResponse,
   WorkspaceGithubCloneProtocol,
   WorkspaceGithubCloneResponse,
   ArchiveWorkspaceResponseMessage,
@@ -151,6 +153,7 @@ const perfNow: () => number =
     ? () => performance.now()
     : () => Date.now();
 
+const PROJECT_GITHUB_CLONE_TIMEOUT_MS = 5 * 60 * 1000;
 const WORKSPACE_GITHUB_CLONE_TIMEOUT_MS = 5 * 60 * 1000;
 
 interface ImportAgentInputBase {
@@ -765,6 +768,7 @@ type ProjectAddPayload = ProjectAddResponse["payload"];
 export type ProjectCreateDirectoryPayload = ProjectCreateDirectoryResponse["payload"];
 export type WorkspaceGithubSearchRepositoriesPayload =
   WorkspaceGithubSearchRepositoriesResponse["payload"];
+type ProjectGithubClonePayload = ProjectGithubCloneResponse["payload"];
 type WorkspaceGithubClonePayload = WorkspaceGithubCloneResponse["payload"];
 type ArchiveWorkspacePayload = ArchiveWorkspaceResponseMessage["payload"];
 type WorkspaceSetupStatusPayload = WorkspaceSetupStatusResponseMessage["payload"];
@@ -2026,6 +2030,24 @@ export class DaemonClient {
     );
   }
 
+  async cloneGithubProject(
+    input: { repo: string; targetDirectory: string; cloneProtocol?: ProjectGithubCloneProtocol },
+    requestId?: string,
+  ): Promise<ProjectGithubClonePayload> {
+    const message = {
+      type: "project.github.clone.request",
+      repo: input.repo,
+      targetDirectory: input.targetDirectory,
+      ...(input.cloneProtocol ? { cloneProtocol: input.cloneProtocol } : {}),
+    } as const;
+    return this.sendNamespacedCorrelatedSessionRequest<"project.github.clone.response">({
+      requestId,
+      message,
+      timeout: PROJECT_GITHUB_CLONE_TIMEOUT_MS,
+    });
+  }
+
+  // COMPAT(workspaceGithubClone): added in v0.1.1, remove after 2027-01-16.
   async cloneGithubWorkspace(
     input: { repo: string; targetDirectory: string; cloneProtocol?: WorkspaceGithubCloneProtocol },
     requestId?: string,

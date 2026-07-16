@@ -20,6 +20,7 @@ import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { StyleSheet, UnistylesRuntime } from "react-native-unistyles";
 import { CommandCenter } from "@/components/command-center";
+import { AddProjectFlowHost } from "@/components/add-project-flow-host";
 import { WorktreeSetupCalloutSource } from "@/components/worktree-setup-callout-source";
 import { DownloadToast } from "@/components/download-toast";
 import { KeyboardShortcutsDialog } from "@/components/keyboard-shortcuts-dialog";
@@ -322,6 +323,7 @@ function AppContainer({ children, chromeEnabled: chromeEnabledOverride }: AppCon
       <DownloadToast />
       <WorktreeSetupCalloutSource />
       <CommandCenter />
+      <AddProjectFlowHost />
       <HostChooserModal />
       <ProviderSettingsHost />
       <WorkspaceSetupDialog />

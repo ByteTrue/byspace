@@ -1810,8 +1810,18 @@ export const WorkspaceGithubSearchRepositoriesRequestSchema = z.object({
   requestId: z.string(),
 });
 
-export const WorkspaceGithubCloneProtocolSchema = z.enum(["https", "ssh"]);
+export const ProjectGithubCloneProtocolSchema = z.enum(["https", "ssh"]);
+export const WorkspaceGithubCloneProtocolSchema = ProjectGithubCloneProtocolSchema;
 
+export const ProjectGithubCloneRequestSchema = z.object({
+  type: z.literal("project.github.clone.request"),
+  repo: z.string().trim().min(MIN_REPOSITORY_PATH_LENGTH),
+  cloneProtocol: ProjectGithubCloneProtocolSchema.optional(),
+  targetDirectory: z.string().trim().min(1),
+  requestId: z.string(),
+});
+
+// COMPAT(workspaceGithubClone): added in v0.1.1, remove after 2027-01-16 when pre-project RPC clients are retired.
 export const WorkspaceGithubCloneRequestSchema = z.object({
   type: z.literal("workspace.github.clone.request"),
   repo: z.string().trim().min(MIN_REPOSITORY_PATH_LENGTH),
@@ -2205,6 +2215,7 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   ProjectAddRequestSchema,
   ProjectCreateDirectoryRequestSchema,
   WorkspaceGithubSearchRepositoriesRequestSchema,
+  ProjectGithubCloneRequestSchema,
   WorkspaceGithubCloneRequestSchema,
   ArchiveWorkspaceRequestSchema,
   WorkspaceCreateRequestSchema,
@@ -2450,7 +2461,9 @@ export const ServerInfoStatusPayloadSchema = z
         providerSubagents: z.boolean().optional(),
         // COMPAT(workspacePinning): added in v0.1.107, remove gate after 2027-01-12.
         workspacePinning: z.boolean().optional(),
-        // COMPAT(workspaceGithubClone): added in v0.1.108, remove gate after 2027-01-13.
+        // COMPAT(projectGithubClone): added in v0.1.108, remove gate after 2027-01-15.
+        projectGithubClone: z.boolean().optional(),
+        // COMPAT(workspaceGithubClone): added in v0.1.1, remove after 2027-01-16.
         workspaceGithubClone: z.boolean().optional(),
         // COMPAT(workspaceGithubRepositorySearch): added in v0.1.108, remove gate after 2027-01-15.
         workspaceGithubRepositorySearch: z.boolean().optional(),
@@ -3011,6 +3024,18 @@ export const WorkspaceGithubSearchRepositoriesResponseSchema = z.object({
   ]),
 });
 
+export const ProjectGithubCloneResponseSchema = z.object({
+  type: z.literal("project.github.clone.response"),
+  payload: z.object({
+    requestId: z.string(),
+    repo: z.string().trim().min(MIN_REPOSITORY_PATH_LENGTH),
+    checkoutPath: z.string().nullable(),
+    project: WorkspaceProjectDescriptorPayloadSchema.nullable(),
+    error: z.string().nullable(),
+  }),
+});
+
+// COMPAT(workspaceGithubClone): added in v0.1.1, remove after 2027-01-16 when pre-project RPC clients are retired.
 export const WorkspaceGithubCloneResponseSchema = z.object({
   type: z.literal("workspace.github.clone.response"),
   payload: z.object({
@@ -4445,6 +4470,7 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   ProjectCreateDirectoryResponseSchema,
   OpenProjectResponseMessageSchema,
   WorkspaceGithubSearchRepositoriesResponseSchema,
+  ProjectGithubCloneResponseSchema,
   WorkspaceGithubCloneResponseSchema,
   StartWorkspaceScriptResponseMessageSchema,
   LegacyListAvailableEditorsResponseMessageSchema,
@@ -4610,6 +4636,7 @@ export type WorkspaceGithubSearchRepositoriesResponse = z.infer<
   typeof WorkspaceGithubSearchRepositoriesResponseSchema
 >;
 export type GithubRepository = z.infer<typeof GithubRepositorySchema>;
+export type ProjectGithubCloneResponse = z.infer<typeof ProjectGithubCloneResponseSchema>;
 export type WorkspaceGithubCloneResponse = z.infer<typeof WorkspaceGithubCloneResponseSchema>;
 export type StartWorkspaceScriptResponseMessage = z.infer<
   typeof StartWorkspaceScriptResponseMessageSchema
@@ -4864,6 +4891,8 @@ export type ProjectCreateDirectoryErrorCode = z.infer<typeof ProjectCreateDirect
 export type WorkspaceGithubSearchRepositoriesRequest = z.infer<
   typeof WorkspaceGithubSearchRepositoriesRequestSchema
 >;
+export type ProjectGithubCloneRequest = z.infer<typeof ProjectGithubCloneRequestSchema>;
+export type ProjectGithubCloneProtocol = z.infer<typeof ProjectGithubCloneProtocolSchema>;
 export type WorkspaceGithubCloneRequest = z.infer<typeof WorkspaceGithubCloneRequestSchema>;
 export type WorkspaceGithubCloneProtocol = z.infer<typeof WorkspaceGithubCloneProtocolSchema>;
 export type ArchiveWorkspaceRequest = z.infer<typeof ArchiveWorkspaceRequestSchema>;

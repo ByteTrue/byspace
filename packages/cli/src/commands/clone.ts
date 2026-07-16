@@ -14,21 +14,52 @@ interface CloneCommandOptions extends CommandOptions {
 export interface CloneResult {
   repo: string;
   checkoutPath: string;
-  workspaceId: string;
-  workspaceName: string;
+  projectId: string;
+  projectName: string;
 }
 
 export const cloneSchema: OutputSchema<CloneResult> = {
-  idField: "workspaceId",
+  idField: "projectId",
   columns: [
     { header: "REPO", field: "repo", width: 28 },
-    { header: "WORKSPACE", field: "workspaceName", width: 28 },
+    { header: "PROJECT", field: "projectName", width: 28 },
     { header: "PATH", field: "checkoutPath", width: 56 },
   ],
 };
 
 function cmdError(code: string, message: string, details?: string): CommandError {
   return details ? { code, message, details } : { code, message };
+}
+
+async function cloneGithubProjectCompat(
+  client: DaemonClient,
+  input: { repo: string; targetDirectory: string; cloneProtocol?: CloneProtocol },
+  useLegacyClone: boolean,
+): Promise<CloneResult> {
+  const response = useLegacyClone
+    ? await client.cloneGithubWorkspace(input)
+    : await client.cloneGithubProject(input);
+  let projectId: string | null = null;
+  let projectName: string | null = null;
+  if ("project" in response && response.project) {
+    projectId = response.project.projectId;
+    projectName = response.project.projectDisplayName;
+  } else if ("workspace" in response && response.workspace) {
+    projectId = response.workspace.projectId;
+    projectName = response.workspace.projectDisplayName;
+  }
+  if (response.error || !projectId || !projectName || !response.checkoutPath) {
+    throw cmdError(
+      "CLONE_FAILED",
+      `Failed to clone GitHub repo: ${response.error ?? "no project returned"}`,
+    );
+  }
+  return {
+    repo: response.repo,
+    checkoutPath: response.checkoutPath,
+    projectId,
+    projectName,
+  };
 }
 
 export async function runCloneCommand(
@@ -52,7 +83,10 @@ export async function runCloneCommand(
     throw buildDaemonConnectionCommandError({ host: options.host, error: err });
   }
 
-  if (client.getLastServerInfoMessage()?.features?.workspaceGithubClone !== true) {
+  const features = client.getLastServerInfoMessage()?.features;
+  const useLegacyClone =
+    features?.projectGithubClone !== true && features?.workspaceGithubClone === true;
+  if (features?.projectGithubClone !== true && !useLegacyClone) {
     await client.close().catch(() => {});
     throw cmdError(
       "UNSUPPORTED_BY_HOST",
@@ -62,28 +96,16 @@ export async function runCloneCommand(
   }
 
   try {
-    const response = await client.cloneGithubWorkspace({
-      repo,
-      targetDirectory,
-      ...(repoIsCompleteRemote ? {} : { cloneProtocol: options.protocol }),
-    });
-    if (response.error || !response.workspace || !response.checkoutPath) {
-      throw cmdError(
-        "CLONE_FAILED",
-        `Failed to clone GitHub repo: ${response.error ?? "no workspace returned"}`,
-      );
-    }
-
-    return {
-      type: "single",
-      data: {
-        repo: response.repo,
-        checkoutPath: response.checkoutPath,
-        workspaceId: response.workspace.id,
-        workspaceName: response.workspace.name,
+    const data = await cloneGithubProjectCompat(
+      client,
+      {
+        repo,
+        targetDirectory,
+        ...(repoIsCompleteRemote ? {} : { cloneProtocol: options.protocol }),
       },
-      schema: cloneSchema,
-    };
+      useLegacyClone,
+    );
+    return { type: "single", data, schema: cloneSchema };
   } catch (err) {
     if (err && typeof err === "object" && "code" in err) {
       throw err;

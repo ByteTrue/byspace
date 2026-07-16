@@ -1,4 +1,5 @@
 import { router } from "expo-router";
+import type { WorkspaceProjectDescriptorPayload } from "@bytetrue/byspace-protocol/messages";
 import {
   ArrowLeft,
   Folder,
@@ -60,7 +61,7 @@ import { Shortcut } from "@/components/ui/shortcut";
 import { isWeb } from "@/constants/platform";
 import { useFetchQuery } from "@/data/query";
 import { getOpenProjectFailureReason, registerProjectDescriptor } from "@/hooks/open-project";
-import { useOpenGithubRepo, useOpenProject } from "@/hooks/use-open-project";
+import { useCloneGithubProject, useOpenProject } from "@/hooks/use-open-project";
 import {
   useHosts,
   useHostRuntimeClient,
@@ -72,7 +73,7 @@ import { useRecommendedProjectPaths } from "@/stores/session-store-hooks";
 import type { AddProjectFlowRequest } from "@/stores/add-project-flow-store";
 import type { Theme } from "@/styles/theme";
 import { shortenPath } from "@/utils/shorten-path";
-import { buildSettingsAddHostRoute } from "@/utils/host-routes";
+import { buildNewWorkspaceRoute, buildSettingsAddHostRoute } from "@/utils/host-routes";
 
 interface AddProjectFlowProps {
   request: AddProjectFlowRequest;
@@ -194,7 +195,7 @@ function pageTitle(page: AddProjectPage): string {
     case "github-search":
       return "Clone from GitHub";
     case "github-location":
-      return `Where should BySpace create ${pathBaseName(page.repository.nameWithOwner)}?`;
+      return "Choose destination";
     case "new-directory-parent":
       return "Choose parent directory";
     case "new-directory-name":
@@ -293,8 +294,10 @@ export function AddProjectFlow({ request, onClose }: AddProjectFlowProps) {
   const hostIds = useMemo(() => hosts.map((host) => host.serverId), [hosts]);
   const connectionStatuses = useHostRuntimeConnectionStatuses(hostIds);
   const projectAddByHost = useHostFeatureMap(hostIds, "projectAdd");
-  // COMPAT(workspaceGithubClone): added in v0.1.108, remove gate after 2027-01-15.
-  const githubCloneByHost = useHostFeatureMap(hostIds, "workspaceGithubClone");
+  // COMPAT(projectGithubClone): added in v0.1.108, remove gate after 2027-01-15.
+  const githubCloneByHost = useHostFeatureMap(hostIds, "projectGithubClone");
+  // COMPAT(workspaceGithubClone): added in v0.1.1, remove after 2027-01-16.
+  const legacyGithubCloneByHost = useHostFeatureMap(hostIds, "workspaceGithubClone");
   // COMPAT(workspaceGithubRepositorySearch): added in v0.1.108, remove gate after 2027-01-15.
   const githubSearchByHost = useHostFeatureMap(hostIds, "workspaceGithubRepositorySearch");
   // COMPAT(projectCreateDirectory): added in v0.1.108, remove gate after 2027-01-15.
@@ -310,7 +313,9 @@ export function AddProjectFlow({ request, onClose }: AddProjectFlowProps) {
             label: host.label,
             canAddProject,
             canBrowse: false,
-            canCloneGithubRepositories: githubCloneByHost.get(host.serverId) === true,
+            canCloneGithubRepositories:
+              githubCloneByHost.get(host.serverId) === true ||
+              legacyGithubCloneByHost.get(host.serverId) === true,
             canSearchGithubRepositories: githubSearchByHost.get(host.serverId) === true,
             canCreateDirectory: createDirectoryByHost.get(host.serverId) === true,
           },
@@ -320,6 +325,7 @@ export function AddProjectFlow({ request, onClose }: AddProjectFlowProps) {
       connectionStatuses,
       createDirectoryByHost,
       githubCloneByHost,
+      legacyGithubCloneByHost,
       githubSearchByHost,
       hosts,
       projectAddByHost,
@@ -337,7 +343,7 @@ export function AddProjectFlow({ request, onClose }: AddProjectFlowProps) {
   const client = useHostRuntimeClient(hostId ?? "");
   const recommendedPaths = useRecommendedProjectPaths(hostId);
   const openProject = useOpenProject(hostId);
-  const openGithubRepo = useOpenGithubRepo(hostId);
+  const cloneGithubProject = useCloneGithubProject(hostId);
   const addEmptyProject = useSessionStore((store) => store.addEmptyProject);
   const setHasHydratedWorkspaces = useSessionStore((store) => store.setHasHydratedWorkspaces);
   const inputRef = useRef<TextInput>(null);
@@ -409,9 +415,24 @@ export function AddProjectFlow({ request, onClose }: AddProjectFlowProps) {
     });
   }, [onClose]);
 
+  const openNewWorkspaceForProject = useCallback(
+    (serverId: string, project: WorkspaceProjectDescriptorPayload) => {
+      onClose();
+      router.push(
+        buildNewWorkspaceRoute({
+          serverId,
+          projectId: project.projectId,
+          sourceDirectory: project.projectRootPath,
+          displayName: project.projectDisplayName,
+        }),
+      );
+    },
+    [onClose],
+  );
+
   const openAddedProject = useCallback(
     async (path: string, sourceKind: "directory-search" | "method") => {
-      if (submissionInFlightRef.current) return;
+      if (!hostId || submissionInFlightRef.current) return;
       submissionInFlightRef.current = true;
       setState((current) =>
         setPageStatus(current, sourceKind, { isSubmitting: true, error: null }),
@@ -419,7 +440,7 @@ export function AddProjectFlow({ request, onClose }: AddProjectFlowProps) {
       try {
         const result = await openProject(path);
         if (result.ok) {
-          onClose();
+          openNewWorkspaceForProject(hostId, result.project);
           return;
         }
         const reason = getOpenProjectFailureReason(result);
@@ -439,7 +460,7 @@ export function AddProjectFlow({ request, onClose }: AddProjectFlowProps) {
         submissionInFlightRef.current = false;
       }
     },
-    [onClose, openProject],
+    [hostId, openNewWorkspaceForProject, openProject],
   );
 
   const selectMethod = useCallback(
@@ -477,34 +498,34 @@ export function AddProjectFlow({ request, onClose }: AddProjectFlowProps) {
         setPageStatus(current, "github-location", { isSubmitting: true, error: null }),
       );
       try {
-        const opened = await openGithubRepo(
+        const result = await cloneGithubProject(
           locationPage.repository.cloneUrl,
           parentPath,
           locationPage.repository.cloneProtocol,
         );
-        if (opened) {
+        if (result.ok) {
           lastCloneParentByHost.set(locationPage.hostId, parentPath);
-          onClose();
+          openNewWorkspaceForProject(locationPage.hostId, result.project);
           return;
         }
         setState((current) =>
           setPageStatus(current, "github-location", {
             isSubmitting: false,
-            error: "Unable to clone repository",
+            error: result.error ?? "Unable to clone repository",
           }),
         );
-      } catch {
+      } catch (error) {
         setState((current) =>
           setPageStatus(current, "github-location", {
             isSubmitting: false,
-            error: "Unable to clone repository",
+            error: error instanceof Error ? error.message : "Unable to clone repository",
           }),
         );
       } finally {
         submissionInFlightRef.current = false;
       }
     },
-    [onClose, openGithubRepo],
+    [cloneGithubProject, openNewWorkspaceForProject],
   );
   const rows = useMemo<FlowRowOption[]>(() => {
     if (page.kind === "host") {
@@ -678,7 +699,7 @@ export function AddProjectFlow({ request, onClose }: AddProjectFlowProps) {
         addEmptyProject,
         setHasHydratedWorkspaces,
       });
-      onClose();
+      openNewWorkspaceForProject(page.hostId, payload.project);
     } catch {
       setState((current) =>
         setPageStatus(current, "new-directory-name", {
@@ -689,7 +710,7 @@ export function AddProjectFlow({ request, onClose }: AddProjectFlowProps) {
     } finally {
       submissionInFlightRef.current = false;
     }
-  }, [addEmptyProject, client, onClose, page, setHasHydratedWorkspaces]);
+  }, [addEmptyProject, client, openNewWorkspaceForProject, page, setHasHydratedWorkspaces]);
 
   const submitActive = useCallback(() => {
     if (page.kind === "new-directory-name") {

@@ -1623,8 +1623,11 @@ export class Session {
         return this.handleProjectCreateDirectoryRequest(msg);
       case "workspace.github.search_repositories.request":
         return this.handleWorkspaceGithubSearchRepositoriesRequest(msg);
+      // COMPAT(workspaceGithubClone): added in v0.1.1, remove after 2027-01-16.
       case "workspace.github.clone.request":
         return this.handleWorkspaceGithubCloneRequest(msg);
+      case "project.github.clone.request":
+        return this.handleProjectGithubCloneRequest(msg);
       case "archive_workspace_request":
         return this.handleArchiveWorkspaceRequest(msg);
       case "project.remove.request":
@@ -4883,6 +4886,7 @@ export class Session {
     }
   }
 
+  // COMPAT(workspaceGithubClone): added in v0.1.1, remove after 2027-01-16.
   private async handleWorkspaceGithubCloneRequest(
     request: Extract<SessionInboundMessage, { type: "workspace.github.clone.request" }>,
   ): Promise<void> {
@@ -4970,6 +4974,84 @@ export class Session {
           repo: normalizedRepo,
           checkoutPath,
           workspace: null,
+          error: message,
+        },
+      });
+    }
+  }
+
+  private async handleProjectGithubCloneRequest(
+    request: Extract<SessionInboundMessage, { type: "project.github.clone.request" }>,
+  ): Promise<void> {
+    let normalizedRepo = request.repo;
+    let checkoutPath: string | null = null;
+    try {
+      const repo = normalizeCloneRepository({
+        repo: request.repo,
+        cloneProtocol: request.cloneProtocol,
+      });
+      normalizedRepo = repo.displayName;
+      const targetParent = resolve(expandTilde(request.targetDirectory.trim()));
+      checkoutPath = resolve(targetParent, repo.name);
+      if (!this.isPathWithinRoot(targetParent, checkoutPath)) {
+        throw new Error("Resolved checkout path must stay inside the target directory");
+      }
+
+      await mkdir(targetParent, { recursive: true });
+      try {
+        await lstat(checkoutPath);
+        throw new Error(`Checkout path already exists: ${checkoutPath}`);
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+          throw error;
+        }
+      }
+
+      const cloneStagingPath = await mkdtemp(resolve(targetParent, ".byspace-clone-"));
+      try {
+        await runGitCommand(["clone", repo.cloneUrl, cloneStagingPath], {
+          cwd: targetParent,
+          timeout: 5 * 60 * 1000,
+          maxOutputBytes: 1024 * 1024,
+          logger: this.sessionLogger,
+        });
+        await rename(cloneStagingPath, checkoutPath);
+      } catch (error) {
+        await rm(cloneStagingPath, { recursive: true, force: true }).catch((cleanupError) => {
+          this.sessionLogger.warn(
+            { err: cleanupError, cloneStagingPath },
+            "Failed to clean up partial GitHub clone",
+          );
+        });
+        throw error;
+      }
+
+      const project =
+        await this.workspaceProvisioning.findOrCreateProjectForDirectory(checkoutPath);
+
+      this.emit({
+        type: "project.github.clone.response",
+        payload: {
+          requestId: request.requestId,
+          repo: repo.displayName,
+          checkoutPath,
+          project: this.buildProjectDescriptor(project),
+          error: null,
+        },
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to clone GitHub repo";
+      this.sessionLogger.error(
+        { err: error, repo: request.repo, targetDirectory: request.targetDirectory },
+        "Failed to clone GitHub project",
+      );
+      this.emit({
+        type: "project.github.clone.response",
+        payload: {
+          requestId: request.requestId,
+          repo: normalizedRepo,
+          checkoutPath,
+          project: null,
           error: message,
         },
       });
