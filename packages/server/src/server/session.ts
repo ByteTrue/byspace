@@ -221,11 +221,6 @@ import { type WorktreeConfig, createWorktree } from "../utils/worktree.js";
 import { runGitCommand } from "../utils/run-git-command.js";
 import { CreateAgentLifecycleDispatch } from "./agent/create-agent-lifecycle-dispatch.js";
 
-// TODO: Remove once all app store clients are on >=0.1.45 and understand arbitrary provider strings.
-// Clients before 0.1.45 validate providers with z.enum(["claude", "codex", "opencode"]) and reject
-// the entire session message if they encounter an unknown provider.
-const LEGACY_PROVIDER_IDS = new Set(["claude", "codex", "opencode"]);
-const MIN_VERSION_ALL_PROVIDERS = "0.1.45";
 function errorToFriendlyMessage(error: unknown): string {
   if (error instanceof Error) return error.message;
   if (typeof error === "string") return error;
@@ -284,25 +279,6 @@ function buildWorkspaceCheckout(
     isBySpaceOwnedWorktree: false,
     mainRepoRoot: null,
   };
-}
-
-function isAppVersionAtLeast(appVersion: string | null, minVersion: string): boolean {
-  if (!appVersion) return false;
-  // Strip prerelease suffix: "0.1.45-beta.4" -> "0.1.45"
-  const base = appVersion.replace(/-.*$/, "");
-  const parts = base.split(".").map(Number);
-  const minParts = minVersion.split(".").map(Number);
-  for (let i = 0; i < minParts.length; i++) {
-    const a = parts[i] ?? 0;
-    const b = minParts[i] ?? 0;
-    if (a > b) return true;
-    if (a < b) return false;
-  }
-  return true;
-}
-
-function clientSupportsAllProviders(appVersion: string | null): boolean {
-  return isAppVersionAtLeast(appVersion, MIN_VERSION_ALL_PROVIDERS);
 }
 
 type DeleteFencedAgentStorage = AgentStorage & {
@@ -1274,11 +1250,8 @@ export class Session {
     return buildStoredAgentPayload(record, registeredProviderIds);
   }
 
-  private isProviderVisibleToClient(provider: string): boolean {
-    if (clientSupportsAllProviders(this.appVersion)) {
-      return true;
-    }
-    return LEGACY_PROVIDER_IDS.has(provider);
+  private isProviderVisibleToClient(_provider: string): boolean {
+    return true;
   }
 
   private async buildProjectPlacementForWorkspace(

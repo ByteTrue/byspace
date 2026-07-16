@@ -1437,7 +1437,15 @@ async function tryFetchWorktreeTrackingRemote(options: {
       acceptExitCodes: [0, 1, 128],
     },
   );
-  return result.exitCode === 0 ? { name: options.remoteName, headRef: options.headRef } : undefined;
+  if (result.exitCode !== 0) return undefined;
+  const trackingRef = `refs/remotes/${options.remoteName}/${options.headRef}`;
+  const refResult = await runGitCommand(["show-ref", "--verify", "--quiet", trackingRef], {
+    cwd: options.cwd,
+    acceptExitCodes: [0, 1, 128],
+  });
+  return refResult.exitCode === 0
+    ? { name: options.remoteName, headRef: options.headRef }
+    : undefined;
 }
 
 async function getWorktreeRemotePushUrl(

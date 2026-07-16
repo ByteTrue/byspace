@@ -17,7 +17,7 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const cliDir = join(root, "packages", "cli");
 const artifactsDir = join(root, "artifacts");
 const internalWorkspaces = ["highlight", "protocol", "client", "relay", "server"];
-const npmCommand = process.platform === "win32" ? "npm.cmd" : "npm";
+const npmCli = process.env.npm_execpath;
 
 function run(command, args, options = {}) {
   const result = spawnSync(command, args, {
@@ -28,13 +28,20 @@ function run(command, args, options = {}) {
   if (result.status !== 0) {
     process.stderr.write(result.stdout ?? "");
     process.stderr.write(result.stderr ?? "");
-    throw new Error(`${command} ${args.join(" ")} failed with status ${result.status}`);
+    const detail = result.error ? `: ${result.error.message}` : "";
+    throw new Error(`${command} ${args.join(" ")} failed with status ${result.status}${detail}`);
   }
   return result.stdout ?? "";
 }
 
+function runNpm(args, options = {}) {
+  return npmCli
+    ? run(process.execPath, [npmCli, ...args], options)
+    : run("npm", args, { ...options, shell: process.platform === "win32" });
+}
+
 function packWorkspace(workspaceDir, destination) {
-  const output = run(npmCommand, [
+  const output = runNpm([
     "pack",
     "--ignore-scripts",
     "--json",
@@ -49,8 +56,8 @@ function packWorkspace(workspaceDir, destination) {
   return join(destination, filename);
 }
 
-run(npmCommand, ["run", "build:server:clean"]);
-run(npmCommand, ["run", "build:daemon-web-ui"]);
+runNpm(["run", "build:server:clean"]);
+runNpm(["run", "build:daemon-web-ui"]);
 
 mkdirSync(artifactsDir, { recursive: true });
 for (const filename of readdirSync(artifactsDir)) {
@@ -88,6 +95,7 @@ try {
       }
       manifest.dependencies[name] = range;
     }
+
     const tarball = packWorkspace(workspaceDir, tarballsDir);
     const extractDir = join(temporaryRoot, `extract-${workspace}`);
     mkdirSync(extractDir, { recursive: true });
@@ -108,7 +116,7 @@ try {
   }
 
   writeFileSync(join(stagingDir, "package.json"), `${JSON.stringify(manifest, null, 2)}\n`);
-  run(npmCommand, ["install", "--package-lock-only", "--ignore-scripts"], { cwd: stagingDir });
+  runNpm(["install", "--package-lock-only", "--ignore-scripts"], { cwd: stagingDir });
 
   const packageLockPath = join(stagingDir, "package-lock.json");
   const packageLock = JSON.parse(readFileSync(packageLockPath, "utf8"));
@@ -118,8 +126,8 @@ try {
   }
   writeFileSync(join(stagingDir, "package.json"), `${JSON.stringify(manifest, null, 2)}\n`);
   writeFileSync(packageLockPath, `${JSON.stringify(packageLock, null, 2)}\n`);
-  const finalOutput = run(
-    npmCommand,
+
+  const finalOutput = runNpm(
     ["pack", "--ignore-scripts", "--json", "--pack-destination", artifactsDir, "."],
     { cwd: stagingDir },
   );

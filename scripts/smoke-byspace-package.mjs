@@ -8,7 +8,7 @@ const root = resolve(import.meta.dirname, "..");
 const { version } = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
 const artifact = join(root, "artifacts", `bytetrue-byspace-${version}.tgz`);
 const installRoot = mkdtempSync(join(tmpdir(), "byspace-install-smoke-"));
-const npmCommand = process.platform === "win32" ? "npm.cmd" : "npm";
+const npmCli = process.env.npm_execpath;
 const binary = join(
   installRoot,
   "node_modules",
@@ -26,9 +26,16 @@ function run(command, args, options = {}) {
   if (result.status !== 0) {
     process.stderr.write(result.stdout ?? "");
     process.stderr.write(result.stderr ?? "");
-    throw new Error(`${command} ${args.join(" ")} failed with status ${result.status}`);
+    const detail = result.error ? `: ${result.error.message}` : "";
+    throw new Error(`${command} ${args.join(" ")} failed with status ${result.status}${detail}`);
   }
   return result.stdout ?? "";
+}
+
+function runNpm(args, options = {}) {
+  return npmCli
+    ? run(process.execPath, [npmCli, ...args], options)
+    : run("npm", args, { ...options, shell: process.platform === "win32" });
 }
 
 function sleep(milliseconds) {
@@ -83,7 +90,7 @@ let env;
 let failure;
 let cleanupFailure;
 try {
-  run(npmCommand, ["run", "pack:byspace"]);
+  runNpm(["run", "pack:byspace"], { timeout: 600_000 });
   const port = await reservePort();
   const home = join(installRoot, "home");
   env = {
@@ -92,7 +99,7 @@ try {
     BYSPACE_LISTEN: `127.0.0.1:${port}`,
   };
 
-  run(npmCommand, ["install", "--prefix", installRoot, "--no-audit", "--no-fund", artifact], {
+  runNpm(["install", "--prefix", installRoot, "--no-audit", "--no-fund", artifact], {
     timeout: 300_000,
   });
   const installedVersion = run(binary, ["--version"], { env }).trim();
