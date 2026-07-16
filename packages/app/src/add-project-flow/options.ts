@@ -3,6 +3,7 @@ import {
   parseGitHubRemoteUrl,
   parseGitRemoteLocation,
 } from "@bytetrue/byspace-protocol/git-remote";
+import type { TFunction } from "i18next";
 import { shortenPath } from "@/utils/shorten-path";
 import type { AddProjectHost, GithubRepositoryChoice } from "./model";
 
@@ -33,47 +34,50 @@ export function filterAddProjectHosts(hosts: AddProjectHost[], query: string): A
   );
 }
 
-export function buildAddProjectMethods(host: AddProjectHost): AddProjectMethodOption[] {
+export function buildAddProjectMethods(
+  host: AddProjectHost,
+  t: TFunction,
+): AddProjectMethodOption[] {
   const options: AddProjectMethodOption[] = [];
   if (host.canAddProject) {
     options.push({
       id: "directory-search",
-      label: "Search for directory",
-      description: `Find a directory on ${host.label}`,
+      label: t("addProjectFlow.methods.directory.label"),
+      description: t("addProjectFlow.methods.directory.description", { host: host.label }),
     });
   }
   if (host.canBrowse) {
     options.push({
       id: "browse",
-      label: "Browse",
-      description: "Choose or create a directory in Finder",
+      label: t("addProjectFlow.methods.browse.label"),
+      description: t("addProjectFlow.methods.browse.description"),
     });
   }
   options.push({
     id: "github",
-    label: "Clone from GitHub",
-    description: githubMethodDescription(host),
+    label: t("addProjectFlow.methods.github.label"),
+    description: githubMethodDescription(host, t),
     disabled: !host.canCloneGithubRepositories,
   });
   options.push({
     id: "new-directory",
-    label: "New directory",
+    label: t("addProjectFlow.methods.newDirectory.label"),
     description: host.canCreateDirectory
-      ? `Create an empty directory on ${host.label}`
-      : "Update this host to create directories",
+      ? t("addProjectFlow.methods.newDirectory.description", { host: host.label })
+      : t("addProjectFlow.methods.newDirectory.update"),
     disabled: !host.canCreateDirectory,
   });
   return options;
 }
 
-function githubMethodDescription(host: AddProjectHost): string {
+function githubMethodDescription(host: AddProjectHost, t: TFunction): string {
   if (!host.canCloneGithubRepositories) {
-    return "Update this host to clone GitHub repositories";
+    return t("addProjectFlow.methods.github.update");
   }
   if (host.canSearchGithubRepositories) {
-    return "Search projects available to your GitHub account";
+    return t("addProjectFlow.methods.github.search");
   }
-  return "Enter a GitHub URL or owner/repo";
+  return t("addProjectFlow.methods.github.enter");
 }
 
 export function pathBaseName(path: string): string {
@@ -82,7 +86,10 @@ export function pathBaseName(path: string): string {
   return parts[parts.length - 1] ?? trimmed;
 }
 
-export function buildManualGithubRepositoryChoices(query: string): GithubRepositoryChoice[] {
+export function buildManualGithubRepositoryChoices(
+  query: string,
+  t: TFunction,
+): GithubRepositoryChoice[] {
   const repo = query.trim();
   if (!repo) return [];
 
@@ -95,7 +102,7 @@ export function buildManualGithubRepositoryChoices(query: string): GithubReposit
         id: `manual:${repo}`,
         nameWithOwner: identity?.repo ?? remoteName,
         cloneUrl: repo,
-        description: "Clone this repository URL",
+        description: t("addProjectFlow.repository.url"),
         visibility: null,
         updatedAt: null,
       },
@@ -110,7 +117,9 @@ export function buildManualGithubRepositoryChoices(query: string): GithubReposit
     nameWithOwner,
     cloneUrl: nameWithOwner,
     cloneProtocol,
-    description: `Clone owner/repo via ${cloneProtocol.toUpperCase()}`,
+    description: t("addProjectFlow.repository.cloneVia", {
+      protocol: cloneProtocol.toUpperCase(),
+    }),
     visibility: null,
     updatedAt: null,
   }));
@@ -146,11 +155,14 @@ export function buildSuggestedParentDirectories(projectPaths: string[]): string[
   return [...new Set(values)];
 }
 
-export function buildCloneLocationOptions(input: {
-  parents: string[];
-  repositoryName: string;
-  existingPaths: string[];
-}): AddProjectPathOption[] {
+export function buildCloneLocationOptions(
+  input: {
+    parents: string[];
+    repositoryName: string;
+    existingPaths: string[];
+  },
+  t: TFunction,
+): AddProjectPathOption[] {
   const existing = new Set(input.existingPaths.map(pathIdentity));
   const seen = new Set<string>();
   return input.parents.flatMap((parent) => {
@@ -164,7 +176,9 @@ export function buildCloneLocationOptions(input: {
         id: parent,
         path: parent,
         displayPath: path,
-        secondaryText: pathExists ? "Already exists" : `Parent directory: ${parent}`,
+        secondaryText: pathExists
+          ? t("addProjectFlow.destination.exists")
+          : t("addProjectFlow.destination.parent", { parent }),
         disabled: pathExists,
       },
     ];

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { TFunction } from "i18next";
 import {
   backAddProjectPage,
   chooseAddProjectHost,
@@ -20,6 +21,31 @@ import {
   buildCloneLocationOptions,
   buildManualGithubRepositoryChoices,
 } from "./options";
+
+const COPY: Record<string, string> = {
+  "addProjectFlow.methods.directory.label": "Search for directory",
+  "addProjectFlow.methods.directory.description": "Find a directory on {{host}}",
+  "addProjectFlow.methods.browse.label": "Browse",
+  "addProjectFlow.methods.browse.description": "Pick a local directory",
+  "addProjectFlow.methods.github.label": "Clone from GitHub",
+  "addProjectFlow.methods.github.update": "Update this host to clone GitHub repositories",
+  "addProjectFlow.methods.github.search": "Search your GitHub repositories",
+  "addProjectFlow.methods.github.enter": "Enter a repository URL or owner/repo",
+  "addProjectFlow.methods.newDirectory.label": "New directory",
+  "addProjectFlow.methods.newDirectory.description": "Create an empty project on {{host}}",
+  "addProjectFlow.methods.newDirectory.update": "Update this host to create directories",
+  "addProjectFlow.repository.url": "Repository URL",
+  "addProjectFlow.repository.cloneVia": "Clone via {{protocol}}",
+  "addProjectFlow.destination.parent": "Parent directory: {{parent}}",
+  "addProjectFlow.destination.exists": "Already exists",
+};
+const t = ((key: string, values?: Record<string, string>) => {
+  let result = COPY[key] ?? key;
+  for (const [name, value] of Object.entries(values ?? {})) {
+    result = result.replace(`{{${name}}}`, value);
+  }
+  return result;
+}) as TFunction;
 
 const HOST: AddProjectHost = {
   serverId: "host-1",
@@ -112,13 +138,16 @@ describe("Add Project navigation", () => {
 describe("Add Project options", () => {
   it("keeps host-upgrade methods discoverable while hiding local-only Browse", () => {
     expect(
-      buildAddProjectMethods({
-        ...HOST,
-        canBrowse: false,
-        canCloneGithubRepositories: false,
-        canSearchGithubRepositories: false,
-        canCreateDirectory: false,
-      }),
+      buildAddProjectMethods(
+        {
+          ...HOST,
+          canBrowse: false,
+          canCloneGithubRepositories: false,
+          canSearchGithubRepositories: false,
+          canCreateDirectory: false,
+        },
+        t,
+      ),
     ).toEqual([
       {
         id: "directory-search",
@@ -141,27 +170,30 @@ describe("Add Project options", () => {
   });
 
   it("offers manual URL and protocol-specific owner/repo clone choices", () => {
-    expect(buildManualGithubRepositoryChoices("git@github.com:ByteTrue/byspace.git")).toEqual([
+    expect(buildManualGithubRepositoryChoices("git@github.com:ByteTrue/byspace.git", t)).toEqual([
       expect.objectContaining({
         id: "manual:git@github.com:ByteTrue/byspace.git",
         nameWithOwner: "ByteTrue/byspace",
         cloneUrl: "git@github.com:ByteTrue/byspace.git",
       }),
     ]);
-    expect(buildManualGithubRepositoryChoices("ByteTrue/byspace")).toEqual([
+    expect(buildManualGithubRepositoryChoices("ByteTrue/byspace", t)).toEqual([
       expect.objectContaining({ cloneProtocol: "https", cloneUrl: "ByteTrue/byspace" }),
       expect.objectContaining({ cloneProtocol: "ssh", cloneUrl: "ByteTrue/byspace" }),
     ]);
-    expect(buildManualGithubRepositoryChoices("byspace")).toEqual([]);
+    expect(buildManualGithubRepositoryChoices("byspace", t)).toEqual([]);
   });
 
   it("shows final clone paths while retaining parent paths as values", () => {
     expect(
-      buildCloneLocationOptions({
-        parents: ["~/dev", "~/workspace"],
-        repositoryName: "byspace",
-        existingPaths: ["~/workspace/byspace"],
-      }),
+      buildCloneLocationOptions(
+        {
+          parents: ["~/dev", "~/workspace"],
+          repositoryName: "byspace",
+          existingPaths: ["~/workspace/byspace"],
+        },
+        t,
+      ),
     ).toEqual([
       {
         id: "~/dev",
@@ -182,11 +214,14 @@ describe("Add Project options", () => {
 
   it("shows equivalent absolute-home and tilde destinations only once", () => {
     expect(
-      buildCloneLocationOptions({
-        parents: ["/Users/moboudra/dev", "~/dev"],
-        repositoryName: "dotfiles",
-        existingPaths: [],
-      }),
+      buildCloneLocationOptions(
+        {
+          parents: ["/Users/moboudra/dev", "~/dev"],
+          repositoryName: "dotfiles",
+          existingPaths: [],
+        },
+        t,
+      ),
     ).toEqual([
       {
         id: "/Users/moboudra/dev",
