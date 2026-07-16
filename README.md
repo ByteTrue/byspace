@@ -31,6 +31,41 @@ Run agents in parallel on your own machines from a hosted Web interface or the C
 - **Web + CLI:** Use the hosted browser interface from any device, or script the same local daemon from the terminal.
 - **Privacy-first:** BySpace doesn't have any telemetry, tracking, or forced log-ins.
 
+## Why BySpace
+
+BySpace keeps the mature daemon, relay, protocol, and provider integrations from its upstream while narrowing the product around a browser-first workflow:
+
+- **Pi-first:** Pi is the primary integration and the first place BySpace invests in orchestration, local commands, recovery, and subagent UX.
+- **Web-only UI:** The supported graphical client is the responsive browser Web/PWA. There is no Electron shell or native iOS/Android release surface.
+- **Local-first execution:** Source code, credentials, agent processes, terminals, worktrees, and history stay on the daemon machine.
+- **Broad provider compatibility:** Direct provider adapters and ACP/custom providers remain available even though Pi is the first-class focus.
+
+## How it works
+
+```mermaid
+flowchart LR
+  W["Browser Web/PWA"] -->|"LAN / localhost WebSocket"| D["Local BySpace daemon"]
+  W -->|"E2EE relay connection"| R["Cloudflare Relay"]
+  R -->|"encrypted frames"| D
+  C["byspace CLI"] --> D
+  D --> A["Pi / Claude / Codex / OpenCode / ACP"]
+  D --> F["Your files, Git worktrees, terminals and history"]
+```
+
+The hosted Web app contains no project data. Pairing gives it the daemon identity and encrypted relay endpoint; the relay forwards encrypted WebSocket frames and cannot read agent traffic. On the same machine or LAN, the Web app can connect directly instead.
+
+## Providers
+
+| Provider family                 | Integration         | Notes                                                                   |
+| ------------------------------- | ------------------- | ----------------------------------------------------------------------- |
+| Pi                              | Pi RPC runtime      | First-class BySpace focus, including subagents and local slash commands |
+| Claude Code                     | Anthropic Agent SDK | Session resume, permissions, models, tools, and native subagents        |
+| Codex                           | Codex app server    | Threads, approvals, tool events, and native subagents                   |
+| OpenCode                        | OpenCode SDK/server | Sessions, models, permissions, tools, and recovery                      |
+| GitHub Copilot and other agents | ACP                 | Shared ACP lifecycle with catalog and custom-provider support           |
+
+Provider CLIs still own their credentials. BySpace discovers and launches the binaries already installed on the daemon machine.
+
 ## Getting Started
 
 BySpace runs a local daemon that manages your coding agents. The hosted Web app and CLI connect directly or through the E2EE relay.
@@ -55,6 +90,14 @@ byspace
 ```
 
 The daemon prints a pairing link for the hosted Web app and keeps agents running after the browser closes.
+
+### Pair the Web app
+
+1. Keep the local daemon running; agents continue when the browser closes.
+2. Open the pairing URL printed by `byspace`, or run `byspace daemon pair` to print it again.
+3. The link opens [byspace.pages.dev](https://byspace.pages.dev) and stores the host in that browser profile.
+
+Direct connections use port `6777`. Away from the daemon machine, the same pairing uses BySpace's encrypted Cloudflare Relay automatically.
 
 For full setup and configuration, see:
 
@@ -108,6 +151,22 @@ Then use them in any agent conversation:
 - `/byspace-loop` — loop an agent against clear acceptance criteria (aka Ralph loops), optionally with a verifier.
 - `/byspace-advisor` — spin up a single agent as an advisor for a second opinion, without delegating the work itself.
 - `/byspace-committee` — form a committee of two contrasting agents to step back, do root cause analysis, and produce a plan.
+
+## State, configuration, and migration
+
+BySpace stores daemon state under `$BYSPACE_HOME`, which defaults to `~/.byspace`:
+
+- `config.json` — daemon, relay, provider, speech, and logging settings
+- `server-id` and `daemon-keypair.json` — stable daemon and E2EE relay identity
+- `agents/` — agent records and resumable session metadata
+- `projects/` — project and workspace registry
+- `schedules/`, `loops/`, and other durable runtime records
+
+The old upstream home directory is never modified automatically. Existing users should stop the old daemon and migrate durable state with a backup rather than copying PID files, logs, or stale runtime records. See [Migrating existing state](public-docs/migrating-existing-state.md).
+
+## Product boundary
+
+BySpace intentionally ships the Web/PWA, CLI/daemon, encrypted relay, and complete provider layer. It does **not** ship Electron, native iOS/Android clients, the old in-app Browser automation surface, or a separate marketing website. Responsive narrow-browser layouts are still fully supported.
 
 ## Development
 

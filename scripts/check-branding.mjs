@@ -15,6 +15,7 @@ const ignoredFiles = new Set([
   "LICENSE",
   ".byspace/upstream-sync.json",
   ".agents/skills/upstream-sync/SKILL.md",
+  "public-docs/migrating-existing-state.md",
 ]);
 const attribution = `BySpace is forked from [${legacyName}](https://github.com/get${legacyLower}/${legacyLower}).`;
 
