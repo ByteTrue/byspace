@@ -141,7 +141,9 @@ try {
       );
     }
   }
-  if (!cleanupFailure) rmSync(installRoot, { recursive: true, force: true });
+  if (!cleanupFailure) {
+    rmSync(installRoot, { recursive: true, force: true, maxRetries: 30, retryDelay: 1_000 });
+  }
 }
 
 if (cleanupFailure) throw cleanupFailure;
