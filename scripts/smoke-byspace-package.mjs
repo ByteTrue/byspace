@@ -9,12 +9,8 @@ const { version } = JSON.parse(readFileSync(join(root, "package.json"), "utf8"))
 const artifact = join(root, "artifacts", `bytetrue-byspace-${version}.tgz`);
 const installRoot = mkdtempSync(join(tmpdir(), "byspace-install-smoke-"));
 const npmCli = process.env.npm_execpath;
-const binary = join(
-  installRoot,
-  "node_modules",
-  ".bin",
-  process.platform === "win32" ? "byspace.cmd" : "byspace",
-);
+const binaryScript = join(installRoot, "node_modules", "@bytetrue", "byspace", "bin", "byspace");
+const binaryArgs = ["--disable-warning=DEP0040", binaryScript];
 
 function run(command, args, options = {}) {
   const result = spawnSync(command, args, {
@@ -36,6 +32,14 @@ function runNpm(args, options = {}) {
   return npmCli
     ? run(process.execPath, [npmCli, ...args], options)
     : run("npm", args, { ...options, shell: process.platform === "win32" });
+}
+
+function runBinary(args, options = {}) {
+  return run(process.execPath, [...binaryArgs, ...args], options);
+}
+
+function spawnBinary(args, options = {}) {
+  return spawnSync(process.execPath, [...binaryArgs, ...args], options);
 }
 
 function sleep(milliseconds) {
@@ -65,7 +69,7 @@ async function reservePort() {
 function waitForDaemon(env) {
   const deadline = Date.now() + 20_000;
   while (Date.now() < deadline) {
-    const result = spawnSync(binary, ["daemon", "status", "--json"], {
+    const result = spawnBinary(["daemon", "status", "--json"], {
       cwd: root,
       env,
       encoding: "utf8",
@@ -102,15 +106,15 @@ try {
   runNpm(["install", "--prefix", installRoot, "--no-audit", "--no-fund", artifact], {
     timeout: 300_000,
   });
-  const installedVersion = run(binary, ["--version"], { env }).trim();
+  const installedVersion = runBinary(["--version"], { env }).trim();
   if (installedVersion !== version) {
     throw new Error(`Installed version ${installedVersion} does not match ${version}`);
   }
-  if (!run(binary, ["--help"], { env }).includes("Usage: byspace")) {
+  if (!runBinary(["--help"], { env }).includes("Usage: byspace")) {
     throw new Error("Installed CLI help did not render");
   }
 
-  run(binary, ["daemon", "start", "--no-relay"], { env });
+  runBinary(["daemon", "start", "--no-relay"], { env });
   daemonStarted = true;
   const status = waitForDaemon(env);
   if (status.home !== home || status.listen !== `127.0.0.1:${port}`) {
@@ -120,11 +124,14 @@ try {
 } catch (error) {
   failure = error;
 } finally {
-  if (daemonStarted && env && existsSync(binary)) {
-    const stop = spawnSync(
-      binary,
+  if (daemonStarted && env && existsSync(binaryScript)) {
+    const stop = spawnBinary(
       ["daemon", "stop", "--force", "--timeout", "5", "--kill-timeout", "5"],
-      { env, encoding: "utf8", timeout: 30_000 },
+      {
+        env,
+        encoding: "utf8",
+        timeout: 30_000,
+      },
     );
     if (stop.status !== 0) {
       process.stderr.write(stop.stdout ?? "");

@@ -119,7 +119,7 @@ async function resolveGitHubPrCheckoutIntent(params: {
   const pushRemoteUrl = checkoutTarget?.isCrossRepository
     ? checkoutTarget.headRepositorySshUrl || checkoutTarget.headRepositoryUrl || undefined
     : undefined;
-  // ponytail: PR refs may exist without a trackable origin branch; add tracking only after proving the remote branch.
+  const trackOriginHead = checkoutTarget ? !checkoutTarget.isCrossRepository : false;
 
   return {
     kind: "checkout-github-pr",
@@ -128,6 +128,7 @@ async function resolveGitHubPrCheckoutIntent(params: {
     baseRefName,
     ...(localBranchName !== headRef ? { localBranchName } : {}),
     ...(pushRemoteUrl ? { pushRemoteUrl } : {}),
+    ...(trackOriginHead ? { trackOriginHead } : {}),
   };
 }
 

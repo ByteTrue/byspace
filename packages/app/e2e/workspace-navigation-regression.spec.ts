@@ -311,7 +311,7 @@ test.describe("Workspace navigation regression", () => {
 
       await daemonGate.drop();
       await page.reload();
-      await expect(page.getByTestId("startup-splash")).toBeVisible({ timeout: 30_000 });
+      await expect(page).toHaveURL(buildHostWorkspaceRoute(serverId, workspace.workspaceId));
       daemonGate.restore();
       await waitForSidebarHydration(page);
 

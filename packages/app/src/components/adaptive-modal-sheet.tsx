@@ -357,6 +357,7 @@ export function SheetHeaderView({
         {showCloseButton ? (
           <Pressable
             accessibilityLabel={t("common.actions.close")}
+            accessibilityRole="button"
             style={styles.closeButton}
             onPress={onClose}
           >

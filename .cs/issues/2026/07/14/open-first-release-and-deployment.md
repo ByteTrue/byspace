@@ -75,12 +75,14 @@ epic: ".cs/epics/2026/07/14/web-only-byspace/spec.md"
 - Tarball 内含 5 个内部 packages，59 个外部 runtime dependencies 无缺失/冲突；外部 native 依赖未从构建机 bundle。
 - 空前缀 `byspace --version`、`--help`、daemon start/status/pair/stop 已通过；隔离 home/listen 与自有 pairing endpoints 正确。
 - Workflow YAML 解析通过；多轮独立 review 的 packaging/lifecycle/CI blocker 已修复。
+- 首次远端 CI 暴露版本重置门禁、旧品牌测试断言、Wrangler exports、Windows npm spawn 与 Web-only 后残留 E2E；均已按根因修复，最新本地 release gate、217 个聚焦测试和此前 CI 硬失败对应的 31 个 Playwright 用例通过。
 - 待外部验证：GitHub Actions、Pages、Relay、npm 真实 endpoint 与 GitHub Release。
 
 ## 执行记录
 
 - 已完成 v0.1.0 metadata、changelog、单包脚本、三平台 CI distribution job、CI-gated Pages/Relay、npm OIDC/tag workflow、Docker tag 验证和 Nix hash bot workflow。
-- 当前外部阻碍：仓库尚未创建；Cloudflare resources 尚未在当前 ByteTrue account 部署；GitHub 尚无 Cloudflare API token secret；npm 尚未认证且包不存在。
+- `ByteTrue/byspace` public repository 已创建并配置 `origin`；Cloudflare Pages `byspace` 与 Worker `byspace-relay` 已在 ByteTrue account 首次部署，GitHub Cloudflare secret 已配置。
+- 首次 `main` CI 未通过，因此按门禁未创建 tag、未发布 npm/GitHub Release；当前修复待第二次 CI 验证。首次 npm 包仍需完成 bootstrap publication 后再配置 Trusted Publishing。
 
 ## 关闭回写
 

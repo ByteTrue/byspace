@@ -1,6 +1,6 @@
 import { useCallback, useState } from "react";
 import { Text, View } from "react-native";
-import { Activity, CircleHelp, Keyboard } from "lucide-react-native";
+import { CircleHelp, Keyboard } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { DiscordIcon } from "@/components/icons/discord-icon";
@@ -17,7 +17,6 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { isNative } from "@/constants/platform";
-import { useAppDiagnosticStore } from "@/diagnostics/store";
 import { useHostRuntimeIsConnected, useHosts } from "@/runtime/host-runtime";
 import { useKeyboardShortcutsStore } from "@/stores/keyboard-shortcuts-store";
 import { useSessionStore } from "@/stores/session-store";
@@ -28,7 +27,6 @@ import { openExternalUrl } from "@/utils/open-external-url";
 
 const DISCORD_URL = "https://discord.gg/jz8T2uahpH";
 const GITHUB_ISSUE_URL = "https://github.com/ByteTrue/byspace/issues/new";
-const ThemedActivity = withUnistyles(Activity);
 const ThemedCircleHelp = withUnistyles(CircleHelp);
 const ThemedKeyboard = withUnistyles(Keyboard);
 const ThemedDiscordIcon = withUnistyles(DiscordIcon);
@@ -37,9 +35,6 @@ const foregroundColorMapping = (theme: Theme) => ({ color: theme.colors.foregrou
 const foregroundMutedColorMapping = (theme: Theme) => ({
   color: theme.colors.foregroundMuted,
 });
-const diagnosticLeadingIcon = (
-  <ThemedActivity size={ICON_SIZE.sm} uniProps={foregroundMutedColorMapping} />
-);
 const shortcutsLeadingIcon = (
   <ThemedKeyboard size={ICON_SIZE.sm} uniProps={foregroundMutedColorMapping} />
 );
@@ -79,7 +74,6 @@ function HostVersionHint({ host }: { host: HostProfile }) {
 export function SidebarHelpMenu() {
   const { t } = useTranslation();
   const isCompactLayout = useIsCompactFormFactor();
-  const openAppDiagnostic = useAppDiagnosticStore((state) => state.open);
   const setShortcutsDialogOpen = useKeyboardShortcutsStore((state) => state.setShortcutsDialogOpen);
   const [open, setOpen] = useState(false);
   const showKeyboardShortcuts = !isNative && !isCompactLayout;
@@ -133,13 +127,6 @@ export function SidebarHelpMenu() {
             {t("sidebar.help.shortcuts")}
           </DropdownMenuItem>
         ) : null}
-        <DropdownMenuItem
-          testID="sidebar-help-diagnostics"
-          leading={diagnosticLeadingIcon}
-          onSelect={openAppDiagnostic}
-        >
-          {t("sidebar.help.diagnostics")}
-        </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuLabel>{t("sidebar.help.reportIssue")}</DropdownMenuLabel>
         <DropdownMenuItem

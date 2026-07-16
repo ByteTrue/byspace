@@ -63,7 +63,6 @@ import { CommunityLinks } from "@/components/community-links";
 import { SegmentedControl } from "@/components/ui/segmented-control";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { resolveAppVersion } from "@/utils/app-version";
-import { useAppDiagnosticStore } from "@/diagnostics/store";
 import { settingsStyles } from "@/styles/settings";
 import { THINKING_TONE_NATIVE_PCM_BASE64 } from "@/utils/thinking-tone.native-pcm";
 import { useVoiceAudioEngineOptional } from "@/contexts/voice-context";
@@ -371,22 +370,12 @@ function DiagnosticsSection({
   handlePlaybackTest,
 }: DiagnosticsSectionProps) {
   const { t } = useTranslation();
-  const openAppDiagnostic = useAppDiagnosticStore((state) => state.open);
   const handlePlayPress = useCallback(() => {
     void handlePlaybackTest();
   }, [handlePlaybackTest]);
   return (
     <SettingsSection title={t("settings.diagnostics.title")}>
       <View style={settingsStyles.card}>
-        <View style={settingsStyles.row} testID="app-diagnostic-row">
-          <View style={settingsStyles.rowContent}>
-            <Text style={settingsStyles.rowTitle}>{t("settings.diagnostics.app.rowTitle")}</Text>
-            <Text style={settingsStyles.rowHint}>{t("settings.diagnostics.app.rowHint")}</Text>
-          </View>
-          <Button variant="secondary" size="sm" onPress={openAppDiagnostic}>
-            {t("settings.diagnostics.app.run")}
-          </Button>
-        </View>
         <View style={settingsStyles.row}>
           <View style={settingsStyles.rowContent}>
             <Text style={settingsStyles.rowTitle}>{t("settings.diagnostics.testAudio")}</Text>

@@ -20,26 +20,16 @@ test.describe("Settings sidebar scrolling", () => {
         }
       }
       if (!scroller) return null;
-
-      const scrollerRect = scroller.getBoundingClientRect();
-      const dragRegions = [];
-      for (const element of node.querySelectorAll<HTMLElement>("*")) {
-        if (getComputedStyle(element).getPropertyValue("-webkit-app-region") === "drag") {
-          const rect = element.getBoundingClientRect();
-          dragRegions.push({ bottom: rect.bottom });
-        }
-      }
-
+      scroller.scrollTop = scroller.scrollHeight;
       return {
-        scrollBodyTop: scrollerRect.top,
-        dragRegions,
+        clientHeight: scroller.clientHeight,
+        scrollHeight: scroller.scrollHeight,
+        scrollTop: scroller.scrollTop,
       };
     });
 
     expect(geometry).not.toBeNull();
-    expect(geometry!.dragRegions).not.toEqual([]);
-    for (const dragRegion of geometry!.dragRegions) {
-      expect(dragRegion.bottom).toBeLessThanOrEqual(geometry!.scrollBodyTop + 1);
-    }
+    expect(geometry!.scrollHeight).toBeGreaterThan(geometry!.clientHeight);
+    expect(geometry!.scrollTop).toBeGreaterThan(0);
   });
 });

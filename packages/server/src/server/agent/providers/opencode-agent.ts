@@ -630,7 +630,9 @@ function mapOpenCodeAgentToMode(agent: {
   const colorTier = readOpenCodeAgentHexColor(agent);
   return {
     id: agent.name,
-    label: agent.name.charAt(0).toUpperCase() + agent.name.slice(1),
+    label: agent.name.startsWith("byspace")
+      ? `BySpace${agent.name.slice("byspace".length)}`
+      : agent.name.charAt(0).toUpperCase() + agent.name.slice(1),
     icon: "Bot",
     description:
       typeof agent.description === "string" && agent.description.trim().length > 0
