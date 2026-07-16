@@ -17,7 +17,7 @@ import {
   type ShortcutCallbackName,
 } from "@/keyboard/route-shortcut";
 import { getShortcutOs } from "@/utils/shortcut-platform";
-import { useOpenProjectPicker } from "@/hooks/use-open-project-picker";
+import { useOpenAddProject } from "@/hooks/use-open-add-project";
 import { useKeyboardShortcutOverrides } from "@/hooks/use-keyboard-shortcut-overrides";
 import { isNative } from "@/constants/platform";
 import { isImeComposingKeyboardEvent } from "@/utils/keyboard-ime";
@@ -52,7 +52,7 @@ export function useKeyboardShortcuts({
     step: 0,
     timeoutId: null,
   });
-  const openProjectPickerAction = useOpenProjectPicker();
+  const openProjectPickerAction = useOpenAddProject();
   const activeWorkspaceSelection = useActiveWorkspaceSelection();
   const keyboardWorkspaceSelectionRef = useRef<ActiveWorkspaceSelection | null>(null);
 
