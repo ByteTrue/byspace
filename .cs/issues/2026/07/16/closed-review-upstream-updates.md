@@ -1,8 +1,9 @@
 ---
 kind: issue
 title: "审阅 2026-07-16 Paseo upstream 更新"
-status: open
+status: closed
 created: 2026-07-16
+closed: 2026-07-16
 epic: ""
 ---
 

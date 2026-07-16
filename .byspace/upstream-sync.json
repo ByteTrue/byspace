@@ -5,8 +5,8 @@
     "branch": "main"
   },
   "cursor": {
-    "lastReviewedCommit": "6804882761fcb9a511338f1fed19b9ed45e99e45",
-    "reviewedAt": "2026-07-15"
+    "lastReviewedCommit": "d42ab91971a92bf2e2a981848989c7ca6536a18e",
+    "reviewedAt": "2026-07-16"
   },
   "batches": [
     {
@@ -89,6 +89,71 @@
       "hardeningCommits": [
         "25e19bfde3716305e6df3865ced11b1d3ead0552",
         "7fafecb6bd3f977e27ee11a9e1d5772814b610ea"
+      ]
+    },
+    {
+      "startExclusive": "6804882761fcb9a511338f1fed19b9ed45e99e45",
+      "endInclusive": "d42ab91971a92bf2e2a981848989c7ca6536a18e",
+      "reviewedAt": "2026-07-16",
+      "issue": ".cs/issues/2026/07/16/closed-review-upstream-updates.md",
+      "decisions": {
+        "inherited": ["3e8dce7d7c9b1a3ef8e1ed8c18faa3d6f36da113"],
+        "applied": [
+          {
+            "upstreamCommit": "37bde90d9f4aaf45c755f828ee25a6b189f18065",
+            "localCommit": "d1f3f7d2b7a594c2d8851a45d5dccad253fbeabf",
+            "mode": "full"
+          },
+          {
+            "upstreamCommit": "90e0a0e353a90e12d91d88a91e64dda7984928c0",
+            "localCommit": "27d7ef8d71925071b927280eedea73510ff1386c",
+            "mode": "full"
+          },
+          {
+            "upstreamCommit": "dfe3330ef837d801dd8c4de499247aa7d7a63896",
+            "localCommit": "5db1e525add21fa7b818369d1b7a0bcab08b11b0",
+            "mode": "full"
+          },
+          {
+            "upstreamCommit": "943d03ad995a613558752d2863b51e78419fba54",
+            "localCommit": "8fa0158f16705954163de484cdfbe55ea2be31be",
+            "mode": "full"
+          },
+          {
+            "upstreamCommit": "6aba0370aeea9973260a9dd594097d127e7dc834",
+            "localCommit": "b6ab9a475255a5ef6b46c2fa4bde3ab05a3a9a04",
+            "mode": "partial"
+          },
+          {
+            "upstreamCommit": "e528a0db067cf32f2a615347290a1f72ac40a010",
+            "localCommit": "639fa9f1fa1674e43f4ea8f3faa1f5eb0b000240",
+            "mode": "full"
+          },
+          {
+            "upstreamCommit": "d42ab91971a92bf2e2a981848989c7ca6536a18e",
+            "localCommit": "9bdf76c5c684ca60b081db96ebb9dd4794ed7f02",
+            "mode": "full"
+          }
+        ],
+        "deferred": [],
+        "skipped": [
+          "5ef1b9dbb118001729ac13ffc03b26d121bce809",
+          "38cfe109c937a8bd8c33e7c5a2b5d625e252103f",
+          "d791a0aa91236a28fe23b0be362f0baf0abf2fd1",
+          "75ea0d4534a2922e6f3072d805008474ac4728bd",
+          "8554b94cdb3c6374ce3fb10ac5dafb7a15eb3364",
+          "64c819efeb6fa301b751f5382468ab1beaaa68af",
+          "75d784534f07b0ebb1a7ff35de7f15783e7000ac",
+          "42e101c81ea6a1ab9da6c49b36a55cafc1df9c8e",
+          "d7ca1b5a03f812d4147695c54ec55b58b72d8b79",
+          "47532952f325912094593889b65c98ea5aa49912",
+          "f4509fe04450be76eac7ab574b3944590f46f571"
+        ]
+      },
+      "hardeningCommits": [
+        "7b51ffdff70df83b6978821b2213b1a2fd5caf01",
+        "1a0236d7d6b9a974a6c866df9dc09966cce6417c",
+        "9edc288d6ac983c7c2f0fdf42aa86c3f43e60e45"
       ]
     }
   ]
