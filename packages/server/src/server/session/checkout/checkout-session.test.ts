@@ -232,6 +232,63 @@ describe("CheckoutSession", () => {
     });
   });
 
+  describe("commit file diff validation", () => {
+    it.each(["", "/etc/passwd", "../secret", "folder\\..\\secret"])(
+      "rejects unsafe path %j before Git execution",
+      async (path) => {
+        const { checkout, emitted } = makeCheckoutSession();
+
+        await checkout.handleCommitFileDiffRequest({
+          type: "checkout.commits.file_diff.request",
+          cwd: "/repo",
+          sha: "abc123",
+          path,
+          requestId: "commit-path-validation",
+        });
+
+        expect(emitted).toEqual([
+          {
+            type: "checkout.commits.file_diff.response",
+            payload: {
+              cwd: "/repo",
+              sha: "abc123",
+              path,
+              file: null,
+              error: { code: "UNKNOWN", message: `Invalid path: ${path}` },
+              requestId: "commit-path-validation",
+            },
+          },
+        ]);
+      },
+    );
+
+    it("rejects an unsafe commit ref before Git execution", async () => {
+      const { checkout, emitted } = makeCheckoutSession();
+
+      await checkout.handleCommitFileDiffRequest({
+        type: "checkout.commits.file_diff.request",
+        cwd: "/repo",
+        sha: "--output=/tmp/injected",
+        path: "src/file.ts",
+        requestId: "commit-ref-validation",
+      });
+
+      expect(emitted).toEqual([
+        {
+          type: "checkout.commits.file_diff.response",
+          payload: {
+            cwd: "/repo",
+            sha: "--output=/tmp/injected",
+            path: "src/file.ts",
+            file: null,
+            error: expect.objectContaining({ code: "UNKNOWN" }),
+            requestId: "commit-ref-validation",
+          },
+        },
+      ]);
+    });
+  });
+
   describe("validate branch", () => {
     it("validates an existing local branch", async () => {
       const { checkout, emitted } = makeCheckoutSession({

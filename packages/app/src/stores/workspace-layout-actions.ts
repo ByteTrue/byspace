@@ -971,6 +971,41 @@ export function collectAllPanes(root: SplitNode): SplitPane[] {
   return internalRoot.group.children.flatMap((child) => collectAllPanes(child));
 }
 
+function isEphemeralTab(tab: WorkspaceTab): boolean {
+  // Commit diff tabs are ephemeral: their SHA may be rebased away before the next
+  // load, so a restored tab could point at a dead commit.
+  return tab.target.kind === "commit_diff";
+}
+
+function stripEphemeralTabsFromNode(node: SplitNodeInternal): SplitNodeInternal {
+  if (node.kind === "pane") {
+    const nextTabs = node.pane.tabs.filter((tab) => !isEphemeralTab(tab));
+    if (nextTabs.length === node.pane.tabs.length) {
+      return node;
+    }
+    return createPaneNode({
+      id: node.pane.id,
+      tabs: nextTabs,
+      focusedTabId: node.pane.focusedTabId,
+    });
+  }
+  return createGroupNode({
+    id: node.group.id,
+    direction: node.group.direction,
+    children: node.group.children.map((child) => stripEphemeralTabsFromNode(child)),
+    sizes: node.group.sizes,
+  });
+}
+
+export function stripEphemeralTabsFromLayout(layout: WorkspaceLayout): WorkspaceLayout {
+  const internalLayout = asInternalLayout(layout);
+  const nextRoot = stripEphemeralTabsFromNode(internalLayout.root);
+  return withNormalizedParentTabMap({
+    root: nextRoot,
+    focusedPaneId: internalLayout.focusedPaneId,
+    parentTabIdByTabId: layout.parentTabIdByTabId,
+  });
+}
 export function createDefaultLayout(): WorkspaceLayout {
   return {
     root: createPaneNode({ id: DEFAULT_PANE_ID }),

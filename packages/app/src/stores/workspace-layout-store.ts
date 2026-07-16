@@ -36,6 +36,7 @@ import {
   retargetTabInLayout,
   splitPaneEmptyInLayout,
   splitPaneInLayout,
+  stripEphemeralTabsFromLayout,
   type SplitGroup,
   type SplitNode,
   type SplitPane,
@@ -57,6 +58,7 @@ export {
   normalizeLayout,
   removePaneFromTree,
   removeTabFromTree,
+  stripEphemeralTabsFromLayout,
 };
 export type {
   SplitGroup,
@@ -900,7 +902,11 @@ export function createWorkspaceLayoutStore(
         partialize: (state) => {
           const layoutByWorkspace: Record<string, WorkspaceLayout> = {};
           for (const key in state.layoutByWorkspace) {
-            layoutByWorkspace[key] = normalizeLayout(state.layoutByWorkspace[key]);
+            // Strip ephemeral (commit diff) tabs before persisting so they are
+            // dropped on reload rather than restored pointing at a rebased SHA.
+            layoutByWorkspace[key] = stripEphemeralTabsFromLayout(
+              normalizeLayout(state.layoutByWorkspace[key]),
+            );
           }
           return {
             layoutByWorkspace,

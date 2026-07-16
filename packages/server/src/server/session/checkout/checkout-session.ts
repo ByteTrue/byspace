@@ -1,8 +1,11 @@
 import type pino from "pino";
+import { isAbsolute } from "node:path";
 import { getErrorMessage } from "@bytetrue/byspace-protocol/error-utils";
 import { validateBranchSlug } from "@bytetrue/byspace-protocol/branch-slug";
 import type {
   BranchSuggestionsRequest,
+  CheckoutCommitsListRequest,
+  CheckoutCommitFileDiffRequest,
   CheckoutRefreshRequest,
   CheckoutRenameBranchRequest,
   CheckoutStatusRequest,
@@ -37,6 +40,8 @@ import {
 import {
   commitChanges,
   createPullRequest,
+  getCommitFileDiff,
+  listCheckoutCommits,
   mergeFromBase,
   mergeToBase,
   pullCurrentBranch,
@@ -168,6 +173,44 @@ export class CheckoutSession {
           error: toCheckoutError(error),
           requestId,
         },
+      });
+    }
+  }
+
+  async handleCommitsListRequest(msg: CheckoutCommitsListRequest): Promise<void> {
+    const { cwd, requestId } = msg;
+
+    try {
+      const { baseRef, commits } = await listCheckoutCommits({ cwd: expandTilde(cwd) });
+      this.host.emit({
+        type: "checkout.commits.list.response",
+        payload: { cwd, baseRef, commits, error: null, requestId },
+      });
+    } catch (error) {
+      this.host.emit({
+        type: "checkout.commits.list.response",
+        payload: { cwd, baseRef: null, commits: [], error: toCheckoutError(error), requestId },
+      });
+    }
+  }
+
+  async handleCommitFileDiffRequest(msg: CheckoutCommitFileDiffRequest): Promise<void> {
+    const { cwd, sha, path, requestId } = msg;
+
+    try {
+      assertSafeGitRef(sha, "commit");
+      if (path.length === 0 || isAbsolute(path) || path.split(/[\\/]/).includes("..")) {
+        throw new Error(`Invalid path: ${path}`);
+      }
+      const file = await getCommitFileDiff({ cwd: expandTilde(cwd), sha, path });
+      this.host.emit({
+        type: "checkout.commits.file_diff.response",
+        payload: { cwd, sha, path, file, error: null, requestId },
+      });
+    } catch (error) {
+      this.host.emit({
+        type: "checkout.commits.file_diff.response",
+        payload: { cwd, sha, path, file: null, error: toCheckoutError(error), requestId },
       });
     }
   }
