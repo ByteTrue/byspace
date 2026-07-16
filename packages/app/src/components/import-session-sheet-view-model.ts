@@ -5,6 +5,15 @@ import { i18n } from "@/i18n/i18next";
 export const PER_PROVIDER_LIMIT = 15;
 export const ALL_FILTER_VALUE = "__all__";
 
+// COMPAT(importSessionWorkspaceTarget): added in BySpace v0.1.2, remove after 2027-01-17.
+export function requiresImportSessionsHostUpgrade(input: {
+  supportsSnapshot: boolean;
+  workspaceId?: string | null;
+  supportsWorkspaceTarget: boolean;
+}): boolean {
+  return !input.supportsSnapshot || (Boolean(input.workspaceId) && !input.supportsWorkspaceTarget);
+}
+
 export interface SessionsQueryResult {
   data:
     | {

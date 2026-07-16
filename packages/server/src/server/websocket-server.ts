@@ -1257,6 +1257,8 @@ export class VoiceAssistantWebSocketServer {
         commitsList: true,
         // COMPAT(providerRemoval): added in v0.1.105, drop the gate when floor >= v0.1.105.
         providerRemoval: true,
+        // COMPAT(importSessionWorkspaceTarget): added in BySpace v0.1.2; remove after 2027-01-17 once daemon floor >= v0.1.2.
+        importSessionWorkspaceTarget: true,
       },
     };
   }

@@ -1255,6 +1255,7 @@ export const ImportAgentRequestMessageSchema = z.object({
   sessionId: z.string().optional(),
   providerHandleId: z.string().optional(),
   cwd: z.string().optional(),
+  workspaceId: z.string().optional(),
   labels: z.record(z.string(), z.string()).optional(),
   requestId: z.string(),
 });
@@ -2558,6 +2559,8 @@ export const ServerInfoStatusPayloadSchema = z
         commitsList: z.boolean().optional(),
         // COMPAT(providerRemoval): added in v0.1.105, drop the gate when floor >= v0.1.105.
         providerRemoval: z.boolean().optional(),
+        // COMPAT(importSessionWorkspaceTarget): added in BySpace v0.1.2; remove after 2027-01-17 once daemon floor >= v0.1.2.
+        importSessionWorkspaceTarget: z.boolean().optional(),
       })
       .optional(),
   })
