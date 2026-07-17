@@ -2,6 +2,7 @@ import type { z } from "zod";
 
 export interface BySpaceToolExecutionContext {
   signal?: AbortSignal;
+  sendUpdate?: (update: BySpaceToolResult) => void;
 }
 
 export interface BySpaceToolResult {

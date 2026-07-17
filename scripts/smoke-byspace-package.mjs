@@ -22,6 +22,7 @@ const installedBinary = join(
 );
 const nativeLoadCheck = `
   import { createRequire } from "node:module";
+  import { pathToFileURL } from "node:url";
   const require = createRequire(${JSON.stringify(
     join(
       installedPackageRoot,
@@ -36,6 +37,11 @@ const nativeLoadCheck = `
   )});
   const pty = require("node-pty");
   const sherpa = require("sherpa-onnx-node");
+  const mcpCompatModules = [
+    "@modelcontextprotocol/sdk/server/zod-compat.js",
+    "@modelcontextprotocol/sdk/server/zod-json-schema-compat.js",
+  ];
+  await Promise.all(mcpCompatModules.map((specifier) => import(pathToFileURL(require.resolve(specifier)))));
   if (typeof pty.spawn !== "function" || typeof sherpa.OfflineRecognizer !== "function") {
     throw new Error("Installed native modules did not expose their runtime APIs");
   }

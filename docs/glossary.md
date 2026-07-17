@@ -21,7 +21,7 @@ Authoritative terminology. UI label wins. Don't invent synonyms; use what's here
 - **Agent session** — One running instance of an agent inside a workspace (one provider, one model, one cwd, one timeline). The conceptual unit; in the UI this opens as a tab. Moving toward this as the canonical term over "Agent". Code: `AgentSnapshotPayload` (`packages/protocol/src/messages.ts:608`).
 - **Session** — Two senses: (a) per-client connection to a daemon, internal; (b) user-facing agent session, see **Agent session**. Code: `Session` (`packages/server/src/server/session.ts`) for (a). Don't confuse with: provider-side agent session log.
 - **Profile** — Internal name for the persisted shape of a host. Code: `HostProfile` (`packages/app/src/types/host-connection.ts:37`). Never user-facing.
-- **Provider** — Agent backend (Claude Code, Codex, Copilot, OpenCode, Pi, OMP). UI: "Provider". Code: `ProviderSnapshotEntry` (`packages/protocol/src/messages.ts:198`).
+- **Provider** — Agent backend (Claude Code, Codex, Copilot, OpenCode, Pi, Oh My Pi). UI: "Provider". Code: `ProviderSnapshotEntry` (`packages/protocol/src/messages.ts:198`).
 - **Model** — A specific LLM offered by a provider. UI: "Model" / "Select model". Code: `AgentModelDefinition` (`packages/protocol/src/messages.ts:187`).
 - **Tab** — UI surface representing one session inside a workspace. Not a conceptual unit; use **Agent session** when talking about the model. Code: `WorkspaceTabDescriptor` (`packages/app/src/screens/workspace/workspace-tabs-types.ts`).
 - **Terminal** — Workspace-scoped PTY shell streamed over the binary mux channel. UI: "Terminal". Code: `TerminalStreamFrame` (`packages/protocol/src/terminal-stream-protocol.ts`).
@@ -35,6 +35,7 @@ Authoritative terminology. UI label wins. Don't invent synonyms; use what's here
 - **Agent controls** — Provider, model, mode, thinking, and provider-feature controls for an agent or draft agent. Code: `AgentControls` / `DraftAgentControls` (`packages/app/src/composer/agent-controls/index.tsx`). Forbidden: "Agent status bar".
 - **Composer footer** — Optional area rendered below the composer input but still inside the keyboard-shifted composer layout. Code: `Composer.footer` (`packages/app/src/composer/index.tsx`).
 - **Composer track** — A contextual lane above the composer input. Specific tracks use the `<thing> track` form: **Queue track**, **Subagents track**. Code: queue track inside `Composer` (`packages/app/src/composer/index.tsx`), `SubagentsTrack` (`packages/app/src/subagents/track.tsx`).
+- **Subagent** — User-facing term for an agent session related to a parent agent session. Use **subagents** in UI copy and docs. Internal daemon/provider plumbing may say "child agent" or `child_session`, especially for provider-managed imports; do not surface "child agent" as a product term.
 - **Attachment tray** — The selected-attachments row inside the composer input, above the text input. Code: `renderAttachmentTray` (`packages/app/src/composer/index.tsx`). Forbidden: "Attachment bar".
 - **Conflict** — Two distinct senses; do NOT use the bare word in UI copy without qualifying which: (a) **stale-write conflict** on `byspace.json` ("Config changed on disk", code `stale_project_config`, `packages/app/src/screens/project-settings-screen.tsx:593`); (b) **git merge conflict** (no current UI string).
 
