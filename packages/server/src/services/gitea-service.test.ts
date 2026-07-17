@@ -1173,6 +1173,33 @@ describe("createGiteaService", () => {
     );
   });
 
+  it("evicts the least-recently-used PR head SHA after 512 entries", async () => {
+    const { service, calls } = makeService(
+      (args) => {
+        if (args[0] === "pr" && args[1] === "list") return ok(JSON.stringify([OPEN_PR]));
+        if (args[0] === "pr" && args[1] === "5") return ok(JSON.stringify(STATUS_PR_VIEW));
+        if (args[0] === "api" && args[1].includes("/commits/")) {
+          return ok(JSON.stringify(SAMPLE_COMBINED_STATUS));
+        }
+        throw new Error(`unexpected call: ${args.join(" ")}`);
+      },
+      { resolveCurrentBranch: async () => "feat/sample-change" },
+    );
+    const requestFor = (index: number) => ({
+      cwd: `/repo-${index}`,
+      repoOwner: "example-user",
+      repoName: "sample-repo",
+      checkRunId: 2,
+    });
+
+    for (let index = 0; index < 513; index += 1) {
+      await service.getCheckDetails(requestFor(index));
+    }
+    await service.getCheckDetails(requestFor(0));
+
+    expect(calls.filter((args) => args[0] === "pr" && args[1] === "5")).toHaveLength(514);
+  });
+
   it("throws when check details cannot find a PR for the current branch", async () => {
     const { service, calls } = makeService(
       (args) => {

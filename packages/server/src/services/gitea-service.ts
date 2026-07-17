@@ -1,5 +1,6 @@
 import { z } from "zod";
 import pLimit from "p-limit";
+import { LRUCache } from "lru-cache";
 import {
   normalizeHost,
   parseGitHubRemoteIdentity,
@@ -73,6 +74,7 @@ const reviewCommentsLimit = pLimit(REVIEW_COMMENTS_FAN_OUT_CONCURRENCY);
 // short cache, each poll re-derives the PR head SHA from scratch (branch name +
 // PR lookup + PR view). The TTL keeps a new push visible within one poll cycle.
 const CURRENT_PR_HEAD_SHA_CACHE_TTL_MS = 30_000;
+const CURRENT_PR_HEAD_SHA_CACHE_MAX_ENTRIES = 512;
 // 50 is the page-size cap Gitea enforces on list endpoints; five pages bounds
 // the sweep to the 250 most recent Actions tasks.
 const GITEA_ACTIONS_RUNS_PAGE_LIMIT = 50;
@@ -1185,7 +1187,9 @@ export function createGiteaService(options: CreateGiteaServiceOptions = {}): For
   const resolveRemoteUrl = options.resolveRemoteUrl ?? defaultResolveRemoteUrl;
   const resolveCurrentBranch = options.resolveCurrentBranch ?? defaultResolveCurrentBranch;
   const now = options.now ?? Date.now;
-  const currentPrHeadShaCache = new Map<string, { sha: string; expiresAt: number }>();
+  const currentPrHeadShaCache = new LRUCache<string, { sha: string; expiresAt: number }>({
+    max: CURRENT_PR_HEAD_SHA_CACHE_MAX_ENTRIES,
+  });
 
   async function run(args: string[], runOptions: TeaCommandRunnerOptions): Promise<string> {
     const teaPath = await resolveTea();
