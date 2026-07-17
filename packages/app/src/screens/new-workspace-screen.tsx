@@ -21,7 +21,10 @@ import {
 import { Composer } from "@/composer";
 import { FileDropZone } from "@/components/file-drop/file-drop-zone";
 import { DraftAgentModeControl } from "@/composer/agent-controls/mode-control";
-import { splitComposerAttachmentsForSubmit } from "@/composer/attachments/submit";
+import {
+  resolveComposerAttachmentSubmitFormat,
+  splitComposerAttachmentsForSubmit,
+} from "@/composer/attachments/submit";
 import { HostStatusDot } from "@/components/host-status-dot";
 import { HostPicker } from "@/components/hosts/host-picker";
 import { ProjectIconView } from "@/components/project-icon-view";
@@ -35,7 +38,7 @@ import { ScreenHeader } from "@/components/headers/screen-header";
 import { HEADER_INNER_HEIGHT, MAX_CONTENT_WIDTH, useIsCompactFormFactor } from "@/constants/layout";
 import { useToast } from "@/contexts/toast-context";
 import { useAgentInputDraft } from "@/composer/draft/input-draft";
-import { useGithubSearchQuery } from "@/git/use-github-search-query";
+import { useForgeSearchQuery } from "@/git/use-forge-search-query";
 import {
   useHostRuntimeClient,
   useHostRuntimeConnectionStatuses,
@@ -62,6 +65,8 @@ import {
 import { useKeyboardShiftStyle } from "@/hooks/use-keyboard-shift-style";
 import { useFormPreferences } from "@/hooks/use-form-preferences";
 import { useShortcutKeys } from "@/hooks/use-shortcut-keys";
+import { forgeFromRemoteUrl, getForgePresentation } from "@/git/forge";
+import { resolveForgeCapabilities } from "@/git/forge-capabilities";
 import type { CreateAgentInitialValues } from "@/hooks/use-agent-form-state";
 import { generateMessageId } from "@/types/stream";
 import { toErrorMessage } from "@/utils/error-messages";
@@ -78,7 +83,7 @@ import { ICON_SIZE, type Theme } from "@/styles/theme";
 import type { ComposerAttachment, UserComposerAttachment } from "@/attachments/types";
 import { useDraftWorkspaceAttachmentScopeKey } from "@/attachments/workspace-attachments-store";
 import type { MessagePayload } from "@/composer/types";
-import type { AgentAttachment, GitHubSearchItem } from "@bytetrue/byspace-protocol/messages";
+import type { AgentAttachment, ForgeSearchItem } from "@bytetrue/byspace-protocol/messages";
 import type { CreateBySpaceWorktreeInput } from "@bytetrue/byspace-client/internal/daemon-client";
 import type { AgentProvider } from "@bytetrue/byspace-protocol/agent-types";
 import type { WorkspaceDraftTabSetup, WorkspaceTabTarget } from "@/stores/workspace-tabs-store";
@@ -636,8 +641,17 @@ function AddProjectPickerAction({ onPress }: { onPress: () => void }) {
   );
 }
 
-function formatPrLabel(item: { number: number; title: string }): string {
-  return `#${item.number} ${item.title}`;
+function formatPrLabel(item: Pick<ForgeSearchItem, "forge" | "number" | "title">): string {
+  const presentation = getForgePresentation(item.forge ?? "github");
+  return `${presentation.numberPrefix}${item.number} ${item.title}`;
+}
+
+function getCheckoutHintPresentation(item: ForgeSearchItem) {
+  const presentation = getForgePresentation(item.forge ?? "github");
+  return {
+    noun: presentation.changeRequestAbbrev,
+    numberPrefix: presentation.numberPrefix,
+  };
 }
 
 function pickerItemLabel(item: PickerItem): string {
@@ -654,7 +668,7 @@ function newWorkspaceHostOptionTestID(serverId: string): string {
 
 function computePickerOptionData(
   branchDetails: ReadonlyArray<{ name: string; committerDate: number }>,
-  prItems: ReadonlyArray<GitHubSearchItem>,
+  prItems: ReadonlyArray<ForgeSearchItem>,
 ): PickerOptionData {
   const idMap = new Map<string, PickerItem>();
 
@@ -816,6 +830,7 @@ interface SubmitDraftInput {
   attachments: ComposerAttachment[];
   provider: AgentProvider;
   composerState: NewWorkspaceComposerState;
+  supportsForgeSearch: boolean;
 }
 
 type NewWorkspaceComposerState = NonNullable<
@@ -921,6 +936,7 @@ interface CreateChatAgentInput {
   serverId: string;
   draftKey: string;
   draftId?: string;
+  supportsForgeSearch: boolean;
   labels: {
     composerStateRequired: string;
     selectModel: string;
@@ -991,7 +1007,13 @@ async function runCreateChatAgent(input: CreateChatAgentInput): Promise<void> {
   if (!provider) {
     throw new Error(input.labels.selectModel);
   }
-  const { attachments: reviewAttachments } = splitComposerAttachmentsForSubmit(attachments);
+  const attachmentSubmitFormat = resolveComposerAttachmentSubmitFormat({
+    supportsForgeAttachments: input.supportsForgeSearch,
+    attachments,
+  });
+  const { attachments: reviewAttachments } = splitComposerAttachmentsForSubmit(attachments, {
+    format: attachmentSubmitFormat,
+  });
   const workspaceNamingAttachments = getWorkspaceNamingAttachments(reviewAttachments);
   const ensuredWorkspace = await ensureWorkspace({
     cwd,
@@ -1016,6 +1038,7 @@ async function runCreateChatAgent(input: CreateChatAgentInput): Promise<void> {
     attachments,
     provider,
     composerState,
+    supportsForgeSearch: input.supportsForgeSearch,
   });
 }
 
@@ -1137,7 +1160,12 @@ function submitWorkspaceDraft(input: SubmitDraftInput): void {
   const draftId = draftIdInput?.trim() || generateDraftId();
   const clientMessageId = generateMessageId();
   const timestamp = Date.now();
-  const wirePayload = splitComposerAttachmentsForSubmit(attachments);
+  const wirePayload = splitComposerAttachmentsForSubmit(attachments, {
+    format: resolveComposerAttachmentSubmitFormat({
+      supportsForgeAttachments: input.supportsForgeSearch,
+      attachments,
+    }),
+  });
   const submission = resolveWorkspaceDraftSubmissionConfig({
     draftId,
     workspaceDirectory,
@@ -1584,6 +1612,25 @@ function useNewWorkspaceFormStack(input: NewWorkspaceFormStackInput): ReactEleme
   );
 }
 
+function resolvePickerForge(remoteUrl: string | null): string | undefined {
+  if (!remoteUrl) return undefined;
+  return forgeFromRemoteUrl(remoteUrl) ?? "unknown";
+}
+
+interface PickerEmptyTextInput {
+  isForgeUnavailable: boolean;
+  isFetching: boolean;
+  unavailableText: string;
+  fetchingText: string;
+  emptyText: string;
+}
+
+function resolvePickerEmptyText(input: PickerEmptyTextInput): string {
+  if (input.isForgeUnavailable) return input.unavailableText;
+  if (input.isFetching) return input.fetchingText;
+  return input.emptyText;
+}
+
 export function NewWorkspaceScreen({
   serverId,
   sourceDirectory: sourceDirectoryProp,
@@ -1615,6 +1662,7 @@ export function NewWorkspaceScreen({
   });
   // COMPAT(workspaceMultiplicity): added in v0.1.97, drop the gate when floor >= v0.1.97
   const supportsWorkspaceMultiplicity = useHostFeature(selectedServerId, "workspaceMultiplicity");
+  const supportsForgeSearch = useHostFeature(selectedServerId, "forgeSearch");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [createdWorkspace, setCreatedWorkspace] = useState<ReturnType<
     typeof normalizeWorkspaceDescriptor
@@ -1724,6 +1772,13 @@ export function NewWorkspaceScreen({
   });
 
   const currentBranch = checkoutStatusQuery.data?.currentBranch ?? null;
+  const pickerRemoteUrl = checkoutStatusQuery.data?.remoteUrl ?? null;
+  const pickerForge = resolvePickerForge(pickerRemoteUrl);
+  const forgeSearchUnavailable =
+    resolveForgeCapabilities({
+      forge: pickerForge,
+      features: { forgeSearch: supportsForgeSearch },
+    }).search === "unavailable";
   const { effectiveIsolation, setIsolation, canCreateWorktree, showRefPicker } =
     useWorkspaceIsolation({
       supportsMultiplicity: supportsWorkspaceMultiplicity,
@@ -1752,12 +1807,14 @@ export function NewWorkspaceScreen({
     staleTime: 15_000,
   });
 
-  const githubPrSearchQuery = useGithubSearchQuery({
+  const githubPrSearchQuery = useForgeSearchQuery({
     client,
     serverId: selectedServerId,
     cwd: selectedSourceDirectory ?? "",
     query: debouncedPickerSearchQuery,
-    kinds: ["github-pr"],
+    kinds: ["change_request"],
+    supportsForgeSearch,
+    forge: pickerForge,
     enabled: pickerQueryEnabled,
   });
 
@@ -1765,11 +1822,12 @@ export function NewWorkspaceScreen({
     () => normalizeBranchDetails(branchSuggestionsQuery.data),
     [branchSuggestionsQuery.data],
   );
-  const githubFeaturesEnabled = githubPrSearchQuery.data?.githubFeaturesEnabled !== false;
-  const prItems: GitHubSearchItem[] = useMemo(() => {
-    if (!githubFeaturesEnabled) return [];
+  const forgeSearchAuthenticated =
+    !githubPrSearchQuery.data || githubPrSearchQuery.data.authState === "authenticated";
+  const prItems: ForgeSearchItem[] = useMemo(() => {
+    if (!forgeSearchAuthenticated) return [];
     return githubPrSearchQuery.data?.items ?? [];
-  }, [githubFeaturesEnabled, githubPrSearchQuery.data?.items]);
+  }, [forgeSearchAuthenticated, githubPrSearchQuery.data?.items]);
 
   const { options, itemById }: PickerOptionData = useMemo(
     () => computePickerOptionData(branchDetails, prItems),
@@ -2058,6 +2116,7 @@ export function NewWorkspaceScreen({
           serverId: selectedServerId,
           draftKey,
           draftId,
+          supportsForgeSearch,
           labels: {
             composerStateRequired: t("newWorkspace.errors.composerStateRequired"),
             selectModel: t("newWorkspace.errors.selectModel"),
@@ -2070,7 +2129,17 @@ export function NewWorkspaceScreen({
         toast.error(message);
       }
     },
-    [composerState, draftId, draftKey, ensureWorkspace, forkDraftSetup, selectedServerId, t, toast],
+    [
+      composerState,
+      draftId,
+      draftKey,
+      ensureWorkspace,
+      forkDraftSetup,
+      selectedServerId,
+      supportsForgeSearch,
+      t,
+      toast,
+    ],
   );
 
   const renderPickerOption = useCallback(
@@ -2133,10 +2202,13 @@ export function NewWorkspaceScreen({
     [composerState, isPending],
   );
 
-  const pickerEmptyText =
-    branchSuggestionsQuery.isFetching || githubPrSearchQuery.isFetching
-      ? t("newWorkspace.refPicker.searching")
-      : t("newWorkspace.refPicker.noMatchingRefs");
+  const pickerEmptyText = resolvePickerEmptyText({
+    isForgeUnavailable: forgeSearchUnavailable,
+    isFetching: branchSuggestionsQuery.isFetching || githubPrSearchQuery.isFetching,
+    unavailableText: t("newWorkspace.refPicker.updateHost"),
+    fetchingText: t("newWorkspace.refPicker.searching"),
+    emptyText: t("newWorkspace.refPicker.noMatchingRefs"),
+  });
 
   const formStack = useNewWorkspaceFormStack({
     isCompact,
@@ -2203,12 +2275,15 @@ export function NewWorkspaceScreen({
           <CheckoutHintBadge
             label={t("newWorkspace.refPicker.checkoutHint", {
               number: checkoutHintPrAttachment.item.number,
+              ...getCheckoutHintPresentation(checkoutHintPrAttachment.item),
             })}
             acceptLabel={t("newWorkspace.refPicker.checkoutPr", {
               number: checkoutHintPrAttachment.item.number,
+              ...getCheckoutHintPresentation(checkoutHintPrAttachment.item),
             })}
             dismissLabel={t("newWorkspace.refPicker.dismissCheckoutHint", {
               number: checkoutHintPrAttachment.item.number,
+              ...getCheckoutHintPresentation(checkoutHintPrAttachment.item),
             })}
             onAccept={acceptCheckoutHint}
             onDismiss={dismissCheckoutHint}

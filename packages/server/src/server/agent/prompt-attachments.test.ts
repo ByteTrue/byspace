@@ -52,6 +52,23 @@ describe("prompt attachments", () => {
     ).toContain("GitHub PR #123: Fix race in worktree setup");
   });
 
+  it("renders GitLab change request attachments with MR numbering", () => {
+    expect(
+      renderPromptAttachmentAsText({
+        type: "forge_change_request",
+        mimeType: "application/byspace-forge-change-request",
+        forge: "gitlab",
+        number: 123,
+        title: "Fix race in worktree setup",
+        url: "https://gitlab.com/ByteTrue/byspace/-/merge_requests/123",
+        body: "MR body",
+        projectPath: "ByteTrue/byspace",
+        baseRefName: "main",
+        headRefName: "fix/worktree-race",
+      }),
+    ).toContain("GitLab MR !123: Fix race in worktree setup");
+  });
+
   it("renders review attachments with compact file, line, comment, and context details", () => {
     expect(
       renderPromptAttachmentAsText({

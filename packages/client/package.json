@@ -20,6 +20,10 @@
     "./internal/daemon-client-transport-types": {
       "types": "./dist/daemon-client-transport-types.d.ts",
       "default": "./dist/daemon-client-transport-types.js"
+    },
+    "./internal/compat/normalize-forge": {
+      "types": "./dist/compat/normalize-forge.d.ts",
+      "default": "./dist/compat/normalize-forge.js"
     }
   },
   "publishConfig": {

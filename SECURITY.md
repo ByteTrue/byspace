@@ -68,6 +68,10 @@ BySpace validates the `Host` header on every HTTP request and every WebSocket up
 
 BySpace wraps agent CLIs (Claude Code, Codex, OpenCode) but does not manage their authentication. Each agent provider handles its own credentials. BySpace never stores or transmits provider API keys. Agents run in your user context with your existing credentials.
 
+## Forge host trust
+
+BySpace only talks to a forge host that is either a known cloud host or one the forge CLI is already authenticated to. It never probes or routes credentials to an unauthenticated, remote-derived host.
+
 ## Reporting vulnerabilities
 
 If you discover a security vulnerability, please report it privately by emailing hello@moboudra.com. Do not open a public issue.

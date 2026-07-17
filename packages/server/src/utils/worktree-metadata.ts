@@ -1,15 +1,23 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
+import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "fs";
 import { isAbsolute, join, resolve } from "path";
 import { z } from "zod";
+
+const ChangeRequestLookupTargetSchema = z.object({
+  headRef: z.string().min(1),
+  headRepositoryOwner: z.string().min(1).optional(),
+  changeRequestNumber: z.number().int().positive().optional(),
+});
 
 const BySpaceWorktreeMetadataV1Schema = z.object({
   version: z.literal(1),
   baseRefName: z.string().min(1),
+  changeRequestLookupTarget: ChangeRequestLookupTargetSchema.optional(),
 });
 
 const BySpaceWorktreeMetadataV2Schema = z.object({
   version: z.literal(2),
   baseRefName: z.string().min(1),
+  changeRequestLookupTarget: ChangeRequestLookupTargetSchema.optional(),
   firstAgentBranchAutoName: z
     .discriminatedUnion("status", [
       z.object({
@@ -36,6 +44,9 @@ const BySpaceWorktreeMetadataSchema = z.union([
 ]);
 
 export type BySpaceWorktreeMetadata = z.infer<typeof BySpaceWorktreeMetadataSchema>;
+export type BySpaceWorktreeChangeRequestLookupTarget = z.infer<
+  typeof ChangeRequestLookupTargetSchema
+>;
 
 function getGitDirForWorktreeRoot(worktreeRoot: string): string {
   const gitPath = join(worktreeRoot, ".git");
@@ -77,7 +88,10 @@ export function normalizeBaseRefName(input: string): string {
 
 export function writeBySpaceWorktreeMetadata(
   worktreeRoot: string,
-  options: { baseRefName: string },
+  options: {
+    baseRefName: string;
+    changeRequestLookupTarget?: BySpaceWorktreeChangeRequestLookupTarget;
+  },
 ): void {
   const baseRefName = normalizeBaseRefName(options.baseRefName);
   if (baseRefName === "HEAD") {
@@ -90,10 +104,14 @@ export function writeBySpaceWorktreeMetadata(
     throw new Error(`Invalid base branch: ${baseRefName}`);
   }
 
-  const metadataPath = getBySpaceWorktreeMetadataPath(worktreeRoot);
-  mkdirSync(join(getGitDirForWorktreeRoot(worktreeRoot), "byspace"), { recursive: true });
-  const metadata: BySpaceWorktreeMetadata = { version: 1, baseRefName };
-  writeFileSync(metadataPath, `${JSON.stringify(metadata, null, 2)}\n`, "utf8");
+  const metadata: BySpaceWorktreeMetadata = {
+    version: 1,
+    baseRefName,
+    ...(options.changeRequestLookupTarget
+      ? { changeRequestLookupTarget: options.changeRequestLookupTarget }
+      : {}),
+  };
+  writeBySpaceWorktreeMetadataFile(worktreeRoot, metadata);
 }
 
 export function writeBySpaceWorktreeRuntimeMetadata(
@@ -109,11 +127,12 @@ export function writeBySpaceWorktreeRuntimeMetadata(
     throw new Error("Cannot persist worktree runtime metadata: missing base metadata");
   }
 
-  const metadataPath = getBySpaceWorktreeMetadataPath(worktreeRoot);
-  mkdirSync(join(getGitDirForWorktreeRoot(worktreeRoot), "byspace"), { recursive: true });
   const next: BySpaceWorktreeMetadata = {
     version: 2,
     baseRefName: current.baseRefName,
+    ...(current.changeRequestLookupTarget
+      ? { changeRequestLookupTarget: current.changeRequestLookupTarget }
+      : {}),
     ...(current.version === 2 && current.firstAgentBranchAutoName
       ? { firstAgentBranchAutoName: current.firstAgentBranchAutoName }
       : {}),
@@ -121,7 +140,7 @@ export function writeBySpaceWorktreeRuntimeMetadata(
       worktreePort: options.worktreePort,
     },
   };
-  writeFileSync(metadataPath, `${JSON.stringify(next, null, 2)}\n`, "utf8");
+  writeBySpaceWorktreeMetadataFile(worktreeRoot, next);
 }
 
 export function writeBySpaceWorktreeFirstAgentBranchAutoNameMetadata(
@@ -141,6 +160,9 @@ export function writeBySpaceWorktreeFirstAgentBranchAutoNameMetadata(
   writeBySpaceWorktreeMetadataFile(worktreeRoot, {
     version: 2,
     baseRefName: current.baseRefName,
+    ...(current.changeRequestLookupTarget
+      ? { changeRequestLookupTarget: current.changeRequestLookupTarget }
+      : {}),
     firstAgentBranchAutoName: {
       status: "pending",
       placeholderBranchName,
@@ -161,6 +183,9 @@ export function markBySpaceWorktreeFirstAgentBranchAutoNameAttempted(
   const next: BySpaceWorktreeMetadata = {
     version: 2,
     baseRefName: current.baseRefName,
+    ...(current.changeRequestLookupTarget
+      ? { changeRequestLookupTarget: current.changeRequestLookupTarget }
+      : {}),
     firstAgentBranchAutoName: {
       status: "attempted",
       placeholderBranchName: current.firstAgentBranchAutoName.placeholderBranchName,
@@ -207,5 +232,7 @@ function writeBySpaceWorktreeMetadataFile(
 ): void {
   const metadataPath = getBySpaceWorktreeMetadataPath(worktreeRoot);
   mkdirSync(join(getGitDirForWorktreeRoot(worktreeRoot), "byspace"), { recursive: true });
-  writeFileSync(metadataPath, `${JSON.stringify(metadata, null, 2)}\n`, "utf8");
+  const tempPath = `${metadataPath}.${process.pid}.${Date.now()}.tmp`;
+  writeFileSync(tempPath, `${JSON.stringify(metadata, null, 2)}\n`, "utf8");
+  renameSync(tempPath, metadataPath);
 }

@@ -737,7 +737,7 @@ export async function createBySpaceDaemon(
     byspaceHome: config.byspaceHome,
     worktreesRoot: config.worktreesRoot,
     deps: {
-      github,
+      forgeOverrides: { github },
     },
   });
   const providerSnapshotLogger = logger.child({ module: "provider-snapshot-manager" });
@@ -895,7 +895,6 @@ export async function createBySpaceDaemon(
     readDaemonConfig: () => ({ metadataGeneration: daemonConfigStore.get().metadataGeneration }),
     gitMutation: createGitMutationService({
       workspaceGitService,
-      github,
       logger,
     }),
     emitWorkspaceUpdateForCwd: emitWorkspaceUpdateForCwdExternal,

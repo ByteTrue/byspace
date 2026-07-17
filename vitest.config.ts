@@ -13,6 +13,9 @@ const resolvePackageEntry = (packageName: string) => {
 };
 
 export default defineConfig({
+  define: {
+    __DEV__: false,
+  },
   resolve: {
     extensions: [
       ".web.mjs",
@@ -41,7 +44,23 @@ export default defineConfig({
       { find: "@", replacement: path.resolve(appDir, "src") },
       { find: "@server", replacement: path.resolve(__dirname, "packages/server/src") },
       {
-        find: "react-native",
+        find: /^react-native-unistyles$/,
+        replacement: path.resolve(appDir, "test-stubs/react-native-unistyles.ts"),
+      },
+      {
+        find: /^react-native-svg$/,
+        replacement: path.resolve(appDir, "test-stubs/react-native-svg.ts"),
+      },
+      {
+        find: /^lucide-react-native$/,
+        replacement: path.resolve(appDir, "test-stubs/lucide-react-native.ts"),
+      },
+      {
+        find: /^expo-linking$/,
+        replacement: path.resolve(appDir, "test-stubs/expo-linking.ts"),
+      },
+      {
+        find: /^react-native$/,
         replacement: path.resolve(rootNodeModules, "react-native-web/dist/index.js"),
       },
       { find: "react", replacement: resolvePackageEntry("react") },

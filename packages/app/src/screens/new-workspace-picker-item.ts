@@ -1,16 +1,16 @@
 import type { CreateBySpaceWorktreeInput } from "@bytetrue/byspace-client/internal/daemon-client";
-import type { GitHubSearchItem } from "@bytetrue/byspace-protocol/messages";
+import type { ForgeSearchItem } from "@bytetrue/byspace-protocol/messages";
 
 export type PickerItem =
   | { kind: "branch"; name: string }
   | {
       kind: "github-pr";
-      item: GitHubSearchItem;
+      item: ForgeSearchItem;
     };
 
 export type PickerCheckoutRequest = Pick<
   CreateBySpaceWorktreeInput,
-  "action" | "refName" | "githubPrNumber"
+  "action" | "refName" | "checkoutSource" | "githubPrNumber"
 >;
 
 export function pickerItemToCheckoutRequest(
@@ -22,10 +22,23 @@ export function pickerItemToCheckoutRequest(
       return { action: "branch-off", refName: item.name };
     case "github-pr": {
       const headRefName = item.item.headRefName?.trim();
+      const forge = item.item.forge ?? "github";
       return {
         action: "checkout",
         ...(headRefName ? { refName: headRefName } : {}),
-        githubPrNumber: item.item.number,
+        checkoutSource: {
+          kind: "change_request",
+          forge,
+          number: item.item.number,
+          ...(item.item.projectPath ? { projectPath: item.item.projectPath } : {}),
+        },
+        ...(forge === "github"
+          ? {
+              // COMPAT(githubPrNumber): added in BySpace v0.1.2, remove after 2027-01-18 once
+              // daemon floor parses checkoutSource.
+              githubPrNumber: item.item.number,
+            }
+          : {}),
       };
     }
   }

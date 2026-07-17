@@ -15,6 +15,11 @@ import {
   type ServerInfoStatusPayload,
 } from "@bytetrue/byspace-protocol/messages";
 import { validateWSOutboundMessage } from "@bytetrue/byspace-protocol/validation/ws-outbound";
+import {
+  normalizeForgeSearchPayload,
+  normalizeForgeCheckDetailsPayload,
+  type NormalizedForgeSearchPayload,
+} from "./compat/normalize-forge.js";
 import type {
   AgentStreamEventPayload,
   AgentSnapshotPayload,
@@ -40,7 +45,9 @@ import type {
   CheckoutPrCreateResponse,
   CheckoutPrMergeResponse,
   CheckoutPrMergeMethod,
+  CheckoutForgeSetAutoMergeResponse,
   CheckoutGithubSetAutoMergeResponse,
+  CheckoutForgeGetCheckDetailsResponse,
   CheckoutGithubGetCheckDetailsResponse,
   CheckoutPrStatusResponse,
   PullRequestTimelineResponse,
@@ -50,6 +57,7 @@ import type {
   StashListResponse,
   ValidateBranchResponse,
   BranchSuggestionsResponse,
+  ForgeSearchRequest,
   GitHubSearchResponse,
   GitHubSearchRequest,
   DirectorySuggestionsResponse,
@@ -342,6 +350,7 @@ export interface CreateBySpaceWorktreeInput extends Pick<
   | "firstAgentContext"
   | "refName"
   | "action"
+  | "checkoutSource"
   | "githubPrNumber"
 > {}
 
@@ -359,7 +368,9 @@ type CheckoutPushPayload = CheckoutPushResponse["payload"];
 type CheckoutRefreshPayload = CheckoutRefreshResponse["payload"];
 type CheckoutPrCreatePayload = CheckoutPrCreateResponse["payload"];
 type CheckoutPrMergePayload = CheckoutPrMergeResponse["payload"];
+type CheckoutForgeSetAutoMergePayload = CheckoutForgeSetAutoMergeResponse["payload"];
 type CheckoutGithubSetAutoMergePayload = CheckoutGithubSetAutoMergeResponse["payload"];
+type CheckoutForgeGetCheckDetailsPayload = CheckoutForgeGetCheckDetailsResponse["payload"];
 type CheckoutGithubGetCheckDetailsPayload = CheckoutGithubGetCheckDetailsResponse["payload"];
 type CheckoutPrStatusPayload = CheckoutPrStatusResponse["payload"];
 type PullRequestTimelinePayload = PullRequestTimelineResponse["payload"];
@@ -370,6 +381,7 @@ type StashPopPayload = StashPopResponse["payload"];
 type StashListPayload = StashListResponse["payload"];
 type ValidateBranchPayload = ValidateBranchResponse["payload"];
 type BranchSuggestionsPayload = BranchSuggestionsResponse["payload"];
+type ForgeSearchPayload = NormalizedForgeSearchPayload;
 type GitHubSearchPayload = GitHubSearchResponse["payload"];
 type DirectorySuggestionsPayload = DirectorySuggestionsResponse["payload"];
 type BySpaceWorktreeListPayload = BySpaceWorktreeListResponse["payload"];
@@ -3598,6 +3610,23 @@ export class DaemonClient {
     });
   }
 
+  async checkoutForgeSetAutoMerge(
+    cwd: string,
+    input: { enabled: true; method: CheckoutPrMergeMethod } | { enabled: false },
+    requestId?: string,
+  ): Promise<CheckoutForgeSetAutoMergePayload> {
+    return this.sendNamespacedCorrelatedSessionRequest<"checkout.forge.set_auto_merge.response">({
+      requestId,
+      message: {
+        type: "checkout.forge.set_auto_merge.request",
+        cwd,
+        enabled: input.enabled,
+        ...(input.enabled ? { mergeMethod: input.method } : {}),
+      },
+      timeout: 60000,
+    });
+  }
+
   async checkoutGithubSetAutoMerge(
     cwd: string,
     input: { enabled: true; method: CheckoutPrMergeMethod } | { enabled: false },
@@ -3612,6 +3641,36 @@ export class DaemonClient {
         ...(input.enabled ? { mergeMethod: input.method } : {}),
       },
     });
+  }
+
+  async checkoutForgeGetCheckDetails(
+    input: {
+      cwd: string;
+      repoOwner?: string;
+      repoName?: string;
+      checkRunId?: number;
+      workflowRunId?: number;
+      changeRequestNumber?: number;
+    },
+    requestId?: string,
+  ): Promise<CheckoutForgeGetCheckDetailsPayload> {
+    const payload =
+      await this.sendNamespacedCorrelatedSessionRequest<"checkout.forge.get_check_details.response">(
+        {
+          requestId,
+          message: {
+            type: "checkout.forge.get_check_details.request",
+            cwd: input.cwd,
+            repoOwner: input.repoOwner,
+            repoName: input.repoName,
+            checkRunId: input.checkRunId,
+            workflowRunId: input.workflowRunId,
+            changeRequestNumber: input.changeRequestNumber,
+          },
+          timeout: 60000,
+        },
+      );
+    return normalizeForgeCheckDetailsPayload(payload);
   }
 
   async checkoutGithubGetCheckDetails(
@@ -3794,6 +3853,7 @@ export class DaemonClient {
           : {}),
         ...(input.refName !== undefined ? { refName: input.refName } : {}),
         ...(input.action !== undefined ? { action: input.action } : {}),
+        ...(input.checkoutSource !== undefined ? { checkoutSource: input.checkoutSource } : {}),
         ...(input.githubPrNumber !== undefined ? { githubPrNumber: input.githubPrNumber } : {}),
       },
       responseType: "create_byspace_worktree_response",
@@ -3851,6 +3911,25 @@ export class DaemonClient {
       },
       responseType: "branch_suggestions_response",
     });
+  }
+
+  async searchForge(
+    options: { cwd: string; query: string; limit?: number; kinds?: ForgeSearchRequest["kinds"] },
+    requestId?: string,
+  ): Promise<ForgeSearchPayload> {
+    const payload = await this.sendCorrelatedSessionRequest({
+      requestId,
+      message: {
+        type: "forge.search.request",
+        cwd: options.cwd,
+        query: options.query,
+        limit: options.limit,
+        kinds: options.kinds,
+      },
+      responseType: "forge.search.response",
+      timeout: 15000,
+    });
+    return normalizeForgeSearchPayload(payload);
   }
 
   async searchGitHub(

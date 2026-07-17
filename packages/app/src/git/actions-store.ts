@@ -2,8 +2,10 @@ import type { CheckoutPrMergeMethod } from "@bytetrue/byspace-protocol/messages"
 import { create } from "zustand";
 import { queryClient as appQueryClient } from "@/data/query-client";
 import { useSessionStore } from "@/stores/session-store";
-import { invalidateCheckoutGitQueriesForClient } from "@/git/query-keys";
+import { checkoutPrStatusQueryKey, invalidateCheckoutGitQueriesForClient } from "@/git/query-keys";
 import { i18n } from "@/i18n/i18next";
+import { resolveForgeCapabilities } from "@/git/forge-capabilities";
+import type { CheckoutPrStatusPayload } from "@/git/pr-status";
 
 const SUCCESS_DISPLAY_MS = 1000;
 
@@ -42,11 +44,21 @@ function resolveClient(serverId: string) {
   return client;
 }
 
-function assertGitHubAutoMergeActionsSupported(serverId: string) {
+type AutoMergeActionsRpc = "forge" | "github";
+
+function resolveAutoMergeActionsRpc(serverId: string, cwd: string): AutoMergeActionsRpc {
   const session = useSessionStore.getState().sessions[serverId];
-  if (session?.serverInfo?.features?.checkoutGithubSetAutoMerge !== true) {
-    throw new Error("Update the host to use GitHub auto-merge actions.");
-  }
+  const status = appQueryClient.getQueryData<CheckoutPrStatusPayload>(
+    checkoutPrStatusQueryKey(serverId, cwd),
+  );
+  const route = resolveForgeCapabilities({
+    forge: status?.forge,
+    features: session?.serverInfo?.features,
+  }).autoMerge;
+  if (route === "forge") return "forge";
+  // COMPAT(githubAutoMergeRpc): added in BySpace v0.1.2, remove after 2027-01-18.
+  if (route === "legacy-github") return "github";
+  throw new Error("Update the host to use auto-merge actions.");
 }
 
 function setStatus(
@@ -281,14 +293,19 @@ export const useCheckoutGitActionsStore = create<CheckoutGitActionsStoreState>()
   },
 
   enablePrAutoMerge: async ({ serverId, cwd, method }) => {
-    assertGitHubAutoMergeActionsSupported(serverId);
+    const rpc = resolveAutoMergeActionsRpc(serverId, cwd);
     await runCheckoutAction({
       serverId,
       cwd,
       actionId: `enable-pr-auto-merge-${method}`,
       run: async () => {
         const client = resolveClient(serverId);
-        const payload = await client.checkoutGithubSetAutoMerge(cwd, { enabled: true, method });
+        // COMPAT(githubAutoMergeRpc): added in BySpace v0.1.2, remove after 2027-01-18 once
+        // all supported clients use checkout.forge.set_auto_merge.*.
+        const payload =
+          rpc === "forge"
+            ? await client.checkoutForgeSetAutoMerge(cwd, { enabled: true, method })
+            : await client.checkoutGithubSetAutoMerge(cwd, { enabled: true, method });
         if (payload.error) {
           throw new Error(payload.error.message);
         }
@@ -297,14 +314,19 @@ export const useCheckoutGitActionsStore = create<CheckoutGitActionsStoreState>()
   },
 
   disablePrAutoMerge: async ({ serverId, cwd }) => {
-    assertGitHubAutoMergeActionsSupported(serverId);
+    const rpc = resolveAutoMergeActionsRpc(serverId, cwd);
     await runCheckoutAction({
       serverId,
       cwd,
       actionId: "disable-pr-auto-merge",
       run: async () => {
         const client = resolveClient(serverId);
-        const payload = await client.checkoutGithubSetAutoMerge(cwd, { enabled: false });
+        // COMPAT(githubAutoMergeRpc): added in BySpace v0.1.2, remove after 2027-01-18 once
+        // all supported clients use checkout.forge.set_auto_merge.*.
+        const payload =
+          rpc === "forge"
+            ? await client.checkoutForgeSetAutoMerge(cwd, { enabled: false })
+            : await client.checkoutGithubSetAutoMerge(cwd, { enabled: false });
         if (payload.error) {
           throw new Error(payload.error.message);
         }
