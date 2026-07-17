@@ -1,0 +1,94 @@
+import { useCallback, useEffect, useRef, useState } from "react";
+import { View } from "react-native";
+import { GestureDetector, type GestureType } from "react-native-gesture-handler";
+import { StyleSheet } from "react-native-unistyles";
+import { isWeb } from "@/constants/platform";
+
+interface SidebarResizeHandleProps {
+  edge: "left" | "right";
+  gesture: GestureType;
+  testID: string;
+}
+
+const HIGHLIGHT_DELAY_MS = 100;
+
+const webResizeCursorStyle = isWeb
+  ? ({
+      cursor: "col-resize",
+    } as object)
+  : null;
+
+export function SidebarResizeHandle({ edge, gesture, testID }: SidebarResizeHandleProps) {
+  const [highlighted, setHighlighted] = useState(false);
+  const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const hitAreaStyle = edge === "left" ? LEFT_HIT_AREA_STYLE : RIGHT_HIT_AREA_STYLE;
+
+  const cancelHighlightTimer = useCallback(() => {
+    if (highlightTimerRef.current === null) return;
+    clearTimeout(highlightTimerRef.current);
+    highlightTimerRef.current = null;
+  }, []);
+
+  const handlePointerEnter = useCallback(() => {
+    cancelHighlightTimer();
+    highlightTimerRef.current = setTimeout(() => {
+      highlightTimerRef.current = null;
+      setHighlighted(true);
+    }, HIGHLIGHT_DELAY_MS);
+  }, [cancelHighlightTimer]);
+
+  const handlePointerLeave = useCallback(() => {
+    cancelHighlightTimer();
+    setHighlighted(false);
+  }, [cancelHighlightTimer]);
+
+  useEffect(() => cancelHighlightTimer, [cancelHighlightTimer]);
+
+  return (
+    <View
+      testID={testID}
+      style={hitAreaStyle}
+      onPointerEnter={handlePointerEnter}
+      onPointerLeave={handlePointerLeave}
+    >
+      <GestureDetector gesture={gesture}>
+        <View style={styles.gestureSurface} />
+      </GestureDetector>
+      {highlighted ? (
+        <View pointerEvents="none" testID={`${testID}-highlight`} style={styles.highlight} />
+      ) : null}
+    </View>
+  );
+}
+
+const styles = StyleSheet.create((theme) => ({
+  hitArea: {
+    position: "absolute",
+    top: 0,
+    bottom: 0,
+    width: 10,
+    zIndex: 10,
+  },
+  gestureSurface: {
+    width: "100%",
+    height: "100%",
+  },
+  leftEdge: {
+    left: -5,
+  },
+  rightEdge: {
+    right: -5,
+  },
+  highlight: {
+    position: "absolute",
+    top: 0,
+    bottom: 0,
+    left: 5,
+    width: 1,
+    backgroundColor: theme.colors.foreground,
+    opacity: 0.25,
+  },
+}));
+
+const LEFT_HIT_AREA_STYLE = [styles.hitArea, styles.leftEdge, webResizeCursorStyle];
+const RIGHT_HIT_AREA_STYLE = [styles.hitArea, styles.rightEdge, webResizeCursorStyle];
