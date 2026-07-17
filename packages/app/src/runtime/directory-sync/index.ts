@@ -147,10 +147,12 @@ export class DirectorySync {
     agentId: string,
     request: Parameters<DaemonClient["fetchAgentTimeline"]>[1],
   ): Promise<Awaited<ReturnType<DaemonClient["fetchAgentTimeline"]>>> {
-    const { client } = this.requireOnline();
+    const { client, source } = this.requireOnline();
     const token = this.agents.captureTimeline(agentId);
     const page = await fetchAgentTimelineOnce(client, agentId, request);
-    if (page.agent) this.agents.submitTimelineAgent(token, page.agent);
+    if (page.agent && this.isCurrent(client, source)) {
+      this.agents.submitTimelineAgent(token, page.agent);
+    }
     return page;
   }
 
