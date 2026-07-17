@@ -256,6 +256,9 @@ const ThemedDynamicProviderIcon = withUnistyles(DynamicProviderIcon);
 
 const foregroundColorMapping = (theme: Theme) => ({ color: theme.colors.foreground });
 const mutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
+const extraMutedColorMapping = (theme: Theme) => ({
+  color: theme.colors.foregroundExtraMuted,
+});
 
 const sourceControlPanelStrokeWidth15 = { strokeWidth: 1.5 };
 
@@ -1605,6 +1608,7 @@ function WorkspaceScreenContent({
   const toast = useToast();
   const isMobile = useIsCompactFormFactor();
   const isFocusModeEnabled = usePanelStore((state) => state.desktop.focusModeEnabled);
+  const toggleFocusMode = usePanelStore((state) => state.toggleFocusMode);
 
   const normalizedServerId = useMemo(() => trimNonEmpty(decodeSegment(serverId)) ?? "", [serverId]);
 
@@ -2817,6 +2821,10 @@ function WorkspaceScreenContent({
 
   const handleWorkspacePaneAction = useCallback(
     (action: KeyboardActionDefinition): boolean => {
+      if (action.id === "workspace.focus.toggle") {
+        toggleFocusMode();
+        return true;
+      }
       if (!persistenceKey || !workspaceLayout) {
         return true;
       }
@@ -2891,6 +2899,7 @@ function WorkspaceScreenContent({
       focusedPaneTabState.activeTabId,
       focusedPaneTabState.pane,
       workspaceLayout,
+      toggleFocusMode,
     ],
   );
 
@@ -2923,6 +2932,7 @@ function WorkspaceScreenContent({
       "workspace.pane.move-tab.up",
       "workspace.pane.move-tab.down",
       "workspace.pane.close",
+      "workspace.focus.toggle",
     ] as const,
     enabled: Boolean(isRouteFocused && normalizedServerId && normalizedWorkspaceId),
     priority: 100,
@@ -3216,8 +3226,8 @@ function WorkspaceScreenContent({
                     style={explorerToggleStyle}
                   >
                     {({ hovered, pressed }) => {
-                      const active = isExplorerOpen || hovered || pressed;
-                      const colorMapping = active ? foregroundColorMapping : mutedColorMapping;
+                      const active = hovered || pressed;
+                      const colorMapping = active ? foregroundColorMapping : extraMutedColorMapping;
                       return (
                         <>
                           <ThemedSourceControlPanelIcon size={16} uniProps={colorMapping} />
@@ -3262,9 +3272,9 @@ function WorkspaceScreenContent({
             accessibilityLabel={explorerToggleLabel}
             accessibilityState={explorerToggleAccessibilityState}
           >
-            {({ hovered }) => {
+            {({ hovered, pressed }) => {
               const colorMapping =
-                isExplorerOpen || hovered ? foregroundColorMapping : mutedColorMapping;
+                hovered || pressed ? foregroundColorMapping : extraMutedColorMapping;
               return <ThemedPanelRight size={16} uniProps={colorMapping} />;
             }}
           </HeaderToggleButton>
@@ -3350,6 +3360,7 @@ function WorkspaceScreenContent({
       <SplitContainer
         layout={workspaceLayout}
         focusModeEnabled={desktopFocusModeEnabled}
+        onExitFocusMode={toggleFocusMode}
         workspaceKey={persistenceKey}
         normalizedServerId={normalizedServerId}
         normalizedWorkspaceId={normalizedWorkspaceId}
@@ -3385,6 +3396,7 @@ function WorkspaceScreenContent({
     workspaceLayout,
     persistenceKey,
     desktopFocusModeEnabled,
+    toggleFocusMode,
     normalizedServerId,
     normalizedWorkspaceId,
     isRouteFocused,
@@ -3506,6 +3518,8 @@ function WorkspaceScreenContent({
           onSplitRight={noop}
           onSplitDown={noop}
           showPaneSplitActions={false}
+          focusModeEnabled={desktopFocusModeEnabled}
+          onExitFocusMode={toggleFocusMode}
         />
       ) : null}
 

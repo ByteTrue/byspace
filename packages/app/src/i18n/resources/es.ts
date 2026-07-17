@@ -466,6 +466,7 @@ export const es: TranslationResources = {
         newTerminal: "Nueva terminal",
         preparingTerminal: "Preparando la pestaña del terminal",
         preparingTerminalTooltip: "Preparando terminal...",
+        exitFocusMode: "Salir del modo de concentración",
         splitRight: "Panel dividido a la derecha",
         splitDown: "Dividir panel hacia abajo",
         terminalProfilesMenu: "Terminal profiles",

@@ -466,6 +466,7 @@ export const ja: TranslationResources = {
         newTerminal: "新しいターミナル",
         preparingTerminal: "ターミナルタブを準備中",
         preparingTerminalTooltip: "ターミナルを準備中...",
+        exitFocusMode: "フォーカスモードを終了",
         splitRight: "右にペインを分割",
         splitDown: "下にペインを分割",
         terminalProfilesMenu: "ターミナルプロファイル",

@@ -113,6 +113,7 @@ interface SplitContainerProps {
   onReorderTabsInPane: (paneId: string, tabIds: string[]) => void;
   renderPaneEmptyState?: () => ReactNode;
   focusModeEnabled?: boolean;
+  onExitFocusMode: () => void;
 }
 
 interface WorkspaceTabDragData {
@@ -376,6 +377,7 @@ export function SplitContainer({
   onReorderTabsInPane,
   renderPaneEmptyState = () => null,
   focusModeEnabled,
+  onExitFocusMode,
 }: SplitContainerProps) {
   const [activeDragTabId, setActiveDragTabId] = useState<string | null>(null);
   const [dropPreview, setDropPreview] = useState<SplitDropZoneHover | null>(null);
@@ -593,6 +595,8 @@ export function SplitContainer({
           showDropZones={activeDragTabId !== null}
           dropPreview={dropPreview}
           tabDropPreview={tabDropPreview}
+          focusModeEnabled={focusModeEnabled}
+          onExitFocusMode={onExitFocusMode}
         />
         <DragOverlay dropAnimation={null}>
           {activeDragTabId ? (
@@ -734,6 +738,8 @@ function SplitNodeView({
   showDropZones,
   dropPreview,
   tabDropPreview,
+  focusModeEnabled,
+  onExitFocusMode,
 }: SplitNodeViewProps) {
   const groupId = node.kind === "group" ? node.group.id : null;
   const groupDirection = node.kind === "group" ? node.group.direction : null;
@@ -784,6 +790,8 @@ function SplitNodeView({
         showDropZones={showDropZones}
         dropPreview={dropPreview}
         tabDropPreview={tabDropPreview}
+        focusModeEnabled={focusModeEnabled}
+        onExitFocusMode={onExitFocusMode}
       />
     );
   }
@@ -829,6 +837,8 @@ function SplitNodeView({
               showDropZones={showDropZones}
               dropPreview={dropPreview}
               tabDropPreview={tabDropPreview}
+              focusModeEnabled={focusModeEnabled}
+              onExitFocusMode={onExitFocusMode}
             />
           </SplitGroupChild>
           {index < node.group.children.length - 1 ? (
@@ -878,6 +888,8 @@ function SplitPaneView({
   showDropZones,
   dropPreview,
   tabDropPreview,
+  focusModeEnabled,
+  onExitFocusMode,
 }: SplitPaneViewProps) {
   const { theme: _theme } = useUnistyles();
   const paneRef = useRef<View | null>(null);
@@ -1011,6 +1023,8 @@ function SplitPaneView({
             tabDropPreviewIndex={
               tabDropPreview?.paneId === pane.id ? tabDropPreview.indicatorIndex : null
             }
+            focusModeEnabled={Boolean(focusModeEnabled)}
+            onExitFocusMode={onExitFocusMode}
           />
         </View>
 

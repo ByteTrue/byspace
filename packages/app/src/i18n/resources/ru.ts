@@ -464,6 +464,7 @@ export const ru: TranslationResources = {
         newTerminal: "Новый терминал",
         preparingTerminal: "Подготовка вкладки терминала",
         preparingTerminalTooltip: "Подготовка терминала...",
+        exitFocusMode: "Выйти из режима фокусировки",
         splitRight: "Разделить панель справа",
         splitDown: "Разделить панель вниз",
         terminalProfilesMenu: "Terminal profiles",
