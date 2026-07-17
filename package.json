@@ -88,7 +88,7 @@
     "version:all:beta:major": "node scripts/set-release-version.mjs --mode beta-major",
     "version:all:beta:next": "node scripts/set-release-version.mjs --mode beta-next",
     "version:all:promote": "node scripts/set-release-version.mjs --mode promote",
-    "release:check": "npm run branding:check && npm run upstream:check && npm run release:prepare && npm run build:app-deps && npm run test:pack && npm run typecheck && npm run lint && npm run format:check && npm run smoke:package && npm run release:verify",
+    "release:check": "npm run branding:check && npm run upstream:check && npm run release:prepare && npm run build:server && npm run test:pack && npm run typecheck && npm run lint && npm run format:check && npm run smoke:package && npm run release:verify",
     "release:verify": "node scripts/publish-byspace.mjs --dry-run --skip-pack",
     "release:publish:dry-run": "node scripts/publish-byspace.mjs --dry-run",
     "release:publish:beta:dry-run": "node scripts/publish-byspace.mjs --dry-run --tag beta",
