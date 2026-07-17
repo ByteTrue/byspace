@@ -160,10 +160,14 @@ export interface SeedDaemonClient {
 
 export async function connectSeedClient(options?: {
   appVersion?: string;
+  url?: string;
+  port?: number;
 }): Promise<SeedDaemonClient> {
   return connectDaemonClient<SeedDaemonClient>({
     clientIdPrefix: "seed",
     appVersion: options?.appVersion ?? loadAppVersion(),
+    url: options?.url,
+    port: options?.port,
   });
 }
 

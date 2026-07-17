@@ -1011,6 +1011,7 @@ export const es: TranslationResources = {
       hosts: "No hay hosts conectados",
       github: "Busca o introduce owner/repo",
       noMatch: "Sin resultados",
+      updateHost: "Actualiza el host para añadir proyectos.",
     },
     errors: {
       directorySearch: "No se puede buscar en este host",

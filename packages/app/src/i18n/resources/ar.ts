@@ -980,6 +980,7 @@ export const ar: TranslationResources = {
       hosts: "لا توجد أجهزة مضيفة متصلة",
       github: "ابحث أو أدخل owner/repo",
       noMatch: "لا توجد نتائج",
+      updateHost: "حدّث المضيف لإضافة المشاريع.",
     },
     errors: {
       directorySearch: "تعذر البحث في هذا الجهاز",

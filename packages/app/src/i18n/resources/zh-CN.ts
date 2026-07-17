@@ -970,6 +970,7 @@ export const zhCN: TranslationResources = {
       hosts: "没有已连接的主机",
       github: "搜索或输入 owner/repo",
       noMatch: "没有匹配项",
+      updateHost: "更新主机后即可添加项目。",
     },
     errors: {
       directorySearch: "无法搜索此主机",

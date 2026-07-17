@@ -1062,7 +1062,7 @@ describe.skipIf(isPlatform("win32"))("worktree-core POSIX-only", () => {
           number: 1790,
           baseRefName: "main",
           headRefName: "daemon-shutdown-diagnostics",
-          headOwnerLogin: "getbyspace",
+          headOwnerLogin: "ByteTrue",
           headRepositorySshUrl: remoteDir,
           headRepositoryUrl: remoteDir,
           isCrossRepository: false,

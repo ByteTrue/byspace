@@ -3,11 +3,15 @@ import type {
   DaemonClient,
   FetchAgentsEntry,
 } from "@bytetrue/byspace-client/internal/daemon-client";
-import type { AgentSnapshotPayload } from "@bytetrue/byspace-protocol/messages";
+import type {
+  AgentSnapshotPayload,
+  SessionOutboundMessage,
+} from "@bytetrue/byspace-protocol/messages";
 import { useSessionStore } from "@/stores/session-store";
 import { DirectoryRefreshSupersededError, DirectorySync } from "./index";
 
 type TimelinePage = Awaited<ReturnType<DaemonClient["fetchAgentTimeline"]>>;
+type WorkspaceFetchResult = Awaited<ReturnType<DaemonClient["fetchWorkspaces"]>>;
 
 function agent(title: string): AgentSnapshotPayload {
   return {
@@ -60,9 +64,35 @@ class FakeDirectoryClient {
   fetchWorkspacesCalls = 0;
   agentEntries: FetchAgentsEntry[] = [];
   timelinePage: Promise<TimelinePage> = Promise.resolve({ hasNewer: false } as TimelinePage);
+  private pendingWorkspaceFetch: Promise<WorkspaceFetchResult> | null = null;
+  private readonly handlers = new Map<
+    SessionOutboundMessage["type"],
+    Set<(message: SessionOutboundMessage) => void>
+  >();
 
-  on(): () => void {
-    return () => undefined;
+  on<TType extends SessionOutboundMessage["type"]>(
+    type: TType,
+    handler: (message: Extract<SessionOutboundMessage, { type: TType }>) => void,
+  ): () => void {
+    const handlers = this.handlers.get(type) ?? new Set();
+    const registered = handler as unknown as (message: SessionOutboundMessage) => void;
+    handlers.add(registered);
+    this.handlers.set(type, handlers);
+    return () => handlers.delete(registered);
+  }
+
+  emit<TType extends SessionOutboundMessage["type"]>(
+    message: Extract<SessionOutboundMessage, { type: TType }>,
+  ): void {
+    for (const handler of this.handlers.get(message.type) ?? []) handler(message);
+  }
+
+  holdWorkspaceFetch(): (result: WorkspaceFetchResult) => void {
+    let complete!: (result: WorkspaceFetchResult) => void;
+    this.pendingWorkspaceFetch = new Promise((resolve) => {
+      complete = resolve;
+    });
+    return complete;
   }
 
   async fetchAgents(): Promise<Awaited<ReturnType<DaemonClient["fetchAgents"]>>> {
@@ -74,8 +104,13 @@ class FakeDirectoryClient {
     };
   }
 
-  async fetchWorkspaces(): Promise<Awaited<ReturnType<DaemonClient["fetchWorkspaces"]>>> {
+  async fetchWorkspaces(): Promise<WorkspaceFetchResult> {
     this.fetchWorkspacesCalls += 1;
+    if (this.pendingWorkspaceFetch) {
+      const pending = this.pendingWorkspaceFetch;
+      this.pendingWorkspaceFetch = null;
+      return pending;
+    }
     return {
       requestId: "workspaces",
       entries: [],
@@ -166,6 +201,116 @@ describe("DirectorySync session readiness", () => {
     await currentRefresh;
 
     expect(client.fetchAgentsCalls).toBe(1);
+    directory.dispose();
+  });
+
+  it("buffers workspace and project updates in the same hydration transaction", async () => {
+    const serverId = "workspace-project-transaction";
+    const { client, directory } = createDirectory(serverId);
+    const store = useSessionStore.getState();
+    store.initializeSession(serverId, client as unknown as DaemonClient, 1);
+    store.updateSessionServerInfo(serverId, {
+      serverId,
+      hostname: null,
+      version: "test",
+      features: { workspaceMultiplicity: true },
+    });
+    const completeFetch = client.holdWorkspaceFetch();
+
+    const refresh = directory.refreshWorkspaces({ subscribe: true });
+    await Promise.resolve();
+    client.emit({
+      type: "workspace_update",
+      payload: {
+        kind: "remove",
+        id: "removed-workspace",
+        emptyProject: {
+          projectId: "workspace-project",
+          projectDisplayName: "Project from workspace update",
+          projectRootPath: "/repo/workspace-project",
+          projectKind: "git",
+        },
+      },
+    });
+    client.emit({
+      type: "project.update",
+      payload: {
+        kind: "upsert",
+        project: {
+          projectId: "snapshot-project",
+          projectDisplayName: "Renamed during hydration",
+          projectRootPath: "/moved/snapshot-project",
+          projectKind: "directory",
+        },
+      },
+    });
+    completeFetch({
+      requestId: "workspaces",
+      entries: [],
+      emptyProjects: [
+        {
+          projectId: "snapshot-project",
+          projectDisplayName: "Stale snapshot project",
+          projectRootPath: "/repo/snapshot-project",
+          projectKind: "git",
+        },
+      ],
+      pageInfo: { hasMore: false, nextCursor: null, prevCursor: null },
+    });
+    await refresh;
+
+    const emptyProjects = useSessionStore.getState().sessions[serverId]?.emptyProjects;
+    expect(Array.from(emptyProjects?.keys() ?? [])).toEqual([
+      "snapshot-project",
+      "workspace-project",
+    ]);
+    expect(emptyProjects?.get("snapshot-project")).toMatchObject({
+      projectDisplayName: "Renamed during hydration",
+      projectRootPath: "/moved/snapshot-project",
+      projectKind: "directory",
+    });
+    expect(emptyProjects?.get("workspace-project")).toMatchObject({
+      projectDisplayName: "Project from workspace update",
+    });
+    directory.dispose();
+  });
+
+  it("buffers project updates from the online epoch before workspace hydration starts", async () => {
+    const serverId = "project-before-workspace-hydration";
+    const { client, directory } = createDirectory(serverId);
+    const store = useSessionStore.getState();
+    store.initializeSession(serverId, client as unknown as DaemonClient, 1);
+    store.updateSessionServerInfo(serverId, {
+      serverId,
+      hostname: null,
+      version: "test",
+      features: { workspaceMultiplicity: true },
+    });
+
+    client.emit({
+      type: "project.update",
+      payload: {
+        kind: "upsert",
+        project: {
+          projectId: "early-project",
+          projectDisplayName: "Early project",
+          projectRootPath: "/repo/early-project",
+          projectKind: "git",
+        },
+      },
+    });
+
+    expect(useSessionStore.getState().sessions[serverId]?.hasHydratedWorkspaces).toBe(false);
+
+    await directory.refreshWorkspaces({ subscribe: true });
+
+    expect(useSessionStore.getState().sessions[serverId]?.hasHydratedWorkspaces).toBe(true);
+    expect(
+      useSessionStore.getState().sessions[serverId]?.emptyProjects.get("early-project"),
+    ).toMatchObject({
+      projectDisplayName: "Early project",
+      projectRootPath: "/repo/early-project",
+    });
     directory.dispose();
   });
 });

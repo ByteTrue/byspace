@@ -1009,6 +1009,7 @@ export const fr: TranslationResources = {
       hosts: "Aucun hôte connecté",
       github: "Recherchez ou saisissez owner/repo",
       noMatch: "Aucun résultat",
+      updateHost: "Mettez à jour l’hôte pour ajouter des projets.",
     },
     errors: {
       directorySearch: "Impossible de rechercher sur cet hôte",

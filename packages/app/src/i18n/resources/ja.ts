@@ -993,6 +993,7 @@ export const ja: TranslationResources = {
       hosts: "接続済みホストがありません",
       github: "検索するか owner/repo を入力",
       noMatch: "一致する項目がありません",
+      updateHost: "プロジェクトを追加するにはホストを更新してください。",
     },
     errors: {
       directorySearch: "このホストを検索できません",

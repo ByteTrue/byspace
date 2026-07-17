@@ -991,6 +991,7 @@ export const en = {
       hosts: "No connected hosts",
       github: "Search or enter owner/repo",
       noMatch: "No matches",
+      updateHost: "Update the host to add projects.",
     },
     errors: {
       directorySearch: "Unable to search this host",

@@ -17,7 +17,9 @@ test("capable host uses dotted forge search", async ({ page, forgeCapableDaemon 
     withRemote: true,
     originUrl: "https://github.com/acme/repo.git",
   });
-  const client = await connectNewWorkspaceDaemonClient(`ws://${forgeCapableDaemon.endpoint}/ws`);
+  const client = await connectNewWorkspaceDaemonClient({
+    url: `ws://${forgeCapableDaemon.endpoint}/ws`,
+  });
   const project = await openProjectViaDaemon(client, repo.path);
   const host = buildSeededHost({
     endpoint: forgeCapableDaemon.endpoint,

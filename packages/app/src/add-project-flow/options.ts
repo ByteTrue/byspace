@@ -38,14 +38,14 @@ export function buildAddProjectMethods(
   host: AddProjectHost,
   t: TFunction,
 ): AddProjectMethodOption[] {
-  const options: AddProjectMethodOption[] = [];
-  if (host.canAddProject) {
-    options.push({
+  if (!host.canAddProject) return [];
+  const options: AddProjectMethodOption[] = [
+    {
       id: "directory-search",
       label: t("addProjectFlow.methods.directory.label"),
       description: t("addProjectFlow.methods.directory.description", { host: host.label }),
-    });
-  }
+    },
+  ];
   if (host.canBrowse) {
     options.push({
       id: "browse",
@@ -68,6 +68,12 @@ export function buildAddProjectMethods(
     disabled: !host.canCreateDirectory,
   });
   return options;
+}
+
+export function addProjectMethodEmptyText(host: AddProjectHost | null, t: TFunction): string {
+  return host?.canAddProject === false
+    ? t("addProjectFlow.empty.updateHost")
+    : t("addProjectFlow.empty.noMatch");
 }
 
 function githubMethodDescription(host: AddProjectHost, t: TFunction): string {

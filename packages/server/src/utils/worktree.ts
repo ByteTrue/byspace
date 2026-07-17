@@ -38,7 +38,7 @@ import { resolveBySpaceHome } from "../server/byspace-home.js";
 import { createExternalProcessEnv } from "../server/byspace-env.js";
 import { parseGitRevParsePath, resolveGitRevParsePath } from "./git-rev-parse-path.js";
 import { validateBranchSlug } from "@bytetrue/byspace-protocol/branch-slug";
-import { expandTilde } from "./path.js";
+import { expandTilde, getRealpathAwareRelativePath, isPathInsideRoot } from "./path.js";
 
 export { slugify, validateBranchSlug } from "@bytetrue/byspace-protocol/branch-slug";
 
@@ -728,11 +728,15 @@ export async function resolveWorktreeRuntimeEnv(options: {
 
 export async function runWorktreeTeardownCommands(options: {
   worktreePath: string;
+  teardownCwd?: string;
   branchName?: string;
   repoRootPath?: string;
 }): Promise<WorktreeTeardownCommandResult[]> {
-  // Read byspace.json from the worktree (it will have the same content as the source repo)
-  const teardownCommands = getWorktreeTeardownCommands(options.worktreePath);
+  const teardownCwd = options.teardownCwd ?? options.worktreePath;
+  if (getRealpathAwareRelativePath(options.worktreePath, teardownCwd) === null) {
+    throw new Error(`Worktree teardown cwd is outside the worktree: ${teardownCwd}`);
+  }
+  const teardownCommands = getWorktreeTeardownCommands(teardownCwd);
   if (teardownCommands.length === 0) {
     return [];
   }
@@ -760,7 +764,7 @@ export async function runWorktreeTeardownCommands(options: {
   const results: WorktreeTeardownCommandResult[] = [];
   for (const cmd of teardownCommands) {
     const result = await execSetupCommand(cmd, {
-      cwd: options.worktreePath,
+      cwd: teardownCwd,
       env: teardownEnv,
     });
     results.push(result);
@@ -774,6 +778,23 @@ export async function runWorktreeTeardownCommands(options: {
   }
 
   return results;
+}
+
+export async function seedBySpaceConfigFile(options: {
+  sourceCwd: string;
+  targetCwd: string;
+}): Promise<void> {
+  const sourceConfigPath = join(options.sourceCwd, "byspace.json");
+  const targetConfigPath = join(options.targetCwd, "byspace.json");
+  try {
+    await stat(targetConfigPath);
+    return;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+  }
+  await copyFile(sourceConfigPath, targetConfigPath).catch((error) => {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+  });
 }
 
 /**
@@ -849,6 +870,36 @@ export async function computeWorktreePath(
   return join(projectWorktreesRoot, slug);
 }
 
+export function mapWorkspaceCwdToWorktree(input: {
+  sourceWorktreePath: string;
+  workspaceCwd: string;
+  targetWorktreePath: string;
+}): string {
+  const relativeWorkspaceCwd = getRealpathAwareRelativePath(
+    input.sourceWorktreePath,
+    input.workspaceCwd,
+  );
+  if (relativeWorkspaceCwd === null) {
+    throw new Error(`Workspace cwd is outside its source worktree: ${input.workspaceCwd}`);
+  }
+
+  return mapWorkspaceRelativeCwdToWorktree({
+    relativeWorkspaceCwd,
+    targetWorktreePath: input.targetWorktreePath,
+  });
+}
+
+export function mapWorkspaceRelativeCwdToWorktree(input: {
+  relativeWorkspaceCwd: string;
+  targetWorktreePath: string;
+}): string {
+  const mappedCwd = resolve(input.targetWorktreePath, input.relativeWorkspaceCwd);
+  if (!isPathInsideRoot(input.targetWorktreePath, mappedCwd)) {
+    throw new Error(`Workspace cwd escapes its target worktree: ${input.relativeWorkspaceCwd}`);
+  }
+  return mappedCwd;
+}
+
 function normalizePathForOwnership(input: string): string {
   try {
     return realpathSync(input);
@@ -882,13 +933,13 @@ export async function isBySpaceOwnedWorktreeCwd(
   }
 
   const worktreesBaseRoot = resolveBySpaceWorktreesBaseRoot(options);
-  const byspaceWorktreesPrefix = normalizePathForOwnership(worktreesBaseRoot) + sep;
+  const relativePath = getRealpathAwareRelativePath(worktreesBaseRoot, resolvedCwd);
 
   // Ownership is defined by the path living under <worktrees-root>/<hash>/<slug>[/...].
   // The <hash>/<slug> prefix is BySpace-private — nothing else writes there — so the
   // path shape alone is sufficient proof of ownership, even when git has already
   // forgotten about the worktree.
-  if (!resolvedCwd.startsWith(byspaceWorktreesPrefix)) {
+  if (relativePath === null) {
     return {
       allowed: false,
       ...(repoRoot !== undefined ? { repoRoot } : {}),
@@ -896,8 +947,7 @@ export async function isBySpaceOwnedWorktreeCwd(
     };
   }
 
-  const relative = resolvedCwd.slice(byspaceWorktreesPrefix.length);
-  const parts = relative.split(sep).filter((part) => part.length > 0);
+  const parts = relativePath.split(sep).filter((part) => part.length > 0);
   if (parts.length < 2) {
     return {
       allowed: false,
@@ -911,7 +961,7 @@ export async function isBySpaceOwnedWorktreeCwd(
     allowed: true,
     ...(repoRoot !== undefined ? { repoRoot } : {}),
     worktreeRoot: worktreesRoot,
-    worktreePath: resolvedCwd,
+    worktreePath: join(worktreesRoot, parts[1]),
   };
 }
 
@@ -981,10 +1031,9 @@ export async function listBySpaceWorktrees({
     envOverlay: READ_ONLY_GIT_ENV,
   });
 
-  const rootPrefix = normalizePathForOwnership(projectWorktreesRoot) + sep;
   return parseWorktreeList(stdout)
     .map((entry) => Object.assign({}, entry, { path: normalizePathForOwnership(entry.path) }))
-    .filter((entry) => entry.path.startsWith(rootPrefix))
+    .filter((entry) => getRealpathAwareRelativePath(projectWorktreesRoot, entry.path) !== null)
     .map((entry) =>
       Object.assign({}, entry, { createdAt: resolveWorktreeCreatedAtIso(entry.path) }),
     );
@@ -1022,76 +1071,25 @@ export async function resolveExistingWorktreeForSlug({
   };
 }
 
-export async function resolveBySpaceWorktreeRootForCwd(
-  cwd: string,
-  options?: WorktreeRootOptions,
-): Promise<{ repoRoot: string; worktreeRoot: string; worktreePath: string } | null> {
-  let gitCommonDir: string;
-  try {
-    gitCommonDir = await getGitCommonDir(cwd);
-  } catch {
-    return null;
-  }
-
-  const worktreesRoot = await getBySpaceWorktreesRoot(
-    cwd,
-    options?.byspaceHome,
-    options?.worktreesRoot,
-  );
-  const resolvedRoot = normalizePathForOwnership(worktreesRoot) + sep;
-
-  let worktreeRoot: string | null = null;
-  try {
-    const { stdout } = await runGitCommand(["rev-parse", "--show-toplevel"], {
-      cwd,
-      envOverlay: READ_ONLY_GIT_ENV,
-    });
-    worktreeRoot = parseGitRevParsePath(stdout);
-  } catch {
-    worktreeRoot = null;
-  }
-
-  if (!worktreeRoot) {
-    return null;
-  }
-
-  const resolvedWorktreeRoot = normalizePathForOwnership(worktreeRoot);
-  if (!resolvedWorktreeRoot.startsWith(resolvedRoot)) {
-    return null;
-  }
-
-  const knownWorktrees = await listBySpaceWorktrees({
-    cwd,
-    byspaceHome: options?.byspaceHome,
-    worktreesRoot: options?.worktreesRoot,
-  });
-  const match = knownWorktrees.find((entry) => entry.path === resolvedWorktreeRoot);
-  if (!match) {
-    return null;
-  }
-
-  return {
-    repoRoot: gitCommonDir,
-    worktreeRoot: worktreesRoot,
-    worktreePath: match.path,
-  };
+export interface DeleteBySpaceWorktreeOptions {
+  cwd: string | null;
+  worktreePath?: string;
+  teardownCwds?: string[];
+  worktreeSlug?: string;
+  worktreesRoot?: string;
+  byspaceHome?: string;
+  worktreesBaseRoot?: string;
 }
 
 export async function deleteBySpaceWorktree({
   cwd,
   worktreePath,
+  teardownCwds,
   worktreeSlug,
   worktreesRoot,
   byspaceHome,
   worktreesBaseRoot,
-}: {
-  cwd: string | null;
-  worktreePath?: string;
-  worktreeSlug?: string;
-  worktreesRoot?: string;
-  byspaceHome?: string;
-  worktreesBaseRoot?: string;
-}): Promise<void> {
+}: DeleteBySpaceWorktreeOptions): Promise<void> {
   if (!worktreePath && !worktreeSlug) {
     throw new Error("worktreePath or worktreeSlug is required");
   }
@@ -1108,25 +1106,30 @@ export async function deleteBySpaceWorktree({
     throw new Error("cwd or worktreesRoot is required to delete a BySpace worktree");
   }
 
-  const resolvedRoot = normalizePathForOwnership(resolvedWorktreesRoot) + sep;
   const requestedPath = worktreePath ?? join(resolvedWorktreesRoot, worktreeSlug!);
   const resolvedRequested = normalizePathForOwnership(requestedPath);
+  const ownership = await isBySpaceOwnedWorktreeCwd(requestedPath, {
+    byspaceHome,
+    worktreesRoot: worktreesBaseRoot,
+  });
   const resolvedWorktree =
-    (
-      await resolveBySpaceWorktreeRootForCwd(requestedPath, {
-        byspaceHome,
-        worktreesRoot: worktreesBaseRoot,
-      })
-    )?.worktreePath ?? resolvedRequested;
+    ownership.allowed && ownership.worktreePath ? ownership.worktreePath : resolvedRequested;
 
-  if (!resolvedWorktree.startsWith(resolvedRoot)) {
+  const relativeWorktreePath = getRealpathAwareRelativePath(
+    resolvedWorktreesRoot,
+    resolvedWorktree,
+  );
+  if (relativeWorktreePath === null || relativeWorktreePath === "") {
     throw new Error("Refusing to delete non-BySpace worktree");
   }
 
   if (await pathExists(resolvedWorktree)) {
-    await runWorktreeTeardownCommands({
-      worktreePath: resolvedWorktree,
-    });
+    for (const teardownCwd of teardownCwds ?? [resolvedWorktree]) {
+      await runWorktreeTeardownCommands({
+        worktreePath: resolvedWorktree,
+        teardownCwd,
+      });
+    }
   }
 
   if (cwd) {
@@ -1152,6 +1155,27 @@ export async function deleteBySpaceWorktree({
       // not critical; git will prune lazily
     }
   }
+}
+
+export async function rollbackCreatedBySpaceWorktree(
+  options: DeleteBySpaceWorktreeOptions,
+  cause: unknown,
+): Promise<never> {
+  let cleanupError: unknown;
+  try {
+    await deleteBySpaceWorktree(options);
+  } catch (error) {
+    cleanupError = error;
+  }
+  if (cleanupError) {
+    const failure = new Error(
+      `${cause instanceof Error ? cause.message : "Worktree workflow failed"}; rollback also failed: ${cleanupError instanceof Error ? cleanupError.message : String(cleanupError)}`,
+      { cause },
+    );
+    Object.assign(failure, { cleanupError });
+    throw failure;
+  }
+  throw cause;
 }
 
 async function pathExists(path: string): Promise<boolean> {
@@ -1250,18 +1274,7 @@ export const createWorktree = async ({
       : {}),
   });
 
-  // If byspace.json exists in the main repo but wasn't checked into the worktree
-  // (e.g. uncommitted on first-time setup), seed the worktree with it so setup
-  // commands and scripts pick up the user's intended config.
-  const mainConfigPath = join(cwd, "byspace.json");
-  const worktreeConfigPath = join(worktreePath, "byspace.json");
-  try {
-    await stat(worktreeConfigPath);
-  } catch {
-    await copyFile(mainConfigPath, worktreeConfigPath).catch((err) => {
-      if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;
-    });
-  }
+  await seedBySpaceConfigFile({ sourceCwd: cwd, targetCwd: worktreePath });
 
   if (runSetup) {
     await runWorktreeSetupCommands({

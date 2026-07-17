@@ -1003,6 +1003,7 @@ export const ptBR: TranslationResources = {
       hosts: "Nenhum host conectado",
       github: "Pesquise ou informe owner/repo",
       noMatch: "Nenhum resultado",
+      updateHost: "Atualize o host para adicionar projetos.",
     },
     errors: {
       directorySearch: "Não foi possível pesquisar neste host",

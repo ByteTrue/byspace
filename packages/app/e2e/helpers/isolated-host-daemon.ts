@@ -9,6 +9,7 @@ import { withDisabledE2ESpeechEnv } from "./speech-env";
 export interface IsolatedHostDaemon {
   serverId: string;
   port: number;
+  restart(): Promise<void>;
   close(): Promise<void>;
 }
 
@@ -85,43 +86,61 @@ export async function startIsolatedHostDaemon(serverId: string): Promise<Isolate
   const byspaceHome = await mkdtemp(path.join(tmpdir(), "byspace-e2e-secondary-host-"));
   const serverDir = path.resolve(__dirname, "../../../server");
   const tsxBin = execSync("which tsx").toString().trim();
-  const child = spawn(tsxBin, ["scripts/supervisor-entrypoint.ts", "--dev"], {
-    cwd: serverDir,
-    env: withDisabledE2ESpeechEnv({
-      ...process.env,
-      BYSPACE_HOME: byspaceHome,
-      BYSPACE_SERVER_ID: serverId,
-      BYSPACE_LISTEN: `127.0.0.1:${port}`,
-      BYSPACE_CORS_ORIGINS: `http://localhost:${metroPort}`,
-      BYSPACE_RELAY_ENABLED: "0",
-      BYSPACE_NODE_ENV: "development",
-      NODE_ENV: "development",
-    }),
-    stdio: ["ignore", "ignore", "pipe"],
-    detached: false,
-  });
+  const spawnDaemon = async (): Promise<ChildProcess> => {
+    const child = spawn(tsxBin, ["scripts/supervisor-entrypoint.ts", "--dev"], {
+      cwd: serverDir,
+      env: withDisabledE2ESpeechEnv({
+        ...process.env,
+        BYSPACE_HOME: byspaceHome,
+        BYSPACE_SERVER_ID: serverId,
+        BYSPACE_LISTEN: `127.0.0.1:${port}`,
+        BYSPACE_CORS_ORIGINS: `http://localhost:${metroPort}`,
+        BYSPACE_RELAY_ENABLED: "0",
+        BYSPACE_NODE_ENV: "development",
+        NODE_ENV: "development",
+      }),
+      stdio: ["ignore", "ignore", "pipe"],
+      detached: false,
+    });
 
-  let stderr = "";
-  child.stderr?.on("data", (chunk: Buffer) => {
-    stderr += chunk.toString("utf8");
-    stderr = stderr.split("\n").slice(-40).join("\n");
-  });
+    let stderr = "";
+    child.stderr?.on("data", (chunk: Buffer) => {
+      stderr += chunk.toString("utf8");
+      stderr = stderr.split("\n").slice(-40).join("\n");
+    });
 
+    try {
+      await waitForServer(port, child);
+      return child;
+    } catch (error) {
+      await stopProcess(child);
+      throw new Error(
+        `${error instanceof Error ? error.message : String(error)}\nDaemon stderr:\n${stderr}`,
+        { cause: error },
+      );
+    }
+  };
+
+  let child: ChildProcess;
   try {
-    await waitForServer(port, child);
+    child = await spawnDaemon();
   } catch (error) {
-    await stopProcess(child);
     await rm(byspaceHome, { recursive: true, force: true });
-    throw new Error(
-      `${error instanceof Error ? error.message : String(error)}\nDaemon stderr:\n${stderr}`,
-      { cause: error },
-    );
+    throw error;
   }
+  let closed = false;
 
   return {
     serverId,
     port,
+    restart: async () => {
+      if (closed) throw new Error(`Cannot restart closed isolated daemon ${serverId}`);
+      await stopProcess(child);
+      child = await spawnDaemon();
+    },
     close: async () => {
+      if (closed) return;
+      closed = true;
       await stopProcess(child);
       await rm(byspaceHome, { recursive: true, force: true });
     },

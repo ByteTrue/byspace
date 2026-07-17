@@ -17,6 +17,7 @@ import {
   type AddProjectHost,
 } from "./model";
 import {
+  addProjectMethodEmptyText,
   buildAddProjectMethods,
   buildCloneLocationOptions,
   buildManualGithubRepositoryChoices,
@@ -38,6 +39,7 @@ const COPY: Record<string, string> = {
   "addProjectFlow.repository.cloneVia": "Clone via {{protocol}}",
   "addProjectFlow.destination.parent": "Parent directory: {{parent}}",
   "addProjectFlow.destination.exists": "Already exists",
+  "addProjectFlow.empty.updateHost": "Update the host to add projects.",
 };
 const t = ((key: string, values?: Record<string, string>) => {
   let result = COPY[key] ?? key;
@@ -136,6 +138,13 @@ describe("Add Project navigation", () => {
 });
 
 describe("Add Project options", () => {
+  it("hides every mutating method when the host lacks stable project identity", () => {
+    const outdatedHost = { ...HOST, canAddProject: false };
+
+    expect(buildAddProjectMethods(outdatedHost, t)).toEqual([]);
+    expect(addProjectMethodEmptyText(outdatedHost, t)).toBe("Update the host to add projects.");
+  });
+
   it("keeps host-upgrade methods discoverable while hiding local-only Browse", () => {
     expect(
       buildAddProjectMethods(

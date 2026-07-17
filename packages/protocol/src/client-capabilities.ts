@@ -18,6 +18,8 @@ export const CLIENT_CAPS = {
   // COMPAT(providerSubagents): added in v0.1.107. The daemon emits provider-owned
   // child descriptors and timelines only to clients that understand the new messages.
   providerSubagents: "provider_subagents",
+  // COMPAT(projectUpdates): added in BySpace v0.1.2, remove gate after 2027-01-18.
+  projectUpdates: "project_updates",
 } as const;
 
 export type ClientCapability = (typeof CLIENT_CAPS)[keyof typeof CLIENT_CAPS];

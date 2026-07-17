@@ -1002,6 +1002,7 @@ export const ru: TranslationResources = {
       hosts: "Нет подключённых хостов",
       github: "Найдите или введите owner/repo",
       noMatch: "Совпадений нет",
+      updateHost: "Обновите хост, чтобы добавлять проекты.",
     },
     errors: {
       directorySearch: "Не удалось выполнить поиск на этом хосте",

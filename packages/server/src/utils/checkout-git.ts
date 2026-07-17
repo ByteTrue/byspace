@@ -23,6 +23,7 @@ import { isBySpaceOwnedWorktreeCwd, resolveBySpaceWorktreesBaseRoot } from "./wo
 import { type BySpaceWorktreeMetadata, readBySpaceWorktreeMetadata } from "./worktree-metadata.js";
 const READ_ONLY_GIT_ENV = {
   GIT_OPTIONAL_LOCKS: "0",
+  LC_ALL: "C",
 } as const;
 
 /**
@@ -808,11 +809,11 @@ export type CheckoutSnapshotFacts =
       pullRequestLookupFallbackTarget: PullRequestStatusLookupTarget | null;
     };
 
-function isGitError(error: unknown): boolean {
+function isNotGitRepositoryError(error: unknown): boolean {
   if (!(error instanceof Error)) {
     return false;
   }
-  return /not a git repository/i.test(error.message) || /git repository/i.test(error.message);
+  return /not a git repository \(or any of the parent directories\): \.git/i.test(error.message);
 }
 
 async function requireGitRepo(cwd: string): Promise<void> {
@@ -869,8 +870,11 @@ async function getWorktreeRoot(cwd: string, context?: CheckoutContext): Promise<
       logger: context?.logger,
     });
     return parseGitRevParsePath(stdout);
-  } catch {
-    return null;
+  } catch (error) {
+    if (isNotGitRepositoryError(error)) {
+      return null;
+    }
+    throw error;
   }
 }
 
@@ -1539,35 +1543,28 @@ async function inspectCheckoutContext(
   cwd: string,
   context?: CheckoutContext,
 ): Promise<CheckoutInspectionContext | null> {
-  try {
-    const root = await getWorktreeRoot(cwd, context);
-    if (!root) {
-      return null;
-    }
-
-    const [currentBranch, remoteUrl, absoluteGitDir, gitCommonDir, byspaceWorktree] =
-      await Promise.all([
-        getCurrentBranch(cwd),
-        getOriginRemoteUrl(cwd),
-        resolveAbsoluteGitDir(cwd),
-        resolveGitCommonDir(cwd),
-        getBySpaceWorktreeForCwd(cwd, context, root),
-      ]);
-
-    return {
-      worktreeRoot: root,
-      currentBranch,
-      remoteUrl,
-      absoluteGitDir,
-      gitCommonDir,
-      byspaceWorktree,
-    };
-  } catch (error) {
-    if (isGitError(error)) {
-      return null;
-    }
-    throw error;
+  const root = await getWorktreeRoot(cwd, context);
+  if (!root) {
+    return null;
   }
+
+  const [currentBranch, remoteUrl, absoluteGitDir, gitCommonDir, byspaceWorktree] =
+    await Promise.all([
+      getCurrentBranch(cwd),
+      getOriginRemoteUrl(cwd),
+      resolveAbsoluteGitDir(cwd),
+      resolveGitCommonDir(cwd),
+      getBySpaceWorktreeForCwd(cwd, context, root),
+    ]);
+
+  return {
+    worktreeRoot: root,
+    currentBranch,
+    remoteUrl,
+    absoluteGitDir,
+    gitCommonDir,
+    byspaceWorktree,
+  };
 }
 
 function buildPullRequestLookupTargetFromBranchConfig(
