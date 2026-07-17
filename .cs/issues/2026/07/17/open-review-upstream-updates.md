@@ -225,7 +225,8 @@ Review hardening：
 - `c639d77c8` — archived import activation 纳入 rollback boundary；
 - `3aac126ff` — Forge exact-host trust、bounded resources、checkout identity、forge-aware checks URL 与真实 daemon/browser E2E；
 - `8c4b5b068` — Gitea current-PR head cache 上限 512；
-- `a7f5767a1` — timeline completion 拒绝 superseded client generation / connection epoch。
+- `a7f5767a1` — timeline completion 拒绝 superseded client generation / connection epoch；
+- `d323ce590` — Playwright global setup 预热 Metro Web bundle，避免首测把 timeout 消耗在 cold compile。
 
 ## 关键验证
 
@@ -237,6 +238,7 @@ Review hardening：
 - Retained builds/gates：`build:client`、`build:server`、root typecheck、lint、format、branding、Web export、`upstream:check` 与 diff check 全绿。
 - ACP frozen catalog blob 与 upstream `293f55a` 完全一致；执行时 live registry 的 Dirac 已从 `0.4.17` 到 `0.4.18`，按冻结范围不扩大本批。
 - Reviewer 误触发的 broad server E2E 在 terminal slow-websocket case 超时；随后该 exact file/exact case 在 scratch 与 pre-sync `main` (`8f7937df`) 均以同一 15 秒 timeout 失败，已证明不是本批 regression。没有以重跑 broad suite 作为验收。
+- 首次远端 CI 的 Playwright shard 4 只因 Metro cold bundle 用时约 68 秒而让首个 terminal test 超过 60 秒；retry 在 warm bundle 上 11.7 秒通过。`d323ce590` 把 bundle 编译移到 global setup，清理 checkout-local Wrangler state 后 exact terminal alternate-screen spec `2/2` 通过。
 
 ## 边界与残余风险
 
@@ -248,4 +250,4 @@ Review hardening：
 
 ## Tracking
 
-`.byspace/upstream-sync.json` 已记录 33/33 dispositions、16 笔 source→local mapping、5 笔 hardening，并把 cursor 推进到 `1977d330edefb8d7c8c0f0673e911586d40a6262`；`npm run upstream:check` 通过。
+`.byspace/upstream-sync.json` 已记录 33/33 dispositions、16 笔 source→local mapping、6 笔 hardening，并把 cursor 推进到 `1977d330edefb8d7c8c0f0673e911586d40a6262`；`npm run upstream:check` 通过。
