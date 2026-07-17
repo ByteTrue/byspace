@@ -88,6 +88,10 @@ Expo Router and React Native Web app that connects to one or more daemons.
 - Composer UI and submit/draft behavior live in `packages/app/src/composer/`; screens and panels should integrate it from there instead of dropping composer internals into `components/`, `hooks/`, or `screens/workspace/`
 - Timeline reducers in `timeline/session-stream-reducers.ts` handle compaction, gap detection, sequence-based deduplication
 - Timeline sync correctness is documented in [docs/timeline-sync.md](timeline-sync.md): live streams are for immediacy, `fetch_agent_timeline_request` is authoritative, and catch-up is paged but complete.
+- `HostRuntimeController` owns one ordered `DirectorySync` per host. It attaches agent/workspace delta
+  listeners before paged subscribed bootstrap, buffers deltas during snapshots, and rejects stale
+  generations, connection epochs, and lifecycle completions. `SessionContext` does not duplicate
+  directory ownership.
 - Voice features: dictation (STT) and voice agent (realtime)
 
 ### `packages/cli` — Command-line client
@@ -147,6 +151,15 @@ Client liveness checks use the top-level JSON `ping`/`pong` envelope, not a sess
 Client session RPC waits default to 60s so slow relay or mobile networks do not turn a live but delayed daemon response into a false operation failure. Keep connect timeouts, app-level grace windows, explicit diagnostic latency probes, liveness ping timers, and genuinely long-running RPCs separate from this default.
 
 New session RPCs use dotted names with `.request` and `.response` suffixes, such as `checkout.forge.set_auto_merge.request` and `checkout.forge.set_auto_merge.response`. See [rpc-namespacing.md](rpc-namespacing.md) for the convention and migration rules for older flat RPC names.
+
+The Web app advertises `selective_agent_timeline`; the generic client does not. Current daemons
+advertise `features.selectiveAgentTimeline` and accept
+`agent.timeline.set_subscription.request` as a complete, source-scoped viewed set. Per-socket
+capability and membership permit capable and legacy sockets to share one retained session safely:
+capable sockets receive only viewed live timelines plus dedicated attention envelopes, while
+incapable sockets retain global streams and legacy attention. Source-targeted acknowledgements,
+detach cleanup, reconnect reset, and capability downgrade prevent membership from leaking between
+sockets.
 
 **Notable session message types:**
 

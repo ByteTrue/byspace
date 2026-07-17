@@ -14,6 +14,24 @@ to 64 KiB, and the same bounded item is used for durable timeline rows and live 
 Provider history hydration applies the same rule so reopening an agent cannot restore an oversized
 tool payload.
 
+## Selective live delivery
+
+The browser app advertises the optional `selective_agent_timeline` capability. A capable daemon
+sends live `agent_stream` rows only for the complete set of agents that each socket currently
+views. Membership is socket-scoped: capable and legacy sockets sharing a retained session may
+receive different live delivery, and detach, reconnect, or capability downgrade resets only that
+source. Clients without the capability retain the legacy global stream.
+
+The app publishes the union of visible agent panes while active and an empty set while hidden.
+After the daemon acknowledges the complete replacement set, the app catches each newly viewed
+agent up from its durable cursor through every `hasNewer` page. Membership and page failures retry
+from existing history; gaps queue catch-up, identical fetches coalesce, and stale completions cannot
+restore removed or archived agents. A reconnect resends membership before catch-up.
+
+Attention is separate from timeline delivery. Capable sockets receive `agent_attention_required`
+for unviewed agents; legacy sockets receive the historical attention-shaped `agent_stream`. Neither
+shape substitutes for authoritative timeline catch-up.
+
 ## Presence is not delivery
 
 Client heartbeat reports presence:

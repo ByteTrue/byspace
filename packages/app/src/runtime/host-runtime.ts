@@ -4,7 +4,6 @@ import equal from "fast-deep-equal/es6";
 import {
   DaemonClient,
   type ConnectionState,
-  type FetchAgentsEntry,
   type FetchAgentsOptions,
 } from "@bytetrue/byspace-client/internal/daemon-client";
 import {
@@ -35,12 +34,8 @@ import {
   type ConnectionCandidate,
   type ConnectionProbeState,
 } from "@/utils/connection-selection";
-import { replaceFetchedAgentDirectory } from "@/utils/agent-directory-sync";
+import { CLIENT_CAPS } from "@bytetrue/byspace-protocol/client-capabilities";
 import { useSessionStore } from "@/stores/session-store";
-import {
-  fetchLegacyDaemonWorkspaceDirectory,
-  shouldUseLegacyDaemonWorkspaceDirectory,
-} from "@/workspace/legacy-daemon-workspaces";
 import { invalidateCheckoutGitQueriesForServer } from "@/git/query-keys";
 import { queryClient } from "@/data/query-client";
 import {
@@ -48,6 +43,13 @@ import {
   mountServerDataPushRouter,
 } from "@/data/push-router";
 import { schedulesQueryBaseKey } from "@/schedules/aggregated-schedules";
+import { sendQueuedComposerMessageNow } from "@/composer/actions";
+import {
+  resolveComposerAttachmentSubmitFormat,
+  splitComposerAttachmentsForSubmit,
+} from "@/composer/attachments/submit";
+import { encodeImages } from "@/utils/encode-images";
+import { DirectorySync, type RefreshAgentDirectoryResult } from "@/runtime/directory-sync";
 
 export type HostRuntimeConnectionStatus = "idle" | "connecting" | "online" | "offline" | "error";
 export type HostRegistryStatus = "loading" | "ready";
@@ -79,6 +81,7 @@ export interface HostRuntimeSnapshot {
   hasEverLoadedAgentDirectory: boolean;
   probeByConnectionId: Map<string, ConnectionProbeState>;
   clientGeneration: number;
+  connectionEpoch: number;
 }
 
 type HostRuntimeSnapshotPatch = Partial<Omit<HostRuntimeSnapshot, "serverId" | "clientGeneration">>;
@@ -169,90 +172,6 @@ const ADAPTIVE_SWITCH_THRESHOLD_MS = 40;
 const ADAPTIVE_SWITCH_CONSECUTIVE_PROBES = 3;
 const DEFAULT_AGENT_DIRECTORY_PAGE_LIMIT = 200;
 const CONFIGURED_OVERRIDE_BOOTSTRAP_RETRY_MS = 1_000;
-
-const DEFAULT_AGENT_DIRECTORY_SORT: NonNullable<FetchAgentsOptions["sort"]> = [
-  { key: "updated_at", direction: "desc" },
-];
-
-function readFetchAgentsHasMore(
-  pageInfo: Awaited<ReturnType<DaemonClient["fetchAgents"]>>["pageInfo"],
-): boolean {
-  const page = pageInfo as {
-    hasMore?: boolean;
-    hasMoreAfter?: boolean;
-  };
-  if (typeof page.hasMore === "boolean") {
-    return page.hasMore;
-  }
-  if (typeof page.hasMoreAfter === "boolean") {
-    return page.hasMoreAfter;
-  }
-  return false;
-}
-
-function readFetchAgentsNextCursor(
-  pageInfo: Awaited<ReturnType<DaemonClient["fetchAgents"]>>["pageInfo"],
-): string | null {
-  const page = pageInfo as {
-    nextCursor?: string | null;
-    afterCursor?: string | null;
-  };
-  if (typeof page.nextCursor === "string" && page.nextCursor.length > 0) {
-    return page.nextCursor;
-  }
-  if (typeof page.afterCursor === "string" && page.afterCursor.length > 0) {
-    return page.afterCursor;
-  }
-  return null;
-}
-
-interface AgentDirectoryFetchInput {
-  client: DaemonClient;
-  filter?: FetchAgentsOptions["filter"];
-  subscribe?: FetchAgentsOptions["subscribe"];
-  page?: FetchAgentsOptions["page"];
-}
-
-interface AgentDirectoryFetchResult {
-  entries: FetchAgentsEntry[];
-  subscriptionId: string | null;
-}
-
-async function fetchCurrentAgentDirectory(
-  input: AgentDirectoryFetchInput,
-): Promise<AgentDirectoryFetchResult> {
-  const pageLimit = input.page?.limit ?? DEFAULT_AGENT_DIRECTORY_PAGE_LIMIT;
-  let cursor = input.page?.cursor ?? null;
-  let includeSubscribe = true;
-  let subscriptionId: string | null = null;
-  const entries: FetchAgentsEntry[] = [];
-
-  while (true) {
-    const payload = await input.client.fetchAgents({
-      scope: input.filter ? undefined : "active",
-      ...(input.filter ? { filter: input.filter } : {}),
-      sort: DEFAULT_AGENT_DIRECTORY_SORT,
-      ...(includeSubscribe && input.subscribe ? { subscribe: input.subscribe } : {}),
-      page: cursor ? { limit: pageLimit, cursor } : { limit: pageLimit },
-    });
-
-    entries.push(...payload.entries);
-    subscriptionId = subscriptionId ?? payload.subscriptionId ?? null;
-    includeSubscribe = false;
-
-    if (!readFetchAgentsHasMore(payload.pageInfo)) {
-      break;
-    }
-
-    const nextCursor = readFetchAgentsNextCursor(payload.pageInfo);
-    if (!nextCursor) {
-      break;
-    }
-    cursor = nextCursor;
-  }
-
-  return { entries, subscriptionId };
-}
 
 function toActiveConnection(connection: HostConnection): ActiveConnection {
   if (connection.type === "directSocket") {
@@ -439,9 +358,15 @@ function nextConnectionMachineState(input: {
 
 function toSnapshotConnectionPatch(
   state: HostRuntimeConnectionMachineState,
+  connectionEpoch: number,
 ): Pick<
   HostRuntimeSnapshot,
-  "activeConnectionId" | "activeConnection" | "connectionStatus" | "lastError" | "lastOnlineAt"
+  | "activeConnectionId"
+  | "activeConnection"
+  | "connectionStatus"
+  | "lastError"
+  | "lastOnlineAt"
+  | "connectionEpoch"
 > {
   if (state.tag === "booting") {
     return {
@@ -450,6 +375,7 @@ function toSnapshotConnectionPatch(
       connectionStatus: "connecting",
       lastError: null,
       lastOnlineAt: null,
+      connectionEpoch,
     };
   }
   if (state.tag === "connecting") {
@@ -459,6 +385,7 @@ function toSnapshotConnectionPatch(
       connectionStatus: "connecting",
       lastError: null,
       lastOnlineAt: null,
+      connectionEpoch,
     };
   }
   if (state.tag === "online") {
@@ -468,6 +395,7 @@ function toSnapshotConnectionPatch(
       connectionStatus: "online",
       lastError: null,
       lastOnlineAt: state.lastOnlineAt,
+      connectionEpoch,
     };
   }
   if (state.tag === "offline") {
@@ -477,6 +405,7 @@ function toSnapshotConnectionPatch(
       connectionStatus: "offline",
       lastError: null,
       lastOnlineAt: null,
+      connectionEpoch,
     };
   }
   return {
@@ -485,6 +414,7 @@ function toSnapshotConnectionPatch(
     connectionStatus: "error",
     lastError: state.message,
     lastOnlineAt: null,
+    connectionEpoch,
   };
 }
 
@@ -522,6 +452,9 @@ function probeIntervalForConnection(
 }
 
 function createDefaultDeps(): HostRuntimeControllerDeps {
+  const appCapabilities = {
+    [CLIENT_CAPS.selectiveAgentTimeline]: true,
+  };
   return {
     createClient: ({ host, connection, clientId, runtimeGeneration }) => {
       const base = {
@@ -530,6 +463,7 @@ function createDefaultDeps(): HostRuntimeControllerDeps {
         clientType: "browser" as const,
         appVersion: resolveAppVersion() ?? undefined,
         runtimeGeneration,
+        capabilities: appCapabilities,
       };
       if (connection.type === "directSocket" || connection.type === "directPipe") {
         throw new Error("Local socket connections are unavailable in the browser client");
@@ -557,6 +491,7 @@ function createDefaultDeps(): HostRuntimeControllerDeps {
       connectToDaemon(connection, {
         ...(host.serverId ? { serverId: host.serverId } : {}),
         ...(timeoutMs !== undefined ? { timeoutMs } : {}),
+        capabilities: appCapabilities,
       }),
     getClientId: () => getOrCreateClientId(),
     mountClientHandlers: ({ client, host }) =>
@@ -569,6 +504,7 @@ export class HostRuntimeController {
   private deps: HostRuntimeControllerDeps;
   private onReconcileServerId: ((oldId: string, newId: string) => void) | null;
   private connectionMachineState: HostRuntimeConnectionMachineState;
+  private connectionEpoch = 0;
   private snapshot: HostRuntimeSnapshot;
   private listeners = new Set<() => void>();
   private activeClient: DaemonClient | null = null;
@@ -599,7 +535,7 @@ export class HostRuntimeController {
     };
     this.snapshot = {
       serverId: this.host.serverId,
-      ...toSnapshotConnectionPatch(this.connectionMachineState),
+      ...toSnapshotConnectionPatch(this.connectionMachineState, this.connectionEpoch),
       client: null,
       agentDirectoryStatus: "idle",
       agentDirectoryError: null,
@@ -667,7 +603,7 @@ export class HostRuntimeController {
     }
     this.applyConnectionEvent({ type: "stopped" });
     this.updateSnapshot({
-      ...toSnapshotConnectionPatch(this.connectionMachineState),
+      ...toSnapshotConnectionPatch(this.connectionMachineState, this.connectionEpoch),
       client: null,
     });
   }
@@ -731,7 +667,7 @@ export class HostRuntimeController {
   markStartupError(message: string): void {
     this.applyConnectionEvent({ type: "connect_failed", message });
     this.updateSnapshot({
-      ...toSnapshotConnectionPatch(this.connectionMachineState),
+      ...toSnapshotConnectionPatch(this.connectionMachineState, this.connectionEpoch),
     });
   }
 
@@ -764,7 +700,7 @@ export class HostRuntimeController {
       }
       this.applyConnectionEvent({ type: "no_connections" });
       this.updateSnapshot({
-        ...toSnapshotConnectionPatch(this.connectionMachineState),
+        ...toSnapshotConnectionPatch(this.connectionMachineState, this.connectionEpoch),
         probeByConnectionId: new Map(),
       });
       return;
@@ -1050,6 +986,9 @@ export class HostRuntimeController {
       state: previousState,
       event,
     });
+    if (previousState.tag !== "online" && nextState.tag === "online") {
+      this.connectionEpoch += 1;
+    }
     this.connectionMachineState = nextState;
     this.logConnectionTransition({
       from: previousState.tag,
@@ -1126,7 +1065,7 @@ export class HostRuntimeController {
         message: `Failed to resolve client id: ${message}`,
       });
       this.updateSnapshot({
-        ...toSnapshotConnectionPatch(this.connectionMachineState),
+        ...toSnapshotConnectionPatch(this.connectionMachineState, this.connectionEpoch),
       });
       return null;
     }
@@ -1224,7 +1163,7 @@ export class HostRuntimeController {
     this.snapshot = {
       ...this.snapshot,
       serverId: this.host.serverId,
-      ...toSnapshotConnectionPatch(this.connectionMachineState),
+      ...toSnapshotConnectionPatch(this.connectionMachineState, this.connectionEpoch),
       client,
       clientGeneration: nextGeneration,
     };
@@ -1242,7 +1181,7 @@ export class HostRuntimeController {
         lastError: client.lastError,
       });
       const patch: HostRuntimeSnapshotPatch = {
-        ...toSnapshotConnectionPatch(this.connectionMachineState),
+        ...toSnapshotConnectionPatch(this.connectionMachineState, this.connectionEpoch),
         ...this.buildAgentDirectoryStatusPatch(),
       };
       this.updateSnapshot(patch);
@@ -1262,7 +1201,7 @@ export class HostRuntimeController {
         message,
       });
       this.updateSnapshot({
-        ...toSnapshotConnectionPatch(this.connectionMachineState),
+        ...toSnapshotConnectionPatch(this.connectionMachineState, this.connectionEpoch),
       });
     }
   }
@@ -1348,6 +1287,13 @@ function rekeyMap<V>(map: Map<string, V>, oldKey: string, newKey: string): void 
   map.set(newKey, value);
 }
 
+interface AgentDirectoryRefreshInput {
+  serverId: string;
+  filter?: FetchAgentsOptions["filter"];
+  subscribe?: FetchAgentsOptions["subscribe"];
+  page?: FetchAgentsOptions["page"];
+}
+
 export class HostRuntimeStore {
   private controllers = new Map<string, HostRuntimeController>();
   private serverListeners = new Map<string, Set<() => void>>();
@@ -1361,6 +1307,8 @@ export class HostRuntimeStore {
   private deps: HostRuntimeControllerDeps;
   private lastConnectionStatusByServer = new Map<string, HostRuntimeConnectionStatus>();
   private agentDirectoryBootstrapInFlight = new Map<string, Promise<void>>();
+  private queuedAgentDrainInFlight = new Set<string>();
+  private directorySyncByServer = new Map<string, DirectorySync>();
   private configuredOverrideBootstrapInFlight: Promise<void> | null = null;
   private bootStarted = false;
   private storage: HostRuntimeStorage;
@@ -1587,6 +1535,27 @@ export class HostRuntimeStore {
 
     rekeyMap(this.lastConnectionStatusByServer, oldServerId, newServerId);
     rekeyMap(this.agentDirectoryBootstrapInFlight, oldServerId, newServerId);
+    this.directorySyncByServer.get(oldServerId)?.dispose();
+    this.directorySyncByServer.delete(oldServerId);
+    const directory = new DirectorySync(newServerId, {
+      drainQueuedAgentMessage: (agentId) => this.drainQueuedAgentMessage(newServerId, agentId),
+      markAgentLoading: () => controller.markAgentDirectorySyncLoading(),
+      markAgentReady: () => {
+        this.agentDirectoryBootstrapInFlight.delete(newServerId);
+        controller.markAgentDirectorySyncReady();
+      },
+      markAgentError: (error) => controller.markAgentDirectorySyncError(error),
+    });
+    this.directorySyncByServer.set(newServerId, directory);
+    const snapshot = controller.getSnapshot();
+    directory.connectionChanged({
+      client: snapshot.client,
+      status: snapshot.connectionStatus === "online" ? "online" : "offline",
+      source: {
+        clientGeneration: snapshot.clientGeneration,
+        connectionEpoch: snapshot.connectionEpoch,
+      },
+    });
 
     const listeners = this.serverListeners.get(oldServerId);
     if (listeners) {
@@ -1752,7 +1721,7 @@ export class HostRuntimeStore {
       throw new Error(`Unsupported listen address: ${input.listenAddress}`);
     }
     if (!serverId) {
-      throw new Error("Desktop daemon did not return a server id.");
+      throw new Error("Daemon did not return a server id.");
     }
     return this.upsertHostConnection({
       serverId,
@@ -1877,6 +1846,8 @@ export class HostRuntimeStore {
       this.controllers.delete(serverId);
       this.lastConnectionStatusByServer.delete(serverId);
       this.agentDirectoryBootstrapInFlight.delete(serverId);
+      this.directorySyncByServer.get(serverId)?.dispose();
+      this.directorySyncByServer.delete(serverId);
       void controller.stop();
       this.emit(serverId);
     }
@@ -1899,6 +1870,19 @@ export class HostRuntimeStore {
         onReconcileServerId: (oldId, newId) => this.reconcileServerId(oldId, newId),
       });
       this.controllers.set(host.serverId, controller);
+      this.directorySyncByServer.set(
+        host.serverId,
+        new DirectorySync(host.serverId, {
+          drainQueuedAgentMessage: (agentId) =>
+            this.drainQueuedAgentMessage(host.serverId, agentId),
+          markAgentLoading: () => controller.markAgentDirectorySyncLoading(),
+          markAgentReady: () => {
+            this.agentDirectoryBootstrapInFlight.delete(host.serverId);
+            controller.markAgentDirectorySyncReady();
+          },
+          markAgentError: (error) => controller.markAgentDirectorySyncError(error),
+        }),
+      );
       this.lastConnectionStatusByServer.set(
         host.serverId,
         controller.getSnapshot().connectionStatus,
@@ -1931,6 +1915,15 @@ export class HostRuntimeStore {
       return;
     }
     const snapshot = controller.getSnapshot();
+    const directorySourceChanged =
+      this.directorySyncByServer.get(serverId)?.connectionChanged({
+        client: snapshot.client,
+        status: snapshot.connectionStatus === "online" ? "online" : "offline",
+        source: {
+          clientGeneration: snapshot.clientGeneration,
+          connectionEpoch: snapshot.connectionEpoch,
+        },
+      }) ?? false;
     const previousStatus = this.lastConnectionStatusByServer.get(serverId);
     this.lastConnectionStatusByServer.set(serverId, snapshot.connectionStatus);
     const didTransitionOnline =
@@ -1953,17 +1946,20 @@ export class HostRuntimeStore {
     if (!didTransitionOnline && snapshot.hasEverLoadedAgentDirectory) {
       return;
     }
-    if (this.agentDirectoryBootstrapInFlight.has(serverId)) {
+    if (this.agentDirectoryBootstrapInFlight.has(serverId) && !directorySourceChanged) {
       return;
     }
 
     const bootstrap = Promise.resolve()
       .then(() =>
-        this.refreshAgentDirectory({
-          serverId,
-          subscribe: { subscriptionId: `app:${serverId}` },
-          page: { limit: DEFAULT_AGENT_DIRECTORY_PAGE_LIMIT },
-        }),
+        Promise.all([
+          this.refreshAgentDirectory({
+            serverId,
+            subscribe: { subscriptionId: `app:${serverId}` },
+            page: { limit: DEFAULT_AGENT_DIRECTORY_PAGE_LIMIT },
+          }),
+          this.refreshWorkspaceDirectory({ serverId, subscribe: true }),
+        ]),
       )
       .then(() => undefined)
       .catch((error) => {
@@ -1980,6 +1976,55 @@ export class HostRuntimeStore {
       });
 
     this.agentDirectoryBootstrapInFlight.set(serverId, bootstrap);
+  }
+
+  drainQueuedAgentMessage(serverId: string, agentId: string): void {
+    const drainKey = `${serverId}:${agentId}`;
+    if (this.queuedAgentDrainInFlight.has(drainKey)) return;
+    const store = useSessionStore.getState();
+    const session = store.sessions[serverId];
+    const queue = session?.queuedMessages.get(agentId);
+    const client = session?.client;
+    if (!client || !queue?.length || session.initializingAgents.get(agentId) === true) {
+      return;
+    }
+    this.queuedAgentDrainInFlight.add(drainKey);
+    const next = queue[0];
+    void sendQueuedComposerMessageNow({
+      agentId,
+      messageId: next.id,
+      queue: {
+        read: (queuedAgentId) =>
+          useSessionStore.getState().sessions[serverId]?.queuedMessages.get(queuedAgentId) ?? [],
+        write: (update) => useSessionStore.getState().setQueuedMessages(serverId, update),
+      },
+      submitMessage: async ({ text, attachments }) => {
+        const supportsForgeAttachments =
+          useSessionStore.getState().sessions[serverId]?.serverInfo?.features?.forgeSearch === true;
+        const wirePayload = splitComposerAttachmentsForSubmit(attachments, {
+          format: resolveComposerAttachmentSubmitFormat({ supportsForgeAttachments }),
+        });
+        const images = await encodeImages(wirePayload.images);
+        await client.sendAgentMessage(agentId, text, {
+          messageId: next.id,
+          ...(images && images.length > 0 ? { images } : {}),
+          attachments: wirePayload.attachments,
+        });
+      },
+    })
+      .then((result) => {
+        if (result.status === "failed") {
+          console.error("[HostRuntime] failed to drain queued agent message", {
+            serverId,
+            agentId,
+            error: result.errorMessage,
+          });
+        }
+        return result;
+      })
+      .finally(() => {
+        this.queuedAgentDrainInFlight.delete(drainKey);
+      });
   }
 
   getSnapshot(serverId: string): HostRuntimeSnapshot | null {
@@ -2046,63 +2091,34 @@ export class HostRuntimeStore {
     ).then(() => undefined);
   }
 
-  async refreshAgentDirectory(input: {
-    serverId: string;
-    filter?: FetchAgentsOptions["filter"];
-    subscribe?: FetchAgentsOptions["subscribe"];
-    page?: FetchAgentsOptions["page"];
-  }): Promise<{
-    agents: ReturnType<typeof replaceFetchedAgentDirectory>["agents"];
-    subscriptionId: string | null;
-  }> {
-    const controller = this.controllers.get(input.serverId);
-    if (!controller) {
-      throw new Error(`Unknown host runtime for serverId ${input.serverId}`);
-    }
-    const snapshot = controller.getSnapshot();
-    const client = controller.getClient();
-    if (!client || snapshot.connectionStatus !== "online") {
-      throw new Error(`Host ${input.serverId} is not connected`);
-    }
+  async refreshAgentDirectory(
+    input: AgentDirectoryRefreshInput,
+  ): Promise<RefreshAgentDirectoryResult> {
+    const directory = this.directorySyncByServer.get(input.serverId);
+    if (!directory) throw new Error(`Unknown host runtime for serverId ${input.serverId}`);
+    return directory.refreshAgents(input);
+  }
 
-    controller.markAgentDirectorySyncLoading();
-    try {
-      const session = useSessionStore.getState().sessions[input.serverId];
-      if (!input.filter && shouldUseLegacyDaemonWorkspaceDirectory(session?.serverInfo)) {
-        const result = await fetchLegacyDaemonWorkspaceDirectory({
-          client,
-          serverId: input.serverId,
-          subscribe: input.subscribe,
-          page: input.page,
-        });
-        controller.markAgentDirectorySyncReady();
-        return {
-          agents: result.agents,
-          subscriptionId: result.subscriptionId,
-        };
-      }
+  async refreshWorkspaceDirectory(input: { serverId: string; subscribe?: boolean }): Promise<void> {
+    const directory = this.directorySyncByServer.get(input.serverId);
+    if (!directory) throw new Error(`Unknown host runtime for serverId ${input.serverId}`);
+    await directory.refreshWorkspaces({ subscribe: input.subscribe });
+  }
 
-      const directory = await fetchCurrentAgentDirectory({
-        client,
-        filter: input.filter,
-        subscribe: input.subscribe,
-        page: input.page,
-      });
+  async refreshDirectories(serverId: string): Promise<void> {
+    const directory = this.directorySyncByServer.get(serverId);
+    if (!directory) throw new Error(`Unknown host runtime for serverId ${serverId}`);
+    await directory.refreshAll();
+  }
 
-      const { agents } = replaceFetchedAgentDirectory({
-        serverId: input.serverId,
-        entries: directory.entries,
-      });
-
-      controller.markAgentDirectorySyncReady();
-      return {
-        agents,
-        subscriptionId: directory.subscriptionId,
-      };
-    } catch (error) {
-      controller.markAgentDirectorySyncError(toErrorMessage(error));
-      throw error;
-    }
+  fetchAgentTimeline(
+    serverId: string,
+    agentId: string,
+    request: Parameters<DaemonClient["fetchAgentTimeline"]>[1],
+  ): Promise<Awaited<ReturnType<DaemonClient["fetchAgentTimeline"]>>> {
+    const directory = this.directorySyncByServer.get(serverId);
+    if (!directory) throw new Error(`Unknown host runtime for serverId ${serverId}`);
+    return directory.fetchTimeline(agentId, request);
   }
 
   refreshAllAgentDirectories(input?: { serverIds?: string[] }): void {

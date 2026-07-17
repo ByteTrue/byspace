@@ -1,4 +1,8 @@
 export const CLIENT_CAPS = {
+  // COMPAT(selectiveAgentTimeline): added in BySpace v0.1.2. Capable clients receive
+  // agent streams only for their explicit viewed set. Remove after 2027-01-19
+  // once the supported client floor is >= BySpace v0.1.2.
+  selectiveAgentTimeline: "selective_agent_timeline",
   reasoningMergeEnum: "reasoning_merge_enum",
   // COMPAT(customModeIcons): added in v0.1.84. Old clients pin AgentModeIcon to
   // a closed enum and crash rendering unknown values; daemon downgrades icons
