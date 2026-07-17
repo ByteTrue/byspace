@@ -209,11 +209,11 @@ async function importProviderSessionNow(
     ) {
       labelPatch[PARENT_AGENT_ID_LABEL] = requestedParentAgentId;
     }
-    await unarchiveAgentState(input.agentStorage, input.agentManager, archivedRecord.id, {
-      workspaceId,
-      labels: Object.keys(labelPatch).length > 0 ? labelPatch : undefined,
-    });
     try {
+      await unarchiveAgentState(input.agentStorage, input.agentManager, archivedRecord.id, {
+        workspaceId,
+        labels: Object.keys(labelPatch).length > 0 ? labelPatch : undefined,
+      });
       const snapshot = await ensureAgentLoaded(archivedRecord.id, {
         agentManager: input.agentManager,
         agentStorage: input.agentStorage,

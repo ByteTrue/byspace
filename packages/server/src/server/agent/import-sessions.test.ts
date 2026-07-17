@@ -511,6 +511,7 @@ class ProviderImportHarness {
   timeline: AgentTimelineItem[] = [];
   activeAgent: ManagedAgent | null = null;
   resumeError: Error | null = null;
+  unarchiveError: Error | null = null;
   resumeAttempts = 0;
   private unarchiveWait: Promise<void> | null = null;
   private releaseUnarchive: (() => void) | null = null;
@@ -549,6 +550,9 @@ class ProviderImportHarness {
           labels,
           archivedAt: null,
         });
+        if (this.unarchiveError) {
+          throw this.unarchiveError;
+        }
         return true;
       },
       notifyAgentState: () => {},
@@ -759,6 +763,28 @@ test("importProviderSession restores storage and closes a partial runtime when l
   expect(await harness.storage.get(harness.snapshot.id)).toEqual(archived);
   expect(harness.activeAgent).toBeNull();
   expect(harness.closedAgentIds).toEqual([harness.snapshot.id]);
+});
+
+test("restores the archived record when activation fails after clearing archive state", async () => {
+  const harness = await ProviderImportHarness.create();
+  await harness.seed(
+    makeStoredProviderSession({
+      id: harness.snapshot.id,
+      cwd: harness.snapshot.cwd,
+      sessionId: "thread-imported",
+      archivedAt: "2026-04-30T12:00:00.000Z",
+    }),
+  );
+  const original = await harness.storage.get(harness.snapshot.id);
+  expect(original?.archivedAt).toBe("2026-04-30T12:00:00.000Z");
+  harness.unarchiveError = new Error("activation failed after persistence");
+
+  await expect(
+    harness.import({ providerHandleId: "thread-imported", cwd: harness.snapshot.cwd }),
+  ).rejects.toThrow("activation failed after persistence");
+
+  expect(harness.resumeAttempts).toBe(0);
+  expect(await harness.storage.get(harness.snapshot.id)).toEqual(original);
 });
 
 test("importProviderSession serializes legacy and native aliases for one archived session", async () => {
