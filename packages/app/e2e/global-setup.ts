@@ -116,6 +116,37 @@ async function waitForServer(port: number, options: WaitForServerOptions): Promi
   );
 }
 
+async function warmMetroWebBundle(port: number, getRecentOutput: () => string): Promise<void> {
+  const baseUrl = `http://localhost:${port}/`;
+  const pageResponse = await fetch(baseUrl, { signal: AbortSignal.timeout(180_000) });
+  if (!pageResponse.ok) {
+    throw new Error(
+      `Metro Web page returned ${pageResponse.status}.${formatRecentOutput(getRecentOutput)}`,
+    );
+  }
+
+  const html = await pageResponse.text();
+  const scriptSources = Array.from(
+    html.matchAll(/<script[^>]+src=(['"])(.*?)\1/giu),
+    (match) => match[2] ?? "",
+  );
+  const bundleSource = scriptSources.find((source) => source.includes(".bundle"));
+  if (!bundleSource) {
+    throw new Error(
+      `Metro Web page did not include a bundle script.${formatRecentOutput(getRecentOutput)}`,
+    );
+  }
+
+  const bundleUrl = new URL(bundleSource.replaceAll("&amp;", "&"), baseUrl);
+  const bundleResponse = await fetch(bundleUrl, { signal: AbortSignal.timeout(180_000) });
+  if (!bundleResponse.ok) {
+    throw new Error(
+      `Metro Web bundle returned ${bundleResponse.status}.${formatRecentOutput(getRecentOutput)}`,
+    );
+  }
+  await bundleResponse.arrayBuffer();
+}
+
 function parseRelayStartupFailure(line: string): string | null {
   const clean = stripAnsi(line);
   if (/Address already in use/i.test(clean)) {
@@ -791,6 +822,8 @@ export default async function globalSetup() {
         getRecentOutput: metroLineBuffer.dump,
       }),
     ]);
+
+    await warmMetroWebBundle(metroPort, metroLineBuffer.dump);
 
     const offer = await waitForPairingOfferFromDaemon({
       port,
