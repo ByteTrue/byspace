@@ -16,6 +16,15 @@ The first BySpace release is `v0.1.0`. Stable releases use `vX.Y.Z`; beta candid
 
 Do not derive the next BySpace version from upstream tags. Fetch upstream without tags and never push all local tags.
 
+### Release version decision
+
+Before changing versions or the changelog, inspect the complete diff from the previous stable tag through `HEAD`:
+
+- **minor**: a significant user upgrade or foundational internal work that materially changes reliability, performance, compatibility, deployment, or operation;
+- **patch**: fixes, polish, small enhancements, and improvements within existing capabilities.
+
+Diff size alone does not decide the version. The release agent proposes patch or minor, including the target version and rationale, and waits for explicit user approval. An agent never chooses a major release autonomously and never bumps a version merely to retry a failed build or tag workflow.
+
 ## Required checks
 
 Before creating a release:
@@ -38,17 +47,18 @@ Also pack the public npm artifact, install it with `npm install -g --prefix <emp
 ## Stable release
 
 1. Start from a clean `main` checkout.
-2. Update the shared workspace version and changelog.
-3. Run all required checks and the clean install smoke.
-4. Commit the release as `Release vX.Y.Z`.
-5. Push `main` to `ByteTrue/byspace`.
-6. Wait for CI on that exact commit to pass.
-7. Create and push only tag `vX.Y.Z`.
-8. Verify the GitHub release, npm `latest`, Pages, relay health, and Docker image when enabled.
+2. Classify the complete previous-stable-to-`HEAD` diff and obtain approval for the target patch or minor version.
+3. Run `npm run version:all:patch` or `npm run version:all:minor`, then update the changelog.
+4. Run all required checks and the clean install smoke.
+5. Commit the release as `Release vX.Y.Z`.
+6. Push `main` to `ByteTrue/byspace`.
+7. Wait for CI on that exact commit to pass.
+8. Create and push only tag `vX.Y.Z`.
+9. Verify the GitHub release, npm `latest`, Pages, relay health, and Docker image when enabled.
 
 ## Beta release
 
-Use `vX.Y.Z-beta.N`, mark the GitHub release as prerelease, and publish npm only with `--tag beta`. Do not move the stable `latest` dist-tag until the stable release is complete.
+Classify the release and obtain approval before changing versions or the changelog. For a fresh beta, use `npm run version:all:beta:patch` or `npm run version:all:beta:minor`; retain the existing beta-next/promote flow for later candidates. Use `vX.Y.Z-beta.N`, mark the GitHub release as prerelease, and publish npm only with `--tag beta`. Do not move the stable `latest` dist-tag until the stable release is complete.
 
 ## Cloudflare deployment
 
