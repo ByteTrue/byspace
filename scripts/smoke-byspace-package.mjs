@@ -9,8 +9,37 @@ const { version } = JSON.parse(readFileSync(join(root, "package.json"), "utf8"))
 const artifact = join(root, "artifacts", `bytetrue-byspace-${version}.tgz`);
 const installRoot = mkdtempSync(join(tmpdir(), "byspace-install-smoke-"));
 const npmCli = process.env.npm_execpath;
-const binaryScript = join(installRoot, "node_modules", "@bytetrue", "byspace", "bin", "byspace");
-const binaryArgs = ["--disable-warning=DEP0040", binaryScript];
+const globalPackageRoot = join(
+  installRoot,
+  process.platform === "win32" ? "node_modules" : join("lib", "node_modules"),
+);
+const globalBinRoot = process.platform === "win32" ? installRoot : join(installRoot, "bin");
+const installedPackageRoot = join(globalPackageRoot, "@bytetrue", "byspace");
+const installedPackageBin = join(installedPackageRoot, "bin", "byspace");
+const installedBinary = join(
+  globalBinRoot,
+  process.platform === "win32" ? "byspace.cmd" : "byspace",
+);
+const nativeLoadCheck = `
+  import { createRequire } from "node:module";
+  const require = createRequire(${JSON.stringify(
+    join(
+      installedPackageRoot,
+      "node_modules",
+      "@bytetrue",
+      "byspace-server",
+      "dist",
+      "server",
+      "server",
+      "bootstrap.js",
+    ),
+  )});
+  const pty = require("node-pty");
+  const sherpa = require("sherpa-onnx-node");
+  if (typeof pty.spawn !== "function" || typeof sherpa.OfflineRecognizer !== "function") {
+    throw new Error("Installed native modules did not expose their runtime APIs");
+  }
+`;
 
 function run(command, args, options = {}) {
   const result = spawnSync(command, args, {
@@ -34,12 +63,35 @@ function runNpm(args, options = {}) {
     : run("npm", args, { ...options, shell: process.platform === "win32" });
 }
 
+function runNpmResult(args, options = {}) {
+  return npmCli
+    ? spawnSync(process.execPath, [npmCli, ...args], {
+        cwd: root,
+        encoding: "utf8",
+        timeout: 120_000,
+        ...options,
+      })
+    : spawnSync("npm", args, {
+        cwd: root,
+        encoding: "utf8",
+        timeout: 120_000,
+        ...options,
+        shell: process.platform === "win32",
+      });
+}
+
 function runBinary(args, options = {}) {
-  return run(process.execPath, [...binaryArgs, ...args], options);
+  return run(installedBinary, args, {
+    ...options,
+    shell: process.platform === "win32",
+  });
 }
 
 function spawnBinary(args, options = {}) {
-  return spawnSync(process.execPath, [...binaryArgs, ...args], options);
+  return spawnSync(installedBinary, args, {
+    ...options,
+    shell: process.platform === "win32",
+  });
 }
 
 function removeInstallRoot() {
@@ -116,9 +168,22 @@ try {
     BYSPACE_LISTEN: `127.0.0.1:${port}`,
   };
 
-  runNpm(["install", "--prefix", installRoot, "--no-audit", "--no-fund", artifact], {
+  runNpm(["install", "--global", "--prefix", installRoot, "--no-audit", "--no-fund", artifact], {
     timeout: 300_000,
   });
+  if (!existsSync(installedPackageBin) || !existsSync(installedBinary)) {
+    throw new Error(`Global install did not create ${installedBinary}`);
+  }
+  const dependencyTree = runNpmResult(
+    ["ls", "--global", "--prefix", installRoot, "--all", "--json"],
+    { timeout: 120_000 },
+  );
+  if (dependencyTree.status !== 0) {
+    process.stderr.write(dependencyTree.stdout ?? "");
+    process.stderr.write(dependencyTree.stderr ?? "");
+    throw new Error("Global install has missing or invalid dependencies");
+  }
+  run(process.execPath, ["--input-type=module", "--eval", nativeLoadCheck], { env });
   const installedVersion = runBinary(["--version"], { env }).trim();
   if (installedVersion !== version) {
     throw new Error(`Installed version ${installedVersion} does not match ${version}`);
@@ -137,7 +202,7 @@ try {
 } catch (error) {
   failure = error;
 } finally {
-  if (daemonStarted && env && existsSync(binaryScript)) {
+  if (daemonStarted && env && existsSync(installedPackageBin)) {
     const stop = spawnBinary(
       ["daemon", "stop", "--force", "--timeout", "5", "--kill-timeout", "5"],
       {

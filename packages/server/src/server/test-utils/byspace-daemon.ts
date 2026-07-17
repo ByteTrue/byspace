@@ -16,6 +16,8 @@ import type { PushNotificationSender } from "../push/notifications.js";
 interface TestBySpaceDaemonOptions {
   downloadTokenTtlMs?: number;
   corsAllowedOrigins?: string[];
+  /** Override the version advertised in server_info (used by outdated-daemon e2e). */
+  daemonVersion?: string;
   listen?: string;
   logger?: Parameters<typeof createBySpaceDaemon>[1];
   mcpEnabled?: boolean;
@@ -158,6 +160,7 @@ async function prepareTestDaemonConfig(
   const config: BySpaceDaemonConfig = {
     listen: `${listenHost}:0`,
     byspaceHome,
+    daemonVersion: options.daemonVersion,
     corsAllowedOrigins: options.corsAllowedOrigins ?? [],
     hostnames: true,
     mcpEnabled: options.mcpEnabled ?? true,

@@ -221,7 +221,7 @@ test.describe("Add Project command-center flow", () => {
         await expectAddProjectPage(page, "method");
 
         await expect(addProjectFlowMethod(page, "new-directory")).toContainText(
-          `Create an empty directory on ${SECONDARY_HOST_LABEL}`,
+          `Create an empty project on ${SECONDARY_HOST_LABEL}`,
         );
         await chooseAddProjectMethod(page, "new-directory");
         await addProjectFlowInput(page).fill(parentDirectory);

@@ -10,8 +10,9 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { parsePackedFilename } from "./pack-byspace-output.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const cliDir = join(root, "packages", "cli");
@@ -41,19 +42,22 @@ function runNpm(args, options = {}) {
 }
 
 function packWorkspace(workspaceDir, destination) {
+  const workspacePath = `./${relative(root, workspaceDir).replaceAll("\\", "/")}`;
   const output = runNpm([
     "pack",
     "--ignore-scripts",
     "--json",
     "--pack-destination",
     destination,
-    workspaceDir,
+    workspacePath,
   ]);
-  const result = JSON.parse(output);
-  const filename = result[0]?.filename;
-  if (typeof filename !== "string")
-    throw new Error(`npm pack returned no filename for ${workspaceDir}`);
-  return join(destination, filename);
+  return join(
+    destination,
+    parsePackedFilename(
+      output,
+      JSON.parse(readFileSync(join(workspaceDir, "package.json"), "utf8")).name,
+    ),
+  );
 }
 
 runNpm(["run", "build:server:clean"]);
@@ -76,7 +80,6 @@ try {
   delete manifest.scripts;
   manifest.files = ["bin", "dist", "README.md", "LICENSE"];
   manifest.bundleDependencies = [];
-  const internalVersions = new Map();
 
   cpSync(join(cliDir, "bin"), join(stagingDir, "bin"), { recursive: true });
   cpSync(join(cliDir, "dist"), join(stagingDir, "dist"), { recursive: true });
@@ -100,39 +103,35 @@ try {
     const extractDir = join(temporaryRoot, `extract-${workspace}`);
     mkdirSync(extractDir, { recursive: true });
     run("tar", ["-xzf", tarball, "-C", extractDir]);
-    cpSync(
-      join(extractDir, "package"),
-      join(
-        stagingDir,
-        "node_modules",
-        "@bytetrue",
-        workspaceManifest.name.slice("@bytetrue/".length),
-      ),
-      { recursive: true },
+    const bundledDir = join(
+      stagingDir,
+      "node_modules",
+      "@bytetrue",
+      workspaceManifest.name.slice("@bytetrue/".length),
     );
-    manifest.dependencies[workspaceManifest.name] = `file:${tarball}`;
+    cpSync(join(extractDir, "package"), bundledDir, { recursive: true });
+
+    // npm does not install a bundled package's transitive dependencies during a global install.
+    // The public root already owns the flattened dependency graph, so keep bundled workspaces as
+    // code-only packages and avoid npm deduping their dependencies into empty directories.
+    const bundledManifestPath = join(bundledDir, "package.json");
+    const bundledManifest = JSON.parse(readFileSync(bundledManifestPath, "utf8"));
+    delete bundledManifest.dependencies;
+    delete bundledManifest.optionalDependencies;
+    delete bundledManifest.peerDependencies;
+    delete bundledManifest.peerDependenciesMeta;
+    writeFileSync(bundledManifestPath, `${JSON.stringify(bundledManifest, null, 2)}\n`);
+
+    manifest.dependencies[workspaceManifest.name] = workspaceManifest.version;
     manifest.bundleDependencies.push(workspaceManifest.name);
-    internalVersions.set(workspaceManifest.name, workspaceManifest.version);
   }
 
   writeFileSync(join(stagingDir, "package.json"), `${JSON.stringify(manifest, null, 2)}\n`);
-  runNpm(["install", "--package-lock-only", "--ignore-scripts"], { cwd: stagingDir });
-
-  const packageLockPath = join(stagingDir, "package-lock.json");
-  const packageLock = JSON.parse(readFileSync(packageLockPath, "utf8"));
-  for (const [name, version] of internalVersions) {
-    manifest.dependencies[name] = version;
-    packageLock.packages[""].dependencies[name] = version;
-  }
-  writeFileSync(join(stagingDir, "package.json"), `${JSON.stringify(manifest, null, 2)}\n`);
-  writeFileSync(packageLockPath, `${JSON.stringify(packageLock, null, 2)}\n`);
-
   const finalOutput = runNpm(
     ["pack", "--ignore-scripts", "--json", "--pack-destination", artifactsDir, "."],
     { cwd: stagingDir },
   );
-  const finalFilename = JSON.parse(finalOutput)[0]?.filename;
-  if (typeof finalFilename !== "string") throw new Error("npm pack returned no BySpace artifact");
+  const finalFilename = parsePackedFilename(finalOutput, manifest.name);
   process.stdout.write(`${join(artifactsDir, finalFilename)}\n`);
 } finally {
   rmSync(temporaryRoot, { recursive: true, force: true });

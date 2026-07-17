@@ -333,6 +333,8 @@ export type DaemonLifecycleIntent =
 export interface BySpaceDaemonConfig {
   listen: string;
   byspaceHome: string;
+  /** Test-only override for advertised daemon version (e.g. outdated-daemon e2e fixture). */
+  daemonVersion?: string;
   worktreesRoot?: string;
   corsAllowedOrigins: string[];
   allowedHosts?: HostnamesConfig;
@@ -478,7 +480,10 @@ export async function createBySpaceDaemon(
   const logger = rootLogger.child({ module: "bootstrap" });
   const bootstrapStart = performance.now();
   const elapsed = () => `${(performance.now() - bootstrapStart).toFixed(0)}ms`;
-  const daemonVersion = resolveDaemonVersion(import.meta.url);
+  const daemonVersion =
+    typeof config.daemonVersion === "string" && config.daemonVersion.trim().length > 0
+      ? config.daemonVersion.trim()
+      : resolveDaemonVersion(import.meta.url);
   const daemonConfigStore = new DaemonConfigStore(
     config.byspaceHome,
     createInitialMutableDaemonConfig(config),

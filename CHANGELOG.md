@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.1 - 2026-07-17
+
+### Fixed
+
+- Global `npm install -g @bytetrue/byspace` now installs the full external dependency tree. Bundled workspace packages no longer redeclare dependencies that npm would dedupe into empty directories during a global install.
+- Release smoke uses a real empty-prefix global install, validates the dependency tree, and loads native bindings before daemon checks.
+- Add Project e2e assertions match the current method copy and loading indicators; outdated-daemon fixtures can advertise a mismatched version so the host update card appears.
+
 ## 0.1.0 - 2026-07-15
 
 ### Added

@@ -33,7 +33,7 @@ npm run build:web --workspace=@bytetrue/byspace-app
 npm run release:check
 ```
 
-Also pack the public npm artifact, install it into an empty prefix, and run `byspace --version`, `byspace --help`, and an isolated daemon status/start/stop smoke. A release is blocked while any advertised GitHub, npm, Pages, relay, or Docker endpoint is missing.
+Also pack the public npm artifact, install it with `npm install -g --prefix <empty-prefix>`, and run `byspace --version`, `byspace --help`, and an isolated daemon status/start/stop smoke. The global-prefix shape is required because npm treats bundled packages differently during local and global installs. A release is blocked while any advertised GitHub, npm, Pages, relay, or Docker endpoint is missing.
 
 ## Stable release
 
@@ -58,7 +58,7 @@ Local emergency deployment uses the same workspace scripts after `wrangler whoam
 
 ## npm publishing
 
-The public entry is only `@bytetrue/byspace`. Internal workspace packages are bundled into its tarball and are not user-facing install targets. `release:check` packs, clean-installs, and smoke-tests one artifact; publication uses that same tarball without rebuilding it.
+The public entry is only `@bytetrue/byspace`. Internal workspace code is bundled into its tarball and is not a user-facing install target. The public root manifest alone owns the flattened external runtime dependency graph; bundled workspace manifests must not redeclare it because npm global installs do not install bundled packages' transitive dependencies. External dependencies, including native modules, are installed on the target platform. `release:check` packs, globally installs into an empty prefix, and smoke-tests one artifact; publication uses that same tarball without rebuilding it.
 
 For the first release only, wait for `main` CI, run `npm login`, rerun `release:check` on that exact commit, and execute `npm run release:publish` before pushing the tag. Then configure npm Trusted Publishing for repository `ByteTrue/byspace` and workflow `npm-release.yml`. The tag workflow is idempotent: it skips npm publication when the exact version already exists, then creates the GitHub release. Subsequent releases publish through OIDC and require npm 11.5.1+ plus `id-token: write`, with no long-lived token.
 

@@ -3,6 +3,7 @@ import { gotoAppShell, openSettings } from "./helpers/app";
 import { getE2EDaemonPort } from "./helpers/daemon-port";
 import { TEST_HOST_LABEL } from "./helpers/daemon-registry";
 import { getServerId } from "./helpers/server-id";
+import { waitForConnectedHost } from "./helpers/add-project-flow";
 import {
   expectSettingsHeader,
   openSettingsHost,
@@ -75,12 +76,21 @@ test.describe("Settings host page", () => {
   }) => {
     await seedSavedSettingsHosts(page, [outdatedDaemon]);
     await page.reload();
+    await waitForConnectedHost(page, {
+      serverId: outdatedDaemon.serverId,
+      endpoint: outdatedDaemon.endpoint,
+    });
     await openSettings(page);
     await openSettingsHost(page, outdatedDaemon.serverId);
     await openHostSection(page, outdatedDaemon.serverId, "host");
 
-    page.once("dialog", (dialog) => dialog.accept());
+    // Update card only appears once the outdated host session reports a mismatched version
+    // with daemonSelfUpdate enabled.
     const updateButton = page.getByTestId("host-page-update-button");
+    await expect(page.getByTestId("host-page-update-card")).toBeVisible({ timeout: 30_000 });
+    await expect(updateButton).toBeEnabled({ timeout: 30_000 });
+
+    page.once("dialog", (dialog) => dialog.accept());
     await updateButton.click();
 
     await expect(

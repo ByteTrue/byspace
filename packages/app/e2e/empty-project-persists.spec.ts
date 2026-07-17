@@ -100,6 +100,8 @@ test.describe("Project picker search", () => {
   test("shows a loading state after typing while directory suggestions are pending", async ({
     page,
   }) => {
+    // Freeze timers so the 180ms search debounce never settles; loading must stay visible.
+    await page.clock.install();
     await gotoAppShell(page);
     await waitForSidebarProjectListReady(page);
     await openAddProjectFlow(page);
@@ -108,8 +110,8 @@ test.describe("Project picker search", () => {
     const input = addProjectFlowInput(page);
     await input.fill("byspace-loading-state-no-match");
 
-    await expect(page.getByText("Start typing a path", { exact: true })).toHaveCount(0);
-    await expect(page.getByText("Loading...", { exact: true })).toBeVisible();
+    await expect(page.getByTestId("add-project-flow-empty")).toHaveCount(0);
+    await expect(page.getByTestId("add-project-flow-loading")).toBeVisible();
   });
 });
 
