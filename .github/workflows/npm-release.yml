@@ -21,6 +21,11 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Fetch upstream history for release gate
+        run: |
+          git remote add upstream https://github.com/getpaseo/paseo.git 2>/dev/null || git remote set-url upstream https://github.com/getpaseo/paseo.git
+          git fetch --no-tags upstream main
+
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
