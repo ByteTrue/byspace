@@ -1,4 +1,5 @@
 import { normalizeForge, type Forge } from "@/git/forge";
+import { resolveForgeChecksUrl } from "@/git/forges";
 
 export interface PrHint {
   url: string;
@@ -7,6 +8,7 @@ export interface PrHint {
   /** Forge backing this change request, so badges render the right brand mark. */
   forge: Forge;
   checks?: Array<{ name: string; status: string; url: string | null }>;
+  checksUrl: string | null;
   checksStatus?: "none" | "pending" | "success" | "failure";
   reviewDecision?: "approved" | "changes_requested" | "pending" | null;
 }
@@ -19,6 +21,7 @@ interface PrStatusLike {
   checksStatus?: string;
   reviewDecision?: string | null;
   forge?: string;
+  forgeSpecific?: unknown;
 }
 
 function parsePullRequestNumber(url: string): number | null {
@@ -56,12 +59,18 @@ export function selectPrHintFromStatus(
   else if (status.state === "open") state = "open";
   else state = "closed";
 
+  const normalizedForge = normalizeForge(forge ?? status.forge);
   return {
     url: status.url,
     number,
     state,
-    forge: normalizeForge(forge ?? status.forge),
+    forge: normalizedForge,
     checks: status.checks,
+    checksUrl: resolveForgeChecksUrl(normalizedForge, {
+      changeRequestUrl: status.url,
+      checks: status.checks ?? [],
+      forgeSpecific: status.forgeSpecific,
+    }),
     checksStatus: status.checksStatus as PrHint["checksStatus"],
     reviewDecision: status.reviewDecision as PrHint["reviewDecision"],
   };

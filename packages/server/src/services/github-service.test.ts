@@ -713,6 +713,7 @@ describe("ForgeService", () => {
       service.getPullRequestCheckoutTarget?.({ cwd: "/repo", number: 526 }),
     ).resolves.toEqual({
       number: 526,
+      projectPath: "ByteTrue/byspace",
       baseRefName: "main",
       headRefName: "main",
       checkoutRefs: [{ remoteName: "origin", remoteRef: "refs/pull/526/head" }],
@@ -2801,6 +2802,24 @@ describe("ForgeService", () => {
     expect(runner.calls).toHaveLength(1);
   });
 
+  it("bounds passive result cache entries", async () => {
+    const runner = createRunner(Array.from({ length: 514 }, () => pullRequestJson("result")));
+    const service = createGitHubService({
+      ttlMs: 10_000,
+      runner: runner.runner,
+      resolveGhPath: async () => "/usr/bin/gh",
+      resolveRepoHost: async () => null,
+      now: () => 100,
+    });
+
+    for (let index = 0; index < 513; index += 1) {
+      await service.listPullRequests({ cwd: "/repo", query: `query-${index}`, limit: 10 });
+    }
+    await service.listPullRequests({ cwd: "/repo", query: "query-0", limit: 10 });
+
+    expect(runner.calls).toHaveLength(514);
+  });
+
   it("refreshes cached results after the TTL expires", async () => {
     let now = 100;
     const runner = createRunner([
@@ -3563,6 +3582,26 @@ describe("ForgeService", () => {
 
     expect(hostResolutions).toBe(2);
     expect(runner.calls[1]?.envOverlay).toMatchObject({ GH_HOST: "ghe.example.com" });
+  });
+
+  it("bounds passive repo-host cache entries", async () => {
+    let resolutions = 0;
+    const service = createGitHubService({
+      runner: createRunner(Array.from({ length: 514 }, () => "[]")).runner,
+      resolveGhPath: async () => "/usr/bin/gh",
+      resolveRepoHost: async () => {
+        resolutions += 1;
+        return null;
+      },
+      now: () => 100,
+    });
+
+    for (let index = 0; index < 513; index += 1) {
+      await service.listPullRequests({ cwd: `/repo-${index}`, limit: 10 });
+    }
+    await service.listPullRequests({ cwd: "/repo-0", limit: 10 });
+
+    expect(resolutions).toBe(514);
   });
 
   it("re-resolves the host after invalidation when the remote changes", async () => {

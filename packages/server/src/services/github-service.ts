@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { LRUCache } from "lru-cache";
 import {
   isGitHubHost,
   parseGitHubRemoteUrl,
@@ -102,6 +103,7 @@ const CHECK_ANNOTATION_PAGE_MAX = 20;
 const CHECK_LOG_TAIL_MAX_LINES = 200;
 const CHECK_LOG_TAIL_MAX_BYTES = 16 * 1024;
 const CHECK_LOG_TAIL_CACHE_MAX_ENTRIES = 128;
+const GITHUB_CACHE_MAX_ENTRIES = 512;
 const ACTIONS_JOB_PAGE_MAX = 100;
 const FAILED_CHECK_JOB_LIMIT = 5;
 export const GITHUB_POLL_FAST_INTERVAL_MS = 20_000;
@@ -741,11 +743,11 @@ export function createGitHubService(options: CreateGitHubServiceOptions = {}): G
   // A resolved enterprise host is cached permanently; a null resolution (no
   // host, or the auth probe said no) expires so `gh auth login --hostname`
   // run after the first probe is picked up without a daemon restart.
-  const repoHostByCwd = new Map<
+  const repoHostByCwd = new LRUCache<
     string,
     { promise: Promise<string | null>; expiresAt: number | null }
-  >();
-  const cache = new Map<string, CacheEntry>();
+  >({ max: GITHUB_CACHE_MAX_ENTRIES });
+  const cache = new LRUCache<string, CacheEntry>({ max: GITHUB_CACHE_MAX_ENTRIES });
   const inFlight = new Map<string, InFlightCacheEntry>();
   const pollTargets = new Map<string, GitHubPollTarget>();
   const checkLogTailCache = new Map<string, { logTail: string; logTruncated: boolean }>();
@@ -771,6 +773,9 @@ export function createGitHubService(options: CreateGitHubServiceOptions = {}): G
     const now = deps.now();
     if (!params.readOptions?.force && cachedEntry && cachedEntry.expiresAt > now) {
       return cachedEntry.value as T;
+    }
+    if (cachedEntry) {
+      cache.delete(key);
     }
 
     const existing = inFlight.get(key);
@@ -807,6 +812,9 @@ export function createGitHubService(options: CreateGitHubServiceOptions = {}): G
     const cachedHost = repoHostByCwd.get(cwd);
     if (cachedHost && (cachedHost.expiresAt === null || deps.now() < cachedHost.expiresAt)) {
       return cachedHost.promise;
+    }
+    if (cachedHost) {
+      repoHostByCwd.delete(cwd);
     }
     const pending = deps
       .resolveRepoHost(cwd)
@@ -1084,7 +1092,7 @@ export function createGitHubService(options: CreateGitHubServiceOptions = {}): G
             PullRequestCheckoutTargetSchema,
             "{}",
           );
-          return toPullRequestCheckoutTarget(parsed);
+          return toPullRequestCheckoutTarget(parsed, `${owner}/${name}`);
         },
       });
     },
@@ -2308,6 +2316,7 @@ function normalizeRepositoryVisibility(visibility: string): GitHubRepositorySumm
 
 function toPullRequestCheckoutTarget(
   parsed: z.infer<typeof PullRequestCheckoutTargetSchema>,
+  projectPath: string,
 ): PullRequestCheckoutTarget {
   const pullRequest = parsed.data.repository.pullRequest;
   if (!pullRequest) {
@@ -2315,6 +2324,7 @@ function toPullRequestCheckoutTarget(
   }
   return {
     number: pullRequest.number,
+    projectPath,
     baseRefName: pullRequest.baseRefName,
     headRefName: pullRequest.headRefName,
     checkoutRefs: [{ remoteName: "origin", remoteRef: `refs/pull/${pullRequest.number}/head` }],

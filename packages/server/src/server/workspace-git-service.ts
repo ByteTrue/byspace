@@ -15,6 +15,7 @@ import {
   type CheckoutDiffResult,
   getCheckoutDiff,
   getCheckoutSnapshotFacts,
+  isPullRequestLookupTargetCompatible,
   getCheckoutShortstat,
   getCheckoutStatus,
   getPullRequestStatus,
@@ -1224,7 +1225,7 @@ export class WorkspaceGitServiceImpl implements WorkspaceGitService {
       return;
     }
 
-    const pollTarget = this.resolveForgePrStatusPollTarget(target);
+    const pollTarget = this.resolveForgePrStatusPollTarget(target, resolution.forge);
     const remoteUrl = git.remoteUrl;
     if (!pollTarget) {
       this.stopForgePrStatusPollForTarget(target);
@@ -1358,6 +1359,7 @@ export class WorkspaceGitServiceImpl implements WorkspaceGitService {
 
   private resolveForgePrStatusPollTarget(
     target: WorkspaceGitTarget,
+    forge: string,
   ): WorkspaceForgePrStatusPollTarget | null {
     const git = target.latestGit;
     if (!git?.currentBranch) {
@@ -1366,7 +1368,7 @@ export class WorkspaceGitServiceImpl implements WorkspaceGitService {
 
     const lookupTarget =
       target.latestFacts?.isGit && target.latestFacts.currentBranch === git.currentBranch
-        ? target.latestFacts.pullRequestLookupTarget
+        ? selectCompatiblePullRequestLookupTarget(target.latestFacts, git.remoteUrl, forge)
         : null;
     if (lookupTarget) {
       return lookupTarget;
@@ -1825,7 +1827,7 @@ export class WorkspaceGitServiceImpl implements WorkspaceGitService {
       deps: this.deps,
       force: forceForge,
       reason: request.reason,
-      facts,
+      facts: withCompatiblePullRequestLookupTarget(facts, remoteUrl, resolution.forge),
     });
     // Carry the resolved forge (probe-aware) so the wire projection labels
     // self-managed GitLab hosts correctly instead of falling back to "github".
@@ -1856,7 +1858,7 @@ export class WorkspaceGitServiceImpl implements WorkspaceGitService {
       return null;
     }
 
-    const pollTarget = this.resolveForgePrStatusPollTarget(target);
+    const pollTarget = this.resolveForgePrStatusPollTarget(target, resolution.forge);
     if (!pollTarget) {
       return null;
     }
@@ -2041,6 +2043,30 @@ export class WorkspaceGitServiceImpl implements WorkspaceGitService {
     }
     target.workspaceKeys.clear();
   }
+}
+
+function selectCompatiblePullRequestLookupTarget(
+  facts: Extract<CheckoutSnapshotFacts, { isGit: true }>,
+  remoteUrl: string | null,
+  forge: string | undefined,
+) {
+  const target = facts.pullRequestLookupTarget;
+  return target && isPullRequestLookupTargetCompatible(target, remoteUrl, forge)
+    ? target
+    : facts.pullRequestLookupFallbackTarget;
+}
+
+function withCompatiblePullRequestLookupTarget(
+  facts: CheckoutSnapshotFacts,
+  remoteUrl: string | null,
+  forge: string,
+): CheckoutSnapshotFacts {
+  return facts.isGit
+    ? {
+        ...facts,
+        pullRequestLookupTarget: selectCompatiblePullRequestLookupTarget(facts, remoteUrl, forge),
+      }
+    : facts;
 }
 
 async function loadForgeSnapshot(options: {

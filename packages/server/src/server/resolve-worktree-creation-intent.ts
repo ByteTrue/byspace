@@ -59,6 +59,20 @@ export class CheckoutSourceForgeMismatchError extends Error {
   }
 }
 
+export class CheckoutSourceProjectMismatchError extends Error {
+  readonly expectedProjectPath: string;
+  readonly actualProjectPath: string | null;
+
+  constructor(params: { expectedProjectPath: string; actualProjectPath?: string }) {
+    super(
+      `Checkout source is for ${params.expectedProjectPath}, but this workspace resolved to ${params.actualProjectPath ?? "an unknown project"}`,
+    );
+    this.name = "CheckoutSourceProjectMismatchError";
+    this.expectedProjectPath = params.expectedProjectPath;
+    this.actualProjectPath = params.actualProjectPath ?? null;
+  }
+}
+
 export async function resolveWorktreeCreationIntent(
   input: ResolveWorktreeCreationIntentInput,
   repoRoot: string,
@@ -77,7 +91,7 @@ export async function resolveWorktreeCreationIntent(
     if (changeRequest) {
       assertCheckoutSourceMatchesResolvedForge(changeRequest, deps);
       return resolvePrCheckoutIntent({
-        refName: input.refName,
+        projectPath: changeRequest.projectPath,
         changeRequestNumber: changeRequest.number,
         repoRoot,
         deps,
@@ -99,7 +113,7 @@ export async function resolveWorktreeCreationIntent(
   if (changeRequest) {
     assertCheckoutSourceMatchesResolvedForge(changeRequest, deps);
     return resolvePrCheckoutIntent({
-      refName: input.refName,
+      projectPath: changeRequest.projectPath,
       changeRequestNumber: changeRequest.number,
       repoRoot,
       deps,
@@ -122,7 +136,7 @@ export async function resolveWorktreeCreationIntent(
 }
 
 interface PrCheckoutIntentParams {
-  refName?: string;
+  projectPath?: string;
   changeRequestNumber: number;
   repoRoot: string;
   deps: ResolveWorktreeCreationIntentDeps;
@@ -164,8 +178,8 @@ async function resolvePrCheckoutIntent(
   const { deps } = params;
   const service = deps.forgeService;
   const checkoutTarget = await resolvePrCheckoutTarget(params);
+  assertCheckoutSourceMatchesResolvedProject(params.projectPath, checkoutTarget.projectPath);
   const headRef = await resolvePrHeadRef({
-    refName: params.refName,
     changeRequestNumber: params.changeRequestNumber,
     checkoutTarget,
     repoRoot: params.repoRoot,
@@ -196,6 +210,7 @@ async function resolvePrCheckoutIntent(
   return {
     kind: "checkout-change-request",
     forge: deps.forge,
+    ...trustedProjectIdentity(checkoutTarget),
     changeRequestNumber: params.changeRequestNumber,
     headRef,
     ...(headRepositoryOwner ? { headRepositoryOwner } : {}),
@@ -205,6 +220,10 @@ async function resolvePrCheckoutIntent(
     ...(pushRemoteUrl ? { pushRemoteUrl } : {}),
     ...(trackOriginHead ? { trackOriginHead } : {}),
   };
+}
+
+function trustedProjectIdentity(target: PullRequestCheckoutTarget): { projectPath?: string } {
+  return target.projectPath ? { projectPath: target.projectPath } : {};
 }
 
 function hasCheckoutRefs(target: PullRequestCheckoutTarget): boolean {
@@ -222,6 +241,28 @@ async function resolvePrCheckoutTarget(params: {
   });
 }
 
+function normalizeProjectPath(projectPath: string): string {
+  return projectPath
+    .trim()
+    .replace(/^\/+|\/+$/gu, "")
+    .replace(/\.git$/u, "");
+}
+
+function assertCheckoutSourceMatchesResolvedProject(
+  sourceProjectPath: string | undefined,
+  targetProjectPath: string | undefined,
+): void {
+  if (!sourceProjectPath) return;
+  const expectedProjectPath = normalizeProjectPath(sourceProjectPath);
+  const actualProjectPath = targetProjectPath ? normalizeProjectPath(targetProjectPath) : undefined;
+  if (!actualProjectPath || actualProjectPath !== expectedProjectPath) {
+    throw new CheckoutSourceProjectMismatchError({
+      expectedProjectPath,
+      ...(actualProjectPath ? { actualProjectPath } : {}),
+    });
+  }
+}
+
 async function resolveDefaultBranch(
   repoRoot: string,
   deps: ResolveWorktreeCreationIntentDeps,
@@ -234,16 +275,11 @@ async function resolveDefaultBranch(
 }
 
 async function resolvePrHeadRef(params: {
-  refName?: string;
   changeRequestNumber: number;
   checkoutTarget: PullRequestCheckoutTarget;
   repoRoot: string;
   deps: ResolveWorktreeCreationIntentDeps;
 }): Promise<string> {
-  const trimmedRefName = params.refName?.trim();
-  if (trimmedRefName) {
-    return trimmedRefName;
-  }
   const checkoutTargetHeadRef = params.checkoutTarget.headRefName.trim();
   if (checkoutTargetHeadRef) {
     return checkoutTargetHeadRef;

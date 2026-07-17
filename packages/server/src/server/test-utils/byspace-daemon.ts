@@ -18,6 +18,7 @@ interface TestBySpaceDaemonOptions {
   corsAllowedOrigins?: string[];
   /** Override the version advertised in server_info (used by outdated-daemon e2e). */
   daemonVersion?: string;
+  github?: BySpaceDaemonConfig["github"];
   listen?: string;
   logger?: Parameters<typeof createBySpaceDaemon>[1];
   mcpEnabled?: boolean;
@@ -161,6 +162,7 @@ async function prepareTestDaemonConfig(
     listen: `${listenHost}:0`,
     byspaceHome,
     daemonVersion: options.daemonVersion,
+    github: options.github,
     corsAllowedOrigins: options.corsAllowedOrigins ?? [],
     hostnames: true,
     mcpEnabled: options.mcpEnabled ?? true,

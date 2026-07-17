@@ -13,6 +13,20 @@ async function resolveSshHostnameAsLiteralHost(host: string): Promise<string | n
   return host;
 }
 
+function deferProbe(
+  releases: Array<(forge: string | null) => void>,
+  state: { active: number; maxActive: number },
+): Promise<string | null> {
+  state.active += 1;
+  state.maxActive = Math.max(state.maxActive, state.active);
+  return new Promise((resolve) => {
+    releases.push((forge) => {
+      state.active -= 1;
+      resolve(forge);
+    });
+  });
+}
+
 describe("parseRemoteHost", () => {
   it("parses ssh and https remotes", () => {
     expect(parseRemoteHost("git@github.com:owner/repo.git")).toBe("github.com");
@@ -372,5 +386,55 @@ describe("createForgeResolver", () => {
     expect(a).toMatchObject({ forge: "gitlab", host: "git.acme.internal" });
     expect(b).toMatchObject({ forge: "gitlab", host: "git.acme.internal" });
     expect(probeForge).toHaveBeenCalledTimes(1);
+  });
+
+  it("limits distinct-host probes to five globally across resolver instances", async () => {
+    const state = { active: 0, maxActive: 0 };
+    const releases: Array<(forge: string | null) => void> = [];
+    const probeForge = vi.fn(() => deferProbe(releases, state));
+    const firstResolver = createForgeResolver({
+      probeForge,
+      resolveSshHostname: resolveSshHostnameAsLiteralHost,
+    });
+    const secondResolver = createForgeResolver({
+      probeForge,
+      resolveSshHostname: resolveSshHostnameAsLiteralHost,
+    });
+    const pending = Array.from({ length: 6 }, (_, index) =>
+      (index % 2 === 0 ? firstResolver : secondResolver).resolveFromRemoteUrlAsync(
+        `git@forge-${index}.example:team/repo.git`,
+      ),
+    );
+
+    await vi.waitFor(() => expect(probeForge).toHaveBeenCalledTimes(5));
+    expect(state.maxActive).toBe(5);
+    releases[0]?.(null);
+    await vi.waitFor(() => expect(probeForge).toHaveBeenCalledTimes(6));
+    for (const release of releases.slice(1)) release(null);
+    await expect(Promise.all(pending)).resolves.toEqual(Array.from({ length: 6 }, () => null));
+    expect(state.maxActive).toBe(5);
+  });
+
+  it("retries a negatively cached host after its TTL", async () => {
+    let now = 1_000;
+    const probeForge = vi
+      .fn<() => Promise<string | null>>()
+      .mockResolvedValueOnce(null)
+      .mockResolvedValue("gitea");
+    const resolver = createForgeResolver({
+      now: () => now,
+      probeForge,
+      resolveSshHostname: resolveSshHostnameAsLiteralHost,
+    });
+    const url = "git@forge.example:team/repo.git";
+
+    await expect(resolver.resolveFromRemoteUrlAsync(url)).resolves.toBeNull();
+    await expect(resolver.resolveFromRemoteUrlAsync(url)).resolves.toBeNull();
+    expect(probeForge).toHaveBeenCalledTimes(1);
+    now += 60_001;
+    await expect(resolver.resolveFromRemoteUrlAsync(url)).resolves.toMatchObject({
+      forge: "gitea",
+    });
+    expect(probeForge).toHaveBeenCalledTimes(2);
   });
 });

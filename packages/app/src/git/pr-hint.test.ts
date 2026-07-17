@@ -41,3 +41,63 @@ describe("selectPrHintFromStatus", () => {
     ).toBeNull();
   });
 });
+
+describe("forge checks URL selection", () => {
+  const check = (url: string | null) => [{ name: "build", status: "success", url }];
+
+  it("builds the GitHub checks page safely", () => {
+    expect(
+      selectPrHintFromStatus({
+        ...githubStatus,
+        url: "https://github.com/acme/repo/pull/12?x=1#fragment",
+      })?.checksUrl,
+    ).toBe("https://github.com/acme/repo/pull/12/checks");
+  });
+
+  it("uses validated GitLab pipeline facts, then actual check URLs", () => {
+    expect(
+      selectPrHintFromStatus(
+        {
+          ...gitlabStatus,
+          checks: check("https://gitlab.com/acme/repo/-/jobs/1"),
+          forgeSpecific: {
+            forge: "gitlab",
+            pipelineUrl: "https://gitlab.com/acme/repo/-/pipelines/306",
+          },
+        },
+        "gitlab",
+      )?.checksUrl,
+    ).toBe("https://gitlab.com/acme/repo/-/pipelines/306");
+    expect(
+      selectPrHintFromStatus(
+        { ...gitlabStatus, checks: check("https://gitlab.com/acme/repo/-/jobs/1") },
+        "gitlab",
+      )?.checksUrl,
+    ).toBe("https://gitlab.com/acme/repo/-/jobs/1");
+  });
+
+  it.each(["gitea", "forgejo", "codeberg", "unknown"])(
+    "%s uses an actual check URL without inventing one",
+    (forge) => {
+      expect(
+        selectPrHintFromStatus(
+          { ...githubStatus, checks: check("https://forge.example/actions/1") },
+          forge,
+        )?.checksUrl,
+      ).toBe("https://forge.example/actions/1");
+      expect(selectPrHintFromStatus(githubStatus, forge)?.checksUrl).toBeNull();
+    },
+  );
+
+  it("rejects malformed GitLab facts as a URL source", () => {
+    expect(
+      selectPrHintFromStatus(
+        {
+          ...gitlabStatus,
+          forgeSpecific: { forge: "gitlab", pipelineUrl: 123 },
+        },
+        "gitlab",
+      )?.checksUrl,
+    ).toBeNull();
+  });
+});

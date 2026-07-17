@@ -174,6 +174,7 @@ export type WorktreeSource =
   | {
       kind: "checkout-change-request";
       forge: string;
+      projectPath?: string;
       changeRequestNumber: number;
       headRef: string;
       headRepositoryOwner?: string;
@@ -1393,18 +1394,30 @@ async function resolveWorktreeSourcePlan({
       return {
         branchName: localBranchName,
         metadataBaseRefName: normalizedBaseRefName,
-        changeRequestLookupTarget: {
-          headRef: source.headRef,
-          ...(source.headRepositoryOwner
-            ? { headRepositoryOwner: source.headRepositoryOwner }
-            : {}),
-          changeRequestNumber,
-        },
+        changeRequestLookupTarget: buildChangeRequestLookupTarget(source, changeRequestNumber),
         addArguments: [localBranchName],
         ...remotePlan,
       };
     }
   }
+}
+
+function buildChangeRequestLookupTarget(
+  source: Extract<
+    WorktreeSource,
+    { kind: "checkout-change-request" } | { kind: "checkout-github-pr" }
+  >,
+  changeRequestNumber: number,
+): BySpaceWorktreeChangeRequestLookupTarget {
+  return {
+    headRef: source.headRef,
+    ...(source.kind === "checkout-change-request" ? { forge: source.forge } : {}),
+    ...(source.kind === "checkout-change-request" && source.projectPath
+      ? { projectPath: source.projectPath }
+      : {}),
+    ...(source.headRepositoryOwner ? { headRepositoryOwner: source.headRepositoryOwner } : {}),
+    changeRequestNumber,
+  };
 }
 
 async function configureWorktreePushRemote(options: {

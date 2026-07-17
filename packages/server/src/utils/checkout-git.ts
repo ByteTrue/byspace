@@ -3,6 +3,7 @@ import { existsSync, realpathSync } from "fs";
 import { open as openFile, readFile, stat as statFile } from "fs/promises";
 import { TTLCache } from "@isaacs/ttlcache";
 import type { CheckoutCommit, CheckoutCommitFile } from "@bytetrue/byspace-protocol/messages";
+import { parseGitRemoteLocation } from "@bytetrue/byspace-protocol/git-remote";
 import type { Logger } from "pino";
 import type { ParsedDiffFile } from "../server/utils/diff-highlighter.js";
 import { parseAndHighlightDiff } from "../server/utils/diff-highlighter.js";
@@ -64,9 +65,11 @@ interface CheckoutReadCacheOptions {
   reason?: string;
 }
 
-interface PullRequestStatusLookupTarget {
+export interface PullRequestStatusLookupTarget {
   headRef: string;
   headRepositoryOwner?: string;
+  forge?: string;
+  projectPath?: string;
 }
 
 interface PullRequestLookupTargetBranchConfig {
@@ -802,6 +805,7 @@ export type CheckoutSnapshotFacts =
       branchRemoteName: string | null;
       branchMergeRef: string | null;
       pullRequestLookupTarget: PullRequestStatusLookupTarget | null;
+      pullRequestLookupFallbackTarget: PullRequestStatusLookupTarget | null;
     };
 
 function isGitError(error: unknown): boolean {
@@ -1636,6 +1640,8 @@ function buildPullRequestLookupTargetFromMetadata(
   return {
     headRef: target.headRef,
     ...(target.headRepositoryOwner ? { headRepositoryOwner: target.headRepositoryOwner } : {}),
+    ...(target.forge ? { forge: target.forge } : {}),
+    ...(target.projectPath ? { projectPath: target.projectPath } : {}),
   };
 }
 
@@ -1652,17 +1658,46 @@ function buildInitialPullRequestLookupTarget(input: {
     return null;
   }
 
-  return (
-    buildPullRequestLookupTargetFromMetadata(input.metadata) ??
-    buildPullRequestLookupTargetFromBranchConfig({
-      currentBranch: input.currentBranch,
-      branchRemoteName: input.branchRemoteName,
-      branchMergeRef: input.branchMergeRef,
-      branchRemoteUrl: input.branchRemoteUrl,
-      originRemoteUrl: input.originRemoteUrl,
-      resolvedBaseRef: input.resolvedBaseRef,
-    })
-  );
+  const metadataTarget = buildPullRequestLookupTargetFromMetadata(input.metadata);
+  if (
+    metadataTarget &&
+    isPullRequestLookupTargetCompatible(metadataTarget, input.originRemoteUrl)
+  ) {
+    return metadataTarget;
+  }
+  return buildPullRequestLookupTargetFromBranchConfig({
+    currentBranch: input.currentBranch,
+    branchRemoteName: input.branchRemoteName,
+    branchMergeRef: input.branchMergeRef,
+    branchRemoteUrl: input.branchRemoteUrl,
+    originRemoteUrl: input.originRemoteUrl,
+    resolvedBaseRef: input.resolvedBaseRef,
+  });
+}
+
+function normalizeProjectPath(projectPath: string): string {
+  return projectPath
+    .trim()
+    .replace(/^\/+|\/+$/gu, "")
+    .replace(/\.git$/u, "");
+}
+
+export function isPullRequestLookupTargetCompatible(
+  target: PullRequestStatusLookupTarget,
+  originRemoteUrl: string | null,
+  forge?: string,
+): boolean {
+  if (!target.forge && !target.projectPath) return true;
+  const origin = originRemoteUrl ? parseGitRemoteLocation(originRemoteUrl) : null;
+  if (!origin) return false;
+  if (target.forge && forge && target.forge !== forge) return false;
+  if (
+    target.projectPath &&
+    normalizeProjectPath(origin.path) !== normalizeProjectPath(target.projectPath)
+  ) {
+    return false;
+  }
+  return true;
 }
 
 async function resolvePullRequestLookupTargetFromPushConfig(
@@ -1747,6 +1782,16 @@ export async function getCheckoutSnapshotFacts(
       ]);
     }
   }
+  let pullRequestLookupFallbackTarget = inspected.currentBranch
+    ? buildPullRequestLookupTargetFromBranchConfig({
+        currentBranch: inspected.currentBranch,
+        branchRemoteName,
+        branchMergeRef,
+        branchRemoteUrl,
+        originRemoteUrl: inspected.remoteUrl,
+        resolvedBaseRef,
+      })
+    : null;
   let pullRequestLookupTarget = buildInitialPullRequestLookupTarget({
     currentBranch: inspected.currentBranch,
     metadata: byspaceWorktreeMetadata,
@@ -1756,19 +1801,21 @@ export async function getCheckoutSnapshotFacts(
     originRemoteUrl: inspected.remoteUrl,
     resolvedBaseRef,
   });
-  if (
-    inspected.currentBranch &&
-    pullRequestLookupTarget?.headRef === inspected.currentBranch &&
-    !pullRequestLookupTarget.headRepositoryOwner
-  ) {
-    pullRequestLookupTarget =
-      (await resolvePullRequestLookupTargetFromPushConfig(
-        cwd,
-        inspected.currentBranch,
-        inspected.remoteUrl,
-        resolvedBaseRef,
-        context,
-      )) ?? pullRequestLookupTarget;
+  if (inspected.currentBranch) {
+    const pushTarget = await resolvePullRequestLookupTargetFromPushConfig(
+      cwd,
+      inspected.currentBranch,
+      inspected.remoteUrl,
+      resolvedBaseRef,
+      context,
+    );
+    pullRequestLookupFallbackTarget = pushTarget ?? pullRequestLookupFallbackTarget;
+    if (
+      pullRequestLookupTarget?.headRef === inspected.currentBranch &&
+      !pullRequestLookupTarget.headRepositoryOwner
+    ) {
+      pullRequestLookupTarget = pushTarget ?? pullRequestLookupTarget;
+    }
   }
 
   return {
@@ -1786,6 +1833,7 @@ export async function getCheckoutSnapshotFacts(
     branchRemoteName,
     branchMergeRef,
     pullRequestLookupTarget,
+    pullRequestLookupFallbackTarget,
   };
 }
 

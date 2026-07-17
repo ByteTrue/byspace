@@ -375,6 +375,7 @@ describe("createGitLabService", () => {
       service.getPullRequestCheckoutTarget?.({ cwd: "/repo", number: 14 }),
     ).resolves.toEqual({
       number: 14,
+      projectPath: "example-group/example-project",
       baseRefName: "main",
       headRefName: "release/v0.4.0",
       checkoutRefs: [
@@ -404,6 +405,7 @@ describe("createGitLabService", () => {
       service.getPullRequestCheckoutTarget?.({ cwd: "/repo", number: 14 }),
     ).resolves.toMatchObject({
       number: 14,
+      projectPath: "example-group/example-project",
       headRefName: "release/v0.4.0",
       isCrossRepository: true,
       headOwnerLogin: null,

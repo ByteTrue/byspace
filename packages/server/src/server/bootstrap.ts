@@ -91,6 +91,7 @@ function formatListenTarget(listenTarget: ListenTarget | null): string | null {
 
 import { VoiceAssistantWebSocketServer } from "./websocket-server.js";
 import { createGitHubService } from "../services/github-service.js";
+import type { ForgeService } from "../services/forge-service.js";
 import {
   createBySpaceWorktree as createRegisteredBySpaceWorktree,
   createLocalCheckoutWorkspace,
@@ -335,6 +336,8 @@ export interface BySpaceDaemonConfig {
   byspaceHome: string;
   /** Test-only override for advertised daemon version (e.g. outdated-daemon e2e fixture). */
   daemonVersion?: string;
+  /** Optional forge adapter injection for isolated test daemons. */
+  github?: ForgeService;
   worktreesRoot?: string;
   corsAllowedOrigins: string[];
   allowedHosts?: HostnamesConfig;
@@ -731,7 +734,7 @@ export async function createBySpaceDaemon(
     byspaceHome: config.byspaceHome,
     logger,
   });
-  const github = createGitHubService();
+  const github = config.github ?? createGitHubService();
   const workspaceGitService = new WorkspaceGitServiceImpl({
     logger,
     byspaceHome: config.byspaceHome,

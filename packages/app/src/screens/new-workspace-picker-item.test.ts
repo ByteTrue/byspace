@@ -27,14 +27,13 @@ describe("pickerItemToCheckoutRequest", () => {
     });
   });
 
-  it("maps a github-pr row to checkout using the head ref and pr number", () => {
+  it("maps a github-pr row to checkout without trusting the client head ref", () => {
     const item: PickerItem = {
       kind: "github-pr",
       item: prItem,
     };
     expect(pickerItemToCheckoutRequest(item)).toEqual({
       action: "checkout",
-      refName: "feature/picker",
       checkoutSource: { kind: "change_request", forge: "github", number: 42 },
       githubPrNumber: 42,
     });
@@ -53,7 +52,6 @@ describe("pickerItemToCheckoutRequest", () => {
     };
     expect(pickerItemToCheckoutRequest(item)).toEqual({
       action: "checkout",
-      refName: "orphan",
       checkoutSource: { kind: "change_request", forge: "github", number: 7 },
       githubPrNumber: 7,
     });
@@ -72,7 +70,6 @@ describe("pickerItemToCheckoutRequest", () => {
     };
     expect(pickerItemToCheckoutRequest(item)).toEqual({
       action: "checkout",
-      refName: "feature/picker",
       checkoutSource: {
         kind: "change_request",
         forge: "gitlab",

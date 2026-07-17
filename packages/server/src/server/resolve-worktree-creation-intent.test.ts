@@ -3,6 +3,7 @@ import { describe, expect, test } from "vitest";
 import type { ForgeService } from "../services/forge-service.js";
 import {
   CheckoutSourceForgeMismatchError,
+  CheckoutSourceProjectMismatchError,
   MissingCheckoutTargetError,
   resolveWorktreeCreationIntent,
   UnsupportedForgeCheckoutTargetError,
@@ -210,7 +211,7 @@ describe("resolveWorktreeCreationIntent", () => {
     expect(deps.headRefLookups).toEqual([]);
   });
 
-  test("uses an explicit PR head ref without calling GitHub", async () => {
+  test("ignores an explicit client PR head ref", async () => {
     const deps = createResolverHarness();
 
     await expect(
@@ -223,12 +224,99 @@ describe("resolveWorktreeCreationIntent", () => {
       kind: "checkout-change-request",
       forge: "github",
       changeRequestNumber: 42,
-      headRef: "head-ref",
+      headRef: "pr-42",
       baseRefName: "main",
       checkoutRefs: [{ remoteName: "origin", remoteRef: "refs/pull/42/head" }],
       trackOriginHead: true,
     });
     expect(deps.headRefLookups).toEqual([]);
+  });
+
+  test("validates a supplied project path against the adapter target", async () => {
+    const deps = createResolverHarness({
+      forgeService: {
+        getPullRequestCheckoutTarget: async ({ number }) => ({
+          number,
+          projectPath: "group/repo",
+          baseRefName: "main",
+          headRefName: "trusted-head",
+          headOwnerLogin: null,
+          headRepositorySshUrl: null,
+          headRepositoryUrl: null,
+          isCrossRepository: false,
+        }),
+      },
+    });
+
+    await expect(
+      resolveWorktreeCreationIntent(
+        {
+          action: "checkout",
+          refName: "untrusted-head",
+          checkoutSource: {
+            kind: "change_request",
+            forge: "github",
+            number: 9,
+            projectPath: "/group/repo.git/",
+          },
+        },
+        repoRoot,
+        deps,
+      ),
+    ).resolves.toMatchObject({ projectPath: "group/repo", headRef: "trusted-head" });
+  });
+
+  test("rejects a supplied project path when the adapter cannot verify it", async () => {
+    const deps = createResolverHarness();
+
+    await expect(
+      resolveWorktreeCreationIntent(
+        {
+          action: "checkout",
+          checkoutSource: {
+            kind: "change_request",
+            forge: "github",
+            number: 9,
+            projectPath: "other/repo",
+          },
+        },
+        repoRoot,
+        deps,
+      ),
+    ).rejects.toThrow(CheckoutSourceProjectMismatchError);
+  });
+
+  test("rejects a supplied project path that differs from the adapter target", async () => {
+    const deps = createResolverHarness({
+      forgeService: {
+        getPullRequestCheckoutTarget: async ({ number }) => ({
+          number,
+          projectPath: "group/repo",
+          baseRefName: "main",
+          headRefName: "trusted-head",
+          headOwnerLogin: null,
+          headRepositorySshUrl: null,
+          headRepositoryUrl: null,
+          isCrossRepository: false,
+        }),
+      },
+    });
+
+    await expect(
+      resolveWorktreeCreationIntent(
+        {
+          action: "checkout",
+          checkoutSource: {
+            kind: "change_request",
+            forge: "github",
+            number: 9,
+            projectPath: "other/repo",
+          },
+        },
+        repoRoot,
+        deps,
+      ),
+    ).rejects.toThrow(CheckoutSourceProjectMismatchError);
   });
 
   test("checks out a GitLab MR source branch from the checkout target", async () => {

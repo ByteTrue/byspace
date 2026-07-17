@@ -144,7 +144,10 @@ function createCheckoutStatus(
   };
 }
 
-function createCheckoutSnapshotFacts(cwd: string): CheckoutSnapshotFacts {
+function createCheckoutSnapshotFacts(
+  cwd: string,
+  overrides?: Partial<Extract<CheckoutSnapshotFacts, { isGit: true }>>,
+): CheckoutSnapshotFacts {
   return {
     isGit: true,
     worktreeRoot: cwd,
@@ -160,6 +163,8 @@ function createCheckoutSnapshotFacts(cwd: string): CheckoutSnapshotFacts {
     branchRemoteName: "origin",
     branchMergeRef: "refs/heads/main",
     pullRequestLookupTarget: { headRef: "main" },
+    pullRequestLookupFallbackTarget: null,
+    ...overrides,
   };
 }
 
@@ -386,6 +391,30 @@ describe("WorkspaceGitServiceImpl", () => {
     );
     expect(getPullRequestStatus).toHaveBeenCalledTimes(1);
 
+    service.dispose();
+  });
+
+  test("immediate forge status rejects stale identity-bearing metadata", async () => {
+    const getPullRequestStatus = vi.fn(async () => createPullRequestStatusResult());
+    const service = createService({
+      getPullRequestStatus,
+      getCheckoutSnapshotFacts: vi.fn(async (cwd: string) =>
+        createCheckoutSnapshotFacts(cwd, {
+          pullRequestLookupTarget: {
+            headRef: "stale-fork",
+            forge: "github",
+            projectPath: "other/repo",
+          },
+          pullRequestLookupFallbackTarget: { headRef: "main" },
+        }),
+      ),
+    });
+
+    await service.getSnapshot(REPO_CWD);
+
+    expect(getPullRequestStatus.mock.calls[0]?.[3]).toMatchObject({
+      facts: { pullRequestLookupTarget: { headRef: "main" } },
+    });
     service.dispose();
   });
 

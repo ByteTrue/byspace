@@ -322,7 +322,7 @@ function WorkspaceHoverCardContent({
               <View style={styles.separator} />
               <ChecksSummaryPressable
                 checks={prHint.checks}
-                url={prHint.url}
+                url={prHint.checksUrl}
                 forge={prHint.forge}
               />
             </>
@@ -534,10 +534,10 @@ function ChecksSummaryPressable({
 }: {
   checks: NonNullable<PrHint["checks"]>;
   forge: PrHint["forge"];
-  url: string;
+  url: string | null;
 }) {
   const handlePress = useCallback(() => {
-    void openExternalUrl(`${url}/checks`);
+    if (url) void openExternalUrl(url);
   }, [url]);
 
   const renderChildren = useCallback(
@@ -546,6 +546,14 @@ function ChecksSummaryPressable({
     ),
     [checks, forge],
   );
+
+  if (!url) {
+    return (
+      <View style={styles.checksSummaryRow}>
+        <ChecksSummaryContent checks={checks} forge={forge} hovered={false} />
+      </View>
+    );
+  }
 
   return (
     <Pressable style={checksSummaryPressableStyle} onPress={handlePress}>

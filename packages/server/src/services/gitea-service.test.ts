@@ -388,7 +388,12 @@ const TIMELINE_REVIEW_COMMENTS = [
 ];
 
 const LOGINS = [
-  { name: "gitea.com", url: "https://gitea.com", ssh_host: "gitea.com", user: "example-user" },
+  {
+    name: "work",
+    url: "https://Gitea.Com.:8443/api",
+    ssh_host: "ssh.gitea.com",
+    user: "example-user",
+  },
 ];
 
 function giteaMergeStatus(
@@ -1529,6 +1534,7 @@ describe("createGiteaService", () => {
       service.getPullRequestCheckoutTarget({ cwd: "/repo", number: 5 }),
     ).resolves.toEqual({
       number: 5,
+      projectPath: "example-user/sample-repo",
       baseRefName: "main",
       headRefName: "feat/sample-change",
       checkoutRefs: [
@@ -1565,6 +1571,7 @@ describe("createGiteaService", () => {
       service.getPullRequestCheckoutTarget({ cwd: "/repo", number: 5 }),
     ).resolves.toEqual({
       number: 5,
+      projectPath: "example-user/sample-repo",
       baseRefName: "main",
       headRefName: "feat/sample-change",
       checkoutRefs: [
@@ -2056,6 +2063,20 @@ describe("createGiteaService", () => {
     await expect(service.isAuthenticated({ cwd: "/repo" })).resolves.toBe(false);
   });
 
+  it.each([
+    [[{ name: "gitea.com", url: "https://attacker.example" }], "alias spoof"],
+    [[{ name: "work", url: "https://attacker.example", ssh_host: "gitea.com" }], "ssh host spoof"],
+    [[{ name: "gitea.com", url: "not a url" }], "malformed URL"],
+    [[{ name: "gitea.com" }], "missing URL"],
+  ])("does not authenticate a remote through a %s", async (logins) => {
+    const { service } = makeService((args) => {
+      if (args[0] === "login" && args[1] === "list") return ok(JSON.stringify(logins));
+      throw new Error(`unexpected call: ${args.join(" ")}`);
+    });
+
+    await expect(service.isAuthenticated({ cwd: "/repo" })).resolves.toBe(false);
+  });
+
   it("maps an authentication failure from tea onto TeaAuthenticationError", async () => {
     const { service } = makeService(() => {
       throw { code: 1, stderr: "401 Unauthorized" };
@@ -2244,7 +2265,7 @@ describe("detectGiteaFamilySoftware", () => {
     const runTea = async (args: string[]): Promise<{ stdout: string; stderr: string }> => {
       if (args[0] === "login") {
         return {
-          stdout: JSON.stringify([{ name: "git.acme.it", url: "https://git.acme.it" }]),
+          stdout: JSON.stringify([{ name: "work", url: "https://Git.Acme.It.:8443/api" }]),
           stderr: "",
         };
       }
@@ -2257,10 +2278,12 @@ describe("detectGiteaFamilySoftware", () => {
   });
 
   it("reads forgejo from the authenticated tea status line when anonymous access is blocked", async () => {
+    const calls: string[][] = [];
     const runTea = async (args: string[]): Promise<{ stdout: string; stderr: string }> => {
+      calls.push(args);
       if (args[0] === "login") {
         return {
-          stdout: JSON.stringify([{ name: "forge.acme.it", url: "https://forge.acme.it" }]),
+          stdout: JSON.stringify([{ name: "work", url: "https://forge.acme.it" }]),
           stderr: "",
         };
       }
@@ -2270,6 +2293,7 @@ describe("detectGiteaFamilySoftware", () => {
       runTea,
     });
     expect(software).toBe("forgejo");
+    expect(calls[1]).toEqual(["api", "--login", "work", "-i", "/api/forgejo/v1/version"]);
   });
 
   it("defaults to gitea when every tier is inconclusive", async () => {

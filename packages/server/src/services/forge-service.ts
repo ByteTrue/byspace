@@ -31,6 +31,7 @@ export interface PullRequestSummary {
 
 export interface PullRequestCheckoutTarget {
   number: number;
+  projectPath?: string;
   baseRefName: string;
   headRefName: string;
   checkoutRefs?: PullRequestCheckoutRef[];

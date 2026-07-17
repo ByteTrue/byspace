@@ -46,6 +46,12 @@ export const GITEA_FAMILY_URL_GRAMMAR: ForgeUrlGrammar = {
 
 export type ForgeSpecificEnvelope = { forge: string } & Record<string, unknown>;
 
+export interface ChecksUrlInput {
+  changeRequestUrl: string;
+  checks: Array<{ url: string | null }>;
+  forgeSpecific?: unknown;
+}
+
 type CheckoutPrStatus = NonNullable<CheckoutPrStatusResponse["payload"]["status"]>;
 
 export type LegacyGithubMergeFacts = NonNullable<CheckoutPrStatus["github"]>;
@@ -188,6 +194,7 @@ export interface ClientForgeLogicModule<
   readonly id: string;
   readonly urlGrammar?: ForgeUrlGrammar;
   readonly facts?: ClientForgeFactsEntry<TFacts>;
+  readonly resolveChecksUrl?: (input: ChecksUrlInput) => string | null;
 }
 
 /**

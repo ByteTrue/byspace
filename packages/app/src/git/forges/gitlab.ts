@@ -75,6 +75,16 @@ export type GitlabMergeFacts = z.infer<typeof GitlabMergeFactsSchema>;
 
 export { GitlabMergeFactsSchema };
 
+function resolveGitlabChecksUrl(input: {
+  checks: Array<{ url: string | null }>;
+  forgeSpecific?: unknown;
+}): string | null {
+  const parsed = GitlabMergeFactsSchema.safeParse(input.forgeSpecific);
+  return parsed.success
+    ? (parsed.data.pipelineUrl ?? input.checks.find((check) => check.url !== null)?.url ?? null)
+    : (input.checks.find((check) => check.url !== null)?.url ?? null);
+}
+
 const GITLAB_MERGEABLE_STATUS = "mergeable";
 const GITLAB_LEGACY_MERGEABLE_STATUS = "can_be_merged";
 const GITLAB_MERGE_METHODS: CheckoutPrMergeMethod[] = ["merge", "squash", "rebase"];
@@ -147,6 +157,7 @@ export const gitlabForgeLogic = {
     blobInfix: "/-/blob/",
     lineAnchor: gitlabLineAnchor,
   },
+  resolveChecksUrl: resolveGitlabChecksUrl,
   facts: defineForgeFacts({
     family: "gitlab",
     schema: GitlabMergeFactsSchema,

@@ -1032,8 +1032,13 @@ export function createGitLabService(options: CreateGitLabServiceOptions = {}): F
       input: GetPullRequestOptions,
     ): Promise<PullRequestCheckoutTarget> {
       const mr = await viewMergeRequest(input.cwd, String(input.number));
+      const projectPath = extractProjectPath(mr.references?.full);
+      if (!projectPath) {
+        throw new Error("GitLab merge request project path is unavailable");
+      }
       return {
         number: mr.iid,
+        projectPath,
         baseRefName: mr.target_branch,
         headRefName: mr.source_branch,
         checkoutRefs: [

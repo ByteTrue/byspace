@@ -33,6 +33,7 @@ function resolveDaemonWsUrl(): string {
 export interface ConnectDaemonClientOptions {
   clientIdPrefix: string;
   appVersion?: string;
+  url?: string;
 }
 
 /**
@@ -45,7 +46,7 @@ export async function connectDaemonClient<ClientInstance extends { connect(): Pr
 ): Promise<ClientInstance> {
   const DaemonClient = await loadDaemonClientConstructor<E2EDaemonClientConfig, ClientInstance>();
   const client = new DaemonClient({
-    url: resolveDaemonWsUrl(),
+    url: options.url ?? resolveDaemonWsUrl(),
     clientId: `${options.clientIdPrefix}-${randomUUID()}`,
     clientType: "cli",
     appVersion: options.appVersion ?? loadAppVersion(),

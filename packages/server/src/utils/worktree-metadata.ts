@@ -6,6 +6,8 @@ const ChangeRequestLookupTargetSchema = z.object({
   headRef: z.string().min(1),
   headRepositoryOwner: z.string().min(1).optional(),
   changeRequestNumber: z.number().int().positive().optional(),
+  forge: z.string().min(1).optional(),
+  projectPath: z.string().min(1).optional(),
 });
 
 const BySpaceWorktreeMetadataV1Schema = z.object({

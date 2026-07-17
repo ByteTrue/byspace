@@ -39,6 +39,7 @@ import {
   parseWorktreeList,
   renameCurrentBranch,
   isBySpaceWorktreePath,
+  isPullRequestLookupTargetCompatible,
   isDescendantPath,
   warmCheckoutShortstatInBackground,
 } from "./checkout-git.js";
@@ -203,6 +204,34 @@ function getBranchUpstream(cwd: string): string | null {
   return result.status === 0 ? result.stdout.trim() : null;
 }
 
+describe("isPullRequestLookupTargetCompatible", () => {
+  it("accepts matching identity and legacy metadata", () => {
+    expect(
+      isPullRequestLookupTargetCompatible(
+        { headRef: "feature", forge: "gitlab", projectPath: "group/repo" },
+        "https://gitlab.example/group/repo.git",
+        "gitlab",
+      ),
+    ).toBe(true);
+    expect(isPullRequestLookupTargetCompatible({ headRef: "legacy" }, null, "github")).toBe(true);
+  });
+
+  it("rejects changed project, changed forge, and missing or malformed origins", () => {
+    const target = { headRef: "feature", forge: "gitlab", projectPath: "group/repo" };
+    expect(
+      isPullRequestLookupTargetCompatible(
+        target,
+        "https://gitlab.example/other/repo.git",
+        "gitlab",
+      ),
+    ).toBe(false);
+    expect(
+      isPullRequestLookupTargetCompatible(target, "https://gitlab.example/group/repo.git", "gitea"),
+    ).toBe(false);
+    expect(isPullRequestLookupTargetCompatible(target, null, "gitlab")).toBe(false);
+    expect(isPullRequestLookupTargetCompatible(target, "not a remote", "gitlab")).toBe(false);
+  });
+});
 function setupRemoteTrackingMain(
   repoDir: string,
   tempDir: string,

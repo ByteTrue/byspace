@@ -1,4 +1,5 @@
 import { LRUCache } from "lru-cache";
+import pLimit from "p-limit";
 import {
   parseGitRemoteLocation,
   type GitRemoteLocation,
@@ -54,6 +55,8 @@ const NEGATIVE_PROBE_TTL_MS = 60_000;
 // so unbounded Maps would grow for the daemon's lifetime. Distinct hosts/cwds
 // are few in practice; LRU eviction keeps the working set without a leak.
 const FORGE_RESOLVER_CACHE_MAX = 512;
+const FORGE_HOST_PROBE_CONCURRENCY = 5;
+const forgeHostProbeLimit = pLimit(FORGE_HOST_PROBE_CONCURRENCY);
 
 export function parseRemoteHost(url: string): string | null {
   return parseGitRemoteLocation(url)?.host ?? null;
@@ -113,7 +116,7 @@ export function createForgeResolver(options: CreateForgeResolverOptions = {}): F
     if (!entry) {
       return undefined;
     }
-    if (entry.expiresAt !== null && Date.now() >= entry.expiresAt) {
+    if (entry.expiresAt !== null && now() >= entry.expiresAt) {
       probedForgeByHost.delete(host);
       return undefined;
     }
@@ -148,13 +151,13 @@ export function createForgeResolver(options: CreateForgeResolverOptions = {}): F
         // cached negatively, so a transient failure is retried after the TTL.
         let probed: string | null;
         try {
-          probed = await probeForge(host);
+          probed = await forgeHostProbeLimit(() => probeForge(host));
         } catch {
           probed = null;
         }
         probedForgeByHost.set(host, {
           forge: probed,
-          expiresAt: probed === null ? Date.now() + NEGATIVE_PROBE_TTL_MS : null,
+          expiresAt: probed === null ? now() + NEGATIVE_PROBE_TTL_MS : null,
         });
         return probed;
       } finally {
@@ -218,7 +221,7 @@ export function createForgeResolver(options: CreateForgeResolverOptions = {}): F
     }
     probedForgeByHost.set(aliasHost, {
       forge,
-      expiresAt: forge === null ? Date.now() + NEGATIVE_PROBE_TTL_MS : null,
+      expiresAt: forge === null ? now() + NEGATIVE_PROBE_TTL_MS : null,
     });
   }
 

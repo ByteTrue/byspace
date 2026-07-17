@@ -1,6 +1,7 @@
 import { z } from "zod";
 import pLimit from "p-limit";
 import {
+  normalizeHost,
   parseGitHubRemoteIdentity,
   parseGitRemoteLocation,
 } from "@bytetrue/byspace-protocol/git-remote";
@@ -1005,17 +1006,19 @@ function findTeaLoginNameForHost(stdout: string, host: string): string | null {
   if (!parsed.success) {
     return null;
   }
-  const target = host.toLowerCase();
+  const target = normalizeHost(host);
+  if (!target) {
+    return null;
+  }
   const match = parsed.data.find((login) => {
-    const candidates = [login.ssh_host, login.name];
-    if (login.url) {
-      try {
-        candidates.push(new URL(login.url).hostname);
-      } catch {
-        // ignore malformed login url
-      }
+    if (!login.name || !login.url) {
+      return false;
     }
-    return candidates.some((candidate) => candidate?.toLowerCase() === target);
+    try {
+      return normalizeHost(new URL(login.url).hostname) === target;
+    } catch {
+      return false;
+    }
   });
   return match?.name ?? null;
 }
@@ -1695,6 +1698,9 @@ export function createGiteaService(options: CreateGiteaServiceOptions = {}): For
       input: GetPullRequestOptions,
     ): Promise<PullRequestCheckoutTarget> {
       const summary = await this.getPullRequest(input);
+      if (!summary.projectPath) {
+        throw new Error("Gitea pull request project path is unavailable");
+      }
       const checkoutRefs = [
         { remoteName: "origin", remoteRef: `refs/pull/${summary.number}/head` },
       ];
@@ -1704,6 +1710,7 @@ export function createGiteaService(options: CreateGiteaServiceOptions = {}): For
       const fork = await resolveForkCheckoutFacts(input.cwd, summary);
       return {
         number: summary.number,
+        projectPath: summary.projectPath,
         baseRefName: summary.baseRefName,
         headRefName: summary.headRefName,
         checkoutRefs,

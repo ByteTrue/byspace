@@ -21,11 +21,9 @@ export function pickerItemToCheckoutRequest(
     case "branch":
       return { action: "branch-off", refName: item.name };
     case "github-pr": {
-      const headRefName = item.item.headRefName?.trim();
       const forge = item.item.forge ?? "github";
       return {
         action: "checkout",
-        ...(headRefName ? { refName: headRefName } : {}),
         checkoutSource: {
           kind: "change_request",
           forge,

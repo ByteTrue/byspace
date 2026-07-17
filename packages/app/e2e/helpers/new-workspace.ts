@@ -89,9 +89,12 @@ function parseWorkspaceIdFromPageUrl(page: Page, serverId: string): string | nul
   return decodeWorkspaceIdFromPathSegment(match[1]);
 }
 
-export async function connectNewWorkspaceDaemonClient(): Promise<NewWorkspaceDaemonClient> {
+export async function connectNewWorkspaceDaemonClient(
+  url?: string,
+): Promise<NewWorkspaceDaemonClient> {
   return connectDaemonClient<NewWorkspaceDaemonClient>({
     clientIdPrefix: "app-e2e-new-workspace",
+    ...(url ? { url } : {}),
   });
 }
 

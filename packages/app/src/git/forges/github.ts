@@ -60,6 +60,20 @@ function normalizeGithubMergeMethod(value: string | null): CheckoutPrMergeMethod
   return null;
 }
 
+function resolveGithubChecksUrl({ changeRequestUrl }: { changeRequestUrl: string }): string | null {
+  try {
+    const url = new URL(changeRequestUrl);
+    const match = url.pathname.replace(/\/+$/u, "").match(/^(.*\/pull\/\d+)(?:\/.*)?$/u);
+    if (!match) return null;
+    url.pathname = `${match[1]}/checks`;
+    url.search = "";
+    url.hash = "";
+    return url.toString();
+  } catch {
+    return null;
+  }
+}
+
 function deriveGithubMergeCapability(github: GithubMergeFacts): MergeCapability {
   const repository = github.repository;
   const allowedMethods: CheckoutPrMergeMethod[] = [];
@@ -87,6 +101,7 @@ export const githubForgeLogic = {
     blobInfix: "/blob/",
     lineAnchor: GITHUB_LINE_ANCHOR,
   },
+  resolveChecksUrl: resolveGithubChecksUrl,
   facts: defineForgeFacts({
     family: "github",
     schema: GithubMergeFactsSchema,

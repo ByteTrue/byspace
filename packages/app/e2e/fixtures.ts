@@ -1,5 +1,6 @@
 import { test as base, expect, type Page } from "@playwright/test";
 import { startOutdatedDaemon, type OutdatedDaemon } from "./helpers/daemon-update";
+import { startForgeCapableDaemon, type ForgeCapableDaemon } from "./helpers/forge-capable-daemon";
 import { getE2EDaemonPort } from "./helpers/daemon-port";
 import { buildCreateAgentPreferences, buildSeededHost } from "./helpers/daemon-registry";
 import {
@@ -24,6 +25,7 @@ interface TrackedProjectPickerFixture extends ProjectPickerFixture {
 const test = base.extend<{
   byspaceE2ESetup: void;
   outdatedDaemon: OutdatedDaemon;
+  forgeCapableDaemon: ForgeCapableDaemon;
   projectPickerFixture: TrackedProjectPickerFixture;
   withWorkspace: WithWorkspace;
 }>({
@@ -120,6 +122,11 @@ const test = base.extend<{
   ],
   outdatedDaemon: async ({}, provide) => {
     const daemon = await startOutdatedDaemon();
+    await provide(daemon);
+    await daemon.close();
+  },
+  forgeCapableDaemon: async ({}, provide) => {
+    const daemon = await startForgeCapableDaemon();
     await provide(daemon);
     await daemon.close();
   },
