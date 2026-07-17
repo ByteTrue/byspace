@@ -365,7 +365,12 @@ export function normalizeGitOptions(
 }
 
 export function assertSafeGitRef(ref: string, label: string): void {
-  if (!SAFE_GIT_REF_PATTERN.test(ref) || ref.includes("..") || ref.includes("@{")) {
+  if (
+    !SAFE_GIT_REF_PATTERN.test(ref) ||
+    ref.startsWith("-") ||
+    ref.includes("..") ||
+    ref.includes("@{")
+  ) {
     throw new Error(`Invalid ${label}: ${ref}`);
   }
 }

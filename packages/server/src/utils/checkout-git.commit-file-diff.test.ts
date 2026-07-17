@@ -88,4 +88,37 @@ describe("getCommitFileDiff", () => {
 
     expect(file).toBeNull();
   });
+
+  it("treats Git pathspec metacharacters as a literal file path", async () => {
+    const repoDir = initRepo();
+    writeFileSync(join(repoDir, "file1.txt"), "plain base\n");
+    writeFileSync(join(repoDir, "file[1].txt"), "literal base\n");
+    git(["add", "."], repoDir);
+    git(["-c", "commit.gpgsign=false", "commit", "-m", "initial"], repoDir);
+
+    writeFileSync(join(repoDir, "file1.txt"), "plain changed\n");
+    writeFileSync(join(repoDir, "file[1].txt"), "literal changed\n");
+    git(["add", "."], repoDir);
+    git(["-c", "commit.gpgsign=false", "commit", "-m", "edit both"], repoDir);
+
+    const file = await getCommitFileDiff({
+      cwd: repoDir,
+      sha: headSha(repoDir),
+      path: "file[1].txt",
+    });
+
+    expect(file?.path).toBe("file[1].txt");
+    expect(file?.hunks[0]?.lines).toContainEqual(
+      expect.objectContaining({ type: "add", content: "literal changed" }),
+    );
+  });
+
+  it("treats a leading-dash object name as data rather than a Git option", async () => {
+    const repoDir = initRepo();
+    commitFile(repoDir, "foo.txt", "base\n", "initial");
+
+    await expect(
+      getCommitFileDiff({ cwd: repoDir, sha: "--ext-diff", path: "foo.txt" }),
+    ).rejects.toThrow();
+  });
 });

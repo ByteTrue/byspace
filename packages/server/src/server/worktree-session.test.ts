@@ -17,6 +17,7 @@ import type { SessionOutboundMessage, WorkspaceDescriptorPayload } from "./messa
 import {
   buildAgentSessionConfig,
   createBySpaceWorktreeWorkflow,
+  assertSafeGitRef,
   handleBySpaceWorktreeArchiveRequest,
   handleBySpaceWorktreeListRequest,
   resolveGitCreateBaseBranch,
@@ -77,6 +78,12 @@ function createLogger(): Logger {
   vi.spyOn(logger, "warn").mockImplementation(() => undefined);
   vi.spyOn(logger, "error").mockImplementation(() => undefined);
   return logger;
+
+  describe("assertSafeGitRef", () => {
+    test("rejects leading-dash refs before they reach Git option parsing", () => {
+      expect(() => assertSafeGitRef("--ext-diff", "commit")).toThrow("Invalid commit: --ext-diff");
+    });
+  });
 }
 
 function createWorkflowForRequestTest(options: {

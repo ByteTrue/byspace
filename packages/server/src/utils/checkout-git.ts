@@ -2196,9 +2196,8 @@ export async function listCheckoutCommits({
  * parses it into the same {@link ParsedDiffFile} shape the diff subscription
  * emits (so the client can reuse its existing renderer).
  *
- * Runs `git show <sha> --format= -- <path>` with the sha and path passed as
- * separate process args (never interpolated into a shell string), and `--format=`
- * suppresses the commit header so the output is a pure unified diff. The text is
+ * Runs `git show --format= --end-of-options <sha> -- :(literal)<path>` so a caller cannot
+ * turn either value into a Git option or pathspec expression. The output is a pure unified diff.
  * parsed and highlighted by {@link parseAndHighlightDiff} — the exact parser the
  * diff subscription uses. Returns `null` when the file is absent from the commit
  * or the change is binary-only (no textual hunks). Throws on git failure (e.g. an
@@ -2213,10 +2212,14 @@ export async function getCommitFileDiff({
   sha: string;
   path: string;
 }): Promise<ParsedDiffFile | null> {
-  const { stdout } = await runGitCommand(["show", sha, "--format=", "--", path], {
-    cwd,
-    envOverlay: READ_ONLY_GIT_ENV,
-  });
+  const literalPathspec = `:(literal)${path}`;
+  const { stdout } = await runGitCommand(
+    ["show", "--format=", "--end-of-options", sha, "--", literalPathspec],
+    {
+      cwd,
+      envOverlay: READ_ONLY_GIT_ENV,
+    },
+  );
 
   if (stdout.trim().length === 0) {
     return null;
