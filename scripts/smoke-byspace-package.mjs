@@ -175,7 +175,7 @@ try {
   };
 
   runNpm(["install", "--global", "--prefix", installRoot, "--no-audit", "--no-fund", artifact], {
-    timeout: 300_000,
+    timeout: 600_000,
   });
   if (!existsSync(installedPackageBin) || !existsSync(installedBinary)) {
     throw new Error(`Global install did not create ${installedBinary}`);

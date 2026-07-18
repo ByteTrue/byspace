@@ -158,10 +158,12 @@ export interface SeedDaemonClient {
   killTerminal(terminalId: string): Promise<{ error: string | null }>;
 }
 
-export async function connectSeedClient(): Promise<SeedDaemonClient> {
+export async function connectSeedClient(options?: {
+  appVersion?: string;
+}): Promise<SeedDaemonClient> {
   return connectDaemonClient<SeedDaemonClient>({
     clientIdPrefix: "seed",
-    appVersion: loadAppVersion(),
+    appVersion: options?.appVersion ?? loadAppVersion(),
   });
 }
 

@@ -1182,7 +1182,7 @@ describe("handleCreateBySpaceWorktreeRequest", () => {
     }
   });
 
-  test("checks out the GitHub PR branch when githubPrNumber is supplied", async () => {
+  test("uses the adapter GitHub PR head when legacy refName is supplied", async () => {
     const { tempDir, repoDir } = createGitHubPrRemoteRepo();
     cleanupPaths.push(tempDir);
 
@@ -1232,13 +1232,13 @@ describe("handleCreateBySpaceWorktreeRequest", () => {
     })
       .toString()
       .trim();
-    expect(branch).toBe("feature/review-pr");
+    expect(branch).toBe("pr-123");
 
     const readme = readFileSync(path.join(worktreePath, "README.md"), "utf8");
     expect(readme).toContain("review branch");
   });
 
-  test("buildAgentSessionConfig checks out the GitHub PR branch for agent worktrees", async () => {
+  test("buildAgentSessionConfig uses the adapter GitHub PR head for agent worktrees", async () => {
     const { tempDir, repoDir } = createGitHubPrRemoteRepo();
     cleanupPaths.push(tempDir);
     const events: string[] = [];
@@ -1284,7 +1284,7 @@ describe("handleCreateBySpaceWorktreeRequest", () => {
     })
       .toString()
       .trim();
-    expect(branch).toBe("feature/review-pr");
+    expect(branch).toBe("pr-123");
   });
 
   test("buildAgentSessionConfig uses the normalized new branch name as the worktree slug fallback", async () => {

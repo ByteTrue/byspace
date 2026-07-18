@@ -39,7 +39,7 @@ test.describe("Worktree restore", () => {
   test.describe.configure({ timeout: 120_000 });
 
   test.beforeEach(async () => {
-    client = await connectSeedClient();
+    client = await connectSeedClient({ appVersion: "0.1.2" });
     worktreeClient = await connectNewWorkspaceDaemonClient();
     tempRepo = await createTempGitRepo("wt-restore-");
   });
@@ -65,8 +65,8 @@ test.describe("Worktree restore", () => {
       .toBe(false);
 
     // Match the remote cloud-race record: workspace archived and absent, while
-    // the surviving closed agent record is not agent-archived. Refresh now owns
-    // only agent lifecycle, so its expected cwd failure cannot recover the workspace.
+    // the surviving closed agent record is not agent-archived. A v0.1.2 client refreshes
+    // only the agent; older clients used this RPC as their workspace-recovery fallback.
     await client.refreshAgent(agent.id).catch(() => undefined);
     await expect.poll(() => fetchAgentArchivedAt(client, agent.id), { timeout: 30_000 }).toBeNull();
     expect(existsSync(worktree.workspaceDirectory)).toBe(false);

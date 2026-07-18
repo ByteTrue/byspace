@@ -121,9 +121,9 @@ export function createWorkspaceProvisioningService(deps: {
       if (projectHasActiveWorkspace) {
         return;
       }
-      if (previousProject?.archivedAt) {
+      if (previousProject) {
         await projectRegistry.upsert(previousProject);
-      } else if (!previousProject) {
+      } else {
         await projectRegistry.remove(workspace.projectId);
       }
     } catch (error) {

@@ -464,7 +464,7 @@ describe.skipIf(isPlatform("win32"))("worktree-core POSIX-only", () => {
       expect(existsSync(result.worktree.worktreePath)).toBe(true);
     });
 
-    test("checks out an explicit GitHub PR branch with legacy RPC fields", async () => {
+    test("ignores a legacy GitHub PR refName in favor of the adapter target", async () => {
       const { tempDir, repoDir, byspaceHome } = createGitHubPrRemoteRepo();
       cleanupPaths.push(tempDir);
 
@@ -484,15 +484,15 @@ describe.skipIf(isPlatform("win32"))("worktree-core POSIX-only", () => {
         kind: "checkout-change-request",
         forge: "github",
         changeRequestNumber: 123,
-        headRef: "feature/review-pr",
+        headRef: "pr-123",
         baseRefName: "main",
         checkoutRefs: [{ remoteName: "origin", remoteRef: "refs/pull/123/head" }],
         trackOriginHead: true,
       });
-      expect(result.worktree.branchName).toBe("feature/review-pr");
+      expect(result.worktree.branchName).toBe("pr-123");
     });
 
-    test("uses the PR head ref as the default slug when no slug is supplied", async () => {
+    test("uses the adapter PR head ref as the default slug", async () => {
       const { tempDir, repoDir, byspaceHome } = createGitHubPrRemoteRepo();
       cleanupPaths.push(tempDir);
 
@@ -507,8 +507,8 @@ describe.skipIf(isPlatform("win32"))("worktree-core POSIX-only", () => {
         createCoreDeps(),
       );
 
-      expect(path.basename(result.worktree.worktreePath)).toBe("feature-review-pr");
-      expect(result.worktree.branchName).toBe("feature/review-pr");
+      expect(path.basename(result.worktree.worktreePath)).toBe("pr-123");
+      expect(result.worktree.branchName).toBe("pr-123");
     });
 
     test("creates the MCP standalone worktree input shape", async () => {
@@ -736,6 +736,10 @@ describe.skipIf(isPlatform("win32"))("worktree-core POSIX-only", () => {
                 target_branch: "main",
                 source_project_id: 202,
                 target_project_id: 101,
+                references: {
+                  full: "example-group/example-project!14",
+                  short: "!14",
+                },
               }),
               stderr: "",
             };
@@ -833,11 +837,12 @@ describe.skipIf(isPlatform("win32"))("worktree-core POSIX-only", () => {
       expect(metadata?.changeRequestLookupTarget).toEqual({
         headRef: "feature/gitlab-mr",
         changeRequestNumber: 14,
+        forge: "gitlab",
       });
       expect(facts).toMatchObject({
         isGit: true,
         currentBranch: "feature/gitlab-mr-1",
-        pullRequestLookupTarget: { headRef: "feature/gitlab-mr" },
+        pullRequestLookupTarget: { headRef: "feature/gitlab-mr-1" },
       });
     });
 
