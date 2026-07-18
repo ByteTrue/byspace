@@ -191,6 +191,57 @@ describe("workspace recovery", () => {
     expect(unarchived).toEqual([workspace.workspaceId]);
   });
 
+  test("rolls back a recreated worktree when registry unarchive fails", async () => {
+    const { tempDir, repoDir } = createGitRepository();
+    const branch = "feature/unarchive-failure";
+    execFileSync("git", ["branch", branch], { cwd: repoDir, stdio: "pipe" });
+    const byspaceHome = join(tempDir, "byspace-home");
+    const worktreesRoot = join(tempDir, "worktrees");
+    const created = await createWorktree({
+      cwd: repoDir,
+      worktreeSlug: "unarchive-failure",
+      source: { kind: "checkout-branch", branchName: branch },
+      runSetup: false,
+      byspaceHome,
+      worktreesRoot,
+    });
+    const worktreeRoot = realpathSync(created.worktreePath);
+    rmSync(worktreeRoot, { recursive: true, force: true });
+    execFileSync("git", ["worktree", "prune"], { cwd: repoDir, stdio: "pipe" });
+
+    const project = createProject({ rootPath: repoDir });
+    const workspace = createWorkspace({
+      workspaceId: "ws-unarchive-failure",
+      projectId: project.projectId,
+      cwd: worktreeRoot,
+      branch,
+      worktreeRoot,
+      mainRepoRoot: repoDir,
+    });
+    const service = createWorkspaceRecoveryService({
+      byspaceHome,
+      worktreesRoot,
+      getWorkspace: async (workspaceId) =>
+        workspaceId === workspace.workspaceId ? workspace : null,
+      getProject: async (projectId) => (projectId === project.projectId ? project : null),
+      isDirectory: async (path) => existsSync(path) && statSync(path).isDirectory(),
+      unarchiveWorkspace: async () => {
+        throw new Error("registry persistence failed");
+      },
+    });
+
+    await expect(service.restore(workspace.workspaceId)).rejects.toThrow(
+      "registry persistence failed",
+    );
+    expect(existsSync(worktreeRoot)).toBe(false);
+    expect(
+      execFileSync("git", ["worktree", "list", "--porcelain"], {
+        cwd: repoDir,
+        encoding: "utf8",
+      }),
+    ).not.toContain(worktreeRoot);
+  });
+
   test("keeps an exact-subdirectory workspace archived when its branch lacks that directory", async () => {
     const { tempDir, repoDir } = createGitRepository();
     const branch = "feature/without-subproject";

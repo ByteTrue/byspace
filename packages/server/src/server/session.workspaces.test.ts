@@ -592,21 +592,12 @@ function createSessionForWorkspaceTests(
             updatedAt: "2026-03-01T12:00:00.000Z",
           })
         : null,
-    update: async (workspaceId, updater) => {
-      if (workspaceId !== "ws-repo-running") {
-        return null;
-      }
-      return updater(
-        createPersistedWorkspaceRecord({
-          workspaceId: "ws-repo-running",
-          projectId: "proj-repo-running",
-          cwd: REPO_CWD,
-          kind: "directory",
-          displayName: "repo",
-          createdAt: "2026-03-01T12:00:00.000Z",
-          updatedAt: "2026-03-01T12:00:00.000Z",
-        }),
-      );
+    async update(workspaceId, updater) {
+      const workspace = await this.get(workspaceId);
+      if (!workspace) return null;
+      const updated = updater(workspace);
+      await this.upsert(updated);
+      return updated;
     },
     upsert: async () => {},
     archive: async () => {},
@@ -668,6 +659,13 @@ function createSessionForWorkspaceTests(
             updatedAt: input.timestamp,
           }),
         upsert: async () => {},
+        async update(projectId, updater) {
+          const project = await this.get(projectId);
+          if (!project) return null;
+          const updated = updater(project);
+          await this.upsert(updated);
+          return updated;
+        },
         archive: async () => {},
         remove: async () => {},
       },
@@ -3686,6 +3684,13 @@ test("create byspace worktree response preserves an explicit non-Git project", a
   };
   session.projectRegistry.get = async (projectId: string) => projects.get(projectId) ?? null;
   session.projectRegistry.list = async () => Array.from(projects.values());
+  session.projectRegistry.update = async (projectId: string, updater) => {
+    const project = projects.get(projectId);
+    if (!project) return null;
+    const updated = updater(project);
+    projects.set(projectId, updated);
+    return updated;
+  };
   session.projectRegistry.getOrCreateActiveByRoot = async (input) => {
     const existing = Array.from(projects.values()).find(
       (project) => !project.archivedAt && project.rootPath === input.rootPath,
@@ -3899,6 +3904,13 @@ test("import_agent_request registers a workspace for a never-seen cwd", async ()
   const importedCwd = path.resolve("/tmp/imported-project");
 
   session.projectRegistry.get = async (projectId: string) => projects.get(projectId) ?? null;
+  session.projectRegistry.update = async (projectId: string, updater) => {
+    const project = projects.get(projectId);
+    if (!project) return null;
+    const updated = updater(project);
+    projects.set(projectId, updated);
+    return updated;
+  };
   session.projectRegistry.upsert = async (
     record: ReturnType<typeof createPersistedProjectRecord>,
   ) => {
@@ -3906,12 +3918,35 @@ test("import_agent_request registers a workspace for a never-seen cwd", async ()
   };
   session.workspaceRegistry.get = async (lookupWorkspaceId: string) =>
     workspaces.get(lookupWorkspaceId) ?? null;
+  session.workspaceRegistry.update = async (workspaceId: string, updater) => {
+    const workspace = workspaces.get(workspaceId);
+    if (!workspace) return null;
+    const updated = updater(workspace);
+    workspaces.set(workspaceId, updated);
+    return updated;
+  };
   session.workspaceRegistry.upsert = async (
     record: ReturnType<typeof createPersistedWorkspaceRecord>,
   ) => {
     workspaces.set(record.workspaceId, record);
   };
   session.projectRegistry.list = async () => Array.from(projects.values());
+  session.projectRegistry.getOrCreateActiveByRoot = async (input) => {
+    const existing = Array.from(projects.values()).find(
+      (project) => !project.archivedAt && project.rootPath === input.rootPath,
+    );
+    if (existing) return existing;
+    const project = createPersistedProjectRecord({
+      projectId: `prj_${projects.size.toString().padStart(16, "0")}`,
+      rootPath: input.rootPath,
+      kind: input.kind,
+      displayName: input.displayName,
+      createdAt: input.timestamp,
+      updatedAt: input.timestamp,
+    });
+    projects.set(project.projectId, project);
+    return project;
+  };
   session.workspaceRegistry.list = async () => Array.from(workspaces.values());
   session.buildProjectPlacement = async (cwd: string) => ({
     projectKey: cwd,
@@ -7859,6 +7894,13 @@ test("workspace.create worktree source checks out a GitHub PR from githubPrNumbe
     upsert: async (record) => {
       projects.set(record.projectId, record);
     },
+    update: async (projectId, updater) => {
+      const project = projects.get(projectId);
+      if (!project) return null;
+      const updated = updater(project);
+      projects.set(projectId, updated);
+      return updated;
+    },
     archive: async () => {},
     remove: async () => {},
   };
@@ -7871,6 +7913,13 @@ test("workspace.create worktree source checks out a GitHub PR from githubPrNumbe
       workspaces.set(record.workspaceId, record);
     },
     archive: async () => {},
+    update: async (workspaceId, updater) => {
+      const workspace = workspaces.get(workspaceId);
+      if (!workspace) return null;
+      const updated = updater(workspace);
+      workspaces.set(workspaceId, updated);
+      return updated;
+    },
     remove: async () => {},
   };
   const session = createSessionForWorkspaceTests({

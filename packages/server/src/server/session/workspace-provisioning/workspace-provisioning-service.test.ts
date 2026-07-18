@@ -266,6 +266,7 @@ test("uses one workspace snapshot when reopening an archived workspace", async (
     list: async () => (reads++ === 0 ? archived : []),
     get: (workspaceId) => workspaceRegistry.get(workspaceId),
     upsert: (workspace) => workspaceRegistry.upsert(workspace),
+    update: (workspaceId, updater) => workspaceRegistry.update(workspaceId, updater),
     archive: (workspaceId, archivedAt) => workspaceRegistry.archive(workspaceId, archivedAt),
     remove: (workspaceId) => workspaceRegistry.remove(workspaceId),
   };
@@ -706,4 +707,37 @@ test("failed import preserves a concurrent replacement for a newly allocated pro
     customName: "replacement",
     updatedAt: "2026-07-18T00:00:00.000Z",
   });
+});
+
+test("failed import preserves a project concurrently adopted by another workspace", async () => {
+  const importCwd = path.join(tmpDir, "failed-import-adopted-project");
+  const adoptedCwd = path.join(tmpDir, "adopted-workspace");
+  mkdirSync(importCwd);
+  mkdirSync(adoptedCwd);
+  const project = await provisioning.findOrCreateProjectForDirectory(importCwd);
+  let markOperationStarted!: () => void;
+  const operationStarted = new Promise<void>((resolve) => {
+    markOperationStarted = resolve;
+  });
+  let releaseOperation!: () => void;
+  const operationBlocked = new Promise<void>((resolve) => {
+    releaseOperation = resolve;
+  });
+
+  const failedImport = provisioning.runInImportWorkspace({ cwd: importCwd }, async () => {
+    markOperationStarted();
+    await operationBlocked;
+    throw new Error("provider session is unavailable");
+  });
+  await operationStarted;
+  const adoptedWorkspace = await provisioning.createWorkspaceForDirectory(
+    adoptedCwd,
+    null,
+    project.projectId,
+  );
+  releaseOperation();
+  await expect(failedImport).rejects.toThrow("provider session is unavailable");
+
+  expect(await projectRegistry.get(project.projectId)).not.toBeNull();
+  expect(await workspaceRegistry.list()).toEqual([adoptedWorkspace]);
 });

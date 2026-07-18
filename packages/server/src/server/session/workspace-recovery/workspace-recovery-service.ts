@@ -146,17 +146,37 @@ export function createWorkspaceRecoveryService(deps: {
       throw new Error(resolved.message);
     }
 
+    let recreatedWorktreePath: string | null = null;
     if (resolved.kind === "restore") {
-      await recreateArchivedWorktree(resolved.workspace, resolved.sourceRepoRoot);
+      recreatedWorktreePath = await recreateArchivedWorktree(
+        resolved.workspace,
+        resolved.sourceRepoRoot,
+      );
     }
-    await deps.unarchiveWorkspace(resolved.workspace);
+    try {
+      await deps.unarchiveWorkspace(resolved.workspace);
+    } catch (error) {
+      if (resolved.kind === "restore" && recreatedWorktreePath) {
+        return rollbackCreatedBySpaceWorktree(
+          {
+            cwd: resolved.sourceRepoRoot,
+            worktreePath: recreatedWorktreePath,
+            teardownCwds: [],
+            byspaceHome: deps.byspaceHome,
+            worktreesBaseRoot: deps.worktreesRoot,
+          },
+          error,
+        );
+      }
+      throw error;
+    }
     return { workspaceId, action: resolved.kind };
   }
 
   async function recreateArchivedWorktree(
     workspace: PersistedWorkspaceRecord,
     sourceRepoRoot: string,
-  ): Promise<void> {
+  ): Promise<string> {
     const branch = workspace.branch;
     if (!branch) {
       throw new WorktreeRequestError({
@@ -229,6 +249,7 @@ export function createWorkspaceRecoveryService(deps: {
         error,
       );
     }
+    return recreatedWorktreePath;
   }
 
   return { inspect, restore };

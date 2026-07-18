@@ -159,6 +159,7 @@ import {
   archiveWorkspaceContents,
 } from "./workspace-archive-service.js";
 import { WorkspaceReconciliationService } from "./workspace-reconciliation-service.js";
+import { withWorkspaceLifecycleLocks } from "./workspace-lifecycle-lock.js";
 import type { ServiceProxySubsystem } from "./service-proxy.js";
 import { renameCurrentBranch as renameCurrentBranchDefault } from "../utils/checkout-git.js";
 import {
@@ -667,6 +668,7 @@ export class Session {
       projectRegistry: this.projectRegistry,
       workspaceGitService: this.workspaceGitService,
       logger: this.sessionLogger,
+      isDirectory: (path) => this.filesystem.isDirectory(path),
     });
     this.workspaceRecovery = createWorkspaceRecoveryService({
       byspaceHome: this.byspaceHome,
@@ -2387,62 +2389,64 @@ export class Session {
     this.sessionLogger.info({ projectId, requestId }, "session: project.remove.request");
 
     try {
-      const projectWorkspaces = (await this.workspaceRegistry.list()).filter(
-        (workspace) => workspace.projectId === projectId,
-      );
-      const activeWorkspaceIds = projectWorkspaces
-        .filter((workspace) => !workspace.archivedAt)
-        .map((workspace) => workspace.workspaceId);
+      await withWorkspaceLifecycleLocks({ projectIds: [projectId] }, async () => {
+        const projectWorkspaces = (await this.workspaceRegistry.list()).filter(
+          (workspace) => workspace.projectId === projectId,
+        );
+        const activeWorkspaceIds = projectWorkspaces
+          .filter((workspace) => !workspace.archivedAt)
+          .map((workspace) => workspace.workspaceId);
 
-      if (activeWorkspaceIds.length > 0) {
-        this.markWorkspaceArchiving(activeWorkspaceIds, new Date().toISOString());
-        await this.emitWorkspaceUpdatesForWorkspaceIds(activeWorkspaceIds, {
-          skipReconcile: true,
-        });
-      }
-
-      const removedWorkspaceIds: string[] = [];
-      try {
-        for (const workspaceId of activeWorkspaceIds) {
-          await archiveWorkspaceContents(
-            {
-              agentManager: this.agentManager,
-              agentStorage: this.agentStorage,
-              killTerminalsForWorkspace: (id) =>
-                this.terminalController.killTerminalsForWorkspace(id),
-              sessionLogger: this.sessionLogger,
-            },
-            workspaceId,
-          );
-          await this.archiveWorkspaceRecord(workspaceId);
-          removedWorkspaceIds.push(workspaceId);
-        }
-
-        await this.projectRegistry.remove(projectId);
-      } finally {
         if (activeWorkspaceIds.length > 0) {
-          this.clearWorkspaceArchiving(activeWorkspaceIds);
+          this.markWorkspaceArchiving(activeWorkspaceIds, new Date().toISOString());
+          await this.emitWorkspaceUpdatesForWorkspaceIds(activeWorkspaceIds, {
+            skipReconcile: true,
+          });
         }
-      }
 
-      const updateIds =
-        removedWorkspaceIds.length > 0
-          ? removedWorkspaceIds
-          : [projectWorkspaces[0]?.workspaceId ?? projectId];
-      await this.emitWorkspaceUpdatesForWorkspaceIds(updateIds, {
-        skipReconcile: true,
-        removedProjectId: projectId,
-      });
+        const removedWorkspaceIds: string[] = [];
+        try {
+          for (const workspaceId of activeWorkspaceIds) {
+            await archiveWorkspaceContents(
+              {
+                agentManager: this.agentManager,
+                agentStorage: this.agentStorage,
+                killTerminalsForWorkspace: (id) =>
+                  this.terminalController.killTerminalsForWorkspace(id),
+                sessionLogger: this.sessionLogger,
+              },
+              workspaceId,
+            );
+            await this.archiveWorkspaceRecord(workspaceId);
+            removedWorkspaceIds.push(workspaceId);
+          }
 
-      this.emit({
-        type: "project.remove.response",
-        payload: {
-          requestId,
-          projectId,
-          accepted: true,
-          removedWorkspaceIds,
-          error: null,
-        },
+          await this.projectRegistry.remove(projectId);
+        } finally {
+          if (activeWorkspaceIds.length > 0) {
+            this.clearWorkspaceArchiving(activeWorkspaceIds);
+          }
+        }
+
+        const updateIds =
+          removedWorkspaceIds.length > 0
+            ? removedWorkspaceIds
+            : [projectWorkspaces[0]?.workspaceId ?? projectId];
+        await this.emitWorkspaceUpdatesForWorkspaceIds(updateIds, {
+          skipReconcile: true,
+          removedProjectId: projectId,
+        });
+
+        this.emit({
+          type: "project.remove.response",
+          payload: {
+            requestId,
+            projectId,
+            accepted: true,
+            removedWorkspaceIds,
+            error: null,
+          },
+        });
       });
     } catch (error) {
       this.sessionLogger.error(
