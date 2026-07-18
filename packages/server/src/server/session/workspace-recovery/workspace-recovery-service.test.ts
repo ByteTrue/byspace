@@ -20,6 +20,7 @@ import {
   type PersistedProjectRecord,
   type PersistedWorkspaceRecord,
 } from "../../workspace-registry.js";
+import { withWorkspaceLifecycleLocks } from "../../workspace-lifecycle-lock.js";
 import { createWorkspaceRecoveryService } from "./workspace-recovery-service.js";
 
 const NOW = "2026-07-11T10:12:30.752Z";
@@ -240,6 +241,70 @@ describe("workspace recovery", () => {
         encoding: "utf8",
       }),
     ).not.toContain(worktreeRoot);
+  });
+
+  test("holds the lifecycle transaction from worktree recreation through unarchive", async () => {
+    const { tempDir, repoDir } = createGitRepository();
+    const branch = "feature/serialized-restore";
+    execFileSync("git", ["branch", branch], { cwd: repoDir, stdio: "pipe" });
+    const byspaceHome = join(tempDir, "byspace-home");
+    const worktreesRoot = join(tempDir, "worktrees");
+    const created = await createWorktree({
+      cwd: repoDir,
+      worktreeSlug: "serialized-restore",
+      source: { kind: "checkout-branch", branchName: branch },
+      runSetup: false,
+      byspaceHome,
+      worktreesRoot,
+    });
+    const worktreeRoot = realpathSync(created.worktreePath);
+    rmSync(worktreeRoot, { recursive: true, force: true });
+    execFileSync("git", ["worktree", "prune"], { cwd: repoDir, stdio: "pipe" });
+
+    const project = createProject({ rootPath: repoDir });
+    const workspace = createWorkspace({
+      workspaceId: "ws-serialized-restore",
+      projectId: project.projectId,
+      cwd: worktreeRoot,
+      branch,
+      worktreeRoot,
+      mainRepoRoot: repoDir,
+    });
+    let markUnarchiveStarted!: () => void;
+    const unarchiveStarted = new Promise<void>((resolve) => {
+      markUnarchiveStarted = resolve;
+    });
+    let releaseUnarchive!: () => void;
+    const unarchiveBlocked = new Promise<void>((resolve) => {
+      releaseUnarchive = resolve;
+    });
+    const service = createWorkspaceRecoveryService({
+      byspaceHome,
+      worktreesRoot,
+      getWorkspace: async (workspaceId) =>
+        workspaceId === workspace.workspaceId ? workspace : null,
+      getProject: async (projectId) => (projectId === project.projectId ? project : null),
+      isDirectory: async (path) => existsSync(path) && statSync(path).isDirectory(),
+      unarchiveWorkspace: async () => {
+        markUnarchiveStarted();
+        await unarchiveBlocked;
+      },
+    });
+
+    const restore = service.restore(workspace.workspaceId);
+    await unarchiveStarted;
+    let archiveEntered = false;
+    const archive = withWorkspaceLifecycleLocks(
+      { paths: [worktreeRoot], projectIds: [project.projectId] },
+      async () => {
+        archiveEntered = true;
+      },
+    );
+    await Promise.resolve();
+    expect(archiveEntered).toBe(false);
+    releaseUnarchive();
+    await Promise.all([restore, archive]);
+    expect(archiveEntered).toBe(true);
   });
 
   test("keeps an exact-subdirectory workspace archived when its branch lacks that directory", async () => {

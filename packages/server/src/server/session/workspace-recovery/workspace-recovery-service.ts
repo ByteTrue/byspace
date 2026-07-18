@@ -141,36 +141,49 @@ export function createWorkspaceRecoveryService(deps: {
   async function restore(
     workspaceId: string,
   ): Promise<{ workspaceId: string; action: WorkspaceRecoveryAction }> {
-    const resolved = await resolveRecovery(workspaceId);
-    if (resolved.kind === "unavailable") {
-      throw new Error(resolved.message);
+    const initial = await resolveRecovery(workspaceId);
+    if (initial.kind === "unavailable") {
+      throw new Error(initial.message);
     }
 
-    let recreatedWorktreePath: string | null = null;
-    if (resolved.kind === "restore") {
-      recreatedWorktreePath = await recreateArchivedWorktree(
-        resolved.workspace,
-        resolved.sourceRepoRoot,
-      );
-    }
-    try {
-      await deps.unarchiveWorkspace(resolved.workspace);
-    } catch (error) {
-      if (resolved.kind === "restore" && recreatedWorktreePath) {
-        return rollbackCreatedBySpaceWorktree(
-          {
-            cwd: resolved.sourceRepoRoot,
-            worktreePath: recreatedWorktreePath,
-            teardownCwds: [],
-            byspaceHome: deps.byspaceHome,
-            worktreesBaseRoot: deps.worktreesRoot,
-          },
-          error,
-        );
-      }
-      throw error;
-    }
-    return { workspaceId, action: resolved.kind };
+    return withWorkspaceLifecycleLocks(
+      {
+        paths: [initial.workspace.worktreeRoot ?? initial.workspace.cwd],
+        projectIds: [initial.workspace.projectId],
+      },
+      async () => {
+        const resolved = await resolveRecovery(workspaceId);
+        if (resolved.kind === "unavailable") {
+          throw new Error(resolved.message);
+        }
+
+        let recreatedWorktreePath: string | null = null;
+        if (resolved.kind === "restore") {
+          recreatedWorktreePath = await recreateArchivedWorktree(
+            resolved.workspace,
+            resolved.sourceRepoRoot,
+          );
+        }
+        try {
+          await deps.unarchiveWorkspace(resolved.workspace);
+        } catch (error) {
+          if (resolved.kind === "restore" && recreatedWorktreePath) {
+            return rollbackCreatedBySpaceWorktree(
+              {
+                cwd: resolved.sourceRepoRoot,
+                worktreePath: recreatedWorktreePath,
+                teardownCwds: [],
+                byspaceHome: deps.byspaceHome,
+                worktreesBaseRoot: deps.worktreesRoot,
+              },
+              error,
+            );
+          }
+          throw error;
+        }
+        return { workspaceId, action: resolved.kind };
+      },
+    );
   }
 
   async function recreateArchivedWorktree(
@@ -283,3 +296,4 @@ function createRecoveryPlan(
     workspace: input.workspace,
   };
 }
+import { withWorkspaceLifecycleLocks } from "../../workspace-lifecycle-lock.js";

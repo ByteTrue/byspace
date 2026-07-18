@@ -1,7 +1,9 @@
+import { AsyncLocalStorage } from "node:async_hooks";
 import { realpathSync } from "node:fs";
 import { resolve } from "node:path";
 
 const lifecycleLocks = new Map<string, Promise<void>>();
+const heldLifecycleKeys = new AsyncLocalStorage<ReadonlySet<string>>();
 
 function pathLockKey(path: string): string {
   let key: string;
@@ -15,6 +17,9 @@ function pathLockKey(path: string): string {
 }
 
 async function withLifecycleKey<T>(key: string, operation: () => Promise<T>): Promise<T> {
+  const heldKeys = heldLifecycleKeys.getStore();
+  if (heldKeys?.has(key)) return operation();
+
   const previous = lifecycleLocks.get(key) ?? Promise.resolve();
   let release!: () => void;
   const current = new Promise<void>((resolveCurrent) => {
@@ -25,7 +30,9 @@ async function withLifecycleKey<T>(key: string, operation: () => Promise<T>): Pr
 
   await previous;
   try {
-    return await operation();
+    const nextHeldKeys = new Set(heldKeys);
+    nextHeldKeys.add(key);
+    return await heldLifecycleKeys.run(nextHeldKeys, operation);
   } finally {
     release();
     if (lifecycleLocks.get(key) === tail) lifecycleLocks.delete(key);

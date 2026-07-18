@@ -75,3 +75,22 @@ test("serializes different paths that mutate the same project", async () => {
   releaseFirst();
   await Promise.all([first, second]);
 });
+
+test("reenters locks already held by the same async transaction", async () => {
+  const target = realpathSync(mkdtempSync(path.join(tmpdir(), "workspace-reentrant-lock-")));
+  cleanupPaths.push(target);
+  let nestedRan = false;
+
+  await withWorkspaceLifecycleLocks(
+    { paths: [target], projectIds: ["project-reentrant"] },
+    async () => {
+      await withWorkspaceLifecycleLocks(
+        { paths: [target], projectIds: ["project-reentrant"] },
+        async () => {
+          nestedRan = true;
+        },
+      );
+    },
+  );
+  expect(nestedRan).toBe(true);
+});
