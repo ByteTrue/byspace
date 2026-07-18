@@ -131,6 +131,13 @@ function createHarness(input: {
       upsert: async (record: PersistedProjectRecord) => {
         projects.set(record.projectId, record);
       },
+      update: async (id: string, updater) => {
+        const project = projects.get(id);
+        if (!project) return null;
+        const updated = updater(project);
+        projects.set(id, updated);
+        return updated;
+      },
       archive: async (id: string, archivedAt: string) => {
         const p = projects.get(id);
         if (p) projects.set(id, { ...p, archivedAt });
@@ -146,6 +153,13 @@ function createHarness(input: {
       get: async (id: string) => workspaces.get(id) ?? null,
       upsert: async (record: PersistedWorkspaceRecord) => {
         workspaces.set(record.workspaceId, record);
+      },
+      update: async (id: string, updater) => {
+        const workspace = workspaces.get(id);
+        if (!workspace) return null;
+        const updated = updater(workspace);
+        workspaces.set(id, updated);
+        return updated;
       },
       archive: async (id: string, archivedAt: string) => {
         const w = workspaces.get(id);
