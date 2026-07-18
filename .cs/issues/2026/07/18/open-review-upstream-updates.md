@@ -88,3 +88,4 @@ duplicate = 0
 - 修复的 review blockers：reconciliation stale write/removal resurrection、archive/reopen TOCTOU、import rollback concurrent update/adopter、unsafe Git ref、recovery orphan cleanup、project/remove FK race、archive transaction linearization、recreate→unarchive gap。
 - 验证：440 server focused tests（4 skipped）、235 protocol/client/App/server cross-layer tests、45 Project/Add Project/worktree recovery/Forge Playwright，Web export、server build、root typecheck/lint/format/branding 全绿。
 - 独立 fixed-tip review：Gemini 与 GPT reviewer 均返回 `No blockers`。
+- 首轮 exact-SHA CI `29647811728` 仅 Linux/Windows server suite 的旧 registry fixture 失败；`af4f5acce` 补齐 functional `update` fixture，目标 invariant 13/13 通过。
