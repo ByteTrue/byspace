@@ -2,7 +2,7 @@
 
 ## Prerequisites
 
-- Node.js (see `.tool-versions` for exact version)
+- Node.js 22 or newer. The repository deliberately does not pin a mise Node version; use your active global Node environment.
 - npm workspaces (comes with Node)
 
 ## Running the dev server
