@@ -6,6 +6,7 @@ import { getServerId } from "./helpers/server-id";
 import { getE2EDaemonPort } from "./helpers/daemon-port";
 import { waitForWorkspaceTabsVisible } from "./helpers/workspace-tabs";
 import { installDaemonWebSocketGate } from "./helpers/daemon-websocket-gate";
+import { openCommandCenter } from "./helpers/command-center";
 import {
   expectReconnectingToastGone,
   expectReconnectingToastVisible,
@@ -17,6 +18,7 @@ interface ViewedTimelineScenario {
   firstAgentId: string;
   secondAgentId: string;
   thirdAgentId: string;
+  createAgent(title: string): ReturnType<SeedDaemonClient["createAgent"]>;
   cleanup(): Promise<void>;
 }
 
@@ -42,6 +44,7 @@ async function seedViewedTimelineScenario(): Promise<ViewedTimelineScenario> {
     firstAgentId: firstAgent.id,
     secondAgentId: secondAgent.id,
     thirdAgentId: thirdAgent.id,
+    createAgent,
     cleanup: workspace.cleanup,
   };
 }
@@ -56,23 +59,6 @@ async function openAgent(page: Page, scenario: ViewedTimelineScenario, agentId: 
 
 async function selectAgent(page: Page, title: string) {
   await page.getByRole("button", { name: title, exact: true }).click();
-}
-
-async function enableMoveTabShortcut(page: Page) {
-  await page.addInitScript(() => {
-    localStorage.setItem(
-      "byspace:keyboard-shortcut:workspace.pane.move-tab.right",
-      "Meta+Alt+Shift+ArrowRight",
-    );
-  });
-}
-
-async function moveActiveTabRight(page: Page) {
-  await page.keyboard.press("Meta+Alt+Shift+ArrowRight");
-}
-
-function hasTwoAgentSubscription(subscriptions: string[][], agentId: string): boolean {
-  return subscriptions.some((agentIds) => agentIds.length === 2 && agentIds.includes(agentId));
 }
 
 async function commitMessage(scenario: ViewedTimelineScenario, agentId: string, prompt: string) {
@@ -163,36 +149,29 @@ test.describe("Viewed agent timelines", () => {
 
   test("two visible split chats both stay current", async ({ page }) => {
     const gate = await installDaemonWebSocketGate(page);
-    await enableMoveTabShortcut(page);
     const scenario = await seedViewedTimelineScenario();
     try {
       await openAgent(page, scenario, scenario.firstAgentId);
       await page.getByRole("button", { name: "Split pane right" }).click();
-      await selectAgent(page, "Second viewed chat");
-      await moveActiveTabRight(page);
-      await expect
-        .poll(() =>
-          hasTwoAgentSubscription(
-            gate.getAcknowledgedTimelineSubscriptions(),
-            scenario.secondAgentId,
-          ),
-        )
-        .toBe(true);
-      await selectAgent(page, "First viewed chat");
+      const splitAgent = await scenario.createAgent("Second split viewed chat");
+      const commandCenter = await openCommandCenter(page);
+      await commandCenter
+        .getByTestId(`command-center-agent-${getServerId()}:${splitAgent.id}`)
+        .click();
       await expect(
         page.getByRole("button", { name: "First viewed chat", exact: true }),
       ).toBeVisible();
       await expect(
-        page.getByRole("button", { name: "Second viewed chat", exact: true }),
+        page.getByRole("button", { name: "Second split viewed chat", exact: true }),
       ).toBeVisible();
       await expect(page.getByRole("textbox", { name: "Message agent..." })).toHaveCount(2);
       await expect
         .poll(() => gate.getAcknowledgedTimelineSubscriptions())
-        .toContainEqual([scenario.firstAgentId, scenario.secondAgentId].sort());
+        .toContainEqual([scenario.firstAgentId, splitAgent.id].sort());
       await commitMessage(scenario, scenario.firstAgentId, "First visible pane update.");
       await expect(page.getByText("First visible pane update.", { exact: true })).toBeVisible();
       await expect(
-        page.getByRole("button", { name: "Second viewed chat", exact: true }),
+        page.getByRole("button", { name: "Second split viewed chat", exact: true }),
       ).toBeVisible();
     } finally {
       gate.restore();
