@@ -5299,7 +5299,7 @@ test("legacy refresh_agent_request restores a real deleted worktree", async () =
 
   const emitted: SessionOutboundMessage[] = [];
   const session = createSessionForWorkspaceTests({
-    appVersion: "0.1.104",
+    appVersion: "0.1.1",
     byspaceHome,
     worktreesRoot,
     onMessage: (message) => {
@@ -5467,12 +5467,8 @@ test("legacy editor RPC requests return daemon unsupported errors", async () => 
   const listResponse = findByType(emitted, "list_available_editors_response");
   const openResponse = findByType(emitted, "open_in_editor_response");
   expect(listResponse?.payload.editors).toEqual([]);
-  expect(listResponse?.payload.error).toBe(
-    "Editor opening moved to the desktop app and is no longer supported by the daemon",
-  );
-  expect(openResponse?.payload.error).toBe(
-    "Editor opening moved to the desktop app and is no longer supported by the daemon",
-  );
+  expect(listResponse?.payload.error).toBe("Editor opening is not supported by the daemon");
+  expect(openResponse?.payload.error).toBe("Editor opening is not supported by the daemon");
 });
 
 test("archive_workspace_request hides non-destructive workspace records", async () => {

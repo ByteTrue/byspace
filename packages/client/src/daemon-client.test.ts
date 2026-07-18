@@ -14,6 +14,7 @@ import {
   encodeTerminalStreamFrame,
   TerminalStreamOpcode,
 } from "@bytetrue/byspace-protocol/terminal-stream-protocol";
+import { CLIENT_CAPS } from "@bytetrue/byspace-protocol/client-capabilities";
 
 expectTypeOf<"getGitDiff" extends keyof DaemonClient ? true : false>().toEqualTypeOf<false>();
 expectTypeOf<
