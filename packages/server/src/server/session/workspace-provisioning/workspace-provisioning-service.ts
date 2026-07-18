@@ -185,10 +185,10 @@ export function createWorkspaceProvisioningService(deps: {
         },
         async () => {
           await workspaceRegistry.remove(workspace.workspaceId);
-          const projectHasActiveWorkspace = (await workspaceRegistry.list()).some(
-            (candidate) => candidate.projectId === workspace.projectId && !candidate.archivedAt,
+          const projectHasWorkspace = (await workspaceRegistry.list()).some(
+            (candidate) => candidate.projectId === workspace.projectId,
           );
-          if (projectHasActiveWorkspace || !projectRollback) return;
+          if (projectHasWorkspace || !projectRollback) return;
 
           if (projectRollback.kind === "created") {
             const currentProject = await projectRegistry.get(workspace.projectId);

@@ -741,3 +741,38 @@ test("failed import preserves a project concurrently adopted by another workspac
   expect(await projectRegistry.get(project.projectId)).not.toBeNull();
   expect(await workspaceRegistry.list()).toEqual([adoptedWorkspace]);
 });
+
+test("failed import preserves a project adopted only by an archived workspace", async () => {
+  const importCwd = path.join(tmpDir, "failed-import-archived-adopter");
+  const adoptedCwd = path.join(tmpDir, "archived-adopter");
+  mkdirSync(importCwd);
+  mkdirSync(adoptedCwd);
+  const project = await provisioning.findOrCreateProjectForDirectory(importCwd);
+  let markOperationStarted!: () => void;
+  const operationStarted = new Promise<void>((resolve) => {
+    markOperationStarted = resolve;
+  });
+  let releaseOperation!: () => void;
+  const operationBlocked = new Promise<void>((resolve) => {
+    releaseOperation = resolve;
+  });
+
+  const failedImport = provisioning.runInImportWorkspace({ cwd: importCwd }, async () => {
+    markOperationStarted();
+    await operationBlocked;
+    throw new Error("provider session is unavailable");
+  });
+  await operationStarted;
+  const adoptedWorkspace = await provisioning.createWorkspaceForDirectory(
+    adoptedCwd,
+    null,
+    project.projectId,
+  );
+  const archivedAt = "2026-07-18T00:00:00.000Z";
+  await workspaceRegistry.archive(adoptedWorkspace.workspaceId, archivedAt);
+  releaseOperation();
+  await expect(failedImport).rejects.toThrow("provider session is unavailable");
+
+  expect(await projectRegistry.get(project.projectId)).not.toBeNull();
+  expect(await workspaceRegistry.get(adoptedWorkspace.workspaceId)).toMatchObject({ archivedAt });
+});
