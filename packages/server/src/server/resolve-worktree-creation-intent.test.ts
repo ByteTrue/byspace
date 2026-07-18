@@ -128,6 +128,19 @@ describe("resolveWorktreeCreationIntent", () => {
     expect(deps.headRefLookups).toEqual([]);
   });
 
+  test.each(["--help", "main..evil", "main@{1}", "main:evil"])(
+    "rejects unsafe branch-off ref %s",
+    async (refName) => {
+      await expect(
+        resolveWorktreeCreationIntent(
+          { action: "branch-off", refName, worktreeSlug: "feature" },
+          repoRoot,
+          createResolverHarness(),
+        ),
+      ).rejects.toThrow("Invalid git ref");
+    },
+  );
+
   test("checks out an explicit branch target", async () => {
     const deps = createResolverHarness();
 

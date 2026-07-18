@@ -89,6 +89,10 @@ export interface ProjectRegistry {
     displayName: string;
     timestamp: string;
   }): Promise<PersistedProjectRecord>;
+  update(
+    projectId: string,
+    updater: (record: PersistedProjectRecord) => PersistedProjectRecord,
+  ): Promise<PersistedProjectRecord | null>;
   upsert(record: PersistedProjectRecord): Promise<void>;
   archive(projectId: string, archivedAt: string): Promise<void>;
   remove(projectId: string): Promise<void>;
@@ -345,6 +349,16 @@ export class FileBackedProjectRegistry
   override async upsert(record: PersistedProjectRecord): Promise<void> {
     await super.upsert(record);
     await this.notifyMutation({ kind: "upsert", projectId: record.projectId, project: record });
+  }
+
+  override async update(
+    projectId: string,
+    updater: (record: PersistedProjectRecord) => PersistedProjectRecord,
+  ): Promise<PersistedProjectRecord | null> {
+    const project = await super.update(projectId, updater);
+    if (!project) return null;
+    await this.notifyMutation({ kind: "upsert", projectId, project });
+    return project;
   }
 
   override async archive(projectId: string, archivedAt: string): Promise<void> {

@@ -615,6 +615,13 @@ function createBySpaceWorktreeForMcpTest(options: {
     upsert: async (record) => {
       projects.set(record.projectId, record);
     },
+    update: async (projectId, updater) => {
+      const project = projects.get(projectId);
+      if (!project) return null;
+      const updated = updater(project);
+      projects.set(projectId, updated);
+      return updated;
+    },
     archive: async (projectId, archivedAt) => {
       const project = projects.get(projectId);
       if (project) projects.set(projectId, { ...project, archivedAt });
@@ -2347,10 +2354,10 @@ describe("create_agent MCP tool", () => {
 
       // Populate the active workspaces with the real created path so archiveByScope
       // matches it against the worktree directory.
-      activeWorkspaces = [
+      activeWorkspaces.push(
         { workspaceId: "ws-mcp-A", cwd: worktreePath, kind: "worktree" as const },
         { workspaceId: "ws-mcp-B", cwd: worktreePath, kind: "worktree" as const },
-      ];
+      );
 
       await archiveTool.handler({
         cwd: repoDir,

@@ -39,6 +39,7 @@ import { createExternalProcessEnv } from "../server/byspace-env.js";
 import { parseGitRevParsePath, resolveGitRevParsePath } from "./git-rev-parse-path.js";
 import { validateBranchSlug } from "@bytetrue/byspace-protocol/branch-slug";
 import { expandTilde, getRealpathAwareRelativePath, isPathInsideRoot } from "./path.js";
+import { assertSafeGitRef } from "./git-ref.js";
 
 export { slugify, validateBranchSlug } from "@bytetrue/byspace-protocol/branch-slug";
 
@@ -1601,6 +1602,7 @@ function normalizeRequiredBaseBranch(baseBranch: string): string {
   if (normalizedBaseBranch === "HEAD") {
     throw new Error("Base branch cannot be HEAD when creating a BySpace worktree");
   }
+  assertSafeGitRef(normalizedBaseBranch, "base branch");
   return normalizedBaseBranch;
 }
 
@@ -1609,11 +1611,16 @@ async function resolveBaseBranchForWorktree(
   normalizedBaseBranch: string,
 ): Promise<string> {
   try {
-    await runGitCommand(["rev-parse", "--verify", `origin/${normalizedBaseBranch}`], { cwd });
+    await runGitCommand(
+      ["rev-parse", "--verify", "--end-of-options", `origin/${normalizedBaseBranch}`],
+      { cwd },
+    );
     return `origin/${normalizedBaseBranch}`;
   } catch {
     try {
-      await runGitCommand(["rev-parse", "--verify", normalizedBaseBranch], { cwd });
+      await runGitCommand(["rev-parse", "--verify", "--end-of-options", normalizedBaseBranch], {
+        cwd,
+      });
       return normalizedBaseBranch;
     } catch {
       throw new Error(`Base branch not found: ${normalizedBaseBranch}`);

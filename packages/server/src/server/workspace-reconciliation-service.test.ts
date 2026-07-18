@@ -48,6 +48,13 @@ function createTestRegistries() {
     upsert: async (record: PersistedProjectRecord) => {
       projects.set(record.projectId, record);
     },
+    update: async (id, updater) => {
+      const project = projects.get(id);
+      if (!project) return null;
+      const updated = updater(project);
+      projects.set(id, updated);
+      return updated;
+    },
     archive: async (id: string, archivedAt: string) => {
       const existing = projects.get(id);
       if (existing) {
@@ -66,6 +73,13 @@ function createTestRegistries() {
     get: async (id: string) => workspaces.get(id) ?? null,
     upsert: async (record: PersistedWorkspaceRecord) => {
       workspaces.set(record.workspaceId, record);
+    },
+    update: async (id, updater) => {
+      const workspace = workspaces.get(id);
+      if (!workspace) return null;
+      const updated = updater(workspace);
+      workspaces.set(id, updated);
+      return updated;
     },
     archive: async (id: string, archivedAt: string) => {
       const existing = workspaces.get(id);
@@ -1327,5 +1341,128 @@ describe("WorkspaceReconciliationService", () => {
       isBySpaceOwnedWorktree: true,
       mainRepoRoot: "/tmp/main-repo",
     });
+  });
+
+  test("does not overwrite concurrent project and workspace lifecycle mutations", async () => {
+    const rootPath = realpathSync(
+      mkdtempSync(path.join(tmpdir(), "reconcile-concurrent-mutation-")),
+    );
+    tempDirs.push(rootPath);
+    const { projects, workspaces, projectRegistry, workspaceRegistry } = createTestRegistries();
+    projects.set(
+      "p1",
+      createPersistedProjectRecord({
+        projectId: "p1",
+        rootPath,
+        kind: "non_git",
+        displayName: "original",
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      }),
+    );
+    workspaces.set(
+      "w1",
+      createPersistedWorkspaceRecord({
+        workspaceId: "w1",
+        projectId: "p1",
+        cwd: rootPath,
+        kind: "directory",
+        displayName: "original",
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      }),
+    );
+
+    let releaseRead!: () => void;
+    const readBlocked = new Promise<void>((resolve) => {
+      releaseRead = resolve;
+    });
+    let markReadStarted!: () => void;
+    const readStarted = new Promise<void>((resolve) => {
+      markReadStarted = resolve;
+    });
+    const getCheckout = async () => {
+      markReadStarted();
+      await readBlocked;
+      return createCheckout(rootPath, { isGit: true });
+    };
+    const service = new WorkspaceReconciliationService({
+      projectRegistry,
+      workspaceRegistry,
+      workspaceGitService: { getCheckout },
+      logger: createTestLogger(),
+    });
+
+    const reconciliation = service.reconcileGitMetadata();
+    await readStarted;
+    await projectRegistry.update("p1", (project) => ({
+      ...project,
+      customName: "renamed concurrently",
+      archivedAt: "2026-07-18T00:00:00.000Z",
+      updatedAt: "2026-07-18T00:00:00.000Z",
+    }));
+    await workspaceRegistry.update("w1", (workspace) => ({
+      ...workspace,
+      title: "renamed concurrently",
+      archivedAt: "2026-07-18T00:00:00.000Z",
+      updatedAt: "2026-07-18T00:00:00.000Z",
+    }));
+    releaseRead();
+    await reconciliation;
+
+    expect(projects.get("p1")).toMatchObject({
+      customName: "renamed concurrently",
+      archivedAt: "2026-07-18T00:00:00.000Z",
+    });
+    expect(workspaces.get("w1")).toMatchObject({
+      title: "renamed concurrently",
+      archivedAt: "2026-07-18T00:00:00.000Z",
+    });
+  });
+
+  test("does not resurrect a project removed during Git inspection", async () => {
+    const rootPath = realpathSync(mkdtempSync(path.join(tmpdir(), "reconcile-concurrent-remove-")));
+    tempDirs.push(rootPath);
+    const { projects, projectRegistry, workspaceRegistry } = createTestRegistries();
+    projects.set(
+      "p1",
+      createPersistedProjectRecord({
+        projectId: "p1",
+        rootPath,
+        kind: "non_git",
+        displayName: "removed",
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      }),
+    );
+
+    let releaseRead!: () => void;
+    const readBlocked = new Promise<void>((resolve) => {
+      releaseRead = resolve;
+    });
+    let markReadStarted!: () => void;
+    const readStarted = new Promise<void>((resolve) => {
+      markReadStarted = resolve;
+    });
+    const service = new WorkspaceReconciliationService({
+      projectRegistry,
+      workspaceRegistry,
+      workspaceGitService: {
+        getCheckout: async () => {
+          markReadStarted();
+          await readBlocked;
+          return createCheckout(rootPath, { isGit: true });
+        },
+      },
+      logger: createTestLogger(),
+    });
+
+    const reconciliation = service.reconcileGitMetadata();
+    await readStarted;
+    await projectRegistry.remove("p1");
+    releaseRead();
+    await reconciliation;
+
+    expect(projects.has("p1")).toBe(false);
   });
 });

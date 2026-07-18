@@ -1,5 +1,6 @@
 import type { ForgeService, PullRequestCheckoutTarget } from "../services/forge-service.js";
 import type { WorktreeSource } from "../utils/worktree.js";
+import { assertSafeGitRef } from "../utils/git-ref.js";
 
 export type WorktreeCreationIntent = WorktreeSource;
 
@@ -78,10 +79,12 @@ export async function resolveWorktreeCreationIntent(
   repoRoot: string,
   deps: ResolveWorktreeCreationIntentDeps,
 ): Promise<WorktreeCreationIntent> {
+  const refName = input.refName?.trim();
+  if (refName) assertSafeGitRef(refName, "git ref");
   if (input.action === "branch-off") {
     return {
       kind: "branch-off",
-      baseBranch: input.refName?.trim() || (await resolveDefaultBranch(repoRoot, deps)),
+      baseBranch: refName || (await resolveDefaultBranch(repoRoot, deps)),
       branchName: input.branchName ?? input.worktreeSlug ?? "worktree",
     };
   }
@@ -98,7 +101,7 @@ export async function resolveWorktreeCreationIntent(
       });
     }
 
-    const branchName = input.refName?.trim();
+    const branchName = refName;
     if (branchName) {
       return {
         kind: "checkout-branch",
@@ -120,10 +123,10 @@ export async function resolveWorktreeCreationIntent(
     });
   }
 
-  if (input.refName?.trim()) {
+  if (refName) {
     return {
       kind: "branch-off",
-      baseBranch: input.refName.trim(),
+      baseBranch: refName,
       branchName: input.branchName ?? input.worktreeSlug ?? "worktree",
     };
   }

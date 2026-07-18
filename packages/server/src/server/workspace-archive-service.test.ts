@@ -217,6 +217,35 @@ describe("archiveByScope", () => {
     expect(existsSync(worktree.worktreePath)).toBe(false);
   });
 
+  test("does not tear down a worktree reopened before directory removal", async () => {
+    const { tempDir, repoDir } = createGitRepo();
+    const byspaceHome = path.join(tempDir, ".byspace");
+    const worktree = await createBySpaceOwnedWorktree(repoDir, byspaceHome, "reopened-workspace");
+    const workspace = {
+      workspaceId: "ws-reopened",
+      cwd: worktree.worktreePath,
+      kind: "worktree" as const,
+    };
+    const deps = createArchiveDeps({ byspaceHome, activeWorkspaces: [workspace] });
+    const archiveWorkspaceRecord = deps.archiveWorkspaceRecord;
+    deps.archiveWorkspaceRecord = async (workspaceId) => {
+      await archiveWorkspaceRecord(workspaceId);
+      deps.activeWorkspaces.push(workspace);
+    };
+    deps.listActiveWorkspaces = async () => deps.activeWorkspaces;
+
+    const result = await archiveByScope(deps, {
+      scope: { kind: "workspace", workspaceId: workspace.workspaceId },
+      requestId: "req-reopened-workspace",
+    });
+
+    assertArchiveResult(result, {
+      archivedWorkspaceIds: [workspace.workspaceId],
+      removedDirectory: false,
+    });
+    expect(existsSync(worktree.worktreePath)).toBe(true);
+  });
+
   test("workspace scope runs teardown while keeping a directory referenced by a sibling", async () => {
     const { tempDir, repoDir } = createGitRepo();
     writeFileSync(

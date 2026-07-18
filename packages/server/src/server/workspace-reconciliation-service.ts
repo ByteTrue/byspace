@@ -339,35 +339,44 @@ export class WorkspaceReconciliationService {
 
     if (Object.keys(projectUpdates).length > 0) {
       const timestamp = new Date().toISOString();
-      await this.projectRegistry.upsert({
-        ...project,
-        ...projectUpdates,
-        updatedAt: timestamp,
+      let applied = false;
+      const updated = await this.projectRegistry.update(project.projectId, (current) => {
+        if (current.archivedAt || current.kind === mappedKind) return current;
+        applied = true;
+        return { ...current, kind: mappedKind, updatedAt: timestamp };
       });
-      changes.push({
-        kind: "project_updated",
-        projectId: project.projectId,
-        directory: project.rootPath,
-        fields: projectUpdates,
-      });
+      if (applied && updated) {
+        changes.push({
+          kind: "project_updated",
+          projectId: project.projectId,
+          directory: updated.rootPath,
+          fields: projectUpdates,
+        });
+      }
     }
 
     await Promise.all(
       workspaceCheckouts.map(async ({ workspace, checkout: wsGit }) => {
         const timestamp = new Date().toISOString();
-        const update = reconcileWorkspacePlacement({
-          workspace,
-          checkout: wsGit,
-          updatedAt: timestamp,
+        let appliedFields: Record<string, unknown> | null = null;
+        const updated = await this.workspaceRegistry.update(workspace.workspaceId, (current) => {
+          if (current.archivedAt) return current;
+          const update = reconcileWorkspacePlacement({
+            workspace: current,
+            checkout: wsGit,
+            updatedAt: timestamp,
+          });
+          if (!update) return current;
+          appliedFields = update.fields;
+          return update.workspace;
         });
-        if (!update) return;
+        if (!updated || !appliedFields) return;
 
-        await this.workspaceRegistry.upsert(update.workspace);
         changes.push({
           kind: "workspace_updated",
           workspaceId: workspace.workspaceId,
-          directory: workspace.cwd,
-          fields: update.fields,
+          directory: updated.cwd,
+          fields: appliedFields,
         });
       }),
     );

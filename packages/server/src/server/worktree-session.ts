@@ -25,6 +25,8 @@ import type { ServiceProxySubsystem } from "./service-proxy.js";
 import type { WorkspaceScriptRuntimeStore } from "./workspace-script-runtime-store.js";
 import type { CheckoutExistingBranchResult } from "../utils/checkout-git.js";
 import { expandTilde } from "../utils/path.js";
+import { assertSafeGitRef } from "../utils/git-ref.js";
+export { assertSafeGitRef } from "../utils/git-ref.js";
 import {
   getWorktreeSetupCommands,
   resolveWorktreeRuntimeEnv,
@@ -47,8 +49,6 @@ import {
   createBySpaceWorktreeCommand,
   listBySpaceWorktreesCommand,
 } from "./worktree/commands.js";
-
-const SAFE_GIT_REF_PATTERN = /^[A-Za-z0-9._/-]+$/;
 
 export interface NormalizedGitOptions {
   baseBranch?: string;
@@ -372,17 +372,6 @@ export function normalizeGitOptions(
     checkoutSource,
     githubPrNumber,
   };
-}
-
-export function assertSafeGitRef(ref: string, label: string): void {
-  if (
-    !SAFE_GIT_REF_PATTERN.test(ref) ||
-    ref.startsWith("-") ||
-    ref.includes("..") ||
-    ref.includes("@{")
-  ) {
-    throw new Error(`Invalid ${label}: ${ref}`);
-  }
 }
 
 export async function resolveGitCreateBaseBranch(

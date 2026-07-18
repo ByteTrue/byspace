@@ -77,6 +77,21 @@ describe("byspace worktree manager", () => {
     rmSync(tempDir, { recursive: true, force: true });
   });
 
+  it.each(["--help", "main..evil", "main@{1}"])(
+    "rejects unsafe branch-off base ref %s before invoking Git",
+    async (baseBranch) => {
+      await expect(
+        createLegacyWorktreeForTest({
+          branchName: "safe-output-branch",
+          cwd: repoDir,
+          baseBranch,
+          worktreeSlug: "unsafe-ref",
+          byspaceHome,
+        }),
+      ).rejects.toThrow("Invalid base branch");
+    },
+  );
+
   it("treats a worktree as byspace-owned even when its .git admin is missing", async () => {
     const created = await createLegacyWorktreeForTest({
       branchName: "orphan-admin-branch",

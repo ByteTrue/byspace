@@ -83,6 +83,7 @@ beforeEach(async () => {
     projectRegistry,
     workspaceGitService: gitService(),
     logger,
+    isDirectory: async () => true,
   });
 });
 
@@ -233,6 +234,7 @@ test("reopening archived exact-root records restores the fresh Git project", asy
         mainRepoRoot: null,
       }),
     }),
+    isDirectory: async () => true,
   });
 
   const reopened = await archivedProvisioning.ensureWorkspaceRecordUnarchived(workspace);
@@ -271,6 +273,8 @@ test("uses one workspace snapshot when reopening an archived workspace", async (
     workspaceRegistry: snapshotRegistry,
     projectRegistry,
     workspaceGitService: gitService(),
+    logger: createTestLogger(),
+    isDirectory: async () => true,
   });
 
   const reopened = await snapshotProvisioning.findOrCreateWorkspaceForDirectory(repo);
@@ -637,4 +641,69 @@ test("runInImportWorkspace preserves an active project when an untargeted import
 
   expect(await workspaceRegistry.list()).toEqual([]);
   expect(await projectRegistry.list()).toEqual([previousProject]);
+});
+
+test("failed import does not overwrite a concurrent project update", async () => {
+  const cwd = path.join(tmpDir, "failed-import-concurrent-update");
+  mkdirSync(cwd);
+  const project = await provisioning.findOrCreateProjectForDirectory(cwd);
+
+  await expect(
+    provisioning.runInImportWorkspace({ cwd }, async () => {
+      await projectRegistry.update(project.projectId, (current) => ({
+        ...current,
+        customName: "renamed concurrently",
+        updatedAt: "2026-07-18T00:00:00.000Z",
+      }));
+      throw new Error("provider session is unavailable");
+    }),
+  ).rejects.toThrow("provider session is unavailable");
+
+  expect(await workspaceRegistry.list()).toEqual([]);
+  expect(await projectRegistry.get(project.projectId)).toMatchObject({
+    customName: "renamed concurrently",
+    updatedAt: "2026-07-18T00:00:00.000Z",
+  });
+});
+
+test("failed import does not resurrect a concurrently removed project", async () => {
+  const cwd = path.join(tmpDir, "failed-import-concurrent-remove");
+  mkdirSync(cwd);
+  const project = await provisioning.findOrCreateProjectForDirectory(cwd);
+
+  await expect(
+    provisioning.runInImportWorkspace({ cwd }, async () => {
+      await projectRegistry.remove(project.projectId);
+      throw new Error("provider session is unavailable");
+    }),
+  ).rejects.toThrow("provider session is unavailable");
+
+  expect(await workspaceRegistry.list()).toEqual([]);
+  expect(await projectRegistry.get(project.projectId)).toBeNull();
+});
+
+test("failed import preserves a concurrent replacement for a newly allocated project", async () => {
+  const cwd = path.join(tmpDir, "failed-import-concurrent-replacement");
+  mkdirSync(cwd);
+  let projectId = "";
+
+  await expect(
+    provisioning.runInImportWorkspace({ cwd }, async (workspace) => {
+      projectId = workspace.projectId;
+      const project = await projectRegistry.get(projectId);
+      if (!project) throw new Error("project missing during test");
+      await projectRegistry.upsert({
+        ...project,
+        customName: "replacement",
+        updatedAt: "2026-07-18T00:00:00.000Z",
+      });
+      throw new Error("provider session is unavailable");
+    }),
+  ).rejects.toThrow("provider session is unavailable");
+
+  expect(await workspaceRegistry.list()).toEqual([]);
+  expect(await projectRegistry.get(projectId)).toMatchObject({
+    customName: "replacement",
+    updatedAt: "2026-07-18T00:00:00.000Z",
+  });
 });

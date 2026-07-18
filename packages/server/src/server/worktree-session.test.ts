@@ -336,6 +336,13 @@ function createBySpaceWorktreeForTest(options: {
       options.events?.push(`project:${record.projectId}`);
       projects.set(record.projectId, record);
     },
+    update: async (projectId, updater) => {
+      const project = projects.get(projectId);
+      if (!project) return null;
+      const updated = updater(project);
+      projects.set(projectId, updated);
+      return updated;
+    },
     archive: async (projectId, archivedAt) => {
       const project = projects.get(projectId);
       if (project) projects.set(projectId, { ...project, archivedAt });
