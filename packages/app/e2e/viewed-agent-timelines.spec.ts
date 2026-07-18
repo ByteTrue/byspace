@@ -71,6 +71,10 @@ async function moveActiveTabRight(page: Page) {
   await page.keyboard.press("Meta+Alt+Shift+ArrowRight");
 }
 
+function hasTwoAgentSubscription(subscriptions: string[][], agentId: string): boolean {
+  return subscriptions.some((agentIds) => agentIds.length === 2 && agentIds.includes(agentId));
+}
+
 async function commitMessage(scenario: ViewedTimelineScenario, agentId: string, prompt: string) {
   await scenario.client.sendAgentMessage(agentId, prompt);
   const finish = await scenario.client.waitForFinish(agentId, 30_000);
@@ -166,6 +170,14 @@ test.describe("Viewed agent timelines", () => {
       await page.getByRole("button", { name: "Split pane right" }).click();
       await selectAgent(page, "Second viewed chat");
       await moveActiveTabRight(page);
+      await expect
+        .poll(() =>
+          hasTwoAgentSubscription(
+            gate.getAcknowledgedTimelineSubscriptions(),
+            scenario.secondAgentId,
+          ),
+        )
+        .toBe(true);
       await selectAgent(page, "First viewed chat");
       await expect(
         page.getByRole("button", { name: "First viewed chat", exact: true }),
