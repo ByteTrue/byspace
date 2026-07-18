@@ -5,8 +5,8 @@
     "branch": "main"
   },
   "cursor": {
-    "lastReviewedCommit": "1977d330edefb8d7c8c0f0673e911586d40a6262",
-    "reviewedAt": "2026-07-17"
+    "lastReviewedCommit": "a1de743ef67dde4fe7c48d045a3714f65dfa5e90",
+    "reviewedAt": "2026-07-18"
   },
   "batches": [
     {
@@ -276,6 +276,37 @@
         "e4a349c628363ae1ed9a4f6d1cf6eb164ec5226d",
         "92732ebf40328d43b257bb2ae0e1a6d2f22bdd8c",
         "f3b24374060c69dd852bcf18b410aa7e84336465"
+      ]
+    },
+    {
+      "startExclusive": "1977d330edefb8d7c8c0f0673e911586d40a6262",
+      "endInclusive": "a1de743ef67dde4fe7c48d045a3714f65dfa5e90",
+      "reviewedAt": "2026-07-18",
+      "issue": ".cs/issues/2026/07/18/open-review-upstream-updates.md",
+      "decisions": {
+        "inherited": [],
+        "applied": [
+          {
+            "upstreamCommit": "39cb3dbb9c8784f9f25fce54fc429b848076fe0e",
+            "localCommit": "6532db52244015bf148a22bab23e94b57753e645",
+            "mode": "full"
+          },
+          {
+            "upstreamCommit": "a1de743ef67dde4fe7c48d045a3714f65dfa5e90",
+            "localCommit": "cd09ca3b10e54e2a031135764d106412416c8767",
+            "mode": "full"
+          }
+        ],
+        "deferred": ["a414f8ea8572412cae498bcb62cac9429cc13bdf"],
+        "skipped": []
+      },
+      "hardeningCommits": [
+        "60bf7930a638676cc7f32fc62d2fde817bc78b13",
+        "9559b0f8f4814eee10ce0f8cb9f185983e742636",
+        "6788f69ab5026e9b877b6a2e1a7f1256d61d1f6d",
+        "58b3232759216703afcfa13e0c44b92dcebe0170",
+        "0f99c9757cd12935f3870fa255d049f9dd90e680",
+        "dd2e2488c8adb8e400cb8982562f12f69cefeb4a"
       ]
     }
   ]
