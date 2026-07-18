@@ -60,7 +60,10 @@ async function selectAgent(page: Page, title: string) {
 
 async function enableMoveTabShortcut(page: Page) {
   await page.addInitScript(() => {
-    Object.defineProperty(navigator, "platform", { get: () => "MacIntel" });
+    localStorage.setItem(
+      "byspace:keyboard-shortcut:workspace.pane.move-tab.right",
+      "Meta+Alt+Shift+ArrowRight",
+    );
   });
 }
 
@@ -155,13 +158,15 @@ test.describe("Viewed agent timelines", () => {
   });
 
   test("two visible split chats both stay current", async ({ page }) => {
+    const gate = await installDaemonWebSocketGate(page);
+    await enableMoveTabShortcut(page);
     const scenario = await seedViewedTimelineScenario();
     try {
-      await enableMoveTabShortcut(page);
       await openAgent(page, scenario, scenario.firstAgentId);
       await page.getByRole("button", { name: "Split pane right" }).click();
       await selectAgent(page, "Second viewed chat");
       await moveActiveTabRight(page);
+      await selectAgent(page, "First viewed chat");
       await expect(
         page.getByRole("button", { name: "First viewed chat", exact: true }),
       ).toBeVisible();
@@ -169,12 +174,16 @@ test.describe("Viewed agent timelines", () => {
         page.getByRole("button", { name: "Second viewed chat", exact: true }),
       ).toBeVisible();
       await expect(page.getByRole("textbox", { name: "Message agent..." })).toHaveCount(2);
+      await expect
+        .poll(() => gate.getAcknowledgedTimelineSubscriptions())
+        .toContainEqual([scenario.firstAgentId, scenario.secondAgentId].sort());
       await commitMessage(scenario, scenario.firstAgentId, "First visible pane update.");
       await expect(page.getByText("First visible pane update.", { exact: true })).toBeVisible();
       await expect(
         page.getByRole("button", { name: "Second viewed chat", exact: true }),
       ).toBeVisible();
     } finally {
+      gate.restore();
       await scenario.cleanup();
     }
   });
@@ -217,8 +226,8 @@ test.describe("Viewed agent timelines", () => {
     try {
       await openAgent(page, scenario, scenario.firstAgentId);
       await expect
-        .poll(() => gate.getLastTimelineSubscriptionAgentIds())
-        .toEqual([scenario.firstAgentId]);
+        .poll(() => gate.hasAcknowledgedTimelineSubscription([scenario.firstAgentId]))
+        .toBe(true);
       const timelineSubscriptionRequests = gate.getClientRequestCount(
         "agent.timeline.set_subscription.request",
       );

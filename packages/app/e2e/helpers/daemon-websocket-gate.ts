@@ -25,6 +25,8 @@ interface ClientRequest {
   subscribe?: unknown;
   page?: { cursor?: unknown };
   agentIds?: unknown;
+  requestId?: unknown;
+  payload?: { requestId?: unknown; agentIds?: unknown };
   capabilities?: Record<string, unknown>;
 }
 
@@ -125,7 +127,7 @@ export async function installDaemonWebSocketGate(page: Page) {
     capable: createTimelineTrafficState(),
     legacy: createTimelineTrafficState(),
   };
-  let lastTimelineSubscriptionAgentIds: string[] = [];
+  const acknowledgedTimelineAgentIdsBySocket = new Map<WebSocketRoute, string[]>();
 
   await page.routeWebSocket(daemonWsRoutePattern(), (ws) => {
     if (!acceptingConnections) {
@@ -136,6 +138,13 @@ export async function installDaemonWebSocketGate(page: Page) {
     activeSockets.add(ws);
     const server = ws.connectToServer();
     let timelineClientKind: TimelineClientKind | null = null;
+    let latestTimelineSubscriptionRequestId: string | null = null;
+    const forgetSocket = () => {
+      activeSockets.delete(ws);
+      acknowledgedTimelineAgentIdsBySocket.delete(ws);
+    };
+    ws.onClose(forgetSocket);
+    server.onClose(forgetSocket);
 
     ws.onMessage((message) => {
       if (!acceptingConnections) return;
@@ -146,11 +155,11 @@ export async function installDaemonWebSocketGate(page: Page) {
       }
       if (
         request?.type === "agent.timeline.set_subscription.request" &&
+        typeof request.requestId === "string" &&
         Array.isArray(request.agentIds)
       ) {
-        lastTimelineSubscriptionAgentIds = request.agentIds
-          .filter((agentId): agentId is string => typeof agentId === "string")
-          .sort();
+        latestTimelineSubscriptionRequestId = request.requestId;
+        acknowledgedTimelineAgentIdsBySocket.delete(ws);
       }
       if (typeof request?.type === "string") {
         clientRequestCounts.set(request.type, (clientRequestCounts.get(request.type) ?? 0) + 1);
@@ -164,17 +173,33 @@ export async function installDaemonWebSocketGate(page: Page) {
       try {
         server.send(message);
       } catch {
-        activeSockets.delete(ws);
+        forgetSocket();
       }
     });
 
     server.onMessage((message) => {
       if (!acceptingConnections) return;
       if (timelineClientKind) recordTimelineTraffic(timelineTraffic[timelineClientKind], message);
+      const response = readClientRequest(message);
+      const responseRequestId = response?.payload?.requestId;
+      const acknowledgedAgentIds = response?.payload?.agentIds;
+      if (
+        response?.type === "agent.timeline.set_subscription.response" &&
+        typeof responseRequestId === "string" &&
+        responseRequestId === latestTimelineSubscriptionRequestId &&
+        Array.isArray(acknowledgedAgentIds)
+      ) {
+        acknowledgedTimelineAgentIdsBySocket.set(
+          ws,
+          acknowledgedAgentIds
+            .filter((agentId): agentId is string => typeof agentId === "string")
+            .sort(),
+        );
+      }
       try {
         ws.send(message);
       } catch {
-        activeSockets.delete(ws);
+        forgetSocket();
       }
     });
   });
@@ -184,6 +209,7 @@ export async function installDaemonWebSocketGate(page: Page) {
       acceptingConnections = false;
       const sockets = Array.from(activeSockets);
       activeSockets.clear();
+      acknowledgedTimelineAgentIdsBySocket.clear();
       await Promise.all(
         sockets.map((ws) =>
           ws.close({ code: 1008, reason: "Dropped by reconnect test." }).catch(() => undefined),
@@ -203,8 +229,16 @@ export async function installDaemonWebSocketGate(page: Page) {
     getClientRequestCount(type: string): number {
       return clientRequestCounts.get(type) ?? 0;
     },
-    getLastTimelineSubscriptionAgentIds(): string[] {
-      return [...lastTimelineSubscriptionAgentIds];
+    hasAcknowledgedTimelineSubscription(agentIds: string[]): boolean {
+      const expected = [...new Set(agentIds)].filter(Boolean).sort();
+      return [...acknowledgedTimelineAgentIdsBySocket.values()].some(
+        (acknowledged) =>
+          acknowledged.length === expected.length &&
+          acknowledged.every((agentId, index) => agentId === expected[index]),
+      );
+    },
+    getAcknowledgedTimelineSubscriptions(): string[][] {
+      return [...acknowledgedTimelineAgentIdsBySocket.values()].map((agentIds) => agentIds.slice());
     },
     resetTimelineTraffic(): void {
       resetTimelineTraffic(timelineTraffic.capable);
