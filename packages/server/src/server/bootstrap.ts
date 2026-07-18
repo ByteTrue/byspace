@@ -885,6 +885,7 @@ export async function createBySpaceDaemon(
       .filter((workspace) => !workspace.archivedAt)
       .map((workspace) => ({
         workspaceId: workspace.workspaceId,
+        projectId: workspace.projectId,
         cwd: workspace.cwd,
         kind: workspace.kind,
         worktreeRoot: workspace.worktreeRoot,

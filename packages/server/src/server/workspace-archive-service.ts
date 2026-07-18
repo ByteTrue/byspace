@@ -15,11 +15,17 @@ import {
 import type { TerminalManager } from "../terminal/terminal-manager.js";
 import type { PersistedWorkspaceRecord, WorkspaceRegistry } from "./workspace-registry.js";
 import { createRealpathAwarePathMatcher } from "../utils/path.js";
-import { withWorkspaceLifecycleLock } from "./workspace-lifecycle-lock.js";
+import { withWorkspaceLifecycleLocks } from "./workspace-lifecycle-lock.js";
 
 export type ActiveWorkspaceRef = Pick<
   PersistedWorkspaceRecord,
-  "workspaceId" | "cwd" | "kind" | "worktreeRoot" | "isBySpaceOwnedWorktree" | "mainRepoRoot"
+  | "workspaceId"
+  | "projectId"
+  | "cwd"
+  | "kind"
+  | "worktreeRoot"
+  | "isBySpaceOwnedWorktree"
+  | "mainRepoRoot"
 >;
 
 export interface ArchiveDependencies {
@@ -77,6 +83,7 @@ interface BackingDirectory {
 
 interface ArchiveTarget {
   backing: BackingDirectory | null;
+  projectIds: string[];
   teardownTargets: Array<{ workspaceId: string | null; cwd: string }>;
   workspaceIds: string[];
 }
@@ -99,6 +106,18 @@ export async function resolveWorkspaceIdAtPath(
 // (agents + terminals + record), then removes the backing directory iff it is
 // BySpace-owned AND no active workspace still references it.
 export async function archiveByScope(
+  dependencies: ArchiveDependencies,
+  request: ArchiveByScopeRequest,
+): Promise<ArchiveResult> {
+  const target = await resolveArchiveTarget(dependencies, request.scope);
+  const paths = target.backing
+    ? [target.backing.path]
+    : target.teardownTargets.map((entry) => entry.cwd);
+  return withWorkspaceLifecycleLocks({ paths, projectIds: target.projectIds }, () =>
+    archiveByScopeUnderLock(dependencies, request),
+  );
+}
+async function archiveByScopeUnderLock(
   dependencies: ArchiveDependencies,
   request: ArchiveByScopeRequest,
 ): Promise<ArchiveResult> {
@@ -172,10 +191,11 @@ async function resolveArchiveTarget(
         { workspaceId },
         "Workspace not found for archive-by-scope; skipping",
       );
-      return { backing: null, teardownTargets: [], workspaceIds: [] };
+      return { backing: null, projectIds: [], teardownTargets: [], workspaceIds: [] };
     }
     return {
       backing: await resolveWorkspaceBackingDirectory(record, dependencies),
+      projectIds: [record.projectId],
       teardownTargets: [{ workspaceId, cwd: record.cwd }],
       workspaceIds: [workspaceId],
     };
@@ -199,6 +219,7 @@ async function resolveArchiveTarget(
       ...backing,
       mainRepoRoot: persistedMainRepoRoot ?? backing.mainRepoRoot,
     },
+    projectIds: Array.from(new Set(targetWorkspaces.map((workspace) => workspace.projectId))),
     teardownTargets:
       targetWorkspaces.length > 0
         ? targetWorkspaces.map((workspace) => ({
@@ -301,78 +322,74 @@ async function maybeRemoveDirectory(
     return false;
   }
 
-  return withWorkspaceLifecycleLock(backing.path, async () => {
-    const archivedWorkspaceIdSet = new Set(archivedWorkspaceIds);
-    const activeBeforeTeardown = await dependencies.listActiveWorkspaces();
-    if (
-      activeBeforeTeardown.some((workspace) => archivedWorkspaceIdSet.has(workspace.workspaceId))
-    ) {
-      return false;
-    }
+  const archivedWorkspaceIdSet = new Set(archivedWorkspaceIds);
+  const activeBeforeTeardown = await dependencies.listActiveWorkspaces();
+  if (activeBeforeTeardown.some((workspace) => archivedWorkspaceIdSet.has(workspace.workspaceId))) {
+    return false;
+  }
 
-    const teardownCwds = uniqueFilesystemPaths(
-      target.teardownTargets
-        .filter(
-          (teardownTarget) =>
-            teardownTarget.workspaceId === null ||
-            archivedWorkspaceIdSet.has(teardownTarget.workspaceId),
-        )
-        .map((teardownTarget) => teardownTarget.cwd),
-    );
+  const teardownCwds = uniqueFilesystemPaths(
+    target.teardownTargets
+      .filter(
+        (teardownTarget) =>
+          teardownTarget.workspaceId === null ||
+          archivedWorkspaceIdSet.has(teardownTarget.workspaceId),
+      )
+      .map((teardownTarget) => teardownTarget.cwd),
+  );
 
-    try {
-      for (const teardownCwd of teardownCwds) {
-        await runWorktreeTeardownCommands({
-          worktreePath: backing.path,
-          teardownCwd,
-          repoRootPath: backing.mainRepoRoot ?? undefined,
-        });
-      }
-    } catch (error) {
-      if (error instanceof WorktreeTeardownError) {
-        dependencies.sessionLogger?.warn(
-          { err: error, targetPath: backing.path, requestId: request.requestId },
-          "Worktree teardown failed during archive; workspace already archived",
-        );
-        return false;
-      }
-      throw error;
-    }
-
-    const remainingActive = await dependencies.listActiveWorkspaces();
-    if (
-      !(await isDirectoryUnreferenced(
-        remainingActive,
-        backing.path,
-        new Set(archivedWorkspaceIds),
-        dependencies,
-      ))
-    ) {
-      return false;
-    }
-
-    try {
-      await deleteBySpaceWorktree({
-        cwd: backing.mainRepoRoot,
+  try {
+    for (const teardownCwd of teardownCwds) {
+      await runWorktreeTeardownCommands({
         worktreePath: backing.path,
-        teardownCwds: [],
-        worktreesRoot: backing.byspaceWorktreesRoot ?? undefined,
-        byspaceHome: dependencies.byspaceHome,
-        worktreesBaseRoot: dependencies.byspaceWorktreesBaseRoot,
+        teardownCwd,
+        repoRootPath: backing.mainRepoRoot ?? undefined,
       });
-      dependencies.github.invalidate({ cwd: backing.path });
-      return true;
-    } catch (error) {
-      if (error instanceof WorktreeTeardownError) {
-        dependencies.sessionLogger?.warn(
-          { err: error, targetPath: backing.path, requestId: request.requestId },
-          "Worktree disk removal failed during archive; workspace already archived",
-        );
-        return false;
-      }
-      throw error;
     }
-  });
+  } catch (error) {
+    if (error instanceof WorktreeTeardownError) {
+      dependencies.sessionLogger?.warn(
+        { err: error, targetPath: backing.path, requestId: request.requestId },
+        "Worktree teardown failed during archive; workspace already archived",
+      );
+      return false;
+    }
+    throw error;
+  }
+
+  const remainingActive = await dependencies.listActiveWorkspaces();
+  if (
+    !(await isDirectoryUnreferenced(
+      remainingActive,
+      backing.path,
+      new Set(archivedWorkspaceIds),
+      dependencies,
+    ))
+  ) {
+    return false;
+  }
+
+  try {
+    await deleteBySpaceWorktree({
+      cwd: backing.mainRepoRoot,
+      worktreePath: backing.path,
+      teardownCwds: [],
+      worktreesRoot: backing.byspaceWorktreesRoot ?? undefined,
+      byspaceHome: dependencies.byspaceHome,
+      worktreesBaseRoot: dependencies.byspaceWorktreesBaseRoot,
+    });
+    dependencies.github.invalidate({ cwd: backing.path });
+    return true;
+  } catch (error) {
+    if (error instanceof WorktreeTeardownError) {
+      dependencies.sessionLogger?.warn(
+        { err: error, targetPath: backing.path, requestId: request.requestId },
+        "Worktree disk removal failed during archive; workspace already archived",
+      );
+      return false;
+    }
+    throw error;
+  }
 }
 
 function uniqueFilesystemPaths(paths: string[]): string[] {

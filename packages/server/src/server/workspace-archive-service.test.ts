@@ -11,6 +11,7 @@ import { createWorktree, type WorktreeConfig } from "../utils/worktree.js";
 import type { ManagedAgent } from "./agent/agent-manager.js";
 import type { AgentStorage, StoredAgentRecord } from "./agent/agent-storage.js";
 import type { WorkspaceGitService } from "./workspace-git-service.js";
+import { withWorkspaceLifecycleLocks } from "./workspace-lifecycle-lock.js";
 import {
   archiveByScope,
   type ActiveWorkspaceRef,
@@ -116,7 +117,7 @@ async function createBySpaceOwnedWorktree(
 
 interface ArchiveDepsInput {
   byspaceHome: string;
-  activeWorkspaces: ActiveWorkspaceRef[];
+  activeWorkspaces: Array<Omit<ActiveWorkspaceRef, "projectId"> & { projectId?: string }>;
   byspaceWorktreesBaseRoot?: string;
   findWorkspaceIdForCwd?: (cwd: string) => Promise<string | null>;
 }
@@ -129,7 +130,10 @@ interface ArchiveTestDependencies extends ArchiveDependencies {
 
 function createArchiveDeps(input: ArchiveDepsInput): ArchiveTestDependencies {
   const archivedWorkspaceIds = new Set<string>();
-  const active = [...input.activeWorkspaces];
+  const active: ActiveWorkspaceRef[] = input.activeWorkspaces.map((workspace) => ({
+    ...workspace,
+    projectId: workspace.projectId ?? `project-${workspace.workspaceId}`,
+  }));
   const archivedAgentIds: string[] = [];
   const archivedSnapshotIds: string[] = [];
 
@@ -215,6 +219,49 @@ describe("archiveByScope", () => {
       removedDirectory: true,
     });
     expect(existsSync(worktree.worktreePath)).toBe(false);
+  });
+
+  test("serializes record archival behind an in-flight reopen transaction", async () => {
+    const { tempDir } = createGitRepo();
+    const cwd = path.join(tempDir, "directory-workspace");
+    mkdirSync(cwd);
+    const workspace = {
+      workspaceId: "ws-linearized-archive",
+      projectId: "project-linearized-archive",
+      cwd,
+      kind: "directory" as const,
+    };
+    const deps = createArchiveDeps({
+      byspaceHome: path.join(tempDir, ".byspace"),
+      activeWorkspaces: [workspace],
+    });
+    let releaseReopen!: () => void;
+    const reopenBlocked = new Promise<void>((resolve) => {
+      releaseReopen = resolve;
+    });
+    let markReopenStarted!: () => void;
+    const reopenStarted = new Promise<void>((resolve) => {
+      markReopenStarted = resolve;
+    });
+    const reopen = withWorkspaceLifecycleLocks(
+      { paths: [cwd], projectIds: [workspace.projectId] },
+      async () => {
+        markReopenStarted();
+        await reopenBlocked;
+      },
+    );
+    await reopenStarted;
+
+    const archive = archiveByScope(deps, {
+      scope: { kind: "workspace", workspaceId: workspace.workspaceId },
+      requestId: "req-linearized-archive",
+    });
+    await Promise.resolve();
+    expect(deps.activeWorkspaces).toHaveLength(1);
+
+    releaseReopen();
+    await Promise.all([reopen, archive]);
+    expect(deps.activeWorkspaces).toHaveLength(0);
   });
 
   test("does not tear down a worktree reopened before directory removal", async () => {
