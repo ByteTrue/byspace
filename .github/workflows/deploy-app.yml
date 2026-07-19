@@ -1,37 +1,49 @@
 name: Deploy App
 
 on:
-  push:
-    tags:
-      - "v*"
-      - "!v*-beta.*"
-      - "app-v*"
-      - "!app-v*-beta.*"
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
   workflow_dispatch:
+
+concurrency:
+  group: deploy-app-production
+  cancel-in-progress: true
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    if: ${{ vars.CLOUDFLARE_DEPLOY_ENABLED == 'true' && (github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' && github.event.workflow_run.head_branch == 'main')) }}
+    env:
+      EXPECTED_SHA: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXPECTED_SHA }}
+          fetch-depth: 0
+
+      - name: Reject stale deployment
+        run: |
+          git fetch origin main
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          test "$EXPECTED_SHA" = "$(git rev-parse origin/main)"
 
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
           cache: "npm"
-          registry-url: "https://npm.pkg.github.com"
-          scope: "@boudra"
 
       - name: Install dependencies
         run: node scripts/npm-retry.mjs ci
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - name: Build app dependencies
-        run: npm run build:app-deps
 
       - name: Typecheck
         run: npm run typecheck --workspace=@bytetrue/byspace-app
+
+      - name: Recheck current main
+        run: |
+          git fetch origin main
+          test "$EXPECTED_SHA" = "$(git rev-parse origin/main)"
 
       - name: Build and deploy to Cloudflare Pages
         run: npm run deploy:web --workspace=@bytetrue/byspace-app

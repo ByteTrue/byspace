@@ -61,21 +61,6 @@ For full setup and configuration, see:
 - [Docs](https://byspace.pages.dev/docs)
 - [Configuration reference](https://byspace.pages.dev/docs/configuration)
 
-### Docker
-
-Run the BySpace daemon and self-hosted web UI in Docker:
-
-```bash
-docker run -d --name byspace \
-  -p 6777:6777 \
-  -e BYSPACE_PASSWORD=change-me \
-  -v "$PWD/byspace-home:/home/byspace" \
-  -v "$PWD:/workspace" \
-  ghcr.io/bytetrue/byspace:latest
-```
-
-Open `http://localhost:6777` after it starts. Extend the base image with the agent CLIs you use, then provide credentials through environment variables or the persistent `/home/byspace` volume. See the [Docker documentation](docs/docker.md) for full setup details.
-
 ## CLI
 
 Everything you can do in the app, you can do from the terminal.

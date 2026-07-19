@@ -1,21 +1,33 @@
 name: Deploy Relay
 
 on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - "packages/relay/**"
-      - "package.json"
-      - "package-lock.json"
-      - ".github/workflows/deploy-relay.yml"
+
+concurrency:
+  group: deploy-relay-production
+  cancel-in-progress: true
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    if: ${{ vars.CLOUDFLARE_DEPLOY_ENABLED == 'true' && (github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' && github.event.workflow_run.head_branch == 'main')) }}
+    env:
+      EXPECTED_SHA: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXPECTED_SHA }}
+          fetch-depth: 0
+
+      - name: Reject stale deployment
+        run: |
+          git fetch origin main
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          test "$EXPECTED_SHA" = "$(git rev-parse origin/main)"
 
       - uses: actions/setup-node@v4
         with:
@@ -27,6 +39,11 @@ jobs:
 
       - name: Typecheck
         run: npm run typecheck --workspace=@bytetrue/byspace-relay
+
+      - name: Recheck current main
+        run: |
+          git fetch origin main
+          test "$EXPECTED_SHA" = "$(git rev-parse origin/main)"
 
       - name: Deploy worker
         run: cd packages/relay && npx wrangler deploy
