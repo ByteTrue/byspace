@@ -1,6 +1,6 @@
 import { useCallback, useState } from "react";
 import { Text, View } from "react-native";
-import { Activity, CircleHelp, Gift, Keyboard } from "lucide-react-native";
+import { CircleHelp, Gift, Keyboard } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { DiscordIcon } from "@/components/icons/discord-icon";
@@ -17,7 +17,6 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { isNative } from "@/constants/platform";
-import { useAppDiagnosticStore } from "@/diagnostics/store";
 import { useHostRuntimeIsConnected, useHosts } from "@/runtime/host-runtime";
 import { useKeyboardShortcutsStore } from "@/stores/keyboard-shortcuts-store";
 import { useSessionStore } from "@/stores/session-store";
@@ -35,7 +34,6 @@ function formatVersionWithPrefix(version: string | null | undefined): string {
   if (!value) return "—";
   return value.startsWith("v") ? value : `v${value}`;
 }
-const ThemedActivity = withUnistyles(Activity);
 const ThemedCircleHelp = withUnistyles(CircleHelp);
 const ThemedGift = withUnistyles(Gift);
 const ThemedKeyboard = withUnistyles(Keyboard);
@@ -45,9 +43,6 @@ const foregroundColorMapping = (theme: Theme) => ({ color: theme.colors.foregrou
 const foregroundMutedColorMapping = (theme: Theme) => ({
   color: theme.colors.foregroundMuted,
 });
-const diagnosticLeadingIcon = (
-  <ThemedActivity size={ICON_SIZE.sm} uniProps={foregroundMutedColorMapping} />
-);
 const shortcutsLeadingIcon = (
   <ThemedKeyboard size={ICON_SIZE.sm} uniProps={foregroundMutedColorMapping} />
 );
@@ -84,7 +79,6 @@ function HostVersionHint({ host }: { host: HostProfile }) {
 export function SidebarHelpMenu() {
   const { t } = useTranslation();
   const isCompactLayout = useIsCompactFormFactor();
-  const openAppDiagnostic = useAppDiagnosticStore((state) => state.open);
   const setShortcutsDialogOpen = useKeyboardShortcutsStore((state) => state.setShortcutsDialogOpen);
   const [open, setOpen] = useState(false);
   const showKeyboardShortcuts = !isNative && !isCompactLayout;
@@ -142,20 +136,6 @@ export function SidebarHelpMenu() {
             {t("sidebar.help.shortcuts")}
           </DropdownMenuItem>
         ) : null}
-        <DropdownMenuItem
-          testID="sidebar-help-changelog"
-          leading={changelogLeadingIcon}
-          onSelect={openChangelog}
-        >
-          {t("sidebar.help.whatsNew")}
-        </DropdownMenuItem>
-        <DropdownMenuItem
-          testID="sidebar-help-diagnostics"
-          leading={diagnosticLeadingIcon}
-          onSelect={openAppDiagnostic}
-        >
-          {t("sidebar.help.diagnostics")}
-        </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuLabel>{t("sidebar.help.reportIssue")}</DropdownMenuLabel>
         <DropdownMenuItem
@@ -171,6 +151,13 @@ export function SidebarHelpMenu() {
           onSelect={openGitHubIssue}
         >
           {t("sidebar.help.github")}
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          testID="sidebar-help-changelog"
+          leading={changelogLeadingIcon}
+          onSelect={openChangelog}
+        >
+          {t("sidebar.help.whatsNew")}
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <View style={styles.versionList}>

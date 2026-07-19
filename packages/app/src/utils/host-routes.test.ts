@@ -45,8 +45,8 @@ describe("workspace route parsing", () => {
     expect(decodeWorkspaceIdFromPathSegment("L3RtcC9yZXBv")).toBe("/tmp/repo");
   });
 
-  it("decodes non-canonical base64url workspace IDs used by older links", () => {
-    expect(decodeWorkspaceIdFromPathSegment("L2hvbWUvdXNlci9kZXYvcGFzZW8")).toBe(
+  it("decodes non-canonical base64url workspace IDs", () => {
+    expect(decodeWorkspaceIdFromPathSegment("L2hvbWUvdXNlci9kZXYvYnlzcGFjZQ")).toBe(
       "/home/user/dev/byspace",
     );
   });

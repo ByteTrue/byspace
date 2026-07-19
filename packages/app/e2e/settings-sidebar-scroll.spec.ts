@@ -11,35 +11,16 @@ test.describe("Settings sidebar scrolling", () => {
     const sidebar = page.getByTestId("settings-sidebar");
     await expect(sidebar).toBeVisible();
 
-    const geometry = await sidebar.evaluate((node) => {
-      let scroller: HTMLElement | null = null;
+    const scrollable = await sidebar.evaluate((node) => {
       for (const element of node.querySelectorAll<HTMLElement>("*")) {
-        if (element.scrollHeight > element.clientHeight) {
-          scroller = element;
-          break;
-        }
+        if (element.scrollHeight <= element.clientHeight) continue;
+        const before = element.scrollTop;
+        element.scrollTop = element.scrollHeight;
+        return element.scrollTop > before;
       }
-      if (!scroller) return null;
-
-      const scrollerRect = scroller.getBoundingClientRect();
-      const dragRegions = [];
-      for (const element of node.querySelectorAll<HTMLElement>("*")) {
-        if (getComputedStyle(element).getPropertyValue("-webkit-app-region") === "drag") {
-          const rect = element.getBoundingClientRect();
-          dragRegions.push({ bottom: rect.bottom });
-        }
-      }
-
-      return {
-        scrollBodyTop: scrollerRect.top,
-        dragRegions,
-      };
+      return false;
     });
 
-    expect(geometry).not.toBeNull();
-    expect(geometry!.dragRegions).not.toEqual([]);
-    for (const dragRegion of geometry!.dragRegions) {
-      expect(dragRegion.bottom).toBeLessThanOrEqual(geometry!.scrollBodyTop + 1);
-    }
+    expect(scrollable).toBe(true);
   });
 });

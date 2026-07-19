@@ -591,7 +591,7 @@ describe("OpenCodeAgentClient adapter smoke tests", () => {
 
     const custom = modes.find((mode) => mode.id === "byspace-test-custom");
     expect(custom).toBeDefined();
-    expect(custom!.label).toBe("BySpace-test-custom");
+    expect(custom!.label).toBe("Byspace-test-custom");
     expect(custom!.description).toBe("Custom agent defined for BySpace integration test");
 
     // System agents should not appear as selectable modes

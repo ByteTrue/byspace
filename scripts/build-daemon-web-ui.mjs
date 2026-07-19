@@ -35,9 +35,17 @@ function run(command, args, options) {
   });
 }
 
+async function runNpm(args, options) {
+  const npmExecPath = process.env.npm_execpath;
+  if (npmExecPath) {
+    return await run(process.execPath, [npmExecPath, ...args], options);
+  }
+  return await run(process.platform === "win32" ? "npm.cmd" : "npm", args, options);
+}
+
 async function exportBrowserWebApp() {
   console.log("Exporting browser web app...");
-  await run("npm", ["run", "build:web", "--workspace=@bytetrue/byspace-app"], {
+  await runNpm(["run", "build:web", "--workspace=@bytetrue/byspace-app"], {
     cwd: REPO_ROOT,
   });
 }
