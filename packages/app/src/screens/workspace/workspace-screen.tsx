@@ -11,7 +11,7 @@ import {
 } from "react";
 import { useStoreWithEqualityFn } from "zustand/traditional";
 import { useIsFocused } from "@react-navigation/native";
-import { ActivityIndicator, BackHandler, Keyboard, Pressable, Text, View } from "react-native";
+import { ActivityIndicator, Keyboard, Pressable, Text, View } from "react-native";
 import { useQueryClient } from "@tanstack/react-query";
 import { useRouter, type Href } from "expo-router";
 import * as Clipboard from "expo-clipboard";
@@ -1848,22 +1848,6 @@ function WorkspaceScreenContent({
     () => ({ expanded: isExplorerOpen }),
     [isExplorerOpen],
   );
-
-  useEffect(() => {
-    if (!isRouteFocused || isWeb || !isExplorerOpen) {
-      return;
-    }
-
-    const handler = BackHandler.addEventListener("hardwareBackPress", () => {
-      if (isExplorerOpen) {
-        showMobileAgent();
-        return true;
-      }
-      return false;
-    });
-
-    return () => handler.remove();
-  }, [isExplorerOpen, isRouteFocused, showMobileAgent]);
 
   const workspaceLayout = useWorkspaceLayoutStore((state) =>
     persistenceKey ? (state.layoutByWorkspace[persistenceKey] ?? null) : null,

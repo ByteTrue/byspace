@@ -16,7 +16,6 @@ import {
   View,
   Text,
   Pressable,
-  Platform,
   ActivityIndicator,
   type PressableStateCallbackType,
   type StyleProp,
@@ -393,15 +392,8 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
           loadOlder: historyPagination.onLoadOlder,
         }
       : agentHistoryPagination;
-    // Keep entry/exit animations off on Android due to RN dispatchDraw crashes
-    // tracked in react-native-reanimated#8422.
-    const shouldDisableEntryExitAnimations = Platform.OS === "android";
-    const scrollIndicatorFadeIn = shouldDisableEntryExitAnimations
-      ? undefined
-      : FadeIn.duration(200);
-    const scrollIndicatorFadeOut = shouldDisableEntryExitAnimations
-      ? undefined
-      : FadeOut.duration(200);
+    const scrollIndicatorFadeIn = FadeIn.duration(200);
+    const scrollIndicatorFadeOut = FadeOut.duration(200);
 
     useEffect(() => {
       setIsNearBottom(true);

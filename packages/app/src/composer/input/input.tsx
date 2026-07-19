@@ -3,7 +3,6 @@ import {
   Text,
   TextInput,
   Pressable,
-  Platform,
   ActivityIndicator,
   useWindowDimensions,
   NativeSyntheticEvent,
@@ -303,10 +302,6 @@ function AttachmentDropdown({
   const handleSheetItemSelect = useCallback((item: AttachmentMenuItem) => {
     if (item.disabled) return;
     setIsSheetOpen(false);
-    if (Platform.OS === "ios") {
-      setTimeout(item.onSelect, 250);
-      return;
-    }
     item.onSelect();
   }, []);
   const mobileAttachButtonStyle = useCallback(

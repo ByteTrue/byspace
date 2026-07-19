@@ -15,8 +15,6 @@ import {
   Modal,
   TextInput,
   ScrollView,
-  Platform,
-  StatusBar,
   useWindowDimensions,
   type LayoutChangeEvent,
   type PressableStateCallbackType,
@@ -796,13 +794,6 @@ function runIfSubmitSearch(
   }
 }
 
-function computeCollisionPadding(): number {
-  const basePadding = 16;
-  if (Platform.OS !== "android") return basePadding;
-  const statusBarHeight = StatusBar.currentHeight ?? 0;
-  return Math.max(basePadding, statusBarHeight + basePadding);
-}
-
 function scrollDesktopOptionsToEnd(scrollRef: React.RefObject<ScrollView | null>) {
   scrollRef.current?.scrollToEnd({ animated: false });
   requestAnimationFrame(() => {
@@ -1280,7 +1271,7 @@ export function Combobox({
 
   useResetSearchOnOpen(isOpen, setSearchQueryWithCallback, bumpSearchResetKey);
 
-  const collisionPadding = useMemo(computeCollisionPadding, []);
+  const collisionPadding = 16;
 
   const middleware = useMemo(
     () =>

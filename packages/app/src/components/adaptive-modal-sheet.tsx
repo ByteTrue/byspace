@@ -2,7 +2,7 @@ import { forwardRef, useCallback, useEffect, useMemo, useRef, useState } from "r
 import type { ReactNode, Ref } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
-import { Modal, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { Modal, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import type { TextInputProps } from "react-native";
 import { StyleSheet, useUnistyles, withUnistyles } from "react-native-unistyles";
 import { useIsCompactFormFactor } from "@/constants/layout";
@@ -592,12 +592,6 @@ export function AdaptiveModalSheet({
     }, WEB_EXIT_DURATION_MS);
     return () => window.clearTimeout(timeout);
   }, [visible, isMobile, onDismiss, shouldRenderWeb]);
-
-  useEffect(() => {
-    if (isWeb || isMobile || visible || Platform.OS !== "android") return;
-    const timeout = setTimeout(notifyNativeModalDismiss, 0);
-    return () => clearTimeout(timeout);
-  }, [visible, isMobile, notifyNativeModalDismiss]);
 
   if (isMobile) {
     return (

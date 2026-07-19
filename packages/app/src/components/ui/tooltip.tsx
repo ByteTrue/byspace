@@ -14,10 +14,8 @@ import {
 } from "react";
 import {
   Dimensions,
-  Platform,
   Modal,
   Pressable,
-  StatusBar,
   View,
   type PressableProps,
   type StyleProp,
@@ -459,11 +457,10 @@ export function TooltipContent({
       return () => {};
     }
 
-    const statusBarHeight = Platform.OS === "android" ? (StatusBar.currentHeight ?? 0) : 0;
     let cancelled = false;
 
     void measureElement(ctx.triggerRef.current).then((rect) => {
-      if (!cancelled) setTriggerRect({ ...rect, y: rect.y + statusBarHeight });
+      if (!cancelled) setTriggerRect(rect);
       return undefined;
     });
 
@@ -537,13 +534,7 @@ export function TooltipContent({
   }
 
   return (
-    <Modal
-      visible={ctx.open}
-      transparent
-      animationType="none"
-      statusBarTranslucent={Platform.OS === "android"}
-      onRequestClose={handleDismiss}
-    >
+    <Modal visible={ctx.open} transparent animationType="none" onRequestClose={handleDismiss}>
       <Pressable style={styles.overlay} onPress={handleDismiss}>
         <FloatingSurface
           pointerEvents="none"

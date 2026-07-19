@@ -19,8 +19,6 @@ import {
   Text,
   View,
   Dimensions,
-  Platform,
-  StatusBar,
   type PressableProps,
   type PressableStateCallbackType,
   type ViewStyle,
@@ -58,7 +56,6 @@ interface DropdownMenuContextValue {
   open: boolean;
   setOpen: (open: boolean) => void;
   selectItem: (onSelect: (() => void) | undefined, closeOnSelect: boolean) => void;
-  flushPendingSelect: () => void;
   triggerRef: React.RefObject<View | null>;
 }
 
@@ -239,7 +236,6 @@ export function DropdownMenu({
   onOpenChange?: (open: boolean) => void;
 }>): ReactElement {
   const triggerRef = useRef<View>(null);
-  const pendingSelectRef = useRef<(() => void) | null>(null);
   const [isOpen, setIsOpen] = useControllableOpenState({
     open,
     defaultOpen,
@@ -247,31 +243,10 @@ export function DropdownMenu({
   });
   useDismissKeyboardOnOpen(isOpen);
 
-  const flushPendingSelect = useCallback(() => {
-    const pendingSelect = pendingSelectRef.current;
-    pendingSelectRef.current = null;
-    if (!pendingSelect) return;
-
-    if (Platform.OS === "ios") {
-      // Native presenters such as PHPicker can hang if launched while an RN
-      // Modal is still completing dismissal on UIKit's side.
-      setTimeout(pendingSelect, 250);
-      return;
-    }
-
-    pendingSelect();
-  }, []);
-
   const selectItem = useCallback(
     (onSelect: (() => void) | undefined, closeOnSelect: boolean) => {
       if (!closeOnSelect) {
         onSelect?.();
-        return;
-      }
-
-      if (Platform.OS === "ios") {
-        pendingSelectRef.current = onSelect ?? null;
-        setIsOpen(false);
         return;
       }
 
@@ -286,10 +261,9 @@ export function DropdownMenu({
       open: isOpen,
       setOpen: setIsOpen,
       selectItem,
-      flushPendingSelect,
       triggerRef,
     }),
-    [flushPendingSelect, isOpen, selectItem, setIsOpen],
+    [isOpen, selectItem, setIsOpen],
   );
 
   return <DropdownMenuContext.Provider value={value}>{children}</DropdownMenuContext.Provider>;
@@ -443,8 +417,7 @@ export function DropdownMenuContent({
   testID?: string;
 }>): ReactElement | null {
   const { t } = useTranslation();
-  const { open, setOpen, triggerRef, flushPendingSelect } =
-    useDropdownMenuContext("DropdownMenuContent");
+  const { open, setOpen, triggerRef } = useDropdownMenuContext("DropdownMenuContent");
   const [modalVisible, setModalVisible] = useState(false);
   const surfaceNativeID = useId();
   const [closing, setClosing] = useState(false);
@@ -480,12 +453,6 @@ export function DropdownMenuContent({
     }
   }, [open, modalVisible]);
 
-  useEffect(() => {
-    if (!open && !modalVisible) {
-      flushPendingSelect();
-    }
-  }, [flushPendingSelect, modalVisible, open]);
-
   useReleaseFixedMenuHeight({
     contentSize,
     enabled: modalVisible,
@@ -505,21 +472,11 @@ export function DropdownMenuContent({
       return undefined;
     }
 
-    // Capture status bar height synchronously before async measurement.
-    // This avoids race conditions where StatusBar.currentHeight could change
-    // or return null if read after the component re-renders.
-    const statusBarHeight = Platform.OS === "android" ? (StatusBar.currentHeight ?? 0) : 0;
     let cancelled = false;
 
     void measureElement(triggerRef.current).then((rect) => {
       if (cancelled) return undefined;
-      // On Android with statusBarTranslucent, measureInWindow returns coordinates
-      // relative to below the status bar, but Modal content starts from screen top.
-      // Add status bar height to align coordinate systems (same as react-native-popover-view).
-      setTriggerRect({
-        ...rect,
-        y: rect.y + statusBarHeight,
-      });
+      setTriggerRect(rect);
       return undefined;
     });
 
@@ -614,14 +571,7 @@ export function DropdownMenuContent({
   );
 
   return (
-    <Modal
-      visible={modalVisible}
-      transparent
-      animationType="none"
-      statusBarTranslucent={Platform.OS === "android"}
-      onDismiss={flushPendingSelect}
-      onRequestClose={handleClose}
-    >
+    <Modal visible={modalVisible} transparent animationType="none" onRequestClose={handleClose}>
       <View style={styles.overlay}>
         <Pressable
           accessibilityRole="button"
