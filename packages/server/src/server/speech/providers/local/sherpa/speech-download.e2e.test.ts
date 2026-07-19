@@ -11,7 +11,7 @@ import { SherpaOnnxTTS } from "./sherpa-tts.js";
 import { SherpaOfflineRecognizerEngine } from "./sherpa-offline-recognizer.js";
 import { SherpaOnnxParakeetSTT } from "./sherpa-parakeet-stt.js";
 
-const RUN = process.env.PASEO_SPEECH_E2E_DOWNLOAD === "1";
+const RUN = process.env.BYSPACE_SPEECH_E2E_DOWNLOAD === "1";
 const downloadTest = RUN ? test : test.skip;
 
 async function readFixtureWav(): Promise<Buffer> {

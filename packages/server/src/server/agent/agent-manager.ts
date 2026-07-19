@@ -3992,7 +3992,7 @@ export class AgentManager {
       agentId,
       env: {
         ...env,
-        PASEO_AGENT_ID: agentId,
+        BYSPACE_AGENT_ID: agentId,
       },
     };
     if (

@@ -306,7 +306,7 @@ async function createFakeEditorBin(): Promise<string> {
   const fakeEditorSource = `#!/usr/bin/env node
 const fs = require("fs");
 const path = require("path");
-const recordPath = process.env.PASEO_E2E_EDITOR_RECORD_PATH;
+const recordPath = process.env.BYSPACE_E2E_EDITOR_RECORD_PATH;
 
 if (recordPath) {
   fs.appendFileSync(recordPath, JSON.stringify({
@@ -414,7 +414,7 @@ async function loadEnvTestFile(repoRoot: string): Promise<void> {
 }
 
 async function applyPaseoHomeFork(targetHome: string): Promise<void> {
-  const forkSourceHome = resolveOptionalPaseoHomeEnv(process.env.E2E_FORK_PASEO_HOME_FROM);
+  const forkSourceHome = resolveOptionalPaseoHomeEnv(process.env.E2E_FORK_BYSPACE_HOME_FROM);
   if (!forkSourceHome) {
     return;
   }
@@ -422,8 +422,8 @@ async function applyPaseoHomeFork(targetHome: string): Promise<void> {
     sourceHome: forkSourceHome,
     targetHome,
   });
-  process.env.E2E_FORK_SOURCE_PASEO_HOME = forkResult.sourceHome;
-  process.env.E2E_FORK_TARGET_PASEO_HOME = forkResult.targetHome;
+  process.env.E2E_FORK_SOURCE_BYSPACE_HOME = forkResult.sourceHome;
+  process.env.E2E_FORK_TARGET_BYSPACE_HOME = forkResult.targetHome;
   process.env.E2E_FORK_COPIED_FILES = String(forkResult.copiedFiles);
   process.env.E2E_FORK_COPIED_BYTES = String(forkResult.copiedBytes);
   console.log(
@@ -454,7 +454,7 @@ async function logSpeechHarnessConfig(): Promise<void> {
   if (!openAiUsable && !hasDefaultLocalModelsDir) {
     console.warn(
       "[e2e] Neither OPENAI_API_KEY nor local speech models found — app E2E keeps dictation/voice disabled. " +
-        "Tests that require dictation should gate on PASEO_DICTATION_ENABLED.",
+        "Tests that require dictation should gate on BYSPACE_DICTATION_ENABLED.",
     );
     return;
   }
@@ -620,7 +620,7 @@ function startMetro(input: {
       BROWSER: "none",
       ...(process.env.E2E_DESKTOP_RUNTIME === "1"
         ? {
-            PASEO_WEB_PLATFORM: "electron",
+            BYSPACE_WEB_PLATFORM: "electron",
             EXPO_PUBLIC_LOCAL_DAEMON: `127.0.0.1:${input.daemonPort}`,
           }
         : {}),
@@ -670,13 +670,13 @@ function startDaemon(args: DaemonSpawnArgs): ChildProcess {
   const env = withDisabledE2ESpeechEnv({
     ...process.env,
     PATH: `${args.fakeEditorBinDir}${path.delimiter}${process.env.PATH ?? ""}`,
-    PASEO_HOME: args.paseoHome,
-    PASEO_E2E_EDITOR_RECORD_PATH: args.editorRecordPath,
-    PASEO_SERVER_ID: "srv_e2e_test_daemon",
-    PASEO_LISTEN: `0.0.0.0:${args.port}`,
-    PASEO_RELAY_ENDPOINT: `127.0.0.1:${args.relayPort}`,
-    PASEO_CORS_ORIGINS: `http://localhost:${args.metroPort}`,
-    PASEO_NODE_ENV: "development",
+    BYSPACE_HOME: args.paseoHome,
+    BYSPACE_E2E_EDITOR_RECORD_PATH: args.editorRecordPath,
+    BYSPACE_SERVER_ID: "srv_e2e_test_daemon",
+    BYSPACE_LISTEN: `0.0.0.0:${args.port}`,
+    BYSPACE_RELAY_ENDPOINT: `127.0.0.1:${args.relayPort}`,
+    BYSPACE_CORS_ORIGINS: `http://localhost:${args.metroPort}`,
+    BYSPACE_NODE_ENV: "development",
     NODE_ENV: "development",
   });
 
@@ -737,7 +737,7 @@ async function performCleanup(shouldRemovePaseoHome: boolean): Promise<void> {
     await removeTempTree(paseoHome);
     paseoHome = null;
   } else if (paseoHome) {
-    console.log(`[e2e] Preserving PASEO_HOME: ${paseoHome}`);
+    console.log(`[e2e] Preserving BYSPACE_HOME: ${paseoHome}`);
   }
   if (fakeEditorBinDir) {
     await removeTempTree(fakeEditorBinDir);
@@ -752,8 +752,8 @@ export default async function globalSetup() {
 
   const port = await getAvailablePortExcluding(new Set());
   const metroPort = await getAvailablePortExcluding(new Set([port]));
-  const requestedPaseoHome = resolveOptionalPaseoHomeEnv(process.env.E2E_PASEO_HOME);
-  const shouldRemovePaseoHome = !requestedPaseoHome && process.env.E2E_KEEP_PASEO_HOME !== "1";
+  const requestedPaseoHome = resolveOptionalPaseoHomeEnv(process.env.E2E_BYSPACE_HOME);
+  const shouldRemovePaseoHome = !requestedPaseoHome && process.env.E2E_KEEP_BYSPACE_HOME !== "1";
   paseoHome = requestedPaseoHome ?? (await mkdtemp(path.join(tmpdir(), "paseo-e2e-home-")));
   const editorRecordPath = path.join(paseoHome, "editor-open-records.jsonl");
   fakeEditorBinDir = await createFakeEditorBin();
@@ -806,7 +806,7 @@ export default async function globalSetup() {
     process.env.E2E_SERVER_ID = offer.serverId;
     process.env.E2E_RELAY_DAEMON_PUBLIC_KEY = offer.daemonPublicKeyB64;
     process.env.E2E_METRO_PORT = String(metroPort);
-    process.env.E2E_PASEO_HOME = paseoHome;
+    process.env.E2E_BYSPACE_HOME = paseoHome;
     process.env.E2E_EDITOR_RECORD_PATH = editorRecordPath;
     console.log(
       `[e2e] Test daemon started on port ${port}, Metro on port ${metroPort}, home: ${paseoHome}`,

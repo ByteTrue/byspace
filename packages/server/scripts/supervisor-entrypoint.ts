@@ -78,7 +78,7 @@ function resolveWorkerExecArgv(workerEntry: string, devMode: boolean): string[] 
     "--report-on-fatalerror",
     "--report-directory=/tmp/paseo-reports",
   ];
-  const inspectArg = process.env.PASEO_NODE_INSPECT ?? "--inspect";
+  const inspectArg = process.env.BYSPACE_NODE_INSPECT ?? "--inspect";
   if (inspectArg !== "0" && inspectArg !== "false" && inspectArg !== "off") {
     devArgs.push(inspectArg);
   }

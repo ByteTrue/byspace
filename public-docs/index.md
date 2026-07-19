@@ -29,7 +29,7 @@ Paseo prints a QR code in the terminal. Scan it from the mobile app, or enter th
 
 The daemon can also serve the browser web app itself, so you can use the full UI without the hosted app. See [Self-hosting the web UI](/docs/web-ui).
 
-Configuration and local state live under `PASEO_HOME` (defaults to `~/.paseo`).
+Configuration and local state live under `BYSPACE_HOME` (defaults to `~/.paseo`).
 
 ## Docker
 
@@ -38,7 +38,7 @@ For servers, dev boxes, NAS devices, or homelab hosts, run the official image:
 ```bash
 docker run -d --name paseo \
   -p 6767:6767 \
-  -e PASEO_PASSWORD=change-me \
+  -e BYSPACE_PASSWORD=change-me \
   -v "$PWD/paseo-home:/home/paseo" \
   -v "$PWD:/workspace" \
   ghcr.io/getpaseo/paseo:latest

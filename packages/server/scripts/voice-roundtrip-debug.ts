@@ -22,7 +22,7 @@ async function main(): Promise<void> {
     throw new Error("OPENAI_API_KEY is required");
   }
 
-  const logger = pino({ level: process.env.PASEO_LOG_LEVEL ?? "info" });
+  const logger = pino({ level: process.env.BYSPACE_LOG_LEVEL ?? "info" });
   const daemon = await createTestPaseoDaemon({
     logger,
     agentClients: {},

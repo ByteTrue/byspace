@@ -757,7 +757,7 @@ describe("agent MCP end-to-end (offline)", () => {
       execSync("git -c commit.gpgsign=false commit -m 'initial'", { cwd: repoRoot, stdio: "pipe" });
 
       const setupCommand =
-        'while [ ! -f "$PASEO_WORKTREE_PATH/allow-setup" ]; do sleep 0.05; done; echo "done" > "$PASEO_WORKTREE_PATH/setup-done.txt"';
+        'while [ ! -f "$BYSPACE_WORKTREE_PATH/allow-setup" ]; do sleep 0.05; done; echo "done" > "$BYSPACE_WORKTREE_PATH/setup-done.txt"';
       await writeFile(
         path.join(repoRoot, "paseo.json"),
         JSON.stringify({

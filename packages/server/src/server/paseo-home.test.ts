@@ -13,11 +13,11 @@ function modeOf(filePath: string): number {
 }
 
 describe.skipIf(process.platform === "win32")("resolvePaseoHome permissions", () => {
-  test("creates PASEO_HOME with private permissions", () => {
+  test("creates BYSPACE_HOME with private permissions", () => {
     const parent = mkdtempSync(path.join(tmpdir(), "paseo-home-parent-"));
     const paseoHome = path.join(parent, "home");
     try {
-      expect(resolvePaseoHome({ PASEO_HOME: paseoHome })).toBe(paseoHome);
+      expect(resolvePaseoHome({ BYSPACE_HOME: paseoHome })).toBe(paseoHome);
       expect(modeOf(paseoHome)).toBe(PRIVATE_DIRECTORY_MODE);
     } finally {
       rmSync(parent, { recursive: true, force: true });

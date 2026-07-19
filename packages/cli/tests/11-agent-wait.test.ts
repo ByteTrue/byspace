@@ -51,7 +51,7 @@ try {
   {
     console.log("Test 2: wait requires id argument");
     const result =
-      await $`PASEO_HOST=localhost:${port} PASEO_HOME=${paseoHome} npx paseo wait`.nothrow();
+      await $`BYSPACE_HOST=localhost:${port} BYSPACE_HOME=${paseoHome} npx paseo wait`.nothrow();
     assert.notStrictEqual(result.exitCode, 0, "should fail without id");
     const output = result.stdout + result.stderr;
     // Commander should complain about missing argument
@@ -67,7 +67,7 @@ try {
   {
     console.log("Test 3: wait handles daemon not running");
     const result =
-      await $`PASEO_HOST=localhost:${port} PASEO_HOME=${paseoHome} npx paseo wait abc123`.nothrow();
+      await $`BYSPACE_HOST=localhost:${port} BYSPACE_HOME=${paseoHome} npx paseo wait abc123`.nothrow();
     // Should fail because daemon not running
     assert.notStrictEqual(result.exitCode, 0, "should fail when daemon not running");
     const output = result.stdout + result.stderr;
@@ -83,7 +83,7 @@ try {
   {
     console.log("Test 4: wait --timeout flag is accepted");
     const result =
-      await $`PASEO_HOME=${paseoHome} npx paseo wait --timeout 30 --host localhost:${port} abc123`.nothrow();
+      await $`BYSPACE_HOME=${paseoHome} npx paseo wait --timeout 30 --host localhost:${port} abc123`.nothrow();
     const output = result.stdout + result.stderr;
     assert(!output.includes("unknown option"), "should accept --timeout flag");
     assert(!output.includes("error: option"), "should not have option parsing error");
@@ -94,7 +94,7 @@ try {
   {
     console.log("Test 5: wait --host flag is accepted");
     const result =
-      await $`PASEO_HOME=${paseoHome} npx paseo wait --host localhost:${port} abc123`.nothrow();
+      await $`BYSPACE_HOME=${paseoHome} npx paseo wait --host localhost:${port} abc123`.nothrow();
     const output = result.stdout + result.stderr;
     assert(!output.includes("unknown option"), "should accept --host flag");
     assert(!output.includes("error: option"), "should not have option parsing error");
@@ -105,7 +105,7 @@ try {
   {
     console.log("Test 6: -q (quiet) flag is accepted with wait");
     const result =
-      await $`PASEO_HOST=localhost:${port} PASEO_HOME=${paseoHome} npx paseo -q wait abc123`.nothrow();
+      await $`BYSPACE_HOST=localhost:${port} BYSPACE_HOME=${paseoHome} npx paseo -q wait abc123`.nothrow();
     const output = result.stdout + result.stderr;
     assert(!output.includes("unknown option"), "should accept -q flag");
     assert(!output.includes("error: option"), "should not have option parsing error");
@@ -116,7 +116,7 @@ try {
   {
     console.log("Test 7: --json flag is accepted with wait");
     const result =
-      await $`PASEO_HOST=localhost:${port} PASEO_HOME=${paseoHome} npx paseo wait abc123 --json`.nothrow();
+      await $`BYSPACE_HOST=localhost:${port} BYSPACE_HOME=${paseoHome} npx paseo wait abc123 --json`.nothrow();
     const output = result.stdout + result.stderr;
     assert(!output.includes("unknown option"), "should accept --json flag");
     assert(!output.includes("error: option"), "should not have option parsing error");
@@ -127,7 +127,7 @@ try {
   {
     console.log("Test 8: --format yaml flag is accepted with wait");
     const result =
-      await $`PASEO_HOST=localhost:${port} PASEO_HOME=${paseoHome} npx paseo --format yaml wait abc123`.nothrow();
+      await $`BYSPACE_HOST=localhost:${port} BYSPACE_HOME=${paseoHome} npx paseo --format yaml wait abc123`.nothrow();
     const output = result.stdout + result.stderr;
     assert(!output.includes("unknown option"), "should accept --format yaml flag");
     assert(!output.includes("error: option"), "should not have option parsing error");

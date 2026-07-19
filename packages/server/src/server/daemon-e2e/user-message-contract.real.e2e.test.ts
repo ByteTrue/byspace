@@ -124,7 +124,7 @@ describe.each(CONTRACT_CASES)("daemon E2E (real $provider) - user_message contra
         throw new Error(`${entry.title} user-message contract test was not initialized`);
       }
 
-      const prompt = `PASEO_USER_MESSAGE_CONTRACT_${entry.provider.toUpperCase()}. Reply exactly: OK.`;
+      const prompt = `BYSPACE_USER_MESSAGE_CONTRACT_${entry.provider.toUpperCase()}. Reply exactly: OK.`;
       const agent = await client.createAgent({
         cwd,
         title: `${entry.provider}-user-message-contract`,

@@ -158,9 +158,9 @@ npm run typecheck
 自托管 relay 默认使用 `ws://`，除非显式启用 TLS。对于 nginx 后面、监听 443 的 relay，可以这样启动 daemon：
 
 ```bash
-PASEO_RELAY_ENDPOINT=127.0.0.1:8080 \
-PASEO_RELAY_PUBLIC_ENDPOINT=relay.example.com:443 \
-PASEO_RELAY_USE_TLS=true \
+BYSPACE_RELAY_ENDPOINT=127.0.0.1:8080 \
+BYSPACE_RELAY_PUBLIC_ENDPOINT=relay.example.com:443 \
+BYSPACE_RELAY_USE_TLS=true \
 paseo daemon start
 ```
 

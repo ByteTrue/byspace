@@ -20,7 +20,7 @@ import {
   getRealProviderConfig,
 } from "./real-provider-test-config.js";
 
-process.env.PASEO_SUPERVISED = "0";
+process.env.BYSPACE_SUPERVISED = "0";
 
 const PI_TEST_TIMEOUT_MS = 240_000;
 const PI_REAL_TEST_MODEL = getRealProviderConfig("pi").model;

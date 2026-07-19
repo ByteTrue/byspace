@@ -2082,7 +2082,7 @@ export const ptBR: TranslationResources = {
         newScript: "Novo script",
         editScript: "Editar {{name}}",
         runAsService: "Executar como serviço",
-        serviceHint: "O Paseo supervisiona o processo e atribui uma porta via $PASEO_PORT",
+        serviceHint: "O Paseo supervisiona o processo e atribui uma porta via $BYSPACE_PORT",
         actions: {
           add: "Adicionar script",
           edit: "Editar",

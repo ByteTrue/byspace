@@ -2960,7 +2960,7 @@ const x = 1;
       expect(isPaseoWorktreePath("C:\\Users\\dev\\.paseo\\worktrees\\feature")).toBe(true);
     });
 
-    it("matches worktrees under a custom PASEO_HOME", () => {
+    it("matches worktrees under a custom BYSPACE_HOME", () => {
       const customPaseoHome = process.platform === "win32" ? "C:\\paseo" : "/var/lib/paseo";
       const worktreePath =
         process.platform === "win32"

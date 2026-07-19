@@ -2044,7 +2044,7 @@ export const ar: TranslationResources = {
         newScript: "نص جديد",
         editScript: "تحرير{{name}}",
         runAsService: "تشغيل كخدمة",
-        serviceHint: "يشرف Paseo على العملية ويعين منفذًا عبر $PASEO_PORT",
+        serviceHint: "يشرف Paseo على العملية ويعين منفذًا عبر $BYSPACE_PORT",
         actions: {
           add: "إضافة البرنامج النصي",
           edit: "يحرر",

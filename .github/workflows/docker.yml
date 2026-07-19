@@ -69,7 +69,7 @@ jobs:
 
       - id: values
         env:
-          INPUT_PASEO_VERSION: ${{ inputs.paseo_version }}
+          INPUT_BYSPACE_VERSION: ${{ inputs.paseo_version }}
           INPUT_PUBLISH: ${{ inputs.publish }}
           INPUT_PUBLISH_LATEST: ${{ inputs.publish_latest }}
           REPO_OWNER: ${{ github.repository_owner }}
@@ -80,7 +80,7 @@ jobs:
           owner="$(printf '%s' "${REPO_OWNER}" | tr '[:upper:]' '[:lower:]')"
           image="ghcr.io/${owner}/paseo"
           package_version="$(node -p "require('./package.json').version")"
-          install_version="${INPUT_PASEO_VERSION:-${package_version}}"
+          install_version="${INPUT_BYSPACE_VERSION:-${package_version}}"
           publish=false
           publish_latest=false
           prerelease=false
@@ -95,7 +95,7 @@ jobs:
             fi
           elif [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
             if [[ "${INPUT_PUBLISH:-false}" == "true" ]]; then
-              if [[ -z "${INPUT_PASEO_VERSION}" || "${INPUT_PASEO_VERSION}" == "latest" ]]; then
+              if [[ -z "${INPUT_BYSPACE_VERSION}" || "${INPUT_BYSPACE_VERSION}" == "latest" ]]; then
                 echo "::error::paseo_version is required for manual Docker publishes."
                 exit 1
               fi
@@ -147,7 +147,7 @@ jobs:
           file: docker/base/Dockerfile
           platforms: ${{ env.PLATFORMS }}
           build-args: |
-            PASEO_VERSION=${{ needs.setup.outputs.install_version }}
+            BYSPACE_VERSION=${{ needs.setup.outputs.install_version }}
           tags: ${{ needs.setup.outputs.check_tag }}
           push: false
           provenance: false
@@ -180,7 +180,7 @@ jobs:
           file: docker/base/Dockerfile
           platforms: ${{ env.PLATFORMS }}
           build-args: |
-            PASEO_VERSION=${{ needs.setup.outputs.install_version }}
+            BYSPACE_VERSION=${{ needs.setup.outputs.install_version }}
           tags: ${{ needs.setup.outputs.publish_tags }}
           push: true
           provenance: false

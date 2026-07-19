@@ -6,9 +6,9 @@ import path from "node:path";
 import { performance } from "node:perf_hooks";
 import { createDaemonTestContext } from "../test-utils/index.js";
 
-const RUN = process.env.PASEO_GIT_DIFF_BOTTLENECK_E2E === "1";
+const RUN = process.env.BYSPACE_GIT_DIFF_BOTTLENECK_E2E === "1";
 const LARGE_CHANGESET_SIZE = Number.parseInt(
-  process.env.PASEO_GIT_DIFF_BOTTLENECK_FILE_COUNT ?? "1200",
+  process.env.BYSPACE_GIT_DIFF_BOTTLENECK_FILE_COUNT ?? "1200",
   10,
 );
 

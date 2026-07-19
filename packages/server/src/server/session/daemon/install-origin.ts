@@ -3,7 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
 import { isRealpathInsideRoot } from "../../../utils/path.js";
-import { PASEO_CLI_PACKAGE, type NpmGlobalPaseoInstall } from "./npm-global-cli.js";
+import { BYSPACE_CLI_PACKAGE, type NpmGlobalPaseoInstall } from "./npm-global-cli.js";
 
 const PackageJsonSchema = z.object({ name: z.string().optional() }).passthrough();
 
@@ -21,11 +21,11 @@ export function validateDaemonInstallOrigin(
   runtime: DaemonInstallOriginRuntime = daemonInstallOriginRuntime,
 ): string | null {
   if (install.isLinked) {
-    return `The global ${PASEO_CLI_PACKAGE} install is linked; self-update only supports normal npm global installs.`;
+    return `The global ${BYSPACE_CLI_PACKAGE} install is linked; self-update only supports normal npm global installs.`;
   }
 
   if (daemonVersion && install.version !== daemonVersion) {
-    return `This daemon is not running from the npm global ${PASEO_CLI_PACKAGE} install (global npm has ${install.version}, daemon is ${daemonVersion}).`;
+    return `This daemon is not running from the npm global ${BYSPACE_CLI_PACKAGE} install (global npm has ${install.version}, daemon is ${daemonVersion}).`;
   }
 
   const currentServerPackageRoot = runtime.resolveCurrentServerPackageRoot();
@@ -34,7 +34,7 @@ export function validateDaemonInstallOrigin(
   }
 
   if (!isCurrentServerUnderNpmInstall(currentServerPackageRoot, install)) {
-    return `This daemon is not running from the npm global ${PASEO_CLI_PACKAGE} install.`;
+    return `This daemon is not running from the npm global ${BYSPACE_CLI_PACKAGE} install.`;
   }
 
   return null;

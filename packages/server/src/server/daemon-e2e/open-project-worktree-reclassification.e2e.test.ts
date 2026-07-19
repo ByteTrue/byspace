@@ -30,8 +30,8 @@ afterEach(async () => {
 });
 
 test("openProject reclassifies an existing directory workspace into its parent git project", async () => {
-  const previousSupervised = process.env.PASEO_SUPERVISED;
-  process.env.PASEO_SUPERVISED = "0";
+  const previousSupervised = process.env.BYSPACE_SUPERVISED;
+  process.env.BYSPACE_SUPERVISED = "0";
   try {
     const repoRoot = realpathSync(mkdtempSync(path.join(os.tmpdir(), "paseo-open-project-repo-")));
     const worktreeRoot = realpathSync(
@@ -125,7 +125,7 @@ test("openProject reclassifies an existing directory workspace into its parent g
       persistedWorkspaces.find((workspace) => workspace.workspaceId === worktreeRoot)?.kind,
     ).toBe("worktree");
   } finally {
-    process.env.PASEO_SUPERVISED = previousSupervised;
+    process.env.BYSPACE_SUPERVISED = previousSupervised;
   }
 }, 30_000);
 

@@ -4,11 +4,11 @@ set -euo pipefail
 IMAGE_HOME="/home/paseo"
 
 : "${HOME:=$IMAGE_HOME}"
-: "${PASEO_HOME:=${HOME}/.paseo}"
-: "${PASEO_LISTEN:=0.0.0.0:6767}"
-: "${PASEO_WEB_UI_ENABLED:=true}"
-: "${PASEO_LOG_LEVEL:=info}"
-: "${PASEO_LOG_FORMAT:=json}"
+: "${BYSPACE_HOME:=${HOME}/.paseo}"
+: "${BYSPACE_LISTEN:=0.0.0.0:6767}"
+: "${BYSPACE_WEB_UI_ENABLED:=true}"
+: "${BYSPACE_LOG_LEVEL:=info}"
+: "${BYSPACE_LOG_FORMAT:=json}"
 : "${CLAUDE_CONFIG_DIR:=${HOME}/.claude}"
 : "${CODEX_HOME:=${HOME}/.codex}"
 : "${XDG_CONFIG_HOME:=${HOME}/.config}"
@@ -17,11 +17,11 @@ IMAGE_HOME="/home/paseo"
 : "${XDG_CACHE_HOME:=${HOME}/.cache}"
 
 export HOME
-export PASEO_HOME
-export PASEO_LISTEN
-export PASEO_WEB_UI_ENABLED
-export PASEO_LOG_LEVEL
-export PASEO_LOG_FORMAT
+export BYSPACE_HOME
+export BYSPACE_LISTEN
+export BYSPACE_WEB_UI_ENABLED
+export BYSPACE_LOG_LEVEL
+export BYSPACE_LOG_FORMAT
 export CLAUDE_CONFIG_DIR
 export CODEX_HOME
 export XDG_CONFIG_HOME
@@ -42,7 +42,7 @@ ensure_dir() {
 }
 
 ensure_dir "$HOME"
-ensure_dir "$PASEO_HOME"
+ensure_dir "$BYSPACE_HOME"
 ensure_dir "$CLAUDE_CONFIG_DIR"
 ensure_dir "$CODEX_HOME"
 ensure_dir "$XDG_CONFIG_HOME"
@@ -57,11 +57,11 @@ if [[ "$#" -gt 0 ]]; then
   exec "$@"
 fi
 
-if [[ -z "${PASEO_PASSWORD:-}" ]]; then
+if [[ -z "${BYSPACE_PASSWORD:-}" ]]; then
   {
-    echo "[paseo] WARNING: PASEO_PASSWORD is not set."
+    echo "[paseo] WARNING: BYSPACE_PASSWORD is not set."
     echo "[paseo] The daemon accepts unauthenticated control connections from any client that can reach it."
-    echo "[paseo] Set PASEO_PASSWORD for any published port or network-reachable deployment."
+    echo "[paseo] Set BYSPACE_PASSWORD for any published port or network-reachable deployment."
   } >&2
 fi
 
@@ -71,7 +71,7 @@ if [[ ! -f /etc/paseo-server-entry ]]; then
 fi
 
 entry="$(cat /etc/paseo-server-entry)"
-echo "[paseo] starting daemon on ${PASEO_LISTEN} with web UI ${PASEO_WEB_UI_ENABLED}"
+echo "[paseo] starting daemon on ${BYSPACE_LISTEN} with web UI ${BYSPACE_WEB_UI_ENABLED}"
 if [[ "$(id -u)" == "0" ]]; then
   exec gosu paseo node "$entry"
 fi

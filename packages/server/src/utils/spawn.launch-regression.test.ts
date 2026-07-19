@@ -24,8 +24,8 @@ if (process.argv.includes("--version")) {
   console.log("fake-cli 1.0.0");
   process.exit(0);
 }
-const expected = JSON.parse(process.env.PASEO_EXPECTED_ARGV_JSON);
-const sliceFrom = process.env.PASEO_ARGV_SLICE_FROM ? Number(process.env.PASEO_ARGV_SLICE_FROM) : 2;
+const expected = JSON.parse(process.env.BYSPACE_EXPECTED_ARGV_JSON);
+const sliceFrom = process.env.BYSPACE_ARGV_SLICE_FROM ? Number(process.env.BYSPACE_ARGV_SLICE_FROM) : 2;
 const actual = process.argv.slice(sliceFrom);
 if (JSON.stringify(actual) !== JSON.stringify(expected)) {
   console.error("ARGV_MISMATCH");
@@ -58,7 +58,7 @@ if (process.argv.includes("--version")) {
   process.exit(0);
 }
 
-const expected = JSON.parse(process.env.PASEO_EXPECTED_ARGV_JSON);
+const expected = JSON.parse(process.env.BYSPACE_EXPECTED_ARGV_JSON);
 const actual = process.argv.slice(2);
 if (JSON.stringify(actual) !== JSON.stringify(expected)) {
   console.error("ARGV_MISMATCH");
@@ -130,7 +130,7 @@ async function runFixture(params: {
   const child = spawnProcess(params.command, params.args, {
     env: {
       ...process.env,
-      PASEO_EXPECTED_ARGV_JSON: JSON.stringify(["--config", JSON_ARG]),
+      BYSPACE_EXPECTED_ARGV_JSON: JSON.stringify(["--config", JSON_ARG]),
     },
     stdio: ["ignore", "pipe", "pipe"],
     ...(params.shell === undefined ? {} : { shell: params.shell }),
@@ -216,8 +216,8 @@ async function findAndLaunch(fixture: LaunchFixture): Promise<{
     const child = spawnProcess(found, fixture.args, {
       env: {
         ...process.env,
-        PASEO_EXPECTED_ARGV_JSON: fixture.expectedArgvJson,
-        PASEO_ARGV_SLICE_FROM: String(fixture.sliceFrom),
+        BYSPACE_EXPECTED_ARGV_JSON: fixture.expectedArgvJson,
+        BYSPACE_ARGV_SLICE_FROM: String(fixture.sliceFrom),
       },
       stdio: ["ignore", "pipe", "pipe"],
     });

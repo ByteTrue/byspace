@@ -1,7 +1,7 @@
 import { isPaseoToolName } from "@bytetrue/byspace-protocol/tool-name-normalization";
 import { describeToolCall, type ToolCallRun } from "../grouping";
 
-const DIRECT_PASEO_TOOL_PREFIX = "paseo_";
+const DIRECT_BYSPACE_TOOL_PREFIX = "paseo_";
 const DIRECT_SEARCH_TOOL_SUFFIX_PATTERN = /(?:^|[_.:/])(?:web_search|llm_context)$/;
 
 export interface OverviewSummary {
@@ -21,7 +21,7 @@ export interface OverviewToolCallGroup {
 }
 
 function isPaseoCall(name: string, normalizedName: string): boolean {
-  return isPaseoToolName(name) || normalizedName.startsWith(DIRECT_PASEO_TOOL_PREFIX);
+  return isPaseoToolName(name) || normalizedName.startsWith(DIRECT_BYSPACE_TOOL_PREFIX);
 }
 
 function isSearchCall(name: string): boolean {

@@ -99,7 +99,7 @@ export async function forkPaseoHomeMetadata(input: {
   const targetHome = resolvePaseoHomePath(input.targetHome);
 
   if (sourceHome === targetHome) {
-    throw new Error("Refusing to fork Paseo metadata onto the same PASEO_HOME.");
+    throw new Error("Refusing to fork Paseo metadata onto the same BYSPACE_HOME.");
   }
 
   await mkdir(targetHome, { recursive: true });

@@ -14,7 +14,7 @@ describe("voice MCP stdio config", () => {
       socketPath: "/tmp/paseo-voice.sock",
       env: {
         ELECTRON_RUN_AS_NODE: "1",
-        PASEO_HOME: "/tmp/paseo-home",
+        BYSPACE_HOME: "/tmp/paseo-home",
       },
     });
 
@@ -27,7 +27,7 @@ describe("voice MCP stdio config", () => {
     ]);
     expect(config.env).toEqual({
       ELECTRON_RUN_AS_NODE: "1",
-      PASEO_HOME: "/tmp/paseo-home",
+      BYSPACE_HOME: "/tmp/paseo-home",
     });
   });
 });

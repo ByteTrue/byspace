@@ -133,8 +133,8 @@ function buildTurns(scenario: RewindCase): ClaudeTurnSpec[] {
     const index = (offset + 1) as 1 | 2 | 3;
     return {
       index,
-      promptToken: `PASEO_RW_${prefix}_T${index}`,
-      doneToken: `PASEO_RW_${prefix}_T${index}_DONE`,
+      promptToken: `BYSPACE_RW_${prefix}_T${index}`,
+      doneToken: `BYSPACE_RW_${prefix}_T${index}_DONE`,
       fileName: `turn-${index}.txt`,
       content: `turn ${index} preserved content\n`,
     };
@@ -319,16 +319,16 @@ describe("daemon E2E (real claude) - rewind", () => {
       await sendClaudeReplyTurn(
         harness,
         session,
-        "PASEO_RW_NO_ROUNDTRIP_T1. Reply exactly: PASEO_RW_NO_ROUNDTRIP_T1_DONE",
+        "BYSPACE_RW_NO_ROUNDTRIP_T1. Reply exactly: BYSPACE_RW_NO_ROUNDTRIP_T1_DONE",
       );
       await sendClaudeReplyTurn(
         harness,
         session,
-        "PASEO_RW_NO_ROUNDTRIP_T2. Reply exactly: PASEO_RW_NO_ROUNDTRIP_T2_DONE",
+        "BYSPACE_RW_NO_ROUNDTRIP_T2. Reply exactly: BYSPACE_RW_NO_ROUNDTRIP_T2_DONE",
       );
 
       const beforeTimeline = await fetchTimelineItems(harness.client, session.agentId);
-      const targetMessageId = userMessageIdForToken(beforeTimeline, "PASEO_RW_NO_ROUNDTRIP_T2");
+      const targetMessageId = userMessageIdForToken(beforeTimeline, "BYSPACE_RW_NO_ROUNDTRIP_T2");
       const sessionIdBeforeRewind = await runtimeSessionId(harness, session);
       expectSessionId(sessionIdBeforeRewind);
 
@@ -340,7 +340,7 @@ describe("daemon E2E (real claude) - rewind", () => {
       await sendClaudeReplyTurn(
         harness,
         session,
-        "PASEO_RW_NO_ROUNDTRIP_T3. Reply exactly: PASEO_RW_NO_ROUNDTRIP_T3_DONE",
+        "BYSPACE_RW_NO_ROUNDTRIP_T3. Reply exactly: BYSPACE_RW_NO_ROUNDTRIP_T3_DONE",
       );
 
       const finalSessionId = await runtimeSessionId(harness, session);

@@ -35,7 +35,7 @@ describe("codex agent commands E2E", () => {
         "argument-hint: NAME=<name>",
         "---",
         "",
-        "Say hello to $NAME and then output exactly PASEO_OK.",
+        "Say hello to $NAME and then output exactly BYSPACE_OK.",
         "",
       ].join("\n"),
       "utf8",
@@ -50,7 +50,7 @@ describe("codex agent commands E2E", () => {
         "user-invocable: true",
         "---",
         "",
-        "When invoked, respond with exactly PASEO_SKILL_OK.",
+        "When invoked, respond with exactly BYSPACE_SKILL_OK.",
         "",
       ].join("\n"),
       "utf8",
@@ -105,7 +105,7 @@ describe("codex agent commands E2E", () => {
         "argument-hint: NAME=<name>",
         "---",
         "",
-        "Output exactly: PASEO_OK $NAME",
+        "Output exactly: BYSPACE_OK $NAME",
         "",
       ].join("\n"),
       "utf8",
@@ -121,7 +121,7 @@ describe("codex agent commands E2E", () => {
     const state = await ctx.client.waitForFinish(agent.id, 30_000);
 
     expect(state.status).toBe("idle");
-    expect(state.lastMessage).toContain("PASEO_OK");
+    expect(state.lastMessage).toContain("BYSPACE_OK");
 
     rmSync(promptPath, { force: true });
   }, 30_000);
@@ -133,7 +133,7 @@ describe("codex agent commands E2E", () => {
     mkdirSync(promptsDir, { recursive: true });
     writeFileSync(
       path.join(promptsDir, "paseo-test-sayok.md"),
-      ["---", "description: Say OK", "---", "", "Output exactly: PASEO_OK", ""].join("\n"),
+      ["---", "description: Say OK", "---", "", "Output exactly: BYSPACE_OK", ""].join("\n"),
       "utf8",
     );
     process.env.CODEX_HOME = codexHome;
@@ -149,7 +149,7 @@ describe("codex agent commands E2E", () => {
       const state = await ctx.client.waitForFinish(agent.id, 30_000);
 
       expect(state.status).toBe("idle");
-      expect(state.lastMessage).toContain("PASEO_OK paseo-test-sayok");
+      expect(state.lastMessage).toContain("BYSPACE_OK paseo-test-sayok");
     } finally {
       if (prevCodexHome === undefined) {
         delete process.env.CODEX_HOME;
@@ -173,7 +173,7 @@ describe("codex agent commands E2E", () => {
 
     expect(state.status).toBe("idle");
     expect(state.lastMessage).toContain(token);
-    expect(state.lastMessage).not.toContain("PASEO_SKILL_OK");
+    expect(state.lastMessage).not.toContain("BYSPACE_SKILL_OK");
   }, 30_000);
 
   test("returns error for non-existent agent", async () => {

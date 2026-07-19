@@ -3,7 +3,7 @@
 ARG NODE_IMAGE=node:22-bookworm-slim
 FROM --platform=$BUILDPLATFORM ${NODE_IMAGE} AS source-pack
 
-ARG PASEO_VERSION
+ARG BYSPACE_VERSION
 
 ENV ONNXRUNTIME_NODE_INSTALL=skip
 
@@ -11,8 +11,8 @@ WORKDIR /tmp/paseo-src
 COPY . .
 
 RUN set -eux; \
-    if [ -n "${PASEO_VERSION:-}" ]; then \
-      test "$(node -p "require('./package.json').version")" = "${PASEO_VERSION}"; \
+    if [ -n "${BYSPACE_VERSION:-}" ]; then \
+      test "$(node -p "require('./package.json').version")" = "${BYSPACE_VERSION}"; \
     fi; \
     node -e 'const fs=require("node:fs"); const pkg=JSON.parse(fs.readFileSync("package.json","utf8")); delete pkg.scripts.prepare; fs.writeFileSync("package.json", `${JSON.stringify(pkg)}\n`);'; \
     npm ci
@@ -29,11 +29,11 @@ RUN set -eux; \
 FROM ${NODE_IMAGE}
 
 ENV HOME=/home/paseo \
-    PASEO_HOME=/home/paseo/.paseo \
-    PASEO_LISTEN=0.0.0.0:6767 \
-    PASEO_WEB_UI_ENABLED=true \
-    PASEO_LOG_FORMAT=json \
-    PASEO_LOG_LEVEL=info \
+    BYSPACE_HOME=/home/paseo/.paseo \
+    BYSPACE_LISTEN=0.0.0.0:6767 \
+    BYSPACE_WEB_UI_ENABLED=true \
+    BYSPACE_LOG_FORMAT=json \
+    BYSPACE_LOG_LEVEL=info \
     CLAUDE_CONFIG_DIR=/home/paseo/.claude \
     CODEX_HOME=/home/paseo/.codex \
     XDG_CONFIG_HOME=/home/paseo/.config \
@@ -81,7 +81,7 @@ RUN set -eux; \
     fi; \
     mkdir -p \
       /workspace \
-      "$PASEO_HOME" \
+      "$BYSPACE_HOME" \
       "$CLAUDE_CONFIG_DIR" \
       "$CODEX_HOME" \
       "$XDG_CONFIG_HOME" \
@@ -99,6 +99,6 @@ EXPOSE 6767
 VOLUME ["/home/paseo"]
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
-  CMD node -e "const listen=process.env.PASEO_LISTEN||'0.0.0.0:6767'; const m=listen.match(/:(\\d+)$/); const port=m?Number(m[1]):6767; require('http').get({hostname:'127.0.0.1',port,path:'/api/health'},r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"
+  CMD node -e "const listen=process.env.BYSPACE_LISTEN||'0.0.0.0:6767'; const m=listen.match(/:(\\d+)$/); const port=m?Number(m[1]):6767; require('http').get({hostname:'127.0.0.1',port,path:'/api/health'},r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"
 
 ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/paseo-docker-entrypoint"]

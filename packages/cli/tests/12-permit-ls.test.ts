@@ -55,7 +55,7 @@ try {
   {
     console.log("Test 3: permit ls handles daemon not running");
     const result =
-      await $`PASEO_HOST=localhost:${port} PASEO_HOME=${paseoHome} npx paseo permit ls`.nothrow();
+      await $`BYSPACE_HOST=localhost:${port} BYSPACE_HOME=${paseoHome} npx paseo permit ls`.nothrow();
     // Should fail because daemon not running
     assert.notStrictEqual(result.exitCode, 0, "should fail when daemon not running");
     const output = result.stdout + result.stderr;
@@ -71,7 +71,7 @@ try {
   {
     console.log("Test 4: permit ls --json handles errors");
     const result =
-      await $`PASEO_HOST=localhost:${port} PASEO_HOME=${paseoHome} npx paseo permit ls --json`.nothrow();
+      await $`BYSPACE_HOST=localhost:${port} BYSPACE_HOME=${paseoHome} npx paseo permit ls --json`.nothrow();
     // Should still fail (daemon not running)
     assert.notStrictEqual(result.exitCode, 0, "should fail when daemon not running");
     // But output should be valid JSON if present
@@ -93,7 +93,7 @@ try {
   {
     console.log("Test 5: -q (quiet) flag is accepted");
     const result =
-      await $`PASEO_HOST=localhost:${port} PASEO_HOME=${paseoHome} npx paseo -q permit ls`.nothrow();
+      await $`BYSPACE_HOST=localhost:${port} BYSPACE_HOME=${paseoHome} npx paseo -q permit ls`.nothrow();
     const output = result.stdout + result.stderr;
     assert(!output.includes("unknown option"), "should accept -q flag");
     assert(!output.includes("error: option"), "should not have option parsing error");

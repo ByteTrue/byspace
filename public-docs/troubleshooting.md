@@ -63,7 +63,7 @@ This login-shell step runs on macOS and Linux. On Windows, Paseo uses the enviro
 ## Reading the logs
 
 - **Desktop app** — the login-shell resolution is logged here. Look for `[login-shell-env]`: `applied` means it worked (it logs the `PATH` before and after); `failed; keeping inherited env` means it fell back to the stripped-down environment, with a `reason` (a timeout, a non-zero exit from your shell config, no output, …). A slow or erroring `.zshrc`/`.zprofile` is the usual cause.
-- **Daemon** — `~/.paseo/daemon.log` (`$PASEO_HOME/daemon.log` if you've set a custom home).
+- **Daemon** — `~/.paseo/daemon.log` (`$BYSPACE_HOME/daemon.log` if you've set a custom home).
 
 Desktop app log location:
 

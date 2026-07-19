@@ -2361,7 +2361,7 @@ describe("OpenCode provider subagent contract", () => {
     });
     const parent = await client.createSession(
       { provider: "opencode", cwd: "/workspace/repo" },
-      { env: { PASEO_AGENT_ID: "parent-agent" } },
+      { env: { BYSPACE_AGENT_ID: "parent-agent" } },
     );
 
     parentClient.emitEvent({
@@ -2385,7 +2385,7 @@ describe("OpenCode provider subagent contract", () => {
         metadata: { cwd: "/workspace/repo" },
       },
       undefined,
-      { env: { PASEO_AGENT_ID: "child-agent" } },
+      { env: { BYSPACE_AGENT_ID: "child-agent" } },
     );
     return { runtime, parent, child, childClient };
   }
@@ -2403,7 +2403,7 @@ describe("OpenCode provider subagent contract", () => {
     });
     const parent = await client.createSession(
       { provider: "opencode", cwd: "/workspace/repo" },
-      { env: { PASEO_AGENT_ID: "parent-agent" } },
+      { env: { BYSPACE_AGENT_ID: "parent-agent" } },
     );
     const events: AgentStreamEvent[] = [];
     parent.subscribe((event) => events.push(event));
@@ -2429,7 +2429,7 @@ describe("OpenCode provider subagent contract", () => {
         metadata: { cwd: "/workspace/repo" },
       },
       undefined,
-      { env: { PASEO_AGENT_ID: "child-agent" } },
+      { env: { BYSPACE_AGENT_ID: "child-agent" } },
     );
     await child.close();
     await parent.close();
@@ -2445,7 +2445,7 @@ describe("OpenCode provider subagent contract", () => {
       },
     });
     expect(runtime.acquisitions).toEqual([
-      { kind: "dedicated", env: { PASEO_AGENT_ID: "parent-agent" }, releaseCount: 1 },
+      { kind: "dedicated", env: { BYSPACE_AGENT_ID: "parent-agent" }, releaseCount: 1 },
       { kind: "existing", url: runtime.server.url, releaseCount: 1 },
     ]);
     expect(runtime.clientCreations).toEqual([

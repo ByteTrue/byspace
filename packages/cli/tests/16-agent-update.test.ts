@@ -42,7 +42,7 @@ try {
   {
     console.log("Test 2: agent update requires ID argument");
     const result =
-      await $`PASEO_HOST=localhost:${port} PASEO_HOME=${paseoHome} npx paseo agent update --name "New Name"`.nothrow();
+      await $`BYSPACE_HOST=localhost:${port} BYSPACE_HOME=${paseoHome} npx paseo agent update --name "New Name"`.nothrow();
     assert.notStrictEqual(result.exitCode, 0, "should fail without id");
     const output = result.stdout + result.stderr;
     const hasError =
@@ -58,7 +58,7 @@ try {
   {
     console.log("Test 3: agent update requires update field");
     const result =
-      await $`PASEO_HOST=localhost:${port} PASEO_HOME=${paseoHome} npx paseo agent update abc123`.nothrow();
+      await $`BYSPACE_HOST=localhost:${port} BYSPACE_HOME=${paseoHome} npx paseo agent update abc123`.nothrow();
     assert.notStrictEqual(result.exitCode, 0, "should fail without --name/--label");
     const output = result.stdout + result.stderr;
     const hasError =
@@ -73,7 +73,7 @@ try {
   {
     console.log("Test 4: agent update handles daemon not running");
     const result =
-      await $`PASEO_HOST=localhost:${port} PASEO_HOME=${paseoHome} npx paseo agent update abc123 --name "Renamed Agent"`.nothrow();
+      await $`BYSPACE_HOST=localhost:${port} BYSPACE_HOME=${paseoHome} npx paseo agent update abc123 --name "Renamed Agent"`.nothrow();
     assert.notStrictEqual(result.exitCode, 0, "should fail when daemon not running");
     const output = result.stdout + result.stderr;
     const hasError =
@@ -88,7 +88,7 @@ try {
   {
     console.log("Test 5: agent update accepts multi-label syntax");
     const result =
-      await $`PASEO_HOST=localhost:${port} PASEO_HOME=${paseoHome} npx paseo agent update abc123 --label surface=workspace,area=frontend --label priority=high`.nothrow();
+      await $`BYSPACE_HOST=localhost:${port} BYSPACE_HOME=${paseoHome} npx paseo agent update abc123 --label surface=workspace,area=frontend --label priority=high`.nothrow();
     const output = result.stdout + result.stderr;
     assert(!output.includes("unknown option"), "should accept --label flag");
     assert(!output.includes("error: option"), "should not have option parsing error");

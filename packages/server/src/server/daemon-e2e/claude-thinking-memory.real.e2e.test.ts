@@ -90,7 +90,7 @@ describe("daemon E2E (real claude) - thinking effort memory", () => {
 
       await client.sendMessage(
         agent.id,
-        "Remember the code phrase PASEO_MEMORY_56. Reply exactly: ACK_56",
+        "Remember the code phrase BYSPACE_MEMORY_56. Reply exactly: ACK_56",
       );
       const firstFinish = await client.waitForFinish(agent.id, 180_000);
       expect(firstFinish.status).toBe("idle");

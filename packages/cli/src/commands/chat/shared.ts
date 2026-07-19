@@ -132,6 +132,6 @@ export function parseTimeoutMs(input?: string): number | undefined {
 }
 
 export function resolveChatAuthorAgentId(): string {
-  const agentId = process.env.PASEO_AGENT_ID?.trim();
+  const agentId = process.env.BYSPACE_AGENT_ID?.trim();
   return agentId && agentId.length > 0 ? agentId : "manual";
 }

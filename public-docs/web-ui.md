@@ -29,7 +29,7 @@ paseo daemon start --web-ui
 Or with an environment variable:
 
 ```bash
-PASEO_WEB_UI_ENABLED=true paseo daemon start
+BYSPACE_WEB_UI_ENABLED=true paseo daemon start
 ```
 
 Or persist it in `config.json` so it survives restarts:
@@ -83,7 +83,7 @@ Two things to configure when you expose the daemon directly:
 1. **Set a password** so only authorized clients can connect:
 
    ```bash
-   PASEO_PASSWORD=my-secret paseo daemon start --web-ui --listen 0.0.0.0:6767
+   BYSPACE_PASSWORD=my-secret paseo daemon start --web-ui --listen 0.0.0.0:6767
    ```
 
    See [password authentication](/docs/configuration#password-authentication) for the persistent setup. Password auth controls access; it does not encrypt traffic, put TLS in front of it (below) on any untrusted network.
@@ -176,10 +176,10 @@ If your proxy reaches the daemon from another address, as in some Docker, LAN, o
 }
 ```
 
-`PASEO_TRUSTED_PROXIES` accepts the same comma-separated values:
+`BYSPACE_TRUSTED_PROXIES` accepts the same comma-separated values:
 
 ```bash
-PASEO_TRUSTED_PROXIES=loopback,172.16.0.0/12 paseo daemon start --web-ui
+BYSPACE_TRUSTED_PROXIES=loopback,172.16.0.0/12 paseo daemon start --web-ui
 ```
 
 Only use `trustedProxies: true` when your final trusted proxy overwrites client-supplied `X-Forwarded-*` headers. Otherwise a client could spoof forwarded header values.

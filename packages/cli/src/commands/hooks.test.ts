@@ -3,9 +3,9 @@ import { describe, expect, it } from "vitest";
 import { runHooksCommand } from "./hooks.js";
 
 const hookEnv = {
-  PASEO_TERMINAL_ID: "terminal-1",
-  PASEO_ACTIVITY_TOKEN: "token-1",
-  PASEO_TERMINAL_ACTIVITY_URL: "http://127.0.0.1:6767/api/terminal-activity",
+  BYSPACE_TERMINAL_ID: "terminal-1",
+  BYSPACE_ACTIVITY_TOKEN: "token-1",
+  BYSPACE_TERMINAL_ACTIVITY_URL: "http://127.0.0.1:6767/api/terminal-activity",
 };
 
 function inputFrom(value: string) {
@@ -59,13 +59,13 @@ async function runHook(agent: string, event: string, input = ttyInput()) {
 function expectPostedState(fetch: RecordingFetch, state: string) {
   expect(fetch.calls).toEqual([
     {
-      url: hookEnv.PASEO_TERMINAL_ACTIVITY_URL,
+      url: hookEnv.BYSPACE_TERMINAL_ACTIVITY_URL,
       init: {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          terminalId: hookEnv.PASEO_TERMINAL_ID,
-          token: hookEnv.PASEO_ACTIVITY_TOKEN,
+          terminalId: hookEnv.BYSPACE_TERMINAL_ID,
+          token: hookEnv.BYSPACE_ACTIVITY_TOKEN,
           state,
         }),
         signal: expect.any(AbortSignal),

@@ -83,8 +83,8 @@ declare global {
     ReactNativeWebView?: {
       postMessage?: (data: string) => void;
     };
-    __PASEO_TERMINAL_WEBVIEW_RECEIVE__?: (message: InboundMessage) => void;
-    __PASEO_TERMINAL_WEBVIEW_BLUR__?: () => void;
+    __BYSPACE_TERMINAL_WEBVIEW_RECEIVE__?: (message: InboundMessage) => void;
+    __BYSPACE_TERMINAL_WEBVIEW_BLUR__?: () => void;
   }
 }
 
@@ -521,6 +521,6 @@ root.appendChild(host);
 document.body.appendChild(root);
 
 const bridge = new TerminalWebViewBridge(root, host);
-window.__PASEO_TERMINAL_WEBVIEW_RECEIVE__ = bridge.receive;
-window.__PASEO_TERMINAL_WEBVIEW_BLUR__ = bridge.blur;
+window.__BYSPACE_TERMINAL_WEBVIEW_RECEIVE__ = bridge.receive;
+window.__BYSPACE_TERMINAL_WEBVIEW_BLUR__ = bridge.blur;
 sendToNative({ type: "bridgeReady" });

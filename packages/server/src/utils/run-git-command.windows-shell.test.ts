@@ -22,7 +22,7 @@ afterEach(() => {
 describe("runGitCommand shell behavior", () => {
   it("passes git arguments directly instead of through the platform shell", async () => {
     const repo = makeTempRepo();
-    const literalName = "%PASEO_GIT_SHELL_SENTINEL%";
+    const literalName = "%BYSPACE_GIT_SHELL_SENTINEL%";
     const expandedName = "expanded-by-cmd";
 
     await runGitCommand(["init"], { cwd: repo });
@@ -33,7 +33,7 @@ describe("runGitCommand shell behavior", () => {
     const result = await runGitCommand(["ls-files", "--error-unmatch", literalName], {
       cwd: repo,
       envOverlay: {
-        PASEO_GIT_SHELL_SENTINEL: expandedName,
+        BYSPACE_GIT_SHELL_SENTINEL: expandedName,
       },
     });
 

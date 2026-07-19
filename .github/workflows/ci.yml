@@ -259,8 +259,8 @@ jobs:
       - name: Run CLI tests
         run: npm run test --workspace=@bytetrue/byspace-cli
         env:
-          PASEO_LOCAL_SPEECH_AUTO_DOWNLOAD: "0"
-          PASEO_DICTATION_ENABLED: "0"
-          PASEO_VOICE_MODE_ENABLED: "0"
-          PASEO_CLI_TEST_SHARD: ${{ matrix.shard }}
-          PASEO_CLI_TEST_SHARD_TOTAL: "3"
+          BYSPACE_LOCAL_SPEECH_AUTO_DOWNLOAD: "0"
+          BYSPACE_DICTATION_ENABLED: "0"
+          BYSPACE_VOICE_MODE_ENABLED: "0"
+          BYSPACE_CLI_TEST_SHARD: ${{ matrix.shard }}
+          BYSPACE_CLI_TEST_SHARD_TOTAL: "3"

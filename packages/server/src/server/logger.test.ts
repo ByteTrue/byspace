@@ -145,7 +145,7 @@ describe("loadConfig logger config", () => {
     );
 
     const config = loadConfig(paseoHome, {
-      env: { PASEO_LOG_FORMAT: "pretty" },
+      env: { BYSPACE_LOG_FORMAT: "pretty" },
     });
 
     expect(config.log?.format).toBe("pretty");
