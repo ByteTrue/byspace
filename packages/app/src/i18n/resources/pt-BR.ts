@@ -1921,8 +1921,6 @@ export const ptBR: TranslationResources = {
           dialogFailedMessage: "Não foi possível abrir o diálogo de confirmação de reinício.",
         },
         update: {
-          desktopManagedHint:
-            "Este daemon é gerenciado pelo BySpace Desktop. Atualize o BySpace Desktop no host.",
           title: "Atualizar daemon",
           hint: "Atualiza o daemon para a versão mais recente e o reinicia",
           confirm: "Atualizar",

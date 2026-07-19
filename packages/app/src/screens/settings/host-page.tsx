@@ -740,9 +740,6 @@ function UpdateDaemonCard({ host }: { host: HostProfile }) {
   const supportsSelfUpdate = useSessionStore(
     (state) => state.sessions[host.serverId]?.serverInfo?.features?.daemonSelfUpdate === true,
   );
-  const desktopManaged = useSessionStore(
-    (state) => state.sessions[host.serverId]?.serverInfo?.desktopManaged === true,
-  );
 
   const appVersion = resolveAppVersion();
   const hasVersionMismatch = Boolean(appVersion && daemonVersion && appVersion !== daemonVersion);
@@ -925,7 +922,7 @@ function UpdateDaemonCard({ host }: { host: HostProfile }) {
     [theme.iconSize.sm, theme.colors.foreground],
   );
 
-  const shouldShowUpdate = hasVersionMismatch && (supportsSelfUpdate || desktopManaged);
+  const shouldShowUpdate = hasVersionMismatch && supportsSelfUpdate;
   if (!shouldShowUpdate) {
     return null;
   }
@@ -938,18 +935,14 @@ function UpdateDaemonCard({ host }: { host: HostProfile }) {
       <View style={settingsStyles.row}>
         <View style={settingsStyles.rowContent}>
           <Text style={settingsStyles.rowTitle}>{t("settings.host.daemon.update.title")}</Text>
-          <Text style={settingsStyles.rowHint}>
-            {desktopManaged
-              ? t("settings.host.daemon.update.desktopManagedHint")
-              : t("settings.host.daemon.update.hint")}
-          </Text>
+          <Text style={settingsStyles.rowHint}>{t("settings.host.daemon.update.hint")}</Text>
         </View>
         <Button
           variant="outline"
           size="sm"
           leftIcon={updateIcon}
           onPress={handleUpdate}
-          disabled={desktopManaged || isUpdating || !daemonClient || !isConnected}
+          disabled={isUpdating || !daemonClient || !isConnected}
           testID="host-page-update-button"
         >
           {buttonLabel}

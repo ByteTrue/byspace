@@ -11,7 +11,6 @@ async function main(): Promise<void> {
   const daemon = await createTestBySpaceDaemon({
     corsAllowedOrigins: [`http://localhost:${metroPort}`],
     daemonVersion: "0.0.0",
-    desktopManaged: process.env.E2E_DESKTOP_MANAGED === "1",
   });
   const serverId = (await readFile(path.join(daemon.byspaceHome, "server-id"), "utf8")).trim();
 

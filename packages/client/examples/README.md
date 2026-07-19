@@ -7,8 +7,7 @@ import { createBySpaceClient, type BySpaceClient } from "@bytetrue/byspace-clien
 ```
 
 Pass the daemon WebSocket URL into the exported functions. In worktree dev, read it
-from the portless banner or `portless get daemon`; for the desktop-managed daemon,
-use the URL for that daemon.
+from the portless banner or `portless get daemon`.
 
 - `workspaces.ts` covers creating, opening, refetching, and archiving a workspace.
 - `agents-and-providers.ts` covers creating agents and choosing providers with `client.providers.*`.

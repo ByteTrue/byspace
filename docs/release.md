@@ -10,7 +10,7 @@ Electron, native iOS/Android, app-store builds, Browser automation, and a market
 
 ## Source baseline
 
-The current source snapshot is upstream `v0.2.0-beta.1`, commit `0bec06c2db7d3ee071416cde80229eabd682b03e`. The default branch has clean BySpace-only ancestry; the source URL, commit, tree, and AGPL license are recorded in the root commit and README.
+The current source snapshot is upstream `v0.2.0-beta.1`, commit `0bec06c2db7d3ee071416cde80229eabd682b03e`. The default branch has clean BySpace-only ancestry; the root commit records the source URL, commit, tree, and AGPL license, while README keeps the public attribution link.
 
 Future upstream updates are release-level snapshot updates, not per-commit cherry-picks. Build the next clean source snapshot, reapply the bounded Web-only/identity/release changes, verify it, then replace `main` only after explicit approval.
 

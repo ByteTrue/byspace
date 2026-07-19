@@ -1885,8 +1885,6 @@ export const ar: TranslationResources = {
           dialogFailedMessage: "غير قادر على فتح مربع حوار تأكيد إعادة التشغيل.",
         },
         update: {
-          desktopManagedHint:
-            "يدير BySpace Desktop هذا البرنامج الخفي. حدّث BySpace Desktop على المضيف.",
           title: "Update daemon",
           hint: "Update the daemon to the latest version and restart it",
           confirm: "Update",

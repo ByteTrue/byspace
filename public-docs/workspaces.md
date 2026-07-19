@@ -29,9 +29,9 @@ Each workspace is a separate place to work. You can keep one for your main check
 
 ## Workspaces contain sessions
 
-Agents run inside a workspace as sessions. A workspace can have one agent session, several agent sessions, terminals, browsers, and diffs open at the same time.
+Agents run inside a workspace as sessions. A workspace can have one agent session, several agent sessions, terminals, files, and diffs open at the same time.
 
-That matters because real development rarely fits into one long chat. You might ask one agent to implement a feature, open a terminal to run a service, start another agent to review the diff, and keep the browser open next to both. Those belong together because they are all part of the same task.
+That matters because real development rarely fits into one long chat. You might ask one agent to implement a feature, open a terminal to run a service, start another agent to review the diff, and keep the changed files visible next to both. Those belong together because they are all part of the same task.
 
 In BySpace, the workspace is the stable container. The sessions are what you run inside it.
 
@@ -41,7 +41,7 @@ When you create a new workspace, BySpace creates a working directory for it. If 
 
 You can also create a workspace without starting an agent right away. The workspace is still there with its working directory ready; you can open terminals, run services, or browse files, then start an agent later.
 
-Either way, once the workspace exists you can add more sessions to it. Open a terminal alongside an agent, start a second agent to review changes, or open a browser tab to check a local service. Every session lives as a tab inside the same workspace.
+Either way, once the workspace exists you can add more sessions to it. Open a terminal alongside an agent, start a second agent to review changes, or inspect files and diffs. Every session lives as a tab inside the same workspace.
 
 ## Worktrees
 

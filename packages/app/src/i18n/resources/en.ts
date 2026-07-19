@@ -1898,8 +1898,6 @@ export const en = {
           dialogFailedMessage: "Unable to open the restart confirmation dialog.",
         },
         update: {
-          desktopManagedHint:
-            "This daemon is managed by BySpace Desktop. Update BySpace Desktop on the host.",
           title: "Update daemon",
           hint: "Update the daemon to the latest version and restart it",
           confirm: "Update",

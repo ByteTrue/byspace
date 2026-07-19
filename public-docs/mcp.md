@@ -81,10 +81,6 @@ The MCP server itself is controlled by `daemon.mcp.enabled`. Existing agents may
 | `list_pending_permissions` | Return pending permission requests across agents. |
 | `respond_to_permission`    | Approve or deny a pending permission request.     |
 
-### Browser
-
-Browser automation is opt-in and adds tools for opening tabs, reading pages, clicking, typing, and taking screenshots. See the [Browser tools reference](/docs/browser-tools).
-
 ### Voice
 
 | Tool    | Function                                                                                  |

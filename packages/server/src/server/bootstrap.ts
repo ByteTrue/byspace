@@ -334,7 +334,6 @@ export interface BySpaceDaemonConfig {
   listen: string;
   byspaceHome: string;
   daemonVersion?: string;
-  desktopManaged?: boolean;
   worktreesRoot?: string;
   corsAllowedOrigins: string[];
   allowedHosts?: HostnamesConfig;
@@ -1364,7 +1363,6 @@ export async function createBySpaceDaemon(
                 listen: formatListenTarget(boundListenTarget ?? listenTarget),
                 worktreesRoot: config.worktreesRoot,
                 appBaseUrl: config.appBaseUrl,
-                desktopManaged: config.desktopManaged === true,
                 relay: {
                   enabled: relayEnabled,
                   endpoint: relayEndpoint,

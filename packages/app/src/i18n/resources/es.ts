@@ -1936,8 +1936,6 @@ export const es: TranslationResources = {
             "No se puede abrir el cuadro de diálogo de confirmación de reinicio.",
         },
         update: {
-          desktopManagedHint:
-            "Este daemon está administrado por BySpace Desktop. Actualiza BySpace Desktop en el host.",
           title: "Update daemon",
           hint: "Update the daemon to the latest version and restart it",
           confirm: "Update",

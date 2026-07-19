@@ -482,7 +482,6 @@ export function loadConfig(
   return {
     listen,
     byspaceHome,
-    desktopManaged: env.BYSPACE_DESKTOP_MANAGED === "1",
     worktreesRoot: resolveWorktreesRoot(byspaceHome, persisted),
     corsAllowedOrigins: resolveCorsAllowedOrigins(env, persisted),
     hostnames,

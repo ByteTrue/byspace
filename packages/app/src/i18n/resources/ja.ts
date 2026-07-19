@@ -1907,8 +1907,6 @@ export const ja: TranslationResources = {
           dialogFailedMessage: "再起動確認ダイアログを開けませんでした。",
         },
         update: {
-          desktopManagedHint:
-            "このデーモンはBySpace Desktopによって管理されています。ホスト上のBySpace Desktopを更新してください。",
           title: "デーモンを更新",
           hint: "デーモンを最新バージョンに更新して再起動します",
           confirm: "更新",

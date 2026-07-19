@@ -1,6 +1,7 @@
 {
   "name": "@bytetrue/byspace-server",
   "version": "0.2.0-beta.1",
+  "private": true,
   "description": "BySpace backend server",
   "files": [
     "dist/server",
@@ -28,9 +29,6 @@
       "source": "./src/terminal/agent-hooks/provider-registry.ts",
       "default": "./dist/server/terminal/agent-hooks/provider-registry.js"
     }
-  },
-  "publishConfig": {
-    "access": "public"
   },
   "scripts": {
     "dev": "cross-env BYSPACE_NODE_ENV=development node --import tsx scripts/dev-runner.ts",

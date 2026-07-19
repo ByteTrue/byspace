@@ -26,7 +26,7 @@ Closes #
 <!--
 This is the section I read most carefully. I need to see that *you* tested this, not that the diff looks plausible.
 
-- For UI changes: a screenshot or short video on every affected platform (mobile, web, desktop). UI claims without visual proof are not enough.
+- For UI changes: a screenshot or short video at every affected browser viewport. UI claims without visual proof are not enough.
 - For behavior changes: the actual steps you ran, and what you observed.
 - For bug fixes: how you reproduced the bug before, and confirmed it's fixed after.
 
@@ -39,5 +39,5 @@ AI-generated PR descriptions are fine in principle. AI-generated *verification c
 - [ ] `npm run typecheck` passes
 - [ ] `npm run lint` passes
 - [ ] `npm run format` ran (Biome)
-- [ ] UI changes include screenshots or video for every affected platform
+- [ ] UI changes include screenshots or video for every affected browser viewport
 - [ ] Tests added or updated where it made sense

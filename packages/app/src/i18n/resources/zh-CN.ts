@@ -1862,8 +1862,6 @@ export const zhCN: TranslationResources = {
           dialogFailedMessage: "无法打开重启确认对话框。",
         },
         update: {
-          desktopManagedHint:
-            "此 Daemon 由 BySpace Desktop 管理。请在 Host 上更新 BySpace Desktop。",
           title: "Update daemon",
           hint: "Update the daemon to the latest version and restart it",
           confirm: "Update",

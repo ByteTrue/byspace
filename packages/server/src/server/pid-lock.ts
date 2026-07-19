@@ -1,4 +1,4 @@
-import { open, readFile, stat, unlink, mkdir, utimes } from "node:fs/promises";
+import { open, readFile, unlink, mkdir, utimes } from "node:fs/promises";
 import type { FileHandle } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
@@ -11,7 +11,6 @@ export const pidLockInfoSchema = z.object({
   hostname: z.string(),
   uid: z.number(),
   listen: z.string().nullable(),
-  desktopManaged: z.boolean().optional(),
   heartbeat: z.literal(true).optional(),
 });
 
@@ -36,8 +35,6 @@ export class PidLockError extends Error {
   }
 }
 
-// Stale recovery is for abandoned locks, so keep this well above ordinary event-loop stalls.
-const PID_LOCK_STALE_MS = 5 * 60_000;
 const PID_LOCK_HEARTBEAT_INTERVAL_MS = 30_000;
 const PID_LOCK_READ_RETRY_ATTEMPTS = 10;
 const PID_LOCK_READ_RETRY_DELAY_MS = 50;
@@ -53,15 +50,6 @@ function isPidRunning(pid: number): boolean {
 
 function getPidFilePath(byspaceHome: string): string {
   return join(byspaceHome, "byspace.pid");
-}
-
-async function isPidLockFresh(pidPath: string): Promise<boolean> {
-  try {
-    const lockStat = await stat(pidPath);
-    return lockStat.mtimeMs >= Date.now() - PID_LOCK_STALE_MS;
-  } catch {
-    return false;
-  }
 }
 
 async function touchPidLockFile(pidPath: string): Promise<void> {
@@ -87,20 +75,6 @@ function resolveOwnerPid(ownerPid?: number): number {
 
 interface AcquirePidLockOptions {
   ownerPid?: number;
-  reclaimStaleDesktopLock?: boolean;
-}
-
-function canReclaimLiveLock(
-  lock: PidLockInfo,
-  options: AcquirePidLockOptions | undefined,
-): boolean {
-  // COMPAT(pidLockHeartbeat): v0.1.108 desktop startup has already confirmed the old daemon is
-  // unreachable before it launches the supervisor. Remove after 2027-01-15.
-  return options?.reclaimStaleDesktopLock === true && lock.desktopManaged === true;
-}
-
-function isSamePidLock(left: PidLockInfo, right: PidLockInfo): boolean {
-  return left.pid === right.pid && left.startedAt === right.startedAt;
 }
 
 function createLockHeldError(lock: PidLockInfo): PidLockError {
@@ -114,7 +88,6 @@ async function clearExistingPidLock(
   pidPath: string,
   existingLock: PidLockInfo,
   lockOwnerPid: number,
-  options: AcquirePidLockOptions | undefined,
 ): Promise<"already_owned" | "cleared"> {
   const lockOwnerRunning = isPidRunning(existingLock.pid);
   if (existingLock.pid === lockOwnerPid && lockOwnerRunning) {
@@ -123,20 +96,7 @@ async function clearExistingPidLock(
   }
 
   if (lockOwnerRunning) {
-    const reclaimable = canReclaimLiveLock(existingLock, options);
-    if (!reclaimable || (await isPidLockFresh(pidPath))) {
-      throw createLockHeldError(existingLock);
-    }
-
-    // Re-read immediately before unlinking so a heartbeat at the stale boundary wins.
-    const confirmedLock = await readPidLock(pidPath);
-    if (
-      !confirmedLock ||
-      !isSamePidLock(existingLock, confirmedLock) ||
-      (await isPidLockFresh(pidPath))
-    ) {
-      throw new PidLockError("PID lock changed while checking whether it was abandoned");
-    }
+    throw createLockHeldError(existingLock);
   }
 
   await unlink(pidPath).catch(() => {});
@@ -181,10 +141,10 @@ export async function acquirePidLock(
   // Try to read existing lock
   const existingLock = await readPidLock(pidPath);
 
-  // Check if existing lock is stale
+  // Check whether the existing lock is still owned by a running process.
   const lockOwnerPid = resolveOwnerPid(options?.ownerPid);
   if (existingLock) {
-    const result = await clearExistingPidLock(pidPath, existingLock, lockOwnerPid, options);
+    const result = await clearExistingPidLock(pidPath, existingLock, lockOwnerPid);
     if (result === "already_owned") {
       return;
     }
@@ -198,7 +158,6 @@ export async function acquirePidLock(
     uid: process.getuid?.() ?? 0,
     listen,
     heartbeat: true,
-    ...(process.env.BYSPACE_DESKTOP_MANAGED === "1" ? { desktopManaged: true } : {}),
   };
 
   await writeNewPidLock(pidPath, lockInfo);

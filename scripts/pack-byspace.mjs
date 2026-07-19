@@ -78,7 +78,7 @@ try {
   const manifest = JSON.parse(readFileSync(join(cliDir, "package.json"), "utf8"));
   delete manifest.devDependencies;
   delete manifest.scripts;
-  manifest.files = ["bin", "dist", "README.md", "LICENSE"];
+  manifest.files = ["bin", "dist", "!dist/**/*.map", "README.md", "LICENSE"];
   manifest.bundleDependencies = [];
 
   cpSync(join(cliDir, "bin"), join(stagingDir, "bin"), { recursive: true });

@@ -1,4 +1,4 @@
-import { mkdtemp, open, rm, utimes, writeFile } from "node:fs/promises";
+import { mkdtemp, open, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, test } from "vitest";
@@ -59,8 +59,8 @@ describe("pid-lock ownership", () => {
     }
   });
 
-  test("keeps a stale heartbeat lock when the recorded pid is alive without a reachability check", async () => {
-    const byspaceHome = await mkdtemp(join(tmpdir(), "byspace-pid-lock-stale-heartbeat-"));
+  test("keeps a heartbeat lock when the recorded pid is alive", async () => {
+    const byspaceHome = await mkdtemp(join(tmpdir(), "byspace-pid-lock-live-heartbeat-"));
     const replacementOwnerPid = process.pid + 10_000;
 
     try {
@@ -73,12 +73,9 @@ describe("pid-lock ownership", () => {
           hostname: "old-host",
           uid: process.getuid?.() ?? 0,
           listen: "127.0.0.1:6777",
-          desktopManaged: true,
           heartbeat: true,
         }),
       );
-      const staleTime = new Date(Date.now() - 10 * 60_000);
-      await utimes(pidPath, staleTime, staleTime);
 
       await expect(isLocked(byspaceHome)).resolves.toMatchObject({ locked: true });
       await expect(
@@ -92,41 +89,7 @@ describe("pid-lock ownership", () => {
     }
   });
 
-  test("reclaims a stale desktop heartbeat lock after desktop confirms the daemon is unreachable", async () => {
-    const byspaceHome = await mkdtemp(join(tmpdir(), "byspace-pid-lock-stale-desktop-heartbeat-"));
-    const replacementOwnerPid = process.pid + 10_000;
-
-    try {
-      const pidPath = join(byspaceHome, "byspace.pid");
-      await writeFile(
-        pidPath,
-        JSON.stringify({
-          pid: process.pid,
-          startedAt: "2026-01-01T00:00:00.000Z",
-          hostname: "old-host",
-          uid: process.getuid?.() ?? 0,
-          listen: "127.0.0.1:6777",
-          desktopManaged: true,
-          heartbeat: true,
-        }),
-      );
-      const staleTime = new Date(Date.now() - 10 * 60_000);
-      await utimes(pidPath, staleTime, staleTime);
-
-      await acquirePidLock(byspaceHome, null, {
-        ownerPid: replacementOwnerPid,
-        reclaimStaleDesktopLock: true,
-      });
-
-      const lock = await getPidLockInfo(byspaceHome);
-      expect(lock?.pid).toBe(replacementOwnerPid);
-      expect(lock?.listen).toBeNull();
-    } finally {
-      await rm(byspaceHome, { recursive: true, force: true });
-    }
-  });
-
-  test("keeps a stale live lock written by a pre-heartbeat daemon", async () => {
+  test("keeps a live lock written by a pre-heartbeat daemon", async () => {
     const byspaceHome = await mkdtemp(join(tmpdir(), "byspace-pid-lock-legacy-live-"));
     const pidPath = join(byspaceHome, "byspace.pid");
 
@@ -139,11 +102,8 @@ describe("pid-lock ownership", () => {
           hostname: "old-host",
           uid: process.getuid?.() ?? 0,
           listen: "127.0.0.1:6777",
-          desktopManaged: true,
         }),
       );
-      const staleTime = new Date(Date.now() - 10 * 60_000);
-      await utimes(pidPath, staleTime, staleTime);
 
       await expect(
         acquirePidLock(byspaceHome, null, { ownerPid: process.pid + 10_000 }),
@@ -151,39 +111,6 @@ describe("pid-lock ownership", () => {
 
       const lock = await getPidLockInfo(byspaceHome);
       expect(lock?.pid).toBe(process.pid);
-    } finally {
-      await rm(byspaceHome, { recursive: true, force: true });
-    }
-  });
-
-  test("reclaims a stale legacy desktop lock after desktop confirms the daemon is unreachable", async () => {
-    const byspaceHome = await mkdtemp(join(tmpdir(), "byspace-pid-lock-legacy-desktop-"));
-    const replacementOwnerPid = process.pid + 10_000;
-    const pidPath = join(byspaceHome, "byspace.pid");
-
-    try {
-      await writeFile(
-        pidPath,
-        JSON.stringify({
-          pid: process.pid,
-          startedAt: "2026-01-01T00:00:00.000Z",
-          hostname: "old-host",
-          uid: process.getuid?.() ?? 0,
-          listen: "127.0.0.1:6777",
-          desktopManaged: true,
-        }),
-      );
-      const staleTime = new Date(Date.now() - 10 * 60_000);
-      await utimes(pidPath, staleTime, staleTime);
-
-      await acquirePidLock(byspaceHome, null, {
-        ownerPid: replacementOwnerPid,
-        reclaimStaleDesktopLock: true,
-      });
-
-      const lock = await getPidLockInfo(byspaceHome);
-      expect(lock?.pid).toBe(replacementOwnerPid);
-      expect(lock?.heartbeat).toBe(true);
     } finally {
       await rm(byspaceHome, { recursive: true, force: true });
     }
@@ -238,7 +165,6 @@ describe("pid-lock ownership", () => {
           hostname: "current-host",
           uid: process.getuid?.() ?? 0,
           listen: "127.0.0.1:6777",
-          desktopManaged: true,
           heartbeat: true,
         }),
       );

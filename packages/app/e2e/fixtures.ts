@@ -24,7 +24,6 @@ interface TrackedProjectPickerFixture extends ProjectPickerFixture {
 const test = base.extend<{
   byspaceE2ESetup: void;
   outdatedDaemon: OutdatedDaemon;
-  desktopManagedOutdatedDaemon: OutdatedDaemon;
   projectPickerFixture: TrackedProjectPickerFixture;
   withWorkspace: WithWorkspace;
 }>({
@@ -121,11 +120,6 @@ const test = base.extend<{
   ],
   outdatedDaemon: async ({}, provide) => {
     const daemon = await startOutdatedDaemon();
-    await provide(daemon);
-    await daemon.close();
-  },
-  desktopManagedOutdatedDaemon: async ({}, provide) => {
-    const daemon = await startOutdatedDaemon({ desktopManaged: true });
     await provide(daemon);
     await daemon.close();
   },

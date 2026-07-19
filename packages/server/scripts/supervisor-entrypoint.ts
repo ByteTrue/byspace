@@ -18,13 +18,11 @@ process.title = "BySpace Supervisor";
 
 interface DaemonRunnerConfig {
   devMode: boolean;
-  reclaimStalePidLock: boolean;
   workerArgs: string[];
 }
 
 function parseConfig(argv: string[]): DaemonRunnerConfig {
   let devMode = false;
-  let reclaimStalePidLock = false;
   const workerArgs: string[] = [];
 
   for (const arg of argv) {
@@ -32,14 +30,10 @@ function parseConfig(argv: string[]): DaemonRunnerConfig {
       devMode = true;
       continue;
     }
-    if (arg === "--reclaim-stale-pid-lock") {
-      reclaimStalePidLock = true;
-      continue;
-    }
     workerArgs.push(arg);
   }
 
-  return { devMode, reclaimStalePidLock, workerArgs };
+  return { devMode, workerArgs };
 }
 
 function resolveWorkerEntry(): string {
@@ -114,10 +108,7 @@ async function main(): Promise<void> {
   const supervisorLogFile = resolveSupervisorLogFile(byspaceHome, persistedConfig, workerEnv);
 
   try {
-    await acquirePidLock(byspaceHome, null, {
-      ownerPid: process.pid,
-      reclaimStaleDesktopLock: config.reclaimStalePidLock,
-    });
+    await acquirePidLock(byspaceHome, null, { ownerPid: process.pid });
   } catch (error) {
     if (error instanceof PidLockError) {
       process.stderr.write(`${error.message}\n`);

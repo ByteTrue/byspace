@@ -1,14 +1,16 @@
 # Running BySpace in Docker
 
-BySpace publishes a container image for running the daemon on a server, VM, NAS,
-or homelab box. The image also serves the bundled browser web UI, so one
-container gives you both the daemon API and a self-hosted UI.
+Docker support is an optional, self-managed way to run the daemon on a server,
+VM, NAS, or homelab box. BySpace does not publish an official container image;
+build `byspace:local` from this repository. The image also serves the bundled
+browser web UI, so one container gives you both the daemon API and a self-hosted
+UI.
 
-The image source lives in [`docker/`](../docker/).
+The Docker source lives in [`docker/`](../docker/).
 
 ## How it works
 
-The official image:
+The locally built image:
 
 - builds `@bytetrue/byspace-server` and `@bytetrue/byspace` from source-built workspace tarballs
 - runs the daemon as the non-root `byspace` user
@@ -24,13 +26,16 @@ WebSocket requests still require `BYSPACE_PASSWORD` when one is configured.
 
 ## Quick Start
 
+From the repository root:
+
 ```bash
+docker build -f docker/base/Dockerfile -t byspace:local .
 docker run -d --name byspace \
   -p 6777:6777 \
   -e BYSPACE_PASSWORD=change-me \
   -v "$PWD/byspace-home:/home/byspace" \
   -v "$PWD:/workspace" \
-  ghcr.io/bytetrue/byspace:latest
+  byspace:local
 ```
 
 Then open:
@@ -47,9 +52,8 @@ daemon connection in the web UI or another BySpace client.
 Use [`docker/docker-compose.example.yml`](../docker/docker-compose.example.yml):
 
 ```bash
-cp docker/docker-compose.example.yml docker-compose.yml
-$EDITOR docker-compose.yml
-docker compose up -d
+$EDITOR docker/docker-compose.example.yml
+docker compose -f docker/docker-compose.example.yml up -d --build
 ```
 
 Minimal example:
@@ -57,27 +61,30 @@ Minimal example:
 ```yaml
 services:
   byspace:
-    image: ghcr.io/bytetrue/byspace:latest
+    build:
+      context: ..
+      dockerfile: docker/base/Dockerfile
+    image: byspace:local
     restart: unless-stopped
     ports:
       - "6777:6777"
     environment:
       BYSPACE_PASSWORD: "change-me"
     volumes:
-      - ./byspace-home:/home/byspace
-      - ./workspace:/workspace
+      - ../byspace-home:/home/byspace
+      - ../workspace:/workspace
 ```
 
 ## Installing Agents
 
-The base image does not preinstall Claude Code, Codex, OpenCode, Copilot, Pi, or
-other agent CLIs. That keeps the default image small and avoids coupling BySpace
-releases to third-party agent release cycles.
+The local base image does not preinstall Claude Code, Codex, OpenCode, Copilot,
+Pi, or other agent CLIs. That keeps the image small and avoids coupling the
+BySpace source build to third-party agent release cycles.
 
 Create a child image for the agents you use:
 
 ```Dockerfile
-FROM ghcr.io/bytetrue/byspace:latest
+FROM byspace:local
 
 USER root
 RUN npm install -g @openai/codex @anthropic-ai/claude-code opencode-ai
@@ -196,34 +203,11 @@ To assert the source tree version while building:
 
 ```bash
 docker build \
-  --build-arg BYSPACE_VERSION=0.1.102 \
-  -t byspace:0.1.102 \
+  --build-arg BYSPACE_VERSION=0.2.0-beta.1 \
+  -t byspace:local \
   -f docker/base/Dockerfile \
   .
 ```
-
-The Docker workflow builds the image on pull requests and on `main` as a
-non-publishing check. Stable `vX.Y.Z` tag pushes publish
-`ghcr.io/bytetrue/byspace:X.Y.Z` and `ghcr.io/bytetrue/byspace:latest`. Beta tags
-publish only the exact prerelease tag, such as
-`ghcr.io/bytetrue/byspace:0.1.102-beta.1`, and do not update `latest`.
-
-To replace a Docker image in place without rebuilding desktop, APK, or EAS
-mobile release artifacts, dispatch the Docker workflow manually instead of
-pushing a `v*` release tag:
-
-```bash
-gh workflow run docker.yml \
-  --ref main \
-  -f byspace_version=0.1.102-beta.1 \
-  -f publish=true
-```
-
-Manual Docker publishes require an explicit `byspace_version`. The workflow builds
-from the checked-out source tree and publishes only the exact prerelease image
-tag for prerelease versions.
-
-The published image is multi-arch for `linux/amd64` and `linux/arm64`.
 
 ## Troubleshooting
 

@@ -23,26 +23,8 @@ BySpace prints a pairing link. Open it in a browser to connect the hosted Web ap
 
 Configuration and local state live under `BYSPACE_HOME` (defaults to `~/.byspace`).
 
-## Docker
-
-For servers, dev boxes, NAS devices, or homelab hosts, run the official image:
-
-```bash
-docker run -d --name byspace \
-  -p 6777:6777 \
-  -e BYSPACE_PASSWORD=change-me \
-  -v "$PWD/byspace-home:/home/byspace" \
-  -v "$PWD:/workspace" \
-  ghcr.io/bytetrue/byspace:latest
-```
-
-Then open `http://localhost:6777`.
-
-The image runs the daemon and serves the bundled web UI. It does not bundle agent CLIs, so extend it with the agents you use. See [Docker](/docs/docker) for Compose, reverse proxy, agent install, and security examples.
-
 ## Where next
 
-- [Docker](/docs/docker), run the daemon and bundled web UI in a container.
 - [Workspaces](/docs/workspaces), the project, workspace, and session model BySpace is built around.
 - [Providers](/docs/providers), what a provider is and how BySpace wraps existing CLIs.
 - [Orchestration](/docs/orchestration), let one agent delegate work to other providers and models.
