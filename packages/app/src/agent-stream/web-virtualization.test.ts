@@ -136,8 +136,8 @@ describe("estimateStreamItemHeight", () => {
         {
           id: "att-1",
           mimeType: "image/png",
-          storageType: "desktop-file",
-          storageKey: "/tmp/screenshot.png",
+          storageType: "web-indexeddb",
+          storageKey: "att-1",
           fileName: "screenshot.png",
           byteSize: 1024,
           createdAt: Date.now(),

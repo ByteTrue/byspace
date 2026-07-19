@@ -1,5 +1,4 @@
 import { Redirect, Stack, useLocalSearchParams } from "expo-router";
-import { useHostRuntimeBootstrapState } from "@/app/_layout";
 import { HostRouteProvider } from "@/navigation/host-route-context";
 import { resolveStartupRoute } from "@/navigation/host-runtime-bootstrap";
 import { ThemedStack } from "@/navigation/themed-stack";
@@ -20,11 +19,9 @@ function KnownHostRoute() {
   const params = useLocalSearchParams<{ serverId?: string | string[] }>();
   const hosts = useHosts();
   const hostRegistryStatus = useHostRegistryStatus();
-  const bootstrapState = useHostRuntimeBootstrapState();
   const routeServerId = typeof params.serverId === "string" ? params.serverId : null;
   const startupRoute = resolveStartupRoute({
     route: { kind: "host", serverId: routeServerId },
-    startupBlocker: bootstrapState.startupBlocker,
     hostRegistryStatus,
     hosts,
   });

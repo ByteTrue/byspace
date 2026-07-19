@@ -110,9 +110,6 @@ export const en = {
       removeFile: "Remove file attachment",
       openGithub: "Open {{kind}} {{number}}",
       removeGithub: "Remove {{kind}} {{number}}",
-      element: "Element",
-      openBrowserElement: "Open browser element attachment",
-      removeBrowserElement: "Remove browser element attachment",
       openReview: "Open review attachment",
       removeReview: "Remove review attachment",
     },
@@ -1343,7 +1340,6 @@ export const en = {
     },
     backToWorkspace: "Back",
     addHost: "Add host",
-    enableBuiltInDaemon: "Enable built-in daemon",
     projects: "Projects",
     projectList: {
       hostLoadFailed: "Couldn't load projects from host {{hostName}}: {{message}}",

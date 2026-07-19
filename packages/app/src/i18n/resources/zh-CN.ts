@@ -112,9 +112,6 @@ export const zhCN: TranslationResources = {
       removeFile: "Remove file attachment",
       openGithub: "打开 {{kind}} {{number}}",
       removeGithub: "移除 {{kind}} {{number}}",
-      element: "元素",
-      openBrowserElement: "打开浏览器元素附件",
-      removeBrowserElement: "移除浏览器元素附件",
       openReview: "打开 review 附件",
       removeReview: "移除 review 附件",
     },
@@ -1319,7 +1316,6 @@ export const zhCN: TranslationResources = {
     },
     backToWorkspace: "返回",
     addHost: "添加主机",
-    enableBuiltInDaemon: "启用内置 daemon",
     projects: "项目",
     projectList: {
       hostLoadFailed: "无法从 Host {{hostName}} 加载 projects：{{message}}",

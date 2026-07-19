@@ -141,10 +141,10 @@ describe("prompt attachments", () => {
       renderPromptAttachmentAsText({
         type: "text",
         mimeType: "text/plain",
-        title: "Browser element",
-        text: "<browser-element>button.primary</browser-element>",
+        title: "Context excerpt",
+        text: "Selected context",
       }),
-    ).toBe("<browser-element>button.primary</browser-element>");
+    ).toBe("Selected context");
   });
 
   it("renders uploaded file attachments as local file references", () => {

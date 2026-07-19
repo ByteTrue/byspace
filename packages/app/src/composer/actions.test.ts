@@ -109,28 +109,6 @@ function reviewWorkspaceAttachment(
   };
 }
 
-function browserElementWorkspaceAttachment(): Extract<
-  WorkspaceComposerAttachment,
-  { kind: "browser_element" }
-> {
-  return {
-    kind: "browser_element",
-    attachment: {
-      url: "https://example.com/page",
-      selector: "button.primary",
-      tag: "button",
-      text: "Save",
-      outerHTML: '<button class="primary">Save</button>',
-      computedStyles: { display: "flex" },
-      boundingRect: { x: 1, y: 2, width: 80, height: 32 },
-      reactSource: null,
-      parentChain: ["form.settings"],
-      children: [],
-      formatted: '<browser-element url="https://example.com/page">button.primary</browser-element>',
-    },
-  };
-}
-
 function createFakePersister(): AttachmentPersister & {
   blobCalls: Array<{ blob: Blob; mimeType: string; fileName: string | null }>;
   fileUriCalls: Array<{ uri: string; mimeType: string; fileName: string | null }>;
@@ -467,30 +445,6 @@ describe("dispatchComposerAgentMessage", () => {
 
     expect(client.calls[0]?.options.attachments).toEqual([review.attachment]);
     expect(client.calls[0]?.options.images).toEqual([]);
-  });
-
-  it("serializes browser_element workspace attachments as text attachments at the wire boundary", async () => {
-    const client = createFakeSendClient();
-    const stream = createFakeStream();
-    const browserElement = browserElementWorkspaceAttachment();
-
-    await dispatchComposerAgentMessage({
-      client,
-      agentId: "agent",
-      text: "inspect element",
-      attachments: [browserElement],
-      encodeImages: passthroughEncodeImages,
-      stream,
-    });
-
-    expect(client.calls[0]?.options.attachments).toEqual([
-      {
-        type: "text",
-        mimeType: "text/plain",
-        title: "Browser element · button",
-        text: browserElement.attachment.formatted,
-      },
-    ]);
   });
 });
 

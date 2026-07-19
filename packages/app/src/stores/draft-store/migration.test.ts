@@ -158,8 +158,8 @@ describe("draft-store migration", () => {
                 {
                   id: "att-1",
                   mimeType: "image/png",
-                  storageType: "desktop-file",
-                  storageKey: "/tmp/att-1.png",
+                  storageType: "web-indexeddb",
+                  storageKey: "att-1",
                   createdAt: 1700000000000,
                   previewUri: "asset://should-not-persist",
                 },
@@ -183,8 +183,8 @@ describe("draft-store migration", () => {
           metadata: {
             id: "att-1",
             mimeType: "image/png",
-            storageType: "desktop-file",
-            storageKey: "/tmp/att-1.png",
+            storageType: "web-indexeddb",
+            storageKey: "att-1",
             createdAt: 1700000000000,
           },
         },

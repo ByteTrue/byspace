@@ -11,16 +11,10 @@ import { orderHostsLocalFirst } from "@/types/host-connection";
 import {
   ADD_HOST_OPTION_ID,
   ALL_HOSTS_OPTION_ID,
-  ENABLE_BUILT_IN_DAEMON_OPTION_ID,
   getHostPickerLabel,
 } from "./host-picker-constants";
 
-export {
-  ADD_HOST_OPTION_ID,
-  ALL_HOSTS_OPTION_ID,
-  ENABLE_BUILT_IN_DAEMON_OPTION_ID,
-  getHostPickerLabel,
-};
+export { ADD_HOST_OPTION_ID, ALL_HOSTS_OPTION_ID, getHostPickerLabel };
 
 const SEARCHABLE_THRESHOLD = 10;
 type RenderHostOption = NonNullable<ComboboxProps["renderOption"]>;
@@ -121,10 +115,9 @@ export function HostPickerOption({
   );
 }
 
-const SYSTEM_HOST_PICKER_OPTION_LABELS: Record<"add" | "all" | "enableBuiltInDaemon", string> = {
+const SYSTEM_HOST_PICKER_OPTION_LABELS: Record<"add" | "all", string> = {
   add: "Add host",
   all: "All hosts",
-  enableBuiltInDaemon: "Enable built-in daemon",
 };
 
 function SystemHostPickerOption({
@@ -137,7 +130,7 @@ function SystemHostPickerOption({
   active: boolean;
   selected?: boolean;
   onPress: () => void;
-  kind: "add" | "all" | "enableBuiltInDaemon";
+  kind: "add" | "all";
   testID?: string;
 }): ReactElement {
   const { theme } = useUnistyles();
@@ -170,8 +163,6 @@ export interface HostPickerProps {
   includeAllHost?: boolean;
   includeAddHost?: boolean;
   onAddHost?: () => void;
-  includeEnableBuiltInDaemon?: boolean;
-  onEnableBuiltInDaemon?: () => void;
   showActiveConnection?: boolean;
   onOpenHostSettings?: (serverId: string) => void;
   searchable?: boolean;
@@ -193,8 +184,6 @@ export function HostPicker({
   includeAllHost,
   includeAddHost,
   onAddHost,
-  includeEnableBuiltInDaemon,
-  onEnableBuiltInDaemon,
   showActiveConnection,
   onOpenHostSettings,
   searchable,
@@ -215,13 +204,8 @@ export function HostPicker({
     const hostOptions = orderedHosts.map((host) => ({ id: host.serverId, label: host.label }));
     if (includeAllHost) hostOptions.unshift({ id: ALL_HOSTS_OPTION_ID, label: "All hosts" });
     if (includeAddHost) hostOptions.push({ id: ADD_HOST_OPTION_ID, label: "Add host" });
-    if (includeEnableBuiltInDaemon)
-      hostOptions.push({
-        id: ENABLE_BUILT_IN_DAEMON_OPTION_ID,
-        label: "Enable built-in daemon",
-      });
     return hostOptions;
-  }, [orderedHosts, includeAllHost, includeAddHost, includeEnableBuiltInDaemon]);
+  }, [orderedHosts, includeAllHost, includeAddHost]);
 
   const isSearchable = searchable === true && orderedHosts.length > SEARCHABLE_THRESHOLD;
 
@@ -229,14 +213,12 @@ export function HostPicker({
     (id: string) => {
       if (id === ADD_HOST_OPTION_ID) {
         onAddHost?.();
-      } else if (id === ENABLE_BUILT_IN_DAEMON_OPTION_ID) {
-        onEnableBuiltInDaemon?.();
       } else {
         onSelect(id);
       }
       onOpenChange(false);
     },
-    [onAddHost, onEnableBuiltInDaemon, onOpenChange, onSelect],
+    [onAddHost, onOpenChange, onSelect],
   );
 
   const handleOpenHostSettings = useCallback(
@@ -267,11 +249,6 @@ export function HostPicker({
             selected={selected}
             onPress={onPress}
           />
-        );
-      }
-      if (option.id === ENABLE_BUILT_IN_DAEMON_OPTION_ID) {
-        return (
-          <SystemHostPickerOption kind="enableBuiltInDaemon" active={active} onPress={onPress} />
         );
       }
       return (

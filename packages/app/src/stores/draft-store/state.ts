@@ -44,7 +44,7 @@ export function isAttachmentMetadata(value: unknown): value is AttachmentMetadat
   return (
     typeof record.id === "string" &&
     typeof record.mimeType === "string" &&
-    typeof record.storageType === "string" &&
+    record.storageType === "web-indexeddb" &&
     typeof record.storageKey === "string" &&
     typeof record.createdAt === "number"
   );

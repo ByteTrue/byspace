@@ -44,10 +44,7 @@ import { SessionProvider } from "@/contexts/session-context";
 import { SidebarCalloutProvider } from "@/contexts/sidebar-callout-context";
 import { ToastProvider } from "@/contexts/toast-context";
 import { VoiceProvider } from "@/contexts/voice-context";
-import {
-  shouldRunStartupGiveUpTimer,
-  type StartupBlocker,
-} from "@/navigation/host-runtime-bootstrap";
+import { shouldRunStartupGiveUpTimer } from "@/navigation/host-runtime-bootstrap";
 import { registerWorkspaceRouteNavigationRef } from "@/navigation/workspace-route-navigation";
 import { ThemedStack } from "@/navigation/themed-stack";
 import { useActiveWorktreeNewAction } from "@/hooks/use-active-worktree-new-action";
@@ -92,19 +89,13 @@ import {
 polyfillCrypto();
 
 export interface HostRuntimeBootstrapState {
-  splashError: string | null;
-  retry: () => void;
   hasGivenUpWaitingForHost: boolean;
   storeReady: boolean;
-  startupBlocker: StartupBlocker;
 }
 
 const HostRuntimeBootstrapContext = createContext<HostRuntimeBootstrapState>({
-  splashError: null,
-  retry: () => {},
   hasGivenUpWaitingForHost: false,
   storeReady: false,
-  startupBlocker: { kind: "none" },
 });
 
 function PushNotificationRouter() {
@@ -184,7 +175,6 @@ export function useEarliestOnlineHostServerId(): string | null {
 }
 
 const STARTUP_GIVE_UP_TIMEOUT_MS = 5_000;
-const NO_STARTUP_BLOCKER: StartupBlocker = { kind: "none" };
 
 function HostRuntimeBootstrapProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
@@ -194,7 +184,6 @@ function HostRuntimeBootstrapProvider({ children }: { children: ReactNode }) {
   const anyOnlineHostServerId = useEarliestOnlineHostServerId();
   const [hasGivenUpWaitingForHost, setHasGivenUpWaitingForHost] = useState(false);
   const shouldRunGiveUpTimer = shouldRunStartupGiveUpTimer({
-    startupBlocker: NO_STARTUP_BLOCKER,
     anyOnlineHostServerId,
     hasGivenUpWaitingForHost,
   });
@@ -205,18 +194,12 @@ function HostRuntimeBootstrapProvider({ children }: { children: ReactNode }) {
     return () => clearTimeout(handle);
   }, [shouldRunGiveUpTimer]);
 
-  const retry = useCallback(() => {
-    void getHostRuntimeStore().ensureConnectedAll();
-  }, []);
   const state = useMemo<HostRuntimeBootstrapState>(
     () => ({
-      splashError: null,
-      retry,
       hasGivenUpWaitingForHost,
       storeReady: true,
-      startupBlocker: NO_STARTUP_BLOCKER,
     }),
-    [hasGivenUpWaitingForHost, retry],
+    [hasGivenUpWaitingForHost],
   );
 
   return (

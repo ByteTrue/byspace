@@ -902,8 +902,8 @@ describe("stream reducer canonical tool calls", () => {
       {
         id: "att-optimistic",
         mimeType: "image/jpeg",
-        storageType: "native-file" as const,
-        storageKey: "/tmp/optimistic.jpg",
+        storageType: "web-indexeddb" as const,
+        storageKey: "att-optimistic",
         createdAt: Date.now(),
       },
     ];

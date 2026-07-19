@@ -30,7 +30,6 @@ export default function Index() {
 
   const startupRoute = resolveStartupRoute({
     route: { kind: "index", pathname },
-    startupBlocker: bootstrapState.startupBlocker,
     hostRegistryStatus,
     hosts,
     anyOnlineHostServerId,

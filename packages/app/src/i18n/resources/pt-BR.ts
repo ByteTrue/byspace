@@ -112,9 +112,6 @@ export const ptBR: TranslationResources = {
       removeFile: "Remover anexo de arquivo",
       openGithub: "Abrir {{kind}} {{number}}",
       removeGithub: "Remover {{kind}} {{number}}",
-      element: "Elemento",
-      openBrowserElement: "Abrir anexo de elemento do navegador",
-      removeBrowserElement: "Remover anexo de elemento do navegador",
       openReview: "Abrir anexo de revisão",
       removeReview: "Remover anexo de revisão",
     },
@@ -1357,7 +1354,6 @@ export const ptBR: TranslationResources = {
     },
     backToWorkspace: "Voltar",
     addHost: "Adicionar host",
-    enableBuiltInDaemon: "Ativar o daemon integrado",
     projects: "Projetos",
     projectList: {
       hostLoadFailed: "Não foi possível carregar projetos do host {{hostName}}: {{message}}",

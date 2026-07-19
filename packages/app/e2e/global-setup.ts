@@ -12,7 +12,20 @@ import { createNodeWebSocketFactory, type NodeWebSocketFactory } from "./helpers
 import { forkBySpaceHomeMetadata, resolveBySpaceHomePath } from "./helpers/byspace-home-fork";
 import { withDisabledE2ESpeechEnv } from "./helpers/speech-env";
 
-const wranglerCliPath = path.resolve(__dirname, "../node_modules/wrangler/bin/wrangler.js");
+function resolveWranglerCliPath(): string {
+  const cliPath = [
+    path.resolve(__dirname, "../node_modules/wrangler/bin/wrangler.js"),
+    path.resolve(__dirname, "../../../node_modules/wrangler/bin/wrangler.js"),
+  ].find(existsSync);
+
+  if (!cliPath) {
+    throw new Error("Wrangler CLI is not installed in the app or repository workspace.");
+  }
+
+  return cliPath;
+}
+
+const wranglerCliPath = resolveWranglerCliPath();
 
 interface WaitForServerOptions {
   host?: string;
