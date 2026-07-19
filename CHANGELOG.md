@@ -1,6 +1,6 @@
 # Changelog
 
-## v0.2.0-beta.1 - 2026-07-19
+## 0.2.0-beta.1 - 2026-07-19
 
 First clean-history BySpace beta, rebuilt from the Paseo `v0.2.0-beta.1` source snapshot (`0bec06c2db7d3ee071416cde80229eabd682b03e`).
 

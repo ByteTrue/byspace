@@ -77,7 +77,7 @@ For voice philosophy, architecture, and complete local/OpenAI setup examples, se
 
 ## Bundled web UI
 
-The daemon can serve the browser Web client from the same HTTP server. This is enabled in the official Docker image and disabled by default for normal CLI-launched daemons.
+The daemon can serve the browser Web client from the same HTTP server. Local Docker examples enable it; normal CLI-launched daemons keep it disabled by default.
 
 Enable it from the CLI:
 

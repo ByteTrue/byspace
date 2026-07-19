@@ -98,3 +98,17 @@ test("converts contributor profile links to mentions in synced release notes", (
     assert.doesNotMatch(syncedNotes, /\[@therainisme\]\(https:\/\/github\.com\/therainisme\)/);
   }, changelogText);
 });
+
+test("fails when the requested tag has no changelog section", () => {
+  withTempChangelog(() => {
+    assert.throws(
+      () =>
+        syncReleaseNotes(["--repo", "ByteTrue/byspace", "--tag", "v0.2.0-beta.1"], {
+          execFileSync: () => {
+            throw new Error("GitHub must not be called without release notes");
+          },
+        }),
+      /No matching changelog section found for v0\.2\.0-beta\.1/,
+    );
+  });
+});

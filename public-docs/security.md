@@ -112,7 +112,7 @@ We still recommend the relay for mobile access, it combines authentication with 
 
 ## Docker self-hosting
 
-The official Docker image runs the daemon and bundled web UI in one container. It binds to `0.0.0.0:6777` inside the container so Docker port publishing and reverse proxies work normally.
+The source-built Docker image runs the daemon and bundled web UI in one container. It binds to `0.0.0.0:6777` inside the container so Docker port publishing and reverse proxies work normally.
 
 For Docker deployments:
 
@@ -124,7 +124,7 @@ For Docker deployments:
 
 The image runs the daemon and launched agents as the non-root `byspace` user, but container user isolation is not a substitute for careful mounts. Agents can still access whatever code and credentials you mount into the container.
 
-See [Docker](/docs/docker) for Compose and reverse proxy examples.
+See the [source-build Docker guide](https://github.com/ByteTrue/byspace/blob/main/docs/docker.md) for Compose and reverse proxy examples.
 
 ## Agent authentication
 
