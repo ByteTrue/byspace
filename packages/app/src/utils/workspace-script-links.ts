@@ -62,10 +62,6 @@ export function resolveWorkspaceScriptLink(input: {
     };
   }
 
-  if (activeConnection.type === "directSocket" || activeConnection.type === "directPipe") {
-    return { openUrl: localProxyUrl, labelUrl: localProxyUrl };
-  }
-
   try {
     const { host } = parseHostPort(activeConnection.endpoint);
     if (isLoopbackHost(host)) {

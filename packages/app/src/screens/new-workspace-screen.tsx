@@ -4,7 +4,6 @@ import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import { Pressable, Text, View } from "react-native";
 import type { PressableStateCallbackType } from "react-native";
-import ReanimatedAnimated from "react-native-reanimated";
 import { StyleSheet, useUnistyles, withUnistyles } from "react-native-unistyles";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { createNameId } from "mnemonic-id";
@@ -62,7 +61,6 @@ import {
   useWorkspaceDraftSubmissionStore,
   type PendingWorkspaceDraftSetup,
 } from "@/stores/workspace-draft-submission-store";
-import { useKeyboardShiftStyle } from "@/hooks/use-keyboard-shift-style";
 import { useFormPreferences } from "@/hooks/use-form-preferences";
 import { useShortcutKeys } from "@/hooks/use-shortcut-keys";
 import { getForgePresentation } from "@/git/forge";
@@ -2152,15 +2150,6 @@ export function NewWorkspaceScreen({
     [isCompact, insets.bottom],
   );
 
-  const { style: composerKeyboardStyle } = useKeyboardShiftStyle({
-    mode: "translate",
-  });
-
-  const centeredStyle = useMemo(
-    () => [styles.centered, composerKeyboardStyle],
-    [composerKeyboardStyle],
-  );
-
   const agentControlsWithDisabled = useMemo(
     () =>
       composerState
@@ -2276,13 +2265,12 @@ export function NewWorkspaceScreen({
     <FileDropZone style={styles.container}>
       <ScreenHeader left={screenHeaderLeft} borderless />
       <View style={contentStyle}>
-        <ReanimatedAnimated.View style={centeredStyle}>
+        <View style={styles.centered}>
           <View style={styles.composerTitleContainer}>
             <Text style={styles.composerTitle}>{t("newWorkspace.title")}</Text>
           </View>
           {formStack}
           <Composer
-            externalKeyboardShift
             agentId={draftKey}
             serverId={selectedServerId}
             isPaneFocused={true}
@@ -2307,7 +2295,7 @@ export function NewWorkspaceScreen({
             footer={composerFooter}
           />
           {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
-        </ReanimatedAnimated.View>
+        </View>
       </View>
     </FileDropZone>
   );

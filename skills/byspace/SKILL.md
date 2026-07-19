@@ -124,17 +124,9 @@ byspace schedule create --cron "*/15 * * * *" "ping main build"
 
 Discover with `byspace --help` and `byspace <cmd> --help`.
 
-**If `byspace` isn't on PATH but the desktop app is installed**, the bundled CLI is at:
-
-- macOS: `/Applications/BySpace.app/Contents/Resources/bin/byspace`
-- Linux: `<install-dir>/resources/bin/byspace`
-- Windows: `C:\Program Files\BySpace\resources\bin\byspace.cmd`
-
-The desktop app's first-run hook (`installCli`) symlinks this to `~/.local/bin/byspace` (macOS/Linux) or drops a `.cmd` trampoline (Windows) and adds `~/.local/bin` to PATH via shell rc files. If that didn't take, offer to symlink it — don't do it silently.
-
 ## Ops and debugging
 
-Daemon-client architecture: the daemon owns agent lifecycle, state, and the WebSocket API. Tools, CLI, mobile, and desktop apps are all clients.
+Daemon-client architecture: the daemon owns agent lifecycle, state, and the WebSocket API. The hosted Web app and CLI are clients.
 
 |                | Default                                                           |
 | -------------- | ----------------------------------------------------------------- |

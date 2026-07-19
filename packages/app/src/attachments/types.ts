@@ -84,8 +84,7 @@ export type ComposerAttachment = UserComposerAttachment | WorkspaceComposerAttac
 export type AttachmentDataSource =
   | { kind: "bytes"; bytes: Uint8Array }
   | { kind: "blob"; blob: Blob }
-  | { kind: "data_url"; dataUrl: string }
-  | { kind: "file_uri"; uri: string };
+  | { kind: "data_url"; dataUrl: string };
 
 export interface SaveAttachmentInput {
   id?: string;

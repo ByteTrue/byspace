@@ -18,7 +18,6 @@ import {
   rmSync,
   writeFileSync,
 } from "node:fs";
-import { spawnSync } from "node:child_process";
 import { join } from "node:path";
 import { tmpdir, userInfo } from "node:os";
 
@@ -608,58 +607,6 @@ describe.skipIf(isPlatform("win32"))("terminal POSIX-only", () => {
 
       await waitForTitle(session, (title) => title === "sleep 1");
       await waitForTitle(session, (title) => title === "~/dev/faro", 4000);
-    });
-
-    it.skipIf(!hasZsh)("loads the user's zsh prompt when the integration dir is packaged", () => {
-      const homeDir = mkdtempSync(join(tmpdir(), "terminal-zsh-packaged-home-"));
-      temporaryDirs.push(homeDir);
-      writeFileSync(join(homeDir, ".zshrc"), "PS1='BYSPACE_CUSTOM_PROMPT> '\n");
-
-      const fakeAppRoot = join(homeDir, "BySpace.app", "Contents", "Resources");
-      const inaccessiblePackagedIntegrationDir = join(
-        fakeAppRoot,
-        "app.asar",
-        "node_modules",
-        "@bytetrue",
-        "byspace-server",
-        "dist",
-        "server",
-        "terminal",
-        "shell-integration",
-        "zsh",
-      );
-      const unpackedIntegrationDir = join(
-        fakeAppRoot,
-        "app.asar.unpacked",
-        "node_modules",
-        "@bytetrue",
-        "byspace-server",
-        "dist",
-        "server",
-        "terminal",
-        "shell-integration",
-        "zsh",
-      );
-      mkdirSync(unpackedIntegrationDir, { recursive: true });
-      cpSync(resolveZshShellIntegrationDir(), unpackedIntegrationDir, { recursive: true });
-      writeFileSync(join(fakeAppRoot, "app.asar"), "asar archive placeholder");
-
-      const env = buildTerminalEnvironment({
-        shell: "/bin/zsh",
-        env: {
-          HOME: homeDir,
-        },
-        zshShellIntegrationDir: inaccessiblePackagedIntegrationDir,
-      });
-
-      const result = spawnSync("/bin/zsh", ["-i", "-c", "print -r -- ${PROMPT}"], {
-        cwd: homeDir,
-        env,
-        encoding: "utf8",
-      });
-
-      expect(result.status).toBe(0);
-      expect(result.stdout.split(/\r?\n/)).toContain("BYSPACE_CUSTOM_PROMPT> ");
     });
 
     it.skipIf(!hasZsh)("emits zsh shell integration command completion", async () => {

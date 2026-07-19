@@ -5,9 +5,7 @@ import { Plus, Server, Settings } from "lucide-react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { HostStatusDot } from "@/components/host-status-dot";
 import { Combobox, ComboboxItem, type ComboboxProps } from "@/components/ui/combobox";
-import { useLocalDaemonServerId } from "@/hooks/use-is-local-daemon";
-import { useHostRuntimeSnapshot, type ActiveConnection } from "@/runtime/host-runtime";
-import { orderHostsLocalFirst } from "@/types/host-connection";
+import { useHostRuntimeSnapshot } from "@/runtime/host-runtime";
 import {
   ADD_HOST_OPTION_ID,
   ALL_HOSTS_OPTION_ID,
@@ -37,15 +35,6 @@ function formatConnectionEndpoint(endpoint: string): string {
   return endpoint.replace(/:(?:443|80)$/, "");
 }
 
-// Socket/pipe transports have no host:port — their endpoint is a filesystem
-// path, so they read as "Local". TCP and relay show the address being used.
-function formatActiveConnectionLabel(connection: ActiveConnection): string {
-  if (connection.type === "directSocket" || connection.type === "directPipe") {
-    return "Local";
-  }
-  return formatConnectionEndpoint(connection.endpoint);
-}
-
 export interface HostPickerOptionProps {
   serverId: string;
   label: string;
@@ -71,7 +60,7 @@ export function HostPickerOption({
   const activeConnection = useHostRuntimeSnapshot(serverId)?.activeConnection ?? null;
   const connectionLabel =
     showActiveConnection && activeConnection
-      ? formatActiveConnectionLabel(activeConnection)
+      ? formatConnectionEndpoint(activeConnection.endpoint)
       : undefined;
   const leadingSlot = useMemo(() => <HostStatusDotSlot serverId={serverId} />, [serverId]);
   const handleSettingsPress = useCallback(
@@ -194,20 +183,14 @@ export function HostPicker({
   hostOptionTestID,
   children,
 }: HostPickerProps): ReactElement {
-  const localServerId = useLocalDaemonServerId();
-  const orderedHosts = useMemo(
-    () => orderHostsLocalFirst(hosts, localServerId),
-    [hosts, localServerId],
-  );
-
   const options = useMemo(() => {
-    const hostOptions = orderedHosts.map((host) => ({ id: host.serverId, label: host.label }));
+    const hostOptions = hosts.map((host) => ({ id: host.serverId, label: host.label }));
     if (includeAllHost) hostOptions.unshift({ id: ALL_HOSTS_OPTION_ID, label: "All hosts" });
     if (includeAddHost) hostOptions.push({ id: ADD_HOST_OPTION_ID, label: "Add host" });
     return hostOptions;
-  }, [orderedHosts, includeAllHost, includeAddHost]);
+  }, [hosts, includeAllHost, includeAddHost]);
 
-  const isSearchable = searchable === true && orderedHosts.length > SEARCHABLE_THRESHOLD;
+  const isSearchable = searchable === true && hosts.length > SEARCHABLE_THRESHOLD;
 
   const handleSelect = useCallback(
     (id: string) => {

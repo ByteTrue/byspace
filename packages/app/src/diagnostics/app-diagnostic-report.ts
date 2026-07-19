@@ -70,10 +70,6 @@ export function describeConnectionKind(type: HostConnection["type"] | string): s
   switch (type) {
     case "directTcp":
       return "direct TCP";
-    case "directSocket":
-      return "local socket";
-    case "directPipe":
-      return "local pipe";
     case "relay":
       return "relay";
     default:
@@ -109,8 +105,6 @@ function collectSensitiveHostValues(hosts: HostProfile[]): string[] {
       } else if (connection.type === "relay") {
         values.add(connection.relayEndpoint);
         values.add(connection.daemonPublicKeyB64);
-      } else if (connection.type === "directSocket" || connection.type === "directPipe") {
-        values.add(connection.path);
       }
     }
   }

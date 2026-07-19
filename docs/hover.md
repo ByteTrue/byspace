@@ -4,7 +4,7 @@ Read this before writing any hover code. Every hover regression we ship is one o
 
 ## The pattern
 
-The canonical implementation lives in `packages/app/src/components/sidebar-workspace-list.tsx`, in the workspace row (around line 1369). When in doubt, open that file and copy the shape.
+The canonical implementation lives in `packages/app/src/components/sidebar-workspace-list.tsx`, in the workspace row. When in doubt, open that file and copy the shape.
 
 ```tsx
 //
@@ -96,17 +96,15 @@ Any gap between A and B (margins between siblings inside the same parent) is par
 
 If A and B genuinely can't share a parent — B portals into a different layer, floats above other content — see [Section: real gaps](#real-gaps-with-floating-panels) below.
 
-## Native fallback
+## Touch and compact browser fallback
 
-Hover doesn't exist on touch devices. Anything you hide behind hover must have a non-hover path on native and compact layouts:
+Touch input has no hover. Anything hidden behind hover must remain available in the compact browser layout:
 
 ```tsx
-const showControls = isHovered || isNative || isCompact;
+const showControls = isHovered || isCompact;
 ```
 
-`isNative` and `isCompact` come from `@/constants/platform` and `@/constants/layout`. Don't use `Platform.OS === "ios"` as a proxy.
-
-`onPointerEnter` / `onPointerLeave` are DOM events. They do not fire on native. You do not need to gate them — on native, hover is unreachable anyway and visibility is driven by `isNative` / `isCompact` in your show-the-controls expression above. This is why the workspace row's pointer events are not wrapped in `if (isWeb)`.
+Use `useIsCompactFormFactor()` from `@/constants/layout` to derive `isCompact`. Keep pointer handlers ungated: touch input simply never enters the hovered state, while the compact layout keeps the controls visible.
 
 ## What about `Pressable.onHoverIn` / `onHoverOut`?
 
@@ -133,6 +131,6 @@ Before opening a PR that touches hover:
 - [ ] The hover trigger's bounding box contains every element the user might mouse into while interacting with the feature.
 - [ ] Hovered state does **not** change the trigger's outer geometry (`width`, `height`, `padding`, `borderWidth`, mount/unmount of siblings that shift it). Internal swaps fit inside a fixed `minHeight` / `minWidth`.
 - [ ] Revealed content inside the trigger uses `opacity` + `pointerEvents`, not conditional rendering, if mounting it would reflow the trigger.
-- [ ] Visibility on native and compact layouts works without hover (`isHovered || isNative || isCompact`).
+- [ ] Visibility in compact browser layouts works without hover (`isHovered || isCompact`).
 - [ ] If the revealed content sits in a separate layer (portal, floating panel), `useHoverSafeZone` is wired up.
 - [ ] You opened the dev server, hovered the trigger, and slowly moved the mouse along **every** revealed element — including any visible gaps — without losing hover state.

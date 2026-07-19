@@ -1077,10 +1077,6 @@ export const zhCN: TranslationResources = {
         title: "直接连接",
         description: "本地网络或 VPN。",
       },
-      scanQr: {
-        title: "扫描二维码",
-        description: "加密 relay 连接。",
-      },
       pasteLink: {
         title: "粘贴配对链接",
         description: "加密 relay 连接。",
@@ -1146,18 +1142,6 @@ export const zhCN: TranslationResources = {
         pair: "配对",
         pairing: "正在配对...",
       },
-    },
-    scan: {
-      title: "扫描二维码",
-      webUnavailableTitle: "Web 上不可用",
-      webUnavailableBody: "Web build 不支持二维码扫描。请改用“粘贴链接”。",
-      backToSettings: "返回设置",
-      cameraPermissionTitle: "相机权限",
-      cameraPermissionBody: "允许相机访问，以扫描 daemon 提供的配对二维码。",
-      grantPermission: "授予权限",
-      pairing: "正在配对...",
-      unableToPair: "无法配对 host",
-      errorTitle: "错误",
     },
     device: {
       loadingOffer: "正在加载配对 offer...",
@@ -1700,13 +1684,8 @@ export const zhCN: TranslationResources = {
         dangerZone: "危险区域",
         remove: {
           title: "移除 Host",
-          localTitle: "移除 localhost 连接",
           hint: "从此设备移除这个 Host 及其已保存连接",
-          localHint: "从此设备移除 localhost，并停止内置 Daemon",
-          localConfirmTitle: "移除 localhost 连接并停止 Daemon？",
           confirmMessage: "移除 {{name}}？这会删除其已保存连接。",
-          localConfirmMessage:
-            "这会移除 localhost 连接、关闭内置 Daemon 管理，并停止托管 Daemon。远程 Host 会保持连接。",
           errorTitle: "错误",
           errorMessage: "无法移除 Host",
           localErrorMessage: "无法移除 localhost 连接",

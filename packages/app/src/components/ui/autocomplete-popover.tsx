@@ -1,14 +1,12 @@
 import { useEffect, useMemo, useState, type ReactElement, type RefObject } from "react";
 import { Keyboard, View, useWindowDimensions } from "react-native";
 import { Portal } from "@gorhom/portal";
-import Animated, { useAnimatedStyle, useSharedValue } from "react-native-reanimated";
 import { StyleSheet } from "react-native-unistyles";
 import { Autocomplete, type AutocompleteOption } from "@/components/ui/autocomplete";
 import {
   measureFloatingPanelPortalHost,
   useFloatingPanelPortalHostName,
 } from "@/components/ui/floating-panel-portal";
-import { useKeyboardShift } from "@/hooks/use-keyboard-shift-style";
 import { SPACING } from "@/styles/theme";
 import { inlineUnistylesStyle } from "@/styles/unistyles-inline-style";
 
@@ -64,8 +62,6 @@ export function AutocompletePopover({
   const [relativeAnchorRect, setRelativeAnchorRect] = useState<RelativeAnchorRect | null>(null);
   const windowDimensions = useWindowDimensions();
   const portalHostName = useFloatingPanelPortalHostName();
-  const { shift } = useKeyboardShift();
-  const openShift = useSharedValue(0);
 
   useEffect(() => {
     if (!visible || (options.length > 0 && selectedIndex < 0)) {
@@ -88,7 +84,6 @@ export function AutocompletePopover({
           width: anchorRect.width,
           hostHeight: hostRect.height,
         });
-        openShift.value = shift.value;
         return undefined;
       });
     };
@@ -110,8 +105,6 @@ export function AutocompletePopover({
     selectedIndex,
     anchorRef,
     portalHostName,
-    openShift,
-    shift,
     windowDimensions.width,
     windowDimensions.height,
   ]);
@@ -126,22 +119,13 @@ export function AutocompletePopover({
     });
   }, [relativeAnchorRect]);
 
-  const animatedTransformStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: openShift.value - shift.value }],
-  }));
-
-  const composedStyle = useMemo(
-    () => [baseStyle, animatedTransformStyle],
-    [baseStyle, animatedTransformStyle],
-  );
-
   if (!visible || !relativeAnchorRect || !baseStyle) return null;
   if (options.length > 0 && selectedIndex < 0) return null;
 
   return (
     <Portal hostName={portalHostName}>
       <View style={styles.overlay} pointerEvents="box-none">
-        <Animated.View testID="composer-autocomplete-popover" style={composedStyle}>
+        <View testID="composer-autocomplete-popover" style={baseStyle}>
           <Autocomplete
             options={options}
             selectedIndex={selectedIndex}
@@ -151,7 +135,7 @@ export function AutocompletePopover({
             loadingText={loadingText}
             emptyText={emptyText}
           />
-        </Animated.View>
+        </View>
       </View>
     </Portal>
   );

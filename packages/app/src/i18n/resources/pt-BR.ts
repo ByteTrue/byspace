@@ -1111,10 +1111,6 @@ export const ptBR: TranslationResources = {
         title: "Conexão direta",
         description: "Rede local ou VPN.",
       },
-      scanQr: {
-        title: "Escanear QR code",
-        description: "Conexão relay criptografada.",
-      },
       pasteLink: {
         title: "Colar link de pareamento",
         description: "Conexão relay criptografada.",
@@ -1182,20 +1178,6 @@ export const ptBR: TranslationResources = {
         pair: "Parear",
         pairing: "Pareando...",
       },
-    },
-    scan: {
-      title: "Escanear QR",
-      webUnavailableTitle: "Indisponível na web",
-      webUnavailableBody:
-        'Escanear QR não é compatível com a build web. Use "Colar link" em vez disso.',
-      backToSettings: "Voltar para Configurações",
-      cameraPermissionTitle: "Permissão da câmera",
-      cameraPermissionBody:
-        "Permita acesso à câmera para escanear o QR code de pareamento do daemon.",
-      grantPermission: "Conceder permissão",
-      pairing: "Pareando...",
-      unableToPair: "Não foi possível parear host",
-      errorTitle: "Erro",
     },
     device: {
       loadingOffer: "Carregando oferta de pareamento...",
@@ -1750,13 +1732,8 @@ export const ptBR: TranslationResources = {
         dangerZone: "Zona de perigo",
         remove: {
           title: "Remover host",
-          localTitle: "Remover conexão localhost",
           hint: "Remove este host e suas conexões salvas deste dispositivo",
-          localHint: "Remove localhost deste dispositivo e interrompe o daemon integrado",
-          localConfirmTitle: "Remover conexão localhost e parar daemon?",
           confirmMessage: "Remover {{name}}? Isso excluirá suas conexões salvas.",
-          localConfirmMessage:
-            "Isso vai remover a conexão localhost, desativar o gerenciamento do daemon integrado e parar o daemon gerenciado. Hosts remotos permanecem conectados.",
           errorTitle: "Erro",
           errorMessage: "Não foi possível remover host",
           localErrorMessage: "Não foi possível remover a conexão localhost",

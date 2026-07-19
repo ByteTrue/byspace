@@ -3,7 +3,7 @@
 // static module-graph tracing (@vercel/nft) from the three entry points.
 // Used by nix/package.nix's installPhase to materialize $out/lib/byspace
 // with only the bytes the daemon actually loads — no Expo, RN, Metro,
-// Electron, ML stacks, or other non-daemon workspace bloat.
+// with only the bytes the daemon actually loads — no Expo, RN, Metro,
 //
 // Output: newline-separated repo-relative file paths on stdout. The Nix
 // installPhase copies each path to $out/lib/byspace/<path>, preserving the

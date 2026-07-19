@@ -1087,10 +1087,6 @@ export const ar: TranslationResources = {
         title: "اتصال مباشر",
         description: "الشبكة المحلية أو VPN.",
       },
-      scanQr: {
-        title: "مسح رمز QR",
-        description: "اتصال التتابع المشفر.",
-      },
       pasteLink: {
         title: "الصق رابط الاقتران",
         description: "اتصال التتابع المشفر.",
@@ -1158,18 +1154,6 @@ export const ar: TranslationResources = {
         pair: "زوج",
         pairing: "الاقتران...",
       },
-    },
-    scan: {
-      title: "مسح QR",
-      webUnavailableTitle: "غير متوفر على شبكة الإنترنت",
-      webUnavailableBody: 'فحص QR غير مدعوم في بناء الويب. استخدم "لصق الرابط" بدلاً من ذلك.',
-      backToSettings: "العودة إلى الإعدادات",
-      cameraPermissionTitle: "إذن الكاميرا",
-      cameraPermissionBody: "اسمح بالوصول إلى الكاميرا لمسح رمز الاقتران QR من البرنامج الخفي لديك.",
-      grantPermission: "منح الإذن",
-      pairing: "الاقتران...",
-      unableToPair: "غير قادر على إقران المضيف",
-      errorTitle: "خطأ",
     },
     device: {
       loadingOffer: "جارٍ تحميل عرض الإقران...",
@@ -1718,13 +1702,8 @@ export const ar: TranslationResources = {
         dangerZone: "منطقة الخطر",
         remove: {
           title: "إزالة المضيف",
-          localTitle: "Remove localhost connection",
           hint: "إزالة هذا المضيف واتصالاته المحفوظة من هذا الجهاز",
-          localHint: "Removes localhost from this device and stops the built-in daemon",
-          localConfirmTitle: "Remove localhost connection and stop daemon?",
           confirmMessage: "إزالة{{name}}؟ سيؤدي هذا إلى حذف اتصالاته المحفوظة.",
-          localConfirmMessage:
-            "This will remove the localhost connection, turn off built-in daemon management, and stop the managed daemon. Remote hosts remain connected.",
           errorTitle: "خطأ",
           errorMessage: "غير قادر على إزالة المضيف",
           localErrorMessage: "Unable to remove localhost connection",

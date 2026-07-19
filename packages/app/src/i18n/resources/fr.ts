@@ -1118,10 +1118,6 @@ export const fr: TranslationResources = {
         title: "Connexion directe",
         description: "Réseau local ou VPN.",
       },
-      scanQr: {
-        title: "Scanner le codeQR",
-        description: "Connexion relais cryptée.",
-      },
       pasteLink: {
         title: "Coller le lien d'association",
         description: "Connexion relais cryptée.",
@@ -1189,20 +1185,6 @@ export const fr: TranslationResources = {
         pair: "Paire",
         pairing: "L'appariement...",
       },
-    },
-    scan: {
-      title: "ScannerQR",
-      webUnavailableTitle: "Non disponible sur le Web",
-      webUnavailableBody:
-        "L'analyseQRn'est pas prise en charge dans la version Web. Utilisez plutôt \"Coller le lien\".",
-      backToSettings: "Retour aux paramètres",
-      cameraPermissionTitle: "Autorisation de la caméra",
-      cameraPermissionBody:
-        "Autorisez l'accès à la caméra pour scanner le code d'appairageQRà partir de votre démon.",
-      grantPermission: "Accorder l'autorisation",
-      pairing: "L'appariement...",
-      unableToPair: "Impossible de coupler l'hôte",
-      errorTitle: "Erreur",
     },
     device: {
       loadingOffer: "Chargement de l'offre d'association...",
@@ -1757,13 +1739,8 @@ export const fr: TranslationResources = {
         dangerZone: "Zone dangereuse",
         remove: {
           title: "Supprimer l'hôte",
-          localTitle: "Remove localhost connection",
           hint: "Supprime cet hôte et ses connexions enregistrées de cet appareil",
-          localHint: "Removes localhost from this device and stops the built-in daemon",
-          localConfirmTitle: "Remove localhost connection and stop daemon?",
           confirmMessage: "Supprimer{{name}}? Cela supprimera ses connexions enregistrées.",
-          localConfirmMessage:
-            "This will remove the localhost connection, turn off built-in daemon management, and stop the managed daemon. Remote hosts remain connected.",
           errorTitle: "Erreur",
           errorMessage: "Impossible de supprimer l'hôte",
           localErrorMessage: "Unable to remove localhost connection",

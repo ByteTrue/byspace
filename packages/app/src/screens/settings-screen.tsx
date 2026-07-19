@@ -48,10 +48,9 @@ import {
   type AppSettings,
   type SendBehavior,
 } from "@/hooks/use-settings";
-import { useLocalDaemonServerId } from "@/hooks/use-is-local-daemon";
 import { useHostRuntimeIsConnected, useHosts } from "@/runtime/host-runtime";
 import { useSessionStore } from "@/stores/session-store";
-import { orderHostsLocalFirst, type HostProfile } from "@/types/host-connection";
+import type { HostProfile } from "@/types/host-connection";
 import { BackHeader } from "@/components/headers/back-header";
 import { ScreenHeader } from "@/components/headers/screen-header";
 import { AddHostMethodModal } from "@/components/add-host-method-modal";
@@ -523,13 +522,6 @@ function HostVersionRow({
 // Sidebar
 // ---------------------------------------------------------------------------
 
-/**
- * Local daemon first, then remaining hosts in their existing order.
- */
-function useSortedHosts(hosts: HostProfile[], localServerId: string | null): HostProfile[] {
-  return useMemo(() => orderHostsLocalFirst(hosts, localServerId), [hosts, localServerId]);
-}
-
 interface SidebarSectionButtonProps {
   itemId: SettingsSectionSlug;
   label: string;
@@ -649,24 +641,16 @@ function SidebarProjectsButton({ isSelected, onSelect }: SidebarProjectsButtonPr
 
 interface HostPickerProps {
   activeServerId: string | null;
-  sortedHosts: HostProfile[];
+  hosts: HostProfile[];
   onSelectHost: (serverId: string) => void;
   onAddHost: () => void;
 }
 
-/**
- * Scopes the four host sections to a host. Reuses the canonical sidebar host
- * switcher pattern (left-sidebar.tsx): a quiet row-styled trigger opening a
- * <Combobox>. The local host is listed first, each row shows the connection it
- * is using right now; an "Add host" row is always reachable from the list —
- * even with a single host.
- */
-function HostPicker({ activeServerId, sortedHosts, onSelectHost, onAddHost }: HostPickerProps) {
+function HostPicker({ activeServerId, hosts, onSelectHost, onAddHost }: HostPickerProps) {
   const { t } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
   const triggerRef = useRef<View | null>(null);
-  const activeHost =
-    sortedHosts.find((host) => host.serverId === activeServerId) ?? sortedHosts[0] ?? null;
+  const activeHost = hosts.find((host) => host.serverId === activeServerId) ?? hosts[0] ?? null;
 
   const handleOpen = useCallback(() => setIsOpen(true), []);
   const hostOptionTestID = useCallback(
@@ -683,7 +667,7 @@ function HostPicker({ activeServerId, sortedHosts, onSelectHost, onAddHost }: Ho
 
   return (
     <SharedHostPicker
-      hosts={sortedHosts}
+      hosts={hosts}
       value={activeServerId ?? ""}
       onSelect={onSelectHost}
       open={isOpen}
@@ -746,8 +730,7 @@ function SettingsSidebar({
   const { theme } = useUnistyles();
   const { t } = useTranslation();
   const hosts = useHosts();
-  const sortedHosts = useSortedHosts(hosts, null);
-  const hasHosts = sortedHosts.length > 0;
+  const hasHosts = hosts.length > 0;
   const items = SIDEBAR_SECTION_ITEMS.filter((item) => !item.desktopOnly);
   const insets = useSafeAreaInsets();
   const isDesktop = layout === "desktop";
@@ -788,7 +771,7 @@ function SettingsSidebar({
           <Text style={sidebarStyles.groupLabel}>{t("settings.groups.host")}</Text>
           <HostPicker
             activeServerId={activeHostServerId}
-            sortedHosts={sortedHosts}
+            hosts={hosts}
             onSelectHost={onSelectHost}
             onAddHost={onAddHost}
           />
@@ -877,8 +860,6 @@ export default function SettingsScreen({ view, openAddHostIntent = null }: Setti
   const insets = useSafeAreaInsets();
   const insetBottomStyle = useMemo(() => ({ paddingBottom: insets.bottom }), [insets.bottom]);
   const hosts = useHosts();
-  const localServerId = useLocalDaemonServerId();
-  const sortedHosts = useSortedHosts(hosts, localServerId);
   const [selectedSettingsHostServerId, setSelectedSettingsHostServerId] = useState<string | null>(
     view.kind === "host" ? view.serverId : null,
   );
@@ -898,11 +879,11 @@ export default function SettingsScreen({ view, openAddHostIntent = null }: Setti
   }, [view]);
 
   // The host the four sections scope to: the host on the active view, otherwise
-  // the picker choice, otherwise the local daemon, otherwise the first host.
+  // the picker choice, otherwise the first host.
   const activeHostServerId = useMemo(() => {
     if (view.kind === "host") return view.serverId;
-    return knownSelectedSettingsHostServerId ?? localServerId ?? sortedHosts[0]?.serverId ?? null;
-  }, [view, knownSelectedSettingsHostServerId, localServerId, sortedHosts]);
+    return knownSelectedSettingsHostServerId ?? hosts[0]?.serverId ?? null;
+  }, [view, knownSelectedSettingsHostServerId, hosts]);
 
   const handleSendBehaviorChange = useCallback(
     (behavior: SendBehavior) => {

@@ -79,13 +79,8 @@ import {
   useHostRuntimeClient,
   useHostRuntimeIsConnected,
 } from "@/runtime/host-runtime";
-import {
-  deleteAttachments,
-  persistAttachmentFromBlob,
-  persistAttachmentFromFileUri,
-} from "@/attachments/service";
+import { deleteAttachments, persistAttachmentFromBlob } from "@/attachments/service";
 import { resolveAgentControlsMode } from "@/composer/agent-controls/mode";
-import { useKeyboardShiftStyle } from "@/hooks/use-keyboard-shift-style";
 import { useKeyboardActionHandler } from "@/hooks/use-keyboard-action-handler";
 import type { KeyboardActionDefinition } from "@/keyboard/keyboard-action-dispatcher";
 import type { MessageInputKeyboardActionKind } from "@/keyboard/actions";
@@ -792,10 +787,8 @@ interface ComposerProps {
   agentControls?: DraftAgentControlsProps;
   /** Extra styles merged onto the message input wrapper (e.g. elevated background). */
   inputWrapperStyle?: import("react-native").ViewStyle;
-  /** Rendered below the input, inside the keyboard-shifted container. */
+  /** Rendered below the input. */
   footer?: ReactNode;
-  /** When true, a parent wrapper owns the keyboard shift, so the composer skips its own. */
-  externalKeyboardShift?: boolean;
   /** Optional panel/container layout breakpoint. Defaults to the screen breakpoint. */
   isCompactLayout?: boolean;
 }
@@ -999,7 +992,6 @@ export function Composer({
   agentControls,
   inputWrapperStyle,
   footer,
-  externalKeyboardShift,
   isCompactLayout: isCompactLayoutOverride,
 }: ComposerProps) {
   const { t } = useTranslation();
@@ -1370,8 +1362,6 @@ export function Composer({
       persister: {
         persistFromBlob: ({ blob, mimeType, fileName }) =>
           persistAttachmentFromBlob({ blob, mimeType, fileName }),
-        persistFromFileUri: ({ uri, mimeType, fileName }) =>
-          persistAttachmentFromFileUri({ uri, mimeType, fileName }),
       },
     });
     if (newImages.length === 0) return;
@@ -1546,11 +1536,6 @@ export function Composer({
     priority: resolveKeyboardPriority(isMessageInputFocused),
     isActive: () => isPaneFocused,
     handle: handleKeyboardAction,
-  });
-
-  const { style: keyboardAnimatedStyle } = useKeyboardShiftStyle({
-    mode: "translate",
-    enabled: !externalKeyboardShift,
   });
 
   const isVoiceModeForAgent = resolveIsVoiceModeForAgent(voice, serverId, agentId);
@@ -1903,10 +1888,6 @@ export function Composer({
     [githubSearchItems, selectedAttachments, handleToggleGithubItem],
   );
 
-  const composerContainerStyle = useMemo(
-    () => [styles.container, keyboardAnimatedStyle],
-    [keyboardAnimatedStyle],
-  );
   const inputAreaContainerStyle = useMemo(
     () => [styles.inputAreaContainer, isComposerLocked && styles.inputAreaLocked],
     [isComposerLocked],
@@ -1969,7 +1950,7 @@ export function Composer({
 
   return (
     <ComposerKeyboardScopeProvider isActiveComposer={isPaneFocused}>
-      <Animated.View style={composerContainerStyle}>
+      <Animated.View style={styles.container}>
         <AttachmentLightbox metadata={lightboxMetadata} onClose={handleLightboxClose} />
         {/* Input area */}
         <View style={inputAreaContainerStyle}>

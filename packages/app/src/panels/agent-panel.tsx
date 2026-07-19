@@ -4,7 +4,6 @@ import { SquarePen } from "lucide-react-native";
 import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ActivityIndicator, Text, View } from "react-native";
-import ReanimatedAnimated from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import invariant from "tiny-invariant";
@@ -38,7 +37,6 @@ import {
   useAgentScreenStateMachine,
 } from "@/hooks/use-agent-screen-state-machine";
 import { useArchiveAgent } from "@/hooks/use-archive-agent";
-import { useKeyboardShiftStyle } from "@/hooks/use-keyboard-shift-style";
 import { useContainerWidthBelow } from "@/hooks/use-container-width";
 import {
   clearHistorySyncErrorAfterSuccessfulSync,
@@ -778,10 +776,6 @@ function ChatAgentContent({
     clearOnAgentBlurRef.current = attentionController.clearOnAgentBlur;
   }, [attentionController.clearOnAgentBlur]);
 
-  const { style: animatedKeyboardStyle } = useKeyboardShiftStyle({
-    mode: "translate",
-  });
-
   const handleHistorySyncFailure = useCallback(
     ({ origin, error }: { origin: "focus" | "entry"; error: unknown }) => {
       if (agentId) {
@@ -1042,11 +1036,6 @@ function ChatAgentContent({
     serverId,
   ]);
 
-  const animatedContentStyle = useMemo(
-    () => [styles.content, animatedKeyboardStyle],
-    [animatedKeyboardStyle],
-  );
-
   const nonReadyView = renderChatAgentNonReadyView({
     viewState,
     effectiveAgent,
@@ -1076,7 +1065,6 @@ function ChatAgentContent({
       toast={toastState}
       dismiss={dismissToast}
       streamViewRef={streamViewRef}
-      animatedContentStyle={animatedContentStyle}
       handleComposerHeightChange={handleComposerHeightChange}
       handleMessageSent={handleMessageSent}
       showHistorySyncOverlay={showHistorySyncOverlay}
@@ -1101,7 +1089,6 @@ const ChatAgentReadyContent = memo(function ChatAgentReadyContent({
   toast,
   dismiss,
   streamViewRef,
-  animatedContentStyle,
   handleComposerHeightChange,
   handleMessageSent,
   showHistorySyncOverlay,
@@ -1122,7 +1109,6 @@ const ChatAgentReadyContent = memo(function ChatAgentReadyContent({
   toast: ToastState | null;
   dismiss: () => void;
   streamViewRef: React.RefObject<AgentStreamViewHandle | null>;
-  animatedContentStyle: object[];
   handleComposerHeightChange: (height: number) => void;
   handleMessageSent: () => void;
   showHistorySyncOverlay: boolean;
@@ -1186,9 +1172,7 @@ const ChatAgentReadyContent = memo(function ChatAgentReadyContent({
       />
     </RenderProfile>
   );
-  const streamContent = (
-    <ReanimatedAnimated.View style={animatedContentStyle}>{streamSection}</ReanimatedAnimated.View>
-  );
+  const streamContent = <View style={styles.content}>{streamSection}</View>;
   const contentContainer = <View style={styles.contentContainer}>{streamContent}</View>;
 
   return (
@@ -1470,13 +1454,9 @@ function ActiveAgentComposer({
     ],
   );
 
-  const { style: composerKeyboardStyle } = useKeyboardShiftStyle({
-    mode: "translate",
-  });
-
   const inputAreaStyle = useMemo(
-    () => [styles.inputAreaWrapper, { paddingBottom: insets.bottom }, composerKeyboardStyle],
-    [insets.bottom, composerKeyboardStyle],
+    () => [styles.inputAreaWrapper, { paddingBottom: insets.bottom }],
+    [insets.bottom],
   );
 
   const composerFooter = useMemo(
@@ -1493,7 +1473,7 @@ function ActiveAgentComposer({
   );
 
   return (
-    <ReanimatedAnimated.View style={inputAreaStyle} onLayout={onInputAreaLayout}>
+    <View style={inputAreaStyle} onLayout={onInputAreaLayout}>
       <SubagentsTrack
         rows={subagentRows}
         onOpenSubagent={handleOpenSubagent}
@@ -1505,7 +1485,6 @@ function ActiveAgentComposer({
       <Composer
         agentId={agentId}
         serverId={serverId}
-        externalKeyboardShift
         isPaneFocused={isPaneFocused}
         value={agentInputDraft.text}
         onChangeText={agentInputDraft.setText}
@@ -1525,7 +1504,7 @@ function ActiveAgentComposer({
         footer={composerFooter}
         isCompactLayout={isCompactComposerLayout}
       />
-    </ReanimatedAnimated.View>
+    </View>
   );
 }
 

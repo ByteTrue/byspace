@@ -34,15 +34,6 @@ describe("resolveWorkspaceScriptLink", () => {
     });
   });
 
-  it("uses the local proxy URL for socket and pipe connections", () => {
-    expect(
-      resolveLink({ type: "directSocket", endpoint: "/tmp/byspace.sock", display: "socket" }),
-    ).toEqual({
-      openUrl: "http://web--feature--byspace.localhost:6777",
-      labelUrl: "http://web--feature--byspace.localhost:6777",
-    });
-  });
-
   it("degrades to daemon-host plus service port for direct network connections", () => {
     expect(
       resolveLink({
@@ -98,22 +89,6 @@ describe("resolveWorkspaceScriptLink", () => {
           proxyUrl: "https://web--feature--byspace.services.example.com",
         },
         activeConnection: { type: "directTcp", endpoint: "127.0.0.1:6777", display: "localhost" },
-      }),
-    ).toEqual({
-      openUrl: "http://web--feature--byspace.localhost:6777",
-      labelUrl: "http://web--feature--byspace.localhost:6777",
-    });
-  });
-
-  it("uses local URL for direct socket and pipe even when public URL exists", () => {
-    expect(
-      resolveWorkspaceScriptLink({
-        script: {
-          ...runningService,
-          publicProxyUrl: "https://web--feature--byspace.services.example.com",
-          proxyUrl: "https://web--feature--byspace.services.example.com",
-        },
-        activeConnection: { type: "directPipe", endpoint: "byspace", display: "pipe" },
       }),
     ).toEqual({
       openUrl: "http://web--feature--byspace.localhost:6777",

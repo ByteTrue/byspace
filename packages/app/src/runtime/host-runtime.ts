@@ -54,8 +54,6 @@ export type HostRegistryStatus = "loading" | "ready";
 
 export type ActiveConnection =
   | { type: "directTcp"; endpoint: string; display: string }
-  | { type: "directSocket"; endpoint: string; display: "socket" }
-  | { type: "directPipe"; endpoint: string; display: "pipe" }
   | { type: "relay"; endpoint: string; display: "relay" };
 
 export type HostRuntimeAgentDirectoryStatus =
@@ -255,20 +253,6 @@ async function fetchCurrentAgentDirectory(
 }
 
 function toActiveConnection(connection: HostConnection): ActiveConnection {
-  if (connection.type === "directSocket") {
-    return {
-      type: "directSocket",
-      endpoint: connection.path,
-      display: "socket",
-    };
-  }
-  if (connection.type === "directPipe") {
-    return {
-      type: "directPipe",
-      endpoint: connection.path,
-      display: "pipe",
-    };
-  }
   if (connection.type === "directTcp") {
     return {
       type: "directTcp",
@@ -531,9 +515,6 @@ function createDefaultDeps(): HostRuntimeControllerDeps {
         appVersion: resolveAppVersion() ?? undefined,
         runtimeGeneration,
       };
-      if (connection.type === "directSocket" || connection.type === "directPipe") {
-        throw new Error("Local socket connections are unavailable in the browser client");
-      }
       if (connection.type === "directTcp") {
         return new DaemonClient({
           ...base,
@@ -1546,10 +1527,10 @@ export class HostRuntimeStore {
     if (!connection) {
       return false;
     }
-    const connectionWithHint: HostConnection =
-      connection.type === "directTcp"
-        ? { ...connection, useTls: hint.useTls ?? connection.useTls ?? false }
-        : connection;
+    const connectionWithHint: HostConnection = {
+      ...connection,
+      useTls: hint.useTls ?? connection.useTls ?? false,
+    };
     if (registryHasConnection(this.hosts, connectionWithHint)) {
       return true;
     }
@@ -1738,27 +1719,6 @@ export class HostRuntimeStore {
     const payload = decodeOfferFragmentPayload(encoded);
     const offer = ConnectionOfferSchema.parse(payload);
     return this.upsertConnectionFromOffer(offer, label);
-  }
-
-  async upsertConnectionFromListen(input: {
-    listenAddress: string;
-    serverId: string;
-    hostname: string | null;
-  }): Promise<HostProfile> {
-    const normalizedListenAddress = input.listenAddress.trim();
-    const serverId = input.serverId.trim();
-    const connection = connectionFromListen(normalizedListenAddress);
-    if (!connection) {
-      throw new Error(`Unsupported listen address: ${input.listenAddress}`);
-    }
-    if (!serverId) {
-      throw new Error("Desktop daemon did not return a server id.");
-    }
-    return this.upsertHostConnection({
-      serverId,
-      label: input.hostname ?? undefined,
-      connection,
-    });
   }
 
   async renameHost(serverId: string, label: string): Promise<void> {

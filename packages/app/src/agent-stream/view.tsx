@@ -89,7 +89,6 @@ import {
 import { navigateToWorkspace } from "@/stores/navigation-active-workspace-store";
 import { buildNewWorkspaceRoute } from "@/utils/host-routes";
 import { useStableEvent } from "@/hooks/use-stable-event";
-import { isWeb } from "@/constants/platform";
 import type { Theme } from "@/styles/theme";
 import { recordRenderProfileReasons } from "@/utils/render-profiler";
 import { useRetainedPanelActive } from "@/components/retained-panel";
@@ -344,7 +343,6 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
     const streamRenderStrategy = useMemo(
       () =>
         resolveStreamRenderStrategy({
-          platform: Platform.OS,
           isMobileBreakpoint: isMobile,
         }),
       [isMobile],
@@ -580,7 +578,6 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
         agentStatus: context.status,
         tail: projectedToolCalls.tail,
         head: projectedToolCalls.head,
-        platform: isWeb ? "web" : "native",
         isMobileBreakpoint: isMobile,
       });
     }, [context.status, isMobile, projectedToolCalls.head, projectedToolCalls.tail]);

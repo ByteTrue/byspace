@@ -127,17 +127,13 @@
         ]
       }
     },
-    // Raw query burn-down: 35 files total; the 29 files below still enforce the useUnistyles ban.
+    // Raw query burn-down: 28 files total; the 24 files below still enforce the useUnistyles ban.
     {
       "files": [
         "packages/app/src/assistant-file-links/use-file-link.ts",
         "packages/app/src/components/message.tsx",
         "packages/app/src/components/worktree-setup-callout-source.tsx",
-        "packages/app/src/desktop/hooks/use-daemon-status.ts",
-        "packages/app/src/desktop/hooks/use-install-status.ts",
-        "packages/app/src/desktop/settings/desktop-settings.ts",
         "packages/app/src/git/pull-request-panel/use-data.ts",
-        "packages/app/src/git/use-github-search-query.ts",
         "packages/app/src/git/use-pr-status-query.ts",
         "packages/app/src/git/use-status-query.ts",
         "packages/app/src/hooks/use-archive-agent.ts",
@@ -157,8 +153,7 @@
         "packages/app/src/projects/project-icons.ts",
         "packages/app/src/provider-usage/use-provider-usage.ts",
         "packages/app/src/screens/project-settings-screen.tsx",
-        "packages/app/src/screens/workspace/use-workspace-checkout-status.ts",
-        "packages/app/src/workspace/desktop-open-targets.ts"
+        "packages/app/src/screens/workspace/use-workspace-checkout-status.ts"
       ],
       "rules": {
         "no-restricted-imports": [
@@ -175,25 +170,20 @@
         ]
       }
     },
-    // useUnistyles burn-down: 74 files total; the 68 files below still enforce the raw-query ban.
+    // useUnistyles burn-down: 59 files total; the 55 files below still enforce the raw-query ban.
     {
       "files": [
         "packages/app/src/app/_layout.tsx",
-        "packages/app/src/app/pair-scan.tsx",
         "packages/app/src/components/adaptive-modal-sheet.tsx",
         "packages/app/src/components/add-host-method-modal.tsx",
         "packages/app/src/components/add-host-modal.tsx",
         "packages/app/src/components/agent-list.tsx",
         "packages/app/src/components/agent-status-dot.tsx",
         "packages/app/src/components/attachment-lightbox.tsx",
-        "packages/app/src/components/browser-pane.electron.tsx",
-        "packages/app/src/components/browser-pane.tsx",
-        "packages/app/src/components/browser-pane.web.tsx",
         "packages/app/src/components/command-center.tsx",
         "packages/app/src/components/context-window-meter.tsx",
         "packages/app/src/components/dictation-controls.tsx",
         "packages/app/src/components/download-toast.tsx",
-        "packages/app/src/components/draggable-list.native.tsx",
         "packages/app/src/components/explorer-sidebar.tsx",
         "packages/app/src/components/headers/back-header.tsx",
         "packages/app/src/components/headers/menu-header.tsx",
@@ -206,7 +196,6 @@
         "packages/app/src/components/plan-card.tsx",
         "packages/app/src/components/provider-diagnostic-sheet.tsx",
         "packages/app/src/components/question-form-card.tsx",
-        "packages/app/src/components/quitting-overlay.tsx",
         "packages/app/src/components/realtime-voice-overlay.tsx",
         "packages/app/src/components/resize-handle.tsx",
         "packages/app/src/components/rewind/rewind-menu.tsx",
@@ -224,18 +213,11 @@
         "packages/app/src/components/ui/dropdown-menu.tsx",
         "packages/app/src/components/ui/external-link.tsx",
         "packages/app/src/components/volume-meter.tsx",
-        "packages/app/src/components/web-desktop-scrollbar.tsx",
         "packages/app/src/components/welcome-screen.tsx",
         "packages/app/src/composer/agent-controls/index.tsx",
         "packages/app/src/composer/agent-controls/mode-control.tsx",
         "packages/app/src/constants/layout.ts",
-        "packages/app/src/desktop/components/desktop-permission-row.tsx",
-        "packages/app/src/desktop/components/desktop-permissions-section.tsx",
-        "packages/app/src/desktop/components/desktop-updates-section.tsx",
-        "packages/app/src/desktop/components/integrations-section.tsx",
-        "packages/app/src/desktop/updates/update-callout-source.tsx",
         "packages/app/src/git/actions-split-button.tsx",
-        "packages/app/src/hooks/use-web-scrollbar-style.web.ts",
         "packages/app/src/hosts/host-chooser.tsx",
         "packages/app/src/screens/open-project-screen.tsx",
         "packages/app/src/screens/projects-screen.tsx",
@@ -262,14 +244,12 @@
         ]
       }
     },
-    // Both burn-downs: 6 overlapping files. They may only shrink out of this exemption.
+    // Both burn-downs: 4 overlapping files. They may only shrink out of this exemption.
     {
       "files": [
         "packages/app/src/components/file-explorer-pane.tsx",
         "packages/app/src/components/file-pane.tsx",
         "packages/app/src/components/import-session-sheet.tsx",
-        "packages/app/src/components/project-picker-modal.tsx",
-        "packages/app/src/desktop/components/pair-device-section.tsx",
         "packages/app/src/screens/new-workspace-screen.tsx"
       ],
       "rules": {

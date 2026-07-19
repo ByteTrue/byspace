@@ -1099,10 +1099,6 @@ export const en = {
         title: "Direct connection",
         description: "Local network or VPN.",
       },
-      scanQr: {
-        title: "Scan QR code",
-        description: "Encrypted relay connection.",
-      },
       pasteLink: {
         title: "Paste pairing link",
         description: "Encrypted relay connection.",
@@ -1169,19 +1165,6 @@ export const en = {
         pair: "Pair",
         pairing: "Pairing...",
       },
-    },
-    scan: {
-      title: "Scan QR",
-      webUnavailableTitle: "Not available on web",
-      webUnavailableBody:
-        'QR scanning is not supported in the web build. Use "Paste link" instead.',
-      backToSettings: "Back to Settings",
-      cameraPermissionTitle: "Camera permission",
-      cameraPermissionBody: "Allow camera access to scan the pairing QR code from your daemon.",
-      grantPermission: "Grant permission",
-      pairing: "Pairing...",
-      unableToPair: "Unable to pair host",
-      errorTitle: "Error",
     },
     device: {
       loadingOffer: "Loading pairing offer...",
@@ -1731,13 +1714,8 @@ export const en = {
         dangerZone: "Danger zone",
         remove: {
           title: "Remove host",
-          localTitle: "Remove localhost connection",
           hint: "Removes this host and its saved connections from this device",
-          localHint: "Removes localhost from this device and stops the built-in daemon",
-          localConfirmTitle: "Remove localhost connection and stop daemon?",
           confirmMessage: "Remove {{name}}? This will delete its saved connections.",
-          localConfirmMessage:
-            "This will remove the localhost connection, turn off built-in daemon management, and stop the managed daemon. Remote hosts remain connected.",
           errorTitle: "Error",
           errorMessage: "Unable to remove host",
           localErrorMessage: "Unable to remove localhost connection",

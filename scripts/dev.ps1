@@ -42,10 +42,8 @@ Write-Host @"
 ======================================================
 "@
 
-# Allow any origin in dev so Electron on random ports all work.
-# SECURITY: wildcard CORS is unsafe in production — only acceptable here because
-# the daemon binds to localhost and this script is never used for production.
-$env:BYSPACE_CORS_ORIGINS = "*"
+# Allow the Web app dev origin to connect to the daemon.
+$env:BYSPACE_CORS_ORIGINS = "http://localhost:8081"
 
 # Configure the app to auto-connect to this daemon on localhost
 $env:APP_VARIANT = "development"

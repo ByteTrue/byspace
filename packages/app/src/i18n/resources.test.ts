@@ -289,12 +289,11 @@ describe("translation resources", () => {
     expect(en.pairing.connectionMethods.direct.title).toBe("Direct connection");
   });
 
-  it("includes onboarding and direct connection keys for the Batch 4E migration", () => {
+  it("includes onboarding, direct connection, and pair-device keys for the Batch 4E migration", () => {
     expect(en.onboarding.title).toBe("Welcome to BySpace");
     expect(en.onboarding.actions.settings).toBe("Settings");
     expect(en.pairing.direct.title).toBe("Direct connection");
     expect(en.pairing.direct.fields.host).toBe("Host");
-    expect(en.pairing.scan.title).toBe("Scan QR");
     expect(en.pairing.device.copy).toBe("Copy");
   });
 

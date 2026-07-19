@@ -38,7 +38,6 @@ describe("buildAgentStreamRenderModel", () => {
       agentStatus: "running",
       tail,
       head,
-      platform: "web",
       isMobileBreakpoint: false,
     });
 
@@ -56,7 +55,6 @@ describe("buildAgentStreamRenderModel", () => {
       agentStatus: "running",
       tail,
       head,
-      platform: "web",
       isMobileBreakpoint: true,
     });
 
@@ -74,14 +72,12 @@ describe("buildAgentStreamRenderModel", () => {
       agentStatus: "running",
       tail,
       head: firstHead,
-      platform: "native",
       isMobileBreakpoint: false,
     });
     const second = buildAgentStreamRenderModel({
       agentStatus: "running",
       tail,
       head: secondHead,
-      platform: "native",
       isMobileBreakpoint: false,
     });
 
@@ -98,7 +94,6 @@ describe("buildAgentStreamRenderModel", () => {
       agentStatus: "running",
       tail,
       head,
-      platform: "web",
       isMobileBreakpoint: false,
     });
 
@@ -114,7 +109,6 @@ describe("buildAgentStreamRenderModel", () => {
       agentStatus: "idle",
       tail,
       head,
-      platform: "web",
       isMobileBreakpoint: false,
     });
 
@@ -126,18 +120,17 @@ describe("buildAgentStreamRenderModel", () => {
     });
   });
 
-  it("derives the same timing for native inverted rendering", () => {
+  it("derives completed timing from committed history", () => {
     const tail = [userMessage("u1", 1), assistantMessage("a1", 4)];
 
     const model = buildAgentStreamRenderModel({
       agentStatus: "idle",
       tail,
       head: [],
-      platform: "native",
       isMobileBreakpoint: false,
     });
 
-    expect(model.segments.historyMounted.map((item) => item.id)).toEqual(["a1", "u1"]);
+    expect(model.segments.historyMounted.map((item) => item.id)).toEqual(["u1", "a1"]);
     expect(model.turnTiming.byAssistantId.get("a1")).toEqual({
       startedAt: tail[0]?.timestamp,
       completedAt: tail[1]?.timestamp,
@@ -152,7 +145,6 @@ describe("buildAgentStreamRenderModel", () => {
       agentStatus: "idle",
       tail,
       head: [],
-      platform: "web",
       isMobileBreakpoint: false,
     });
 

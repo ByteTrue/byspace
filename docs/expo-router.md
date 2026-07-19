@@ -1,8 +1,8 @@
 # Expo Router
 
-BySpace's mobile route tree is fragile because Expo Router and React Navigation do
-not fail loudly when a nested native route is mounted under the wrong layout. The
-usual symptom is a white or blank native screen with no JavaScript crash.
+BySpace's browser route tree is fragile because Expo Router and React Navigation do
+not fail loudly when a nested route is mounted under the wrong layout. The usual
+symptom is blank content or a route with missing local parameters.
 
 Read this before changing `packages/app/src/app`, startup routing, remembered
 workspace restore, or active workspace selection.
@@ -20,9 +20,9 @@ Each layout owns only the routes directly inside its directory.
   `agent/[agentId]`, `sessions`, `open-project`, and `settings`.
 
 Expo Router warns with `[Layout children]: No route named ...` when a layout
-registers grandchildren. Treat that warning as a route-tree bug. On native, that
-shape can leave a nested index route mounted without its local dynamic params and
-render a blank screen.
+registers grandchildren. Treat that warning as a route-tree bug. That shape can
+mount a nested index route without its local dynamic params and render blank
+content.
 
 ## Startup
 
@@ -42,8 +42,8 @@ status. Do not redirect to another online host just because the remembered host
 is still connecting or offline; the workspace screen owns that offline/loading
 state.
 
-This split is deliberate. The host layout must mount first so native local
-dynamic params exist before any nested workspace leaf is selected.
+This split is deliberate. The host layout must mount first so local dynamic
+params exist before any nested workspace leaf is selected.
 
 ## App-Wide Route Hops
 
@@ -94,36 +94,20 @@ export` warnings and pollutes the route tree.
 Put shared route policy in `src/navigation`, `src/utils`, stores, or another
 non-route directory.
 
-## Native Stack
-
-Keep workspace identity and retention outside native-stack `getId` and
-`dangerouslySingular`. Expo Router maps `dangerouslySingular` to React
-Navigation `getId`, and `getId` has broken Android native-stack/Fabric by
-reordering an already-mounted workspace screen.
-
-Use `ThemedStack` from `packages/app/src/navigation/themed-stack.tsx` for every
-Expo Router stack. React Navigation otherwise paints each native stack screen
-with its light default background. A screen-level wrapper can hide that surface
-while settled, but Android may expose it for one frame when navigation crosses
-from a nested stack to its parent stack. This is especially visible when an
-app-wide route such as `/new` opens from a dark workspace.
-
-Do not read the active theme with `useUnistyles()` in a layout to build
-`screenOptions`. `ThemedStack` keeps that third-party prop theme-reactive through
-a small `withUnistyles` boundary without subscribing the route tree itself to
-every Unistyles runtime update.
-
 ## Regression Shape
 
-Pure helper tests are useful but not enough. The failure mode here is native
-route-tree state, so a real regression should launch native with seeded persisted
-state:
+Pure helper tests are useful but not enough. A browser regression should launch
+the Web app with seeded persisted state:
 
 1. Seed `byspace:last-workspace-route-selection` with a valid
    `{ serverId, workspaceId }`.
-2. Launch the native app cold.
-3. Assert a real screen is visible, not the blank tree.
-4. Assert no `[Layout children]` warning appears.
+2. Load `/` in a fresh browser context.
+3. Assert the URL crosses the host boundary and settles on the remembered
+   workspace.
+4. Assert the workspace screen is visible and no `[Layout children]` warning
+   appears.
+5. Exercise browser back/forward navigation and one app-wide route hop, then
+   assert the visible workspace and URL still agree.
 
 The pure policy tests should still enforce the boundary split:
 
@@ -142,5 +126,5 @@ Before landing route changes:
       `target` when the action names a specific tab.
 - [ ] Did you add a route? Register it in the layout that directly owns it.
 - [ ] Did `useLocalSearchParams()` lose a required param? Fix the route tree.
-- [ ] Did native show a blank screen without a crash? Suspect route ownership
-      before stores, themes, or rendering.
+- [ ] Did the browser show blank content or lose a required route param? Suspect
+      route ownership before stores, themes, or rendering.

@@ -6,13 +6,11 @@ import {
   View,
   type PressableStateCallbackType,
 } from "react-native";
-import Animated, { runOnJS, useAnimatedReaction } from "react-native-reanimated";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { encodeTerminalKeyInput } from "@bytetrue/byspace-protocol/terminal-key-input";
 import type { TerminalInputModeState } from "@bytetrue/byspace-protocol/terminal-input-mode";
 import { useTranslation } from "react-i18next";
 import { useHostRuntimeClient, useHostRuntimeIsConnected } from "@/runtime/host-runtime";
-import { useKeyboardShiftStyle } from "@/hooks/use-keyboard-shift-style";
 import { useAppVisible } from "@/hooks/use-app-visible";
 import { useStableEvent } from "@/hooks/use-stable-event";
 import {
@@ -64,8 +62,6 @@ interface TerminalPaneProps {
   onOpenFileExplorer: () => void;
   onOpenWorkspaceFile: (request: WorkspaceFileOpenRequest) => void;
 }
-
-const TERMINAL_REFIT_DELAYS_MS = [0, 48, 144, 320];
 
 const MODIFIER_LABELS = {
   ctrl: "Ctrl",
@@ -189,10 +185,6 @@ export function TerminalPane({
   const mobileView = usePanelStore((state) => state.mobilePanel.target);
   const showMobileAgentList = usePanelStore((state) => state.showMobileAgentList);
   const swipeGesturesEnabled = isMobile && mobileView === "agent";
-  const { shift: keyboardShift, style: keyboardPaddingStyle } = useKeyboardShiftStyle({
-    mode: "padding",
-    enabled: isMobile,
-  });
 
   const client = useHostRuntimeClient(serverId);
   const isConnected = useHostRuntimeIsConnected(serverId);
@@ -225,7 +217,6 @@ export function TerminalPane({
     win32InputMode: false,
   });
   const pendingTerminalInputRef = useRef<PendingTerminalInput[]>([]);
-  const keyboardRefitTimeoutsRef = useRef<Array<ReturnType<typeof setTimeout>>>([]);
   const lastAutoFocusKeyRef = useRef<string | null>(null);
   const paneFocusResizeClaimRef = useRef(EMPTY_FOCUS_CLAIM_STATE);
   const initialSnapshot = workspaceTerminalSession.snapshots.get({ terminalId });
@@ -324,41 +315,6 @@ export function TerminalPane({
     setFocusedTerminalId,
     terminalId,
   ]);
-
-  const clearKeyboardRefitTimeouts = useCallback(() => {
-    if (keyboardRefitTimeoutsRef.current.length === 0) {
-      return;
-    }
-    for (const handle of keyboardRefitTimeoutsRef.current) {
-      clearTimeout(handle);
-    }
-    keyboardRefitTimeoutsRef.current = [];
-  }, []);
-
-  const pulseKeyboardRefits = useCallback(() => {
-    clearKeyboardRefitTimeouts();
-    requestTerminalReflow();
-    keyboardRefitTimeoutsRef.current = TERMINAL_REFIT_DELAYS_MS.map((delayMs) =>
-      setTimeout(() => {
-        requestTerminalReflow();
-      }, delayMs),
-    );
-  }, [clearKeyboardRefitTimeouts, requestTerminalReflow]);
-
-  useEffect(() => {
-    return () => clearKeyboardRefitTimeouts();
-  }, [clearKeyboardRefitTimeouts]);
-
-  useAnimatedReaction(
-    () => isMobile && keyboardShift.value > 0,
-    (next, prev) => {
-      if (next === prev) {
-        return;
-      }
-      runOnJS(pulseKeyboardRefits)();
-    },
-    [isMobile, pulseKeyboardRefits],
-  );
 
   useEffect(() => {
     if (!client || !isConnected || !isWorkspaceFocused) {
@@ -766,11 +722,6 @@ export function TerminalPane({
     ],
   );
 
-  const containerStyle = useMemo(
-    () => [styles.container, keyboardPaddingStyle],
-    [keyboardPaddingStyle],
-  );
-
   const handleSwipeRight = useCallback(() => {
     if (!swipeGesturesEnabled) return;
     emulatorRef.current?.blur();
@@ -799,7 +750,7 @@ export function TerminalPane({
   }
 
   return (
-    <Animated.View style={containerStyle}>
+    <View style={styles.container}>
       <View style={styles.outputContainer}>
         {isWorkspaceFocused ? (
           <View style={styles.terminalGestureContainer}>
@@ -904,7 +855,7 @@ export function TerminalPane({
           </View>
         </View>
       ) : null}
-    </Animated.View>
+    </View>
   );
 }
 

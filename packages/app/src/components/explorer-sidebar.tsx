@@ -29,7 +29,6 @@ import { MobilePanelOverlay } from "@/mobile-panels/presentation";
 import { HEADER_INNER_HEIGHT } from "@/constants/layout";
 import { GitDiffPane } from "@/git/diff-pane";
 import { FileExplorerPane } from "./file-explorer-pane";
-import { useKeyboardShiftStyle } from "@/hooks/use-keyboard-shift-style";
 
 import { RetainedPanelActivity } from "@/components/retained-panel";
 import { SidebarResizeHandle } from "@/components/sidebar-resize-handle";
@@ -84,10 +83,6 @@ export function CompactExplorerSidebar({
     workspaceRoot,
     isGit,
   });
-  const { style: mobileKeyboardInsetStyle } = useKeyboardShiftStyle({
-    mode: "padding",
-    enabled: true,
-  });
   const { gesture: closeGesture } = useCloseFileExplorerGesture();
 
   const handleClose = useCallback(
@@ -104,14 +99,11 @@ export function CompactExplorerSidebar({
   const handleHeaderClose = useCallback(() => handleClose("header-close-button"), [handleClose]);
 
   const mobileSidebarStyle = useMemo(
-    () => [
-      {
-        paddingTop: insets.top,
-        backgroundColor: theme.colors.surfaceSidebar,
-      },
-      mobileKeyboardInsetStyle,
-    ],
-    [insets.top, theme.colors.surfaceSidebar, mobileKeyboardInsetStyle],
+    () => ({
+      paddingTop: insets.top,
+      backgroundColor: theme.colors.surfaceSidebar,
+    }),
+    [insets.top, theme.colors.surfaceSidebar],
   );
 
   return (

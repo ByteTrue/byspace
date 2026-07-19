@@ -114,8 +114,6 @@ describe("loadAppSettingsFromStorage", () => {
       storage: createInMemoryKeyValueStorage({
         [LEGACY_SETTINGS_KEY]: JSON.stringify({
           theme: "dark",
-          manageBuiltInDaemon: false,
-          releaseChannel: "beta",
         }),
       }),
     });
@@ -155,7 +153,7 @@ describe("loadAppSettingsFromStorage", () => {
 });
 
 describe("loadSettingsFromStorage", () => {
-  it("defaults built-in daemon management to enabled when storage is empty", async () => {
+  it("returns the app defaults when storage is empty", async () => {
     const deps = makeDeps();
 
     const result = await loadSettingsFromStorage(deps);

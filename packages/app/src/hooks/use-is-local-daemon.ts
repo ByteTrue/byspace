@@ -23,17 +23,3 @@ export function useLocalDaemonServerId(): string | null {
     [hosts],
   );
 }
-
-export interface LocalDaemonServerIdState {
-  status: "resolved";
-  serverId: string | null;
-}
-
-export function useLocalDaemonServerIdState(): LocalDaemonServerIdState {
-  return { status: "resolved", serverId: useLocalDaemonServerId() };
-}
-
-export function useIsLocalDaemon(serverId: string): boolean {
-  const localServerId = useLocalDaemonServerId();
-  return localServerId !== null && serverId.trim() === localServerId;
-}

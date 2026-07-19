@@ -306,18 +306,13 @@ export function resolveZshShellIntegrationDir(): string {
   return fileURLToPath(new URL("./shell-integration/zsh", import.meta.url));
 }
 
-function resolveExternalProcessPath(filePath: string): string {
-  return filePath.replace(/\.asar(?=[/\\]|$)/, ".asar.unpacked");
-}
-
 export function resolveBySpaceCliBinDir(): string | null {
   const cliEntrypoint = resolveBySpaceCliBinEntrypoint();
   if (!cliEntrypoint) {
     return null;
   }
 
-  const externalCliEntrypoint = resolveExternalProcessPath(cliEntrypoint);
-  return findNpmBinDir(dirname(externalCliEntrypoint)) ?? dirname(externalCliEntrypoint);
+  return findNpmBinDir(dirname(cliEntrypoint)) ?? dirname(cliEntrypoint);
 }
 
 export function resolveBySpaceCliExecutablePath(): string | null {
@@ -326,8 +321,7 @@ export function resolveBySpaceCliExecutablePath(): string | null {
     return null;
   }
 
-  const externalCliEntrypoint = resolveExternalProcessPath(cliEntrypoint);
-  const npmBinDir = findNpmBinDir(dirname(externalCliEntrypoint));
+  const npmBinDir = findNpmBinDir(dirname(cliEntrypoint));
   if (npmBinDir) {
     const shim = resolveBySpaceCliShim(npmBinDir);
     if (shim) {
@@ -335,7 +329,7 @@ export function resolveBySpaceCliExecutablePath(): string | null {
     }
   }
 
-  return externalCliEntrypoint;
+  return cliEntrypoint;
 }
 
 function resolveBySpaceCliBinEntrypoint(): string | null {
@@ -391,17 +385,13 @@ function resolveZshShellIntegrationRuntimeDir(): string {
 }
 
 function prepareZshShellIntegrationRuntimeDir(sourceDir = resolveZshShellIntegrationDir()): string {
-  const readableSourceDir = resolveExternalProcessPath(sourceDir);
   const runtimeDir = resolveZshShellIntegrationRuntimeDir();
   mkdirSync(runtimeDir, { recursive: true, mode: 0o700 });
   chmodSync(runtimeDir, 0o700);
-  writePrivateFileAtomicSync(
-    join(runtimeDir, ".zshenv"),
-    readFileSync(join(readableSourceDir, ".zshenv")),
-  );
+  writePrivateFileAtomicSync(join(runtimeDir, ".zshenv"), readFileSync(join(sourceDir, ".zshenv")));
   writePrivateFileAtomicSync(
     join(runtimeDir, "byspace-integration.zsh"),
-    readFileSync(join(readableSourceDir, "byspace-integration.zsh")),
+    readFileSync(join(sourceDir, "byspace-integration.zsh")),
   );
   return runtimeDir;
 }
@@ -446,7 +436,7 @@ function injectBySpaceHookCli(
 
   return {
     ...env,
-    BYSPACE_HOOK_CLI: resolvePath(resolveExternalProcessPath(cliPath)),
+    BYSPACE_HOOK_CLI: resolvePath(cliPath),
   };
 }
 

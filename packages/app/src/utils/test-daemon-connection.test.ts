@@ -43,9 +43,6 @@ class FakeDaemonProbe {
       return "cid_shared_probe_test";
     },
     resolveAppVersion: () => null,
-    createLocalTransportFactory: () => null,
-    buildLocalTransportUrl: ({ transportType, transportPath }) =>
-      `byspace+local://${transportType}?path=${encodeURIComponent(transportPath)}`,
     createClient: (config) => {
       const client = new FakeDaemonClient(this, config);
       this.createdClients.push(client);
@@ -99,24 +96,6 @@ describe("test-daemon-connection connectToDaemon", () => {
     expect(firstConfig?.clientId).toBe("cid_shared_probe_test");
     expect(secondConfig?.clientId).toBe("cid_shared_probe_test");
     expect(probe.clientIdsRequested).toBe(2);
-  });
-
-  it("encodes the local socket target into the client config", async () => {
-    const { connectToDaemon } = await import("./test-daemon-connection");
-    const result = await connectToDaemon(
-      {
-        id: "socket:/tmp/byspace.sock",
-        type: "directSocket",
-        path: "/tmp/byspace.sock",
-      },
-      undefined,
-      probe.deps,
-    );
-    await result.client.close();
-
-    expect(probe.createdConfigs()[0]?.url).toBe(
-      "byspace+local://socket?path=%2Ftmp%2Fbyspace.sock",
-    );
   });
 
   it("passes direct TCP connection passwords into the client config", async () => {

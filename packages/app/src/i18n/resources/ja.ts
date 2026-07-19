@@ -1101,10 +1101,6 @@ export const ja: TranslationResources = {
         title: "直接接続",
         description: "ローカルネットワークまたはVPN。",
       },
-      scanQr: {
-        title: "QRコードをスキャン",
-        description: "暗号化されたリレー接続。",
-      },
       pasteLink: {
         title: "ペアリングリンクを貼り付け",
         description: "暗号化されたリレー接続。",
@@ -1171,20 +1167,6 @@ export const ja: TranslationResources = {
         pair: "ペアリング",
         pairing: "ペアリング中...",
       },
-    },
-    scan: {
-      title: "QRをスキャン",
-      webUnavailableTitle: "Webでは利用できません",
-      webUnavailableBody:
-        "QRスキャンはWebビルドではサポートされていません。代わりに「リンクを貼り付け」を使用してください。",
-      backToSettings: "設定に戻る",
-      cameraPermissionTitle: "カメラの権限",
-      cameraPermissionBody:
-        "デーモンからのペアリングQRコードをスキャンするためにカメラへのアクセスを許可してください。",
-      grantPermission: "権限を許可",
-      pairing: "ペアリング中...",
-      unableToPair: "ホストをペアリングできません",
-      errorTitle: "エラー",
     },
     device: {
       loadingOffer: "ペアリングオファーを読み込み中...",
@@ -1739,13 +1721,8 @@ export const ja: TranslationResources = {
         dangerZone: "危険ゾーン",
         remove: {
           title: "ホストを削除",
-          localTitle: "localhost接続を削除",
           hint: "このホストと保存された接続をこのデバイスから削除します",
-          localHint: "このデバイスからlocalhostを削除して組み込みデーモンを停止します",
-          localConfirmTitle: "localhost接続を削除してデーモンを停止しますか？",
           confirmMessage: "{{name}}を削除しますか？保存された接続が削除されます。",
-          localConfirmMessage:
-            "localhost接続を削除し、組み込みデーモン管理をオフにして、管理されているデーモンを停止します。リモートホストは接続されたままです。",
           errorTitle: "エラー",
           errorMessage: "ホストを削除できません",
           localErrorMessage: "localhost接続を削除できません",

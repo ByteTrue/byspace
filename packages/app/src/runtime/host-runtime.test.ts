@@ -1781,41 +1781,6 @@ describe("HostRuntimeStore", () => {
     store.syncHosts([]);
   });
 
-  it("preserves a manual host rename when desktop status re-advertises the daemon hostname", async () => {
-    const advertisedHostname = "macbook-pro.local";
-    const store = new HostRuntimeStore({
-      deps: {
-        createClient: () => new FakeDaemonClient() as unknown as DaemonClient,
-        connectToDaemon: async ({ host }) => ({
-          client: makeConnectedProbeClient(5) as unknown as DaemonClient,
-          serverId: host.serverId,
-          hostname: advertisedHostname,
-        }),
-        getClientId: async () => "cid_test_runtime",
-      },
-      storage: createMemoryHostRuntimeStorage(),
-    });
-
-    try {
-      await store.upsertConnectionFromListen({
-        listenAddress: "127.0.0.1:6777",
-        serverId: "srv_desktop",
-        hostname: advertisedHostname,
-      });
-      await store.renameHost("srv_desktop", "mac-dev");
-
-      await store.upsertConnectionFromListen({
-        listenAddress: "127.0.0.1:6777",
-        serverId: "srv_desktop",
-        hostname: advertisedHostname,
-      });
-
-      expect(store.getHosts().find((h) => h.serverId === "srv_desktop")?.label).toBe("mac-dev");
-    } finally {
-      store.syncHosts([]);
-    }
-  });
-
   it("upsertDirectConnection stores SSL and password settings", async () => {
     const store = new HostRuntimeStore({
       deps: {

@@ -9,18 +9,6 @@ import {
 
 export { DirectTcpHostConnectionSchema, type DirectTcpHostConnection };
 
-export interface DirectSocketHostConnection {
-  id: string;
-  type: "directSocket";
-  path: string;
-}
-
-export interface DirectPipeHostConnection {
-  id: string;
-  type: "directPipe";
-  path: string;
-}
-
 export interface RelayHostConnection {
   id: string;
   type: "relay";
@@ -29,11 +17,7 @@ export interface RelayHostConnection {
   daemonPublicKeyB64: string;
 }
 
-export type HostConnection =
-  | DirectTcpHostConnection
-  | DirectSocketHostConnection
-  | DirectPipeHostConnection
-  | RelayHostConnection;
+export type HostConnection = DirectTcpHostConnection | RelayHostConnection;
 
 export type HostLifecycle = Record<string, never>;
 
@@ -56,25 +40,6 @@ export function normalizeHostLabel(value: string | null | undefined, serverId: s
   return trimmed.length > 0 ? trimmed : serverId;
 }
 
-export function orderHostsLocalFirst<T extends { serverId: string }>(
-  hosts: T[],
-  localServerId: string | null,
-): T[] {
-  if (!localServerId) {
-    return hosts;
-  }
-  const localIndex = hosts.findIndex((host) => host.serverId === localServerId);
-  if (localIndex <= 0) {
-    return hosts;
-  }
-  const ordered = hosts.slice();
-  const [local] = ordered.splice(localIndex, 1);
-  if (local) {
-    ordered.unshift(local);
-  }
-  return ordered;
-}
-
 function hostConnectionEquals(left: HostConnection, right: HostConnection): boolean {
   if (left.type !== right.type || left.id !== right.id) {
     return false;
@@ -86,12 +51,6 @@ function hostConnectionEquals(left: HostConnection, right: HostConnection): bool
       (left.useTls ?? false) === (right.useTls ?? false) &&
       left.password === right.password
     );
-  }
-  if (left.type === "directSocket" && right.type === "directSocket") {
-    return left.path === right.path;
-  }
-  if (left.type === "directPipe" && right.type === "directPipe") {
-    return left.path === right.path;
   }
   if (left.type === "relay" && right.type === "relay") {
     return (
@@ -216,32 +175,6 @@ export function connectionFromListen(listen: string): HostConnection | null {
     return null;
   }
 
-  if (normalizedListen.startsWith("pipe://")) {
-    const path = normalizedListen.slice("pipe://".length).trim();
-    return path ? { id: `pipe:${path}`, type: "directPipe", path } : null;
-  }
-
-  if (normalizedListen.startsWith("unix://")) {
-    const path = normalizedListen.slice("unix://".length).trim();
-    return path ? { id: `socket:${path}`, type: "directSocket", path } : null;
-  }
-
-  if (normalizedListen.startsWith("\\\\.\\pipe\\")) {
-    return {
-      id: `pipe:${normalizedListen}`,
-      type: "directPipe",
-      path: normalizedListen,
-    };
-  }
-
-  if (normalizedListen.startsWith("/")) {
-    return {
-      id: `socket:${normalizedListen}`,
-      type: "directSocket",
-      path: normalizedListen,
-    };
-  }
-
   try {
     const endpoint = normalizeLoopbackToLocalhost(normalizeHostPort(normalizedListen));
     return {
@@ -283,14 +216,6 @@ function normalizeStoredConnection(connection: unknown): HostConnection | null {
     } catch {
       return null;
     }
-  }
-  if (type === "directSocket") {
-    const path = (typeof record.path === "string" ? record.path : "").trim();
-    return path ? { id: `socket:${path}`, type: "directSocket", path } : null;
-  }
-  if (type === "directPipe") {
-    const path = (typeof record.path === "string" ? record.path : "").trim();
-    return path ? { id: `pipe:${path}`, type: "directPipe", path } : null;
   }
   if (type === "relay") {
     try {

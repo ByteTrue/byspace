@@ -38,7 +38,6 @@ export interface BuildAgentStreamRenderModelInput {
   agentStatus: string;
   tail: StreamItem[];
   head: StreamItem[];
-  platform: "web" | "native";
   isMobileBreakpoint: boolean;
 }
 
@@ -82,15 +81,12 @@ function getOrderedItems(params: {
 
 function splitOrderedTail(params: {
   orderedTail: StreamItem[];
-  platform: "web" | "native";
   isMobileBreakpoint: boolean;
 }): Pick<AgentStreamRenderModel, "history" | "segments"> {
-  const { orderedTail, platform, isMobileBreakpoint } = params;
+  const { orderedTail, isMobileBreakpoint } = params;
   const shouldSplitHistory =
-    platform === "web" &&
-    !isMobileBreakpoint &&
-    orderedTail.length > getWebPartialVirtualizationThreshold();
-  const cacheKey = `${platform}:${isMobileBreakpoint}:${getWebMountedRecentStreamItems()}:${shouldSplitHistory}`;
+    !isMobileBreakpoint && orderedTail.length > getWebPartialVirtualizationThreshold();
+  const cacheKey = `${isMobileBreakpoint}:${getWebMountedRecentStreamItems()}:${shouldSplitHistory}`;
   let cachedByKey = splitHistoryCache.get(orderedTail);
   if (!cachedByKey) {
     cachedByKey = new Map();
@@ -158,10 +154,9 @@ export function buildAgentStreamRenderModel(
   input: BuildAgentStreamRenderModelInput,
 ): AgentStreamRenderModel {
   const strategy = resolveStreamRenderStrategy({
-    platform: input.platform === "web" ? "web" : "native",
     isMobileBreakpoint: input.isMobileBreakpoint,
   });
-  const orderingCacheKey = `${input.platform}:${input.isMobileBreakpoint}`;
+  const orderingCacheKey = String(input.isMobileBreakpoint);
   const orderedTail = getOrderedItems({
     cache: orderedTailCache,
     source: input.tail,
@@ -184,7 +179,6 @@ export function buildAgentStreamRenderModel(
   });
   const splitHistory = splitOrderedTail({
     orderedTail,
-    platform: input.platform,
     isMobileBreakpoint: input.isMobileBreakpoint,
   });
   const turnTiming = getTurnTiming({

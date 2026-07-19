@@ -111,23 +111,16 @@ function reviewWorkspaceAttachment(
 
 function createFakePersister(): AttachmentPersister & {
   blobCalls: Array<{ blob: Blob; mimeType: string; fileName: string | null }>;
-  fileUriCalls: Array<{ uri: string; mimeType: string; fileName: string | null }>;
   deletedBatches: AttachmentMetadata[][];
 } {
   const blobCalls: Array<{ blob: Blob; mimeType: string; fileName: string | null }> = [];
-  const fileUriCalls: Array<{ uri: string; mimeType: string; fileName: string | null }> = [];
   const deletedBatches: AttachmentMetadata[][] = [];
   return {
     blobCalls,
-    fileUriCalls,
     deletedBatches,
     persistFromBlob: async ({ blob, mimeType, fileName }) => {
       blobCalls.push({ blob, mimeType, fileName });
       return { ...imageMetadata, id: `blob-${blobCalls.length}` };
-    },
-    persistFromFileUri: async ({ uri, mimeType, fileName }) => {
-      fileUriCalls.push({ uri, mimeType, fileName });
-      return { ...imageMetadata, id: `uri-${fileUriCalls.length}` };
     },
     deleteAttachments: (metadata) => {
       deletedBatches.push(metadata);
@@ -279,7 +272,6 @@ describe("pickAndPersistImages", () => {
     });
     expect(result).toEqual([]);
     expect(persister.blobCalls).toEqual([]);
-    expect(persister.fileUriCalls).toEqual([]);
   });
 
   it("persists blob sources via persistFromBlob with the picked mime type and file name", async () => {
@@ -293,20 +285,6 @@ describe("pickAndPersistImages", () => {
     });
     expect(persister.blobCalls).toEqual([{ blob, mimeType: "image/png", fileName: "img-1.png" }]);
     expect(result.map((m) => m.id)).toEqual(["blob-1"]);
-  });
-
-  it("persists file_uri sources via persistFromFileUri", async () => {
-    const persister = createFakePersister();
-    const result = await pickAndPersistImages({
-      pickImages: async () => [
-        { source: { kind: "file_uri", uri: "/tmp/x.jpg" }, mimeType: null, fileName: null },
-      ],
-      persister,
-    });
-    expect(persister.fileUriCalls).toEqual([
-      { uri: "/tmp/x.jpg", mimeType: "image/jpeg", fileName: null },
-    ]);
-    expect(result).toHaveLength(1);
   });
 });
 

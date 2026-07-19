@@ -1112,10 +1112,6 @@ export const ru: TranslationResources = {
         title: "Прямое подключение",
         description: "Локальная сеть или VPN.",
       },
-      scanQr: {
-        title: "Сканировать код QR",
-        description: "Зашифрованное релейное соединение.",
-      },
       pasteLink: {
         title: "Вставьте ссылку на сопряжение",
         description: "Зашифрованное релейное соединение.",
@@ -1183,20 +1179,6 @@ export const ru: TranslationResources = {
         pair: "Пара",
         pairing: "Сопряжение...",
       },
-    },
-    scan: {
-      title: "Сканировать QR",
-      webUnavailableTitle: "Недоступно в Интернете",
-      webUnavailableBody:
-        "Сканирование QR не поддерживается в веб- сборке. Вместо этого используйте «Вставить ссылку».",
-      backToSettings: "Вернуться к настройкам",
-      cameraPermissionTitle: "Разрешение камеры",
-      cameraPermissionBody:
-        "Разрешите камере доступ к сканированию кода сопряжения QR с вашего демона.",
-      grantPermission: "Предоставить разрешение",
-      pairing: "Сопряжение...",
-      unableToPair: "Невозможно подключить хост",
-      errorTitle: "Ошибка",
     },
     device: {
       loadingOffer: "Загрузка предложения по сопряжению...",
@@ -1750,13 +1732,8 @@ export const ru: TranslationResources = {
         dangerZone: "Опасная зона",
         remove: {
           title: "Удалить хост",
-          localTitle: "Remove localhost connection",
           hint: "Удаляет этот хост и его сохраненные подключения с этого устройства.",
-          localHint: "Removes localhost from this device and stops the built-in daemon",
-          localConfirmTitle: "Remove localhost connection and stop daemon?",
           confirmMessage: "Удалить{{name}}? Это приведет к удалению сохраненных соединений.",
-          localConfirmMessage:
-            "This will remove the localhost connection, turn off built-in daemon management, and stop the managed daemon. Remote hosts remain connected.",
           errorTitle: "Ошибка",
           errorMessage: "Невозможно удалить хост",
           localErrorMessage: "Unable to remove localhost connection",

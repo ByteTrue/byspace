@@ -83,6 +83,56 @@ describe("indexeddb attachment store", () => {
     Reflect.deleteProperty(globalThis, "indexedDB");
   });
 
+  it("stores Blob sources without changing their bytes or type", async () => {
+    const store = createIndexedDbAttachmentStore();
+    const blob = new Blob([new Uint8Array([0, 1, 2])], { type: "image/png" });
+
+    const attachment = await store.save({
+      id: "att_blob",
+      fileName: "image.png",
+      source: { kind: "blob", blob },
+    });
+
+    expect(storedRecord).toEqual({
+      id: "att_blob",
+      blob,
+      createdAt: expect.any(Number),
+      fileName: "image.png",
+    });
+    expect(attachment).toMatchObject({
+      id: "att_blob",
+      mimeType: "image/png",
+      storageType: "web-indexeddb",
+      storageKey: "att_blob",
+      fileName: "image.png",
+      byteSize: 3,
+    });
+  });
+
+  it("stores data URL sources as a Blob", async () => {
+    const store = createIndexedDbAttachmentStore();
+
+    const attachment = await store.save({
+      id: "att_data_url",
+      fileName: "image.png",
+      source: { kind: "data_url", dataUrl: "data:image/png;base64,AAEC" },
+    });
+
+    expect(storedRecord).toEqual({
+      id: "att_data_url",
+      blob: new Blob([new Uint8Array([0, 1, 2])], { type: "image/png" }),
+      createdAt: expect.any(Number),
+      fileName: "image.png",
+    });
+    expect(attachment).toMatchObject({
+      id: "att_data_url",
+      mimeType: "image/png",
+      storageType: "web-indexeddb",
+      storageKey: "att_data_url",
+      fileName: "image.png",
+      byteSize: 3,
+    });
+  });
   it("stores raw byte sources as a Blob", async () => {
     const store = createIndexedDbAttachmentStore();
     const bytes = new Uint8Array([0, 1, 2, 3]);

@@ -89,9 +89,6 @@ function formatHostConnectionLabel(connection: HostConnection, t: TFunction): st
   if (connection.type === "relay") {
     return `${t("settings.host.badges.relay")} (${connection.relayEndpoint})`;
   }
-  if (connection.type === "directSocket" || connection.type === "directPipe") {
-    return `${t("settings.host.badges.local")} (${connection.path})`;
-  }
   return `TCP (${connection.endpoint})`;
 }
 
@@ -105,12 +102,6 @@ function formatActiveConnectionBadge(
     return {
       icon: <Globe size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />,
       text: t("settings.host.badges.relay"),
-    };
-  }
-  if (activeConnection.type === "directSocket" || activeConnection.type === "directPipe") {
-    return {
-      icon: <Monitor size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />,
-      text: t("settings.host.badges.local"),
     };
   }
   return {

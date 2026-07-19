@@ -1119,10 +1119,6 @@ export const es: TranslationResources = {
         title: "Conexión directa",
         description: "Red local o VPN.",
       },
-      scanQr: {
-        title: "Escanea el códigoQR",
-        description: "Conexión de retransmisión cifrada.",
-      },
       pasteLink: {
         title: "Pegar enlace de emparejamiento",
         description: "Conexión de retransmisión cifrada.",
@@ -1190,20 +1186,6 @@ export const es: TranslationResources = {
         pair: "Par",
         pairing: "Emparejamiento...",
       },
-    },
-    scan: {
-      title: "EscanearQR",
-      webUnavailableTitle: "No disponible en la web",
-      webUnavailableBody:
-        'El escaneoQRno es compatible con la compilación web. Utilice "Pegar enlace" en su lugar.',
-      backToSettings: "Volver a configuración",
-      cameraPermissionTitle: "Permiso de cámara",
-      cameraPermissionBody:
-        "Permita el acceso a la cámara para escanear el códigoQRde emparejamiento de su demonio.",
-      grantPermission: "Conceder permiso",
-      pairing: "Emparejamiento...",
-      unableToPair: "No se puede emparejar el host",
-      errorTitle: "Error",
     },
     device: {
       loadingOffer: "Cargando oferta de maridaje...",
@@ -1758,13 +1740,8 @@ export const es: TranslationResources = {
         dangerZone: "Zona de peligro",
         remove: {
           title: "Eliminar host",
-          localTitle: "Remove localhost connection",
           hint: "Elimina este host y sus conexiones guardadas de este dispositivo",
-          localHint: "Removes localhost from this device and stops the built-in daemon",
-          localConfirmTitle: "Remove localhost connection and stop daemon?",
           confirmMessage: "¿Quitar{{name}}? Esto eliminará sus conexiones guardadas.",
-          localConfirmMessage:
-            "This will remove the localhost connection, turn off built-in daemon management, and stop the managed daemon. Remote hosts remain connected.",
           errorTitle: "Error",
           errorMessage: "No se puede eliminar el host",
           localErrorMessage: "Unable to remove localhost connection",

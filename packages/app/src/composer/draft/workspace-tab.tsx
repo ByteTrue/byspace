@@ -1,10 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { Keyboard, ScrollView, Text, View } from "react-native";
 import { useTranslation } from "react-i18next";
-import ReanimatedAnimated from "react-native-reanimated";
 import { StyleSheet } from "react-native-unistyles";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useKeyboardShiftStyle } from "@/hooks/use-keyboard-shift-style";
 import { useContainerWidthBelow } from "@/hooks/use-container-width";
 import invariant from "tiny-invariant";
 import { Composer } from "@/composer";
@@ -630,13 +628,9 @@ export function WorkspaceDraftAgentTab({
     [composerState],
   );
 
-  const { style: composerKeyboardStyle } = useKeyboardShiftStyle({
-    mode: "translate",
-  });
-
   const inputAreaWrapperStyle = useMemo(
-    () => [styles.inputAreaWrapper, { paddingBottom: insets.bottom }, composerKeyboardStyle],
-    [insets.bottom, composerKeyboardStyle],
+    () => [styles.inputAreaWrapper, { paddingBottom: insets.bottom }],
+    [insets.bottom],
   );
 
   const handleDropdownCloseFocus = useCallback(() => {
@@ -706,7 +700,7 @@ export function WorkspaceDraftAgentTab({
         )}
       </View>
 
-      <ReanimatedAnimated.View style={inputAreaWrapperStyle} onLayout={onInputAreaLayout}>
+      <View style={inputAreaWrapperStyle} onLayout={onInputAreaLayout}>
         {importPillPress ? (
           <View style={styles.importPillRow}>
             <View style={styles.importPillContent}>
@@ -717,7 +711,6 @@ export function WorkspaceDraftAgentTab({
         <Composer
           agentId={tabId}
           serverId={serverId}
-          externalKeyboardShift
           isPaneFocused={isPaneFocused}
           onSubmitMessage={handleCreateFromInput}
           isSubmitLoading={isSubmitting}
@@ -737,7 +730,7 @@ export function WorkspaceDraftAgentTab({
           footer={composerFooter}
           isCompactLayout={isCompactComposerLayout}
         />
-      </ReanimatedAnimated.View>
+      </View>
     </FileDropZone>
   );
 }

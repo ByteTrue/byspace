@@ -30,16 +30,6 @@ function makeHost(): HostProfile {
         useTls: true,
         daemonPublicKeyB64: "daemon-public-key-secret",
       },
-      {
-        id: "socket:/tmp/byspace-secret.sock",
-        type: "directSocket",
-        path: "/tmp/byspace-secret.sock",
-      },
-      {
-        id: "pipe:\\\\.\\pipe\\byspace-secret",
-        type: "directPipe",
-        path: "\\\\.\\pipe\\byspace-secret",
-      },
     ],
   };
 }
@@ -86,12 +76,9 @@ describe("app diagnostics report", () => {
 
     expect(report).toContain("direct TCP");
     expect(report).toContain("relay");
-    expect(report).toContain("local socket");
-    expect(report).toContain("local pipe");
     expect(report).not.toContain("secret.example.test");
     expect(report).not.toContain("relay.secret.test");
     expect(report).not.toContain("daemon-public-key-secret");
-    expect(report).not.toContain("/tmp/byspace-secret.sock");
     expect(report).not.toContain("tcp-password");
   });
 
@@ -103,8 +90,6 @@ describe("app diagnostics report", () => {
         "secret.example.test:6777",
         "relay.secret.test:443",
         "daemon-public-key-secret",
-        "/tmp/byspace-secret.sock",
-        "\\\\.\\pipe\\byspace-secret",
         "password=tcp-password",
         "byspace://pairing-secret",
       ].join("\n"),
@@ -114,8 +99,6 @@ describe("app diagnostics report", () => {
     expect(redacted).not.toContain("secret.example.test");
     expect(redacted).not.toContain("relay.secret.test");
     expect(redacted).not.toContain("daemon-public-key-secret");
-    expect(redacted).not.toContain("/tmp/byspace-secret.sock");
-    expect(redacted).not.toContain("\\\\.\\pipe\\byspace-secret");
     expect(redacted).not.toContain("tcp-password");
     expect(redacted).not.toContain("pairing-secret");
   });

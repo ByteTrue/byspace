@@ -4,8 +4,8 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import type { AttachmentMetadata } from "@/attachments/types";
 import {
   garbageCollectAttachments,
+  persistAttachmentFromBlob,
   persistAttachmentFromDataUrl,
-  persistAttachmentFromFileUri,
 } from "@/attachments/service";
 import { useCreateFlowStore } from "@/stores/create-flow-store";
 import { useSessionStore, type SessionState } from "@/stores/session-store";
@@ -95,8 +95,10 @@ const migrateLegacyImages: MigrateLegacyImages = async (images) => {
           });
         }
 
-        return await persistAttachmentFromFileUri({
-          uri: entry.uri,
+        const response = await fetch(entry.uri);
+        const blob = await response.blob();
+        return await persistAttachmentFromBlob({
+          blob,
           mimeType: entry.mimeType,
         });
       } catch (error) {
