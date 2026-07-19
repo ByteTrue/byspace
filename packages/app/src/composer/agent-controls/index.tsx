@@ -49,8 +49,8 @@ import type {
   AgentMode,
   AgentModelDefinition,
   AgentProvider,
-} from "@getpaseo/protocol/agent-types";
-import type { AgentProviderDefinition } from "@getpaseo/protocol/provider-manifest";
+} from "@bytetrue/byspace-protocol/agent-types";
+import type { AgentProviderDefinition } from "@bytetrue/byspace-protocol/provider-manifest";
 import {
   getFeatureHighlightColor,
   getFeatureTooltip,

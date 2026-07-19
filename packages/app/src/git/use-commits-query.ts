@@ -1,4 +1,4 @@
-import type { CheckoutCommit } from "@getpaseo/protocol/messages";
+import type { CheckoutCommit } from "@bytetrue/byspace-protocol/messages";
 import { useFetchQuery } from "@/data/query";
 import { checkoutCommitsQueryKey } from "@/git/query-keys";
 import { useHostRuntimeClient, useHostRuntimeIsConnected } from "@/runtime/host-runtime";

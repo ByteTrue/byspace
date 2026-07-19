@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type {
   CheckoutPrStatusResponse,
   PullRequestTimelineResponse,
-} from "@getpaseo/protocol/messages";
+} from "@bytetrue/byspace-protocol/messages";
 import { isPipelineActiveStatus, mapPipelineStatus } from "@/git/forges/gitlab";
 import {
   deriveAvatarColor,

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { ForgeSearchItem } from "@getpaseo/protocol/messages";
+import type { ForgeSearchItem } from "@bytetrue/byspace-protocol/messages";
 import { pickerItemToCheckoutRequest, type PickerItem } from "./new-workspace-picker-item";
 
 const prItem: ForgeSearchItem = {

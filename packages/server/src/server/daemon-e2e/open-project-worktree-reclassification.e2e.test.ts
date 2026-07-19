@@ -45,7 +45,7 @@ test("openProject reclassifies an existing directory workspace into its parent g
     cleanupPaths.add(paseoHomeRoot);
 
     execSync("git init -b main", { cwd: repoRoot, stdio: "pipe" });
-    execSync("git config user.email 'test@getpaseo.dev'", { cwd: repoRoot, stdio: "pipe" });
+    execSync("git config user.email 'test@byspace.dev'", { cwd: repoRoot, stdio: "pipe" });
     execSync("git config user.name 'Paseo Test'", { cwd: repoRoot, stdio: "pipe" });
     writeFileSync(path.join(repoRoot, "README.md"), "# repo\n", "utf8");
     execSync("git add README.md", { cwd: repoRoot, stdio: "pipe" });

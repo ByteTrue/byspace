@@ -1,5 +1,5 @@
 {
-  "name": "@getpaseo/server",
+  "name": "@bytetrue/byspace-server",
   "version": "0.2.0-beta.1",
   "description": "Paseo backend server",
   "files": [
@@ -67,10 +67,10 @@
     "@agentclientprotocol/sdk": "^0.17.1",
     "@anthropic-ai/claude-agent-sdk": "^0.3.195",
     "@anthropic-ai/sdk": "^0.104.2",
-    "@getpaseo/client": "0.2.0-beta.1",
-    "@getpaseo/highlight": "0.2.0-beta.1",
-    "@getpaseo/protocol": "0.2.0-beta.1",
-    "@getpaseo/relay": "0.2.0-beta.1",
+    "@bytetrue/byspace-client": "0.2.0-beta.1",
+    "@bytetrue/byspace-highlight": "0.2.0-beta.1",
+    "@bytetrue/byspace-protocol": "0.2.0-beta.1",
+    "@bytetrue/byspace-relay": "0.2.0-beta.1",
     "@isaacs/ttlcache": "^2.1.4",
     "@modelcontextprotocol/sdk": "^1.20.1",
     "@opencode-ai/sdk": "1.14.46",

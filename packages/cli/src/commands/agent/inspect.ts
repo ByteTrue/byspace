@@ -1,6 +1,6 @@
 import type { Command } from "commander";
-import { PARENT_AGENT_ID_LABEL } from "@getpaseo/protocol/agent-labels";
-import type { AgentSnapshotPayload } from "@getpaseo/protocol/messages";
+import { PARENT_AGENT_ID_LABEL } from "@bytetrue/byspace-protocol/agent-labels";
+import type { AgentSnapshotPayload } from "@bytetrue/byspace-protocol/messages";
 import { connectToDaemon, getDaemonHost } from "../../utils/client.js";
 import type { CommandOptions, ListResult, OutputSchema, CommandError } from "../../output/index.js";
 

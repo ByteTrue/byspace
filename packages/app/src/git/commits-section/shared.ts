@@ -1,5 +1,5 @@
 import { StyleSheet } from "react-native-unistyles";
-import type { CheckoutCommit } from "@getpaseo/protocol/messages";
+import type { CheckoutCommit } from "@bytetrue/byspace-protocol/messages";
 
 export type CheckoutCommitFile = CheckoutCommit["files"][number];
 

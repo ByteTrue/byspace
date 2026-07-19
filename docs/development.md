@@ -99,7 +99,7 @@ web, keep a daemon available, then run:
 PASEO_PROFILE_SERVER_ID=<server-id> \
 PASEO_PROFILE_WORKSPACE_ID=<workspace-path> \
 PASEO_PROFILE_AGENT_ID=<agent-id> \
-  npm run profile:workspace-tabs --workspace=@getpaseo/app
+  npm run profile:workspace-tabs --workspace=@bytetrue/byspace-app
 ```
 
 This script opens the app with `?renderProfile=1`, creates a temporary terminal
@@ -131,7 +131,7 @@ defaults. The default rotation is `10m` x `3` files everywhere.
 Measure the MCP `tools/list` payload that Paseo injects into agents with:
 
 ```bash
-npm run measure:agent-tools --workspace=@getpaseo/server
+npm run measure:agent-tools --workspace=@bytetrue/byspace-server
 ```
 
 The command reports compact JSON bytes, estimated tokens, field totals, largest
@@ -241,7 +241,7 @@ Measured bundle size for a standard Expo web export:
 
 Package imports resolve through package exports to compiled `dist/` output, not sibling `src/` files. This is true in local dev and in published packages: the app, daemon, CLI, and SDK consumers should all exercise the same runtime paths.
 
-`npm run dev:server` builds the server-side workspace packages once, then keeps `@getpaseo/protocol` and `@getpaseo/client` fresh with TypeScript watch builds while the daemon runs. If you change protocol schemas or client code outside that watch workflow, rebuild the producer before trusting runtime behavior.
+`npm run dev:server` builds the server-side workspace packages once, then keeps `@bytetrue/byspace-protocol` and `@bytetrue/byspace-client` fresh with TypeScript watch builds while the daemon runs. If you change protocol schemas or client code outside that watch workflow, rebuild the producer before trusting runtime behavior.
 
 Use the named root build targets instead of remembering workspace dependency chains:
 
@@ -343,7 +343,7 @@ Do NOT use browser history (back/forward). Always navigate by clicking UI elemen
 ## App web deploys
 
 `packages/app` exports a single-page Expo web app and deploys the `dist/`
-directory to Cloudflare Pages with `npm run deploy:web --workspace=@getpaseo/app`.
+directory to Cloudflare Pages with `npm run deploy:web --workspace=@bytetrue/byspace-app`.
 
 PWA install metadata lives in `packages/app/public/manifest.json` and is linked
 from `packages/app/public/index.html`. Keep the install icons in `public/` so

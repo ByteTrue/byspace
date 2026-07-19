@@ -1,5 +1,5 @@
-import type { CreatePaseoWorktreeInput } from "@getpaseo/client/internal/daemon-client";
-import type { ForgeSearchItem } from "@getpaseo/protocol/messages";
+import type { CreatePaseoWorktreeInput } from "@bytetrue/byspace-client/internal/daemon-client";
+import type { ForgeSearchItem } from "@bytetrue/byspace-protocol/messages";
 
 export type PickerItem =
   | { kind: "branch"; name: string }

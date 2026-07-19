@@ -28,7 +28,7 @@ function createGitRepo(): string {
   tempRoots.push(tempRoot);
   const repoDir = path.join(tempRoot, "repo");
   execFileSync("git", ["init", "-b", "main", repoDir], { stdio: "pipe" });
-  execFileSync("git", ["config", "user.email", "test@getpaseo.local"], {
+  execFileSync("git", ["config", "user.email", "test@byspace.local"], {
     cwd: repoDir,
     stdio: "pipe",
   });

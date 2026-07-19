@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="packages/website/public/logo.svg" width="64" height="64" alt="Paseo logo">
+  <img src="packages/app/assets/images/icon.png" width="64" height="64" alt="Paseo logo">
 </p>
 
 <h1 align="center">Paseo</h1>
@@ -63,7 +63,7 @@ You need at least one agent CLI installed and configured with your credentials:
 Install the CLI and start Paseo:
 
 ```bash
-npm install -g @getpaseo/cli
+npm install -g @bytetrue/byspace-cli
 paseo
 ```
 
@@ -130,7 +130,6 @@ Quick monorepo package map:
 - `packages/app`: Expo/React Native Web client
 - `packages/cli`: `paseo` CLI for daemon and agent workflows
 - `packages/relay`: Relay package for remote connectivity
-- `packages/website`: Marketing site and documentation (`paseo.sh`)
 
 Common commands:
 
@@ -141,7 +140,6 @@ npm run dev
 # run individual surfaces
 npm run dev:server
 npm run dev:app
-npm run dev:website
 
 # build the server stack
 npm run build:server

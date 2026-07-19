@@ -1,5 +1,5 @@
 {
-  "name": "@getpaseo/app",
+  "name": "@bytetrue/byspace-app",
   "version": "0.2.0-beta.1",
   "private": true,
   "main": "index.ts",
@@ -22,13 +22,13 @@
     "build:terminal-webview": "node ./scripts/build-terminal-webview-html.mjs"
   },
   "dependencies": {
+    "@bytetrue/byspace-client": "*",
+    "@bytetrue/byspace-highlight": "*",
+    "@bytetrue/byspace-protocol": "*",
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
     "@floating-ui/react-native": "^0.10.7",
-    "@getpaseo/client": "*",
-    "@getpaseo/highlight": "*",
-    "@getpaseo/protocol": "*",
     "@gorhom/bottom-sheet": "^5.2.14",
     "@gorhom/portal": "^1.0.14",
     "@react-native-async-storage/async-storage": "2.2.0",

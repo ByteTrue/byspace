@@ -28,7 +28,7 @@ import {
 import type { WorktreeCreationIntent } from "./resolve-worktree-creation-intent.js";
 import { resolveFirstAgentPromptTitle } from "./agent/create-agent-title.js";
 import { buildAgentBranchNameSeed } from "./agent/prompt-attachments.js";
-import type { FirstAgentContext } from "@getpaseo/protocol/messages";
+import type { FirstAgentContext } from "@bytetrue/byspace-protocol/messages";
 
 export interface CreatePaseoWorktreeInput extends CreateWorktreeCoreInput {
   projectId?: string;

@@ -82,9 +82,9 @@ import { ICON_SIZE, type Theme } from "@/styles/theme";
 import type { ComposerAttachment, UserComposerAttachment } from "@/attachments/types";
 import { useDraftWorkspaceAttachmentScopeKey } from "@/attachments/workspace-attachments-store";
 import type { MessagePayload } from "@/composer/types";
-import type { AgentAttachment, ForgeSearchItem } from "@getpaseo/protocol/messages";
-import type { CreatePaseoWorktreeInput } from "@getpaseo/client/internal/daemon-client";
-import type { AgentProvider } from "@getpaseo/protocol/agent-types";
+import type { AgentAttachment, ForgeSearchItem } from "@bytetrue/byspace-protocol/messages";
+import type { CreatePaseoWorktreeInput } from "@bytetrue/byspace-client/internal/daemon-client";
+import type { AgentProvider } from "@bytetrue/byspace-protocol/agent-types";
 import type { WorkspaceDraftTabSetup, WorkspaceTabTarget } from "@/stores/workspace-tabs-store";
 import { isEmptyWorkspaceSubmission, runCreateEmptyWorkspace } from "./new-workspace-empty";
 import {

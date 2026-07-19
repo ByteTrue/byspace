@@ -5,7 +5,7 @@ import {
   findCheckoutHintPrAttachment,
   syncPickerPrAttachment,
 } from "./new-workspace-picker-state";
-import type { ForgeSearchItem } from "@getpaseo/protocol/messages";
+import type { ForgeSearchItem } from "@bytetrue/byspace-protocol/messages";
 
 function makePrItem(number: number, title: string, headRefName = "feature/x"): ForgeSearchItem {
   return {

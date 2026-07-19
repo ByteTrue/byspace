@@ -1,4 +1,4 @@
-import { isSyntaxThemeId, type SyntaxThemeId } from "@getpaseo/highlight";
+import { isSyntaxThemeId, type SyntaxThemeId } from "@bytetrue/byspace-highlight";
 import type { QueryClient } from "@tanstack/react-query";
 import { parseAppLanguage, type AppLanguage } from "@/i18n/locales";
 import { THEME_TO_UNISTYLES, type ThemeName } from "@/styles/theme";

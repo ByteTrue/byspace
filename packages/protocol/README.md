@@ -1,4 +1,4 @@
-# @getpaseo/protocol
+# @bytetrue/byspace-protocol
 
 Shared Paseo protocol schemas, codecs, and wire types.
 

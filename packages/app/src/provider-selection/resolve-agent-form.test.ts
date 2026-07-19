@@ -16,12 +16,12 @@ import {
   type UserModifiedFields,
 } from "./resolve-agent-form";
 import { buildProviderDefinitions } from "@/utils/provider-definitions";
-import type { AgentProviderDefinition } from "@getpaseo/protocol/provider-manifest";
+import type { AgentProviderDefinition } from "@bytetrue/byspace-protocol/provider-manifest";
 import type {
   AgentModelDefinition,
   AgentProvider,
   ProviderSnapshotEntry,
-} from "@getpaseo/protocol/agent-types";
+} from "@bytetrue/byspace-protocol/agent-types";
 
 const TEST_CODEX_DEFINITION: AgentProviderDefinition = {
   id: "codex",

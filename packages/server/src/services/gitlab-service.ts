@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { parseGitRemoteLocation } from "@getpaseo/protocol/git-remote";
+import { parseGitRemoteLocation } from "@bytetrue/byspace-protocol/git-remote";
 import { findExecutable } from "../executable-resolution/executable-resolution.js";
 import {
   createCachedCliPathResolver,

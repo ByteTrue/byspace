@@ -19,12 +19,12 @@ RUN set -eux; \
 
 RUN set -eux; \
     mkdir -p /tmp/paseo-packs; \
-    npm pack --workspace=@getpaseo/highlight --pack-destination /tmp/paseo-packs; \
-    npm pack --workspace=@getpaseo/relay --pack-destination /tmp/paseo-packs; \
-    npm pack --workspace=@getpaseo/protocol --pack-destination /tmp/paseo-packs; \
-    npm pack --workspace=@getpaseo/client --pack-destination /tmp/paseo-packs; \
-    npm pack --workspace=@getpaseo/server --pack-destination /tmp/paseo-packs; \
-    npm pack --workspace=@getpaseo/cli --pack-destination /tmp/paseo-packs
+    npm pack --workspace=@bytetrue/byspace-highlight --pack-destination /tmp/paseo-packs; \
+    npm pack --workspace=@bytetrue/byspace-relay --pack-destination /tmp/paseo-packs; \
+    npm pack --workspace=@bytetrue/byspace-protocol --pack-destination /tmp/paseo-packs; \
+    npm pack --workspace=@bytetrue/byspace-client --pack-destination /tmp/paseo-packs; \
+    npm pack --workspace=@bytetrue/byspace-server --pack-destination /tmp/paseo-packs; \
+    npm pack --workspace=@bytetrue/byspace-cli --pack-destination /tmp/paseo-packs
 
 FROM ${NODE_IMAGE}
 
@@ -61,7 +61,7 @@ RUN set -eux; \
 	npm install -g /tmp/paseo-packs/*.tgz; \
     rm -rf /tmp/paseo-packs; \
     npm cache clean --force; \
-    server_entry="$(npm root -g)/@getpaseo/server/dist/scripts/supervisor-entrypoint.js"; \
+    server_entry="$(npm root -g)/@bytetrue/byspace-server/dist/scripts/supervisor-entrypoint.js"; \
     test -f "$server_entry"; \
     printf '%s\n' "$server_entry" > /etc/paseo-server-entry; \
     node --check "$server_entry"

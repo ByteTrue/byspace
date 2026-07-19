@@ -1,5 +1,5 @@
 {
-  "name": "@getpaseo/relay",
+  "name": "@bytetrue/byspace-relay",
   "version": "0.2.0-beta.1",
   "description": "Paseo relay for bridging daemon and client connections",
   "files": [

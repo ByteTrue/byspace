@@ -1,4 +1,4 @@
-import type { CheckoutCheckDetails } from "@getpaseo/protocol/messages";
+import type { CheckoutCheckDetails } from "@bytetrue/byspace-protocol/messages";
 import type { PullRequestContextAttachment } from "@/attachments/types";
 import { type Forge, getForgePresentation } from "@/git/forge";
 import {

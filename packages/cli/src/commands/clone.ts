@@ -1,6 +1,6 @@
 import type { Command } from "commander";
-import { isCompleteGitRemote } from "@getpaseo/protocol/git-remote";
-import type { DaemonClient } from "@getpaseo/client/internal/daemon-client";
+import { isCompleteGitRemote } from "@bytetrue/byspace-protocol/git-remote";
+import type { DaemonClient } from "@bytetrue/byspace-client/internal/daemon-client";
 import { buildDaemonConnectionCommandError, connectToDaemon } from "../utils/client.js";
 import type { CommandError, OutputSchema, SingleResult } from "../output/index.js";
 import type { CommandOptions } from "../output/with-output.js";

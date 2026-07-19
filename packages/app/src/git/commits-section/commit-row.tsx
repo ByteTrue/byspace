@@ -1,7 +1,7 @@
 import { memo, useCallback } from "react";
 import { Pressable, Text, View } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
-import type { CheckoutCommit } from "@getpaseo/protocol/messages";
+import type { CheckoutCommit } from "@bytetrue/byspace-protocol/messages";
 import { ThemedChevron, chevronColorMapping } from "@/git/themed-chevron";
 import { formatTimeAgo } from "@/utils/time";
 import { dotStyles } from "./shared";

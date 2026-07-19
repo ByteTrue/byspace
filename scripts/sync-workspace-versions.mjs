@@ -49,7 +49,7 @@ for (const workspacePath of workspacePaths) {
     }
 
     for (const name of Object.keys(deps)) {
-      if (!name.startsWith("@getpaseo/")) {
+      if (!name.startsWith("@bytetrue/byspace-")) {
         continue;
       }
       if (name === pkg.name) {

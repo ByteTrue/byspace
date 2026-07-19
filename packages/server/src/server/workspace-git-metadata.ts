@@ -1,5 +1,5 @@
 import { basename } from "path";
-import { parseGitHubRemoteUrl } from "@getpaseo/protocol/git-remote";
+import { parseGitHubRemoteUrl } from "@bytetrue/byspace-protocol/git-remote";
 import { slugify } from "../utils/worktree.js";
 import { deriveProjectGroupingKey, deriveProjectGroupingName } from "./workspace-registry-model.js";
 
