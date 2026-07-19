@@ -190,6 +190,14 @@ try {
     throw new Error("Global install has missing or invalid dependencies");
   }
   run(process.execPath, ["--input-type=module", "--eval", nativeLoadCheck], { env });
+  const installedManifest = JSON.parse(
+    readFileSync(join(installedPackageRoot, "package.json"), "utf8"),
+  );
+  if (installedManifest.repository?.url !== "git+https://github.com/ByteTrue/byspace.git") {
+    throw new Error(
+      `Installed package has invalid repository metadata: ${JSON.stringify(installedManifest.repository)}`,
+    );
+  }
   const installedVersion = runBinary(["--version"], { env }).trim();
   if (installedVersion !== version) {
     throw new Error(`Installed version ${installedVersion} does not match ${version}`);
