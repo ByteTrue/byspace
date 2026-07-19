@@ -5,11 +5,10 @@ import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { PanelLeft } from "lucide-react-native";
 import { ScreenHeader } from "./screen-header";
 import { ScreenTitle } from "./screen-title";
-import { HeaderToggleButton, headerIconSlotStyle } from "./header-toggle-button";
+import { HeaderToggleButton } from "./header-toggle-button";
 import { selectIsAgentListOpen, usePanelStore } from "@/stores/panel-store";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { getShortcutOs } from "@/utils/shortcut-platform";
-import { useHasWindowChromeObstruction, useOwnsWindowChromeCorner } from "@/utils/desktop-window";
 
 interface MenuHeaderProps {
   title?: string;
@@ -103,25 +102,7 @@ function SidebarMenuToggleButton({
 
 export function SidebarMenuToggle({ style, ...props }: SidebarMenuToggleProps = {}) {
   const isMobile = useIsCompactFormFactor();
-  const ownsTopLeft = useOwnsWindowChromeCorner("top-left");
-  const hasTopLeftWindowControls = useHasWindowChromeObstruction("top-left");
   const resolvedStyle = useMemo(() => [styles.leadingToggle, style], [style]);
-  const placeholderStyle = useMemo(
-    () => [headerIconSlotStyle.slot, resolvedStyle],
-    [resolvedStyle],
-  );
-
-  if (!isMobile && !ownsTopLeft) {
-    return null;
-  }
-
-  if (!isMobile && hasTopLeftWindowControls) {
-    return (
-      <View pointerEvents="none" style={placeholderStyle}>
-        <View style={styles.desktopMenuIconSpace} />
-      </View>
-    );
-  }
 
   return <SidebarMenuToggleButton {...props} isMobile={isMobile} resolvedStyle={resolvedStyle} />;
 }
@@ -169,10 +150,6 @@ const styles = StyleSheet.create((theme) => ({
     height: 12,
     justifyContent: "space-between",
     alignItems: "flex-start",
-  },
-  desktopMenuIconSpace: {
-    width: theme.iconSize.md,
-    height: theme.iconSize.md,
   },
   mobileMenuLine: {
     width: MOBILE_MENU_LINE_WIDTH,

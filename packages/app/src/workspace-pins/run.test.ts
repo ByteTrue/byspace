@@ -8,7 +8,7 @@ const PROFILES: readonly TerminalProfile[] = [
 ];
 
 interface RecordedLaunch {
-  action: "draft" | "terminal" | "browser" | "profile";
+  action: "draft" | "terminal" | "profile";
   profile?: TerminalProfileInput;
 }
 
@@ -17,7 +17,6 @@ function recordingHandlers() {
   const handlers: TabTargetHandlers = {
     createDraft: () => launches.push({ action: "draft" }),
     createTerminal: () => launches.push({ action: "terminal" }),
-    createBrowser: () => launches.push({ action: "browser" }),
     createTerminalWithProfile: (profile) => launches.push({ action: "profile", profile }),
   };
   return { launches, handlers };
@@ -34,12 +33,6 @@ describe("runPinnedTabTarget", () => {
     const { launches, handlers } = recordingHandlers();
     runPinnedTabTarget({ kind: "terminal" }, PROFILES, handlers);
     expect(launches).toEqual([{ action: "terminal" }]);
-  });
-
-  it("creates a browser for the browser target", () => {
-    const { launches, handlers } = recordingHandlers();
-    runPinnedTabTarget({ kind: "browser" }, PROFILES, handlers);
-    expect(launches).toEqual([{ action: "browser" }]);
   });
 
   it("launches the resolved profile command for a known profile target", () => {

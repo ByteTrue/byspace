@@ -1017,20 +1017,6 @@ export function stripEphemeralTabsFromLayout(layout: WorkspaceLayout): Workspace
   });
 }
 
-export function getFocusedBrowserId(layout: WorkspaceLayout | null | undefined): string | null {
-  if (!layout) {
-    return null;
-  }
-  const focusedPane = findPaneById(layout.root, layout.focusedPaneId);
-  if (!focusedPane?.focusedTabId) {
-    return null;
-  }
-  const focusedTab = collectAllTabs(layout.root).find(
-    (tab) => tab.tabId === focusedPane.focusedTabId,
-  );
-  return focusedTab?.target.kind === "browser" ? focusedTab.target.browserId : null;
-}
-
 export function createDefaultLayout(): WorkspaceLayout {
   return {
     root: createPaneNode({ id: DEFAULT_PANE_ID }),

@@ -3,7 +3,6 @@ import { Pressable, StyleSheet, View } from "react-native";
 import { GestureDetector, type GestureType } from "react-native-gesture-handler";
 import Animated, { useAnimatedStyle } from "react-native-reanimated";
 import { isWeb } from "@/constants/platform";
-import { WindowChromeRootRegion } from "@/utils/desktop-window";
 import { usePanelStore, type MobilePanelView } from "@/stores/panel-store";
 import { getMobilePanelFrame } from "./model";
 import { useIsMobilePanelPresented, useMobilePanelsRuntime } from "./provider";
@@ -83,7 +82,7 @@ export function MobilePanelOverlay({
 
       <GestureDetector gesture={closeGesture} touchAction="pan-y">
         <Animated.View pointerEvents={isOpen ? "auto" : "none"} style={combinedPanelStyle}>
-          <WindowChromeRootRegion corners="both">{children}</WindowChromeRootRegion>
+          {children}
         </Animated.View>
       </GestureDetector>
     </View>

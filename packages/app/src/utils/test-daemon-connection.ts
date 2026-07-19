@@ -8,10 +8,6 @@ import {
   buildRelayWebSocketUrl,
   shouldUseTlsForDefaultHostedRelay,
 } from "./daemon-endpoints";
-import {
-  buildLocalDaemonTransportUrl,
-  createDesktopLocalDaemonTransportFactory,
-} from "@/desktop/daemon/desktop-daemon-transport";
 
 export interface DaemonProbeClient {
   readonly lastError: string | null;
@@ -36,8 +32,10 @@ export interface DaemonConnectionDependencies<TClient extends DaemonProbeClient>
 const defaultDaemonConnectionDependencies: DaemonConnectionDependencies<DaemonClient> = {
   getClientId: getOrCreateClientId,
   resolveAppVersion,
-  createLocalTransportFactory: createDesktopLocalDaemonTransportFactory,
-  buildLocalTransportUrl: buildLocalDaemonTransportUrl,
+  createLocalTransportFactory: () => null,
+  buildLocalTransportUrl: () => {
+    throw new Error("Local socket connections are unavailable in the browser client");
+  },
   createClient: (config) => new DaemonClient(config),
 };
 

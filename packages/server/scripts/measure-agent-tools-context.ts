@@ -9,8 +9,6 @@ import type { AgentManager, ManagedAgent } from "../src/server/agent/agent-manag
 import type { AgentStorage, StoredAgentRecord } from "../src/server/agent/agent-storage.js";
 import type { AgentProvider, ProviderSnapshotEntry } from "../src/server/agent/agent-sdk-types.js";
 import type { ProviderSnapshotManager } from "../src/server/agent/provider-snapshot-manager.js";
-import type { BrowserToolsBroker } from "../src/server/browser-tools/broker.js";
-import type { BrowserToolsResponsePayload } from "../src/server/browser-tools/errors.js";
 
 type CatalogScope = "agent" | "top-level";
 
@@ -35,7 +33,6 @@ interface ToolSize {
 
 interface CatalogMeasurement {
   label: string;
-  browserToolsEnabled: boolean;
   toolCount: number;
   bytes: number;
   estimatedTokens: number;
@@ -176,7 +173,6 @@ function sumFieldSizes(tools: ToolSize[]): FieldSize[] {
 
 async function measureCatalog(params: {
   label: string;
-  browserToolsEnabled: boolean;
   scope: CatalogScope;
 }): Promise<CatalogMeasurement> {
   const server = await createAgentMcpServer({
@@ -184,8 +180,6 @@ async function measureCatalog(params: {
     agentStorage: new MeasurementAgentStorage() as unknown as AgentStorage,
     providerSnapshotManager:
       new MeasurementProviderSnapshotManager() as unknown as ProviderSnapshotManager,
-    browserToolsEnabled: params.browserToolsEnabled,
-    browserToolsBroker: new MeasurementBrowserToolsBroker() as unknown as BrowserToolsBroker,
     callerAgentId: params.scope === "agent" ? MEASUREMENT_AGENT_ID : undefined,
     logger: pino({ level: "silent" }),
   });
@@ -201,7 +195,6 @@ async function measureCatalog(params: {
     const tools = result.tools.map(measureTool).sort((a, b) => b.bytes - a.bytes);
     return {
       label: params.label,
-      browserToolsEnabled: params.browserToolsEnabled,
       toolCount: result.tools.length,
       ...size,
       withoutOutputSchemas: {
@@ -223,15 +216,6 @@ function formatInteger(value: number): string {
 }
 
 function formatMarkdown(measurements: CatalogMeasurement[], top: number): string {
-  const [withoutBrowser, withBrowser] = measurements;
-  const delta =
-    withoutBrowser && withBrowser
-      ? {
-          tools: withBrowser.toolCount - withoutBrowser.toolCount,
-          bytes: withBrowser.bytes - withoutBrowser.bytes,
-          estimatedTokens: withBrowser.estimatedTokens - withoutBrowser.estimatedTokens,
-        }
-      : null;
   const lines: string[] = [];
   lines.push("# Paseo Agent Tool Catalog Context");
   lines.push("");
@@ -246,13 +230,6 @@ function formatMarkdown(measurements: CatalogMeasurement[], top: number): string
       )} | ${formatInteger(measurement.estimatedTokens)} | ${formatInteger(
         measurement.withoutOutputSchemas.savedEstimatedTokens,
       )} est. tokens |`,
-    );
-  }
-  if (delta) {
-    lines.push(
-      `| Browser-tool delta | +${formatInteger(delta.tools)} | +${formatInteger(
-        delta.bytes,
-      )} | +${formatInteger(delta.estimatedTokens)} | |`,
     );
   }
 
@@ -349,26 +326,14 @@ class MeasurementProviderSnapshotManager {
   }
 }
 
-class MeasurementBrowserToolsBroker {
-  public async execute(): Promise<BrowserToolsResponsePayload> {
-    throw new Error("Browser tools are not executed by the measurement script");
-  }
-}
-
 async function main(): Promise<void> {
   const options = parseCliOptions(process.argv.slice(2));
-  const measurements = await Promise.all([
-    measureCatalog({
+  const measurements = [
+    await measureCatalog({
       label: "Core tools",
-      browserToolsEnabled: false,
       scope: options.scope,
     }),
-    measureCatalog({
-      label: "Core + browser tools",
-      browserToolsEnabled: true,
-      scope: options.scope,
-    }),
-  ]);
+  ];
 
   if (options.format === "json") {
     process.stdout.write(`${JSON.stringify({ scope: options.scope, measurements }, null, 2)}\n`);

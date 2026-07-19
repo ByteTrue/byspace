@@ -30,8 +30,6 @@ export { DaemonClient };
 export type {
   DaemonClientConfig,
   DaemonEvent,
-  BrowserAutomationExecuteRequestMessage,
-  BrowserAutomationExecuteResponseMessage,
   WebSocketFactory,
   WebSocketLike,
 } from "./daemon-client.js";

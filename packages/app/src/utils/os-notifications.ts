@@ -1,7 +1,5 @@
 import { Asset } from "expo-asset";
-import { getDesktopHost } from "@/desktop/host";
 import { buildNotificationRoute, resolveNotificationTarget } from "./notification-routing";
-import { isNative } from "@/constants/platform";
 
 interface OsNotificationPayload {
   title: string;
@@ -21,23 +19,6 @@ export const WEB_NOTIFICATION_CLICK_EVENT = "paseo:web-notification-click";
 
 let permissionRequest: Promise<boolean> | null = null;
 let notificationIconUrl: string | null | undefined;
-
-function getDesktopNotificationSender():
-  | ((payload: {
-      title: string;
-      body?: string;
-      data?: Record<string, unknown>;
-    }) => Promise<boolean>)
-  | null {
-  const sendNotification = getDesktopHost()?.notification?.sendNotification;
-  return typeof sendNotification === "function"
-    ? (sendNotification as (payload: {
-        title: string;
-        body?: string;
-        data?: Record<string, unknown>;
-      }) => Promise<boolean>)
-    : null;
-}
 
 function getWebNotificationConstructor(): {
   permission: string;
@@ -91,9 +72,6 @@ async function ensureNotificationPermission(): Promise<boolean> {
 }
 
 export async function ensureOsNotificationPermission(): Promise<boolean> {
-  if (isNative) {
-    return false;
-  }
   return await ensureNotificationPermission();
 }
 
@@ -164,16 +142,6 @@ function attachWebClickHandler(
 }
 
 export async function sendOsNotification(payload: OsNotificationPayload): Promise<boolean> {
-  // Mobile/native notifications should be remote push only.
-  if (isNative) {
-    return false;
-  }
-
-  const desktopNotificationSender = getDesktopNotificationSender();
-  if (desktopNotificationSender) {
-    return await desktopNotificationSender(payload);
-  }
-
   const NotificationConstructor = getWebNotificationConstructor();
   if (NotificationConstructor) {
     const granted = await ensureNotificationPermission();

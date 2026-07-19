@@ -23,13 +23,18 @@ import { useKeyboardShortcutsStore } from "@/stores/keyboard-shortcuts-store";
 import { useSessionStore } from "@/stores/session-store";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
 import type { HostProfile } from "@/types/host-connection";
-import { formatVersionWithPrefix } from "@/desktop/updates/desktop-updates";
 import { resolveAppVersion } from "@/utils/app-version";
 import { openExternalUrl } from "@/utils/open-external-url";
 
 const DISCORD_URL = "https://discord.gg/jz8T2uahpH";
 const GITHUB_ISSUE_URL = "https://github.com/getpaseo/paseo/issues/new";
 const CHANGELOG_URL = "https://paseo.sh/changelog";
+
+function formatVersionWithPrefix(version: string | null | undefined): string {
+  const value = version?.trim();
+  if (!value) return "—";
+  return value.startsWith("v") ? value : `v${value}`;
+}
 const ThemedActivity = withUnistyles(Activity);
 const ThemedCircleHelp = withUnistyles(CircleHelp);
 const ThemedGift = withUnistyles(Gift);

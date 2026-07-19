@@ -4,7 +4,6 @@ import { AppState } from "react-native";
 import { useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { useClientActivity } from "@/hooks/use-client-activity";
-import { usePushTokenRegistration } from "@/hooks/use-push-token-registration";
 import { clearArchiveAgentPending } from "@/hooks/use-archive-agent";
 import { refreshAgentInitializationTimeout } from "@/hooks/use-agent-initialization";
 import { prefetchProvidersSnapshot } from "@/hooks/use-providers-snapshot";
@@ -887,9 +886,8 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
     ],
   );
 
-  // Client activity tracking (heartbeat, push token registration)
+  // Client activity tracking keeps daemon attention state current.
   useClientActivity({ client, focusedAgentId, focusedTerminalId, onAppResumed: handleAppResumed });
-  usePushTokenRegistration({ client, serverId });
 
   const notifyAgentAttention = useCallback(
     (params: {

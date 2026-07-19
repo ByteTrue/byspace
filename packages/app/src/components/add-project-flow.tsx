@@ -3,7 +3,6 @@ import type { WorkspaceProjectDescriptorPayload } from "@getpaseo/protocol/messa
 import {
   ArrowLeft,
   Folder,
-  FolderOpen,
   FolderPlus,
   Github,
   HardDrive,
@@ -58,12 +57,9 @@ import {
   type ProjectPickerOption,
 } from "@/components/project-picker-options";
 import { Shortcut } from "@/components/ui/shortcut";
-import { getIsElectronRuntime } from "@/constants/layout";
 import { isWeb } from "@/constants/platform";
-import { pickDirectory } from "@/desktop/pick-directory";
 import { useFetchQuery } from "@/data/query";
 import { getOpenProjectFailureReason, registerProjectDescriptor } from "@/hooks/open-project";
-import { useIsLocalDaemon, useLocalDaemonServerId } from "@/hooks/use-is-local-daemon";
 import { useCloneGithubProject, useOpenProject } from "@/hooks/use-open-project";
 import {
   useHosts,
@@ -144,7 +140,6 @@ function FlowBackButton({ onPress }: { onPress: () => void }) {
 
 function methodIcon(method: AddProjectMethodId): FlowRowOption["icon"] {
   if (method === "github") return Github;
-  if (method === "browse") return FolderOpen;
   if (method === "new-directory") return FolderPlus;
   return Search;
 }
@@ -303,7 +298,6 @@ export function AddProjectFlow({ request, onClose }: AddProjectFlowProps) {
   const githubSearchByHost = useHostFeatureMap(hostIds, "workspaceGithubRepositorySearch");
   // COMPAT(projectCreateDirectory): added in v0.1.108, remove gate after 2027-01-15.
   const createDirectoryByHost = useHostFeatureMap(hostIds, "projectCreateDirectory");
-  const localServerId = useLocalDaemonServerId();
   const availableHosts = useMemo<AddProjectHost[]>(
     () =>
       hosts.flatMap((host) => {
@@ -314,7 +308,7 @@ export function AddProjectFlow({ request, onClose }: AddProjectFlowProps) {
             serverId: host.serverId,
             label: host.label,
             canAddProject,
-            canBrowse: canAddProject && getIsElectronRuntime() && localServerId === host.serverId,
+            canBrowse: false,
             canCloneGithubRepositories: githubCloneByHost.get(host.serverId) === true,
             canSearchGithubRepositories: githubSearchByHost.get(host.serverId) === true,
             canCreateDirectory: createDirectoryByHost.get(host.serverId) === true,
@@ -327,7 +321,6 @@ export function AddProjectFlow({ request, onClose }: AddProjectFlowProps) {
       githubCloneByHost,
       githubSearchByHost,
       hosts,
-      localServerId,
       projectAddByHost,
     ],
   );
@@ -341,7 +334,6 @@ export function AddProjectFlow({ request, onClose }: AddProjectFlowProps) {
   const hostId = pageHostId(page);
   const host = hostId ? state.hosts.find((candidate) => candidate.serverId === hostId) : null;
   const client = useHostRuntimeClient(hostId ?? "");
-  const isLocalDaemon = useIsLocalDaemon(hostId ?? "");
   const recommendedPaths = useRecommendedProjectPaths(hostId);
   const openProject = useOpenProject(hostId);
   const cloneGithubProject = useCloneGithubProject(hostId);
@@ -349,7 +341,6 @@ export function AddProjectFlow({ request, onClose }: AddProjectFlowProps) {
   const setHasHydratedWorkspaces = useSessionStore((store) => store.setHasHydratedWorkspaces);
   const inputRef = useRef<TextInput>(null);
   const submissionInFlightRef = useRef(false);
-  const browseInFlightRef = useRef(false);
   const query = page.kind === "new-directory-name" ? "" : page.query;
   const [debouncedQuery, setDebouncedQuery] = useState(query);
 
@@ -465,35 +456,18 @@ export function AddProjectFlow({ request, onClose }: AddProjectFlowProps) {
     [hostId, openNewWorkspaceForProject, openProject],
   );
 
-  const browse = useCallback(async () => {
-    if (!hostId || !isLocalDaemon || browseInFlightRef.current) return;
-    browseInFlightRef.current = true;
-    try {
-      const path = await pickDirectory();
-      if (path) await openAddedProject(path, "method");
-    } catch {
-      setState((current) =>
-        setPageStatus(current, "method", { error: "Unable to browse for a directory" }),
-      );
-    } finally {
-      browseInFlightRef.current = false;
-    }
-  }, [hostId, isLocalDaemon, openAddedProject]);
-
   const selectMethod = useCallback(
     (method: AddProjectMethodId) => {
       if (!hostId) return;
       if (method === "directory-search") {
         setState((current) => openDirectorySearchPage(current, hostId));
-      } else if (method === "browse") {
-        void browse();
       } else if (method === "github") {
         setState((current) => openGithubSearchPage(current, hostId));
       } else {
         setState((current) => openNewDirectoryParentPage(current, hostId));
       }
     },
-    [browse, hostId],
+    [hostId],
   );
 
   const directoryPaths = useMemo(

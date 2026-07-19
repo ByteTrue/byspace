@@ -24,7 +24,6 @@ import { Gesture } from "react-native-gesture-handler";
 import Animated, { runOnJS, useAnimatedStyle, useSharedValue } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
-import { TitlebarDragRegion } from "@/components/desktop/titlebar-drag-region";
 import { resolveDesktopSidebarWidth } from "@/components/desktop-sidebar-layout";
 import { HostPicker } from "@/components/hosts/host-picker";
 import { SidebarHeaderRow } from "@/components/sidebar/sidebar-header-row";
@@ -52,7 +51,6 @@ import { useHosts } from "@/runtime/host-runtime";
 import { useActiveWorkspaceSelection } from "@/stores/navigation-active-workspace-store";
 import { useWorkspace } from "@/stores/session-store-hooks";
 import { usePanelStore } from "@/stores/panel-store";
-import { useOwnsWindowChromeCorner, WindowChromeSafeArea } from "@/utils/desktop-window";
 import { useCloseAgentListGesture } from "@/mobile-panels/gestures";
 import { MobilePanelOverlay } from "@/mobile-panels/presentation";
 import {
@@ -594,7 +592,6 @@ function MobileSidebar({
       panelStyle={mobileSidebarInsetStyle}
     >
       <View style={styles.sidebarContent} pointerEvents="auto">
-        <WindowChromeSafeArea placement="below" />
         <View style={styles.sidebarHeaderGroup}>
           <SidebarNewWorkspaceHeaderRow
             label={labels.newWorkspace}
@@ -620,7 +617,7 @@ function MobileSidebar({
             variant="compact"
           />
         </View>
-        <WindowChromeSafeArea placement="inline" style={styles.mobileCloseButtonRow}>
+        <View style={styles.mobileCloseButtonRow}>
           <Pressable
             style={styles.mobileCloseButton}
             onPress={closeSidebar}
@@ -638,7 +635,7 @@ function MobileSidebar({
               />
             )}
           </Pressable>
-        </WindowChromeSafeArea>
+        </View>
 
         {isInitialLoad && !hasActiveHostFilter ? (
           <SidebarAgentListSkeleton />
@@ -703,7 +700,6 @@ function DesktopSidebar({
   handleViewMore,
   handleViewSchedules,
 }: DesktopSidebarProps) {
-  const ownsTopLeft = useOwnsWindowChromeCorner("top-left");
   const pathname = usePathname();
   const hasActiveHostFilter = useSidebarViewStore((state) => state.hostFilters.length > 0);
   const isSessionsActive = pathname.includes("/sessions");
@@ -761,10 +757,6 @@ function DesktopSidebar({
     () => [styles.desktopSidebarBorder, { flex: 1, paddingTop: insetsTop }],
     [insetsTop],
   );
-  const sidebarHeaderGroupStyle = useMemo(
-    () => [styles.sidebarHeaderGroup, ownsTopLeft && styles.sidebarHeaderGroupBelowChrome],
-    [ownsTopLeft],
-  );
   return (
     <Animated.View
       accessibilityElementsHidden={!active}
@@ -774,14 +766,7 @@ function DesktopSidebar({
     >
       <View style={desktopSidebarBorderStyle}>
         <View style={styles.sidebarDragArea}>
-          {ownsTopLeft ? (
-            <View style={styles.desktopChromeRow}>
-              <TitlebarDragRegion />
-            </View>
-          ) : (
-            <TitlebarDragRegion />
-          )}
-          <View style={sidebarHeaderGroupStyle}>
+          <View style={styles.sidebarHeaderGroup}>
             <SidebarNewWorkspaceHeaderRow
               label={labels.newWorkspace}
               testID="sidebar-global-new-workspace"

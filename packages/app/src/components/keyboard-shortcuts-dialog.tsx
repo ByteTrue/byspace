@@ -2,7 +2,6 @@ import { useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { Text, View } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
-import { getIsElectronRuntime } from "@/constants/layout";
 import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
 import { Shortcut } from "@/components/ui/shortcut";
 import { useKeyboardShortcutsStore } from "@/stores/keyboard-shortcuts-store";
@@ -17,10 +16,9 @@ export function KeyboardShortcutsDialog() {
   const setOpen = useKeyboardShortcutsStore((s) => s.setShortcutsDialogOpen);
 
   const isMac = getShortcutOs() === "mac";
-  const isDesktopApp = getIsElectronRuntime();
   const sections = useMemo(
-    () => buildKeyboardShortcutHelpSections({ isMac, isDesktop: isDesktopApp }),
-    [isDesktopApp, isMac],
+    () => buildKeyboardShortcutHelpSections({ isMac, isDesktop: false }),
+    [isMac],
   );
 
   const handleClose = useCallback(() => setOpen(false), [setOpen]);

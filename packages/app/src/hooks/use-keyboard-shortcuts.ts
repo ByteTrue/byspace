@@ -1,9 +1,7 @@
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { usePathname, useRouter } from "expo-router";
-import { getIsElectronRuntime } from "@/constants/layout";
 import { useKeyboardShortcutsStore } from "@/stores/keyboard-shortcuts-store";
 import { setCommandCenterFocusRestoreElement } from "@/utils/command-center-focus-restore";
-import { getResidentBrowserWebview } from "@/components/browser-webview-resident";
 import { navigateToWorkspace } from "@/stores/navigation-active-workspace-store";
 import { keyboardActionDispatcher } from "@/keyboard/keyboard-action-dispatcher";
 import {
@@ -14,11 +12,6 @@ import {
   getWorkspaceIndexJumpModifierKey,
 } from "@/keyboard/keyboard-shortcuts";
 import { resolveKeyboardFocusScope } from "@/keyboard/focus-scope";
-import {
-  buildBrowserKeyboardPolicy,
-  parseBrowserShortcutInput,
-  shouldPublishBrowserShortcutPolicy,
-} from "@/keyboard/browser-shortcuts";
 import type { KeyboardFocusScope, KeyboardShortcutPayload } from "@/keyboard/actions";
 import {
   routeKeyboardShortcut,
@@ -28,8 +21,6 @@ import {
 import { getShortcutOs } from "@/utils/shortcut-platform";
 import { useOpenAddProject } from "@/hooks/use-open-add-project";
 import { useKeyboardShortcutOverrides } from "@/hooks/use-keyboard-shortcut-overrides";
-import { isNative } from "@/constants/platform";
-import { getDesktopHost, isElectronRuntime } from "@/desktop/host";
 import { isImeComposingKeyboardEvent } from "@/utils/keyboard-ime";
 import {
   type ActiveWorkspaceSelection,
@@ -55,7 +46,7 @@ export function useKeyboardShortcuts({
   const resetModifiers = useKeyboardShortcutsStore((s) => s.resetModifiers);
   const { overrides } = useKeyboardShortcutOverrides();
   const bindings = useMemo(() => buildEffectiveBindings(overrides), [overrides]);
-  const isDesktopApp = getIsElectronRuntime();
+  const isDesktopApp = false;
   const isMac = getShortcutOs() === "mac";
   const chordStateRef = useRef<ChordState>({
     candidateIndices: [],
@@ -66,22 +57,6 @@ export function useKeyboardShortcuts({
   const activeWorkspaceSelection = useActiveWorkspaceSelection();
   const keyboardWorkspaceSelectionRef = useRef<ActiveWorkspaceSelection | null>(null);
 
-  const publishBrowserShortcutPolicy = useCallback(
-    (chordState?: ChordState) => {
-      const policy =
-        enabled && !isMobile
-          ? buildBrowserKeyboardPolicy({
-              bindings,
-              chordState,
-              isMac,
-              isDesktop: isDesktopApp,
-            })
-          : { menuPrefixes: [], prefixes: [] };
-      void getDesktopHost()?.browser?.setShortcutPolicy?.(policy);
-    },
-    [bindings, enabled, isDesktopApp, isMac, isMobile],
-  );
-
   useEffect(() => {
     if (activeWorkspaceSelection) {
       keyboardWorkspaceSelectionRef.current = activeWorkspaceSelection;
@@ -89,30 +64,16 @@ export function useKeyboardShortcuts({
   }, [activeWorkspaceSelection]);
 
   useEffect(() => {
-    if (!isDesktopApp) {
-      return;
-    }
-
-    publishBrowserShortcutPolicy();
-  }, [isDesktopApp, publishBrowserShortcutPolicy]);
-
-  useEffect(() => {
     if (!enabled) return;
-    if (isNative) return;
     if (isMobile) return;
 
     // Only the modifier that actually performs the workspace-index jump on this
     // runtime should reveal the sidebar number badges (Alt on web, Cmd on
     // desktop Mac, Ctrl on desktop non-Mac). The store ORs altDown/cmdOrCtrlDown
     // to drive badge visibility, so we set the flag matching this runtime.
-    const badgeModifierKey = getWorkspaceIndexJumpModifierKey({ isMac, isDesktop: isDesktopApp });
+    const badgeModifierKey = getWorkspaceIndexJumpModifierKey({ isMac, isDesktop: false });
     const setBadgeModifierDown = (down: boolean) => {
-      const state = useKeyboardShortcutsStore.getState();
-      if (isDesktopApp) {
-        state.setCmdOrCtrlDown(down);
-      } else {
-        state.setAltDown(down);
-      }
+      useKeyboardShortcutsStore.getState().setAltDown(down);
     };
 
     const shouldHandle = () => {
@@ -221,7 +182,6 @@ export function useKeyboardShortcuts({
       browserFocusRestoreElement?: HTMLElement | null;
     }) => {
       const store = useKeyboardShortcutsStore.getState();
-      const previousChordState = chordStateRef.current;
       const result = resolveKeyboardShortcut({
         event: input.event,
         context: {
@@ -237,21 +197,9 @@ export function useKeyboardShortcuts({
             step: 0,
             timeoutId: null,
           };
-          publishBrowserShortcutPolicy();
         },
         bindings,
       });
-
-      chordStateRef.current = result.nextChordState;
-      if (
-        shouldPublishBrowserShortcutPolicy({
-          isBrowserInput: "browserId" in input.event,
-          previousChordState,
-          nextChordState: result.nextChordState,
-        })
-      ) {
-        publishBrowserShortcutPolicy(result.nextChordState);
-      }
 
       if (result.preventDefault && input.domEvent) {
         input.domEvent.preventDefault();
@@ -334,20 +282,6 @@ export function useKeyboardShortcuts({
     window.addEventListener("blur", handleBlurOrHide);
     document.addEventListener("visibilitychange", handleBlurOrHide);
 
-    const browserShortcutSubscription = isElectronRuntime()
-      ? getDesktopHost()?.events?.on?.("browser-shortcut-input", (payload) => {
-          const input = parseBrowserShortcutInput(payload);
-          if (!input) {
-            return;
-          }
-          resolveAndPerformShortcut({
-            event: input,
-            focusScope: "browser",
-            domEvent: null,
-            browserFocusRestoreElement: getResidentBrowserWebview(input.browserId),
-          });
-        })
-      : null;
     return () => {
       if (chordStateRef.current.timeoutId !== null) {
         clearTimeout(chordStateRef.current.timeoutId);
@@ -361,23 +295,16 @@ export function useKeyboardShortcuts({
       window.removeEventListener("keyup", handleKeyUp, true);
       window.removeEventListener("blur", handleBlurOrHide);
       document.removeEventListener("visibilitychange", handleBlurOrHide);
-      if (typeof browserShortcutSubscription === "function") {
-        browserShortcutSubscription();
-      } else {
-        void browserShortcutSubscription?.then((dispose) => dispose());
-      }
     };
   }, [
     bindings,
     cycleTheme,
     enabled,
     activeWorkspaceSelection,
-    isDesktopApp,
     isMac,
     isMobile,
     openProjectPickerAction,
     pathname,
-    publishBrowserShortcutPolicy,
     resetModifiers,
     router,
     toggleAgentList,

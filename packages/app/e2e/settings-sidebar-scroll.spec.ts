@@ -4,23 +4,7 @@ import { gotoAppShell, openSettings } from "./helpers/app";
 test.describe("Settings sidebar scrolling", () => {
   test.use({ viewport: { width: 900, height: 260 } });
 
-  test("desktop drag region does not cover the scroll body", async ({ page }) => {
-    await page.addInitScript(() => {
-      window.paseoDesktop = {
-        platform: "darwin",
-        events: { on: () => () => {} },
-        invoke: async (command: string) => {
-          if (command === "get_desktop_settings") {
-            return {
-              releaseChannel: "stable",
-              daemon: { manageBuiltInDaemon: true, keepRunningAfterQuit: true },
-            };
-          }
-          return null;
-        },
-      };
-    });
-
+  test("scroll body remains reachable in a short browser viewport", async ({ page }) => {
     await gotoAppShell(page);
     await openSettings(page);
 

@@ -10,7 +10,6 @@ on:
       - "package.json"
       - "package-lock.json"
       - "packages/app/**"
-      - "packages/expo-two-way-audio/**"
       - "packages/highlight/**"
       - "packages/protocol/**"
       - "packages/client/**"
@@ -43,7 +42,7 @@ jobs:
           nix_path: nixpkgs=channel:nixos-unstable
 
       - name: Update lockfile + Nix hash if stale
-        run: ./scripts/update-nix.sh
+        run: ./scripts/update-nix.sh --check
 
       - name: Build Nix package
         run: nix build .#default -o result
@@ -101,6 +100,3 @@ jobs:
           echo "::endgroup::"
 
           exit 1
-
-      - name: Build Nix desktop package
-        run: nix build .#desktop -o result-desktop

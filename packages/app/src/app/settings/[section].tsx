@@ -1,11 +1,9 @@
 import { Redirect, useLocalSearchParams } from "expo-router";
 import { useMemo } from "react";
-import { useHostRuntimeBootstrapState } from "@/app/_layout";
 import { HostRouteBootstrapBoundary } from "@/components/host-route-bootstrap-boundary";
 import { useLocalDaemonServerIdState } from "@/hooks/use-is-local-daemon";
 import { useHosts } from "@/runtime/host-runtime";
 import SettingsScreen from "@/screens/settings-screen";
-import { StartupSplashScreen } from "@/screens/startup-splash-screen";
 import {
   buildSettingsHostSectionRoute,
   buildSettingsRoute,
@@ -17,14 +15,8 @@ import {
 function SettingsDaemonRedirect() {
   const hosts = useHosts();
   const localDaemon = useLocalDaemonServerIdState();
-  const bootstrapState = useHostRuntimeBootstrapState();
-
-  if (localDaemon.status === "loading") {
-    return <StartupSplashScreen bootstrapState={bootstrapState} />;
-  }
 
   if (
-    localDaemon.status === "resolved" &&
     localDaemon.serverId !== null &&
     hosts.some((host) => host.serverId === localDaemon.serverId)
   ) {

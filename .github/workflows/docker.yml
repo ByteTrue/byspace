@@ -16,7 +16,6 @@ on:
       - "packages/app/**"
       - "packages/cli/**"
       - "packages/client/**"
-      - "packages/expo-two-way-audio/**"
       - "packages/highlight/**"
       - "packages/protocol/**"
       - "packages/relay/**"

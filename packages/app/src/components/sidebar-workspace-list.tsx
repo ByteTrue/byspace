@@ -123,12 +123,7 @@ import {
   getCurrentProjectRemoveReadiness,
   removeProjectFromHosts,
 } from "@/projects/project-remove";
-import {
-  isWeb as platformIsWeb,
-  isNative as platformIsNative,
-  getIsElectron,
-} from "@/constants/platform";
-import { getDesktopHost } from "@/desktop/host";
+import { isWeb as platformIsWeb, isNative as platformIsNative } from "@/constants/platform";
 
 const workspaceKeyExtractor = (workspace: SidebarWorkspacePlacement) => workspace.workspaceKey;
 
@@ -520,7 +515,6 @@ function ProjectRowTrailingActions({
         >
           <ProjectKebabMenu
             projectKey={project.projectKey}
-            projectPath={project.iconWorkingDir}
             onRemoveProject={onRemoveProject}
             removeProjectStatus={removeProjectStatus}
           />
@@ -532,9 +526,6 @@ function ProjectRowTrailingActions({
 
 const trash2LeadingIcon = <ThemedTrash2 size={14} uniProps={foregroundMutedColorMapping} />;
 const settingsLeadingIcon = <ThemedSettings size={14} uniProps={foregroundMutedColorMapping} />;
-const openInNewWindowLeadingIcon = (
-  <ThemedExternalLink size={14} uniProps={foregroundMutedColorMapping} />
-);
 
 function renderKebabTriggerIcon({ hovered }: { hovered?: boolean }) {
   return (
@@ -547,36 +538,19 @@ function renderKebabTriggerIcon({ hovered }: { hovered?: boolean }) {
 
 function ProjectKebabMenu({
   projectKey,
-  projectPath,
   onRemoveProject,
   removeProjectStatus,
 }: {
   projectKey: string;
-  projectPath: string;
   onRemoveProject: () => void;
   removeProjectStatus: "idle" | "pending" | "success";
 }) {
   const { t } = useTranslation();
-  const toast = useToast();
   const handleOpenProjectSettings = useCallback(() => {
     if (projectKey.trim().length === 0) return;
     router.navigate(buildProjectSettingsRoute(projectKey));
   }, [projectKey]);
   const canOpenProjectSettings = projectKey.trim().length > 0;
-  // Desktop-only: open a second window that lands on this project via the same
-  // open-project flow as a CLI launch. The project stays visible here too — no
-  // ownership, no move.
-  const canOpenInNewWindow = getIsElectron() && projectPath.trim().length > 0;
-  const handleOpenInNewWindow = useCallback(() => {
-    const trimmedPath = projectPath.trim();
-    if (trimmedPath.length === 0) return;
-    void getDesktopHost()
-      ?.window?.openNew?.({ pendingOpenProjectPath: trimmedPath })
-      ?.catch((error) => {
-        console.warn("[sidebar] openNew failed", error);
-        toast.error(t("sidebar.project.actions.openNewWindowFailed"));
-      });
-  }, [projectPath, t, toast]);
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
@@ -596,15 +570,6 @@ function ProjectKebabMenu({
             onSelect={handleOpenProjectSettings}
           >
             {t("sidebar.project.actions.openSettings")}
-          </DropdownMenuItem>
-        ) : null}
-        {canOpenInNewWindow ? (
-          <DropdownMenuItem
-            testID={`sidebar-project-menu-open-new-window-${projectKey}`}
-            leading={openInNewWindowLeadingIcon}
-            onSelect={handleOpenInNewWindow}
-          >
-            {t("sidebar.project.actions.openNewWindow")}
           </DropdownMenuItem>
         ) : null}
         <DropdownMenuItem

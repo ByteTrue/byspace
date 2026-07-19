@@ -52,7 +52,6 @@ import {
 import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
 import { useDismissKeyboardOnOpen } from "@/components/ui/keyboard-dismiss";
 import { useShortcutKeys } from "@/hooks/use-shortcut-keys";
-import { useIosHardwareKeyboardSubmit } from "@/hooks/use-ios-hardware-keyboard-submit";
 import { formatShortcut, type ShortcutKey } from "@/utils/format-shortcut";
 import { getShortcutOs } from "@/utils/shortcut-platform";
 import type { MessageInputKeyboardActionKind } from "@/keyboard/actions";
@@ -1685,10 +1684,6 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
         defaultSendBehavior,
         isAgentRunning,
       });
-    useIosHardwareKeyboardSubmit({
-      isEnabled: isInputFocused && !isSendButtonDisabled,
-      onSubmit: handleDefaultSendAction,
-    });
     const submitAccessibilityLabel = resolveSubmitAccessibilityLabel({
       submitButtonAccessibilityLabel,
       canPressLoadingButton,

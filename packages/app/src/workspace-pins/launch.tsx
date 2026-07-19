@@ -1,20 +1,15 @@
 import { useMemo, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
-import { Globe, SquarePen, SquareTerminal } from "lucide-react-native";
+import { SquarePen, SquareTerminal } from "lucide-react-native";
 import { withUnistyles } from "react-native-unistyles";
 import {
   getTerminalProfileIcon,
   resolveTerminalProfiles,
 } from "@getpaseo/protocol/terminal-profiles";
 import { getProviderIcon } from "@/components/provider-icons";
-import { getIsElectron } from "@/constants/platform";
 import { useDaemonConfig } from "@/hooks/use-daemon-config";
 import type { Theme } from "@/styles/theme";
-import {
-  isPinnedTargetAvailable,
-  pinnedTargetKey,
-  type PinnedTabTarget,
-} from "@/workspace-pins/target";
+import { pinnedTargetKey, type PinnedTabTarget } from "@/workspace-pins/target";
 import { usePinnedTargetsStore } from "@/workspace-pins/store";
 
 export interface ResolvedPin {
@@ -33,7 +28,6 @@ const mutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMut
 
 const ThemedSquarePen = withUnistyles(SquarePen);
 const ThemedSquareTerminal = withUnistyles(SquareTerminal);
-const ThemedGlobe = withUnistyles(Globe);
 
 function ProviderPinIcon({
   iconKey,
@@ -69,9 +63,6 @@ export function usePinnedLaunchers({ serverId, onLaunch }: UsePinnedLaunchersInp
   return useMemo(() => {
     const resolved: ResolvedPin[] = [];
     for (const target of pinned) {
-      if (!isPinnedTargetAvailable(target, { isElectron: getIsElectron() })) {
-        continue;
-      }
       if (target.kind === "draft") {
         resolved.push({
           key: pinnedTargetKey(target),
@@ -86,15 +77,6 @@ export function usePinnedLaunchers({ serverId, onLaunch }: UsePinnedLaunchersInp
           key: pinnedTargetKey(target),
           label: t("workspace.tabs.actions.newTerminal"),
           icon: <ThemedSquareTerminal size={14} uniProps={mutedColorMapping} />,
-          onPress: () => onLaunch(target),
-        });
-        continue;
-      }
-      if (target.kind === "browser") {
-        resolved.push({
-          key: pinnedTargetKey(target),
-          label: t("workspace.tabs.actions.newBrowser"),
-          icon: <ThemedGlobe size={14} uniProps={mutedColorMapping} />,
           onPress: () => onLaunch(target),
         });
         continue;

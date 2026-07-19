@@ -1,6 +1,5 @@
 import { isSyntaxThemeId, type SyntaxThemeId } from "@getpaseo/highlight";
 import type { QueryClient } from "@tanstack/react-query";
-import type { DesktopSettings } from "@/desktop/settings/desktop-settings";
 import { parseAppLanguage, type AppLanguage } from "@/i18n/locales";
 import { THEME_TO_UNISTYLES, type ThemeName } from "@/styles/theme";
 
@@ -9,7 +8,6 @@ export const APP_SETTINGS_QUERY_KEY = ["app-settings"];
 const LEGACY_SETTINGS_KEY = "@paseo:settings";
 
 export type SendBehavior = "interrupt" | "queue";
-export type ReleaseChannel = "stable" | "beta";
 export type ServiceUrlBehavior = "ask" | "in-app" | "external";
 export type WorkspaceTitleSource = "title" | "branch";
 export type ToolCallDetailLevel = "overview" | "detailed";
@@ -45,10 +43,7 @@ export interface AppSettings {
   toolCallDetailLevel: ToolCallDetailLevel;
 }
 
-export interface Settings extends AppSettings {
-  manageBuiltInDaemon: boolean;
-  releaseChannel: ReleaseChannel;
-}
+export type Settings = AppSettings;
 
 type StoredAppSettings = Partial<AppSettings> & { compactToolCalls?: unknown };
 
@@ -68,29 +63,15 @@ export const DEFAULT_CLIENT_SETTINGS: AppSettings = {
   toolCallDetailLevel: "detailed",
 };
 
-export const DEFAULT_APP_SETTINGS: Settings = {
-  ...DEFAULT_CLIENT_SETTINGS,
-  manageBuiltInDaemon: true,
-  releaseChannel: "stable",
-};
+export const DEFAULT_APP_SETTINGS: Settings = DEFAULT_CLIENT_SETTINGS;
 
 export interface KeyValueStorage {
   getItem(key: string): Promise<string | null>;
   setItem(key: string, value: string): Promise<void>;
 }
 
-export interface DesktopSettingsBridge {
-  isElectron(): boolean;
-  loadDesktopSettings(): Promise<DesktopSettings>;
-  migrateLegacyDesktopSettings(input: {
-    manageBuiltInDaemon?: boolean;
-    releaseChannel?: ReleaseChannel;
-  }): Promise<void>;
-}
-
 export interface SettingsDeps {
   storage: KeyValueStorage;
-  desktop: DesktopSettingsBridge;
 }
 
 export async function saveAppSettings(input: {
@@ -134,29 +115,7 @@ export async function loadAppSettingsFromStorage(deps: SettingsDeps): Promise<Ap
 }
 
 export async function loadSettingsFromStorage(deps: SettingsDeps): Promise<Settings> {
-  const legacyDesktopSettings = deps.desktop.isElectron()
-    ? await loadLegacyDesktopSettingsFromStorage(deps.storage)
-    : null;
-  const appSettings = await loadAppSettingsFromStorage(deps);
-
-  if (!deps.desktop.isElectron()) {
-    return {
-      ...DEFAULT_APP_SETTINGS,
-      ...appSettings,
-    };
-  }
-
-  if (legacyDesktopSettings) {
-    await deps.desktop.migrateLegacyDesktopSettings(legacyDesktopSettings);
-  }
-
-  const desktopSettings = await deps.desktop.loadDesktopSettings();
-  return {
-    ...DEFAULT_APP_SETTINGS,
-    ...appSettings,
-    manageBuiltInDaemon: desktopSettings.daemon.manageBuiltInDaemon,
-    releaseChannel: desktopSettings.releaseChannel,
-  };
+  return await loadAppSettingsFromStorage(deps);
 }
 
 export function normalizeAppSettings(value: unknown): AppSettings {
@@ -307,43 +266,4 @@ export function sanitizeFontFamily(value: unknown): string | null {
     return null; // control chars would corrupt the font-family string
   }
   return trimmed; // quotes/commas are legit in stacks
-}
-
-async function loadLegacyDesktopSettingsFromStorage(storage: KeyValueStorage): Promise<{
-  manageBuiltInDaemon?: boolean;
-  releaseChannel?: ReleaseChannel;
-} | null> {
-  const stored = await loadRendererSettingsPayload(storage);
-  if (!stored) {
-    return null;
-  }
-
-  const result: {
-    manageBuiltInDaemon?: boolean;
-    releaseChannel?: ReleaseChannel;
-  } = {};
-
-  if (typeof stored.manageBuiltInDaemon === "boolean") {
-    result.manageBuiltInDaemon = stored.manageBuiltInDaemon;
-  }
-  if (stored.releaseChannel === "stable" || stored.releaseChannel === "beta") {
-    result.releaseChannel = stored.releaseChannel;
-  }
-
-  return Object.keys(result).length > 0 ? result : null;
-}
-
-async function loadRendererSettingsPayload(
-  storage: KeyValueStorage,
-): Promise<Record<string, unknown> | null> {
-  const current = await storage.getItem(APP_SETTINGS_KEY);
-  if (current) {
-    return JSON.parse(current) as Record<string, unknown>;
-  }
-
-  const legacy = await storage.getItem(LEGACY_SETTINGS_KEY);
-  if (!legacy) {
-    return null;
-  }
-  return JSON.parse(legacy) as Record<string, unknown>;
 }

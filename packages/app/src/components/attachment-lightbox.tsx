@@ -8,7 +8,6 @@ import { useTranslation } from "react-i18next";
 import type { AttachmentMetadata } from "@/attachments/types";
 import { useAttachmentPreviewUrl } from "@/attachments/use-attachment-preview-url";
 import { isWeb } from "@/constants/platform";
-import { WindowChromeRootRegion, WindowChromeSafeArea } from "@/utils/desktop-window";
 
 interface AttachmentLightboxProps {
   metadata: AttachmentMetadata | null;
@@ -65,46 +64,44 @@ export function AttachmentLightbox({ metadata, onClose }: AttachmentLightboxProp
 
   return (
     <Modal transparent animationType="fade" statusBarTranslucent visible onRequestClose={onClose}>
-      <WindowChromeRootRegion corners="both">
-        <View style={styles.root}>
-          <Pressable
-            testID="attachment-lightbox-backdrop"
-            accessibilityRole="button"
-            accessibilityLabel={t("message.attachments.dismissImage")}
-            onPress={onClose}
-            style={styles.backdrop}
-          />
-          <View style={styles.contentLayer}>
-            <View style={styles.imageArea}>
-              {hasError ? (
-                <Text style={styles.errorText}>{t("message.attachments.imageLoadFailed")}</Text>
-              ) : (
-                <Pressable onPress={noopPress} style={styles.imagePressable}>
-                  <ExpoImage
-                    testID="attachment-lightbox-image"
-                    source={imageSource}
-                    contentFit="contain"
-                    onError={handleImageError}
-                    style={imageFillStyle}
-                  />
-                </Pressable>
-              )}
-            </View>
-            <WindowChromeSafeArea placement="inline" style={closeButtonRowStyle}>
-              <Pressable
-                testID="attachment-lightbox-close"
-                accessibilityRole="button"
-                accessibilityLabel={t("message.attachments.closeImage")}
-                hitSlop={8}
-                onPress={onClose}
-                style={closeButtonStyle}
-              >
-                <X size={16} color={theme.colors.foregroundMuted} />
+      <View style={styles.root}>
+        <Pressable
+          testID="attachment-lightbox-backdrop"
+          accessibilityRole="button"
+          accessibilityLabel={t("message.attachments.dismissImage")}
+          onPress={onClose}
+          style={styles.backdrop}
+        />
+        <View style={styles.contentLayer}>
+          <View style={styles.imageArea}>
+            {hasError ? (
+              <Text style={styles.errorText}>{t("message.attachments.imageLoadFailed")}</Text>
+            ) : (
+              <Pressable onPress={noopPress} style={styles.imagePressable}>
+                <ExpoImage
+                  testID="attachment-lightbox-image"
+                  source={imageSource}
+                  contentFit="contain"
+                  onError={handleImageError}
+                  style={imageFillStyle}
+                />
               </Pressable>
-            </WindowChromeSafeArea>
+            )}
+          </View>
+          <View style={closeButtonRowStyle}>
+            <Pressable
+              testID="attachment-lightbox-close"
+              accessibilityRole="button"
+              accessibilityLabel={t("message.attachments.closeImage")}
+              hitSlop={8}
+              onPress={onClose}
+              style={closeButtonStyle}
+            >
+              <X size={16} color={theme.colors.foregroundMuted} />
+            </Pressable>
           </View>
         </View>
-      </WindowChromeRootRegion>
+      </View>
     </Modal>
   );
 }

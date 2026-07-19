@@ -30,8 +30,7 @@ import { HEADER_INNER_HEIGHT } from "@/constants/layout";
 import { GitDiffPane } from "@/git/diff-pane";
 import { FileExplorerPane } from "./file-explorer-pane";
 import { useKeyboardShiftStyle } from "@/hooks/use-keyboard-shift-style";
-import { useHasOwnedWindowChromeObstruction, WindowChromeSafeArea } from "@/utils/desktop-window";
-import { TitlebarDragRegion } from "@/components/desktop/titlebar-drag-region";
+
 import { RetainedPanelActivity } from "@/components/retained-panel";
 import { SidebarResizeHandle } from "@/components/sidebar-resize-handle";
 import { buildWorkspaceAttachmentScopeKey } from "@/attachments/workspace-attachments-store";
@@ -288,7 +287,7 @@ function ExplorerSidebarContent({
   const { theme } = useUnistyles();
   const { t } = useTranslation();
   const toast = useToast();
-  const hasRightWindowControls = useHasOwnedWindowChromeObstruction("top-right");
+
   const canQueryPullRequest = isGit && Boolean(workspaceRoot);
   const prPane = usePrPaneData({
     serverId,
@@ -316,13 +315,7 @@ function ExplorerSidebarContent({
   return (
     <View style={styles.sidebarContent} pointerEvents="auto">
       {/* Header with tabs and close button */}
-      <WindowChromeSafeArea
-        placement="inline"
-        horizontalPadding={theme.spacing[2]}
-        style={styles.header}
-        testID="explorer-header"
-      >
-        <TitlebarDragRegion />
+      <View style={styles.header} testID="explorer-header">
         <View style={styles.tabsContainer}>
           {isGit && (
             <ExplorerTabButton
@@ -359,29 +352,25 @@ function ExplorerSidebarContent({
           )}
         </View>
         <View style={styles.headerRightSection}>
-          {!hasRightWindowControls && (
-            <Pressable
-              onPress={onClose}
-              style={styles.closeButton}
-              testID="explorer-close"
-              nativeID="explorer-close"
-              accessible
-              accessibilityRole="button"
-              accessibilityLabel={t("workspace.tabs.explorer.close")}
-              hitSlop={8}
-            >
-              {({ hovered, pressed }) => (
-                <X
-                  size={18}
-                  color={
-                    hovered || pressed ? theme.colors.foreground : theme.colors.foregroundMuted
-                  }
-                />
-              )}
-            </Pressable>
-          )}
+          <Pressable
+            onPress={onClose}
+            style={styles.closeButton}
+            testID="explorer-close"
+            nativeID="explorer-close"
+            accessible
+            accessibilityRole="button"
+            accessibilityLabel={t("workspace.tabs.explorer.close")}
+            hitSlop={8}
+          >
+            {({ hovered, pressed }) => (
+              <X
+                size={18}
+                color={hovered || pressed ? theme.colors.foreground : theme.colors.foregroundMuted}
+              />
+            )}
+          </Pressable>
         </View>
-      </WindowChromeSafeArea>
+      </View>
 
       {/* Content based on active tab */}
       <View style={styles.contentArea} testID="explorer-content-area">

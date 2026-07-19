@@ -30,25 +30,8 @@ const originalGlobals: GlobalSnapshot = {
   location: (globalThis as { location?: unknown }).location,
 };
 
-async function loadModuleForPlatform(
-  platform: "web" | "ios" | "android",
-  options?: {
-    desktopHost?: {
-      notification?: {
-        sendNotification?: (payload: {
-          title: string;
-          body?: string;
-          data?: Record<string, unknown>;
-        }) => Promise<boolean>;
-      };
-    } | null;
-  },
-) {
+async function loadModule() {
   vi.resetModules();
-  vi.doMock("react-native", () => ({ Platform: { OS: platform } }));
-  vi.doMock("@/desktop/host", () => ({
-    getDesktopHost: () => options?.desktopHost ?? null,
-  }));
   vi.doMock("expo-asset", () => ({
     Asset: {
       fromModule: vi.fn(() => ({
@@ -93,7 +76,6 @@ describe("sendOsNotification", () => {
   });
 
   afterEach(() => {
-    vi.doUnmock("react-native");
     vi.restoreAllMocks();
     vi.resetModules();
     restoreGlobals();
@@ -132,7 +114,7 @@ describe("sendOsNotification", () => {
     (globalThis as { dispatchEvent?: unknown }).dispatchEvent = dispatchEvent;
     (globalThis as { location?: unknown }).location = { assign };
 
-    const { sendOsNotification, WEB_NOTIFICATION_CLICK_EVENT } = await loadModuleForPlatform("web");
+    const { sendOsNotification, WEB_NOTIFICATION_CLICK_EVENT } = await loadModule();
 
     const sent = await sendOsNotification({
       title: "Agent finished",
@@ -192,7 +174,7 @@ describe("sendOsNotification", () => {
     (globalThis as { dispatchEvent?: unknown }).dispatchEvent = dispatchEvent;
     (globalThis as { location?: unknown }).location = { assign };
 
-    const { sendOsNotification } = await loadModuleForPlatform("web");
+    const { sendOsNotification } = await loadModule();
 
     await sendOsNotification({
       title: "Agent finished",
@@ -208,7 +190,7 @@ describe("sendOsNotification", () => {
 
   it("returns false when the Notification API is unavailable", async () => {
     (globalThis as { Notification?: unknown }).Notification = undefined;
-    const { sendOsNotification } = await loadModuleForPlatform("web");
+    const { sendOsNotification } = await loadModule();
     const sent = await sendOsNotification({
       title: "Agent finished",
       body: "Done",
@@ -245,7 +227,7 @@ describe("sendOsNotification", () => {
     (globalThis as { dispatchEvent?: unknown }).dispatchEvent = vi.fn();
     (globalThis as { location?: unknown }).location = { assign: vi.fn() };
 
-    const { sendOsNotification } = await loadModuleForPlatform("web");
+    const { sendOsNotification } = await loadModule();
 
     const sent = await sendOsNotification({
       title: "Paseo notification test",
@@ -255,30 +237,5 @@ describe("sendOsNotification", () => {
     expect(sent).toBe(true);
     expect(created).toHaveLength(1);
     expect(created[0]?.clickListeners).toHaveLength(0);
-  });
-
-  it("uses the desktop notification bridge when available", async () => {
-    const sendNotification = vi.fn(async () => true);
-
-    const { sendOsNotification } = await loadModuleForPlatform("web", {
-      desktopHost: {
-        notification: {
-          sendNotification,
-        },
-      },
-    });
-
-    const sent = await sendOsNotification({
-      title: "Paseo notification test",
-      body: "If you can see this, desktop notifications work.",
-      data: { serverId: "srv-1" },
-    });
-
-    expect(sent).toBe(true);
-    expect(sendNotification).toHaveBeenCalledWith({
-      title: "Paseo notification test",
-      body: "If you can see this, desktop notifications work.",
-      data: { serverId: "srv-1" },
-    });
   });
 });

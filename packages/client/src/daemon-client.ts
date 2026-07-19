@@ -135,10 +135,6 @@ import {
   normalizeProvidersSnapshotPayload,
 } from "./compat/normalize-provider-models.js";
 import { TerminalStreamRouter, type TerminalStreamEvent } from "./terminal-stream-router.js";
-import type {
-  BrowserAutomationExecuteRequest,
-  BrowserAutomationExecuteResponse,
-} from "@getpaseo/protocol/browser-automation/rpc-schemas";
 
 export interface Logger {
   debug(obj: object, msg?: string): void;
@@ -281,8 +277,6 @@ export type DaemonEvent =
   | { type: "error"; message: string };
 
 export type DaemonEventHandler = (event: DaemonEvent) => void;
-export type BrowserAutomationExecuteRequestMessage = BrowserAutomationExecuteRequest;
-export type BrowserAutomationExecuteResponseMessage = BrowserAutomationExecuteResponse;
 
 export interface DaemonClientConfig {
   url: string;
@@ -4236,10 +4230,6 @@ export class DaemonClient {
       },
       responseType: "set_daemon_config_response",
     });
-  }
-
-  sendBrowserAutomationExecuteResponse(response: BrowserAutomationExecuteResponse): void {
-    this.sendSessionMessageStrict(response);
   }
 
   async readProjectConfig(repoRoot: string, requestId?: string): Promise<ReadProjectConfigPayload> {

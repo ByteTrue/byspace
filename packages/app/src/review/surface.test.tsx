@@ -97,8 +97,6 @@ vi.mock("react-native-unistyles", () => ({
 }));
 
 vi.mock("@/constants/platform", () => ({
-  getIsElectron: () => false,
-  getIsElectronMac: () => false,
   isNative: false,
   isWeb: true,
 }));

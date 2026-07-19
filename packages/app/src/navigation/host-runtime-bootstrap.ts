@@ -1,5 +1,5 @@
 import type { ActiveWorkspaceSelection } from "@/stores/navigation-active-workspace-store";
-import type { DaemonStartResult } from "@/runtime/daemon-start-service";
+type DaemonStartResult = { ok: true } | { ok: false; error: string };
 import type { Href } from "expo-router";
 import {
   buildHostRootRoute,

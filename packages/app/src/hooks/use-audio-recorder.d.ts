@@ -1,1 +1,1 @@
-export * from "./use-audio-recorder.native";
+export * from "./use-audio-recorder.web";
