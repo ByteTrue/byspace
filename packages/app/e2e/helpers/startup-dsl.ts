@@ -22,7 +22,6 @@ export function startupScenario(page: Page) {
 class StartupScenario {
   private readonly page: Page;
   private savedHosts: SavedHostInput[] = [];
-  private desktopBridge = false;
   private blockedEndpointPorts = new Set<string>();
   private viewport: { width: number; height: number } | null = null;
 
@@ -41,11 +40,6 @@ class StartupScenario {
     if (port) {
       this.blockedEndpointPorts.add(port);
     }
-    return this;
-  }
-
-  withPendingDesktopDaemon(): this {
-    this.desktopBridge = true;
     return this;
   }
 
@@ -74,10 +68,6 @@ class StartupScenario {
   private async prepare(): Promise<void> {
     if (this.viewport) {
       await this.page.setViewportSize(this.viewport);
-    }
-
-    if (this.desktopBridge) {
-      await installPendingDesktopBridge(this.page);
     }
 
     for (const port of this.blockedEndpointPorts) {
@@ -186,13 +176,6 @@ class StartupAssertions {
     return this;
   }
 
-  async expectsDesktopDaemonStartup(): Promise<this> {
-    await expect(this.page.getByTestId("startup-splash")).toBeVisible({
-      timeout: 15_000,
-    });
-    return this;
-  }
-
   async expectsSidebarHidden(): Promise<this> {
     await expect(this.page.locator('[data-testid="sidebar-settings"]:visible')).toHaveCount(0);
     await expect(this.page.locator('[data-testid="sidebar-project-list"]:visible')).toHaveCount(0);
@@ -203,39 +186,6 @@ class StartupAssertions {
     await expect(this.page).not.toHaveURL(/\/h\/undefined\/workspace\/undefined/);
     return this;
   }
-}
-
-async function installPendingDesktopBridge(page: Page): Promise<void> {
-  await page.addInitScript(() => {
-    (window as unknown as { byspaceDesktop: unknown }).byspaceDesktop = {
-      platform: "darwin",
-      invoke: async (command: string) => {
-        if (command === "start_desktop_daemon") {
-          await new Promise(() => {
-            // Keep the daemon in the startup phase until the test ends.
-          });
-        }
-        if (command === "desktop_daemon_status") {
-          return {
-            serverId: "srv_desktop_pending",
-            status: "starting",
-            listen: null,
-            hostname: null,
-            pid: null,
-            home: "",
-            version: null,
-            error: null,
-          };
-        }
-        if (command === "desktop_daemon_logs") {
-          return { logPath: "", contents: "" };
-        }
-        return null;
-      },
-      getPendingOpenProject: async () => null,
-      events: { on: async () => () => undefined },
-    };
-  });
 }
 
 function buildStoredHost(input: {

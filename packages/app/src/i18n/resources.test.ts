@@ -213,7 +213,6 @@ describe("translation resources", () => {
   it("includes Settings expansion keys for the Batch 3A migration", () => {
     expect(en.settings.diagnostics.title).toBe("Diagnostics");
     expect(en.settings.about.title).toBe("About");
-    expect(en.settings.about.releaseChannel.label).toBe("Release channel");
     expect(en.settings.appearance.theme.title).toBe("Theme");
     expect(en.settings.appearance.fonts.interfaceFont).toBe("Interface font");
     expect(en.settings.shortcuts.actions.rebind).toBe("Rebind");

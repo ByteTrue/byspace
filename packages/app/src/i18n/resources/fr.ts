@@ -959,175 +959,6 @@ export const fr: TranslationResources = {
       title: "Commencer à partir de",
     },
   },
-  desktop: {
-    quitting: {
-      title: "QuitterBySpace...",
-      detail: "Arrêt du démon local.",
-    },
-    daemon: {
-      title: "Daemon",
-      status: {
-        title: "Statut",
-        builtInOnly: "Seul le démon de bureau intégré est affiché ici",
-        running: "en cours d'exécution",
-        notRunning: "ne fonctionne pas",
-        pid: "PID{{pid}}",
-      },
-      management: {
-        title: "Gérer le démon intégré",
-        hint: "LaissezBySpacedémarrer et arrêter le démon intégré",
-        pauseTitle: "Suspendre le démon intégré",
-        pauseMessage:
-          "Cela arrêtera immédiatement le démon intégré. Les agents en cours d'exécution et les terminaux connectés au démon intégré seront arrêtés.",
-        pauseAndStop: "Pause et arrêt",
-        registrationFailed:
-          "Built-in daemon started, but BySpace could not save the localhost connection. Toggle daemon management off and on again, or add localhost manually.",
-        pausedStopFailed:
-          "La gestion du démon intégré a été suspendue, maisBySpacen'a ​​pas pu arrêter le démon.",
-        updateFailed: "Impossible de mettre à jour la gestion des démons intégrés.",
-      },
-      keepRunning: {
-        title: "Laisser le démon fonctionner après avoir quitté",
-        hint: "Daemoncontinue de fonctionner lorsque vous quittezBySpace",
-      },
-      logs: {
-        title: "Fichier journal",
-        modalTitle: "JournauxDaemon",
-        unavailable: "Chemin du journal indisponible",
-        empty: "(le fichier journal est vide)",
-        copied: "Chemin du journal copié.",
-        copyFailed: "Impossible de copier le chemin du journal.",
-        open: "Journaux ouverts",
-        copyPath: "Copier le chemin",
-      },
-      fullStatus: {
-        title: "Statut complet",
-        modalTitle: "StatutDaemon",
-        hint: "Exécute`byspace daemon status`et affiche la sortie",
-        view: "Afficher l'état",
-        copied: "Statut copié dans le presse-papiers.",
-        fetchFailed: "Échec de la récupération de l'état du démon:{{message}}",
-      },
-      advancedSettings: "Paramètres avancés",
-      openAdvancedSettings: "Ouvrir les paramètres avancés du démon",
-      versionMismatch:
-        "Les versions de l'application et du démon ne correspondent pas. Mettez à jour les deux vers la même version pour une meilleure expérience.",
-      loadFailed: "Impossible de charger l'état du démon de bureau.",
-    },
-    updates: {
-      status: {
-        checking: "Vérification des mises à jour de l'application...",
-        installing: "Installation de la mise à jour de l'application...",
-        upToDate: "L'application est à jour.",
-        upToDateWithLastChecked: "Up to date. Last checked at {{time}}.",
-        pending: "Nous vous informerons lorsque la mise à jour sera prête.",
-        pendingWithLastChecked:
-          "Nous vous informerons lorsque la mise à jour sera prête. Dernière vérification à {{time}}.",
-        pendingWithVersion: "Mise à jour trouvée : {{version}}. Téléchargement...",
-        pendingWithVersionAndLastChecked:
-          "Mise à jour trouvée : {{version}}. Téléchargement... Dernière vérification à {{time}}.",
-        availableWithVersion: "Mise à jour prête:{{version}}",
-        availableWithVersionAndLastChecked:
-          "Mise à jour prête:{{version}}. Dernière vérification à {{time}}.",
-        available: "Une mise à jour de l'application est prête à être installée.",
-        availableWithLastChecked:
-          "Une mise à jour de l'application est prête à être installée. Dernière vérification à {{time}}.",
-        installed: "Mise à jour de l'application installée. Redémarrage requis.",
-        failed: "Échec de la mise à jour de l'application.",
-        idle: "L'état de la mise à jour n'a pas encore été vérifié.",
-      },
-      installError: "Impossible d'installer la mise à jour de l'application de bureau.",
-      callout: {
-        installingTitle: "Installation de la mise à jour",
-        failedTitle: "La mise à jour a échoué",
-        availableTitle: "Mise à jour disponible",
-        genericError: "Quelque chose s'est mal passé.",
-        whatsNew: "Quoi de neuf",
-        installingAction: "Installation...",
-        installAndRestart: "Installer et redémarrer",
-        installingDescription: "Installation et redémarrage...",
-        versionReady: "{{version}}est prêt à être installé.",
-        newVersionReady: "Une nouvelle version est prête à être installée.",
-        restartWarning:
-          "La mise à niveau de l'application arrêtera l'exécution des agents et fermera les sessions de terminal.",
-      },
-    },
-    settings: {
-      loadFailed: "Impossible de charger les paramètres du bureau.",
-      saveFailed: "Impossible d'enregistrer les paramètres du bureau.",
-    },
-    rosetta: {
-      title: "Téléchargez la versionApple Silicon",
-      runningIntel: "Vous exécutez la versionInteldeBySpacesousRosettasurApple Silicon.",
-      highCpu:
-        "Cela entraîne une utilisation élevée du processeur. Téléchargez la versionApple Siliconpour le réparer.",
-      download: "Télécharger",
-    },
-    permissions: {
-      notifications: {
-        allowed: "Les notifications sont autorisées par le système d'exploitation.",
-        denied: "Les notifications sont refusées dans les paramètres système.",
-        notGranted: "Les notifications n'ont pas encore été accordées.",
-        webOnly:
-          "L’état des notifications sur le bureau est uniquement disponible sur l’exécution Web.",
-        supported: "Les notifications de bureau sont prises en charge.",
-        unsupported:
-          "Les notifications de bureau ne sont pas prises en charge sur cette plateforme.",
-        apiUnavailable: "L'API de notification Web n'est pas disponible dans cet environnement.",
-        requestsWebOnly:
-          "Les demandes de notification sur le bureau sont uniquement disponibles sur l'exécution Web.",
-        requestUnavailable: "L'API de notification Web requestPermission() n'est pas disponible.",
-        requestFailed: "Échec de la demande d'autorisation de notification:{{message}}",
-        unexpectedState: "État d'autorisation de notification inattendu:{{state}}",
-      },
-      microphone: {
-        webOnly:
-          "L’état du microphone de bureau est uniquement disponible dans l’environnement d’exécution Web.",
-        navigatorUnavailable: "Le navigateur n'est pas disponible dans cet environnement.",
-        granted: "L’accès au microphone est accordé.",
-        denied: "L'accès au microphone est refusé dans les paramètres système.",
-        notGranted: "L'autorisation du microphone n'a pas encore été accordée.",
-        unexpectedState: "État d'autorisation inattendu du microphone:{{state}}",
-        statusApiUnavailable:
-          "L’API d’état du microphone n’est pas disponible dans ce runtime. Utilisez Request pour vérifier l’accès.",
-        queryFailed: "Échec de l'interrogation de l'état du microphone:{{message}}",
-        captureUnavailable: "La capture du microphone n'est pas disponible dans cet environnement.",
-        permissionApiUnavailable:
-          "L'API d'état des autorisations n'est pas disponible. Utilisez Request pour vérifier l’accès.",
-        requestsWebOnly:
-          "Les demandes de microphone de bureau sont uniquement disponibles sur le runtime Web.",
-        captureApiUnavailable:
-          "L'API de capture de microphone n'est pas disponible dans cet environnement.",
-        requestDenied:
-          "L'autorisation du microphone a été refusée par l'utilisateur ou le système.",
-        noDevice: "Aucun microphone n'a été trouvé.",
-        requestFailed: "Échec de la demande d'autorisation du microphone:{{message}}",
-      },
-      empty: {
-        notifications: "L'état de la notification n'a pas encore été vérifié.",
-        microphone: "L'état du microphone n'a pas encore été vérifié.",
-      },
-      testNotification: {
-        title: "Test de notificationBySpace",
-        body: "Si vous pouvez voir cela, les notifications sur le bureau fonctionnent.",
-        notDelivered:
-          "La notification n'a pas été délivrée. Vérifiez Paramètres système > Notifications.",
-        failed: "Échec de l'envoi de la notification.",
-      },
-    },
-    integrations: {
-      cli: {
-        statusFailed: "Impossible de vérifier l'état de l'installation deCLI.",
-        installFailed: "Impossible d'installer leBySpaceCLI.",
-      },
-      skills: {
-        statusFailed: "Impossible de vérifier l'état des compétences d'orchestration.",
-        installFailed: "Impossible d'installer les compétences d'orchestration.",
-        updateFailed: "Impossible de mettre à jour les compétences d'orchestration.",
-        uninstallFailed: "Impossible de désinstaller les compétences d'orchestration.",
-      },
-    },
-  },
   rootError: {
     kicker: "Une erreur s'est produite",
     title: "BySpace a rencontré un problème.",
@@ -1560,18 +1391,6 @@ export const fr: TranslationResources = {
     },
     general: {
       title: "Général",
-      browserData: {
-        title: "Données du navigateur",
-        siteData: "Cookies et données des sites",
-        description:
-          "Les onglets du navigateur partagent les connexions et les données des sites dans BySpace.",
-        clear: "Effacer les données du navigateur",
-        clearing: "Effacement...",
-        confirmTitle: "Effacer les données du navigateur ?",
-        confirmMessage: "Vous serez déconnecté des sites et les onglets ouverts seront rechargés.",
-        success: "Données du navigateur effacées.",
-        error: "Impossible d'effacer les données du navigateur.",
-      },
       defaultSend: {
         label: "Envoi par défaut",
         descriptions: {
@@ -1637,7 +1456,7 @@ export const fr: TranslationResources = {
       app: {
         title: "App diagnostic",
         rowTitle: "App diagnostic",
-        rowHint: "Collect connection, daemon, provider, desktop, and log details",
+        rowHint: "Collect connection, daemon, provider, and log details",
         run: "Run",
         running: "Running diagnostic...",
         copyLabel: "diagnostic",
@@ -1647,7 +1466,6 @@ export const fr: TranslationResources = {
         refreshingAccessibility: "Refreshing diagnostic",
         progress: {
           client: "Client",
-          desktop: "Desktop",
         },
       },
     },
@@ -1658,27 +1476,6 @@ export const fr: TranslationResources = {
       connectedHosts: "Hôtes connectés",
       offline: "Hors ligne",
       versionDiffers: "La version diffère de cet appareil",
-      releaseChannel: {
-        label: "Canal de sortie",
-        description:
-          "Passez àBetapour obtenir des mises à jour plus tôt et contribuer à les façonner",
-        stable: "Stable",
-        beta: "Beta",
-      },
-      updates: {
-        label: "Mises à jour de l'application",
-        readyToInstall: "Prêt à installer:{{version}}",
-        installTitle: "Installer la mise à jour du bureau",
-        installMessage: "Cela met à jourBySpacesur cet ordinateur",
-        installConfirm: "Installer la mise à jour",
-        update: "Mise à jour",
-        updateTo: "Mise à jour vers{{version}}",
-        installing: "Installation...",
-        check: "Vérifier",
-        checking: "Vérification...",
-        alertTitle: "Erreur",
-        alertMessage: "Impossible d'ouvrir la boîte de dialogue de confirmation de mise à jour.",
-      },
     },
     appearance: {
       theme: {

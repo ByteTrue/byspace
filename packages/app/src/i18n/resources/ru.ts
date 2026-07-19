@@ -952,170 +952,6 @@ export const ru: TranslationResources = {
       title: "Начать с",
     },
   },
-  desktop: {
-    quitting: {
-      title: "Выход из BySpace...",
-      detail: "Остановка локального демона.",
-    },
-    daemon: {
-      title: "Daemon",
-      status: {
-        title: "Статус",
-        builtInOnly: "Здесь показан только встроенный демон рабочего стола.",
-        running: "бег",
-        notRunning: "не работает",
-        pid: "PID{{pid}}",
-      },
-      management: {
-        title: "Управление встроенным демоном",
-        hint: "Позвольте BySpace запустить и остановить встроенный демон.",
-        pauseTitle: "Приостановить встроенный демон",
-        pauseMessage:
-          "Это немедленно остановит встроенный демон. Запущенные агенты и терминалы, подключенные к встроенному демону, будут остановлены.",
-        pauseAndStop: "Пауза и остановка",
-        registrationFailed:
-          "Built-in daemon started, but BySpace could not save the localhost connection. Toggle daemon management off and on again, or add localhost manually.",
-        pausedStopFailed:
-          "Встроенное управление демоном было приостановлено, но BySpace не смог остановить демон.",
-        updateFailed: "Невозможно обновить встроенное управление демонами.",
-      },
-      keepRunning: {
-        title: "Продолжать работу демона после выхода",
-        hint: "Daemon продолжает работать, когда вы выходите из BySpace",
-      },
-      logs: {
-        title: "Файл журнала",
-        modalTitle: "Журналы Daemon",
-        unavailable: "Путь к журналу недоступен",
-        empty: "(файл журнала пуст)",
-        copied: "Путь к журналу скопирован.",
-        copyFailed: "Невозможно скопировать путь к журналу.",
-        open: "Открыть журналы",
-        copyPath: "Копировать путь",
-      },
-      fullStatus: {
-        title: "Полный статус",
-        modalTitle: "Статус Daemon",
-        hint: "Запускает`byspace daemon status`и показывает результат",
-        view: "Посмотреть статус",
-        copied: "Статус скопирован в буфер обмена.",
-        fetchFailed: "Не удалось получить статус демона:{{message}}.",
-      },
-      advancedSettings: "Расширенные настройки",
-      openAdvancedSettings: "Открыть дополнительные настройки демона",
-      versionMismatch:
-        "Версии приложения и демона не совпадают. Обновите обе версии до одной и той же версии для лучшего опыта.",
-      loadFailed: "Невозможно загрузить статус демона рабочего стола.",
-    },
-    updates: {
-      status: {
-        checking: "Проверка обновлений приложения...",
-        installing: "Установка обновления приложения...",
-        upToDate: "Приложение актуально.",
-        upToDateWithLastChecked: "Up to date. Last checked at {{time}}.",
-        pending: "Мы сообщим вам, когда обновление будет готово.",
-        pendingWithLastChecked:
-          "Мы сообщим вам, когда обновление будет готово. Последняя проверка в {{time}}.",
-        pendingWithVersion: "Найдено обновление: {{version}}. Загрузка...",
-        pendingWithVersionAndLastChecked:
-          "Найдено обновление: {{version}}. Загрузка... Последняя проверка в {{time}}.",
-        availableWithVersion: "Обновление готово:{{version}}",
-        availableWithVersionAndLastChecked:
-          "Обновление готово:{{version}}. Последняя проверка в {{time}}.",
-        available: "Обновление приложения готово к установке.",
-        availableWithLastChecked:
-          "Обновление приложения готово к установке. Последняя проверка в {{time}}.",
-        installed: "Обновление приложения установлено. Требуется перезагрузка.",
-        failed: "Не удалось обновить приложение.",
-        idle: "Статус обновления еще не проверен.",
-      },
-      installError: "Невозможно установить обновление настольного приложения.",
-      callout: {
-        installingTitle: "Установка обновления",
-        failedTitle: "Обновление не выполнено",
-        availableTitle: "Доступно обновление",
-        genericError: "Что- то пошло не так.",
-        whatsNew: "Что нового",
-        installingAction: "Установка...",
-        installAndRestart: "Установить и перезапустить",
-        installingDescription: "Установка и перезапуск...",
-        versionReady: "{{version}}готов к установке.",
-        newVersionReady: "Новая версия готова к установке.",
-        restartWarning:
-          "Обновление приложения приведет к остановке работы агентов и закрытию сеансов терминала.",
-      },
-    },
-    settings: {
-      loadFailed: "Невозможно загрузить настройки рабочего стола.",
-      saveFailed: "Невозможно сохранить настройки рабочего стола.",
-    },
-    rosetta: {
-      title: "Загрузите сборку Apple Silicon",
-      runningIntel: "Вы используете сборку Intel для BySpace под Rosetta на Apple Silicon.",
-      highCpu:
-        "Это приводит к высокой загрузке ЦП. Загрузите сборку Apple Silicon, чтобы исправить это.",
-      download: "Скачать",
-    },
-    permissions: {
-      notifications: {
-        allowed: "Уведомления разрешены операционной системой.",
-        denied: "Уведомления запрещены в настройках системы.",
-        notGranted: "Уведомления еще не были предоставлены.",
-        webOnly: "Статус уведомлений на рабочем столе доступен только в веб- среде выполнения.",
-        supported: "Уведомления на рабочем столе поддерживаются.",
-        unsupported: "Уведомления на рабочем столе не поддерживаются на этой платформе.",
-        apiUnavailable: "API веб- уведомлений недоступен в этой среде.",
-        requestsWebOnly:
-          "Запросы уведомлений на рабочем столе доступны только в веб- среде выполнения.",
-        requestUnavailable: "API веб- уведомлений requestPermission() недоступен.",
-        requestFailed: "Не удалось запросить разрешение на уведомление:{{message}}.",
-        unexpectedState: "Состояние разрешения на непредвиденное уведомление:{{state}}.",
-      },
-      microphone: {
-        webOnly: "Статус настольного микрофона доступен только в веб- среде выполнения.",
-        navigatorUnavailable: "Навигатор недоступен в этой среде.",
-        granted: "Доступ к микрофону разрешен.",
-        denied: "Доступ к микрофону запрещен в настройках системы.",
-        notGranted: "Разрешение на использование микрофона еще не получено.",
-        unexpectedState: "Неожиданное состояние разрешения микрофона:{{state}}.",
-        statusApiUnavailable:
-          "API состояния микрофона недоступен в этой среде выполнения. Используйте Запрос, чтобы проверить доступ.",
-        queryFailed: "Не удалось запросить статус микрофона:{{message}}.",
-        captureUnavailable: "В этой среде захват микрофона недоступен.",
-        permissionApiUnavailable:
-          "API статуса разрешения недоступен. Используйте Запрос, чтобы проверить доступ.",
-        requestsWebOnly: "Запросы настольного микрофона доступны только в веб- среде выполнения.",
-        captureApiUnavailable: "API захвата микрофона недоступен в этой среде.",
-        requestDenied:
-          "Разрешение на использование микрофона было отклонено пользователем или системой.",
-        noDevice: "Микрофонное устройство не обнаружено.",
-        requestFailed: "Не удалось запросить разрешение микрофона:{{message}}.",
-      },
-      empty: {
-        notifications: "Статус уведомления еще не проверен.",
-        microphone: "Состояние микрофона еще не проверялось.",
-      },
-      testNotification: {
-        title: "Тест уведомлений BySpace",
-        body: "Если вы это видите, уведомления на рабочем столе работают.",
-        notDelivered:
-          "Уведомление не было доставлено. Проверьте Системные настройки > Уведомления.",
-        failed: "Не удалось отправить уведомление.",
-      },
-    },
-    integrations: {
-      cli: {
-        statusFailed: "Невозможно проверить статус установки CLI.",
-        installFailed: "Невозможно установить BySpaceCLI.",
-      },
-      skills: {
-        statusFailed: "Невозможно проверить статус навыков оркестровки.",
-        installFailed: "Невозможно установить навыки оркестровки.",
-        updateFailed: "Невозможно обновить навыки оркестровки.",
-        uninstallFailed: "Невозможно удалить навыки оркестровки.",
-      },
-    },
-  },
   rootError: {
     kicker: "Что-то пошло не так",
     title: "В BySpace возникла проблема.",
@@ -1549,18 +1385,6 @@ export const ru: TranslationResources = {
     },
     general: {
       title: "Общий",
-      browserData: {
-        title: "Данные браузера",
-        siteData: "Файлы cookie и данные сайтов",
-        description: "Вкладки браузера используют общие данные входа и данные сайтов в BySpace.",
-        clear: "Очистить данные браузера",
-        clearing: "Очистка...",
-        confirmTitle: "Очистить данные браузера?",
-        confirmMessage:
-          "На сайтах будет выполнен выход, а открытые вкладки браузера перезагрузятся.",
-        success: "Данные браузера очищены.",
-        error: "Не удалось очистить данные браузера.",
-      },
       defaultSend: {
         label: "Отправка по умолчанию",
         descriptions: {
@@ -1625,7 +1449,7 @@ export const ru: TranslationResources = {
       app: {
         title: "App diagnostic",
         rowTitle: "App diagnostic",
-        rowHint: "Collect connection, daemon, provider, desktop, and log details",
+        rowHint: "Collect connection, daemon, provider, and log details",
         run: "Run",
         running: "Running diagnostic...",
         copyLabel: "diagnostic",
@@ -1635,7 +1459,6 @@ export const ru: TranslationResources = {
         refreshingAccessibility: "Refreshing diagnostic",
         progress: {
           client: "Client",
-          desktop: "Desktop",
         },
       },
     },
@@ -1646,27 +1469,6 @@ export const ru: TranslationResources = {
       connectedHosts: "Подключенные хосты",
       offline: "Оффлайн",
       versionDiffers: "Версия отличается от этого устройства",
-      releaseChannel: {
-        label: "Канал выпуска",
-        description:
-          "Перейдите на Beta, чтобы получать обновления раньше и помогать их формировать.",
-        stable: "Stable",
-        beta: "Beta",
-      },
-      updates: {
-        label: "Обновления приложений",
-        readyToInstall: "Готово к установке:{{version}}",
-        installTitle: "Установить обновление рабочего стола",
-        installMessage: "Это обновит BySpace на этом компьютере.",
-        installConfirm: "Установить обновление",
-        update: "Обновлять",
-        updateTo: "Обновление до{{version}}",
-        installing: "Установка...",
-        check: "Проверять",
-        checking: "Проверка...",
-        alertTitle: "Ошибка",
-        alertMessage: "Невозможно открыть диалоговое окно подтверждения обновления.",
-      },
     },
     appearance: {
       theme: {
