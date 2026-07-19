@@ -15,11 +15,11 @@ import type {
 } from "../workspace-git-service.js";
 import type { ForgeService } from "../../services/forge-service.js";
 import type { TerminalManager } from "../../terminal/terminal-manager.js";
-import { isPaseoOwnedWorktreeCwd } from "../../utils/worktree.js";
+import { isBySpaceOwnedWorktreeCwd } from "../../utils/worktree.js";
 
 export interface AutoArchiveArchiveOptions {
-  paseoHome: string;
-  paseoWorktreesBaseRoot?: string;
+  byspaceHome: string;
+  byspaceWorktreesBaseRoot?: string;
   daemonConfigStore: DaemonConfigStore;
   workspaceGitService: WorkspaceGitServiceImpl;
   github: ForgeService;
@@ -37,14 +37,14 @@ export interface AutoArchiveArchiveOptions {
 export interface ArchiveIfSafeDependencies {
   archiveByScope: typeof archiveByScope;
   resolveWorkspaceIdAtPath: typeof resolveWorkspaceIdAtPath;
-  isPaseoOwnedWorktreeCwd: typeof isPaseoOwnedWorktreeCwd;
+  isBySpaceOwnedWorktreeCwd: typeof isBySpaceOwnedWorktreeCwd;
   killTerminalsForWorkspace: typeof killTerminalsForWorkspace;
 }
 
 const defaultDependencies: ArchiveIfSafeDependencies = {
   archiveByScope,
   resolveWorkspaceIdAtPath,
-  isPaseoOwnedWorktreeCwd,
+  isBySpaceOwnedWorktreeCwd,
   killTerminalsForWorkspace,
 };
 
@@ -91,9 +91,9 @@ export async function archiveIfSafe(input: {
       return;
     }
 
-    const ownership = await deps.isPaseoOwnedWorktreeCwd(cwd, {
-      paseoHome: options.paseoHome,
-      worktreesRoot: options.paseoWorktreesBaseRoot,
+    const ownership = await deps.isBySpaceOwnedWorktreeCwd(cwd, {
+      byspaceHome: options.byspaceHome,
+      worktreesRoot: options.byspaceWorktreesBaseRoot,
     });
     if (!ownership.allowed) {
       return;
@@ -114,8 +114,8 @@ export async function archiveIfSafe(input: {
 
       await deps.archiveByScope(
         {
-          paseoHome: options.paseoHome,
-          paseoWorktreesBaseRoot: options.paseoWorktreesBaseRoot,
+          byspaceHome: options.byspaceHome,
+          byspaceWorktreesBaseRoot: options.byspaceWorktreesBaseRoot,
           github: options.github,
           workspaceGitService: options.workspaceGitService,
           agentManager: options.agentManager,
@@ -139,7 +139,7 @@ export async function archiveIfSafe(input: {
         {
           scope: { kind: "workspace", workspaceId },
           repoRoot: ownership.repoRoot ?? null,
-          paseoWorktreesBaseRoot: options.paseoWorktreesBaseRoot,
+          byspaceWorktreesBaseRoot: options.byspaceWorktreesBaseRoot,
           requestId: "auto-archive-on-merge",
         },
       );

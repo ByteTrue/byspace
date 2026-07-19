@@ -5,7 +5,7 @@ import { runHooksCommand } from "./hooks.js";
 const hookEnv = {
   BYSPACE_TERMINAL_ID: "terminal-1",
   BYSPACE_ACTIVITY_TOKEN: "token-1",
-  BYSPACE_TERMINAL_ACTIVITY_URL: "http://127.0.0.1:6767/api/terminal-activity",
+  BYSPACE_TERMINAL_ACTIVITY_URL: "http://127.0.0.1:6777/api/terminal-activity",
 };
 
 function inputFrom(value: string) {

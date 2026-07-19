@@ -1,9 +1,9 @@
-# Paseo Client SDK Examples
+# BySpace Client SDK Examples
 
 These examples use only the public SDK root:
 
 ```ts
-import { createPaseoClient, type PaseoClient } from "@bytetrue/byspace-client";
+import { createBySpaceClient, type BySpaceClient } from "@bytetrue/byspace-client";
 ```
 
 Pass the daemon WebSocket URL into the exported functions. In worktree dev, read it

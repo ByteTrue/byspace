@@ -8,13 +8,13 @@ import {
   startPidLockHeartbeat,
   updatePidLock,
 } from "../src/server/pid-lock.js";
-import { resolvePaseoHome } from "../src/server/paseo-home.js";
+import { resolveBySpaceHome } from "../src/server/byspace-home.js";
 import { loadPersistedConfig } from "../src/server/persisted-config.js";
 import { runSupervisor } from "./supervisor.js";
 import { resolveSupervisorLogFile } from "./supervisor-log-config.js";
 import { applySherpaLoaderEnv } from "../src/server/speech/providers/local/sherpa/sherpa-runtime-env.js";
 
-process.title = "Paseo Supervisor";
+process.title = "BySpace Supervisor";
 
 interface DaemonRunnerConfig {
   devMode: boolean;
@@ -76,7 +76,7 @@ function resolveWorkerExecArgv(workerEntry: string, devMode: boolean): string[] 
     "--heapsnapshot-near-heap-limit=3",
     "--max-old-space-size=3072",
     "--report-on-fatalerror",
-    "--report-directory=/tmp/paseo-reports",
+    "--report-directory=/tmp/byspace-reports",
   ];
   const inspectArg = process.env.BYSPACE_NODE_INSPECT ?? "--inspect";
   if (inspectArg !== "0" && inspectArg !== "false" && inspectArg !== "off") {
@@ -109,12 +109,12 @@ async function main(): Promise<void> {
 
   applySherpaLoaderEnv(workerEnv);
 
-  const paseoHome = resolvePaseoHome(workerEnv);
-  const persistedConfig = loadPersistedConfig(paseoHome);
-  const supervisorLogFile = resolveSupervisorLogFile(paseoHome, persistedConfig, workerEnv);
+  const byspaceHome = resolveBySpaceHome(workerEnv);
+  const persistedConfig = loadPersistedConfig(byspaceHome);
+  const supervisorLogFile = resolveSupervisorLogFile(byspaceHome, persistedConfig, workerEnv);
 
   try {
-    await acquirePidLock(paseoHome, null, {
+    await acquirePidLock(byspaceHome, null, {
       ownerPid: process.pid,
       reclaimStaleDesktopLock: config.reclaimStalePidLock,
     });
@@ -129,7 +129,7 @@ async function main(): Promise<void> {
 
   let lockReleased = false;
   let requestSupervisorShutdown: ((reason: string) => void) | null = null;
-  const stopLockHeartbeat = startPidLockHeartbeat(paseoHome, {
+  const stopLockHeartbeat = startPidLockHeartbeat(byspaceHome, {
     ownerPid: process.pid,
     onError: (error) => {
       const message = error instanceof Error ? error.message : String(error);
@@ -145,7 +145,7 @@ async function main(): Promise<void> {
     }
     lockReleased = true;
     stopLockHeartbeat();
-    await releasePidLock(paseoHome, {
+    await releasePidLock(byspaceHome, {
       ownerPid: process.pid,
     });
   };
@@ -175,7 +175,7 @@ async function main(): Promise<void> {
     restartOnCrash: true,
     logFile: supervisorLogFile,
     onWorkerReady: async ({ listen }) => {
-      await updatePidLock(paseoHome, { listen }, { ownerPid: process.pid });
+      await updatePidLock(byspaceHome, { listen }, { ownerPid: process.pid });
     },
     onSupervisorExit: releaseLock,
   });

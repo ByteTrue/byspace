@@ -2,14 +2,14 @@ import type { Logger } from "pino";
 
 import { PARENT_AGENT_ID_LABEL } from "@bytetrue/byspace-protocol/agent-labels";
 import type { TerminalManager } from "../../../terminal/terminal-manager.js";
-import type { CreatePaseoWorktreeInput } from "../../paseo-worktree-service.js";
+import type { CreateBySpaceWorktreeInput } from "../../byspace-worktree-service.js";
 import { expandUserPath, resolvePathFromBase } from "../../path-utils.js";
 import { toWorktreeRequestError } from "../../worktree-errors.js";
 import type {
   AgentWorktreeSetupContinuation,
-  CreatePaseoWorktreeSetupContinuationInput,
-  CreatePaseoWorktreeWorkflowFn,
-  CreatePaseoWorktreeWorkflowResult,
+  CreateBySpaceWorktreeSetupContinuationInput,
+  CreateBySpaceWorktreeWorkflowFn,
+  CreateBySpaceWorktreeWorkflowResult,
 } from "../../worktree-session.js";
 import type { AgentAttachment, FirstAgentContext, GitSetupOptions } from "../../messages.js";
 import type { AgentManager, CreateAgentOptions, ManagedAgent } from "../agent-manager.js";
@@ -38,11 +38,11 @@ export interface CreateAgentCommandDependencies {
   agentManager: AgentManager;
   agentStorage: AgentStorage;
   logger: Logger;
-  paseoHome?: string;
+  byspaceHome?: string;
   worktreesRoot?: string;
   terminalManager?: TerminalManager | null;
   providerSnapshotManager: ProviderSnapshotManager;
-  createPaseoWorktree?: CreatePaseoWorktreeWorkflowFn;
+  createBySpaceWorktree?: CreateBySpaceWorktreeWorkflowFn;
   // Mints a fresh directory workspace for a cwd and returns its id.
   ensureWorkspaceForCreate?: EnsureWorkspaceForCreate;
 }
@@ -549,10 +549,10 @@ async function resolveMcpCwd(params: {
       githubPrNumber: worktree.githubPrNumber,
       firstAgentContext: { prompt: params.initialPrompt },
       runSetup: false,
-      paseoHome: dependencies.paseoHome,
+      byspaceHome: dependencies.byspaceHome,
       worktreesRoot: dependencies.worktreesRoot,
     },
-    createPaseoWorktree: dependencies.createPaseoWorktree,
+    createBySpaceWorktree: dependencies.createBySpaceWorktree,
     resolveDefaultBranch: baseBranch ? async () => baseBranch : undefined,
     setupContinuation: {
       kind: "agent",
@@ -580,20 +580,20 @@ async function resolveMcpCwd(params: {
 }
 
 interface CreateMcpWorktreeOptions {
-  input: CreatePaseoWorktreeInput;
-  createPaseoWorktree: CreatePaseoWorktreeWorkflowFn | undefined;
+  input: CreateBySpaceWorktreeInput;
+  createBySpaceWorktree: CreateBySpaceWorktreeWorkflowFn | undefined;
   resolveDefaultBranch?: (repoRoot: string) => Promise<string>;
-  setupContinuation?: CreatePaseoWorktreeSetupContinuationInput;
+  setupContinuation?: CreateBySpaceWorktreeSetupContinuationInput;
 }
 
 async function createMcpWorktree(
   options: CreateMcpWorktreeOptions,
-): Promise<CreatePaseoWorktreeWorkflowResult> {
+): Promise<CreateBySpaceWorktreeWorkflowResult> {
   try {
-    if (!options.createPaseoWorktree) {
-      throw new Error("Paseo worktree service is not configured");
+    if (!options.createBySpaceWorktree) {
+      throw new Error("BySpace worktree service is not configured");
     }
-    return await options.createPaseoWorktree(options.input, {
+    return await options.createBySpaceWorktree(options.input, {
       ...(options.resolveDefaultBranch
         ? { resolveDefaultBranch: options.resolveDefaultBranch }
         : {}),

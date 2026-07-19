@@ -16,21 +16,6 @@ export function formatDiagnosticSection(title: string, entries: DiagnosticEntry[
   return [title, ...entries.map((entry) => `  ${entry.label}: ${entry.value}`)].join("\n");
 }
 
-export function formatAppDiagnosticHeader(input: {
-  appVersion: string | null;
-  platform: string;
-  isDesktopApp: boolean;
-  hostCount: number;
-}): string {
-  return formatDiagnosticSection("Paseo app diagnostics", [
-    { label: "Collected at", value: new Date().toISOString() },
-    { label: "App version", value: input.appVersion ?? "unknown" },
-    { label: "Platform", value: input.platform },
-    { label: "Desktop app", value: String(input.isDesktopApp) },
-    { label: "Saved hosts", value: String(input.hostCount) },
-  ]);
-}
-
 export function formatHostRuntimeSection(input: {
   host: HostProfile;
   snapshot: HostRuntimeSnapshot | null;
@@ -111,7 +96,7 @@ export function redactAppDiagnosticReport(report: string, hosts: HostProfile[]):
     redacted = redacted.split(value).join("[redacted]");
   }
   return redacted
-    .replace(/paseo:\/\/\S+/gi, "paseo://[redacted]")
+    .replace(/byspace:\/\/\S+/gi, "byspace://[redacted]")
     .replace(
       /([?&](?:password|token|secret|key|publicKey|daemonPublicKeyB64)=)[^&\s"']+/gi,
       "$1[redacted]",

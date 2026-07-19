@@ -1,6 +1,6 @@
 ---
 title: MCP reference
-description: Reference for the Paseo tools agents use to manage agents, workspaces, terminals, and schedules.
+description: Reference for the BySpace tools agents use to manage agents, workspaces, terminals, and schedules.
 nav: MCP reference
 order: 33
 category: Orchestration
@@ -10,9 +10,9 @@ category: Orchestration
 
 This is the complete catalog behind the workflows in [Orchestration](/docs/orchestration) and [Common workflows](/docs/orchestration-workflows). You normally ask for an outcome in natural language and let the agent choose the tools.
 
-Paseo can inject these tools into every new agent it launches. Open **Settings → your host → Agents** and turn on **Enable Paseo tools**, or set `daemon.mcp.injectIntoAgents` to `true`.
+BySpace can inject these tools into every new agent it launches. Open **Settings → your host → Agents** and turn on **Enable BySpace tools**, or set `daemon.mcp.injectIntoAgents` to `true`.
 
-Depending on the provider, Paseo delivers the catalog through its native tool interface or MCP. The capabilities are the same either way.
+Depending on the provider, BySpace delivers the catalog through its native tool interface or MCP. The capabilities are the same either way.
 
 The MCP server itself is controlled by `daemon.mcp.enabled`. Existing agents may need a reload.
 
@@ -35,12 +35,12 @@ The MCP server itself is controlled by `daemon.mcp.enabled`. Existing agents may
 
 ### Workspaces and worktrees
 
-| Tool               | Function                                                                      |
-| ------------------ | ----------------------------------------------------------------------------- |
-| `rename_workspace` | Change the user-visible name of the current or specified workspace.           |
-| `list_worktrees`   | List Paseo-managed git worktrees for a repository.                            |
-| `create_worktree`  | Create a Paseo-managed git worktree from a branch, base branch, or GitHub PR. |
-| `archive_worktree` | Delete a Paseo-managed git worktree.                                          |
+| Tool               | Function                                                                        |
+| ------------------ | ------------------------------------------------------------------------------- |
+| `rename_workspace` | Change the user-visible name of the current or specified workspace.             |
+| `list_worktrees`   | List BySpace-managed git worktrees for a repository.                            |
+| `create_worktree`  | Create a BySpace-managed git worktree from a branch, base branch, or GitHub PR. |
+| `archive_worktree` | Delete a BySpace-managed git worktree.                                          |
 
 ### Terminals
 

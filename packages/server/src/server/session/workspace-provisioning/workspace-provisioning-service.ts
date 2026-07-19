@@ -14,7 +14,7 @@ import {
   type WorkspaceRegistry,
 } from "../../workspace-registry.js";
 import type { WorkspaceGitService } from "../../workspace-git-service.js";
-import type { CreatePaseoWorktreeWorkflowResult } from "../../worktree-session.js";
+import type { CreateBySpaceWorktreeWorkflowResult } from "../../worktree-session.js";
 import { createRealpathAwarePathMatcher } from "../../../utils/path.js";
 
 /**
@@ -30,7 +30,7 @@ import { createRealpathAwarePathMatcher } from "../../../utils/path.js";
  * this module owns the create-and-persist side.
  */
 export interface ResolveOrCreateWorkspaceIdInput {
-  createdWorktree: CreatePaseoWorktreeWorkflowResult | null;
+  createdWorktree: CreateBySpaceWorktreeWorkflowResult | null;
   requestedWorkspaceId?: string;
   cwd: string;
   initialTitle: string | null;
@@ -245,7 +245,7 @@ export function createWorkspaceProvisioningService(deps: {
           currentBranch: null,
           remoteUrl: null,
           repoRoot: null,
-          isPaseoOwnedWorktree: false,
+          isBySpaceOwnedWorktree: false,
           mainRepoRoot: null,
         });
         const membership = classifyDirectoryForProjectMembership({ cwd: inputCwd, checkout });

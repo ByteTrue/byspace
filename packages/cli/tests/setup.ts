@@ -1,8 +1,8 @@
 /**
- * Test setup utilities for Paseo CLI E2E tests
+ * Test setup utilities for BySpace CLI E2E tests
  *
  * Critical rules from design doc:
- * 1. Port: Random port via 10000 + Math.floor(Math.random() * 50000) - NEVER 6767
+ * 1. Port: Random port via 10000 + Math.floor(Math.random() * 50000) - NEVER 6777
  * 2. Protocol: WebSocket ONLY - daemon has no HTTP endpoints
  * 3. Temp dirs: Create temp directories for BYSPACE_HOME and agent --cwd
  * 4. Model: Always --provider claude with haiku model for agent tests
@@ -48,23 +48,23 @@ function killPidTree(pid: number, signal: NodeJS.Signals): void {
 }
 
 export interface TestContext {
-  /** Random port for test daemon (never 6767) */
+  /** Random port for test daemon (never 6777) */
   port: number;
   /** Temp directory for BYSPACE_HOME */
-  paseoHome: string;
+  byspaceHome: string;
   /** Temp directory for agent working directory */
   workDir: string;
   /** Running daemon process */
   daemon: ProcessPromise | null;
-  /** Run a paseo CLI command against the test daemon */
-  paseo: (args: string[]) => ProcessPromise;
+  /** Run a byspace CLI command against the test daemon */
+  byspace: (args: string[]) => ProcessPromise;
   /** Clean up all resources */
   cleanup: () => Promise<void>;
 }
 
 /**
  * Generate a random port for test daemon
- * NEVER uses 6767 (user's running daemon)
+ * NEVER uses 6777 (user's running daemon)
  */
 export function getRandomPort(): number {
   return 10000 + Math.floor(Math.random() * 50000);
@@ -73,19 +73,19 @@ export function getRandomPort(): number {
 /**
  * Create isolated temp directories for testing
  */
-export async function createTempDirs(): Promise<{ paseoHome: string; workDir: string }> {
-  const paseoHome = await mkdtemp(join(tmpdir(), "paseo-test-home-"));
-  const workDir = await mkdtemp(join(tmpdir(), "paseo-test-work-"));
-  return { paseoHome, workDir };
+export async function createTempDirs(): Promise<{ byspaceHome: string; workDir: string }> {
+  const byspaceHome = await mkdtemp(join(tmpdir(), "byspace-test-home-"));
+  const workDir = await mkdtemp(join(tmpdir(), "byspace-test-work-"));
+  return { byspaceHome, workDir };
 }
 
 /**
  * Wait for daemon to be ready by testing WebSocket connection
- * Uses `paseo agent ls` which connects via WebSocket
+ * Uses `byspace agent ls` which connects via WebSocket
  */
 async function probeDaemon(port: number): Promise<boolean> {
   try {
-    const result = await $`BYSPACE_HOST=localhost:${port} paseo agent ls`.nothrow();
+    const result = await $`BYSPACE_HOST=localhost:${port} byspace agent ls`.nothrow();
     return result.exitCode === 0;
   } catch {
     return false;
@@ -108,10 +108,10 @@ export async function waitForDaemon(port: number, timeout = 30000): Promise<void
 /**
  * Start an isolated test daemon
  */
-export async function startDaemon(port: number, paseoHome: string): Promise<ProcessPromise> {
+export async function startDaemon(port: number, byspaceHome: string): Promise<ProcessPromise> {
   $.verbose = false;
   const daemon =
-    $`BYSPACE_HOME=${paseoHome} BYSPACE_LISTEN=127.0.0.1:${port} BYSPACE_RELAY_ENABLED=false BYSPACE_LOCAL_SPEECH_AUTO_DOWNLOAD=${TEST_ENV_DEFAULTS.BYSPACE_LOCAL_SPEECH_AUTO_DOWNLOAD} BYSPACE_DICTATION_ENABLED=${TEST_ENV_DEFAULTS.BYSPACE_DICTATION_ENABLED} BYSPACE_VOICE_MODE_ENABLED=${TEST_ENV_DEFAULTS.BYSPACE_VOICE_MODE_ENABLED} CI=true paseo daemon start --foreground`.nothrow();
+    $`BYSPACE_HOME=${byspaceHome} BYSPACE_LISTEN=127.0.0.1:${port} BYSPACE_RELAY_ENABLED=false BYSPACE_LOCAL_SPEECH_AUTO_DOWNLOAD=${TEST_ENV_DEFAULTS.BYSPACE_LOCAL_SPEECH_AUTO_DOWNLOAD} BYSPACE_DICTATION_ENABLED=${TEST_ENV_DEFAULTS.BYSPACE_DICTATION_ENABLED} BYSPACE_VOICE_MODE_ENABLED=${TEST_ENV_DEFAULTS.BYSPACE_VOICE_MODE_ENABLED} CI=true byspace daemon start --foreground`.nothrow();
   return daemon;
 }
 
@@ -120,12 +120,12 @@ export async function startDaemon(port: number, paseoHome: string): Promise<Proc
  */
 export async function createTestContext(): Promise<TestContext> {
   const port = getRandomPort();
-  const { paseoHome, workDir } = await createTempDirs();
+  const { byspaceHome, workDir } = await createTempDirs();
 
   // Helper to run CLI commands against test daemon
-  const paseo = (args: string[]): ProcessPromise => {
+  const byspace = (args: string[]): ProcessPromise => {
     $.verbose = false;
-    return $`BYSPACE_HOST=localhost:${port} BYSPACE_LOCAL_SPEECH_AUTO_DOWNLOAD=${TEST_ENV_DEFAULTS.BYSPACE_LOCAL_SPEECH_AUTO_DOWNLOAD} BYSPACE_DICTATION_ENABLED=${TEST_ENV_DEFAULTS.BYSPACE_DICTATION_ENABLED} BYSPACE_VOICE_MODE_ENABLED=${TEST_ENV_DEFAULTS.BYSPACE_VOICE_MODE_ENABLED} paseo ${args}`.nothrow();
+    return $`BYSPACE_HOST=localhost:${port} BYSPACE_LOCAL_SPEECH_AUTO_DOWNLOAD=${TEST_ENV_DEFAULTS.BYSPACE_LOCAL_SPEECH_AUTO_DOWNLOAD} BYSPACE_DICTATION_ENABLED=${TEST_ENV_DEFAULTS.BYSPACE_DICTATION_ENABLED} BYSPACE_VOICE_MODE_ENABLED=${TEST_ENV_DEFAULTS.BYSPACE_VOICE_MODE_ENABLED} byspace ${args}`.nothrow();
   };
 
   // Cleanup function
@@ -139,16 +139,16 @@ export async function createTestContext(): Promise<TestContext> {
         ctx.daemon.kill();
       }
     }
-    await rm(paseoHome, { recursive: true, force: true });
+    await rm(byspaceHome, { recursive: true, force: true });
     await rm(workDir, { recursive: true, force: true });
   };
 
   const ctx: TestContext = {
     port,
-    paseoHome,
+    byspaceHome,
     workDir,
     daemon: null,
-    paseo,
+    byspace,
     cleanup,
   };
 
@@ -161,7 +161,7 @@ export async function createTestContext(): Promise<TestContext> {
  */
 export async function createTestContextWithDaemon(): Promise<TestContext> {
   const ctx = await createTestContext();
-  ctx.daemon = await startDaemon(ctx.port, ctx.paseoHome);
+  ctx.daemon = await startDaemon(ctx.port, ctx.byspaceHome);
   await waitForDaemon(ctx.port);
   return ctx;
 }

@@ -314,7 +314,7 @@ function createLegacyWorkspace(
       ? {
           currentBranch: checkout.currentBranch,
           remoteUrl: checkout.remoteUrl,
-          isPaseoOwnedWorktree: checkout.isPaseoOwnedWorktree,
+          isBySpaceOwnedWorktree: checkout.isBySpaceOwnedWorktree,
           isDirty: null,
           aheadBehind: null,
           aheadOfOrigin: null,
@@ -332,7 +332,7 @@ function resolveLegacyWorkspaceKind(
   if (!checkout.isGit) {
     return "directory";
   }
-  if (checkout.isPaseoOwnedWorktree) {
+  if (checkout.isBySpaceOwnedWorktree) {
     return "worktree";
   }
   return "checkout";

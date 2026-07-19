@@ -1,7 +1,7 @@
-import { createPaseoClient, type PaseoClient } from "@bytetrue/byspace-client";
+import { createBySpaceClient, type BySpaceClient } from "@bytetrue/byspace-client";
 
-export function createClient(url: string): PaseoClient {
-  return createPaseoClient({
+export function createClient(url: string): BySpaceClient {
+  return createBySpaceClient({
     url,
   });
 }

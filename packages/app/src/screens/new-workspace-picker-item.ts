@@ -1,4 +1,4 @@
-import type { CreatePaseoWorktreeInput } from "@bytetrue/byspace-client/internal/daemon-client";
+import type { CreateBySpaceWorktreeInput } from "@bytetrue/byspace-client/internal/daemon-client";
 import type { ForgeSearchItem } from "@bytetrue/byspace-protocol/messages";
 
 export type PickerItem =
@@ -9,7 +9,7 @@ export type PickerItem =
     };
 
 export type PickerCheckoutRequest = Pick<
-  CreatePaseoWorktreeInput,
+  CreateBySpaceWorktreeInput,
   "action" | "refName" | "checkoutSource" | "githubPrNumber"
 >;
 

@@ -8,7 +8,7 @@ import { spawn, type ChildProcess } from "node:child_process";
 import { Buffer } from "node:buffer";
 
 import { generateLocalPairingOffer } from "../pairing-offer.js";
-import { createTestPaseoDaemon } from "../test-utils/paseo-daemon.js";
+import { createTestBySpaceDaemon } from "../test-utils/byspace-daemon.js";
 import { createClientChannel, type Transport } from "@bytetrue/byspace-relay/e2ee";
 import {
   deriveSharedKey,
@@ -38,14 +38,14 @@ function createCapturingLogger() {
 }
 
 async function getPairingOfferUrl(args: {
-  paseoHome: string;
+  byspaceHome: string;
   relayEnabled?: boolean;
   relayEndpoint?: string;
   relayPublicEndpoint?: string;
   appBaseUrl?: string;
 }): Promise<string> {
   const pairing = await generateLocalPairingOffer({
-    paseoHome: args.paseoHome,
+    byspaceHome: args.byspaceHome,
     relayEnabled: args.relayEnabled,
     relayEndpoint: args.relayEndpoint,
     relayPublicEndpoint: args.relayPublicEndpoint,
@@ -232,7 +232,7 @@ async function waitForRelayWebSocketReady(port: number, timeout = 60000): Promis
     const { logger, lines } = createCapturingLogger();
     await startRelay();
 
-    const daemon = await createTestPaseoDaemon({
+    const daemon = await createTestBySpaceDaemon({
       listen: "127.0.0.1",
       logger,
       relayEnabled: true,
@@ -241,7 +241,7 @@ async function waitForRelayWebSocketReady(port: number, timeout = 60000): Promis
 
     try {
       const offerUrl = await getPairingOfferUrl({
-        paseoHome: daemon.paseoHome,
+        byspaceHome: daemon.byspaceHome,
         relayEnabled: daemon.config.relayEnabled,
         relayEndpoint: daemon.config.relayEndpoint,
         relayPublicEndpoint: daemon.config.relayPublicEndpoint,
@@ -368,7 +368,7 @@ async function waitForRelayWebSocketReady(port: number, timeout = 60000): Promis
     const { logger, lines } = createCapturingLogger();
     await startRelay();
 
-    const daemon = await createTestPaseoDaemon({
+    const daemon = await createTestBySpaceDaemon({
       listen: "127.0.0.1",
       logger,
       relayEnabled: true,
@@ -377,7 +377,7 @@ async function waitForRelayWebSocketReady(port: number, timeout = 60000): Promis
 
     try {
       const offerUrl = await getPairingOfferUrl({
-        paseoHome: daemon.paseoHome,
+        byspaceHome: daemon.byspaceHome,
         relayEnabled: daemon.config.relayEnabled,
         relayEndpoint: daemon.config.relayEndpoint,
         relayPublicEndpoint: daemon.config.relayPublicEndpoint,
@@ -509,7 +509,7 @@ async function waitForRelayWebSocketReady(port: number, timeout = 60000): Promis
     const { logger, lines } = createCapturingLogger();
     await startRelay();
 
-    const daemon = await createTestPaseoDaemon({
+    const daemon = await createTestBySpaceDaemon({
       listen: "127.0.0.1",
       logger,
       relayEnabled: true,
@@ -518,7 +518,7 @@ async function waitForRelayWebSocketReady(port: number, timeout = 60000): Promis
 
     try {
       const offerUrl = await getPairingOfferUrl({
-        paseoHome: daemon.paseoHome,
+        byspaceHome: daemon.byspaceHome,
         relayEnabled: daemon.config.relayEnabled,
         relayEndpoint: daemon.config.relayEndpoint,
         relayPublicEndpoint: daemon.config.relayPublicEndpoint,

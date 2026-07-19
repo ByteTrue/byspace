@@ -69,7 +69,7 @@ export interface BuildGitActionsInput {
   pullRequestMergeable: PullRequestMergeable;
   mergeCapability: MergeCapability | null;
   hasRemote: boolean;
-  isPaseoOwnedWorktree: boolean;
+  isBySpaceOwnedWorktree: boolean;
   isOnBaseBranch: boolean;
   hasUncommittedChanges: boolean;
   baseRefAvailable: boolean;
@@ -350,9 +350,9 @@ function getPrimaryActionId(input: BuildGitActionsInput): GitActionId | null {
     return "pr";
   }
 
-  // Only Paseo-owned worktrees get Archive as a fallback primary action.
+  // Only BySpace-owned worktrees get Archive as a fallback primary action.
   // Regular Git checkouts should not show the destructive archive CTA by default.
-  if (input.isPaseoOwnedWorktree) {
+  if (input.isBySpaceOwnedWorktree) {
     return "archive-workspace";
   }
 
@@ -524,9 +524,9 @@ function hasPushableCommits(input: BuildGitActionsInput): boolean {
   if ((input.aheadOfOrigin ?? 0) > 0) {
     return true;
   }
-  // No-upstream Paseo worktrees are first-pushable: the daemon push sets upstream with `git push -u`.
+  // No-upstream BySpace worktrees are first-pushable: the daemon push sets upstream with `git push -u`.
   // Do not fold this into aheadOfOrigin; null also covers deleted/pruned upstream branches.
-  return input.isPaseoOwnedWorktree && input.aheadOfOrigin === null && input.aheadCount > 0;
+  return input.isBySpaceOwnedWorktree && input.aheadOfOrigin === null && input.aheadCount > 0;
 }
 
 function canMergeFromBase(input: BuildGitActionsInput): boolean {

@@ -39,18 +39,18 @@ function makeSubsystem(options: { hasBinaryChannel?: boolean } = {}) {
     emitBinary: (frame) => binary.push(frame),
     hasBinaryChannel: () => hasBinary,
   };
-  const paseoHome = makeDir("workspace-files-home-");
+  const byspaceHome = makeDir("workspace-files-home-");
   const subsystem = new WorkspaceFilesSession({
     host,
     downloadTokenStore: new DownloadTokenStore({ ttlMs: 60_000 }),
-    paseoHome,
+    byspaceHome,
     logger: pino({ level: "silent" }),
   });
   return {
     subsystem,
     emitted,
     binary,
-    paseoHome,
+    byspaceHome,
     setHasBinary: (value: boolean) => {
       hasBinary = value;
     },
@@ -225,7 +225,7 @@ describe("WorkspaceFilesSession", () => {
   });
 
   test("round-trips an upload through transfer frames", async () => {
-    const { subsystem, emitted, paseoHome } = makeSubsystem();
+    const { subsystem, emitted, byspaceHome } = makeSubsystem();
 
     subsystem.handleFileUploadRequest({
       type: "file.upload.request",
@@ -265,8 +265,8 @@ describe("WorkspaceFilesSession", () => {
     }
     expect(message.payload.error).toBeNull();
     expect(message.payload.file?.fileName).toBe("notes.txt");
-    expect(readFileSync(join(paseoHome, "uploads", "upload_req-upload", "notes.txt"), "utf8")).toBe(
-      "hello world",
-    );
+    expect(
+      readFileSync(join(byspaceHome, "uploads", "upload_req-upload", "notes.txt"), "utf8"),
+    ).toBe("hello world");
   });
 });

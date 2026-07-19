@@ -14,14 +14,14 @@ async function writeSession(root: string, relativePath: string, lines: unknown[]
 
 describe("OMP session descriptor", () => {
   test("reads title-first sessions and OMP combined model identifiers", async () => {
-    const root = await mkdtemp(path.join(tmpdir(), "paseo-omp-session-title-first-"));
+    const root = await mkdtemp(path.join(tmpdir(), "byspace-omp-session-title-first-"));
     const cwd = path.join(root, "repo");
     const sessionFile = await writeSession(root, "project/session.jsonl", [
       {
         type: "title",
         id: "title-1",
         timestamp: "2026-06-09T00:00:00.000Z",
-        title: "Deploy Paseo and verify",
+        title: "Deploy BySpace and verify",
       },
       {
         type: "session",
@@ -50,7 +50,7 @@ describe("OMP session descriptor", () => {
       expect.objectContaining({
         providerHandleId: sessionFile,
         cwd,
-        title: "Deploy Paseo and verify",
+        title: "Deploy BySpace and verify",
         firstPromptPreview: "import me",
       }),
     ]);
@@ -60,7 +60,7 @@ describe("OMP session descriptor", () => {
   });
 
   test("keeps recent nested OMP subagent sessions importable", async () => {
-    const root = await mkdtemp(path.join(tmpdir(), "paseo-omp-session-nested-"));
+    const root = await mkdtemp(path.join(tmpdir(), "byspace-omp-session-nested-"));
     const cwd = path.join(root, "repo");
     const parent = await writeSession(root, "project/parent.jsonl", [
       { type: "session", id: "parent", timestamp: "2026-06-10T00:00:00.000Z", cwd },
@@ -95,7 +95,7 @@ describe("OMP session descriptor", () => {
   });
 
   test("uses OMP's own default session directory", async () => {
-    const home = await mkdtemp(path.join(tmpdir(), "paseo-omp-session-home-"));
+    const home = await mkdtemp(path.join(tmpdir(), "byspace-omp-session-home-"));
     const cwd = path.join(home, "repo");
     const sessionFile = path.join(home, ".omp", "agent", "sessions", "project", "session.jsonl");
     await mkdir(path.dirname(sessionFile), { recursive: true });

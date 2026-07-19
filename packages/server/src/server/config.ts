@@ -1,11 +1,11 @@
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { resolvePaseoNodeEnv } from "./paseo-env.js";
+import { resolveBySpaceNodeEnv } from "./byspace-env.js";
 import { z } from "zod";
 import { expandTilde } from "../utils/path.js";
 
-import type { PaseoDaemonConfig } from "./bootstrap.js";
+import type { BySpaceDaemonConfig } from "./bootstrap.js";
 import {
   loadPersistedConfig,
   LogFormatSchema,
@@ -23,9 +23,9 @@ import { hashDaemonPassword } from "./auth.js";
 import { resolveSpeechConfig } from "./speech/speech-config-resolver.js";
 import { mergeHostnames, parseHostnamesEnv, type HostnamesConfig } from "./hostnames.js";
 
-const DEFAULT_PORT = 6767;
-const DEFAULT_RELAY_ENDPOINT = "relay.paseo.sh:443";
-const DEFAULT_APP_BASE_URL = "https://app.paseo.sh";
+const DEFAULT_PORT = 6777;
+const DEFAULT_RELAY_ENDPOINT = "byspace-relay.bytetrue.workers.dev:443";
+const DEFAULT_APP_BASE_URL = "https://byspace.pages.dev";
 const DEFAULT_TRUSTED_PROXIES = ["loopback"];
 
 interface ResolveBundledWebUiDistDirInput {
@@ -285,7 +285,7 @@ interface ResolvedWebUi {
 }
 
 function resolveWebUiConfig(
-  paseoHome: string,
+  byspaceHome: string,
   env: NodeJS.ProcessEnv,
   cli: CliConfigOverrides | undefined,
   persisted: ReturnType<typeof loadPersistedConfig>,
@@ -298,7 +298,7 @@ function resolveWebUiConfig(
   const rawDistDir = env.BYSPACE_WEB_UI_DIST_DIR ?? persisted.features?.webUi?.distDir;
   const trimmedDistDir = rawDistDir?.trim();
   const distDir = trimmedDistDir
-    ? path.resolve(path.isAbsolute(trimmedDistDir) ? trimmedDistDir : paseoHome, trimmedDistDir)
+    ? path.resolve(path.isAbsolute(trimmedDistDir) ? trimmedDistDir : byspaceHome, trimmedDistDir)
     : BUNDLED_WEB_UI_DIST_DIR;
   return {
     enabled,
@@ -369,7 +369,7 @@ function resolveTrustedProxiesConfig(
 // - host:port (TCP)
 // - /path/to/socket (Unix socket)
 // - unix:///path/to/socket (Unix socket)
-// Default is TCP at 127.0.0.1:6767
+// Default is TCP at 127.0.0.1:6777
 function resolveListenAddress(
   env: NodeJS.ProcessEnv,
   cli: CliConfigOverrides | undefined,
@@ -386,7 +386,7 @@ function resolveListenAddress(
 function resolveAuthConfig(
   env: NodeJS.ProcessEnv,
   persisted: ReturnType<typeof loadPersistedConfig>,
-): PaseoDaemonConfig["auth"] {
+): BySpaceDaemonConfig["auth"] {
   const envPassword = env.BYSPACE_PASSWORD?.trim();
   if (envPassword) {
     return { password: hashDaemonPassword(envPassword) };
@@ -397,7 +397,7 @@ function resolveAuthConfig(
 }
 
 function resolveWorktreesRoot(
-  paseoHome: string,
+  byspaceHome: string,
   persisted: ReturnType<typeof loadPersistedConfig>,
 ): string | undefined {
   const configuredRoot = persisted.worktrees?.root?.trim();
@@ -408,7 +408,7 @@ function resolveWorktreesRoot(
   const expandedRoot = expandTilde(configuredRoot);
   return path.isAbsolute(expandedRoot)
     ? path.resolve(expandedRoot)
-    : path.resolve(paseoHome, expandedRoot);
+    : path.resolve(byspaceHome, expandedRoot);
 }
 
 function resolveAppendSystemPrompt(persisted: ReturnType<typeof loadPersistedConfig>): string {
@@ -438,14 +438,14 @@ function resolveStaticLoadConfigSettings(
 }
 
 export function loadConfig(
-  paseoHome: string,
+  byspaceHome: string,
   options?: {
     env?: NodeJS.ProcessEnv;
     cli?: CliConfigOverrides;
   },
-): PaseoDaemonConfig {
+): BySpaceDaemonConfig {
   const env = options?.env ?? process.env;
-  const persisted = loadPersistedConfig(paseoHome);
+  const persisted = loadPersistedConfig(byspaceHome);
 
   const listen = resolveListenAddress(env, options?.cli, persisted);
   const {
@@ -466,10 +466,10 @@ export function loadConfig(
     cliRelayUseTls: options?.cli?.relayUseTls,
   });
   const serviceProxy = resolveServiceProxyConfig(env, persisted);
-  const webUi = resolveWebUiConfig(paseoHome, env, options?.cli, persisted);
+  const webUi = resolveWebUiConfig(byspaceHome, env, options?.cli, persisted);
 
   const { openai, speech } = resolveSpeechConfig({
-    paseoHome,
+    byspaceHome,
     env,
     persisted,
   });
@@ -481,9 +481,9 @@ export function loadConfig(
 
   return {
     listen,
-    paseoHome,
+    byspaceHome,
     desktopManaged: env.BYSPACE_DESKTOP_MANAGED === "1",
-    worktreesRoot: resolveWorktreesRoot(paseoHome, persisted),
+    worktreesRoot: resolveWorktreesRoot(byspaceHome, persisted),
     corsAllowedOrigins: resolveCorsAllowedOrigins(env, persisted),
     hostnames,
     trustedProxies,
@@ -494,8 +494,8 @@ export function loadConfig(
     appendSystemPrompt,
     terminalProfiles,
     mcpDebug: env.MCP_DEBUG === "1",
-    isDev: resolvePaseoNodeEnv(env) === "development",
-    agentStoragePath: path.join(paseoHome, "agents"),
+    isDev: resolveBySpaceNodeEnv(env) === "development",
+    agentStoragePath: path.join(byspaceHome, "agents"),
     staticDir: "public",
     agentClients: {},
     relayEnabled: relay.enabled,

@@ -668,7 +668,7 @@ export const ptBR: TranslationResources = {
           mergePrNoGithub:
             "Merge da PR não está disponível agora porque o GitHub não está conectado",
           archiveNotWorktree:
-            "Arquivar não está disponível aqui porque este workspace não foi criado como um worktree do Paseo",
+            "Arquivar não está disponível aqui porque este workspace não foi criado como um worktree do BySpace",
           mergePrNoForge:
             "Merge da {{noun}} não está disponível agora porque o {{brand}} não está conectado",
           mergePrMissing: "Merge da PR não está disponível porque ainda não há uma pull request",
@@ -840,7 +840,7 @@ export const ptBR: TranslationResources = {
       discord: "Discord",
       github: "Criar issue no GitHub",
       whatsNew: "Novidades",
-      version: "Paseo {{version}}",
+      version: "BySpace {{version}}",
     },
     sections: {
       sessions: "Histórico",
@@ -955,7 +955,7 @@ export const ptBR: TranslationResources = {
   },
   desktop: {
     quitting: {
-      title: "Saindo do Paseo...",
+      title: "Saindo do BySpace...",
       detail: "Parando o daemon local.",
     },
     daemon: {
@@ -969,20 +969,20 @@ export const ptBR: TranslationResources = {
       },
       management: {
         title: "Gerenciar daemon integrado",
-        hint: "Permitir que o Paseo inicie e pare o daemon integrado",
+        hint: "Permitir que o BySpace inicie e pare o daemon integrado",
         pauseTitle: "Pausar daemon integrado",
         pauseMessage:
           "Isso vai parar o daemon integrado imediatamente. Agentes e terminais em execução conectados ao daemon integrado serão interrompidos.",
         pauseAndStop: "Pausar e parar",
         registrationFailed:
-          "O daemon integrado foi iniciado, mas o Paseo não conseguiu salvar a conexão localhost. Desative e reative o gerenciamento do daemon ou adicione localhost manualmente.",
+          "O daemon integrado foi iniciado, mas o BySpace não conseguiu salvar a conexão localhost. Desative e reative o gerenciamento do daemon ou adicione localhost manualmente.",
         pausedStopFailed:
-          "O gerenciamento do daemon integrado foi pausado, mas o Paseo não conseguiu parar o daemon.",
+          "O gerenciamento do daemon integrado foi pausado, mas o BySpace não conseguiu parar o daemon.",
         updateFailed: "Não foi possível atualizar o gerenciamento do daemon integrado.",
       },
       keepRunning: {
         title: "Manter daemon em execução ao sair",
-        hint: "O daemon continua em execução quando você sai do Paseo",
+        hint: "O daemon continua em execução quando você sai do BySpace",
       },
       logs: {
         title: "Arquivo de log",
@@ -997,7 +997,7 @@ export const ptBR: TranslationResources = {
       fullStatus: {
         title: "Status completo",
         modalTitle: "Status do daemon",
-        hint: "Executa `paseo daemon status` e mostra a saída",
+        hint: "Executa `byspace daemon status` e mostra a saída",
         view: "Ver status",
         copied: "Status copiado para a área de transferência.",
         fetchFailed: "Falha ao buscar status do daemon: {{message}}",
@@ -1052,7 +1052,7 @@ export const ptBR: TranslationResources = {
     },
     rosetta: {
       title: "Baixar a build para Apple Silicon",
-      runningIntel: "Você está executando a build Intel do Paseo pelo Rosetta no Apple Silicon.",
+      runningIntel: "Você está executando a build Intel do BySpace pelo Rosetta no Apple Silicon.",
       highCpu: "Isso causa alto uso de CPU. Baixe a build para Apple Silicon para corrigir.",
       download: "Baixar",
     },
@@ -1094,7 +1094,7 @@ export const ptBR: TranslationResources = {
         microphone: "O status do microfone ainda não foi verificado.",
       },
       testNotification: {
-        title: "Teste de notificação do Paseo",
+        title: "Teste de notificação do BySpace",
         body: "Se você consegue ver isto, as notificações desktop funcionam.",
         notDelivered:
           "A notificação não foi entregue. Verifique Ajustes do Sistema > Notificações.",
@@ -1104,7 +1104,7 @@ export const ptBR: TranslationResources = {
     integrations: {
       cli: {
         statusFailed: "Não foi possível verificar o status de instalação da CLI.",
-        installFailed: "Não foi possível instalar a CLI do Paseo.",
+        installFailed: "Não foi possível instalar a CLI do BySpace.",
       },
       skills: {
         statusFailed: "Não foi possível verificar o status das skills de orquestração.",
@@ -1116,7 +1116,7 @@ export const ptBR: TranslationResources = {
   },
   rootError: {
     kicker: "Algo deu errado",
-    title: "O Paseo encontrou um problema.",
+    title: "O BySpace encontrou um problema.",
     body: "Tente novamente para recarregar o app. Se isso continuar acontecendo, inclua os detalhes abaixo ao relatar o problema.",
     details: "Detalhes",
   },
@@ -1210,7 +1210,7 @@ export const ptBR: TranslationResources = {
     },
   },
   onboarding: {
-    title: "Bem-vindo ao Paseo",
+    title: "Bem-vindo ao BySpace",
     subtitle: "Conecte seu computador para começar",
     actions: {
       settings: "Configurações",
@@ -1286,7 +1286,7 @@ export const ptBR: TranslationResources = {
     },
     direct: {
       title: "Conexão direta",
-      helper: "Informe o endereço de um servidor Paseo.",
+      helper: "Informe o endereço de um servidor BySpace.",
       fields: {
         host: "Host",
         port: "Porta",
@@ -1366,7 +1366,7 @@ export const ptBR: TranslationResources = {
       failedToLoadOffer: "Falha ao carregar oferta de pareamento.",
       relayDisabled: "Relay não está ativado. Ative o relay para parear um dispositivo.",
       unavailable: "Oferta de pareamento indisponível.",
-      hint: "Escaneie este QR code com o Paseo no seu celular ou copie o link abaixo.",
+      hint: "Escaneie este QR code com o BySpace no seu celular ou copie o link abaixo.",
       qrUnavailable: "QR code indisponível.",
       retry: "Tentar novamente",
       copy: "Copiar",
@@ -1398,7 +1398,7 @@ export const ptBR: TranslationResources = {
   serviceUrl: {
     title: "Abrir URL do serviço",
     message: "Abrir {{url}}?",
-    inPaseo: "No Paseo",
+    inBySpace: "No BySpace",
     externalBrowser: "Navegador externo",
     dontAskAgain: "Não perguntar novamente",
   },
@@ -1472,9 +1472,9 @@ export const ptBR: TranslationResources = {
       one: "usou {{count}} outra ferramenta",
       other: "usou {{count}} outras ferramentas",
     },
-    paseoCalls: {
-      one: "chamou o Paseo {{count}} vez",
-      other: "chamou o Paseo {{count}} vezes",
+    byspaceCalls: {
+      one: "chamou o BySpace {{count}} vez",
+      other: "chamou o BySpace {{count}} vezes",
     },
     and: "e",
   },
@@ -1548,7 +1548,7 @@ export const ptBR: TranslationResources = {
       browserData: {
         title: "Dados do navegador",
         siteData: "Cookies e dados de sites",
-        description: "As abas do navegador compartilham logins e dados de sites no Paseo.",
+        description: "As abas do navegador compartilham logins e dados de sites no BySpace.",
         clear: "Limpar dados do navegador",
         clearing: "Limpando...",
         confirmTitle: "Limpar dados do navegador?",
@@ -1574,7 +1574,7 @@ export const ptBR: TranslationResources = {
         description: "Onde abrir URLs de scripts em execução",
         options: {
           ask: "Perguntar",
-          inApp: "No Paseo",
+          inApp: "No BySpace",
           external: "Navegador externo",
         },
       },
@@ -1653,7 +1653,7 @@ export const ptBR: TranslationResources = {
         label: "Atualizações do app",
         readyToInstall: "Pronta para instalar: {{version}}",
         installTitle: "Instalar atualização desktop",
-        installMessage: "Isso atualiza o Paseo neste computador",
+        installMessage: "Isso atualiza o BySpace neste computador",
         installConfirm: "Instalar atualização",
         update: "Atualizar",
         updateTo: "Atualizar para {{version}}",
@@ -1785,11 +1785,11 @@ export const ptBR: TranslationResources = {
         title: "Skills de orquestração",
         description: "Ensine seus agentes a orquestrar pela CLI",
         updateAvailable: "Atualização disponível",
-        updateTitle: "Atualizar Paseo skills?",
+        updateTitle: "Atualizar BySpace skills?",
         updateFallback: "Sincronize as skills incluídas com sua máquina.",
-        uninstallTitle: "Desinstalar Paseo skills?",
+        uninstallTitle: "Desinstalar BySpace skills?",
         uninstallMessage:
-          "Remove todas as skills de orquestração do Paseo de ~/.agents, ~/.claude e ~/.codex.",
+          "Remove todas as skills de orquestração do BySpace de ~/.agents, ~/.claude e ~/.codex.",
       },
       actions: {
         install: "Instalar",
@@ -1844,9 +1844,9 @@ export const ptBR: TranslationResources = {
         title: "Orquestração",
         unavailable: "Conecte-se a este host para gerenciar a orquestração",
         enableTools: {
-          title: "Ativar ferramentas do Paseo",
+          title: "Ativar ferramentas do BySpace",
           hint: "Agentes poderão gerenciar worktrees, agentes e agendamentos",
-          accessibilityLabel: "Injetar ferramentas do Paseo",
+          accessibilityLabel: "Injetar ferramentas do BySpace",
         },
         systemPrompt: {
           title: "Prompt do sistema",
@@ -1914,15 +1914,15 @@ export const ptBR: TranslationResources = {
             "Este host não está conectado. Aguarde até ele ficar online antes de reiniciar.",
           offlineTitle: "Host offline",
           offlineMessage:
-            "Este host está offline. O Paseo reconecta automaticamente. Aguarde ele voltar a ficar online antes de reiniciar.",
+            "Este host está offline. O BySpace reconecta automaticamente. Aguarde ele voltar a ficar online antes de reiniciar.",
           requestFailedTitle: "Erro",
           requestFailedMessage:
-            "Falha ao enviar a solicitação de reinício. O Paseo reconecta automaticamente. Tente novamente quando o host aparecer como online.",
+            "Falha ao enviar a solicitação de reinício. O BySpace reconecta automaticamente. Tente novamente quando o host aparecer como online.",
           dialogFailedMessage: "Não foi possível abrir o diálogo de confirmação de reinício.",
         },
         update: {
           desktopManagedHint:
-            "Este daemon é gerenciado pelo Paseo Desktop. Atualize o Paseo Desktop no host.",
+            "Este daemon é gerenciado pelo BySpace Desktop. Atualize o BySpace Desktop no host.",
           title: "Atualizar daemon",
           hint: "Atualiza o daemon para a versão mais recente e o reinicia",
           confirm: "Atualizar",
@@ -2042,14 +2042,14 @@ export const ptBR: TranslationResources = {
         reset: "Redefinir",
       },
       readFailures: {
-        invalidTitle: "Não foi possível analisar paseo.json",
+        invalidTitle: "Não foi possível analisar byspace.json",
         invalidDescription: "Corrija o arquivo no disco e recarregue.",
         missingTitle: "Este host não tem este projeto",
         missingWithHosts: "Troque para outro host acima ou recarregue.",
         missingSingleHost: "O host selecionado não tem registro deste projeto.",
-        transportTitle: "Não foi possível carregar paseo.json",
+        transportTitle: "Não foi possível carregar byspace.json",
         transportFallback: "O host não respondeu.",
-        failedTitle: "Não foi possível carregar paseo.json",
+        failedTitle: "Não foi possível carregar byspace.json",
         failedDescription: "Recarregue para tentar novamente.",
       },
       worktree: {
@@ -2082,7 +2082,7 @@ export const ptBR: TranslationResources = {
         newScript: "Novo script",
         editScript: "Editar {{name}}",
         runAsService: "Executar como serviço",
-        serviceHint: "O Paseo supervisiona o processo e atribui uma porta via $BYSPACE_PORT",
+        serviceHint: "O BySpace supervisiona o processo e atribui uma porta via $BYSPACE_PORT",
         actions: {
           add: "Adicionar script",
           edit: "Editar",
@@ -2091,7 +2091,7 @@ export const ptBR: TranslationResources = {
       },
       metadata: {
         title: "Geração de metadados",
-        info: "Instruções específicas do projeto injetadas nos prompts de IA que o Paseo usa para gerar metadados. Use-as para aplicar convenções da sua equipe, como nomes de branch, estilo de commit ou formato de PR",
+        info: "Instruções específicas do projeto injetadas nos prompts de IA que o BySpace usa para gerar metadados. Use-as para aplicar convenções da sua equipe, como nomes de branch, estilo de commit ou formato de PR",
         branchName: "Nomes de branch",
         branchNamePlaceholder: "Prefixe branches com feat/ ou fix/, mb/ para branches pessoais",
         commitMessage: "Mensagens de commit",
@@ -2101,8 +2101,8 @@ export const ptBR: TranslationResources = {
       },
       writeFailures: {
         staleTitle: "Configuração alterada no disco",
-        staleDescription: "Recarregue para buscar o paseo.json mais recente antes de salvar.",
-        failedTitle: "Não foi possível salvar paseo.json",
+        staleDescription: "Recarregue para buscar o byspace.json mais recente antes de salvar.",
+        failedTitle: "Não foi possível salvar byspace.json",
         failedDescription: "Tente novamente ou recarregue a versão mais recente do disco.",
       },
       actions: {

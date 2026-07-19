@@ -12,8 +12,8 @@ function expandHomeDir(input: string): string {
   return input;
 }
 
-export function resolvePaseoHome(env: NodeJS.ProcessEnv = process.env): string {
-  const raw = env.BYSPACE_HOME ?? "~/.paseo";
+export function resolveBySpaceHome(env: NodeJS.ProcessEnv = process.env): string {
+  const raw = env.BYSPACE_HOME ?? "~/.byspace";
   const resolved = path.resolve(expandHomeDir(raw));
   ensurePrivateDirectory(resolved);
   return resolved;

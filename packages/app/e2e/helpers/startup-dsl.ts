@@ -3,10 +3,10 @@ import { expect, type Page } from "../fixtures";
 import { buildCreateAgentPreferences, buildSeededHost } from "./daemon-registry";
 import { wsRoutePatternForPort } from "./daemon-port";
 
-const DISABLE_DEFAULT_SEED_ONCE_KEY = "@paseo:e2e-disable-default-seed-once";
-const SEED_NONCE_KEY = "@paseo:e2e-seed-nonce";
-const REGISTRY_KEY = "@paseo:daemon-registry";
-const E2E_KEY = "@paseo:e2e";
+const DISABLE_DEFAULT_SEED_ONCE_KEY = "@byspace:e2e-disable-default-seed-once";
+const SEED_NONCE_KEY = "@byspace:e2e-seed-nonce";
+const REGISTRY_KEY = "@byspace:daemon-registry";
+const E2E_KEY = "@byspace:e2e";
 const STORAGE_SEED_HTML = "<!doctype html><html><body>storage seed</body></html>";
 
 interface SavedHostInput {
@@ -117,7 +117,10 @@ class StartupScenario {
 
         localStorage.setItem(keys.e2e, "1");
         localStorage.setItem(keys.registry, JSON.stringify(storedRegistry));
-        localStorage.setItem("@paseo:create-agent-preferences", JSON.stringify(storedPreferences));
+        localStorage.setItem(
+          "@byspace:create-agent-preferences",
+          JSON.stringify(storedPreferences),
+        );
         localStorage.setItem(keys.disableDefaultSeedOnce, nonce);
       },
       {
@@ -204,7 +207,7 @@ class StartupAssertions {
 
 async function installPendingDesktopBridge(page: Page): Promise<void> {
   await page.addInitScript(() => {
-    (window as unknown as { paseoDesktop: unknown }).paseoDesktop = {
+    (window as unknown as { byspaceDesktop: unknown }).byspaceDesktop = {
       platform: "darwin",
       invoke: async (command: string) => {
         if (command === "start_desktop_daemon") {
@@ -221,7 +224,6 @@ async function installPendingDesktopBridge(page: Page): Promise<void> {
             pid: null,
             home: "",
             version: null,
-            desktopManaged: true,
             error: null,
           };
         }

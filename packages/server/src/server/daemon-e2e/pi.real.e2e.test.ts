@@ -12,7 +12,7 @@ import type {
   AgentTimelineItem,
 } from "../agent/agent-sdk-types.js";
 import { DaemonClient } from "../test-utils/daemon-client.js";
-import { createTestPaseoDaemon } from "../test-utils/paseo-daemon.js";
+import { createTestBySpaceDaemon } from "../test-utils/byspace-daemon.js";
 import {
   canRunRealProvider,
   createRealProviderClient,
@@ -54,7 +54,7 @@ function createPiClient(): AgentClient {
 
 function createPiToolDaemon() {
   const logger = pino({ level: "silent" });
-  return createTestPaseoDaemon({
+  return createTestBySpaceDaemon({
     agentClients: createRealProviderClients(["pi"], logger),
     logger,
   });
@@ -140,7 +140,7 @@ beforeEach((context) => {
 });
 
 test(
-  "real Pi daemon lists Paseo-handled compact slash commands",
+  "real Pi daemon lists BySpace-handled compact slash commands",
   async () => {
     const cwd = tmpCwd("pi-compact-commands-");
 

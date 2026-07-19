@@ -13,7 +13,7 @@ const LARGE_CHANGESET_SIZE = Number.parseInt(
 );
 
 function tmpRepo(): string {
-  return mkdtempSync(path.join(tmpdir(), "paseo-git-diff-bottleneck-"));
+  return mkdtempSync(path.join(tmpdir(), "byspace-git-diff-bottleneck-"));
 }
 
 function initGitRepo(cwd: string): void {

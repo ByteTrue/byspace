@@ -96,7 +96,7 @@ describe("codex agent commands E2E", () => {
 
     const promptsDir = path.join(codexHome, "prompts");
     mkdirSync(promptsDir, { recursive: true });
-    const promptPath = path.join(promptsDir, "paseo-test-sayok.md");
+    const promptPath = path.join(promptsDir, "byspace-test-sayok.md");
     writeFileSync(
       promptPath,
       [
@@ -117,7 +117,7 @@ describe("codex agent commands E2E", () => {
       title: "Codex Prompt Execute Test Agent",
     });
 
-    await ctx.client.sendMessage(agent.id, "/prompts:paseo-test-sayok NAME=world");
+    await ctx.client.sendMessage(agent.id, "/prompts:byspace-test-sayok NAME=world");
     const state = await ctx.client.waitForFinish(agent.id, 30_000);
 
     expect(state.status).toBe("idle");
@@ -132,7 +132,7 @@ describe("codex agent commands E2E", () => {
     const promptsDir = path.join(codexHome, "prompts");
     mkdirSync(promptsDir, { recursive: true });
     writeFileSync(
-      path.join(promptsDir, "paseo-test-sayok.md"),
+      path.join(promptsDir, "byspace-test-sayok.md"),
       ["---", "description: Say OK", "---", "", "Output exactly: BYSPACE_OK", ""].join("\n"),
       "utf8",
     );
@@ -145,11 +145,11 @@ describe("codex agent commands E2E", () => {
         title: "Codex Command Route Test",
       });
 
-      await ctx.client.sendMessage(agent.id, "/prompts:paseo-test-sayok NAME=world");
+      await ctx.client.sendMessage(agent.id, "/prompts:byspace-test-sayok NAME=world");
       const state = await ctx.client.waitForFinish(agent.id, 30_000);
 
       expect(state.status).toBe("idle");
-      expect(state.lastMessage).toContain("BYSPACE_OK paseo-test-sayok");
+      expect(state.lastMessage).toContain("BYSPACE_OK byspace-test-sayok");
     } finally {
       if (prevCodexHome === undefined) {
         delete process.env.CODEX_HOME;

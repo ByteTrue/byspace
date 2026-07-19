@@ -1,14 +1,14 @@
 import { ActivityIndicator, Text, View } from "react-native";
 import { useTranslation } from "react-i18next";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
-import { PaseoLogo } from "@/components/icons/paseo-logo";
+import { BySpaceLogo } from "@/components/icons/byspace-logo";
 
 export function StartupSplashScreen() {
   const { t } = useTranslation();
   const { theme } = useUnistyles();
   return (
     <View style={styles.container}>
-      <PaseoLogo size={64} />
+      <BySpaceLogo size={64} />
       <ActivityIndicator color={theme.colors.foregroundMuted} />
       <Text style={styles.message}>{t("startup.connecting")}</Text>
     </View>

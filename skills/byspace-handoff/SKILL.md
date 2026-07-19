@@ -1,5 +1,5 @@
 ---
-name: paseo-handoff
+name: byspace-handoff
 description: Hand off the current task to another agent with full context. Use when the user says "handoff", "hand off", "hand this to", or wants to pass work to another agent.
 user-invocable: true
 ---
@@ -12,12 +12,12 @@ Transfer the current task — context, decisions, failed attempts, constraints �
 
 ## Prerequisites
 
-Read the **paseo** skill. Before choosing a provider, read `~/.paseo/orchestration-preferences.json` unless the user explicitly named a provider in this request. Do not create the receiving agent until you have read it.
+Read the **byspace** skill. Before choosing a provider, read `~/.byspace/orchestration-preferences.json` unless the user explicitly named a provider in this request. Do not create the receiving agent until you have read it.
 
 ## Parsing arguments
 
 1. **Provider** — explicit user request first; otherwise resolve from `impl` preference (or `ui` if the task is styling-only).
-2. **Worktree** — "in a worktree" / "worktree" → create a worktree via Paseo with a short branch name derived from the task, based on the current branch.
+2. **Worktree** — "in a worktree" / "worktree" → create a worktree via BySpace with a short branch name derived from the task, based on the current branch.
 3. **Task description** — anything else the user said.
 
 ## The handoff prompt
@@ -54,7 +54,7 @@ The receiving agent has zero context. Include:
 
 ## Launch
 
-Create the agent via Paseo with a `[Handoff] <task>` title, the briefing as initial prompt, and `relationship: { kind: "detached" }`.
+Create the agent via BySpace with a `[Handoff] <task>` title, the briefing as initial prompt, and `relationship: { kind: "detached" }`.
 
 Use `workspace` for placement:
 
@@ -68,4 +68,4 @@ Leave `notifyOnFinish` omitted unless the user explicitly wants no callback.
 
 Handoff agents are siblings/root agents, not your subagents. They must survive you being archived and must not appear in your subagent track.
 
-Don't wait by default — the user decides whether to follow along or move on. Tell them the agent ID and how to follow along (the paseo skill explains).
+Don't wait by default — the user decides whether to follow along or move on. Tell them the agent ID and how to follow along (the byspace skill explains).

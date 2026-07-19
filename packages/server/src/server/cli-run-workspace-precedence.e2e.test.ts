@@ -4,10 +4,10 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { DaemonClient } from "./test-utils/index.js";
-import { createTestPaseoDaemon } from "./test-utils/paseo-daemon.js";
+import { createTestBySpaceDaemon } from "./test-utils/byspace-daemon.js";
 import { getFullAccessConfig } from "./daemon-e2e/agent-configs.js";
 
-// The daemon-level workspace contract that `paseo run` depends on: each
+// The daemon-level workspace contract that `byspace run` depends on: each
 // local-backed createWorkspace for a cwd mints a fresh, distinct workspace,
 // createAgent stamps the agent with the workspaceId it is given, and attaching
 // to an existing workspace by id creates no new record. The CLI's own flag
@@ -29,8 +29,8 @@ async function mintLocalWorkspace(client: DaemonClient, cwd: string): Promise<st
 }
 
 test("daemon mints a distinct local workspace per run and stamps agents by id", async () => {
-  const daemon = await createTestPaseoDaemon();
-  const cwd = mkdtempSync(path.join(tmpdir(), "paseo-cli-run-cwd-"));
+  const daemon = await createTestBySpaceDaemon();
+  const cwd = mkdtempSync(path.join(tmpdir(), "byspace-cli-run-cwd-"));
   const client = new DaemonClient({
     url: `ws://127.0.0.1:${daemon.port}/ws`,
     appVersion: "0.1.82",

@@ -16,13 +16,13 @@ import { withDisabledE2ESpeechEnv } from "./speech-env";
  * The daemon is owned by Playwright's `globalSetup`, which keeps its child
  * handle in module scope we can't reach from a spec. Instead we drive it the
  * same way an operator would: read the supervisor PID from
- * `$BYSPACE_HOME/paseo.pid`, SIGTERM it (the supervisor forwards the signal to its
+ * `$BYSPACE_HOME/byspace.pid`, SIGTERM it (the supervisor forwards the signal to its
  * worker and releases the lock), wait for the port to free, then re-spawn the
  * supervisor with the identical environment globalSetup used. The relay and
  * Metro processes are untouched, so we reuse their already-published ports.
  *
  * This NEVER targets the developer daemon: the port comes from
- * `getE2EDaemonPort()`, which refuses 6767, and BYSPACE_HOME is the isolated E2E
+ * `getE2EDaemonPort()`, which refuses 6777, and BYSPACE_HOME is the isolated E2E
  * home globalSetup created.
  */
 
@@ -34,8 +34,8 @@ function getEnvOrThrow(name: string): string {
   return value;
 }
 
-async function readSupervisorPid(paseoHome: string): Promise<number> {
-  const pidPath = path.join(paseoHome, "paseo.pid");
+async function readSupervisorPid(byspaceHome: string): Promise<number> {
+  const pidPath = path.join(byspaceHome, "byspace.pid");
   const content = await readFile(pidPath, "utf8");
   const parsed = JSON.parse(content) as { pid?: unknown };
   if (typeof parsed.pid !== "number") {
@@ -82,7 +82,7 @@ async function waitUntil(
 }
 
 function spawnSupervisor(args: {
-  paseoHome: string;
+  byspaceHome: string;
   port: string;
   relayPort: string;
   metroPort: string;
@@ -96,7 +96,7 @@ function spawnSupervisor(args: {
   const tsxCli = createRequire(path.join(serverDir, "package.json")).resolve("tsx/cli");
   const env = withDisabledE2ESpeechEnv({
     ...process.env,
-    BYSPACE_HOME: args.paseoHome,
+    BYSPACE_HOME: args.byspaceHome,
     BYSPACE_E2E_EDITOR_RECORD_PATH: args.editorRecordPath,
     BYSPACE_SERVER_ID: "srv_e2e_test_daemon",
     BYSPACE_LISTEN: `0.0.0.0:${args.port}`,
@@ -132,13 +132,13 @@ function spawnSupervisor(args: {
 
 export async function restartTestDaemon(): Promise<void> {
   const port = getE2EDaemonPort();
-  const paseoHome = getEnvOrThrow("E2E_BYSPACE_HOME");
+  const byspaceHome = getEnvOrThrow("E2E_BYSPACE_HOME");
   const relayPort = getEnvOrThrow("E2E_RELAY_PORT");
   const metroPort = getEnvOrThrow("E2E_METRO_PORT");
   const editorRecordPath =
-    process.env.E2E_EDITOR_RECORD_PATH ?? path.join(paseoHome, "editor-open-records.jsonl");
+    process.env.E2E_EDITOR_RECORD_PATH ?? path.join(byspaceHome, "editor-open-records.jsonl");
 
-  const pid = await readSupervisorPid(paseoHome);
+  const pid = await readSupervisorPid(byspaceHome);
   process.kill(pid, "SIGTERM");
 
   await waitUntil(() => !isPidRunning(pid), {
@@ -150,7 +150,7 @@ export async function restartTestDaemon(): Promise<void> {
     label: `port ${port} to free`,
   });
 
-  spawnSupervisor({ paseoHome, port, relayPort, metroPort, editorRecordPath });
+  spawnSupervisor({ byspaceHome, port, relayPort, metroPort, editorRecordPath });
 
   await waitUntil(async () => isPortListening(Number(port)), {
     timeoutMs: 30_000,

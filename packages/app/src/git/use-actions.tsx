@@ -103,7 +103,7 @@ interface DerivedGitActionsState {
   behindOfOrigin: number | null;
   hasPullRequest: boolean;
   hasRemote: boolean;
-  isPaseoOwnedWorktree: boolean;
+  isBySpaceOwnedWorktree: boolean;
   isOnBaseBranch: boolean;
   shouldPromoteArchive: boolean;
 }
@@ -146,14 +146,14 @@ function deriveGitActionsState(args: DeriveGitActionsStateArgs): DerivedGitActio
     baseRefLabel,
   } = args;
   const actionsDisabled = !isGit || Boolean(status?.error) || isStatusLoading;
-  const isPaseoOwnedWorktree = gitStatus?.isPaseoOwnedWorktree ?? false;
+  const isBySpaceOwnedWorktree = gitStatus?.isBySpaceOwnedWorktree ?? false;
   const isMergedPullRequest = Boolean(prStatus?.isMerged);
   return {
     actionsDisabled,
     ...extractGitCommitCounts(gitStatus),
     hasPullRequest: Boolean(prStatus?.url),
     hasRemote: gitStatus?.hasRemote ?? false,
-    isPaseoOwnedWorktree,
+    isBySpaceOwnedWorktree,
     isOnBaseBranch: gitStatus?.currentBranch === baseRefLabel,
     shouldPromoteArchive: computeShouldPromoteArchive({
       hasUncommittedChanges,
@@ -329,7 +329,7 @@ export function useGitActions({ serverId, cwd, icons }: UseGitActionsInput): Use
     if (!gitStatus?.repoRoot) {
       return null;
     }
-    return `@paseo:changes-ship-default:${gitStatus.repoRoot}`;
+    return `@byspace:changes-ship-default:${gitStatus.repoRoot}`;
   }, [gitStatus?.repoRoot]);
 
   useEffect(() => {
@@ -639,7 +639,7 @@ export function useGitActions({ serverId, cwd, icons }: UseGitActionsInput): Use
     behindOfOrigin,
     hasPullRequest,
     hasRemote,
-    isPaseoOwnedWorktree,
+    isBySpaceOwnedWorktree,
     isOnBaseBranch,
     shouldPromoteArchive,
   } = derived;
@@ -669,7 +669,7 @@ export function useGitActions({ serverId, cwd, icons }: UseGitActionsInput): Use
       pullRequestMergeable: prStatus?.mergeable ?? "UNKNOWN",
       mergeCapability: deriveMergeCapability(prStatus?.forgeSpecific, prStatus?.github),
       hasRemote,
-      isPaseoOwnedWorktree,
+      isBySpaceOwnedWorktree,
       isOnBaseBranch,
       hasUncommittedChanges,
       baseRefAvailable: Boolean(baseRef),
@@ -786,7 +786,7 @@ export function useGitActions({ serverId, cwd, icons }: UseGitActionsInput): Use
     prStatus?.github,
     aheadCount,
     behindBaseCount,
-    isPaseoOwnedWorktree,
+    isBySpaceOwnedWorktree,
     isOnBaseBranch,
     githubFeaturesEnabled,
     forge,
@@ -1043,7 +1043,7 @@ function translateGitActionUnavailableMessage(
       "workspace.git.actions.unavailable.updateDirty",
     "Merge PR isn't available right now because GitHub isn't connected":
       "workspace.git.actions.unavailable.mergePrNoGithub",
-    "Archive isn't available here because this workspace was not created as a Paseo worktree":
+    "Archive isn't available here because this workspace was not created as a BySpace worktree":
       "workspace.git.actions.unavailable.archiveNotWorktree",
     "Merge PR isn't available because there isn't a pull request yet":
       "workspace.git.actions.unavailable.mergePrMissing",

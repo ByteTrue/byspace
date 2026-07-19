@@ -250,7 +250,7 @@ function createServer(options?: {
     }),
     createStub<AgentStorage>({}),
     createStub<DownloadTokenStore>({}),
-    "/tmp/paseo-test",
+    "/tmp/byspace-test",
     createStub<DaemonConfigStore>(daemonConfigStore),
     null,
     { allowedOrigins: new Set() },
@@ -393,8 +393,8 @@ function createHelloMessage(
 function createDirectRequest() {
   return {
     headers: {
-      host: "localhost:6767",
-      origin: "http://localhost:6767",
+      host: "localhost:6777",
+      origin: "http://localhost:6777",
       "user-agent": "vitest",
     },
     socket: {

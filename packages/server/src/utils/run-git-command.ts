@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs";
 import pLimit from "p-limit";
 import type { Logger } from "pino";
-import type { ProcessEnvRecord } from "../server/paseo-env.js";
+import type { ProcessEnvRecord } from "../server/byspace-env.js";
 import { spawnProcess } from "./spawn.js";
 
 const DEFAULT_TIMEOUT_MS = 30_000;

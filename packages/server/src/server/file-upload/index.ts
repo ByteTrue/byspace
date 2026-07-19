@@ -9,7 +9,7 @@ import { getErrorMessage } from "@bytetrue/byspace-protocol/error-utils";
 import type { FileUploadRequest, FileUploadResponse } from "../messages.js";
 
 interface FileUploadStoreOptions {
-  paseoHome: string;
+  byspaceHome: string;
   staleUploadTimeoutMs?: number;
 }
 
@@ -30,12 +30,12 @@ interface PendingUpload {
 export class FileUploadStore {
   private static readonly defaultStaleUploadTimeoutMs = 10 * 60 * 1000;
 
-  private readonly paseoHome: string;
+  private readonly byspaceHome: string;
   private readonly staleUploadTimeoutMs: number;
   private readonly pending = new Map<string, PendingUpload>();
 
   constructor(options: FileUploadStoreOptions) {
-    this.paseoHome = options.paseoHome;
+    this.byspaceHome = options.byspaceHome;
     this.staleUploadTimeoutMs =
       options.staleUploadTimeoutMs ?? FileUploadStore.defaultStaleUploadTimeoutMs;
   }
@@ -50,7 +50,7 @@ export class FileUploadStore {
     const fileName = sanitizeFileName(request.fileName);
     const attempt = existingUpload ? existingUpload.attempt + 1 : 1;
     const id = buildUploadId(request.requestId, attempt);
-    const uploadDir = join(this.paseoHome, "uploads", id);
+    const uploadDir = join(this.byspaceHome, "uploads", id);
     const upload: PendingUpload = {
       requestId: request.requestId,
       id,
@@ -107,7 +107,7 @@ export class FileUploadStore {
   }
 
   private async startWriting(upload: PendingUpload): Promise<void> {
-    await mkdir(join(this.paseoHome, "uploads", upload.id), { recursive: true });
+    await mkdir(join(this.byspaceHome, "uploads", upload.id), { recursive: true });
     await writeFile(upload.path, new Uint8Array());
     upload.started = true;
   }
@@ -180,7 +180,7 @@ export class FileUploadStore {
   }
 
   private async removeUploadDirectory(upload: PendingUpload): Promise<void> {
-    await rm(join(this.paseoHome, "uploads", upload.id), { recursive: true, force: true }).catch(
+    await rm(join(this.byspaceHome, "uploads", upload.id), { recursive: true, force: true }).catch(
       () => undefined,
     );
   }

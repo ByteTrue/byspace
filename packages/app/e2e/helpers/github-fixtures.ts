@@ -136,8 +136,8 @@ async function seedPr(args: {
   git(["clone", authedUrl, localPath, "--quiet", "-b", branch], basePath);
   // Clean remote URL (no embedded token) so gh can parse owner/repo
   git(["remote", "set-url", "origin", `https://github.com/${fullName}.git`], localPath);
-  git(["config", "user.email", "e2e@paseo.test"], localPath);
-  git(["config", "user.name", "Paseo E2E"], localPath);
+  git(["config", "user.email", "e2e@byspace.test"], localPath);
+  git(["config", "user.name", "BySpace E2E"], localPath);
   git(["config", "commit.gpgsign", "false"], localPath);
 
   return {
@@ -160,10 +160,10 @@ function seedIssue(args: { spec: IssueSpec; basePath: string }): GhIssueFixture 
   return { number: issueNumber, title: spec.title, url: issueUrl };
 }
 
-// Single namespace for temporary GitHub repos created by Paseo tests.
-// Bulk cleanup relies on this prefix being unmistakable — never reuse `paseo-`
-// (collides with real repos like `paseo`, `paseo-website`).
-const TEMP_GITHUB_REPO_PREFIX = "paseotmp-";
+// Single namespace for temporary GitHub repos created by BySpace tests.
+// Bulk cleanup relies on this prefix being unmistakable — never reuse `byspace-`
+// (collides with real repos like `byspace`, `byspace-website`).
+const TEMP_GITHUB_REPO_PREFIX = "byspacetmp-";
 
 export async function createTempGithubRepo(options: {
   category: string;
@@ -178,8 +178,8 @@ export async function createTempGithubRepo(options: {
   // Bootstrap local git repo
   const basePath = await mkdtemp(path.join("/tmp", `${repoName}-base-`));
   git(["init", "-b", defaultBranch], basePath);
-  git(["config", "user.email", "e2e@paseo.test"], basePath);
-  git(["config", "user.name", "Paseo E2E"], basePath);
+  git(["config", "user.email", "e2e@byspace.test"], basePath);
+  git(["config", "user.name", "BySpace E2E"], basePath);
   git(["config", "commit.gpgsign", "false"], basePath);
   await writeFile(path.join(basePath, "README.md"), "# E2E Test Repo\n");
   git(["add", "README.md"], basePath);
@@ -270,8 +270,8 @@ export async function cloneGithubRepoDefaultBranchOnly(
     ["clone", "--quiet", "--single-branch", "--branch", repo.defaultBranch, authedUrl, clonePath],
     { stdio: ["ignore", "pipe", "pipe"] },
   );
-  git(["config", "user.email", "e2e@paseo.test"], clonePath);
-  git(["config", "user.name", "Paseo E2E"], clonePath);
+  git(["config", "user.email", "e2e@byspace.test"], clonePath);
+  git(["config", "user.name", "BySpace E2E"], clonePath);
   git(["config", "commit.gpgsign", "false"], clonePath);
 
   return {

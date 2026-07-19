@@ -11,7 +11,7 @@ import {
   FileBackedWorkspaceRegistry,
   type PersistedProjectRecord,
 } from "../../workspace-registry.js";
-import type { CreatePaseoWorktreeWorkflowResult } from "../../worktree-session.js";
+import type { CreateBySpaceWorktreeWorkflowResult } from "../../worktree-session.js";
 import {
   createWorkspaceProvisioningService,
   type WorkspaceProvisioningService,
@@ -50,7 +50,7 @@ function gitService() {
         currentBranch: worktreeRoot ? "main" : null,
         remoteUrl: null,
         worktreeRoot,
-        isPaseoOwnedWorktree: false,
+        isBySpaceOwnedWorktree: false,
         mainRepoRoot: null,
       };
     },
@@ -158,7 +158,7 @@ test("resolveOrCreateWorkspaceIdForCreateAgent returns a created worktree's id w
   // The branch only reads workspace.workspaceId off the worktree result.
   const createdWorktree = {
     workspace: { workspaceId: "ws-from-worktree" },
-  } as unknown as CreatePaseoWorktreeWorkflowResult;
+  } as unknown as CreateBySpaceWorktreeWorkflowResult;
 
   const id = await provisioning.resolveOrCreateWorkspaceIdForCreateAgent({
     createdWorktree,

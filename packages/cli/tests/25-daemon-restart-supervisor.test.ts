@@ -74,9 +74,9 @@ interface DaemonStatus {
   pid: number | null;
 }
 
-async function readDaemonStatus(paseoHome: string): Promise<DaemonStatus> {
+async function readDaemonStatus(byspaceHome: string): Promise<DaemonStatus> {
   const result =
-    await $`BYSPACE_HOME=${paseoHome} BYSPACE_LOCAL_SPEECH_AUTO_DOWNLOAD=${testEnv.BYSPACE_LOCAL_SPEECH_AUTO_DOWNLOAD} BYSPACE_DICTATION_ENABLED=${testEnv.BYSPACE_DICTATION_ENABLED} BYSPACE_VOICE_MODE_ENABLED=${testEnv.BYSPACE_VOICE_MODE_ENABLED} npx paseo daemon status --home ${paseoHome} --json`.nothrow();
+    await $`BYSPACE_HOME=${byspaceHome} BYSPACE_LOCAL_SPEECH_AUTO_DOWNLOAD=${testEnv.BYSPACE_LOCAL_SPEECH_AUTO_DOWNLOAD} BYSPACE_DICTATION_ENABLED=${testEnv.BYSPACE_DICTATION_ENABLED} BYSPACE_VOICE_MODE_ENABLED=${testEnv.BYSPACE_VOICE_MODE_ENABLED} npx byspace daemon status --home ${byspaceHome} --json`.nothrow();
   if (result.exitCode !== 0) {
     return { localDaemon: null, pid: null };
   }
@@ -94,8 +94,11 @@ async function readDaemonStatus(paseoHome: string): Promise<DaemonStatus> {
   }
 }
 
-async function readCapturedSupervisorLogs(paseoHome: string, recentLogs: string): Promise<string> {
-  const durableLogs = await readFile(join(paseoHome, "daemon.log"), "utf8").catch(() => "");
+async function readCapturedSupervisorLogs(
+  byspaceHome: string,
+  recentLogs: string,
+): Promise<string> {
+  const durableLogs = await readFile(join(byspaceHome, "daemon.log"), "utf8").catch(() => "");
   return `${recentLogs}\n${durableLogs}`;
 }
 
@@ -119,7 +122,7 @@ async function waitFor(
 console.log("=== Daemon Restart (supervisor regression) ===\n");
 
 const port = await getAvailablePort();
-const paseoHome = await mkdtemp(join(tmpdir(), "paseo-restart-supervisor-"));
+const byspaceHome = await mkdtemp(join(tmpdir(), "byspace-restart-supervisor-"));
 const cliRoot = join(import.meta.dirname, "..");
 const host = `127.0.0.1:${port}`;
 
@@ -137,7 +140,7 @@ try {
       env: {
         ...process.env,
         ...testEnv,
-        BYSPACE_HOME: paseoHome,
+        BYSPACE_HOME: byspaceHome,
         BYSPACE_LISTEN: host,
         BYSPACE_RELAY_ENABLED: "false",
         CI: "true",
@@ -155,7 +158,7 @@ try {
 
   await waitFor(
     async () => {
-      const status = await readDaemonStatus(paseoHome);
+      const status = await readDaemonStatus(byspaceHome);
       return (
         status.localDaemon === "running" && status.pid !== null && isProcessRunning(status.pid)
       );
@@ -164,7 +167,7 @@ try {
     "daemon did not become running in time",
   );
 
-  const statusBeforeRestart = await readDaemonStatus(paseoHome);
+  const statusBeforeRestart = await readDaemonStatus(byspaceHome);
   const supervisorPid = statusBeforeRestart.pid;
   assert.strictEqual(
     statusBeforeRestart.localDaemon,
@@ -216,7 +219,7 @@ try {
     "worker pid should change after restart",
   );
 
-  const statusAfterRestart = await readDaemonStatus(paseoHome);
+  const statusAfterRestart = await readDaemonStatus(byspaceHome);
   assert.strictEqual(
     statusAfterRestart.localDaemon,
     "running",
@@ -227,7 +230,10 @@ try {
     supervisorPid,
     "supervisor pid should remain stable across restart",
   );
-  const capturedSupervisorLogs = await readCapturedSupervisorLogs(paseoHome, recentSupervisorLogs);
+  const capturedSupervisorLogs = await readCapturedSupervisorLogs(
+    byspaceHome,
+    recentSupervisorLogs,
+  );
   assert(
     capturedSupervisorLogs.includes('"msg":"Worker requested restart"') &&
       capturedSupervisorLogs.includes('"reason":"settings_update"'),
@@ -251,8 +257,8 @@ try {
     });
   }
 
-  await $`BYSPACE_HOME=${paseoHome} BYSPACE_LOCAL_SPEECH_AUTO_DOWNLOAD=${testEnv.BYSPACE_LOCAL_SPEECH_AUTO_DOWNLOAD} BYSPACE_DICTATION_ENABLED=${testEnv.BYSPACE_DICTATION_ENABLED} BYSPACE_VOICE_MODE_ENABLED=${testEnv.BYSPACE_VOICE_MODE_ENABLED} npx paseo daemon stop --home ${paseoHome} --force`.nothrow();
-  await rm(paseoHome, { recursive: true, force: true });
+  await $`BYSPACE_HOME=${byspaceHome} BYSPACE_LOCAL_SPEECH_AUTO_DOWNLOAD=${testEnv.BYSPACE_LOCAL_SPEECH_AUTO_DOWNLOAD} BYSPACE_DICTATION_ENABLED=${testEnv.BYSPACE_DICTATION_ENABLED} BYSPACE_VOICE_MODE_ENABLED=${testEnv.BYSPACE_VOICE_MODE_ENABLED} npx byspace daemon stop --home ${byspaceHome} --force`.nothrow();
+  await rm(byspaceHome, { recursive: true, force: true });
 }
 
 if (recentSupervisorLogs.trim().length === 0) {

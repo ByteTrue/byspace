@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-IMAGE_HOME="/home/paseo"
+IMAGE_HOME="/home/byspace"
 
 : "${HOME:=$IMAGE_HOME}"
-: "${BYSPACE_HOME:=${HOME}/.paseo}"
-: "${BYSPACE_LISTEN:=0.0.0.0:6767}"
+: "${BYSPACE_HOME:=${HOME}/.byspace}"
+: "${BYSPACE_LISTEN:=0.0.0.0:6777}"
 : "${BYSPACE_WEB_UI_ENABLED:=true}"
 : "${BYSPACE_LOG_LEVEL:=info}"
 : "${BYSPACE_LOG_FORMAT:=json}"
@@ -36,7 +36,7 @@ ensure_dir() {
     local owner
     owner="$(stat -c "%u" "$dir")"
     if [[ "$owner" == "0" ]]; then
-      chown paseo:paseo "$dir"
+      chown byspace:byspace "$dir"
     fi
   fi
 }
@@ -52,27 +52,27 @@ ensure_dir "$XDG_CACHE_HOME"
 
 if [[ "$#" -gt 0 ]]; then
   if [[ "$(id -u)" == "0" ]]; then
-    exec gosu paseo "$@"
+    exec gosu byspace "$@"
   fi
   exec "$@"
 fi
 
 if [[ -z "${BYSPACE_PASSWORD:-}" ]]; then
   {
-    echo "[paseo] WARNING: BYSPACE_PASSWORD is not set."
-    echo "[paseo] The daemon accepts unauthenticated control connections from any client that can reach it."
-    echo "[paseo] Set BYSPACE_PASSWORD for any published port or network-reachable deployment."
+    echo "[byspace] WARNING: BYSPACE_PASSWORD is not set."
+    echo "[byspace] The daemon accepts unauthenticated control connections from any client that can reach it."
+    echo "[byspace] Set BYSPACE_PASSWORD for any published port or network-reachable deployment."
   } >&2
 fi
 
-if [[ ! -f /etc/paseo-server-entry ]]; then
-  echo "[paseo] FATAL: /etc/paseo-server-entry is missing." >&2
+if [[ ! -f /etc/byspace-server-entry ]]; then
+  echo "[byspace] FATAL: /etc/byspace-server-entry is missing." >&2
   exit 1
 fi
 
-entry="$(cat /etc/paseo-server-entry)"
-echo "[paseo] starting daemon on ${BYSPACE_LISTEN} with web UI ${BYSPACE_WEB_UI_ENABLED}"
+entry="$(cat /etc/byspace-server-entry)"
+echo "[byspace] starting daemon on ${BYSPACE_LISTEN} with web UI ${BYSPACE_WEB_UI_ENABLED}"
 if [[ "$(id -u)" == "0" ]]; then
-  exec gosu paseo node "$entry"
+  exec gosu byspace node "$entry"
 fi
 exec node "$entry"

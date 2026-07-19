@@ -321,16 +321,16 @@ const CONFIG_FILENAME = "config.json";
 const DEFAULT_PERSISTED_CONFIG = PersistedConfigSchema.parse({
   version: 1,
   daemon: {
-    listen: "127.0.0.1:6767",
+    listen: "127.0.0.1:6777",
     cors: {
-      allowedOrigins: ["https://app.paseo.sh"],
+      allowedOrigins: ["https://byspace.pages.dev"],
     },
     relay: {
       enabled: true,
     },
   },
   app: {
-    baseUrl: "https://app.paseo.sh",
+    baseUrl: "https://byspace.pages.dev",
   },
 }) as PersistedConfig;
 
@@ -339,8 +339,8 @@ interface LoggerLike {
   info(...args: unknown[]): void;
 }
 
-function getConfigPath(paseoHome: string): string {
-  return path.join(paseoHome, CONFIG_FILENAME);
+function getConfigPath(byspaceHome: string): string {
+  return path.join(byspaceHome, CONFIG_FILENAME);
 }
 
 function getLogger(logger: LoggerLike | undefined): LoggerLike | undefined {
@@ -386,9 +386,9 @@ function stripRemovedConfigFields(parsed: unknown): unknown {
   return root;
 }
 
-export function loadPersistedConfig(paseoHome: string, logger?: LoggerLike): PersistedConfig {
+export function loadPersistedConfig(byspaceHome: string, logger?: LoggerLike): PersistedConfig {
   const log = getLogger(logger);
-  const configPath = getConfigPath(paseoHome);
+  const configPath = getConfigPath(byspaceHome);
 
   if (!existsSync(configPath)) {
     try {
@@ -438,12 +438,12 @@ export function loadPersistedConfig(paseoHome: string, logger?: LoggerLike): Per
 }
 
 export function savePersistedConfig(
-  paseoHome: string,
+  byspaceHome: string,
   config: PersistedConfig,
   logger?: LoggerLike,
 ): void {
   const log = getLogger(logger);
-  const configPath = getConfigPath(paseoHome);
+  const configPath = getConfigPath(byspaceHome);
 
   const result = PersistedConfigSchema.safeParse(config);
   if (!result.success) {

@@ -57,7 +57,7 @@ describe("CheckoutDiffManager", () => {
 
     const manager = new CheckoutDiffManager({
       logger: logger as unknown as pino.Logger,
-      paseoHome: "/tmp/paseo-test",
+      byspaceHome: "/tmp/byspace-test",
       workspaceGitService: workspaceGitService as unknown as WorkspaceGitService,
     });
 

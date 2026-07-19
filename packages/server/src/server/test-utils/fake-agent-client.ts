@@ -338,7 +338,7 @@ class FakeAgentSession implements AgentSession {
     this.closeSession = options.closeSession;
     this.historyPath = path.join(
       tmpdir(),
-      "paseo-fake-provider-history",
+      "byspace-fake-provider-history",
       this.providerName,
       `${this.id}.jsonl`,
     );

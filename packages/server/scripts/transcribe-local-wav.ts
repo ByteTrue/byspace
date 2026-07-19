@@ -3,7 +3,7 @@ import path from "node:path";
 
 import { STTManager } from "../src/server/agent/stt-manager.js";
 import { createRootLogger } from "../src/server/logger.js";
-import { resolvePaseoHome } from "../src/server/paseo-home.js";
+import { resolveBySpaceHome } from "../src/server/byspace-home.js";
 import {
   DEFAULT_LOCAL_STT_MODEL,
   DEFAULT_LOCAL_TTS_MODEL,
@@ -43,9 +43,9 @@ function parseArgs(argv: string[]): CliOptions {
     throw new Error(`Missing <wavPath>\n\n${usage()}`);
   }
 
-  const paseoHome = resolvePaseoHome();
+  const byspaceHome = resolveBySpaceHome();
   const defaultModelsDir =
-    process.env.BYSPACE_LOCAL_MODELS_DIR ?? path.join(paseoHome, "models", "local-speech");
+    process.env.BYSPACE_LOCAL_MODELS_DIR ?? path.join(byspaceHome, "models", "local-speech");
 
   const positional: string[] = [];
   let outPath: string | undefined;

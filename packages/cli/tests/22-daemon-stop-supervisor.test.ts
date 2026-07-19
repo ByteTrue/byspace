@@ -1,7 +1,7 @@
 #!/usr/bin/env npx tsx
 
 /**
- * Regression: `paseo daemon stop` must stop supervised dev daemons
+ * Regression: `byspace daemon stop` must stop supervised dev daemons
  * without allowing the supervisor entrypoint to respawn a new worker process.
  */
 
@@ -43,8 +43,8 @@ interface PidLockState {
   pid: number | null;
 }
 
-async function readPidLockState(paseoHome: string): Promise<PidLockState> {
-  const pidPath = join(paseoHome, "paseo.pid");
+async function readPidLockState(byspaceHome: string): Promise<PidLockState> {
+  const pidPath = join(byspaceHome, "byspace.pid");
 
   try {
     const content = await readFile(pidPath, "utf-8");
@@ -64,9 +64,9 @@ interface DaemonStatus {
   pid: number | null;
 }
 
-async function readDaemonStatus(paseoHome: string): Promise<DaemonStatus> {
+async function readDaemonStatus(byspaceHome: string): Promise<DaemonStatus> {
   const result =
-    await $`BYSPACE_HOME=${paseoHome} BYSPACE_LOCAL_SPEECH_AUTO_DOWNLOAD=${testEnv.BYSPACE_LOCAL_SPEECH_AUTO_DOWNLOAD} BYSPACE_DICTATION_ENABLED=${testEnv.BYSPACE_DICTATION_ENABLED} BYSPACE_VOICE_MODE_ENABLED=${testEnv.BYSPACE_VOICE_MODE_ENABLED} npx paseo daemon status --home ${paseoHome} --json`.nothrow();
+    await $`BYSPACE_HOME=${byspaceHome} BYSPACE_LOCAL_SPEECH_AUTO_DOWNLOAD=${testEnv.BYSPACE_LOCAL_SPEECH_AUTO_DOWNLOAD} BYSPACE_DICTATION_ENABLED=${testEnv.BYSPACE_DICTATION_ENABLED} BYSPACE_VOICE_MODE_ENABLED=${testEnv.BYSPACE_VOICE_MODE_ENABLED} npx byspace daemon status --home ${byspaceHome} --json`.nothrow();
   if (result.exitCode !== 0) {
     return { localDaemon: null, pid: null };
   }
@@ -84,8 +84,11 @@ async function readDaemonStatus(paseoHome: string): Promise<DaemonStatus> {
   }
 }
 
-async function readCapturedSupervisorLogs(paseoHome: string, recentLogs: string): Promise<string> {
-  const durableLogs = await readFile(join(paseoHome, "daemon.log"), "utf8").catch(() => "");
+async function readCapturedSupervisorLogs(
+  byspaceHome: string,
+  recentLogs: string,
+): Promise<string> {
+  const durableLogs = await readFile(join(byspaceHome, "daemon.log"), "utf8").catch(() => "");
   return `${recentLogs}\n${durableLogs}`;
 }
 
@@ -109,7 +112,7 @@ async function waitFor(
 console.log("=== Daemon Stop (supervisor regression) ===\n");
 
 const port = await getAvailablePort();
-const paseoHome = await mkdtemp(join(tmpdir(), "paseo-stop-supervisor-"));
+const byspaceHome = await mkdtemp(join(tmpdir(), "byspace-stop-supervisor-"));
 const cliRoot = join(import.meta.dirname, "..");
 
 let supervisorProcess: ChildProcess | null = null;
@@ -126,7 +129,7 @@ try {
       env: {
         ...process.env,
         ...testEnv,
-        BYSPACE_HOME: paseoHome,
+        BYSPACE_HOME: byspaceHome,
         BYSPACE_LISTEN: `127.0.0.1:${port}`,
         BYSPACE_RELAY_ENABLED: "false",
         CI: "true",
@@ -144,7 +147,7 @@ try {
 
   await waitFor(
     async () => {
-      const status = await readDaemonStatus(paseoHome);
+      const status = await readDaemonStatus(byspaceHome);
       return (
         status.localDaemon === "running" && status.pid !== null && isProcessRunning(status.pid)
       );
@@ -153,7 +156,7 @@ try {
     "daemon did not become running in time",
   );
 
-  const statusBeforeStop = await readDaemonStatus(paseoHome);
+  const statusBeforeStop = await readDaemonStatus(byspaceHome);
   const daemonPid = statusBeforeStop.pid;
   assert.strictEqual(
     statusBeforeStop.localDaemon,
@@ -162,7 +165,7 @@ try {
   );
   assert(daemonPid !== null, "daemon pid should exist once daemon starts");
   assert(isProcessRunning(daemonPid), "daemon process should be running");
-  const pidLockBeforeStop = await readPidLockState(paseoHome);
+  const pidLockBeforeStop = await readPidLockState(byspaceHome);
   assert.strictEqual(pidLockBeforeStop.pid, daemonPid, "pid lock should match status pid");
   assert.strictEqual(
     daemonPid,
@@ -171,16 +174,16 @@ try {
   );
   console.log(`✓ dev daemon started with daemon pid ${daemonPid}\n`);
 
-  console.log("Test 2: `paseo daemon stop` should stop without respawn");
+  console.log("Test 2: `byspace daemon stop` should stop without respawn");
   const stopResult =
-    await $`BYSPACE_HOME=${paseoHome} BYSPACE_LOCAL_SPEECH_AUTO_DOWNLOAD=${testEnv.BYSPACE_LOCAL_SPEECH_AUTO_DOWNLOAD} BYSPACE_DICTATION_ENABLED=${testEnv.BYSPACE_DICTATION_ENABLED} BYSPACE_VOICE_MODE_ENABLED=${testEnv.BYSPACE_VOICE_MODE_ENABLED} npx paseo daemon stop --home ${paseoHome} --json`.nothrow();
+    await $`BYSPACE_HOME=${byspaceHome} BYSPACE_LOCAL_SPEECH_AUTO_DOWNLOAD=${testEnv.BYSPACE_LOCAL_SPEECH_AUTO_DOWNLOAD} BYSPACE_DICTATION_ENABLED=${testEnv.BYSPACE_DICTATION_ENABLED} BYSPACE_VOICE_MODE_ENABLED=${testEnv.BYSPACE_VOICE_MODE_ENABLED} npx byspace daemon stop --home ${byspaceHome} --json`.nothrow();
   assert.strictEqual(stopResult.exitCode, 0, `stop should succeed: ${stopResult.stderr}`);
   const stopJson = JSON.parse(stopResult.stdout) as { action?: unknown };
   assert.strictEqual(stopJson.action, "stopped", "stop should report stopped action");
 
   await waitFor(
     async () => {
-      const status = await readDaemonStatus(paseoHome);
+      const status = await readDaemonStatus(byspaceHome);
       return status.localDaemon === "stopped";
     },
     15000,
@@ -197,7 +200,7 @@ try {
 
   await sleep(1000);
 
-  const pidAfterStop = await readPidLockState(paseoHome);
+  const pidAfterStop = await readPidLockState(byspaceHome);
   const respawned = pidAfterStop.pid !== null && isProcessRunning(pidAfterStop.pid);
   assert.strictEqual(
     respawned,
@@ -205,13 +208,16 @@ try {
     `daemon respawned after stop (pid: ${pidAfterStop.pid ?? "unknown"})`,
   );
 
-  const statusAfterStop = await readDaemonStatus(paseoHome);
+  const statusAfterStop = await readDaemonStatus(byspaceHome);
   assert.strictEqual(
     statusAfterStop.localDaemon,
     "stopped",
     "daemon should remain stopped after stop command",
   );
-  const capturedSupervisorLogs = await readCapturedSupervisorLogs(paseoHome, recentSupervisorLogs);
+  const capturedSupervisorLogs = await readCapturedSupervisorLogs(
+    byspaceHome,
+    recentSupervisorLogs,
+  );
   assert(
     capturedSupervisorLogs.includes('"msg":"Worker requested shutdown"') &&
       capturedSupervisorLogs.includes('"reason":"client_shutdown_rpc"'),
@@ -239,8 +245,8 @@ try {
     });
   }
 
-  await $`BYSPACE_HOME=${paseoHome} BYSPACE_LOCAL_SPEECH_AUTO_DOWNLOAD=${testEnv.BYSPACE_LOCAL_SPEECH_AUTO_DOWNLOAD} BYSPACE_DICTATION_ENABLED=${testEnv.BYSPACE_DICTATION_ENABLED} BYSPACE_VOICE_MODE_ENABLED=${testEnv.BYSPACE_VOICE_MODE_ENABLED} npx paseo daemon stop --home ${paseoHome} --force`.nothrow();
-  await rm(paseoHome, { recursive: true, force: true });
+  await $`BYSPACE_HOME=${byspaceHome} BYSPACE_LOCAL_SPEECH_AUTO_DOWNLOAD=${testEnv.BYSPACE_LOCAL_SPEECH_AUTO_DOWNLOAD} BYSPACE_DICTATION_ENABLED=${testEnv.BYSPACE_DICTATION_ENABLED} BYSPACE_VOICE_MODE_ENABLED=${testEnv.BYSPACE_VOICE_MODE_ENABLED} npx byspace daemon stop --home ${byspaceHome} --force`.nothrow();
+  await rm(byspaceHome, { recursive: true, force: true });
 }
 
 if (recentSupervisorLogs.trim().length === 0) {

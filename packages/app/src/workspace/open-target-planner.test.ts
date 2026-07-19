@@ -3,7 +3,7 @@ import { planWorkspaceOpenTargets } from "./open-target-planner";
 
 const checkoutStatus = {
   isGit: true,
-  remoteUrl: "git@github.com:getpaseo/paseo.git",
+  remoteUrl: "git@github.com:ByteTrue/byspace.git",
   currentBranch: "main",
 };
 
@@ -21,7 +21,7 @@ describe("planWorkspaceOpenTargets", () => {
         forge: "github",
         id: "github",
         label: "GitHub",
-        url: "https://github.com/getpaseo/paseo/blob/main/src/app.ts#L3-L5",
+        url: "https://github.com/ByteTrue/byspace/blob/main/src/app.ts#L3-L5",
       },
     ]);
   });
@@ -33,7 +33,7 @@ describe("planWorkspaceOpenTargets", () => {
         forge: "github",
         id: "github",
         label: "GitHub",
-        url: "https://github.com/getpaseo/paseo/tree/main",
+        url: "https://github.com/ByteTrue/byspace/tree/main",
       },
     ]);
   });

@@ -6,11 +6,11 @@ import { resolveWorkspaceScriptLink } from "./workspace-script-links";
 const runningService: WorkspaceScriptPayload = {
   scriptName: "web",
   type: "service",
-  hostname: "web--feature--paseo.localhost",
+  hostname: "web--feature--byspace.localhost",
   port: 3000,
-  localProxyUrl: "http://web--feature--paseo.localhost:6767",
+  localProxyUrl: "http://web--feature--byspace.localhost:6777",
   publicProxyUrl: null,
-  proxyUrl: "http://web--feature--paseo.localhost:6767",
+  proxyUrl: "http://web--feature--byspace.localhost:6777",
   lifecycle: "running",
   health: "healthy",
   exitCode: null,
@@ -27,19 +27,19 @@ function resolveLink(activeConnection: ActiveConnection | null) {
 describe("resolveWorkspaceScriptLink", () => {
   it("uses the local proxy URL for loopback TCP connections", () => {
     expect(
-      resolveLink({ type: "directTcp", endpoint: "localhost:6767", display: "localhost:6767" }),
+      resolveLink({ type: "directTcp", endpoint: "localhost:6777", display: "localhost:6777" }),
     ).toEqual({
-      openUrl: "http://web--feature--paseo.localhost:6767",
-      labelUrl: "http://web--feature--paseo.localhost:6767",
+      openUrl: "http://web--feature--byspace.localhost:6777",
+      labelUrl: "http://web--feature--byspace.localhost:6777",
     });
   });
 
   it("uses the local proxy URL for socket and pipe connections", () => {
     expect(
-      resolveLink({ type: "directSocket", endpoint: "/tmp/paseo.sock", display: "socket" }),
+      resolveLink({ type: "directSocket", endpoint: "/tmp/byspace.sock", display: "socket" }),
     ).toEqual({
-      openUrl: "http://web--feature--paseo.localhost:6767",
-      labelUrl: "http://web--feature--paseo.localhost:6767",
+      openUrl: "http://web--feature--byspace.localhost:6777",
+      labelUrl: "http://web--feature--byspace.localhost:6777",
     });
   });
 
@@ -47,8 +47,8 @@ describe("resolveWorkspaceScriptLink", () => {
     expect(
       resolveLink({
         type: "directTcp",
-        endpoint: "mac-mini.tail123.ts.net:6767",
-        display: "mac-mini.tail123.ts.net:6767",
+        endpoint: "mac-mini.tail123.ts.net:6777",
+        display: "mac-mini.tail123.ts.net:6777",
       }),
     ).toEqual({
       openUrl: "http://mac-mini.tail123.ts.net:3000",
@@ -58,10 +58,14 @@ describe("resolveWorkspaceScriptLink", () => {
 
   it("shows the local proxy URL but disables opening over relay", () => {
     expect(
-      resolveLink({ type: "relay", endpoint: "relay.paseo.sh:443", display: "relay" }),
+      resolveLink({
+        type: "relay",
+        endpoint: "byspace-relay.bytetrue.workers.dev:443",
+        display: "relay",
+      }),
     ).toEqual({
       openUrl: null,
-      labelUrl: "http://web--feature--paseo.localhost:6767",
+      labelUrl: "http://web--feature--byspace.localhost:6777",
     });
   });
 
@@ -70,14 +74,18 @@ describe("resolveWorkspaceScriptLink", () => {
       resolveWorkspaceScriptLink({
         script: {
           ...runningService,
-          publicProxyUrl: "https://web--feature--paseo.services.example.com",
-          proxyUrl: "https://web--feature--paseo.services.example.com",
+          publicProxyUrl: "https://web--feature--byspace.services.example.com",
+          proxyUrl: "https://web--feature--byspace.services.example.com",
         },
-        activeConnection: { type: "relay", endpoint: "relay.paseo.sh:443", display: "relay" },
+        activeConnection: {
+          type: "relay",
+          endpoint: "byspace-relay.bytetrue.workers.dev:443",
+          display: "relay",
+        },
       }),
     ).toEqual({
-      openUrl: "https://web--feature--paseo.services.example.com",
-      labelUrl: "https://web--feature--paseo.services.example.com",
+      openUrl: "https://web--feature--byspace.services.example.com",
+      labelUrl: "https://web--feature--byspace.services.example.com",
     });
   });
 
@@ -86,14 +94,14 @@ describe("resolveWorkspaceScriptLink", () => {
       resolveWorkspaceScriptLink({
         script: {
           ...runningService,
-          publicProxyUrl: "https://web--feature--paseo.services.example.com",
-          proxyUrl: "https://web--feature--paseo.services.example.com",
+          publicProxyUrl: "https://web--feature--byspace.services.example.com",
+          proxyUrl: "https://web--feature--byspace.services.example.com",
         },
-        activeConnection: { type: "directTcp", endpoint: "127.0.0.1:6767", display: "localhost" },
+        activeConnection: { type: "directTcp", endpoint: "127.0.0.1:6777", display: "localhost" },
       }),
     ).toEqual({
-      openUrl: "http://web--feature--paseo.localhost:6767",
-      labelUrl: "http://web--feature--paseo.localhost:6767",
+      openUrl: "http://web--feature--byspace.localhost:6777",
+      labelUrl: "http://web--feature--byspace.localhost:6777",
     });
   });
 
@@ -102,14 +110,14 @@ describe("resolveWorkspaceScriptLink", () => {
       resolveWorkspaceScriptLink({
         script: {
           ...runningService,
-          publicProxyUrl: "https://web--feature--paseo.services.example.com",
-          proxyUrl: "https://web--feature--paseo.services.example.com",
+          publicProxyUrl: "https://web--feature--byspace.services.example.com",
+          proxyUrl: "https://web--feature--byspace.services.example.com",
         },
-        activeConnection: { type: "directPipe", endpoint: "paseo", display: "pipe" },
+        activeConnection: { type: "directPipe", endpoint: "byspace", display: "pipe" },
       }),
     ).toEqual({
-      openUrl: "http://web--feature--paseo.localhost:6767",
-      labelUrl: "http://web--feature--paseo.localhost:6767",
+      openUrl: "http://web--feature--byspace.localhost:6777",
+      labelUrl: "http://web--feature--byspace.localhost:6777",
     });
   });
 
@@ -118,18 +126,18 @@ describe("resolveWorkspaceScriptLink", () => {
       resolveWorkspaceScriptLink({
         script: {
           ...runningService,
-          publicProxyUrl: "https://web--feature--paseo.services.example.com",
-          proxyUrl: "https://web--feature--paseo.services.example.com",
+          publicProxyUrl: "https://web--feature--byspace.services.example.com",
+          proxyUrl: "https://web--feature--byspace.services.example.com",
         },
         activeConnection: {
           type: "directTcp",
-          endpoint: "mac-mini.tail123.ts.net:6767",
+          endpoint: "mac-mini.tail123.ts.net:6777",
           display: "remote",
         },
       }),
     ).toEqual({
-      openUrl: "https://web--feature--paseo.services.example.com",
-      labelUrl: "https://web--feature--paseo.services.example.com",
+      openUrl: "https://web--feature--byspace.services.example.com",
+      labelUrl: "https://web--feature--byspace.services.example.com",
     });
   });
 
@@ -143,11 +151,11 @@ describe("resolveWorkspaceScriptLink", () => {
     expect(
       resolveWorkspaceScriptLink({
         script: oldPayload,
-        activeConnection: { type: "directTcp", endpoint: "localhost:6767", display: "localhost" },
+        activeConnection: { type: "directTcp", endpoint: "localhost:6777", display: "localhost" },
       }),
     ).toEqual({
-      openUrl: "http://web--feature--paseo.localhost:6767",
-      labelUrl: "http://web--feature--paseo.localhost:6767",
+      openUrl: "http://web--feature--byspace.localhost:6777",
+      labelUrl: "http://web--feature--byspace.localhost:6777",
     });
   });
 
@@ -158,17 +166,21 @@ describe("resolveWorkspaceScriptLink", () => {
       ...oldPayload
     } = {
       ...runningService,
-      proxyUrl: "https://web--feature--paseo.services.example.com",
+      proxyUrl: "https://web--feature--byspace.services.example.com",
     };
 
     expect(
       resolveWorkspaceScriptLink({
         script: oldPayload,
-        activeConnection: { type: "relay", endpoint: "relay.paseo.sh:443", display: "relay" },
+        activeConnection: {
+          type: "relay",
+          endpoint: "byspace-relay.bytetrue.workers.dev:443",
+          display: "relay",
+        },
       }),
     ).toEqual({
-      openUrl: "https://web--feature--paseo.services.example.com",
-      labelUrl: "https://web--feature--paseo.services.example.com",
+      openUrl: "https://web--feature--byspace.services.example.com",
+      labelUrl: "https://web--feature--byspace.services.example.com",
     });
   });
 });

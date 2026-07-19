@@ -1768,7 +1768,7 @@ describe("processAgentStreamEvents", () => {
 
   it("keeps Claude image tool-result output before following assistant blocks while text streams", () => {
     const imageMarkdown =
-      "![Image](/tmp/paseo-attachments/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.png)";
+      "![Image](/tmp/byspace-attachments/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.png)";
     const result = processAgentStreamEvents({
       events: [
         makeStreamReducerEvent(

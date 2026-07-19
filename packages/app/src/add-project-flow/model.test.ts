@@ -88,8 +88,8 @@ describe("Add Project navigation", () => {
   it("restores the GitHub destination query and active parent when reopening a repository", () => {
     const repository = {
       id: "repo-1",
-      nameWithOwner: "getpaseo/paseo",
-      cloneUrl: "git@github.com:getpaseo/paseo.git",
+      nameWithOwner: "ByteTrue/byspace",
+      cloneUrl: "git@github.com:ByteTrue/byspace.git",
       description: null,
       visibility: "public",
       updatedAt: null,
@@ -141,39 +141,39 @@ describe("Add Project options", () => {
   });
 
   it("offers manual URL and protocol-specific owner/repo clone choices", () => {
-    expect(buildManualGithubRepositoryChoices("git@github.com:getpaseo/paseo.git")).toEqual([
+    expect(buildManualGithubRepositoryChoices("git@github.com:ByteTrue/byspace.git")).toEqual([
       expect.objectContaining({
-        id: "manual:git@github.com:getpaseo/paseo.git",
-        nameWithOwner: "getpaseo/paseo",
-        cloneUrl: "git@github.com:getpaseo/paseo.git",
+        id: "manual:git@github.com:ByteTrue/byspace.git",
+        nameWithOwner: "ByteTrue/byspace",
+        cloneUrl: "git@github.com:ByteTrue/byspace.git",
       }),
     ]);
-    expect(buildManualGithubRepositoryChoices("getpaseo/paseo")).toEqual([
-      expect.objectContaining({ cloneProtocol: "https", cloneUrl: "getpaseo/paseo" }),
-      expect.objectContaining({ cloneProtocol: "ssh", cloneUrl: "getpaseo/paseo" }),
+    expect(buildManualGithubRepositoryChoices("ByteTrue/byspace")).toEqual([
+      expect.objectContaining({ cloneProtocol: "https", cloneUrl: "ByteTrue/byspace" }),
+      expect.objectContaining({ cloneProtocol: "ssh", cloneUrl: "ByteTrue/byspace" }),
     ]);
-    expect(buildManualGithubRepositoryChoices("paseo")).toEqual([]);
+    expect(buildManualGithubRepositoryChoices("byspace")).toEqual([]);
   });
 
   it("shows final clone paths while retaining parent paths as values", () => {
     expect(
       buildCloneLocationOptions({
         parents: ["~/dev", "~/workspace"],
-        repositoryName: "paseo",
-        existingPaths: ["~/workspace/paseo"],
+        repositoryName: "byspace",
+        existingPaths: ["~/workspace/byspace"],
       }),
     ).toEqual([
       {
         id: "~/dev",
         path: "~/dev",
-        displayPath: "~/dev/paseo",
+        displayPath: "~/dev/byspace",
         secondaryText: "Parent directory: ~/dev",
         disabled: false,
       },
       {
         id: "~/workspace",
         path: "~/workspace",
-        displayPath: "~/workspace/paseo",
+        displayPath: "~/workspace/byspace",
         secondaryText: "Already exists",
         disabled: true,
       },

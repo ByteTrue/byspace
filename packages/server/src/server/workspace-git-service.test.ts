@@ -41,7 +41,7 @@ function createSnapshot(
       mainRepoRoot: null,
       currentBranch: "main",
       remoteUrl: "https://github.com/acme/repo.git",
-      isPaseoOwnedWorktree: false,
+      isBySpaceOwnedWorktree: false,
       isDirty: false,
       baseRef: "main",
       aheadBehind: { ahead: 0, behind: 0 },
@@ -139,7 +139,7 @@ function createCheckoutStatus(
     behindOfOrigin: 0,
     hasRemote: true,
     remoteUrl: "https://github.com/acme/repo.git",
-    isPaseoOwnedWorktree: false,
+    isBySpaceOwnedWorktree: false,
     ...overrides,
   };
 }
@@ -152,7 +152,7 @@ function createCheckoutSnapshotFacts(cwd: string): CheckoutSnapshotFacts {
     remoteUrl: "https://github.com/acme/repo.git",
     absoluteGitDir: join(cwd, ".git"),
     gitCommonDir: join(cwd, ".git"),
-    paseoWorktree: { isPaseoOwnedWorktree: false },
+    byspaceWorktree: { isBySpaceOwnedWorktree: false },
     storedBaseRef: null,
     resolvedBaseRef: "main",
     mainRepoRoot: null,
@@ -298,7 +298,7 @@ function buildDefaultTestServiceDeps() {
 function createService(options?: CreateServiceTestOptions) {
   return new WorkspaceGitServiceImpl({
     logger: createLogger() as unknown as pino.Logger,
-    paseoHome: "/tmp/paseo-test",
+    byspaceHome: "/tmp/byspace-test",
     deps: { ...buildDefaultTestServiceDeps(), ...options },
   });
 }
@@ -417,7 +417,7 @@ describe("WorkspaceGitServiceImpl", () => {
   test("getSnapshot keeps plain git classification when shortstat lookup fails", async () => {
     const getCheckoutShortstat = vi.fn(async () => {
       throw new Error(
-        "Missing Paseo worktree base metadata: /tmp/repo/.git/worktrees/feature/paseo/worktree.json",
+        "Missing BySpace worktree base metadata: /tmp/repo/.git/worktrees/feature/byspace/worktree.json",
       );
     });
     const service = createService({
@@ -425,7 +425,7 @@ describe("WorkspaceGitServiceImpl", () => {
         createCheckoutStatus(cwd, {
           repoRoot: cwd,
           currentBranch: "feature/worktree",
-          isPaseoOwnedWorktree: false,
+          isBySpaceOwnedWorktree: false,
           mainRepoRoot: "/tmp/main-repo",
         }),
       ),
@@ -437,7 +437,7 @@ describe("WorkspaceGitServiceImpl", () => {
         git: {
           repoRoot: REPO_CWD,
           currentBranch: "feature/worktree",
-          isPaseoOwnedWorktree: false,
+          isBySpaceOwnedWorktree: false,
           mainRepoRoot: "/tmp/main-repo",
           diffStat: null,
         },
@@ -962,7 +962,7 @@ describe("WorkspaceGitServiceImpl", () => {
 
     expect(getCheckoutShortstat).toHaveBeenLastCalledWith(
       REPO_CWD,
-      expect.objectContaining({ paseoHome: "/tmp/paseo-test" }),
+      expect.objectContaining({ byspaceHome: "/tmp/byspace-test" }),
       { force: true },
     );
     expect(workspaceListener).toHaveBeenCalledWith(

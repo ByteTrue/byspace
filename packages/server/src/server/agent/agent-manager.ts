@@ -63,9 +63,12 @@ import { AgentRunState, type ForegroundTurnWaiter } from "./agent-run-state.js";
 import { getAgentProviderDefinition } from "@bytetrue/byspace-protocol/provider-manifest";
 import { invokeRewindCapability, type RewindMode } from "./rewind/rewind.js";
 import { isSystemInjectedEnvelope } from "./agent-prompt.js";
-import { stripInternalPaseoMcpServer, withRuntimePaseoMcpServer } from "./runtime-mcp-config.js";
+import {
+  stripInternalBySpaceMcpServer,
+  withRuntimeBySpaceMcpServer,
+} from "./runtime-mcp-config.js";
 import { resolveCreateAgentTitles } from "./create-agent-title.js";
-import type { PaseoToolCatalogFactory } from "./tools/types.js";
+import type { BySpaceToolCatalogFactory } from "./tools/types.js";
 import {
   ProviderSubagentStore,
   type ProviderSubagentDescriptor,
@@ -149,7 +152,7 @@ function buildStoredAgentConfig(record: StoredAgentRecord): AgentSessionConfig {
     config.systemPrompt = record.config.systemPrompt;
   }
   if (record.config.mcpServers != null) config.mcpServers = record.config.mcpServers;
-  return stripInternalPaseoMcpServer(config);
+  return stripInternalBySpaceMcpServer(config);
 }
 
 export { AGENT_LIFECYCLE_STATUSES, type AgentLifecycleStatus };
@@ -245,8 +248,8 @@ export interface AgentManagerOptions {
   terminalManager?: TerminalManager | null;
   mcpBaseUrl?: string;
   mcpAuthToken?: string;
-  paseoToolsEnabled?: boolean;
-  paseoToolCatalogFactory?: PaseoToolCatalogFactory;
+  byspaceToolsEnabled?: boolean;
+  byspaceToolCatalogFactory?: BySpaceToolCatalogFactory;
   appendSystemPrompt?: string;
   agentStreamCoalesceWindowMs?: number;
   rescueTimeouts?: AgentManagerRescueTimeouts;
@@ -568,8 +571,8 @@ export class AgentManager {
   private readonly agentStreamCoalescer: AgentStreamCoalescer;
   private mcpBaseUrl: string | null;
   private readonly mcpAuthToken: string | null;
-  private paseoToolsEnabled = true;
-  private paseoToolCatalogFactory: PaseoToolCatalogFactory | null = null;
+  private byspaceToolsEnabled = true;
+  private byspaceToolCatalogFactory: BySpaceToolCatalogFactory | null = null;
   private appendSystemPrompt: string;
   private onAgentAttention?: AgentAttentionCallback;
   private onAgentArchived?: AgentArchivedCallback;
@@ -586,7 +589,7 @@ export class AgentManager {
     this.onWorkspaceStateMayHaveChanged = options?.onWorkspaceStateMayHaveChanged;
     this.mcpBaseUrl = options?.mcpBaseUrl ?? null;
     this.mcpAuthToken = options?.mcpAuthToken ?? null;
-    this.configurePaseoTools(options);
+    this.configureBySpaceTools(options);
     this.appendSystemPrompt = options.appendSystemPrompt ?? "";
     this.logger = options.logger.child({ module: "agent", component: "agent-manager" });
     this.rescueTimeouts = {
@@ -609,9 +612,9 @@ export class AgentManager {
     });
   }
 
-  private configurePaseoTools(options: AgentManagerOptions): void {
-    this.paseoToolsEnabled = options.paseoToolsEnabled ?? true;
-    this.paseoToolCatalogFactory = options.paseoToolCatalogFactory ?? null;
+  private configureBySpaceTools(options: AgentManagerOptions): void {
+    this.byspaceToolsEnabled = options.byspaceToolsEnabled ?? true;
+    this.byspaceToolCatalogFactory = options.byspaceToolCatalogFactory ?? null;
   }
 
   registerClient(provider: AgentProvider, client: AgentClient): void {
@@ -657,12 +660,12 @@ export class AgentManager {
     this.acceptingAgentRegistrations = false;
   }
 
-  setPaseoToolsEnabled(enabled: boolean): void {
-    this.paseoToolsEnabled = enabled;
+  setBySpaceToolsEnabled(enabled: boolean): void {
+    this.byspaceToolsEnabled = enabled;
   }
 
-  setPaseoToolCatalogFactory(factory: PaseoToolCatalogFactory | null): void {
-    this.paseoToolCatalogFactory = factory;
+  setBySpaceToolCatalogFactory(factory: BySpaceToolCatalogFactory | null): void {
+    this.byspaceToolCatalogFactory = factory;
   }
 
   /**
@@ -1126,7 +1129,7 @@ export class AgentManager {
     let handedToRegistration = false;
     try {
       const importedConfig = await this.normalizeConfig(
-        stripInternalPaseoMcpServer(imported.config),
+        stripInternalBySpaceMcpServer(imported.config),
       );
       const timelineRows = buildImportedTimelineRows(imported.timeline);
       const initialTitle = resolveImportedAgentTitle(importedConfig, timelineRows);
@@ -1159,7 +1162,7 @@ export class AgentManager {
   // config swaps). When `rehydrateFromDisk` is set, the timeline is wiped so a
   // new epoch is minted and provider history is re-streamed — this is what the
   // user-facing "Reload agent" action wants when the on-disk session was
-  // mutated outside Paseo.
+  // mutated outside BySpace.
   reloadAgentSession(
     agentId: string,
     overrides?: Partial<AgentSessionConfig>,
@@ -3958,9 +3961,9 @@ export class AgentManager {
     config: AgentSessionConfig,
     agentId: string,
   ): Promise<PreparedSessionConfig> {
-    const storedConfig = await this.normalizeConfig(stripInternalPaseoMcpServer(config));
+    const storedConfig = await this.normalizeConfig(stripInternalBySpaceMcpServer(config));
     const launchConfig = this.applyDaemonAppendSystemPrompt(
-      withRuntimePaseoMcpServer({
+      withRuntimeBySpaceMcpServer({
         config: storedConfig,
         agentId,
         mcpBaseUrl: this.mcpBaseUrl,
@@ -3996,11 +3999,11 @@ export class AgentManager {
       },
     };
     if (
-      this.paseoToolsEnabled &&
-      client.capabilities.supportsNativePaseoTools &&
-      this.paseoToolCatalogFactory
+      this.byspaceToolsEnabled &&
+      client.capabilities.supportsNativeBySpaceTools &&
+      this.byspaceToolCatalogFactory
     ) {
-      context.paseoTools = await this.paseoToolCatalogFactory({ callerAgentId: agentId });
+      context.byspaceTools = await this.byspaceToolCatalogFactory({ callerAgentId: agentId });
     }
     return context;
   }
@@ -4009,7 +4012,7 @@ export class AgentManager {
     launchConfig: AgentSessionConfig,
     launchContext: AgentLaunchContext,
   ): AgentSessionConfig {
-    return launchContext.paseoTools ? stripInternalPaseoMcpServer(launchConfig) : launchConfig;
+    return launchContext.byspaceTools ? stripInternalBySpaceMcpServer(launchConfig) : launchConfig;
   }
 
   private async requireAvailableClient(options: { provider: AgentProvider }): Promise<AgentClient> {

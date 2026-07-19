@@ -4,22 +4,22 @@ import { mkdir, mkdtemp, rm } from "node:fs/promises";
 
 import pino from "pino";
 import {
-  createPaseoDaemon,
-  type PaseoDaemonConfig,
-  type PaseoOpenAIConfig,
-  type PaseoSpeechConfig,
+  createBySpaceDaemon,
+  type BySpaceDaemonConfig,
+  type BySpaceOpenAIConfig,
+  type BySpaceSpeechConfig,
 } from "../bootstrap.js";
 import type { AgentClient, AgentProvider } from "../agent/agent-sdk-types.js";
 import { createTestAgentClients } from "./fake-agent-client.js";
 import type { PushNotificationSender } from "../push/notifications.js";
 
-interface TestPaseoDaemonOptions {
+interface TestBySpaceDaemonOptions {
   daemonVersion?: string;
   desktopManaged?: boolean;
   downloadTokenTtlMs?: number;
   corsAllowedOrigins?: string[];
   listen?: string;
-  logger?: Parameters<typeof createPaseoDaemon>[1];
+  logger?: Parameters<typeof createBySpaceDaemon>[1];
   mcpEnabled?: boolean;
   mcpDebug?: boolean;
   isDev?: boolean;
@@ -28,28 +28,28 @@ interface TestPaseoDaemonOptions {
   relayUseTls?: boolean;
   relayPublicUseTls?: boolean;
   agentClients?: Partial<Record<AgentProvider, AgentClient>>;
-  providerOverrides?: PaseoDaemonConfig["providerOverrides"];
-  paseoHomeRoot?: string;
+  providerOverrides?: BySpaceDaemonConfig["providerOverrides"];
+  byspaceHomeRoot?: string;
   staticDir?: string;
   cleanup?: boolean;
-  openai?: PaseoOpenAIConfig;
-  speech?: PaseoSpeechConfig;
-  voiceLlmProvider?: PaseoDaemonConfig["voiceLlmProvider"];
+  openai?: BySpaceOpenAIConfig;
+  speech?: BySpaceSpeechConfig;
+  voiceLlmProvider?: BySpaceDaemonConfig["voiceLlmProvider"];
   voiceLlmProviderExplicit?: boolean;
   voiceLlmModel?: string | null;
   dictationFinalTimeoutMs?: number;
-  auth?: PaseoDaemonConfig["auth"];
+  auth?: BySpaceDaemonConfig["auth"];
   pushNotificationSender?: PushNotificationSender;
-  serviceProxy?: PaseoDaemonConfig["serviceProxy"];
-  webUi?: PaseoDaemonConfig["webUi"];
-  trustedProxies?: PaseoDaemonConfig["trustedProxies"];
+  serviceProxy?: BySpaceDaemonConfig["serviceProxy"];
+  webUi?: BySpaceDaemonConfig["webUi"];
+  trustedProxies?: BySpaceDaemonConfig["trustedProxies"];
 }
 
-export interface TestPaseoDaemon {
-  config: PaseoDaemonConfig;
-  daemon: Awaited<ReturnType<typeof createPaseoDaemon>>;
+export interface TestBySpaceDaemon {
+  config: BySpaceDaemonConfig;
+  daemon: Awaited<ReturnType<typeof createBySpaceDaemon>>;
   port: number;
-  paseoHome: string;
+  byspaceHome: string;
   staticDir: string;
   close: () => Promise<void>;
 }
@@ -57,7 +57,7 @@ export interface TestPaseoDaemon {
 const TEST_DAEMON_START_TIMEOUT_MS = 20_000;
 
 async function startDaemonWithTimeout(
-  daemon: Awaited<ReturnType<typeof createPaseoDaemon>>,
+  daemon: Awaited<ReturnType<typeof createBySpaceDaemon>>,
   timeoutMs: number,
 ): Promise<void> {
   await new Promise<void>((resolve, reject) => {
@@ -83,16 +83,17 @@ async function startDaemonWithTimeout(
   });
 }
 
-export async function createTestPaseoDaemon(
-  options: TestPaseoDaemonOptions = {},
-): Promise<TestPaseoDaemon> {
+export async function createTestBySpaceDaemon(
+  options: TestBySpaceDaemonOptions = {},
+): Promise<TestBySpaceDaemon> {
   const maxAttempts = 8;
   let lastError: unknown;
 
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
-    const { config, paseoHomeRoot, paseoHome, staticDir } = await prepareTestDaemonConfig(options);
+    const { config, byspaceHomeRoot, byspaceHome, staticDir } =
+      await prepareTestDaemonConfig(options);
     const logger = options.logger ?? pino({ level: "silent" });
-    const daemon = await createPaseoDaemon(config, logger);
+    const daemon = await createBySpaceDaemon(config, logger);
     try {
       await startDaemonWithTimeout(daemon, TEST_DAEMON_START_TIMEOUT_MS);
       const listenTarget = daemon.getListenTarget();
@@ -106,7 +107,7 @@ export async function createTestPaseoDaemon(
         if (options.cleanup ?? true) {
           await new Promise((r) => setTimeout(r, 50));
           await Promise.all([
-            rm(paseoHomeRoot, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 }),
+            rm(byspaceHomeRoot, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 }),
             rm(staticDir, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 }),
           ]);
         }
@@ -116,7 +117,7 @@ export async function createTestPaseoDaemon(
         config,
         daemon,
         port: listenTarget.port,
-        paseoHome,
+        byspaceHome,
         staticDir,
         close,
       };
@@ -124,7 +125,7 @@ export async function createTestPaseoDaemon(
       lastError = error;
       await daemon.stop().catch(() => undefined);
       await Promise.all([
-        rm(paseoHomeRoot, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 }),
+        rm(byspaceHomeRoot, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 }),
         rm(staticDir, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 }),
       ]);
 
@@ -141,24 +142,24 @@ export async function createTestPaseoDaemon(
 }
 
 interface PreparedTestDaemonConfig {
-  config: PaseoDaemonConfig;
-  paseoHomeRoot: string;
-  paseoHome: string;
+  config: BySpaceDaemonConfig;
+  byspaceHomeRoot: string;
+  byspaceHome: string;
   staticDir: string;
 }
 
 async function prepareTestDaemonConfig(
-  options: TestPaseoDaemonOptions,
+  options: TestBySpaceDaemonOptions,
 ): Promise<PreparedTestDaemonConfig> {
-  const paseoHomeRoot =
-    options.paseoHomeRoot ?? (await mkdtemp(path.join(os.tmpdir(), "paseo-home-")));
-  const paseoHome = path.join(paseoHomeRoot, ".paseo");
-  await mkdir(paseoHome, { recursive: true });
-  const staticDir = options.staticDir ?? (await mkdtemp(path.join(os.tmpdir(), "paseo-static-")));
+  const byspaceHomeRoot =
+    options.byspaceHomeRoot ?? (await mkdtemp(path.join(os.tmpdir(), "byspace-home-")));
+  const byspaceHome = path.join(byspaceHomeRoot, ".byspace");
+  await mkdir(byspaceHome, { recursive: true });
+  const staticDir = options.staticDir ?? (await mkdtemp(path.join(os.tmpdir(), "byspace-static-")));
   const listenHost = options.listen ?? "127.0.0.1";
-  const config: PaseoDaemonConfig = {
+  const config: BySpaceDaemonConfig = {
     listen: `${listenHost}:0`,
-    paseoHome,
+    byspaceHome,
     daemonVersion: options.daemonVersion,
     desktopManaged: options.desktopManaged,
     corsAllowedOrigins: options.corsAllowedOrigins ?? [],
@@ -169,12 +170,12 @@ async function prepareTestDaemonConfig(
     isDev: options.isDev,
     agentClients: options.agentClients ?? createTestAgentClients(),
     providerOverrides: options.providerOverrides,
-    agentStoragePath: path.join(paseoHome, "agents"),
+    agentStoragePath: path.join(byspaceHome, "agents"),
     relayEnabled: options.relayEnabled ?? false,
-    relayEndpoint: options.relayEndpoint ?? "relay.paseo.sh:443",
+    relayEndpoint: options.relayEndpoint ?? "byspace-relay.bytetrue.workers.dev:443",
     relayUseTls: options.relayUseTls,
     relayPublicUseTls: options.relayPublicUseTls,
-    appBaseUrl: "https://app.paseo.sh",
+    appBaseUrl: "https://byspace.pages.dev",
     auth: options.auth,
     pushNotificationSender: options.pushNotificationSender,
     serviceProxy: options.serviceProxy,
@@ -188,7 +189,7 @@ async function prepareTestDaemonConfig(
     dictationFinalTimeoutMs: options.dictationFinalTimeoutMs,
     downloadTokenTtlMs: options.downloadTokenTtlMs,
   };
-  return { config, paseoHomeRoot, paseoHome, staticDir };
+  return { config, byspaceHomeRoot, byspaceHome, staticDir };
 }
 
 function isAddressInUseError(error: unknown): boolean {

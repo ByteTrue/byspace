@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="packages/app/assets/images/icon.png" width="64" height="64" alt="Paseo logo">
+  <img src="packages/app/assets/images/icon.png" width="64" height="64" alt="BySpace logo">
 </p>
 
-<h1 align="center">Paseo</h1>
+<h1 align="center">BySpace</h1>
 
 <p align="center">
   <a href="README.md">English</a> ·
@@ -11,28 +11,15 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/getpaseo/paseo/stargazers">
-    <img src="https://img.shields.io/github/stars/getpaseo/paseo?style=flat&logo=github" alt="GitHub stars">
+  <a href="https://github.com/ByteTrue/byspace/stargazers">
+    <img src="https://img.shields.io/github/stars/ByteTrue/byspace?style=flat&logo=github" alt="GitHub stars">
   </a>
-  <a href="https://github.com/getpaseo/paseo/releases">
-    <img src="https://img.shields.io/github/v/release/getpaseo/paseo?style=flat&logo=github" alt="GitHub release">
-  </a>
-  <a href="https://x.com/moboudra">
-    <img src="https://img.shields.io/badge/%40moboudra-555?logo=x" alt="X">
-  </a>
-  <a href="https://discord.gg/jz8T2uahpH">
-    <img src="https://img.shields.io/badge/Discord-555?logo=discord" alt="Discord">
-  </a>
-  <a href="https://www.reddit.com/r/PaseoAI/">
-    <img src="https://img.shields.io/badge/Reddit-555?logo=reddit" alt="Reddit">
+  <a href="https://github.com/ByteTrue/byspace/releases">
+    <img src="https://img.shields.io/github/v/release/ByteTrue/byspace?style=flat&logo=github" alt="GitHub release">
   </a>
 </p>
 
 <p align="center">One interface for Claude Code, Codex, Copilot, OpenCode, and Pi agents.</p>
-
-<p align="center">
-  <img src="https://paseo.sh/hero-mockup.png" alt="Paseo app screenshot" width="100%">
-</p>
 
 ---
 
@@ -42,11 +29,11 @@ Run agents in parallel on your own machines from a hosted Web interface or the C
 - **Multi-provider:** Claude Code, Codex, Copilot, OpenCode, and Pi through the same interface. Pick the right model for each job.
 - **Voice control:** Dictate tasks or talk through problems in voice mode. Hands-free when you need it.
 - **Web + CLI:** Use the hosted browser interface from any device, or script the same local daemon from the terminal.
-- **Privacy-first:** Paseo doesn't have any telemetry, tracking, or forced log-ins.
+- **Privacy-first:** BySpace doesn't have any telemetry, tracking, or forced log-ins.
 
 ## Getting Started
 
-Paseo runs a local daemon that manages your coding agents. The hosted Web app and CLI connect directly or through the E2EE relay.
+BySpace runs a local daemon that manages your coding agents. The hosted Web app and CLI connect directly or through the E2EE relay.
 
 ### Prerequisites
 
@@ -60,75 +47,75 @@ You need at least one agent CLI installed and configured with your credentials:
 
 ### CLI / headless
 
-Install the CLI and start Paseo:
+Install the CLI and start BySpace:
 
 ```bash
-npm install -g @bytetrue/byspace-cli
-paseo
+npm install -g @bytetrue/byspace
+byspace
 ```
 
 The daemon prints a pairing link for the hosted Web app and keeps agents running after the browser closes.
 
 For full setup and configuration, see:
 
-- [Docs](https://paseo.sh/docs)
-- [Configuration reference](https://paseo.sh/docs/configuration)
+- [Docs](https://byspace.pages.dev/docs)
+- [Configuration reference](https://byspace.pages.dev/docs/configuration)
 
 ### Docker
 
-Run the Paseo daemon and self-hosted web UI in Docker:
+Run the BySpace daemon and self-hosted web UI in Docker:
 
 ```bash
-docker run -d --name paseo \
-  -p 6767:6767 \
+docker run -d --name byspace \
+  -p 6777:6777 \
   -e BYSPACE_PASSWORD=change-me \
-  -v "$PWD/paseo-home:/home/paseo" \
+  -v "$PWD/byspace-home:/home/byspace" \
   -v "$PWD:/workspace" \
-  ghcr.io/getpaseo/paseo:latest
+  ghcr.io/bytetrue/byspace:latest
 ```
 
-Open `http://localhost:6767` after it starts. Extend the base image with the agent CLIs you use, then provide credentials through environment variables or the persistent `/home/paseo` volume. See the [Docker documentation](docs/docker.md) for full setup details.
+Open `http://localhost:6777` after it starts. Extend the base image with the agent CLIs you use, then provide credentials through environment variables or the persistent `/home/byspace` volume. See the [Docker documentation](docs/docker.md) for full setup details.
 
 ## CLI
 
 Everything you can do in the app, you can do from the terminal.
 
 ```bash
-paseo run --provider claude/opus-4.6 "implement user authentication"
-paseo run --provider codex/gpt-5.4 --worktree feature-x "implement feature X"
+byspace run --provider claude/opus-4.6 "implement user authentication"
+byspace run --provider codex/gpt-5.4 --worktree feature-x "implement feature X"
 
-paseo ls                           # list running agents
-paseo attach abc123                # stream live output
-paseo send abc123 "also add tests" # follow-up task
+byspace ls                           # list running agents
+byspace attach abc123                # stream live output
+byspace send abc123 "also add tests" # follow-up task
 
 # run on a remote daemon
-paseo --host workstation.local:6767 run "run the full test suite"
+byspace --host workstation.local:6777 run "run the full test suite"
 ```
 
-See the [full CLI reference](https://paseo.sh/docs/cli) for more.
+See the [full CLI reference](https://byspace.pages.dev/docs/cli) for more.
 
 ## Skills
 
-Skills teach your agent to use Paseo to orchestrate other agents.
+Skills teach your agent to use BySpace to orchestrate other agents.
 
 ```bash
-npx skills add getpaseo/paseo
+npx skills add ByteTrue/byspace
 ```
 
 Then use them in any agent conversation:
 
-- `/paseo-handoff` — hand off work between agents. I use this to plan with Claude and then handoff to Codex to implement.
-- `/paseo-loop` — loop an agent against clear acceptance criteria (aka Ralph loops), optionally with a verifier.
-- `/paseo-advisor` — spin up a single agent as an advisor for a second opinion, without delegating the work itself.
-- `/paseo-committee` — form a committee of two contrasting agents to step back, do root cause analysis, and produce a plan.
+- `/byspace-handoff` — hand off work between agents. I use this to plan with Claude and then handoff to Codex to implement.
+- `/byspace-loop` — loop an agent against clear acceptance criteria (aka Ralph loops), optionally with a verifier.
+- `/byspace-advisor` — spin up a single agent as an advisor for a second opinion, without delegating the work itself.
+- `/byspace-committee` — form a committee of two contrasting agents to step back, do root cause analysis, and produce a plan.
 
 ## Development
 
 Quick monorepo package map:
 
-- `packages/server`: Paseo daemon (agent process orchestration, WebSocket API, MCP server)
+- `packages/server`: BySpace daemon (agent process orchestration, WebSocket API, MCP server)
 - `packages/app`: Expo/React Native Web client
-- `packages/cli`: `paseo` CLI for daemon and agent workflows
+- `packages/cli`: `byspace` CLI for daemon and agent workflows
 - `packages/relay`: Relay package for remote connectivity
 
 Common commands:
@@ -148,19 +135,14 @@ npm run build:server
 npm run typecheck
 ```
 
-## Community
-
-- [paseo-relay](https://github.com/zenghongtu/paseo-relay) — self-hosted relay in Go
-- [paseo-vscode](https://marketplace.visualstudio.com/items?itemName=hinnes.paseo-vscode) — VS Code extension
-
 ---
 
 <p align="center">
-  <a href="https://star-history.com/#getpaseo/paseo&Date">
+  <a href="https://star-history.com/#ByteTrue/byspace&Date">
     <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=getpaseo/paseo&type=Date&theme=dark">
-      <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=getpaseo/paseo&type=Date">
-      <img src="https://api.star-history.com/svg?repos=getpaseo/paseo&type=Date" alt="Star history chart for getpaseo/paseo" width="600" style="max-width: 100%;">
+      <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=ByteTrue/byspace&type=Date&theme=dark">
+      <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=ByteTrue/byspace&type=Date">
+      <img src="https://api.star-history.com/svg?repos=ByteTrue/byspace&type=Date" alt="Star history chart for ByteTrue/byspace" width="600" style="max-width: 100%;">
     </picture>
   </a>
 </p>
@@ -168,3 +150,5 @@ npm run typecheck
 ## License
 
 AGPL-3.0
+
+BySpace is forked from [Paseo](https://github.com/getpaseo/paseo).

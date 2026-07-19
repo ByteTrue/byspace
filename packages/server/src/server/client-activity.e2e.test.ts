@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
-import { createTestPaseoDaemon, type TestPaseoDaemon } from "./test-utils/paseo-daemon.js";
+import { createTestBySpaceDaemon, type TestBySpaceDaemon } from "./test-utils/byspace-daemon.js";
 import { DaemonClient } from "./test-utils/daemon-client.js";
 import type { AgentStreamEventPayload } from "@bytetrue/byspace-protocol/messages";
 import type { AgentSnapshotPayload } from "./messages.js";
@@ -35,14 +35,14 @@ describe("client activity tracking", () => {
   const TEST_PROVIDER = "claude";
   const TEST_MODEL = "haiku";
   const TEST_CWD = "/tmp";
-  let daemon: TestPaseoDaemon;
+  let daemon: TestBySpaceDaemon;
   let client1: DaemonClient;
   let client2: DaemonClient;
   let pushNotifications: RecordingPushNotificationSender;
 
   beforeEach(async () => {
     pushNotifications = new RecordingPushNotificationSender();
-    daemon = await createTestPaseoDaemon({ pushNotificationSender: pushNotifications });
+    daemon = await createTestBySpaceDaemon({ pushNotificationSender: pushNotifications });
   });
 
   afterEach(async () => {
@@ -338,13 +338,13 @@ describe("client activity tracking", () => {
       expect(pushNotifications.sent).toHaveLength(1);
     }, 120000);
 
-    test("notifies only the present Electron-style web client when Firefox is stale", async () => {
+    test("notifies only the present Web client when Firefox is stale", async () => {
       client1 = await createClient();
       client2 = await createClient();
 
       const agent = await createAgent({
         client: client1,
-        title: "Stale Firefox Present Electron Test",
+        title: "Stale Firefox Present Web Test",
       });
 
       client1.sendHeartbeat({

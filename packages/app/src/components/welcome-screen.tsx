@@ -12,7 +12,7 @@ import { PairLinkModal } from "./pair-link-modal";
 import { Button } from "@/components/ui/button";
 import { resolveAppVersion } from "@/utils/app-version";
 import { buildOpenProjectRoute } from "@/utils/host-routes";
-import { PaseoLogo } from "@/components/icons/paseo-logo";
+import { BySpaceLogo } from "@/components/icons/byspace-logo";
 
 interface WelcomeAction {
   key: "direct-connection" | "paste-pairing-link";
@@ -224,7 +224,7 @@ export function WelcomeScreen({ onHostAdded }: WelcomeScreenProps) {
         testID="welcome-screen"
       >
         <View style={styles.content}>
-          <PaseoLogo size={96} />
+          <BySpaceLogo size={96} />
           <View style={styles.copyBlock}>
             <Text style={styles.title}>{t("onboarding.title")}</Text>
             <Text style={styles.subtitle}>{t("onboarding.subtitle")}</Text>

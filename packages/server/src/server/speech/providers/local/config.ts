@@ -136,19 +136,19 @@ function buildLocalSpeechLanguageResolutionInput(params: {
 }
 
 function buildLocalSpeechResolutionInput(params: {
-  paseoHome: string;
+  byspaceHome: string;
   env: NodeJS.ProcessEnv;
   persisted: PersistedConfig;
   providers: RequestedSpeechProviders;
   includeProviderConfig: boolean;
 }): Record<string, unknown> {
-  const { paseoHome, env, persisted, providers, includeProviderConfig } = params;
+  const { byspaceHome, env, persisted, providers, includeProviderConfig } = params;
   return {
     includeProviderConfig,
     modelsDir: firstDefinedValue<string>([
       env.BYSPACE_LOCAL_MODELS_DIR,
       persisted.providers?.local?.modelsDir,
-      path.join(paseoHome, DEFAULT_LOCAL_MODELS_SUBDIR),
+      path.join(byspaceHome, DEFAULT_LOCAL_MODELS_SUBDIR),
     ]),
     dictationLocalSttModel: firstDefinedValue<string>([
       env.BYSPACE_DICTATION_LOCAL_STT_MODEL,
@@ -190,7 +190,7 @@ function buildLocalSpeechResolutionInput(params: {
 }
 
 export function resolveLocalSpeechConfig(params: {
-  paseoHome: string;
+  byspaceHome: string;
   env: NodeJS.ProcessEnv;
   persisted: PersistedConfig;
   providers: RequestedSpeechProviders;

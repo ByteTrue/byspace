@@ -96,8 +96,7 @@ export class SherpaOnnxTTS implements TextToSpeechProvider {
       text: trimmed,
       sid: this.speakerId,
       speed: this.speed,
-      // Electron rejects native external-backed typed arrays. Request a copied buffer
-      // from sherpa itself instead of trying to clone after generate() returns.
+      // Request a copied buffer from sherpa instead of retaining its native external backing.
       enableExternalBuffer: false,
     });
     let rawSamples: Float32Array | null = null;

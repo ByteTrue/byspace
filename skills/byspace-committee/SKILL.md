@@ -1,5 +1,5 @@
 ---
-name: paseo-committee
+name: byspace-committee
 description: Form a committee of two high-reasoning agents to step back, do root cause analysis, and produce a plan. Use when stuck, looping, tunnel-visioning, or facing a hard planning problem.
 user-invocable: true
 ---
@@ -14,7 +14,7 @@ The purpose is to step back, not double down. The committee may propose a comple
 
 ## Prerequisites
 
-Read the **paseo** skill. Before choosing committee members, read `~/.paseo/orchestration-preferences.json` unless the user explicitly named providers in this request. Do not create committee agents until you have read it.
+Read the **byspace** skill. Before choosing committee members, read `~/.byspace/orchestration-preferences.json` unless the user explicitly named providers in this request. Do not create committee agents until you have read it.
 
 Contrast is the point of a committee, so pick across providers deliberately using the configured preferences rather than hardcoded defaults.
 
@@ -49,7 +49,7 @@ Write a problem-level prompt:
 - Explicit: "do root cause analysis"
 - Explicit: "state assumptions, ask why three levels deep, check whether you're patching a symptom or removing the problem"
 
-Create both agents in parallel via Paseo with `[Committee] <task>` titles and the same prompt. Wait for both — not just whichever finishes first.
+Create both agents in parallel via BySpace with `[Committee] <task>` titles and the same prompt. Wait for both — not just whichever finishes first.
 
 Read both responses. Challenge them — do not accept at face value:
 

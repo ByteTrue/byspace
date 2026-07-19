@@ -1,11 +1,11 @@
 /**
  * Test Daemon Helper
  *
- * Provides utilities for launching real Paseo daemons in E2E tests.
+ * Provides utilities for launching real BySpace daemons in E2E tests.
  * Each test gets an isolated daemon on an available local port with its own BYSPACE_HOME.
  *
  * CRITICAL RULES (from design doc):
- * 1. Port: Use an available ephemeral local port - NEVER use 6767 (production)
+ * 1. Port: Use an available ephemeral local port - NEVER use 6777 (production)
  * 2. Protocol: WebSocket ONLY - daemon has no HTTP endpoints
  * 3. Temp dirs: Create temp directories for BYSPACE_HOME and agent --cwd
  * 4. Model: Always use claude provider with haiku model for fast, cheap tests
@@ -20,12 +20,12 @@ import { ChildProcess, spawn } from "child_process";
 import { getAvailablePort } from "./network.ts";
 
 export interface TestDaemonContext {
-  /** Available local port for test daemon (never 6767) */
+  /** Available local port for test daemon (never 6777) */
   port: number;
   /** WebSocket URL for connecting to daemon */
   wsUrl: string;
   /** Temp directory for BYSPACE_HOME */
-  paseoHome: string;
+  byspaceHome: string;
   /** Temp directory for agent working directory */
   workDir: string;
   /** Running daemon process */
@@ -143,7 +143,7 @@ async function terminateProcessTree(processRef: ChildProcess, timeoutMs: number)
 /**
  * Generate a random port for test daemon
  * Uses range 20000-30000 to avoid conflicts
- * NEVER uses 6767 (user's running daemon)
+ * NEVER uses 6777 (user's running daemon)
  */
 export function getRandomPort(): number {
   return 20000 + Math.floor(Math.random() * 10000);
@@ -152,28 +152,28 @@ export function getRandomPort(): number {
 /**
  * Create isolated temp directories for testing
  */
-export async function createTempDirs(): Promise<{ paseoHome: string; workDir: string }> {
-  const paseoHome = await mkdtemp(join(tmpdir(), "paseo-e2e-home-"));
-  const workDir = await mkdtemp(join(tmpdir(), "paseo-e2e-work-"));
+export async function createTempDirs(): Promise<{ byspaceHome: string; workDir: string }> {
+  const byspaceHome = await mkdtemp(join(tmpdir(), "byspace-e2e-home-"));
+  const workDir = await mkdtemp(join(tmpdir(), "byspace-e2e-work-"));
 
   // Create the agents directory that the daemon expects
-  const agentsDir = join(paseoHome, "agents");
+  const agentsDir = join(byspaceHome, "agents");
   await mkdir(agentsDir, { recursive: true });
 
-  return { paseoHome, workDir };
+  return { byspaceHome, workDir };
 }
 
 /**
- * Wait for daemon to be ready by running `paseo agent ls`
+ * Wait for daemon to be ready by running `byspace agent ls`
  * This connects via WebSocket and ensures the daemon is responsive
  */
 async function probeDaemonReady(port: number): Promise<boolean> {
   try {
-    const { exitCode } = await runPaseoCli(
+    const { exitCode } = await runBySpaceCli(
       {
         port,
         wsUrl: `ws://${TEST_DAEMON_HOST}:${port}`,
-        paseoHome: "",
+        byspaceHome: "",
         workDir: "",
         process: null,
         isReady: false,
@@ -214,15 +214,15 @@ function sleep(ms: number): Promise<void> {
  */
 export async function startTestDaemon(options?: {
   port?: number;
-  paseoHome?: string;
+  byspaceHome?: string;
   workDir?: string;
   timeout?: number;
   env?: NodeJS.ProcessEnv;
 }): Promise<TestDaemonContext> {
   const port = options?.port ?? (await getAvailablePort());
-  const { paseoHome, workDir } =
-    options?.paseoHome && options?.workDir
-      ? { paseoHome: options.paseoHome, workDir: options.workDir }
+  const { byspaceHome, workDir } =
+    options?.byspaceHome && options?.workDir
+      ? { byspaceHome: options.byspaceHome, workDir: options.workDir }
       : await createTempDirs();
   const timeout = options?.timeout ?? 30000;
 
@@ -237,7 +237,7 @@ export async function startTestDaemon(options?: {
     env: {
       ...process.env,
       ...TEST_DAEMON_ENV_DEFAULTS,
-      BYSPACE_HOME: paseoHome,
+      BYSPACE_HOME: byspaceHome,
       BYSPACE_LISTEN: `${TEST_DAEMON_HOST}:${port}`,
       // Force no TTY to prevent QR code output
       CI: "true",
@@ -265,8 +265,8 @@ export async function startTestDaemon(options?: {
 
     // Clean up temp directories
     try {
-      if (existsSync(paseoHome)) {
-        await rm(paseoHome, { recursive: true, force: true });
+      if (existsSync(byspaceHome)) {
+        await rm(byspaceHome, { recursive: true, force: true });
       }
     } catch {
       // Ignore cleanup errors
@@ -299,7 +299,7 @@ export async function startTestDaemon(options?: {
   const ctx: TestDaemonContext = {
     port,
     wsUrl,
-    paseoHome,
+    byspaceHome,
     workDir,
     process: daemonProcess,
     isReady: false,
@@ -324,12 +324,12 @@ export async function startTestDaemon(options?: {
 }
 
 /**
- * Run a paseo CLI command against a test daemon
+ * Run a byspace CLI command against a test daemon
  *
  * This is a helper that sets the correct environment variables
  * to point at the test daemon.
  */
-export async function runPaseoCli(
+export async function runBySpaceCli(
   ctx: TestDaemonContext,
   args: string[],
   options?: {
@@ -350,7 +350,7 @@ export async function runPaseoCli(
         ...process.env,
         ...TEST_DAEMON_ENV_DEFAULTS,
         BYSPACE_HOST: `${TEST_DAEMON_HOST}:${ctx.port}`,
-        BYSPACE_HOME: ctx.paseoHome,
+        BYSPACE_HOME: ctx.byspaceHome,
         ...options?.env,
       },
       cwd,
@@ -373,7 +373,7 @@ export async function runPaseoCli(
       if (proc.pid) {
         signalProcessTree(proc.pid, "SIGKILL");
       }
-      reject(new Error(`CLI command timed out after ${timeout}ms: paseo ${args.join(" ")}`));
+      reject(new Error(`CLI command timed out after ${timeout}ms: byspace ${args.join(" ")}`));
     }, timeout);
 
     proc.on("exit", (code) => {
@@ -403,8 +403,8 @@ export async function createE2ETestContext(options?: {
   env?: NodeJS.ProcessEnv;
 }): Promise<
   TestDaemonContext & {
-    /** Run a paseo CLI command against this daemon */
-    paseo: (
+    /** Run a byspace CLI command against this daemon */
+    byspace: (
       args: string[],
       opts?: { timeout?: number; cwd?: string; env?: NodeJS.ProcessEnv },
     ) => Promise<{
@@ -416,13 +416,13 @@ export async function createE2ETestContext(options?: {
 > {
   const ctx = await startTestDaemon({ timeout: options?.timeout, env: options?.env });
 
-  const paseo = (
+  const byspace = (
     args: string[],
     opts?: { timeout?: number; cwd?: string; env?: NodeJS.ProcessEnv },
-  ) => runPaseoCli(ctx, args, opts);
+  ) => runBySpaceCli(ctx, args, opts);
 
   return {
     ...ctx,
-    paseo,
+    byspace,
   };
 }

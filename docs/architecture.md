@@ -1,8 +1,8 @@
 # Architecture
 
-Paseo is a Web-and-CLI client-server system for monitoring and controlling local AI coding agents. The daemon runs on your machine, manages agent processes, and streams their output in real time over WebSocket.
+BySpace is a Web-and-CLI client-server system for monitoring and controlling local AI coding agents. The daemon runs on your machine, manages agent processes, and streams their output in real time over WebSocket.
 
-Your code never leaves your machine. Paseo is local-first.
+Your code never leaves your machine. BySpace is local-first.
 
 ## System overview
 
@@ -36,7 +36,7 @@ Your code never leaves your machine. Paseo is local-first.
 
 ### `packages/server` — The daemon
 
-The heart of Paseo. A Node.js process that:
+The heart of BySpace. A Node.js process that:
 
 - Listens for WebSocket connections from clients
 - Manages agent lifecycle (create, run, stop, resume, archive)
@@ -56,8 +56,8 @@ All paths are under `packages/server/src/`.
 | `server/session.ts`             | Per-client session state, timeline subscriptions, terminal operations        |
 | `server/agent/agent-manager.ts` | Agent lifecycle state machine, timeline tracking, subscriber management      |
 | `server/agent/agent-storage.ts` | File-backed JSON persistence at `$BYSPACE_HOME/agents/`                      |
-| `server/agent/tools/`           | Transport-neutral Paseo tool catalog for subagents, permissions, worktrees   |
-| `server/agent/mcp-server.ts`    | Thin MCP adapter that registers the Paseo tool catalog with the MCP SDK      |
+| `server/agent/tools/`           | Transport-neutral BySpace tool catalog for subagents, permissions, worktrees |
+| `server/agent/mcp-server.ts`    | Thin MCP adapter that registers the BySpace tool catalog with the MCP SDK    |
 | `server/agent/providers/`       | Provider adapters (see "Agent providers" below)                              |
 | `server/relay-transport.ts`     | Outbound relay connection with E2E encryption                                |
 | `server/schedule/`              | Cron-based scheduled agents                                                  |
@@ -73,7 +73,7 @@ it does not depend on the server.
 
 ### `packages/client` — Daemon client library and SDK facade
 
-Owns the low-level daemon WebSocket driver plus the higher-level `PaseoClient`
+Owns the low-level daemon WebSocket driver plus the higher-level `BySpaceClient`
 facade. App and CLI may import the low-level driver from
 `@bytetrue/byspace-client/internal/daemon-client` during migration, while new SDK-shaped
 code imports from `@bytetrue/byspace-client`.
@@ -92,18 +92,18 @@ Expo Router and React Native Web app that connects to one or more daemons.
 
 ### `packages/cli` — Command-line client
 
-Commander.js CLI with Docker-style commands. Common agent operations are also exposed at the top level (e.g. `paseo ls`, `paseo run`).
+Commander.js CLI with Docker-style commands. Common agent operations are also exposed at the top level (e.g. `byspace ls`, `byspace run`).
 
-- `paseo agent ls/run/import/attach/logs/stop/delete/send/inspect/wait/archive/reload/update/mode`
-- `paseo daemon start/stop/restart/status/pair/set-password`
-- `paseo chat ls/create/inspect/post/read/wait/delete`
-- `paseo terminal ls/create/capture/send-keys/kill`
-- `paseo loop run/ls/inspect/logs/stop`
-- `paseo schedule create/ls/inspect/update/pause/resume/run-once/logs/delete`
-- `paseo permit allow/deny/ls`
-- `paseo provider ls/models`
-- `paseo worktree create/ls/archive`
-- `paseo speech …`
+- `byspace agent ls/run/import/attach/logs/stop/delete/send/inspect/wait/archive/reload/update/mode`
+- `byspace daemon start/stop/restart/status/pair/set-password`
+- `byspace chat ls/create/inspect/post/read/wait/delete`
+- `byspace terminal ls/create/capture/send-keys/kill`
+- `byspace loop run/ls/inspect/logs/stop`
+- `byspace schedule create/ls/inspect/update/pause/resume/run-once/logs/delete`
+- `byspace permit allow/deny/ls`
+- `byspace provider ls/models`
+- `byspace worktree create/ls/archive`
+- `byspace speech …`
 
 Communicates with the daemon via the same WebSocket protocol as the app.
 
@@ -272,12 +272,12 @@ The built-in, user-facing providers are Claude Code, Codex, Copilot, OpenCode, P
 
 All providers:
 
-- Handle their own authentication (Paseo does not manage API keys)
+- Handle their own authentication (BySpace does not manage API keys)
 - Support session resume via persistence handles
 - Map tool calls to a normalized `ToolCallDetail` type
 - Expose provider-specific modes (plan, default, full-access)
 
-Providers that can accept native tool definitions should set `supportsNativePaseoTools` and read `launchContext.paseoTools`. The daemon then passes the shared Paseo tool catalog directly and removes the internal Paseo MCP server from that provider launch config. Providers that only support MCP continue to receive the same tools through the MCP fallback at `/mcp/agents`.
+Providers that can accept native tool definitions should set `supportsNativeBySpaceTools` and read `launchContext.byspaceTools`. The daemon then passes the shared BySpace tool catalog directly and removes the internal BySpace MCP server from that provider launch config. Providers that only support MCP continue to receive the same tools through the MCP fallback at `/mcp/agents`.
 
 ## Data flow: running an agent
 
@@ -291,7 +291,7 @@ Providers that can accept native tool definitions should set `supportsNativePase
 
 ## Storage
 
-`$BYSPACE_HOME` defaults to `~/.paseo`. The most important files:
+`$BYSPACE_HOME` defaults to `~/.byspace`. The most important files:
 
 ```
 $BYSPACE_HOME/
@@ -304,7 +304,7 @@ $BYSPACE_HOME/
 ├── config.json                                 # Daemon config (mutable)
 ├── daemon-keypair.json                         # Daemon identity for relay/E2EE
 ├── push-tokens.json                            # Mobile push tokens
-├── paseo.sock / paseo.pid                      # Local IPC socket and pidfile
+├── byspace.sock / byspace.pid                      # Local IPC socket and pidfile
 └── daemon.log                                  # Daemon trace logs (rotated)
 ```
 

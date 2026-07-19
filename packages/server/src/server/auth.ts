@@ -68,7 +68,7 @@ export function extractWsBearerProtocol(value: string | undefined): string | nul
   for (const protocol of value.split(",")) {
     const trimmed = protocol.trim();
     const segments = trimmed.split(".");
-    if (segments[0] === "paseo" && segments[1] === "bearer" && segments.length >= 3) {
+    if (segments[0] === "byspace" && segments[1] === "bearer" && segments.length >= 3) {
       return trimmed;
     }
   }
@@ -81,7 +81,7 @@ export function extractWsBearerToken(protocol: string | null): string | null {
     return null;
   }
   const segments = protocol.split(".");
-  if (segments[0] !== "paseo" || segments[1] !== "bearer" || segments.length < 3) {
+  if (segments[0] !== "byspace" || segments[1] !== "bearer" || segments.length < 3) {
     return null;
   }
   return segments.slice(2).join(".");
@@ -128,12 +128,12 @@ const BEARER_AUTH_BYPASS_PATHS = new Set([
   // consumed on first use) that is only ever issued over the
   // already-authenticated WebSocket. The token IS the capability for this
   // route. Requiring the daemon password on top of it breaks browser and
-  // Electron downloads: those trigger the download via an anchor navigation,
+  // browser downloads: those trigger the download via an anchor navigation,
   // which cannot attach an `Authorization` header. The download endpoint still
   // rejects requests without a valid token (400/403), so dropping the bearer
   // here does not make the route unauthenticated.
   "/api/files/download",
-  // The daemon injects its own agents' Paseo MCP connections at this endpoint
+  // The daemon injects its own agents' BySpace MCP connections at this endpoint
   // (and connects its own per-client MCP client here). Those connections cannot
   // carry the daemon password — it is only known in plaintext when set via env,
   // never when set via the app — so the route authenticates them with a

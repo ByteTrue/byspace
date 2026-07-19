@@ -109,7 +109,7 @@ The packaged desktop smoke is an external observer of the production launch path
 
 The harness launches the unpacked packaged app with isolated user data and daemon state, connects to the real renderer over Chromium's debugging protocol, and requires all of these outcomes:
 
-- the `paseo://app/` renderer mounts into `#root`;
+- the `byspace://app/` renderer mounts into `#root`;
 - the sandboxed preload exposes the desktop bridge;
 - the renderer starts a fresh desktop-managed daemon through the normal startup bootstrap;
 - the bundled CLI can query that daemon and run a terminal command.
@@ -120,7 +120,7 @@ To exercise the smoke locally on Linux:
 
 ```bash
 BYSPACE_DESKTOP_SMOKE=1 \
-BYSPACE_DESKTOP_SMOKE_ARTIFACT_DIR=/tmp/paseo-desktop-smoke \
+BYSPACE_DESKTOP_SMOKE_ARTIFACT_DIR=/tmp/byspace-desktop-smoke \
 npm run build:desktop -- --publish never --linux --x64 --dir
 ```
 

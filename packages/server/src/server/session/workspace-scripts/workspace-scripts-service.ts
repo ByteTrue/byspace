@@ -16,7 +16,7 @@ import type {
 } from "../../worktree-bootstrap.js";
 import {
   buildWorkspaceScriptPayloads,
-  readPaseoConfigForProjection,
+  readBySpaceConfigForProjection,
 } from "../../script-status-projection.js";
 import { deriveProjectSlug } from "../../workspace-git-metadata.js";
 
@@ -97,7 +97,7 @@ export function createWorkspaceScriptsService(deps: {
     return buildWorkspaceScriptPayloads({
       workspaceId,
       workspaceDirectory,
-      paseoConfig: readPaseoConfigForProjection(workspaceDirectory, logger),
+      byspaceConfig: readBySpaceConfigForProjection(workspaceDirectory, logger),
       serviceProxy,
       runtimeStore: scriptRuntimeStore,
       daemonPort: getDaemonTcpPort?.() ?? null,

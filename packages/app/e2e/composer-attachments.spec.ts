@@ -144,11 +144,6 @@ test.describe("Composer attachments", () => {
     // needed before this can be exercised end-to-end.
   });
 
-  test.fixme("browser-element attachment pill is created from Electron webview selection", async () => {
-    // The browser-element attachment is only created in browser-pane.electron.tsx via DOM
-    // element selection in the Electron webview. It is not exercisable in headless Chromium E2E.
-  });
-
   test("image lightbox opens on pill click and closes on Escape", async ({
     page,
     withWorkspace,

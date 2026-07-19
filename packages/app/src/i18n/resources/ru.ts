@@ -664,7 +664,7 @@ export const ru: TranslationResources = {
             "Обновление недоступно, поскольку эта ветка уже обновлена ​​до версии{{baseRef}}.",
           mergePrNoGithub: "Объединение PR сейчас недоступно, поскольку GitHub не подключен.",
           archiveNotWorktree:
-            "Архив здесь недоступен, поскольку это рабочее пространство не было создано как рабочее дерево Paseo.",
+            "Архив здесь недоступен, поскольку это рабочее пространство не было создано как рабочее дерево BySpace.",
           mergePrNoForge:
             "Объединение {{noun}} сейчас недоступно, поскольку {{brand}} не подключен.",
           mergePrMissing: "Объединение PR недоступно, поскольку еще нет запроса на включение",
@@ -838,7 +838,7 @@ export const ru: TranslationResources = {
       discord: "Discord",
       github: "Создать issue в GitHub",
       whatsNew: "Что нового",
-      version: "Paseo {{version}}",
+      version: "BySpace {{version}}",
     },
     sections: {
       sessions: "История",
@@ -954,7 +954,7 @@ export const ru: TranslationResources = {
   },
   desktop: {
     quitting: {
-      title: "Выход из Paseo...",
+      title: "Выход из BySpace...",
       detail: "Остановка локального демона.",
     },
     daemon: {
@@ -968,20 +968,20 @@ export const ru: TranslationResources = {
       },
       management: {
         title: "Управление встроенным демоном",
-        hint: "Позвольте Paseo запустить и остановить встроенный демон.",
+        hint: "Позвольте BySpace запустить и остановить встроенный демон.",
         pauseTitle: "Приостановить встроенный демон",
         pauseMessage:
           "Это немедленно остановит встроенный демон. Запущенные агенты и терминалы, подключенные к встроенному демону, будут остановлены.",
         pauseAndStop: "Пауза и остановка",
         registrationFailed:
-          "Built-in daemon started, but Paseo could not save the localhost connection. Toggle daemon management off and on again, or add localhost manually.",
+          "Built-in daemon started, but BySpace could not save the localhost connection. Toggle daemon management off and on again, or add localhost manually.",
         pausedStopFailed:
-          "Встроенное управление демоном было приостановлено, но Paseo не смог остановить демон.",
+          "Встроенное управление демоном было приостановлено, но BySpace не смог остановить демон.",
         updateFailed: "Невозможно обновить встроенное управление демонами.",
       },
       keepRunning: {
         title: "Продолжать работу демона после выхода",
-        hint: "Daemon продолжает работать, когда вы выходите из Paseo",
+        hint: "Daemon продолжает работать, когда вы выходите из BySpace",
       },
       logs: {
         title: "Файл журнала",
@@ -996,7 +996,7 @@ export const ru: TranslationResources = {
       fullStatus: {
         title: "Полный статус",
         modalTitle: "Статус Daemon",
-        hint: "Запускает`paseo daemon status`и показывает результат",
+        hint: "Запускает`byspace daemon status`и показывает результат",
         view: "Посмотреть статус",
         copied: "Статус скопирован в буфер обмена.",
         fetchFailed: "Не удалось получить статус демона:{{message}}.",
@@ -1051,7 +1051,7 @@ export const ru: TranslationResources = {
     },
     rosetta: {
       title: "Загрузите сборку Apple Silicon",
-      runningIntel: "Вы используете сборку Intel для Paseo под Rosetta на Apple Silicon.",
+      runningIntel: "Вы используете сборку Intel для BySpace под Rosetta на Apple Silicon.",
       highCpu:
         "Это приводит к высокой загрузке ЦП. Загрузите сборку Apple Silicon, чтобы исправить это.",
       download: "Скачать",
@@ -1096,7 +1096,7 @@ export const ru: TranslationResources = {
         microphone: "Состояние микрофона еще не проверялось.",
       },
       testNotification: {
-        title: "Тест уведомлений Paseo",
+        title: "Тест уведомлений BySpace",
         body: "Если вы это видите, уведомления на рабочем столе работают.",
         notDelivered:
           "Уведомление не было доставлено. Проверьте Системные настройки > Уведомления.",
@@ -1106,7 +1106,7 @@ export const ru: TranslationResources = {
     integrations: {
       cli: {
         statusFailed: "Невозможно проверить статус установки CLI.",
-        installFailed: "Невозможно установить PaseoCLI.",
+        installFailed: "Невозможно установить BySpaceCLI.",
       },
       skills: {
         statusFailed: "Невозможно проверить статус навыков оркестровки.",
@@ -1118,7 +1118,7 @@ export const ru: TranslationResources = {
   },
   rootError: {
     kicker: "Что-то пошло не так",
-    title: "В Paseo возникла проблема.",
+    title: "В BySpace возникла проблема.",
     body: "Попробуйте снова перезагрузить приложение. Если это повторяется, приложите приведенные ниже подробности к отчету.",
     details: "Подробности",
   },
@@ -1214,7 +1214,7 @@ export const ru: TranslationResources = {
     },
   },
   onboarding: {
-    title: "Добро пожаловать в Paseo",
+    title: "Добро пожаловать в BySpace",
     subtitle: "Подключите компьютер, чтобы начать",
     actions: {
       settings: "Настройки",
@@ -1290,7 +1290,7 @@ export const ru: TranslationResources = {
     },
     direct: {
       title: "Прямое подключение",
-      helper: "Введите адрес сервера Paseo.",
+      helper: "Введите адрес сервера BySpace.",
       fields: {
         host: "Host",
         port: "Порт",
@@ -1370,7 +1370,7 @@ export const ru: TranslationResources = {
       failedToLoadOffer: "Не удалось загрузить предложение сопряжения.",
       relayDisabled: "Реле не включено. Включите реле для сопряжения устройства.",
       unavailable: "Предложение по сопряжению недоступно.",
-      hint: "Отсканируйте этот код QR с помощью Paseo на своем телефоне или скопируйте ссылку ниже.",
+      hint: "Отсканируйте этот код QR с помощью BySpace на своем телефоне или скопируйте ссылку ниже.",
       qrUnavailable: "Код QR недоступен.",
       retry: "Повторить попытку",
       copy: "Копировать",
@@ -1402,7 +1402,7 @@ export const ru: TranslationResources = {
   serviceUrl: {
     title: "Открыть сервис URL",
     message: "Открыть{{url}}?",
-    inPaseo: "В Paseo",
+    inBySpace: "В BySpace",
     externalBrowser: "Внешний браузер",
     dontAskAgain: "Не спрашивай больше",
   },
@@ -1476,9 +1476,9 @@ export const ru: TranslationResources = {
       one: "использован {{count}} другой инструмент",
       other: "использовано {{count}} других инструментов",
     },
-    paseoCalls: {
-      one: "Paseo вызван {{count}} раз",
-      other: "Paseo вызван {{count}} раз",
+    byspaceCalls: {
+      one: "BySpace вызван {{count}} раз",
+      other: "BySpace вызван {{count}} раз",
     },
     and: "и",
   },
@@ -1552,7 +1552,7 @@ export const ru: TranslationResources = {
       browserData: {
         title: "Данные браузера",
         siteData: "Файлы cookie и данные сайтов",
-        description: "Вкладки браузера используют общие данные входа и данные сайтов в Paseo.",
+        description: "Вкладки браузера используют общие данные входа и данные сайтов в BySpace.",
         clear: "Очистить данные браузера",
         clearing: "Очистка...",
         confirmTitle: "Очистить данные браузера?",
@@ -1577,7 +1577,7 @@ export const ru: TranslationResources = {
         description: "Где открыть URL- адреса запущенных скриптов",
         options: {
           ask: "Просить",
-          inApp: "В Paseo",
+          inApp: "В BySpace",
           external: "Внешний браузер",
         },
       },
@@ -1657,7 +1657,7 @@ export const ru: TranslationResources = {
         label: "Обновления приложений",
         readyToInstall: "Готово к установке:{{version}}",
         installTitle: "Установить обновление рабочего стола",
-        installMessage: "Это обновит Paseo на этом компьютере.",
+        installMessage: "Это обновит BySpace на этом компьютере.",
         installConfirm: "Установить обновление",
         update: "Обновлять",
         updateTo: "Обновление до{{version}}",
@@ -1790,10 +1790,11 @@ export const ru: TranslationResources = {
         title: "Навыки оркестровки",
         description: "Научите своих агентов организовывать работу через CLI",
         updateAvailable: "Доступно обновление",
-        updateTitle: "Обновить навыки Paseo?",
+        updateTitle: "Обновить навыки BySpace?",
         updateFallback: "Синхронизируйте связанные навыки с вашим компьютером.",
-        uninstallTitle: "Удалить навыки Paseo?",
-        uninstallMessage: "Удаляет все навыки оркестровки Paseo из ~/.agents, ~/.claude, ~/.codex.",
+        uninstallTitle: "Удалить навыки BySpace?",
+        uninstallMessage:
+          "Удаляет все навыки оркестровки BySpace из ~/.agents, ~/.claude, ~/.codex.",
       },
       actions: {
         install: "Установить",
@@ -1849,9 +1850,9 @@ export const ru: TranslationResources = {
         title: "оркестровка",
         unavailable: "Подключитесь к этому хосту, чтобы управлять оркестрацией.",
         enableTools: {
-          title: "Включить инструменты Paseo",
+          title: "Включить инструменты BySpace",
           hint: "Агенты смогут управлять рабочими деревьями, агентами и расписаниями.",
-          accessibilityLabel: "Инструменты внедрения Paseo",
+          accessibilityLabel: "Инструменты внедрения BySpace",
         },
         systemPrompt: {
           title: "Системная подсказка",
@@ -1918,15 +1919,15 @@ export const ru: TranslationResources = {
             "Этот хост не подключен. Подождите, пока он подключится к сети, прежде чем перезапустить.",
           offlineTitle: "Host оффлайн",
           offlineMessage:
-            "Этот хост не в сети.Paseo автоматически повторно подключается — подождите, пока он снова подключится к сети, прежде чем перезапускаться.",
+            "Этот хост не в сети.BySpace автоматически повторно подключается — подождите, пока он снова подключится к сети, прежде чем перезапускаться.",
           requestFailedTitle: "Ошибка",
           requestFailedMessage:
-            "Не удалось отправить запрос на перезапуск.Paseo автоматически повторно подключается. Повторите попытку, как только хост окажется в сети.",
+            "Не удалось отправить запрос на перезапуск.BySpace автоматически повторно подключается. Повторите попытку, как только хост окажется в сети.",
           dialogFailedMessage: "Невозможно открыть диалоговое окно подтверждения перезапуска.",
         },
         update: {
           desktopManagedHint:
-            "Этот демон управляется Paseo Desktop. Обновите Paseo Desktop на хосте.",
+            "Этот демон управляется BySpace Desktop. Обновите BySpace Desktop на хосте.",
           title: "Update daemon",
           hint: "Update the daemon to the latest version and restart it",
           confirm: "Update",
@@ -2046,14 +2047,14 @@ export const ru: TranslationResources = {
         reset: "Перезагрузить",
       },
       readFailures: {
-        invalidTitle: "paseo.json не удалось разобрать",
+        invalidTitle: "byspace.json не удалось разобрать",
         invalidDescription: "Исправьте файл на диске, затем перезагрузите.",
         missingTitle: "У этого хоста нет этого проекта",
         missingWithHosts: "Переключитесь на другой хост выше или перезагрузите компьютер.",
         missingSingleHost: "У выбранного хоста нет записей об этом проекте.",
-        transportTitle: "Не удалось загрузить paseo.json.",
+        transportTitle: "Не удалось загрузить byspace.json.",
         transportFallback: "Хозяин не ответил.",
-        failedTitle: "Не удалось загрузить paseo.json.",
+        failedTitle: "Не удалось загрузить byspace.json.",
         failedDescription: "Перезагрузите, чтобы попробовать еще раз.",
       },
       worktree: {
@@ -2086,7 +2087,7 @@ export const ru: TranslationResources = {
         newScript: "Новый сценарий",
         editScript: "Изменить{{name}}",
         runAsService: "Запуск как служба",
-        serviceHint: "Paseo контролирует процесс и назначает порт через $BYSPACE_PORT.",
+        serviceHint: "BySpace контролирует процесс и назначает порт через $BYSPACE_PORT.",
         actions: {
           add: "Добавить скрипт",
           edit: "Редактировать",
@@ -2095,7 +2096,7 @@ export const ru: TranslationResources = {
       },
       metadata: {
         title: "Генерация метаданных",
-        info: "Инструкции для конкретного проекта, внедренные в подсказки ИИ, которые Paseo использует для генерации метаданных. Используйте их для обеспечения соблюдения соглашений вашей команды, таких как наименование ветвей, стиль фиксации или формат PR.",
+        info: "Инструкции для конкретного проекта, внедренные в подсказки ИИ, которые BySpace использует для генерации метаданных. Используйте их для обеспечения соблюдения соглашений вашей команды, таких как наименование ветвей, стиль фиксации или формат PR.",
         branchName: "Названия ветвей",
         branchNamePlaceholder: "Префиксные ветки с feat/ или fix/, mb/ для личных веток",
         commitMessage: "Фиксировать сообщения",
@@ -2107,8 +2108,8 @@ export const ru: TranslationResources = {
       writeFailures: {
         staleTitle: "Конфигурация изменена на диске",
         staleDescription:
-          "Перед сохранением перезагрузите компьютер, чтобы получить последнюю версию файла paseo.json.",
-        failedTitle: "Не удалось сохранить paseo.json.",
+          "Перед сохранением перезагрузите компьютер, чтобы получить последнюю версию файла byspace.json.",
+        failedTitle: "Не удалось сохранить byspace.json.",
         failedDescription: "Попробуйте еще раз или перезагрузите последнюю версию с диска.",
       },
       actions: {

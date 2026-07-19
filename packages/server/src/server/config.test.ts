@@ -13,14 +13,14 @@ describe("server config", () => {
     await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
   });
 
-  test("records when the daemon is managed by Paseo Desktop", async () => {
-    const paseoHome = await mkdtemp(path.join(os.tmpdir(), "paseo-config-desktop-managed-"));
-    roots.push(paseoHome);
+  test("records when the daemon is managed by BySpace Desktop", async () => {
+    const byspaceHome = await mkdtemp(path.join(os.tmpdir(), "byspace-config-desktop-managed-"));
+    roots.push(byspaceHome);
 
-    const desktopConfig = loadConfig(paseoHome, {
+    const desktopConfig = loadConfig(byspaceHome, {
       env: { BYSPACE_DESKTOP_MANAGED: "1" },
     });
-    const standaloneConfig = loadConfig(paseoHome, { env: {} });
+    const standaloneConfig = loadConfig(byspaceHome, { env: {} });
 
     expect(desktopConfig.desktopManaged).toBe(true);
     expect(standaloneConfig.desktopManaged).toBe(false);
@@ -38,7 +38,7 @@ describe("server config", () => {
   });
 
   test("resolves bundled web UI path from globally installed compiled modules", async () => {
-    const packageRoot = await mkdtemp(path.join(os.tmpdir(), "paseo-config-compiled-"));
+    const packageRoot = await mkdtemp(path.join(os.tmpdir(), "byspace-config-compiled-"));
     roots.push(packageRoot);
     await mkdir(path.join(packageRoot, "dist", "server", "web-ui"), { recursive: true });
 
@@ -50,7 +50,7 @@ describe("server config", () => {
   });
 
   test("resolves packaged desktop web UI path from resources app-dist", async () => {
-    const packageRoot = await mkdtemp(path.join(os.tmpdir(), "paseo-config-packaged-"));
+    const packageRoot = await mkdtemp(path.join(os.tmpdir(), "byspace-config-packaged-"));
     roots.push(packageRoot);
     await mkdir(path.join(packageRoot, "app-dist"), { recursive: true });
 

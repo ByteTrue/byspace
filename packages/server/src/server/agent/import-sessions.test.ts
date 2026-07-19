@@ -273,7 +273,7 @@ test("listImportableProviderSessions filters, sorts, limits, and projects import
   });
 });
 
-test("listImportableProviderSessions includes a provider session after its Paseo agent is archived", async () => {
+test("listImportableProviderSessions includes a provider session after its BySpace agent is archived", async () => {
   const cwd = "/tmp/project";
   const archivedSession = makeImportableSession({
     provider: "claude",
@@ -394,7 +394,7 @@ test("listImportableProviderSessions filters out metadata generation sessions", 
 });
 
 test("listImportableProviderSessions keeps realpath-equivalent cwd matches", async () => {
-  const root = mkdtempSync(path.join(tmpdir(), "paseo-import-cwd-"));
+  const root = mkdtempSync(path.join(tmpdir(), "byspace-import-cwd-"));
   const realCwd = path.join(root, "real-project");
   const linkedCwd = path.join(root, "linked-project");
   mkdirSync(realCwd, { recursive: true });

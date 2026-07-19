@@ -255,7 +255,7 @@ describe("selectSubagentsForParent", () => {
 
     expect(rows).toEqual([
       {
-        kind: "paseo",
+        kind: "byspace",
         id: "child",
         provider: "claude",
         title: "Review child",

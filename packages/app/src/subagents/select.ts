@@ -6,8 +6,8 @@ import { useSessionStore, type Agent } from "@/stores/session-store";
 import { refreshProviderSubagents, useProviderSubagentStore } from "./provider-store";
 import type { ProviderSubagentDescriptorPayload } from "@bytetrue/byspace-protocol/messages";
 
-export interface PaseoSubagentRow {
-  kind: "paseo";
+export interface BySpaceSubagentRow {
+  kind: "byspace";
   id: Agent["id"];
   provider: Agent["provider"];
   title: Agent["title"];
@@ -27,7 +27,7 @@ export interface ProviderSubagentRow {
   createdAt: Date;
 }
 
-export type SubagentRow = PaseoSubagentRow | ProviderSubagentRow;
+export type SubagentRow = BySpaceSubagentRow | ProviderSubagentRow;
 
 type SessionStoreSnapshot = ReturnType<typeof useSessionStore.getState>;
 type ProviderSubagentStoreSnapshot = ReturnType<typeof useProviderSubagentStore.getState>;
@@ -42,7 +42,7 @@ const EMPTY_PROVIDER_SUBAGENT_ROWS: ProviderSubagentRow[] = [];
 
 function toSubagentRow(agent: Agent): SubagentRow {
   return {
-    kind: "paseo",
+    kind: "byspace",
     id: agent.id,
     provider: agent.provider,
     title: agent.title,
@@ -109,7 +109,7 @@ export function selectProviderSubagentsForParent(
 
 export function useSubagentsForParent(params: SelectSubagentsParams): SubagentRow[] {
   const pendingArchiveIds = usePendingArchiveAgentIds(params.serverId);
-  const paseoRows = useStoreWithEqualityFn(
+  const byspaceRows = useStoreWithEqualityFn(
     useSessionStore,
     (state) => selectSubagentsForParent(state, params, pendingArchiveIds),
     equal,
@@ -132,9 +132,9 @@ export function useSubagentsForParent(params: SelectSubagentsParams): SubagentRo
   }, [client, params.parentAgentId, params.serverId, supported]);
 
   return useMemo(() => {
-    if (providerRows.length === 0) return paseoRows;
-    const rows = [...paseoRows, ...providerRows];
+    if (providerRows.length === 0) return byspaceRows;
+    const rows = [...byspaceRows, ...providerRows];
     rows.sort((left, right) => left.createdAt.getTime() - right.createdAt.getTime());
     return rows;
-  }, [paseoRows, providerRows]);
+  }, [byspaceRows, providerRows]);
 }

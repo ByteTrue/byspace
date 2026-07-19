@@ -78,7 +78,7 @@ describe("worktree shell selection", () => {
     try {
       mkdirSync(join(worktreePath, ".git"), { recursive: true });
       writeFileSync(
-        join(worktreePath, "paseo.json"),
+        join(worktreePath, "byspace.json"),
         JSON.stringify({
           worktree: {
             teardown: ["Write-Output 'teardown'"],
@@ -131,7 +131,7 @@ describe("worktree shell selection", () => {
     process.env.BASH_ENV = "should-not-leak";
     try {
       writeFileSync(
-        join(worktreePath, "paseo.json"),
+        join(worktreePath, "byspace.json"),
         JSON.stringify({
           worktree: {
             setup: ["Write-Output 'setup'"],

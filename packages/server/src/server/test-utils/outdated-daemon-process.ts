@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import { createTestPaseoDaemon } from "./paseo-daemon.js";
+import { createTestBySpaceDaemon } from "./byspace-daemon.js";
 
 async function main(): Promise<void> {
   const metroPort = process.env.E2E_METRO_PORT;
@@ -8,12 +8,12 @@ async function main(): Promise<void> {
     throw new Error("E2E_METRO_PORT is not set");
   }
 
-  const daemon = await createTestPaseoDaemon({
+  const daemon = await createTestBySpaceDaemon({
     corsAllowedOrigins: [`http://localhost:${metroPort}`],
     daemonVersion: "0.0.0",
     desktopManaged: process.env.E2E_DESKTOP_MANAGED === "1",
   });
-  const serverId = (await readFile(path.join(daemon.paseoHome, "server-id"), "utf8")).trim();
+  const serverId = (await readFile(path.join(daemon.byspaceHome, "server-id"), "utf8")).trim();
 
   process.send?.({
     type: "ready",

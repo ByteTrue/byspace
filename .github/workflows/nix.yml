@@ -53,9 +53,9 @@ jobs:
 
           export BYSPACE_HOME
           BYSPACE_HOME="$(mktemp -d)"
-          export BYSPACE_LISTEN=127.0.0.1:6767
+          export BYSPACE_LISTEN=127.0.0.1:6777
 
-          WRAPPER_LOG="$BYSPACE_HOME/paseo-server-wrapper.log"
+          WRAPPER_LOG="$BYSPACE_HOME/byspace-server-wrapper.log"
 
           cleanup() {
             if [[ -n "${DAEMON_PID:-}" ]] && kill -0 "$DAEMON_PID" 2>/dev/null; then
@@ -66,15 +66,15 @@ jobs:
           }
           trap cleanup EXIT
 
-          BYSPACE_WEB_UI_ENABLED=true ./result/bin/paseo-server --no-relay >"$WRAPPER_LOG" 2>&1 &
+          BYSPACE_WEB_UI_ENABLED=true ./result/bin/byspace-server --no-relay >"$WRAPPER_LOG" 2>&1 &
           DAEMON_PID=$!
 
           deadline=$((SECONDS + 30))
           while (( SECONDS < deadline )); do
-            if STATUS_JSON="$(./result/bin/paseo daemon status --json)" \
+            if STATUS_JSON="$(./result/bin/byspace daemon status --json)" \
               && jq -e '.connectedDaemon == "reachable"' <<<"$STATUS_JSON" >/dev/null; then
               echo "$STATUS_JSON"
-              curl --fail --silent --show-error http://127.0.0.1:6767/ >"$BYSPACE_HOME/web-ui.html"
+              curl --fail --silent --show-error http://127.0.0.1:6777/ >"$BYSPACE_HOME/web-ui.html"
               [[ -s "$BYSPACE_HOME/web-ui.html" ]]
               exit 0
             fi
@@ -91,12 +91,12 @@ jobs:
           cat "$BYSPACE_HOME/daemon.log" 2>/dev/null || echo "<missing>"
           echo "::endgroup::"
 
-          echo "::group::paseo-server stdout/stderr"
+          echo "::group::byspace-server stdout/stderr"
           cat "$WRAPPER_LOG" 2>/dev/null || echo "<missing>"
           echo "::endgroup::"
 
-          echo "::group::paseo daemon status"
-          ./result/bin/paseo daemon status || true
+          echo "::group::byspace daemon status"
+          ./result/bin/byspace daemon status || true
           echo "::endgroup::"
 
           exit 1

@@ -1,8 +1,8 @@
 # Data Model
 
-Paseo uses **file-based JSON persistence** instead of a traditional database. All data is validated at runtime with Zod schemas. Most stores write atomically (write to temp file, then rename); a few still use plain `writeFile` — see each section. There is no schema-versioning/migration framework — schemas rely on optional fields with defaults for forward compatibility, with a small amount of inline normalization in `persisted-config.ts` for legacy provider/speech entries.
+BySpace uses **file-based JSON persistence** instead of a traditional database. All data is validated at runtime with Zod schemas. Most stores write atomically (write to temp file, then rename); a few still use plain `writeFile` — see each section. There is no schema-versioning/migration framework — schemas rely on optional fields with defaults for forward compatibility, with a small amount of inline normalization in `persisted-config.ts` for legacy provider/speech entries.
 
-All server-side stores live under `$BYSPACE_HOME` (defaults to `~/.paseo`).
+All server-side stores live under `$BYSPACE_HOME` (defaults to `~/.byspace`).
 
 ## Store Surface Rules
 
@@ -17,7 +17,7 @@ $BYSPACE_HOME/
 ├── config.json                          # Daemon configuration
 ├── server-id                            # Stable daemon identifier (plain text, "srv_<base64url>")
 ├── daemon-keypair.json                  # E2EE keypair for relay (mode 0600)
-├── paseo.pid                            # Daemon PID lock file
+├── byspace.pid                            # Daemon PID lock file
 ├── daemon.log                           # Default log file (path configurable)
 ├── agents/
 │   └── {sanitized-cwd}/
@@ -33,7 +33,7 @@ $BYSPACE_HOME/
 │   └── workspaces.json                  # Workspace registry
 ├── runtime/
 │   └── managed-processes/
-│       └── {recordId}.json              # Helper processes owned by Paseo; reconciled on daemon bootstrap
+│       └── {recordId}.json              # Helper processes owned by BySpace; reconciled on daemon bootstrap
 └── push-tokens.json                     # Expo push notification tokens
 ```
 
@@ -58,7 +58,7 @@ Each agent is stored as a separate JSON file, grouped by project directory.
 | `lastActivityAt`     | `string?` (ISO 8601)                     | Last activity timestamp                                                                                                                                                                                                                                                                                                                                                             |
 | `lastUserMessageAt`  | `string?` (ISO 8601)                     | Last user message timestamp                                                                                                                                                                                                                                                                                                                                                         |
 | `title`              | `string?`                                | User-visible title                                                                                                                                                                                                                                                                                                                                                                  |
-| `labels`             | `Record<string, string>`                 | Key-value labels (default `{}`). `paseo.parent-agent-id` is set automatically for `create_agent` subagent relationships — see [agent-lifecycle.md](./agent-lifecycle.md)                                                                                                                                                                                                            |
+| `labels`             | `Record<string, string>`                 | Key-value labels (default `{}`). `byspace.parent-agent-id` is set automatically for `create_agent` subagent relationships — see [agent-lifecycle.md](./agent-lifecycle.md)                                                                                                                                                                                                          |
 | `lastStatus`         | `AgentStatus`                            | One of: `"initializing"`, `"idle"`, `"running"`, `"error"`, `"closed"`                                                                                                                                                                                                                                                                                                              |
 | `lastModeId`         | `string?`                                | Last active mode ID                                                                                                                                                                                                                                                                                                                                                                 |
 | `config`             | `SerializableConfig?`                    | Agent session configuration (see below)                                                                                                                                                                                                                                                                                                                                             |
@@ -152,7 +152,7 @@ Single file, validated with `PersistedConfigSchema`.
 {
   version: 1,
   daemon: {
-    listen: "127.0.0.1:6767",
+    listen: "127.0.0.1:6777",
     hostnames: true | string[],   // legacy alias `allowedHosts` is migrated on load
     trustedProxies: true | string[], // defaults to ["loopback"]; Express proxy names/CIDRs
     mcp: { enabled: boolean, injectIntoAgents: boolean },
@@ -199,7 +199,7 @@ Single file, validated with `PersistedConfigSchema`.
 
 All fields are optional with sensible defaults.
 
-`agents.metadataGeneration.providers` controls the preferred structured-generation fallback order for daemon-side metadata tasks such as commit messages, PR text, branch names, and generated agent titles. Entries are tried first in the configured order, then Paseo falls through to dynamically discovered defaults and finally the current selection when available.
+`agents.metadataGeneration.providers` controls the preferred structured-generation fallback order for daemon-side metadata tasks such as commit messages, PR text, branch names, and generated agent titles. Entries are tried first in the configured order, then BySpace falls through to dynamically discovered defaults and finally the current selection when available.
 
 Local speech model ids are intentionally narrow: STT uses `parakeet-tdt-0.6b-v2-int8`, TTS uses `kokoro-en-v0_19`, and turn detection uses the bundled Silero VAD model.
 
@@ -230,9 +230,9 @@ OpenAI speech can be configured under `providers.openai`. STT and TTS resolve in
 }
 ```
 
-`providers.openai.stt` is used for both composer dictation and voice mode speech-to-text; `providers.openai.tts` is used for voice mode text-to-speech. The equivalent env vars are `OPENAI_STT_API_KEY`/`OPENAI_STT_BASE_URL` and `OPENAI_TTS_API_KEY`/`OPENAI_TTS_BASE_URL`. Each feature falls back to `providers.openai.apiKey`/`providers.openai.baseUrl`, then `OPENAI_API_KEY`/`OPENAI_BASE_URL`, when its own fields are unset. These settings apply only to Paseo OpenAI speech features, not to Codex or other OpenAI-backed tools.
+`providers.openai.stt` is used for both composer dictation and voice mode speech-to-text; `providers.openai.tts` is used for voice mode text-to-speech. The equivalent env vars are `OPENAI_STT_API_KEY`/`OPENAI_STT_BASE_URL` and `OPENAI_TTS_API_KEY`/`OPENAI_TTS_BASE_URL`. Each feature falls back to `providers.openai.apiKey`/`providers.openai.baseUrl`, then `OPENAI_API_KEY`/`OPENAI_BASE_URL`, when its own fields are unset. These settings apply only to BySpace OpenAI speech features, not to Codex or other OpenAI-backed tools.
 
-Paseo uses these paths under the configured OpenAI base URL:
+BySpace uses these paths under the configured OpenAI base URL:
 
 - dictation STT: `/v1/audio/transcriptions`
 - voice mode STT: `/v1/audio/transcriptions`
@@ -489,7 +489,7 @@ These small files are not validated as full Zod schemas but are persisted under 
 | --------------------- | -------------------------------------------------------------- | --------------------------------------------------------------------------------- |
 | `server-id`           | Plain text, e.g. `srv_<base64url>`                             | Stable per-`$BYSPACE_HOME` daemon ID. Overridable via `BYSPACE_SERVER_ID` env.    |
 | `daemon-keypair.json` | `{ v: 2, publicKeyB64, secretKeyB64 }` (libsodium box keypair) | E2EE relay identity. Written with mode `0600`. Regenerated if file is unreadable. |
-| `paseo.pid`           | JSON `{ pid, startedAt, ... }`                                 | PID lock; prevents two daemons sharing one `$BYSPACE_HOME`.                       |
+| `byspace.pid`         | JSON `{ pid, startedAt, ... }`                                 | PID lock; prevents two daemons sharing one `$BYSPACE_HOME`.                       |
 | `daemon.log`          | Pino log output                                                | Default location; path/rotation configurable via `log.file` in `config.json`.     |
 
 ---
@@ -503,11 +503,11 @@ These live in React Native `AsyncStorage` or browser `IndexedDB`, not on the dae
 Right-sidebar client state splits on whether it is determined by the directory or owned by the workspace (two workspaces can share one `cwd`). The split is enforced by the cache key, so changing a key changes the sharing semantics — see [architecture.md](architecture.md#right-sidebar-boundary-directory-backed-vs-workspace-owned) for the full table.
 
 - **Directory-backed** (shared by same-`cwd` workspaces): keyed by `(serverId, cwd)`. Git status/diff, GitHub PR status, PR timeline, file preview content. These are TanStack Query caches, not persisted stores.
-- **Workspace-owned** (independent per workspace): keyed by `workspaceId`, with `cwd` used only as a fallback when no `workspaceId` is present. Review draft comments (`@paseo:review-draft-store`), diff-mode overrides (in-memory), workspace composer attachments, and file-explorer nav/expand state. The `workspaceId` part of these keys is **opaque** — never parse it back into a path.
+- **Workspace-owned** (independent per workspace): keyed by `workspaceId`, with `cwd` used only as a fallback when no `workspaceId` is present. Review draft comments (`@byspace:review-draft-store`), diff-mode overrides (in-memory), workspace composer attachments, and file-explorer nav/expand state. The `workspaceId` part of these keys is **opaque** — never parse it back into a path.
 
 ### Draft Store
 
-**AsyncStorage key:** `paseo-drafts` (version 2)
+**AsyncStorage key:** `byspace-drafts` (version 2)
 
 ```typescript
 {
@@ -523,7 +523,7 @@ Right-sidebar client state splits on whether it is determined by the directory o
 
 ### Attachment Store (Web)
 
-**IndexedDB database:** `paseo-attachment-bytes`, object store: `attachments`
+**IndexedDB database:** `byspace-attachment-bytes`, object store: `attachments`
 
 Stores binary attachment blobs keyed by attachment ID.
 

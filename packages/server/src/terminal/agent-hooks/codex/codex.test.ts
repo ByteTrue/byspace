@@ -59,7 +59,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 describe("Codex terminal agent hooks", () => {
   it("installs POSIX and Windows hook commands idempotently", () => {
-    const configDir = createTempDir("paseo-codex-config-");
+    const configDir = createTempDir("byspace-codex-config-");
 
     installAgentHooks(codexAgentHookProvider, { configDir });
     const secondInstall = installAgentHooks(codexAgentHookProvider, { configDir });
@@ -68,8 +68,8 @@ describe("Codex terminal agent hooks", () => {
     for (const event of codexAgentHookProvider.events) {
       expect(commandHooks(config, event.event)).toEqual([
         {
-          command: `if [ -n "$BYSPACE_TERMINAL_ID" ]; then "\${BYSPACE_HOOK_CLI:-paseo}" hooks codex ${event.event}; fi`,
-          commandWindows: `if defined BYSPACE_TERMINAL_ID (if defined BYSPACE_HOOK_CLI ("%BYSPACE_HOOK_CLI%" hooks codex ${event.event}) else (paseo hooks codex ${event.event})) else (exit /b 0)`,
+          command: `if [ -n "$BYSPACE_TERMINAL_ID" ]; then "\${BYSPACE_HOOK_CLI:-byspace}" hooks codex ${event.event}; fi`,
+          commandWindows: `if defined BYSPACE_TERMINAL_ID (if defined BYSPACE_HOOK_CLI ("%BYSPACE_HOOK_CLI%" hooks codex ${event.event}) else (byspace hooks codex ${event.event})) else (exit /b 0)`,
         },
       ]);
     }
@@ -78,7 +78,7 @@ describe("Codex terminal agent hooks", () => {
   });
 
   it("preserves unrelated user hooks", () => {
-    const configDir = createTempDir("paseo-codex-config-preserve-");
+    const configDir = createTempDir("byspace-codex-config-preserve-");
     writeFileSync(
       join(configDir, "hooks.json"),
       `${JSON.stringify(
@@ -102,12 +102,12 @@ describe("Codex terminal agent hooks", () => {
     const stopCommands = commandHooks(readHooksFile(configDir), "Stop").map((hook) => hook.command);
     expect(stopCommands).toEqual([
       "say codex done",
-      'if [ -n "$BYSPACE_TERMINAL_ID" ]; then "${BYSPACE_HOOK_CLI:-paseo}" hooks codex Stop; fi',
+      'if [ -n "$BYSPACE_TERMINAL_ID" ]; then "${BYSPACE_HOOK_CLI:-byspace}" hooks codex Stop; fi',
     ]);
   });
 
   it("uninstalls only marker-matched hooks", () => {
-    const configDir = createTempDir("paseo-codex-config-uninstall-");
+    const configDir = createTempDir("byspace-codex-config-uninstall-");
     installAgentHooks(codexAgentHookProvider, { configDir });
     const config = readHooksFile(configDir);
     config.hooks = {

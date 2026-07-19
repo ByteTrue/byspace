@@ -288,12 +288,11 @@ export function createAudioEngine(
           : true;
       const currentOrigin =
         typeof window !== "undefined" && window.location ? window.location.origin : "unknown";
-      const isDesktopApp = false;
 
       if (missingNavigator) {
         throw new Error("Microphone capture is not supported in this environment");
       }
-      if (!secureContext && !isDesktopApp) {
+      if (!secureContext) {
         throw new Error(
           `Microphone access requires HTTPS or localhost. Current origin: ${currentOrigin}`,
         );

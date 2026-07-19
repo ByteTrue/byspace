@@ -59,7 +59,7 @@ function createHarness(input: {
           currentBranch: null,
           remoteUrl: null,
           worktreeRoot: null,
-          isPaseoOwnedWorktree: false,
+          isBySpaceOwnedWorktree: false,
           mainRepoRoot: null,
         };
       }
@@ -69,7 +69,7 @@ function createHarness(input: {
         currentBranch: "main",
         remoteUrl: null,
         worktreeRoot: root,
-        isPaseoOwnedWorktree: false,
+        isBySpaceOwnedWorktree: false,
         mainRepoRoot: null,
       };
     },
@@ -93,7 +93,7 @@ function createHarness(input: {
     logger: createStub<SessionOptions["logger"]>(logger),
     downloadTokenStore: createStub<SessionOptions["downloadTokenStore"]>({}),
     pushTokenStore: createStub<SessionOptions["pushTokenStore"]>({}),
-    paseoHome: mkdtempSync(path.join(tmpdir(), "paseo-invariant-test-")),
+    byspaceHome: mkdtempSync(path.join(tmpdir(), "byspace-invariant-test-")),
     agentManager: createStub<SessionOptions["agentManager"]>({
       subscribe: () => () => {},
       listAgents: () => [],

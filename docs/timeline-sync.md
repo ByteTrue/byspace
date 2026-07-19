@@ -39,7 +39,7 @@ The first load of an agent without a local cursor is different: it fetches a bou
 
 ## Durable item anchors
 
-Provider message IDs are not guaranteed for every displayed item. Paseo-generated system errors are one example. Rendered item indices are not durable either because pagination and projection can merge source rows.
+Provider message IDs are not guaranteed for every displayed item. BySpace-generated system errors are one example. Rendered item indices are not durable either because pagination and projection can merge source rows.
 
 Actions that address a point in chat history, such as Fork, use the daemon timeline `epoch` plus the projected item's `seqEnd`. The app carries that position on the rendered assistant item for both live and fetched history. When adjacent projected chunks merge, the merged item retains the newer chunk's position.
 

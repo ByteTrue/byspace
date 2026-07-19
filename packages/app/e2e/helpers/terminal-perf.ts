@@ -16,7 +16,7 @@ export async function getTerminalBufferText(page: Page): Promise<string> {
   return page.evaluate(() => {
     const term = (
       window as Window & {
-        __paseoTerminal?: {
+        __byspaceTerminal?: {
           buffer: {
             active: {
               length: number;
@@ -26,7 +26,7 @@ export async function getTerminalBufferText(page: Page): Promise<string> {
           onWriteParsed: (cb: () => void) => { dispose: () => void };
         };
       }
-    ).__paseoTerminal;
+    ).__byspaceTerminal;
     if (!term) {
       return "";
     }
@@ -127,13 +127,13 @@ export interface LatencySample {
 export async function measureKeystrokeLatency(page: Page, char: string): Promise<number> {
   await page.evaluate(() => {
     const win = window as Window & {
-      __paseoTerminal?: { onWriteParsed: (cb: () => void) => { dispose: () => void } };
+      __byspaceTerminal?: { onWriteParsed: (cb: () => void) => { dispose: () => void } };
       __perfKeystroke?: { promise: Promise<number> | null };
     };
-    if (!win.__paseoTerminal) {
-      throw new Error("__paseoTerminal not available");
+    if (!win.__byspaceTerminal) {
+      throw new Error("__byspaceTerminal not available");
     }
-    const term = win.__paseoTerminal;
+    const term = win.__byspaceTerminal;
 
     const state = (win.__perfKeystroke = {
       promise: null as Promise<number> | null,

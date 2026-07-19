@@ -8,7 +8,7 @@ import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/
 import { z } from "zod";
 
 import { AGENT_WAIT_TIMEOUT_MS } from "./mcp-shared.js";
-import { createTestPaseoDaemon, type TestPaseoDaemon } from "../test-utils/paseo-daemon.js";
+import { createTestBySpaceDaemon, type TestBySpaceDaemon } from "../test-utils/byspace-daemon.js";
 import { createTestAgentClients } from "../test-utils/fake-agent-client.js";
 import type { AgentClient, AgentProvider, AgentSessionConfig } from "./agent-sdk-types.js";
 import { PARENT_AGENT_ID_LABEL } from "@bytetrue/byspace-protocol/agent-labels";
@@ -138,7 +138,7 @@ async function waitFor<T>(options: {
 }
 
 let tempRoot: string;
-let daemonHandle: TestPaseoDaemon;
+let daemonHandle: TestBySpaceDaemon;
 let topLevelClient: McpClient;
 let agentScopedClient: McpClient;
 let parentAgentId: string;
@@ -285,7 +285,7 @@ beforeAll(async () => {
   parentAgentCwd = await makeCwd("parent-agent-cwd");
   worktreeRepoCwd = await makeCwd("worktree-repo");
 
-  daemonHandle = await createTestPaseoDaemon({ agentClients: createRecordingAgentClients() });
+  daemonHandle = await createTestBySpaceDaemon({ agentClients: createRecordingAgentClients() });
   topLevelClient = await createMcpClient(`http://127.0.0.1:${daemonHandle.port}/mcp/agents`);
 
   const parentPayload = await callToolStructured(topLevelClient, "create_agent", {
@@ -351,7 +351,7 @@ describe("Suite A: Core Fixes", () => {
     }
   });
 
-  test("agentManager.createAgent injects paseo MCP using the daemon listen target", async () => {
+  test("agentManager.createAgent injects byspace MCP using the daemon listen target", async () => {
     let agentId: string | null = null;
     try {
       const listenTarget = daemonHandle.daemon.getListenTarget();
@@ -380,15 +380,15 @@ describe("Suite A: Core Fixes", () => {
         ?.toReversed()
         .find((config) => config.cwd === cwd);
       expect(launchConfig?.mcpServers).toMatchObject({
-        paseo: {
+        byspace: {
           type: "http",
           url: expectedUrl,
         },
       });
-      expect(snapshot.config.mcpServers?.paseo).toBeUndefined();
+      expect(snapshot.config.mcpServers?.byspace).toBeUndefined();
 
       const liveAgent = daemonHandle.daemon.agentManager.getAgent(agentId);
-      expect(liveAgent?.config.mcpServers?.paseo).toBeUndefined();
+      expect(liveAgent?.config.mcpServers?.byspace).toBeUndefined();
     } finally {
       await archiveAgentIfPresent(agentId);
     }

@@ -658,7 +658,7 @@ export const en = {
             "Update isn't available because this branch is already up to date with {{baseRef}}",
           mergePrNoGithub: "Merge PR isn't available right now because GitHub isn't connected",
           archiveNotWorktree:
-            "Archive isn't available here because this workspace was not created as a Paseo worktree",
+            "Archive isn't available here because this workspace was not created as a BySpace worktree",
           mergePrNoForge:
             "Merge {{noun}} isn't available right now because {{brand}} isn't connected",
           mergePrMissing: "Merge PR isn't available because there isn't a pull request yet",
@@ -828,7 +828,7 @@ export const en = {
       discord: "Discord",
       github: "Create GitHub issue",
       whatsNew: "What's new",
-      version: "Paseo {{version}}",
+      version: "BySpace {{version}}",
     },
     sections: {
       sessions: "History",
@@ -943,7 +943,7 @@ export const en = {
   },
   desktop: {
     quitting: {
-      title: "Quitting Paseo...",
+      title: "Quitting BySpace...",
       detail: "Stopping the local daemon.",
     },
     daemon: {
@@ -957,20 +957,20 @@ export const en = {
       },
       management: {
         title: "Manage built-in daemon",
-        hint: "Let Paseo start and stop the built-in daemon",
+        hint: "Let BySpace start and stop the built-in daemon",
         pauseTitle: "Pause built-in daemon",
         pauseMessage:
           "This will stop the built-in daemon immediately. Running agents and terminals connected to the built-in daemon will be stopped.",
         pauseAndStop: "Pause and stop",
         registrationFailed:
-          "Built-in daemon started, but Paseo could not save the localhost connection. Toggle daemon management off and on again, or add localhost manually.",
+          "Built-in daemon started, but BySpace could not save the localhost connection. Toggle daemon management off and on again, or add localhost manually.",
         pausedStopFailed:
-          "Built-in daemon management was paused, but Paseo could not stop the daemon.",
+          "Built-in daemon management was paused, but BySpace could not stop the daemon.",
         updateFailed: "Unable to update built-in daemon management.",
       },
       keepRunning: {
         title: "Keep daemon running after quit",
-        hint: "Daemon keeps running when you quit Paseo",
+        hint: "Daemon keeps running when you quit BySpace",
       },
       logs: {
         title: "Log file",
@@ -985,7 +985,7 @@ export const en = {
       fullStatus: {
         title: "Full status",
         modalTitle: "Daemon status",
-        hint: "Runs `paseo daemon status` and shows the output",
+        hint: "Runs `byspace daemon status` and shows the output",
         view: "View status",
         copied: "Status copied to clipboard.",
         fetchFailed: "Failed to fetch daemon status: {{message}}",
@@ -1037,7 +1037,7 @@ export const en = {
     },
     rosetta: {
       title: "Download the Apple Silicon build",
-      runningIntel: "You're running the Intel build of Paseo under Rosetta on Apple Silicon.",
+      runningIntel: "You're running the Intel build of BySpace under Rosetta on Apple Silicon.",
       highCpu: "This causes high CPU usage. Download the Apple Silicon build to fix it.",
       download: "Download",
     },
@@ -1079,7 +1079,7 @@ export const en = {
         microphone: "Microphone status has not been checked yet.",
       },
       testNotification: {
-        title: "Paseo notification test",
+        title: "BySpace notification test",
         body: "If you can see this, desktop notifications work.",
         notDelivered: "Notification was not delivered. Check System Settings > Notifications.",
         failed: "Failed to send notification.",
@@ -1088,7 +1088,7 @@ export const en = {
     integrations: {
       cli: {
         statusFailed: "Unable to check CLI install status.",
-        installFailed: "Unable to install the Paseo CLI.",
+        installFailed: "Unable to install the BySpace CLI.",
       },
       skills: {
         statusFailed: "Unable to check orchestration skills status.",
@@ -1100,7 +1100,7 @@ export const en = {
   },
   rootError: {
     kicker: "Something went wrong",
-    title: "Paseo ran into a problem.",
+    title: "BySpace ran into a problem.",
     body: "Try again to reload the app. If this keeps happening, include the details below when you report it.",
     details: "Details",
   },
@@ -1194,7 +1194,7 @@ export const en = {
     },
   },
   onboarding: {
-    title: "Welcome to Paseo",
+    title: "Welcome to BySpace",
     subtitle: "Connect your computer to get started",
     actions: {
       settings: "Settings",
@@ -1270,7 +1270,7 @@ export const en = {
     },
     direct: {
       title: "Direct connection",
-      helper: "Enter the address of a Paseo server.",
+      helper: "Enter the address of a BySpace server.",
       fields: {
         host: "Host",
         port: "Port",
@@ -1348,7 +1348,7 @@ export const en = {
       failedToLoadOffer: "Failed to load pairing offer.",
       relayDisabled: "Relay is not enabled. Enable relay to pair a device.",
       unavailable: "Pairing offer unavailable.",
-      hint: "Scan this QR code with Paseo on your phone, or copy the link below.",
+      hint: "Scan this QR code with BySpace on your phone, or copy the link below.",
       qrUnavailable: "QR code unavailable.",
       retry: "Retry",
       copy: "Copy",
@@ -1380,7 +1380,7 @@ export const en = {
   serviceUrl: {
     title: "Open service URL",
     message: "Open {{url}}?",
-    inPaseo: "In Paseo",
+    inBySpace: "In BySpace",
     externalBrowser: "External browser",
     dontAskAgain: "Don't ask again",
   },
@@ -1454,9 +1454,9 @@ export const en = {
       one: "used {{count}} other tool",
       other: "used {{count}} other tools",
     },
-    paseoCalls: {
-      one: "called Paseo {{count}} time",
-      other: "called Paseo {{count}} times",
+    byspaceCalls: {
+      one: "called BySpace {{count}} time",
+      other: "called BySpace {{count}} times",
     },
     and: "and",
   },
@@ -1530,7 +1530,7 @@ export const en = {
       browserData: {
         title: "Browser data",
         siteData: "Cookies and site data",
-        description: "Browser tabs share sign-ins and site data across Paseo.",
+        description: "Browser tabs share sign-ins and site data across BySpace.",
         clear: "Clear browser data",
         clearing: "Clearing...",
         confirmTitle: "Clear browser data?",
@@ -1554,7 +1554,7 @@ export const en = {
         description: "Where to open URLs from running scripts",
         options: {
           ask: "Ask",
-          inApp: "In Paseo",
+          inApp: "In BySpace",
           external: "External browser",
         },
       },
@@ -1632,7 +1632,7 @@ export const en = {
         label: "App updates",
         readyToInstall: "Ready to install: {{version}}",
         installTitle: "Install desktop update",
-        installMessage: "This updates Paseo on this computer",
+        installMessage: "This updates BySpace on this computer",
         installConfirm: "Install update",
         update: "Update",
         updateTo: "Update to {{version}}",
@@ -1763,11 +1763,11 @@ export const en = {
         title: "Orchestration skills",
         description: "Teach your agents to orchestrate through the CLI",
         updateAvailable: "Update available",
-        updateTitle: "Update Paseo skills?",
+        updateTitle: "Update BySpace skills?",
         updateFallback: "Sync bundled skills to your machine.",
-        uninstallTitle: "Uninstall Paseo skills?",
+        uninstallTitle: "Uninstall BySpace skills?",
         uninstallMessage:
-          "Removes all Paseo orchestration skills from ~/.agents, ~/.claude, ~/.codex.",
+          "Removes all BySpace orchestration skills from ~/.agents, ~/.claude, ~/.codex.",
       },
       actions: {
         install: "Install",
@@ -1822,9 +1822,9 @@ export const en = {
         title: "Orchestration",
         unavailable: "Connect to this host to manage orchestration",
         enableTools: {
-          title: "Enable Paseo tools",
+          title: "Enable BySpace tools",
           hint: "Agents will be able to manage worktrees, agents and schedules",
-          accessibilityLabel: "Inject Paseo tools",
+          accessibilityLabel: "Inject BySpace tools",
         },
         systemPrompt: {
           title: "System prompt",
@@ -1891,15 +1891,15 @@ export const en = {
             "This host is not connected. Wait for it to come online before restarting.",
           offlineTitle: "Host offline",
           offlineMessage:
-            "This host is offline. Paseo reconnects automatically-wait until it's back online before restarting.",
+            "This host is offline. BySpace reconnects automatically-wait until it's back online before restarting.",
           requestFailedTitle: "Error",
           requestFailedMessage:
-            "Failed to send the restart request. Paseo reconnects automatically-try again once the host shows as online.",
+            "Failed to send the restart request. BySpace reconnects automatically-try again once the host shows as online.",
           dialogFailedMessage: "Unable to open the restart confirmation dialog.",
         },
         update: {
           desktopManagedHint:
-            "This daemon is managed by Paseo Desktop. Update Paseo Desktop on the host.",
+            "This daemon is managed by BySpace Desktop. Update BySpace Desktop on the host.",
           title: "Update daemon",
           hint: "Update the daemon to the latest version and restart it",
           confirm: "Update",
@@ -2018,14 +2018,14 @@ export const en = {
         reset: "Reset",
       },
       readFailures: {
-        invalidTitle: "paseo.json couldn't be parsed",
+        invalidTitle: "byspace.json couldn't be parsed",
         invalidDescription: "Fix the file on disk, then reload.",
         missingTitle: "This host doesn't have this project",
         missingWithHosts: "Switch to another host above, or reload.",
         missingSingleHost: "The selected host has no record of this project.",
-        transportTitle: "Couldn't load paseo.json",
+        transportTitle: "Couldn't load byspace.json",
         transportFallback: "The host didn't respond.",
-        failedTitle: "Couldn't load paseo.json",
+        failedTitle: "Couldn't load byspace.json",
         failedDescription: "Reload to try again.",
       },
       worktree: {
@@ -2058,7 +2058,7 @@ export const en = {
         newScript: "New script",
         editScript: "Edit {{name}}",
         runAsService: "Run as a service",
-        serviceHint: "Paseo supervises the process and assigns a port via $BYSPACE_PORT",
+        serviceHint: "BySpace supervises the process and assigns a port via $BYSPACE_PORT",
         actions: {
           add: "Add script",
           edit: "Edit",
@@ -2067,7 +2067,7 @@ export const en = {
       },
       metadata: {
         title: "Metadata generation",
-        info: "Project-specific instructions injected into the AI prompts Paseo uses to generate metadata - use them to enforce your team's conventions like branch naming, commit style, or PR format",
+        info: "Project-specific instructions injected into the AI prompts BySpace uses to generate metadata - use them to enforce your team's conventions like branch naming, commit style, or PR format",
         branchName: "Branch names",
         branchNamePlaceholder: "Prefix branches with feat/ or fix/, mb/ for personal branches",
         commitMessage: "Commit messages",
@@ -2077,8 +2077,8 @@ export const en = {
       },
       writeFailures: {
         staleTitle: "Config changed on disk",
-        staleDescription: "Reload to fetch the latest paseo.json before saving.",
-        failedTitle: "Couldn't save paseo.json",
+        staleDescription: "Reload to fetch the latest byspace.json before saving.",
+        failedTitle: "Couldn't save byspace.json",
         failedDescription: "Try again, or reload the latest version from disk.",
       },
       actions: {

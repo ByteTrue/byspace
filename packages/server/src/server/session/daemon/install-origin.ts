@@ -3,7 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
 import { isRealpathInsideRoot } from "../../../utils/path.js";
-import { BYSPACE_CLI_PACKAGE, type NpmGlobalPaseoInstall } from "./npm-global-cli.js";
+import { BYSPACE_CLI_PACKAGE, type NpmGlobalBySpaceInstall } from "./npm-global-cli.js";
 
 const PackageJsonSchema = z.object({ name: z.string().optional() }).passthrough();
 
@@ -16,7 +16,7 @@ export const daemonInstallOriginRuntime: DaemonInstallOriginRuntime = {
 };
 
 export function validateDaemonInstallOrigin(
-  install: NpmGlobalPaseoInstall,
+  install: NpmGlobalBySpaceInstall,
   daemonVersion: string | null,
   runtime: DaemonInstallOriginRuntime = daemonInstallOriginRuntime,
 ): string | null {
@@ -42,7 +42,7 @@ export function validateDaemonInstallOrigin(
 
 function isCurrentServerUnderNpmInstall(
   currentServerPackageRoot: string,
-  install: NpmGlobalPaseoInstall,
+  install: NpmGlobalBySpaceInstall,
 ): boolean {
   const roots = install.globalRootPath
     ? [install.packagePath, globalNodeModulesPath(install.globalRootPath)]

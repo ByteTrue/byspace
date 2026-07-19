@@ -32,7 +32,7 @@ import { AgentStorage } from "./agent/agent-storage.js";
 import { AgentManager } from "./agent/agent-manager.js";
 import { createAgentCommand } from "./agent/create-agent/create.js";
 import type { ProviderSnapshotManager } from "./agent/provider-snapshot-manager.js";
-import { createLocalCheckoutWorkspace } from "./paseo-worktree-service.js";
+import { createLocalCheckoutWorkspace } from "./byspace-worktree-service.js";
 import { createNoopWorkspaceGitService } from "./test-utils/workspace-git-service-stub.js";
 import { FileBackedProjectRegistry, FileBackedWorkspaceRegistry } from "./workspace-registry.js";
 import { LoopService } from "./loop-service.js";
@@ -59,7 +59,7 @@ const NO_UNATTENDED_LOOP_POLICY: Pick<ProviderSnapshotManager, "resolveCreateCon
 };
 
 interface TestLoopServiceOptions {
-  paseoHome: string;
+  byspaceHome: string;
   agentManager: AgentManager;
   agentStorage: AgentStorage;
   logger: ReturnType<typeof createTestLogger>;
@@ -75,7 +75,7 @@ function createLoopService(options: TestLoopServiceOptions): LoopService {
   const ensureWorkspaceForCreate =
     options.ensureWorkspaceForCreate ?? (async () => "workspace-created-for-loop");
   return new LoopService({
-    paseoHome: options.paseoHome,
+    byspaceHome: options.byspaceHome,
     agentManager: options.agentManager,
     logger: options.logger,
     ensureWorkspaceForCreate,
@@ -300,13 +300,13 @@ class ScriptedAgentSession implements AgentSession {
 describe("LoopService", () => {
   const logger = createTestLogger();
   let tmpDir: string;
-  let paseoHome: string;
+  let byspaceHome: string;
   let workspaceDir: string;
   let storage: AgentStorage;
 
   beforeEach(() => {
     tmpDir = realpathSync.native(mkdtempSync(path.join(os.tmpdir(), "loop-service-")));
-    paseoHome = path.join(tmpDir, "paseo-home");
+    byspaceHome = path.join(tmpDir, "byspace-home");
     workspaceDir = path.join(tmpDir, "workspace");
     storage = new AgentStorage(path.join(tmpDir, "agents"), logger);
     mkdirSync(workspaceDir, { recursive: true });
@@ -343,7 +343,7 @@ describe("LoopService", () => {
         logger,
       });
       const service = createLoopService({
-        paseoHome,
+        byspaceHome,
         agentManager: manager,
         agentStorage: storage,
         logger,
@@ -373,7 +373,9 @@ describe("LoopService", () => {
       expect(finalLoop.iterations[1]?.status).toBe("succeeded");
       expect(finalLoop.iterations[0]?.verifyChecks[0]?.passed).toBe(false);
       expect(finalLoop.iterations[1]?.verifyChecks[0]?.passed).toBe(true);
-      expect(readFileSync(path.join(paseoHome, "loops", "loops.json"), "utf8")).toContain(loop.id);
+      expect(readFileSync(path.join(byspaceHome, "loops", "loops.json"), "utf8")).toContain(
+        loop.id,
+      );
     },
   );
 
@@ -400,7 +402,7 @@ describe("LoopService", () => {
       logger,
     });
     const service = createLoopService({
-      paseoHome,
+      byspaceHome,
       agentManager: manager,
       agentStorage: storage,
       logger,
@@ -463,7 +465,7 @@ describe("LoopService", () => {
       logger,
     });
     const service = createLoopService({
-      paseoHome,
+      byspaceHome,
       agentManager: manager,
       agentStorage: storage,
       logger,
@@ -508,7 +510,7 @@ describe("LoopService", () => {
     let ensureCalls = 0;
     const manager = new AgentManager({ registry: storage, logger });
     const service = createLoopService({
-      paseoHome,
+      byspaceHome,
       agentManager: manager,
       agentStorage: storage,
       logger,
@@ -547,7 +549,7 @@ describe("LoopService", () => {
       logger,
     });
     const service = createLoopService({
-      paseoHome,
+      byspaceHome,
       agentManager: manager,
       agentStorage: storage,
       logger,
@@ -600,7 +602,7 @@ describe("LoopService", () => {
       await archiveAgent(agentId);
     };
     const service = createLoopService({
-      paseoHome,
+      byspaceHome,
       agentManager: manager,
       agentStorage: storage,
       logger,
@@ -717,7 +719,7 @@ describe("LoopService", () => {
       logger,
     });
     const service = createLoopService({
-      paseoHome,
+      byspaceHome,
       agentManager: manager,
       agentStorage: storage,
       logger,
@@ -770,7 +772,7 @@ describe("LoopService", () => {
       logger,
     });
     const service = createLoopService({
-      paseoHome,
+      byspaceHome,
       agentManager: manager,
       agentStorage: storage,
       logger,
@@ -818,7 +820,7 @@ describe("LoopService", () => {
       logger,
     });
     const service = createLoopService({
-      paseoHome,
+      byspaceHome,
       agentManager: manager,
       agentStorage: storage,
       logger,
@@ -882,7 +884,7 @@ describe("LoopService", () => {
       logger,
     });
     const service = createLoopService({
-      paseoHome,
+      byspaceHome,
       agentManager: manager,
       agentStorage: storage,
       logger,
@@ -946,7 +948,7 @@ describe("LoopService", () => {
       logger,
     });
     const service = createLoopService({
-      paseoHome,
+      byspaceHome,
       agentManager: manager,
       agentStorage: storage,
       logger,
@@ -996,7 +998,7 @@ describe("LoopService", () => {
       return cancelAgentRun(agentId);
     };
     const service = createLoopService({
-      paseoHome,
+      byspaceHome,
       agentManager: manager,
       agentStorage: storage,
       logger,
@@ -1065,7 +1067,7 @@ describe("LoopService", () => {
       await closeAgent(agentId);
     };
     const service = createLoopService({
-      paseoHome,
+      byspaceHome,
       agentManager: manager,
       agentStorage: storage,
       logger,
@@ -1128,7 +1130,7 @@ describe("LoopService", () => {
       return { status: "refused" };
     };
     const service = createLoopService({
-      paseoHome,
+      byspaceHome,
       agentManager: manager,
       agentStorage: storage,
       logger,
@@ -1174,7 +1176,7 @@ describe("LoopService", () => {
       throw new Error("cancellation transport failed");
     };
     const service = createLoopService({
-      paseoHome,
+      byspaceHome,
       agentManager: manager,
       agentStorage: storage,
       logger,
@@ -1223,7 +1225,7 @@ describe("LoopService", () => {
       return createAgent(...args);
     };
     const service = createLoopService({
-      paseoHome,
+      byspaceHome,
       agentManager: manager,
       agentStorage: storage,
       logger,
@@ -1278,7 +1280,7 @@ describe("LoopService", () => {
       logger,
     });
     const service = createLoopService({
-      paseoHome,
+      byspaceHome,
       agentManager: manager,
       agentStorage: storage,
       logger,

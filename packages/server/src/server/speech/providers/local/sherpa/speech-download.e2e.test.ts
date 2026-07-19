@@ -87,8 +87,8 @@ downloadTest(
   async () => {
     const logger = pino({ level: "silent" });
 
-    const paseoHomeRoot = mkdtempSync(path.join(tmpdir(), "paseo-speech-download-"));
-    const modelsDir = path.join(paseoHomeRoot, ".paseo", "models", "local-speech");
+    const byspaceHomeRoot = mkdtempSync(path.join(tmpdir(), "byspace-speech-download-"));
+    const modelsDir = path.join(byspaceHomeRoot, ".byspace", "models", "local-speech");
 
     await ensureSherpaOnnxModels({
       modelsDir,
@@ -97,7 +97,7 @@ downloadTest(
     });
 
     const ctx = await createDaemonTestContext({
-      paseoHomeRoot,
+      byspaceHomeRoot,
       dictationFinalTimeoutMs: 8000,
       speech: {
         providers: {

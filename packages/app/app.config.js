@@ -2,10 +2,10 @@ const pkg = require("./package.json");
 
 export default {
   expo: {
-    name: "Paseo",
-    slug: "paseo-web",
+    name: "BySpace",
+    slug: "byspace-web",
     version: pkg.version,
-    scheme: "paseo",
+    scheme: "byspace",
     userInterfaceStyle: "automatic",
     web: {
       output: "single",

@@ -70,7 +70,7 @@ function createInput(
     pullRequestMergeable: "UNKNOWN",
     mergeCapability: deriveMergeCapability(pullRequestGithub),
     hasRemote: false,
-    isPaseoOwnedWorktree: false,
+    isBySpaceOwnedWorktree: false,
     isOnBaseBranch: true,
     hasUncommittedChanges: false,
     baseRefAvailable: true,
@@ -207,11 +207,11 @@ describe("git-actions-policy", () => {
     });
   });
 
-  it("keeps push available for a no-upstream Paseo worktree with local commits", () => {
+  it("keeps push available for a no-upstream BySpace worktree with local commits", () => {
     const actions = buildGitActions(
       createInput({
         hasRemote: true,
-        isPaseoOwnedWorktree: true,
+        isBySpaceOwnedWorktree: true,
         isOnBaseBranch: false,
         aheadCount: 1,
         aheadOfOrigin: null,
@@ -420,7 +420,7 @@ describe("git-actions-policy", () => {
   it("offers archive workspace for Git checkouts and worktrees", () => {
     const localCheckout = buildGitActions(createInput({ hasUncommittedChanges: true }));
     const worktree = buildGitActions(
-      createInput({ hasUncommittedChanges: true, isPaseoOwnedWorktree: true }),
+      createInput({ hasUncommittedChanges: true, isBySpaceOwnedWorktree: true }),
     );
 
     expect(localCheckout.secondary.some((action) => action.id === "archive-workspace")).toBe(true);
@@ -434,8 +434,8 @@ describe("git-actions-policy", () => {
     expect(actions.secondary.some((action) => action.id === "archive-workspace")).toBe(true);
   });
 
-  it("still promotes archive as primary for an idle Paseo-owned worktree", () => {
-    const actions = buildGitActions(createInput({ isPaseoOwnedWorktree: true }));
+  it("still promotes archive as primary for an idle BySpace-owned worktree", () => {
+    const actions = buildGitActions(createInput({ isBySpaceOwnedWorktree: true }));
 
     expect(actions.primary).toMatchObject({ id: "archive-workspace" });
   });
@@ -1061,7 +1061,7 @@ describe("git-actions-policy", () => {
         pullRequestState: "open",
         pullRequestMergeable: "MERGEABLE",
         pullRequestGithub: githubStatus(),
-        isPaseoOwnedWorktree: true,
+        isBySpaceOwnedWorktree: true,
       }),
     );
 

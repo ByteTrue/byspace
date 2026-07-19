@@ -10,7 +10,7 @@ import type {
   AgentStreamEvent,
 } from "../agent/agent-sdk-types.js";
 import { DaemonClient } from "../test-utils/daemon-client.js";
-import { createTestPaseoDaemon, type TestPaseoDaemon } from "../test-utils/paseo-daemon.js";
+import { createTestBySpaceDaemon, type TestBySpaceDaemon } from "../test-utils/byspace-daemon.js";
 import {
   canRunRealProvider,
   createRealProviderClient,
@@ -78,7 +78,7 @@ function collectUserMessageEvents(client: DaemonClient, agentId: string): AgentS
 
 describe.each(CONTRACT_CASES)("daemon E2E (real $provider) - user_message contract", (entry) => {
   let canRun = false;
-  let daemon: TestPaseoDaemon | null = null;
+  let daemon: TestBySpaceDaemon | null = null;
   let client: DaemonClient | null = null;
   let cwd: string | null = null;
 
@@ -94,7 +94,7 @@ describe.each(CONTRACT_CASES)("daemon E2E (real $provider) - user_message contra
 
     cwd = tmpCwd(entry.provider);
     const logger = pino({ level: "silent" });
-    daemon = await createTestPaseoDaemon({
+    daemon = await createTestBySpaceDaemon({
       agentClients: { [entry.provider]: createRealProviderClient(entry.provider, logger) },
       logger,
     });

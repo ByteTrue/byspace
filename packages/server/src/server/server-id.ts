@@ -16,8 +16,8 @@ function getLogger(logger: LoggerLike | undefined): LoggerLike | undefined {
   return logger?.child({ module: "server-id" });
 }
 
-function getServerIdPath(paseoHome: string): string {
-  return path.join(paseoHome, SERVER_ID_FILENAME);
+function getServerIdPath(byspaceHome: string): string {
+  return path.join(byspaceHome, SERVER_ID_FILENAME);
 }
 
 function generateServerId(): string {
@@ -33,12 +33,12 @@ function generateServerId(): string {
  * - Can be overridden via `BYSPACE_SERVER_ID` (useful for tests)
  */
 export function getOrCreateServerId(
-  paseoHome: string,
+  byspaceHome: string,
   options?: { env?: NodeJS.ProcessEnv; logger?: LoggerLike },
 ): string {
   const env = options?.env ?? process.env;
   const log = getLogger(options?.logger);
-  const serverIdPath = getServerIdPath(paseoHome);
+  const serverIdPath = getServerIdPath(byspaceHome);
 
   const envOverride =
     typeof env.BYSPACE_SERVER_ID === "string" && env.BYSPACE_SERVER_ID.trim().length > 0

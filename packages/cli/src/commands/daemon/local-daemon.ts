@@ -2,7 +2,7 @@ import { spawnSync, type ChildProcess } from "node:child_process";
 import { existsSync, readFileSync, unlinkSync } from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
-import { loadConfig, resolvePaseoHome, spawnProcess } from "@bytetrue/byspace-server";
+import { loadConfig, resolveBySpaceHome, spawnProcess } from "@bytetrue/byspace-server";
 import treeKill from "tree-kill";
 import { tryConnectToDaemon } from "../../utils/client.js";
 
@@ -25,7 +25,6 @@ export interface LocalDaemonPidInfo {
   hostname?: string;
   uid?: number;
   listen?: string;
-  desktopManaged?: boolean;
 }
 
 export interface LocalDaemonState {
@@ -97,7 +96,7 @@ export interface DaemonLaunchRuntime {
 const DETACHED_STARTUP_GRACE_MS = 1200;
 const PID_POLL_INTERVAL_MS = 100;
 const DAEMON_LOG_FILENAME = "daemon.log";
-const DAEMON_PID_FILENAME = "paseo.pid";
+const DAEMON_PID_FILENAME = "byspace.pid";
 
 export const DEFAULT_STOP_TIMEOUT_MS = 15_000;
 export const DEFAULT_KILL_TIMEOUT_MS = 3_000;
@@ -106,7 +105,7 @@ const require = createRequire(import.meta.url);
 
 const defaultDaemonLaunchRuntime: DaemonLaunchRuntime = {
   resolveRunnerEntry: resolveDaemonRunnerEntry,
-  resolveHome: resolvePaseoHome,
+  resolveHome: resolveBySpaceHome,
   spawnDetached: spawnProcess,
   spawnForeground: spawnSync,
 };
@@ -212,8 +211,8 @@ function resolveDaemonRunnerEntry(): string {
   throw new Error("Unable to resolve @bytetrue/byspace-server package root for daemon runner");
 }
 
-function pidFilePath(paseoHome: string): string {
-  return path.join(paseoHome, DAEMON_PID_FILENAME);
+function pidFilePath(byspaceHome: string): string {
+  return path.join(byspaceHome, DAEMON_PID_FILENAME);
 }
 
 function resolveListenField(listen: unknown, sockPath: unknown): string | undefined {
@@ -255,7 +254,6 @@ function readPidFile(pidPath: string): LocalDaemonPidInfo | null {
       hostname: typeof parsed.hostname === "string" ? parsed.hostname : undefined,
       uid: typeof parsed.uid === "number" ? parsed.uid : undefined,
       listen: resolveListenField(parsed.listen, parsed.sockPath),
-      desktopManaged: parsed.desktopManaged === true ? true : undefined,
     };
   } catch {
     return null;
@@ -500,8 +498,8 @@ function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-export function resolveLocalPaseoHome(home?: string): string {
-  return resolvePaseoHome(envWithHome(home));
+export function resolveLocalBySpaceHome(home?: string): string {
+  return resolveBySpaceHome(envWithHome(home));
 }
 
 export function resolveTcpHostFromListen(listen: string): string | null {
@@ -545,7 +543,7 @@ export function resolveLocalDaemonState(options: { home?: string } = {}): LocalD
     BYSPACE_RELAY_USE_TLS: undefined,
     BYSPACE_RELAY_PUBLIC_USE_TLS: undefined,
   };
-  const home = resolvePaseoHome(env);
+  const home = resolveBySpaceHome(env);
   const config = loadConfig(home, { env });
   const pidPath = pidFilePath(home);
   const logPath = path.join(home, DAEMON_LOG_FILENAME);
@@ -557,7 +555,10 @@ export function resolveLocalDaemonState(options: { home?: string } = {}): LocalD
     home,
     listen,
     relayEnabled: config.relayEnabled ?? true,
-    relayEndpoint: config.relayPublicEndpoint ?? config.relayEndpoint ?? "relay.paseo.sh:443",
+    relayEndpoint:
+      config.relayPublicEndpoint ??
+      config.relayEndpoint ??
+      "byspace-relay.bytetrue.workers.dev:443",
     relayUseTls: config.relayUseTls ?? false,
     relayPublicUseTls: config.relayPublicUseTls ?? config.relayUseTls ?? false,
     logPath,
@@ -569,7 +570,7 @@ export function resolveLocalDaemonState(options: { home?: string } = {}): LocalD
 }
 
 export function tailDaemonLog(home?: string, lines = 30): string | null {
-  const logPath = path.join(resolveLocalPaseoHome(home), DAEMON_LOG_FILENAME);
+  const logPath = path.join(resolveLocalBySpaceHome(home), DAEMON_LOG_FILENAME);
   return tailFile(logPath, lines);
 }
 
@@ -584,8 +585,8 @@ export async function startLocalDaemonDetached(
   const daemonRunnerEntry = runtime.resolveRunnerEntry();
   const childEnv = buildChildEnv(options);
 
-  const paseoHome = runtime.resolveHome(childEnv);
-  const logPath = path.join(paseoHome, DAEMON_LOG_FILENAME);
+  const byspaceHome = runtime.resolveHome(childEnv);
+  const logPath = path.join(byspaceHome, DAEMON_LOG_FILENAME);
   const child = runtime.spawnDetached(
     process.execPath,
     [...process.execArgv, daemonRunnerEntry, ...buildRunnerArgs(options)],

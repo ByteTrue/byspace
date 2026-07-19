@@ -24,8 +24,10 @@ const serverId = args["server-id"] ?? process.env.BYSPACE_SERVER_ID;
 const daemonPublicKeyB64 =
   args["daemon-public-key-b64"] ?? process.env.BYSPACE_DAEMON_PUBLIC_KEY_B64;
 const relayEndpoint =
-  args["relay-endpoint"] ?? process.env.BYSPACE_RELAY_ENDPOINT ?? "relay.paseo.sh:443";
-const baseUrl = args["base-url"] ?? process.env.BYSPACE_APP_URL ?? "https://app.paseo.sh";
+  args["relay-endpoint"] ??
+  process.env.BYSPACE_RELAY_ENDPOINT ??
+  "byspace-relay.bytetrue.workers.dev:443";
+const baseUrl = args["base-url"] ?? process.env.BYSPACE_APP_URL ?? "https://byspace.pages.dev";
 const timeoutMs = Number(args["timeout-ms"] ?? process.env.BYSPACE_PROVE_TIMEOUT_MS ?? 60_000);
 const stabilityMs = Number(
   args["stability-ms"] ?? process.env.BYSPACE_PROVE_STABILITY_MS ?? 30_000,
@@ -61,8 +63,8 @@ page.on("pageerror", (e) => console.error(`[browser:pageerror] ${e.message}`));
 
 await page.addInitScript(
   (seed) => {
-    localStorage.setItem("@paseo:daemon-registry", JSON.stringify([seed.daemon]));
-    localStorage.removeItem("@paseo:settings");
+    localStorage.setItem("@byspace:daemon-registry", JSON.stringify([seed.daemon]));
+    localStorage.removeItem("@byspace:settings");
   },
   { daemon },
 );

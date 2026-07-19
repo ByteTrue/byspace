@@ -2,7 +2,7 @@
  * Reproducible terminal latency benchmark (Node-only, isolated daemon).
  *
  * Boots its OWN isolated daemon subprocess (fresh mkdtemp BYSPACE_HOME, random
- * port) — it NEVER touches the developer daemon on port 6767 — and measures:
+ * port) — it NEVER touches the developer daemon on port 6777 — and measures:
  *   A) terminal echo latency  (single-byte input -> first echoed output frame)
  *   B) terminal output jitter (inter-frame gaps while a command drains ~2MB)
  *   C) RPC ping RTT at 10Hz (proxy for daemon main-loop delay)
@@ -15,7 +15,7 @@
  * Optional:
  *   BENCH_INCLUDE_L3=1   include the L3 level (L2 + a second noisy terminal)
  *
- * Output: pretty table to stdout + JSON to /tmp/paseo-terminal-bench/<ts>.json
+ * Output: pretty table to stdout + JSON to /tmp/byspace-terminal-bench/<ts>.json
  *
  * Requires built client/protocol dist (packages/client/dist). Build with:
  *   npm run build:client
@@ -170,23 +170,23 @@ async function waitForPort(port: number, child: ChildProcess, timeoutMs: number)
 interface BootedDaemon {
   child: ChildProcess;
   port: number;
-  paseoHome: string;
+  byspaceHome: string;
   pid: number;
 }
 
 async function bootDaemon(): Promise<BootedDaemon> {
   const port = await getFreePort();
-  if (port === 6767) {
-    throw new Error("Refusing to use port 6767 (the developer daemon)");
+  if (port === 6777) {
+    throw new Error("Refusing to use port 6777 (the developer daemon)");
   }
-  const paseoHome = await mkdtemp(path.join(os.tmpdir(), "paseo-bench-home-"));
+  const byspaceHome = await mkdtemp(path.join(os.tmpdir(), "byspace-bench-home-"));
   const tsxBin = execSync("which tsx").toString().trim();
 
   const child = spawn(tsxBin, ["scripts/supervisor-entrypoint.ts", "--dev"], {
     cwd: SERVER_DIR,
     env: {
       ...process.env,
-      BYSPACE_HOME: paseoHome,
+      BYSPACE_HOME: byspaceHome,
       BYSPACE_SERVER_ID: "srv_terminal_bench",
       BYSPACE_LISTEN: `127.0.0.1:${port}`,
       BYSPACE_NODE_ENV: "development",
@@ -210,7 +210,7 @@ async function bootDaemon(): Promise<BootedDaemon> {
   });
 
   await waitForPort(port, child, 30_000);
-  return { child, port, paseoHome, pid: child.pid ?? -1 };
+  return { child, port, byspaceHome, pid: child.pid ?? -1 };
 }
 
 async function loadDaemonClientCtor(): Promise<DaemonClientCtor> {
@@ -676,12 +676,12 @@ async function main(): Promise<void> {
 
   try {
     daemon = await bootDaemon();
-    console.log(`Daemon ready: pid=${daemon.pid} port=${daemon.port} home=${daemon.paseoHome}`);
+    console.log(`Daemon ready: pid=${daemon.pid} port=${daemon.port} home=${daemon.byspaceHome}`);
 
     const ctor = await loadDaemonClientCtor();
     client = await connectClient(ctor, daemon.port);
 
-    workspaceDir = await mkdtemp(path.join(os.tmpdir(), "paseo-bench-ws-"));
+    workspaceDir = await mkdtemp(path.join(os.tmpdir(), "byspace-bench-ws-"));
     const opened = await client.openProject(workspaceDir);
     if (!opened.workspace) {
       throw new Error(`Failed to open project: ${opened.error}`);
@@ -711,7 +711,7 @@ async function main(): Promise<void> {
 
     printTable(results);
 
-    const outDir = "/tmp/paseo-terminal-bench";
+    const outDir = "/tmp/byspace-terminal-bench";
     await mkdir(outDir, { recursive: true });
     const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
     const outPath = path.join(outDir, `${timestamp}.json`);
@@ -722,7 +722,7 @@ async function main(): Promise<void> {
           commit,
           daemonPid: daemon.pid,
           port: daemon.port,
-          paseoHome: daemon.paseoHome,
+          byspaceHome: daemon.byspaceHome,
           node: process.version,
           platform: `${os.platform()} ${os.arch()}`,
           createdAt: new Date().toISOString(),
@@ -749,7 +749,7 @@ async function main(): Promise<void> {
       if (daemon.child.exitCode === null && daemon.child.signalCode === null) {
         daemon.child.kill("SIGKILL");
       }
-      await rm(daemon.paseoHome, { recursive: true, force: true }).catch(() => undefined);
+      await rm(daemon.byspaceHome, { recursive: true, force: true }).catch(() => undefined);
     }
     if (workspaceDir) {
       await rm(workspaceDir, { recursive: true, force: true }).catch(() => undefined);

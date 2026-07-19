@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 
-import type { PaseoToolCatalog } from "../../tools/types.js";
+import type { BySpaceToolCatalog } from "../../tools/types.js";
 import type { OmpProviderIdleScheduler } from "./agent.js";
 import { OmpHarness } from "./test-utils/omp-harness.js";
 
@@ -30,14 +30,14 @@ class ManualIdleScheduler implements OmpProviderIdleScheduler {
   }
 }
 
-function createToolCatalog(): PaseoToolCatalog {
+function createToolCatalog(): BySpaceToolCatalog {
   return {
     tools: new Map([
       [
         "create_agent",
         {
           name: "create_agent",
-          description: "Create a Paseo agent.",
+          description: "Create a BySpace agent.",
           handler: async () => ({ content: [] }),
         },
       ],
@@ -53,7 +53,7 @@ describe("OMP agent client and session", () => {
     await omp.start({ modeId: "ask" }, createToolCatalog());
 
     expect(omp.launchConfiguration()).toEqual({
-      cwd: "/tmp/paseo-omp-agent-test",
+      cwd: "/tmp/byspace-omp-agent-test",
       protocolMode: "rpc-ui",
       modeId: "ask",
       argv: ["omp", "--mode", "rpc-ui", "--approval-mode", "always-ask", "--thinking", "medium"],
@@ -63,7 +63,7 @@ describe("OMP agent client and session", () => {
     ]);
     expect(omp.capabilities()).toMatchObject({
       supportsMcpServers: false,
-      supportsNativePaseoTools: true,
+      supportsNativeBySpaceTools: true,
     });
   });
 
@@ -172,7 +172,7 @@ describe("OMP agent client and session", () => {
       cwd: "/workspace/resumed",
       protocolMode: "rpc-ui",
       modeId: "ask",
-      session: expect.stringMatching(/[\\/]paseo-omp-resume-.*[\\/]session\.jsonl$/),
+      session: expect.stringMatching(/[\\/]byspace-omp-resume-.*[\\/]session\.jsonl$/),
       argv: [
         "omp",
         "--mode",
@@ -182,7 +182,7 @@ describe("OMP agent client and session", () => {
         "--thinking",
         "high",
         "--session",
-        expect.stringMatching(/[\\/]paseo-omp-resume-.*[\\/]session\.jsonl$/),
+        expect.stringMatching(/[\\/]byspace-omp-resume-.*[\\/]session\.jsonl$/),
       ],
     });
     await expect(omp.history()).resolves.toEqual([

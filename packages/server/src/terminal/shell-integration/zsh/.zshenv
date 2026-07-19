@@ -14,4 +14,4 @@ elif [[ -f "${HOME}/.zshenv" ]]; then
   source "${HOME}/.zshenv"
 fi
 
-source "${BYSPACE_SHELL_INTEGRATION_DIR}/paseo-integration.zsh"
+source "${BYSPACE_SHELL_INTEGRATION_DIR}/byspace-integration.zsh"

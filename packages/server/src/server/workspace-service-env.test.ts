@@ -19,9 +19,9 @@ describe("buildWorkspaceServiceEnv", () => {
     expect(
       buildWorkspaceServiceEnv({
         scriptName: "daemon",
-        projectSlug: "paseo",
+        projectSlug: "byspace",
         branchName: "main",
-        daemonPort: 6767,
+        daemonPort: 6777,
         daemonListenHost: null,
         peers: [{ scriptName: "daemon", port: 5173 }],
       }).HOST,
@@ -30,9 +30,9 @@ describe("buildWorkspaceServiceEnv", () => {
     expect(
       buildWorkspaceServiceEnv({
         scriptName: "daemon",
-        projectSlug: "paseo",
+        projectSlug: "byspace",
         branchName: "main",
-        daemonPort: 6767,
+        daemonPort: 6777,
         daemonListenHost: "localhost",
         peers: [{ scriptName: "daemon", port: 5173 }],
       }).HOST,
@@ -43,9 +43,9 @@ describe("buildWorkspaceServiceEnv", () => {
     expect(
       buildWorkspaceServiceEnv({
         scriptName: "daemon",
-        projectSlug: "paseo",
+        projectSlug: "byspace",
         branchName: "main",
-        daemonPort: 6767,
+        daemonPort: 6777,
         daemonListenHost: "100.64.0.20",
         peers: [{ scriptName: "daemon", port: 5173 }],
       }).HOST,
@@ -56,18 +56,18 @@ describe("buildWorkspaceServiceEnv", () => {
     expect(
       buildWorkspaceServiceEnv({
         scriptName: "daemon",
-        projectSlug: "paseo",
+        projectSlug: "byspace",
         branchName: "main",
-        daemonPort: 6767,
+        daemonPort: 6777,
         daemonListenHost: null,
         peers: [{ scriptName: "daemon", port: 5173 }],
       }),
     ).toEqual({
       HOST: "127.0.0.1",
       BYSPACE_PORT: "5173",
-      BYSPACE_URL: "http://daemon--paseo.localhost:6767",
+      BYSPACE_URL: "http://daemon--byspace.localhost:6777",
       BYSPACE_SERVICE_DAEMON_PORT: "5173",
-      BYSPACE_SERVICE_DAEMON_URL: "http://daemon--paseo.localhost:6767",
+      BYSPACE_SERVICE_DAEMON_URL: "http://daemon--byspace.localhost:6777",
     });
   });
 
@@ -75,27 +75,27 @@ describe("buildWorkspaceServiceEnv", () => {
     expect(
       buildWorkspaceServiceEnv({
         scriptName: "daemon",
-        projectSlug: "paseo",
+        projectSlug: "byspace",
         branchName: "feature-x",
-        daemonPort: 6767,
+        daemonPort: 6777,
         daemonListenHost: null,
         peers: [{ scriptName: "daemon", port: 5173 }],
       }),
     ).toEqual({
       HOST: "127.0.0.1",
       BYSPACE_PORT: "5173",
-      BYSPACE_URL: "http://daemon--feature-x--paseo.localhost:6767",
+      BYSPACE_URL: "http://daemon--feature-x--byspace.localhost:6777",
       BYSPACE_SERVICE_DAEMON_PORT: "5173",
-      BYSPACE_SERVICE_DAEMON_URL: "http://daemon--feature-x--paseo.localhost:6767",
+      BYSPACE_SERVICE_DAEMON_URL: "http://daemon--feature-x--byspace.localhost:6777",
     });
   });
 
   it("omits PORT while keeping BYSPACE_PORT", () => {
     const env = buildWorkspaceServiceEnv({
       scriptName: "daemon",
-      projectSlug: "paseo",
+      projectSlug: "byspace",
       branchName: "main",
-      daemonPort: 6767,
+      daemonPort: 6777,
       daemonListenHost: null,
       peers: [{ scriptName: "daemon", port: 5173 }],
     });
@@ -108,7 +108,7 @@ describe("buildWorkspaceServiceEnv", () => {
     expect(
       buildWorkspaceServiceEnv({
         scriptName: "daemon",
-        projectSlug: "paseo",
+        projectSlug: "byspace",
         branchName: "main",
         daemonPort: null,
         daemonListenHost: null,
@@ -125,9 +125,9 @@ describe("buildWorkspaceServiceEnv", () => {
     expect(
       buildWorkspaceServiceEnv({
         scriptName: "web",
-        projectSlug: "paseo",
+        projectSlug: "byspace",
         branchName: "feature-x",
-        daemonPort: 6767,
+        daemonPort: 6777,
         daemonListenHost: null,
         peers: [
           { scriptName: "api", port: 4000 },
@@ -137,11 +137,11 @@ describe("buildWorkspaceServiceEnv", () => {
     ).toEqual({
       HOST: "127.0.0.1",
       BYSPACE_PORT: "5173",
-      BYSPACE_URL: "http://web--feature-x--paseo.localhost:6767",
+      BYSPACE_URL: "http://web--feature-x--byspace.localhost:6777",
       BYSPACE_SERVICE_API_PORT: "4000",
-      BYSPACE_SERVICE_API_URL: "http://api--feature-x--paseo.localhost:6767",
+      BYSPACE_SERVICE_API_URL: "http://api--feature-x--byspace.localhost:6777",
       BYSPACE_SERVICE_WEB_PORT: "5173",
-      BYSPACE_SERVICE_WEB_URL: "http://web--feature-x--paseo.localhost:6767",
+      BYSPACE_SERVICE_WEB_URL: "http://web--feature-x--byspace.localhost:6777",
     });
   });
 
@@ -149,9 +149,9 @@ describe("buildWorkspaceServiceEnv", () => {
     expect(
       buildWorkspaceServiceEnv({
         scriptName: "web",
-        projectSlug: "paseo",
+        projectSlug: "byspace",
         branchName: "feature-x",
-        daemonPort: 6767,
+        daemonPort: 6777,
         daemonListenHost: null,
         serviceProxyPublicBaseUrl: "https://services.example.com",
         peers: [
@@ -160,9 +160,9 @@ describe("buildWorkspaceServiceEnv", () => {
         ],
       }),
     ).toMatchObject({
-      BYSPACE_URL: "https://web--feature-x--paseo.services.example.com",
-      BYSPACE_SERVICE_API_URL: "https://api--feature-x--paseo.services.example.com",
-      BYSPACE_SERVICE_WEB_URL: "https://web--feature-x--paseo.services.example.com",
+      BYSPACE_URL: "https://web--feature-x--byspace.services.example.com",
+      BYSPACE_SERVICE_API_URL: "https://api--feature-x--byspace.services.example.com",
+      BYSPACE_SERVICE_WEB_URL: "https://web--feature-x--byspace.services.example.com",
     });
   });
 
@@ -170,9 +170,9 @@ describe("buildWorkspaceServiceEnv", () => {
     expect(() =>
       buildWorkspaceServiceEnv({
         scriptName: "app-server",
-        projectSlug: "paseo",
+        projectSlug: "byspace",
         branchName: "main",
-        daemonPort: 6767,
+        daemonPort: 6777,
         daemonListenHost: null,
         peers: [
           { scriptName: "app-server", port: 5173 },

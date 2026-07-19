@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-Paseo is a Web-and-CLI environment for monitoring and controlling local AI coding agents from anywhere. The hosted Web app connects directly or through the encrypted relay; code and execution stay on the daemon machine.
+BySpace is a Web-and-CLI environment for monitoring and controlling local AI coding agents from anywhere. The hosted Web app connects directly or through the encrypted relay; code and execution stay on the daemon machine.
 
 **Supported agents:** direct Claude Code, Codex, OpenCode, and Pi integrations plus ACP-compatible agents.
 
@@ -10,7 +10,7 @@ This is an npm workspace monorepo:
 
 - `packages/server` — Daemon: agent lifecycle, WebSocket API, MCP server
 - `packages/app` — Browser Web client (Expo + React Native Web)
-- `packages/cli` — Docker-style CLI (`paseo run/ls/logs/wait`)
+- `packages/cli` — Docker-style CLI (`byspace run/ls/logs/wait`)
 - `packages/relay` — E2E encrypted relay for remote access
 
 ## Docs
@@ -21,7 +21,7 @@ At the start of non-trivial work, list `docs/` and skim anything relevant to the
 
 | Doc                                                            | What's in it                                                                                                                   |
 | -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| [docs/product.md](docs/product.md)                             | What Paseo is, who it's for, where it's going                                                                                  |
+| [docs/product.md](docs/product.md)                             | What BySpace is, who it's for, where it's going                                                                                |
 | [docs/architecture.md](docs/architecture.md)                   | System design, package layering, WebSocket protocol, agent lifecycle, data flow                                                |
 | [docs/agent-lifecycle.md](docs/agent-lifecycle.md)             | Agent states, parent/child relationships, archive semantics, tabs vs archive, subagents track                                  |
 | [docs/data-model.md](docs/data-model.md)                       | File-based JSON persistence, Zod schemas, atomic writes, no migrations                                                         |
@@ -62,13 +62,13 @@ npm run format                       # Auto-format with Biome
 npm run format:check                 # Check formatting without writing
 ```
 
-Repo dev commands use checkout-local state by default. In this checkout, `BYSPACE_HOME` resolves to `.dev/paseo-home`, and `npm run cli -- ...` targets that same dev home automatically. Production-style daemons use `~/.paseo` on port `6767`.
+Repo dev commands use checkout-local state by default. In this checkout, `BYSPACE_HOME` resolves to `.dev/byspace-home`, and `npm run cli -- ...` targets that same dev home automatically. Production-style daemons use `~/.byspace` on port `6777`.
 
 See [docs/development.md](docs/development.md) for full setup, build sync requirements, and debugging.
 
 ## Critical rules
 
-- **NEVER restart the main Paseo daemon on port 6767 without permission** — it manages all running agents. If you're an agent, restarting it kills your own process.
+- **NEVER restart the main BySpace daemon on port 6777 without permission** — it manages all running agents. If you're an agent, restarting it kills your own process.
 - **NEVER assume a timeout means the service needs restarting** — timeouts can be transient.
 - **NEVER add auth checks to tests** — agent providers handle their own auth.
 - **Before changing app routes, startup routing, remembered workspace restore, or active workspace selection, read [docs/expo-router.md](docs/expo-router.md).**

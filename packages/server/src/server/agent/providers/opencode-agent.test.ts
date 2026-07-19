@@ -241,7 +241,7 @@ describe("OpenCodeAgentClient adapter smoke tests", () => {
       }),
     ]);
     // No modeId configured → no agent field: OpenCode must fall back to its
-    // own default agent instead of Paseo assuming any particular agent exists.
+    // own default agent instead of BySpace assuming any particular agent exists.
     expect(openCodeClient.calls.sessionPromptAsync[0]).not.toHaveProperty("agent");
 
     await session.close();
@@ -387,8 +387,8 @@ describe("OpenCodeAgentClient adapter smoke tests", () => {
       ],
     };
     runtime.enqueueClient(openCodeClient);
-    const paseoHome = tmpCwd();
-    const opencodeHome = path.join(paseoHome, "opencode-home");
+    const byspaceHome = tmpCwd();
+    const opencodeHome = path.join(byspaceHome, "opencode-home");
     const client = new OpenCodeAgentClient(logger, undefined, {
       serverManager: runtime,
       createClient: runtime.createClient,
@@ -424,13 +424,13 @@ describe("OpenCodeAgentClient adapter smoke tests", () => {
       },
     });
     expect(openCodeClient.calls.providerList).toEqual([{ directory: opencodeHome }]);
-    rmSync(paseoHome, { recursive: true, force: true });
+    rmSync(byspaceHome, { recursive: true, force: true });
   }, 60_000);
 
   test("fetchCatalog releases the acquired server when opencode-home cannot be created", async () => {
     const runtime = new TestOpenCodeHarness();
-    const paseoHome = tmpCwd();
-    const opencodeHome = path.join(paseoHome, "opencode-home");
+    const byspaceHome = tmpCwd();
+    const opencodeHome = path.join(byspaceHome, "opencode-home");
     writeFileSync(opencodeHome, "not a directory");
     const client = new OpenCodeAgentClient(logger, undefined, {
       serverManager: runtime,
@@ -442,7 +442,7 @@ describe("OpenCodeAgentClient adapter smoke tests", () => {
 
     expect(runtime.acquisitions).toEqual([{ kind: "current", releaseCount: 1 }]);
     expect(runtime.clientCreations).toEqual([]);
-    rmSync(paseoHome, { recursive: true, force: true });
+    rmSync(byspaceHome, { recursive: true, force: true });
   });
 
   test("fetchCatalog releases the acquired server when opencode-home cannot be resolved", async () => {
@@ -568,8 +568,8 @@ describe("OpenCodeAgentClient adapter smoke tests", () => {
     openCodeClient.appAgentsResponse = {
       data: [
         {
-          name: "paseo-test-custom",
-          description: "Custom agent defined for Paseo integration test",
+          name: "byspace-test-custom",
+          description: "Custom agent defined for BySpace integration test",
           mode: "primary",
         },
         { name: "compaction", mode: "subagent" },
@@ -587,12 +587,12 @@ describe("OpenCodeAgentClient adapter smoke tests", () => {
 
     const modes = await session.getAvailableModes();
 
-    expect(modes.map((mode) => mode.id)).toEqual(["paseo-test-custom"]);
+    expect(modes.map((mode) => mode.id)).toEqual(["byspace-test-custom"]);
 
-    const custom = modes.find((mode) => mode.id === "paseo-test-custom");
+    const custom = modes.find((mode) => mode.id === "byspace-test-custom");
     expect(custom).toBeDefined();
-    expect(custom!.label).toBe("Paseo-test-custom");
-    expect(custom!.description).toBe("Custom agent defined for Paseo integration test");
+    expect(custom!.label).toBe("BySpace-test-custom");
+    expect(custom!.description).toBe("Custom agent defined for BySpace integration test");
 
     // System agents should not appear as selectable modes
     expect(modes.some((mode) => mode.id === "compaction")).toBe(false);
@@ -984,7 +984,7 @@ describe("OpenCode adapter context-window normalization", () => {
         mimeType: "application/github-issue",
         number: 55,
         title: "Improve startup error details",
-        url: "https://github.com/getpaseo/paseo/issues/55",
+        url: "https://github.com/ByteTrue/byspace/issues/55",
         body: "Issue body",
       },
     ]);
@@ -1052,9 +1052,9 @@ describe("OpenCode adapter startTurn error handling", () => {
         provider: "opencode",
         cwd,
         mcpServers: {
-          paseo: {
+          byspace: {
             type: "http",
-            url: "http://127.0.0.1:6767/mcp/agents?callerAgentId=test-agent",
+            url: "http://127.0.0.1:6777/mcp/agents?callerAgentId=test-agent",
           },
         },
       });
@@ -1064,10 +1064,10 @@ describe("OpenCode adapter startTurn error handling", () => {
       expect(openCodeClient.calls.mcpAdd).toEqual([
         {
           directory: cwd,
-          name: "paseo",
+          name: "byspace",
           config: {
             type: "remote",
-            url: "http://127.0.0.1:6767/mcp/agents?callerAgentId=test-agent",
+            url: "http://127.0.0.1:6777/mcp/agents?callerAgentId=test-agent",
             enabled: true,
           },
         },
@@ -1085,7 +1085,7 @@ describe("OpenCode adapter startTurn error handling", () => {
     const openCodeClient = new TestOpenCodeClient();
     openCodeClient.mcpAddResponse = {
       data: {
-        paseo: {
+        byspace: {
           status: "failed",
           error: "SSE error: Non-200 status code (400)",
         },
@@ -1103,15 +1103,15 @@ describe("OpenCode adapter startTurn error handling", () => {
         provider: "opencode",
         cwd,
         mcpServers: {
-          paseo: {
+          byspace: {
             type: "http",
-            url: "http://127.0.0.1:6767/mcp/agents?callerAgentId=test-agent",
+            url: "http://127.0.0.1:6777/mcp/agents?callerAgentId=test-agent",
           },
         },
       });
 
       await expect(collectTurnEvents(streamSession(session, "hello"))).rejects.toThrow(
-        /Failed to add OpenCode MCP server 'paseo': SSE error/,
+        /Failed to add OpenCode MCP server 'byspace': SSE error/,
       );
 
       await session.close();

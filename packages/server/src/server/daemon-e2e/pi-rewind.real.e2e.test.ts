@@ -4,7 +4,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, test } from "vitest"
 
 import type { AgentTimelineItem } from "../agent/agent-sdk-types.js";
 import { DaemonClient } from "../test-utils/daemon-client.js";
-import { createTestPaseoDaemon, type TestPaseoDaemon } from "../test-utils/paseo-daemon.js";
+import { createTestBySpaceDaemon, type TestBySpaceDaemon } from "../test-utils/byspace-daemon.js";
 import { canRunRealProvider, createRealProviderClients } from "./real-provider-test-config.js";
 import {
   closeRewindSession,
@@ -15,7 +15,7 @@ import {
 
 interface PiRewindHarness {
   client: DaemonClient;
-  daemon: TestPaseoDaemon;
+  daemon: TestBySpaceDaemon;
 }
 
 interface PiRewindSession {
@@ -112,7 +112,7 @@ describe("daemon E2E (real pi) - rewind", () => {
       return;
     }
     const logger = pino({ level: "silent" });
-    const daemon = await createTestPaseoDaemon({
+    const daemon = await createTestBySpaceDaemon({
       agentClients: createRealProviderClients(["pi"], logger),
       logger,
     });

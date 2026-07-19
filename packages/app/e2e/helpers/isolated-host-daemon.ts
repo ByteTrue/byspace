@@ -77,19 +77,19 @@ async function stopProcess(child: ChildProcess): Promise<void> {
 export async function startIsolatedHostDaemon(serverId: string): Promise<IsolatedHostDaemon> {
   const primaryPort = Number(process.env.E2E_DAEMON_PORT ?? 0);
   let port = await getAvailablePort();
-  while (port === 6767 || port === primaryPort) port = await getAvailablePort();
+  while (port === 6777 || port === primaryPort) port = await getAvailablePort();
 
   const metroPort = process.env.E2E_METRO_PORT;
   if (!metroPort) throw new Error("E2E_METRO_PORT is required to start an isolated host daemon");
 
-  const paseoHome = await mkdtemp(path.join(tmpdir(), "paseo-e2e-secondary-host-"));
+  const byspaceHome = await mkdtemp(path.join(tmpdir(), "byspace-e2e-secondary-host-"));
   const serverDir = path.resolve(__dirname, "../../../server");
   const tsxBin = execSync("which tsx").toString().trim();
   const child = spawn(tsxBin, ["scripts/supervisor-entrypoint.ts", "--dev"], {
     cwd: serverDir,
     env: withDisabledE2ESpeechEnv({
       ...process.env,
-      BYSPACE_HOME: paseoHome,
+      BYSPACE_HOME: byspaceHome,
       BYSPACE_SERVER_ID: serverId,
       BYSPACE_LISTEN: `127.0.0.1:${port}`,
       BYSPACE_CORS_ORIGINS: `http://localhost:${metroPort}`,
@@ -111,7 +111,7 @@ export async function startIsolatedHostDaemon(serverId: string): Promise<Isolate
     await waitForServer(port, child);
   } catch (error) {
     await stopProcess(child);
-    await rm(paseoHome, { recursive: true, force: true });
+    await rm(byspaceHome, { recursive: true, force: true });
     throw new Error(
       `${error instanceof Error ? error.message : String(error)}\nDaemon stderr:\n${stderr}`,
       { cause: error },
@@ -123,7 +123,7 @@ export async function startIsolatedHostDaemon(serverId: string): Promise<Isolate
     port,
     close: async () => {
       await stopProcess(child);
-      await rm(paseoHome, { recursive: true, force: true });
+      await rm(byspaceHome, { recursive: true, force: true });
     },
   };
 }

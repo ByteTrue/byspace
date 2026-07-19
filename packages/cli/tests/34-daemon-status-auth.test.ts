@@ -3,20 +3,20 @@
 import assert from "node:assert";
 import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { createTestPaseoDaemon } from "../../server/src/server/test-utils/paseo-daemon.ts";
-import { runLocalPaseo } from "./helpers/local-cli.ts";
+import { createTestBySpaceDaemon } from "../../server/src/server/test-utils/byspace-daemon.ts";
+import { runLocalBySpace } from "./helpers/local-cli.ts";
 
 console.log("=== Daemon Status Auth ===\n");
 
 const CORRECT_PASSWORD_HASH = "$2b$12$GMhF7pN4QnMlHOQXOqjd1OitKWPSmAO3FwB0PHzKtcZR/sAMryz76";
 
-const daemon = await createTestPaseoDaemon({
+const daemon = await createTestBySpaceDaemon({
   auth: { password: CORRECT_PASSWORD_HASH },
 });
 
 try {
   await writeFile(
-    join(daemon.paseoHome, "paseo.pid"),
+    join(daemon.byspaceHome, "byspace.pid"),
     `${JSON.stringify(
       {
         pid: process.pid,
@@ -32,8 +32,8 @@ try {
 
   {
     console.log("Test 1: status reports password requirement without marking daemon unreachable");
-    const result = await runLocalPaseo(["daemon", "status", "--json"], {
-      BYSPACE_HOME: daemon.paseoHome,
+    const result = await runLocalBySpace(["daemon", "status", "--json"], {
+      BYSPACE_HOME: daemon.byspaceHome,
       BYSPACE_HOST: "",
       BYSPACE_PASSWORD: "",
     });
@@ -52,8 +52,8 @@ try {
 
   {
     console.log("Test 2: status reports rejected supplied password separately");
-    const result = await runLocalPaseo(["daemon", "status", "--json"], {
-      BYSPACE_HOME: daemon.paseoHome,
+    const result = await runLocalBySpace(["daemon", "status", "--json"], {
+      BYSPACE_HOME: daemon.byspaceHome,
       BYSPACE_HOST: "",
       BYSPACE_PASSWORD: "wrong-secret",
     });
@@ -70,8 +70,8 @@ try {
 
   {
     console.log("Test 3: status reaches the same daemon when password is supplied");
-    const result = await runLocalPaseo(["daemon", "status", "--json"], {
-      BYSPACE_HOME: daemon.paseoHome,
+    const result = await runLocalBySpace(["daemon", "status", "--json"], {
+      BYSPACE_HOME: daemon.byspaceHome,
       BYSPACE_HOST: "",
       BYSPACE_PASSWORD: "shared-secret",
     });

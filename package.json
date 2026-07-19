@@ -1,8 +1,8 @@
 {
-  "name": "paseo",
+  "name": "byspace",
   "version": "0.2.0-beta.1",
   "private": true,
-  "description": "Paseo: voice-controlled development environment for local AI coding agents",
+  "description": "BySpace: voice-controlled development environment for local AI coding agents",
   "keywords": [
     "development",
     "mcp",
@@ -10,15 +10,14 @@
     "voice",
     "voice-assistant"
   ],
-  "homepage": "https://paseo.sh",
+  "homepage": "https://byspace.pages.dev",
   "license": "AGPL-3.0-or-later",
   "author": {
-    "name": "Mohamed Boudra",
-    "email": "hello@moboudra.com"
+    "name": "ByteTrue"
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/getpaseo/paseo.git"
+    "url": "https://github.com/ByteTrue/byspace.git"
   },
   "workspaces": [
     "packages/highlight",

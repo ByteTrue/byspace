@@ -1,8 +1,8 @@
-# Contributing to Paseo
+# Contributing to BySpace
 
-Paseo is an opinionated product maintained by one person right now.
+BySpace is an opinionated product maintained by one person right now.
 
-The product covers a lot of surface: mobile, desktop, web, the daemon, the relay, and both self-hosted and hosted setups.
+The product covers the hosted Web app, local daemon and CLI, encrypted relay, and many agent providers.
 
 Contributing takes a lot of context that is very hard to transfer. That's why product, design, architecture, and workflow decisions are currently all made by the maintainer.
 
@@ -45,7 +45,7 @@ Learning on the job is fine, I do not care how many years of experience you have
 
 If you need a feature implemented, create a Github issue or a thread in Discord.
 
-Explain the problem you want to solve: your use case, where Paseo falls short today, and the flow you expect.
+Explain the problem you want to solve: your use case, where BySpace falls short today, and the flow you expect.
 
 ## AI assistance
 

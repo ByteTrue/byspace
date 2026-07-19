@@ -42,10 +42,10 @@ function makeFixture(): {
   assertScript: string;
   expectedArgs: string[];
 } {
-  const root = mkdtempSync(path.join(tmpdir(), "paseo spawn regression "));
+  const root = mkdtempSync(path.join(tmpdir(), "byspace spawn regression "));
   tempDirs.push(root);
 
-  const fakeDaemonNode = path.join(root, "Fake Paseo.exe");
+  const fakeDaemonNode = path.join(root, "Fake BySpace.exe");
   copyFileSync(process.execPath, fakeDaemonNode);
 
   const expectedArgs = ["--config", JSON_ARG];
@@ -148,11 +148,11 @@ interface LaunchFixture {
 }
 
 function makeLaunchFixture(ext: "exe" | "cmd" | "bat"): LaunchFixture {
-  const root = mkdtempSync(path.join(tmpdir(), `paseo-launch-${ext}-`));
+  const root = mkdtempSync(path.join(tmpdir(), `byspace-launch-${ext}-`));
   tempDirs.push(root);
 
   // Unique base name so a globally installed binary cannot satisfy findExecutable.
-  const command = `paseo-launch-fake-${path.basename(root)}`;
+  const command = `byspace-launch-fake-${path.basename(root)}`;
   const userArgs = ["--config", JSON_ARG];
   const expectedArgvJson = JSON.stringify(userArgs);
 

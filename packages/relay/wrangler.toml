@@ -1,15 +1,13 @@
-name = "paseo-relay"
-account_id = "10ed39a1dbf316e30abd0c409bed40d6"
+name = "byspace-relay"
+account_id = "835cd580057df97323a7854a8069c5f1"
 main = "src/cloudflare-adapter.ts"
 compatibility_date = "2024-12-01"
 
-routes = [{ pattern = "relay.paseo.sh", custom_domain = true }]
+workers_dev = true
 
 [observability]
 enabled = true
 
-[vars]
-BYSPACE_RELAY_UPSTREAM = "https://paseo-relay-next.fly.dev"
 
 [[durable_objects.bindings]]
 name = "RELAY"

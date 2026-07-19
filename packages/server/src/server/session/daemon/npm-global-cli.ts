@@ -2,7 +2,7 @@ import { getErrorMessage } from "@bytetrue/byspace-protocol/error-utils";
 import { z } from "zod";
 import { execCommand } from "../../../utils/spawn.js";
 
-export const BYSPACE_CLI_PACKAGE = "@bytetrue/byspace-cli";
+export const BYSPACE_CLI_PACKAGE = "@bytetrue/byspace";
 
 const NPM_PROBE_TIMEOUT_MS = 10_000;
 const NPM_INSTALL_TIMEOUT_MS = 300_000;
@@ -42,15 +42,15 @@ export interface CommandResult {
   stderr: string;
 }
 
-export interface NpmGlobalPaseoInstall {
+export interface NpmGlobalBySpaceInstall {
   version: string;
   packagePath: string;
   globalRootPath: string | null;
   isLinked: boolean;
 }
 
-export interface NpmGlobalPaseoCli {
-  inspect(): Promise<NpmGlobalPaseoInstall>;
+export interface NpmGlobalBySpaceCli {
+  inspect(): Promise<NpmGlobalBySpaceInstall>;
   installLatest(): Promise<CommandResult>;
 }
 
@@ -85,7 +85,7 @@ async function runExternalCommand(
   }
 }
 
-function parseNpmGlobalPaseoInstall(stdout: string): NpmGlobalPaseoInstall | null {
+function parseNpmGlobalBySpaceInstall(stdout: string): NpmGlobalBySpaceInstall | null {
   let parsedJson: unknown;
   try {
     parsedJson = JSON.parse(stdout);
@@ -112,10 +112,10 @@ function parseNpmGlobalPaseoInstall(stdout: string): NpmGlobalPaseoInstall | nul
   };
 }
 
-export class DefaultNpmGlobalPaseoCli implements NpmGlobalPaseoCli {
+export class DefaultNpmGlobalBySpaceCli implements NpmGlobalBySpaceCli {
   constructor(private readonly runCommand: CommandRunner = runExternalCommand) {}
 
-  async inspect(): Promise<NpmGlobalPaseoInstall> {
+  async inspect(): Promise<NpmGlobalBySpaceInstall> {
     const result = await this.runCommand(
       "npm",
       ["-g", "ls", BYSPACE_CLI_PACKAGE, "--json", "--depth=0", "--long"],
@@ -129,7 +129,7 @@ export class DefaultNpmGlobalPaseoCli implements NpmGlobalPaseoCli {
       throw new Error(result.stderr.trim() || "npm is not available on this host");
     }
 
-    const install = parseNpmGlobalPaseoInstall(result.stdout);
+    const install = parseNpmGlobalBySpaceInstall(result.stdout);
     if (!install) {
       throw new Error(`${BYSPACE_CLI_PACKAGE} is not installed with npm -g on this host`);
     }
@@ -144,4 +144,4 @@ export class DefaultNpmGlobalPaseoCli implements NpmGlobalPaseoCli {
   }
 }
 
-export const npmGlobalPaseoCli = new DefaultNpmGlobalPaseoCli();
+export const npmGlobalBySpaceCli = new DefaultNpmGlobalBySpaceCli();

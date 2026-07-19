@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { PaseoSubagentRow, SubagentRow } from "./select";
+import type { BySpaceSubagentRow, SubagentRow } from "./select";
 import {
   buildSubagentRowPresentationData,
   countFinishedSubagents,
@@ -8,10 +8,10 @@ import {
 } from "./track-presentation";
 
 function row(
-  overrides: Partial<PaseoSubagentRow> & Pick<PaseoSubagentRow, "id">,
-): PaseoSubagentRow {
+  overrides: Partial<BySpaceSubagentRow> & Pick<BySpaceSubagentRow, "id">,
+): BySpaceSubagentRow {
   return {
-    kind: "paseo",
+    kind: "byspace",
     id: overrides.id,
     provider: overrides.provider ?? "codex",
     title: overrides.title ?? `Agent ${overrides.id}`,
@@ -131,7 +131,7 @@ describe("resolveRowLabel", () => {
 describe("buildSubagentRowPresentationData", () => {
   it("namespaces the key with a subagent prefix", () => {
     expect(buildSubagentRowPresentationData(row({ id: "child-a" })).key).toBe(
-      "paseo_subagent_child-a",
+      "byspace_subagent_child-a",
     );
   });
 

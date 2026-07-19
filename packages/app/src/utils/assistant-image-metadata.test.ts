@@ -16,16 +16,16 @@ describe("assistant image metadata", () => {
   it("extracts markdown image sources", () => {
     expect(
       extractAssistantImageSources(
-        'Before\n\n![local](/tmp/paseo.png)\n\n![remote](https://example.com/test.png "Remote")',
+        'Before\n\n![local](/tmp/byspace.png)\n\n![remote](https://example.com/test.png "Remote")',
       ),
-    ).toEqual(["/tmp/paseo.png", "https://example.com/test.png"]);
+    ).toEqual(["/tmp/byspace.png", "https://example.com/test.png"]);
   });
 
   it("reuses cached metadata across canonical and raw source keys", () => {
     setAssistantImageMetadata(
       {
-        source: "/tmp/paseo-codex-screenshot.png",
-        workspaceRoot: "/workspaces/paseo",
+        source: "/tmp/byspace-codex-screenshot.png",
+        workspaceRoot: "/workspaces/byspace",
         serverId: "server-1",
       },
       { width: 1200, height: 800 },
@@ -33,7 +33,7 @@ describe("assistant image metadata", () => {
 
     expect(
       getAssistantImageMetadata({
-        source: "/tmp/paseo-codex-screenshot.png",
+        source: "/tmp/byspace-codex-screenshot.png",
       }),
     ).toEqual({
       width: 1200,

@@ -37,7 +37,7 @@ export interface WorkspaceFilesSessionHost {
 export interface WorkspaceFilesSessionOptions {
   host: WorkspaceFilesSessionHost;
   downloadTokenStore: DownloadTokenStore;
-  paseoHome: string;
+  byspaceHome: string;
   logger: pino.Logger;
 }
 
@@ -58,7 +58,7 @@ export class WorkspaceFilesSession {
     this.host = options.host;
     this.downloadTokenStore = options.downloadTokenStore;
     this.logger = options.logger;
-    this.fileUploads = new FileUploadStore({ paseoHome: options.paseoHome });
+    this.fileUploads = new FileUploadStore({ byspaceHome: options.byspaceHome });
   }
 
   async handleFileExplorerRequest(request: FileExplorerRequest): Promise<void> {

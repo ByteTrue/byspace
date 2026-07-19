@@ -13,28 +13,28 @@ if (-not $env:BYSPACE_HOME) {
         # Inside a worktree — derive a stable home from the worktree name
         $WorktreeRoot = git rev-parse --show-toplevel
         $WorktreeName = (Split-Path -Leaf $WorktreeRoot).ToLower() -replace '[^a-z0-9-]', '-' -replace '-+', '-' -replace '^-|-$', ''
-        $env:BYSPACE_HOME = "$env:USERPROFILE\.paseo-$WorktreeName"
+        $env:BYSPACE_HOME = "$env:USERPROFILE\.byspace-$WorktreeName"
         New-Item -ItemType Directory -Force -Path $env:BYSPACE_HOME | Out-Null
     } else {
-        $env:BYSPACE_HOME = Join-Path ([System.IO.Path]::GetTempPath()) "paseo-dev-$([System.Guid]::NewGuid().ToString('N').Substring(0,6))"
+        $env:BYSPACE_HOME = Join-Path ([System.IO.Path]::GetTempPath()) "byspace-dev-$([System.Guid]::NewGuid().ToString('N').Substring(0,6))"
         New-Item -ItemType Directory -Force -Path $env:BYSPACE_HOME | Out-Null
         # Register cleanup on exit
-        $TempPaseoHome = $env:BYSPACE_HOME
+        $TempBySpaceHome = $env:BYSPACE_HOME
         Register-EngineEvent PowerShell.Exiting -Action {
-            Remove-Item -Recurse -Force $TempPaseoHome -ErrorAction SilentlyContinue
+            Remove-Item -Recurse -Force $TempBySpaceHome -ErrorAction SilentlyContinue
         } | Out-Null
     }
 }
 
 # Share speech models with the main install to avoid duplicate downloads
 if (-not $env:BYSPACE_LOCAL_MODELS_DIR) {
-    $env:BYSPACE_LOCAL_MODELS_DIR = "$env:USERPROFILE\.paseo\models\local-speech"
+    $env:BYSPACE_LOCAL_MODELS_DIR = "$env:USERPROFILE\.byspace\models\local-speech"
     New-Item -ItemType Directory -Force -Path $env:BYSPACE_LOCAL_MODELS_DIR | Out-Null
 }
 
 Write-Host @"
 ======================================================
-  Paseo Dev (Windows)
+  BySpace Dev (Windows)
 ======================================================
   Home:    $($env:BYSPACE_HOME)
   Models:  $($env:BYSPACE_LOCAL_MODELS_DIR)
