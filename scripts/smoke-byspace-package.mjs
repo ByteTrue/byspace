@@ -212,6 +212,27 @@ try {
   if (status.home !== home || status.listen !== `127.0.0.1:${port}`) {
     throw new Error(`Daemon used unexpected paths: ${JSON.stringify(status)}`);
   }
+  const expectedHostedRelease = version.includes("-")
+    ? {
+        appBaseUrl: "https://byspace-beta.pages.dev",
+        relayEndpoint: "byspace-relay-beta.bytetrue.workers.dev:443",
+      }
+    : {
+        appBaseUrl: "https://byspace.pages.dev",
+        relayEndpoint: "byspace-relay.bytetrue.workers.dev:443",
+      };
+  if (status.relay !== `wss://${expectedHostedRelease.relayEndpoint}`) {
+    throw new Error(`Daemon used unexpected release relay: ${JSON.stringify(status)}`);
+  }
+  const persistedConfig = JSON.parse(readFileSync(join(home, "config.json"), "utf8"));
+  if (
+    persistedConfig.app?.baseUrl !== expectedHostedRelease.appBaseUrl ||
+    !persistedConfig.daemon?.cors?.allowedOrigins?.includes(expectedHostedRelease.appBaseUrl)
+  ) {
+    throw new Error(
+      `Daemon persisted unexpected release endpoints: ${JSON.stringify(persistedConfig)}`,
+    );
+  }
   process.stdout.write(`BySpace ${version} package smoke passed on port ${port}.\n`);
 } catch (error) {
   failure = error;

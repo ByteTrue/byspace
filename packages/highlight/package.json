@@ -1,6 +1,6 @@
 {
   "name": "@bytetrue/byspace-highlight",
-  "version": "0.2.0-beta.1",
+  "version": "0.2.0-beta.2",
   "private": true,
   "files": [
     "dist",
