@@ -1535,11 +1535,14 @@ export class PiRpcAgentSession implements AgentSession {
     }
 
     const model = await this.runtimeSession.setModel(parsedReference.provider, parsedReference.id);
+    const state = await this.runtimeSession.getState();
     this.state = {
-      ...this.state,
+      ...state,
       model,
     };
+    this.lastKnownThinkingOptionId = state.thinkingLevel;
     this.config.model = `${model.provider}/${model.id}`;
+    this.config.thinkingOptionId = state.thinkingLevel;
   }
 
   async setThinkingOption(thinkingOptionId: string | null): Promise<void> {

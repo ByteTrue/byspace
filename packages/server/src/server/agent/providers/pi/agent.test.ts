@@ -801,6 +801,30 @@ describe("PiRpcAgentSession", () => {
     expect(fakeSession.setThinkingLevelRequests).toEqual(["max"]);
   });
 
+  test("syncs Pi-clamped thinking after model updates", async () => {
+    const { pi, session } = await createSession();
+    const fakeSession = pi.latestSession();
+    const model = { provider: "openrouter", id: "model-a", name: "Model A" };
+    fakeSession.setModelResult = model;
+
+    await session.setThinkingOption("max");
+    fakeSession.state = {
+      ...fakeSession.state,
+      model,
+      thinkingLevel: "high",
+    };
+    await session.setModel("openrouter/model-a");
+
+    await expect(session.getRuntimeInfo()).resolves.toMatchObject({
+      model: "openrouter/model-a",
+      thinkingOptionId: "high",
+    });
+    expect(session.describePersistence()?.metadata).toMatchObject({
+      model: "openrouter/model-a",
+      thinkingOptionId: "high",
+    });
+  });
+
   test("materializes image prompts as text hints for text-only Pi models", async () => {
     const { pi, session } = await createSession();
     const fakeSession = pi.latestSession();
