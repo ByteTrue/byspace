@@ -1485,7 +1485,7 @@ export class AgentManager {
 
     agent.config.model = normalizedModelId ?? undefined;
     if (runtimeInfo) {
-      agent.runtimeInfo = { ...runtimeInfo, model: normalizedModelId };
+      agent.runtimeInfo = runtimeInfo;
       if (Object.prototype.hasOwnProperty.call(runtimeInfo, "thinkingOptionId")) {
         agent.config.thinkingOptionId = runtimeInfo.thinkingOptionId ?? undefined;
       }

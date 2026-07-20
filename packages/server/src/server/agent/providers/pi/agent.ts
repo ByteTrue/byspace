@@ -1526,6 +1526,10 @@ export class PiRpcAgentSession implements AgentSession {
   }
 
   async setModel(modelId: string | null): Promise<void> {
+    if (!modelId?.trim()) {
+      this.config.model = undefined;
+      return;
+    }
     const parsedReference = parseModelReference(modelId);
     if (!parsedReference) {
       return;

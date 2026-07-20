@@ -3161,11 +3161,11 @@ test("persists authoritative thinking after model changes clamp it", async () =>
 
   const cleared = manager.getAgent(snapshot.id)!;
   expect(cleared.config.model).toBeUndefined();
-  expect(cleared.runtimeInfo!.model).toBeNull();
+  expect(cleared.runtimeInfo!.model).toBe("model-without-max");
   expect(cleared.persistence!.metadata!.model).toBeNull();
   const persistedClear = (await storage.get(snapshot.id))!;
   expect(persistedClear.config!.model).toBeUndefined();
-  expect(persistedClear.runtimeInfo!.model).toBeNull();
+  expect(persistedClear.runtimeInfo!.model).toBe("model-without-max");
   expect(persistedClear.persistence!.metadata!.model).toBeNull();
 });
 

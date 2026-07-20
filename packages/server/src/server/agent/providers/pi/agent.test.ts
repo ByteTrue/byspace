@@ -823,6 +823,14 @@ describe("PiRpcAgentSession", () => {
       model: "openrouter/model-a",
       thinkingOptionId: "high",
     });
+
+    await session.setModel(null);
+
+    await expect(session.getRuntimeInfo()).resolves.toMatchObject({
+      model: "openrouter/model-a",
+      thinkingOptionId: "high",
+    });
+    expect(session.describePersistence()?.metadata?.model).toBeUndefined();
   });
 
   test("materializes image prompts as text hints for text-only Pi models", async () => {
