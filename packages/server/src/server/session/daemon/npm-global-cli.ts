@@ -1,4 +1,5 @@
 import { getErrorMessage } from "@bytetrue/byspace-protocol/error-utils";
+import type { BySpaceNpmDistTag } from "@bytetrue/byspace-protocol/release-channel";
 import { z } from "zod";
 import { execCommand } from "../../../utils/spawn.js";
 
@@ -51,7 +52,7 @@ export interface NpmGlobalBySpaceInstall {
 
 export interface NpmGlobalBySpaceCli {
   inspect(): Promise<NpmGlobalBySpaceInstall>;
-  installLatest(): Promise<CommandResult>;
+  install(distTag: BySpaceNpmDistTag): Promise<CommandResult>;
 }
 
 export type CommandRunner = (
@@ -136,8 +137,8 @@ export class DefaultNpmGlobalBySpaceCli implements NpmGlobalBySpaceCli {
     return install;
   }
 
-  installLatest(): Promise<CommandResult> {
-    return this.runCommand("npm", ["install", "-g", `${BYSPACE_CLI_PACKAGE}@latest`], {
+  install(distTag: BySpaceNpmDistTag): Promise<CommandResult> {
+    return this.runCommand("npm", ["install", "-g", `${BYSPACE_CLI_PACKAGE}@${distTag}`], {
       timeout: NPM_INSTALL_TIMEOUT_MS,
       maxBuffer: NPM_MAX_BUFFER_BYTES,
     });

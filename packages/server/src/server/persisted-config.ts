@@ -10,6 +10,8 @@ import {
 import type { AgentProviderRuntimeSettingsMap } from "./agent/provider-launch-config.js";
 import { ensurePrivateFile, writePrivateFileAtomicSync } from "./private-files.js";
 import { TerminalProfileSchema } from "@bytetrue/byspace-protocol/messages";
+import { resolveBySpaceHostedRelease } from "@bytetrue/byspace-protocol/release-channel";
+import { resolveDaemonVersion } from "./daemon-version.js";
 
 export const LogLevelSchema = z.enum(["trace", "debug", "info", "warn", "error", "fatal"]);
 export const LogFormatSchema = z.enum(["pretty", "json"]);
@@ -318,21 +320,26 @@ export type PersistedConfig = Omit<PersistedConfigSchemaOutput, "agents"> & {
 };
 
 const CONFIG_FILENAME = "config.json";
-const DEFAULT_PERSISTED_CONFIG = PersistedConfigSchema.parse({
-  version: 1,
-  daemon: {
-    listen: "127.0.0.1:6777",
-    cors: {
-      allowedOrigins: ["https://byspace.pages.dev"],
+export function createDefaultPersistedConfig(
+  releaseVersion: string = resolveDaemonVersion(),
+): PersistedConfig {
+  const hostedRelease = resolveBySpaceHostedRelease(releaseVersion);
+  return PersistedConfigSchema.parse({
+    version: 1,
+    daemon: {
+      listen: "127.0.0.1:6777",
+      cors: {
+        allowedOrigins: [hostedRelease.appBaseUrl],
+      },
+      relay: {
+        enabled: true,
+      },
     },
-    relay: {
-      enabled: true,
+    app: {
+      baseUrl: hostedRelease.appBaseUrl,
     },
-  },
-  app: {
-    baseUrl: "https://byspace.pages.dev",
-  },
-}) as PersistedConfig;
+  }) as PersistedConfig;
+}
 
 interface LoggerLike {
   child(bindings: Record<string, unknown>): LoggerLike;
@@ -394,7 +401,7 @@ export function loadPersistedConfig(byspaceHome: string, logger?: LoggerLike): P
     try {
       writePrivateFileAtomicSync(
         configPath,
-        JSON.stringify(DEFAULT_PERSISTED_CONFIG, null, 2) + "\n",
+        JSON.stringify(createDefaultPersistedConfig(), null, 2) + "\n",
       );
       log?.info(`Initialized config file at ${configPath}`);
     } catch (err) {

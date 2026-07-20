@@ -1,3 +1,5 @@
+import { STABLE_HOSTED_RELEASE } from "./release-channel.js";
+
 export interface HostPortParts {
   host: string;
   port: number;
@@ -16,7 +18,7 @@ export type RelayRole = "server" | "client";
 export type RelayProtocolVersion = "1" | "2";
 
 export const CURRENT_RELAY_PROTOCOL_VERSION: RelayProtocolVersion = "2";
-export const DEFAULT_RELAY_ENDPOINT = "byspace-relay.bytetrue.workers.dev:443";
+export const DEFAULT_RELAY_ENDPOINT = STABLE_HOSTED_RELEASE.relayEndpoint;
 
 export function normalizeRelayProtocolVersion(
   value: unknown,

@@ -1,4 +1,5 @@
 import { getErrorMessage } from "@bytetrue/byspace-protocol/error-utils";
+import { resolveBySpaceHostedRelease } from "@bytetrue/byspace-protocol/release-channel";
 import {
   daemonInstallOriginRuntime,
   validateDaemonInstallOrigin,
@@ -55,6 +56,10 @@ export class DaemonSelfUpdater {
     this.inProgress = true;
     try {
       input.onProgress("starting");
+      if (input.daemonVersion === null) {
+        throw new Error("Cannot self-update because the running daemon version is unavailable.");
+      }
+      const npmDistTag = resolveBySpaceHostedRelease(input.daemonVersion).npmDistTag;
       const install = await this.runtime.npm.inspect();
       const unsupportedReason = validateDaemonInstallOrigin(
         install,
@@ -68,7 +73,7 @@ export class DaemonSelfUpdater {
       input.onProgress("downloading");
       input.onProgress("installing");
 
-      const result = await this.runtime.npm.installLatest();
+      const result = await this.runtime.npm.install(npmDistTag);
       if (result.exitCode !== 0) {
         const error =
           result.stderr.trim() || result.stdout.trim() || `npm exited with code ${result.exitCode}`;

@@ -39,6 +39,7 @@ import {
   buildScheduleProjectTargets,
 } from "@/schedules/schedule-project-targets";
 import type { ScheduleSummary } from "@bytetrue/byspace-protocol/schedule/types";
+import { resolveAppHostedRelease } from "@/utils/hosted-release";
 
 type FormState =
   | { mode: "closed" }
@@ -51,6 +52,7 @@ const STATUS_FILTER_OPTIONS: { value: ScheduleBucket; label: string; testID: str
 ];
 
 const EMPTY_SCHEDULES: AggregatedSchedule[] = [];
+const SCHEDULES_DOCS_URL = `${resolveAppHostedRelease().appBaseUrl}/docs/schedules`;
 
 export function SchedulesScreen(): ReactElement {
   const isFocused = useIsFocused();
@@ -321,7 +323,7 @@ function SchedulesEmptyState({
       <View style={styles.emptyTextStack}>
         <Text style={styles.emptyTitle}>No active schedules</Text>
         <Text style={styles.emptyDescription}>Schedules run agents on a cadence.</Text>
-        <ExternalLink href="https://byspace.pages.dev/docs/schedules" label="See docs" />
+        <ExternalLink href={SCHEDULES_DOCS_URL} label="See docs" />
       </View>
       <Button variant="outline" leftIcon={Plus} onPress={onCreate} testID="schedules-empty-new">
         New schedule

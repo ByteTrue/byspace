@@ -138,6 +138,10 @@ import { startRelayTransport, type RelayTransportController } from "./relay-tran
 import type { PushNotificationSender } from "./push/notifications.js";
 import { getOrCreateServerId } from "./server-id.js";
 import { resolveDaemonVersion } from "./daemon-version.js";
+import {
+  isBySpaceHostedRelayEndpoint,
+  resolveBySpaceHostedRelease,
+} from "@bytetrue/byspace-protocol/release-channel";
 import type { AgentClient, AgentProvider } from "./agent/agent-sdk-types.js";
 import type { FirstAgentContext, TerminalProfile } from "@bytetrue/byspace-protocol/messages";
 import type {
@@ -480,6 +484,7 @@ export async function createBySpaceDaemon(
   const bootstrapStart = performance.now();
   const elapsed = () => `${(performance.now() - bootstrapStart).toFixed(0)}ms`;
   const daemonVersion = config.daemonVersion ?? resolveDaemonVersion(import.meta.url);
+  const hostedRelease = resolveBySpaceHostedRelease(daemonVersion);
   const daemonConfigStore = new DaemonConfigStore(
     config.byspaceHome,
     createInitialMutableDaemonConfig(config),
@@ -1286,12 +1291,15 @@ export async function createBySpaceDaemon(
               agentManager.setAppendSystemPrompt(typeof value === "string" ? value : "");
             });
             const relayEnabled = config.relayEnabled ?? true;
-            const relayEndpoint = config.relayEndpoint ?? "byspace-relay.bytetrue.workers.dev:443";
+            const relayEndpoint = config.relayEndpoint ?? hostedRelease.relayEndpoint;
             const relayPublicEndpoint = config.relayPublicEndpoint ?? relayEndpoint;
-            const relayUseTls =
-              config.relayUseTls ?? relayEndpoint === "byspace-relay.bytetrue.workers.dev:443";
-            const relayPublicUseTls = config.relayPublicUseTls ?? relayUseTls;
-            const appBaseUrl = config.appBaseUrl ?? "https://byspace.pages.dev";
+            const relayUseTls = config.relayUseTls ?? isBySpaceHostedRelayEndpoint(relayEndpoint);
+            const relayPublicUseTls =
+              config.relayPublicUseTls ??
+              (config.relayUseTls === undefined && isBySpaceHostedRelayEndpoint(relayPublicEndpoint)
+                ? true
+                : relayUseTls);
+            const appBaseUrl = config.appBaseUrl ?? hostedRelease.appBaseUrl;
 
             if (boundListenTarget.type === "tcp") {
               logger.info(
@@ -1362,7 +1370,7 @@ export async function createBySpaceDaemon(
               {
                 listen: formatListenTarget(boundListenTarget ?? listenTarget),
                 worktreesRoot: config.worktreesRoot,
-                appBaseUrl: config.appBaseUrl,
+                appBaseUrl,
                 relay: {
                   enabled: relayEnabled,
                   endpoint: relayEndpoint,

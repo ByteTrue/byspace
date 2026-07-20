@@ -24,10 +24,11 @@ import { ICON_SIZE, type Theme } from "@/styles/theme";
 import type { HostProfile } from "@/types/host-connection";
 import { resolveAppVersion } from "@/utils/app-version";
 import { openExternalUrl } from "@/utils/open-external-url";
+import { resolveAppHostedRelease } from "@/utils/hosted-release";
 
 const DISCORD_URL = "https://discord.gg/jz8T2uahpH";
 const GITHUB_ISSUE_URL = "https://github.com/ByteTrue/byspace/issues/new";
-const CHANGELOG_URL = "https://byspace.pages.dev/changelog";
+const CHANGELOG_URL = `${resolveAppHostedRelease().appBaseUrl}/changelog`;
 
 function formatVersionWithPrefix(version: string | null | undefined): string {
   const value = version?.trim();

@@ -61,6 +61,11 @@ For full setup and configuration, see:
 - [Docs](https://byspace.pages.dev/docs)
 - [Configuration reference](https://byspace.pages.dev/docs/configuration)
 
+Release channels stay isolated end-to-end:
+
+- Stable: npm `latest`, [byspace.pages.dev](https://byspace.pages.dev), and `byspace-relay`
+- Beta: npm `beta`, [byspace-beta.pages.dev](https://byspace-beta.pages.dev), and `byspace-relay-beta`
+
 ## CLI
 
 Everything you can do in the app, you can do from the terminal.

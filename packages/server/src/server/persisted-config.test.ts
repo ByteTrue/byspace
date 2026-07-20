@@ -2,8 +2,13 @@ import { chmodSync, mkdtempSync, rmSync, statSync, writeFileSync } from "node:fs
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, test } from "vitest";
+import {
+  BETA_HOSTED_RELEASE,
+  STABLE_HOSTED_RELEASE,
+} from "@bytetrue/byspace-protocol/release-channel";
 
 import {
+  createDefaultPersistedConfig,
   loadPersistedConfig,
   PersistedConfigSchema,
   savePersistedConfig,
@@ -20,6 +25,21 @@ function createTempHome(): string {
 function modeOf(filePath: string): number {
   return statSync(filePath).mode & MODE_MASK;
 }
+
+describe("createDefaultPersistedConfig", () => {
+  test.each([
+    ["0.2.0", STABLE_HOSTED_RELEASE],
+    ["0.2.0-beta.2", BETA_HOSTED_RELEASE],
+  ])("uses the hosted defaults for %s", (releaseVersion, hostedRelease) => {
+    expect(createDefaultPersistedConfig(releaseVersion)).toMatchObject({
+      daemon: {
+        cors: { allowedOrigins: [hostedRelease.appBaseUrl] },
+        relay: { enabled: true },
+      },
+      app: { baseUrl: hostedRelease.appBaseUrl },
+    });
+  });
+});
 
 describe("PersistedConfigSchema daemon auth config", () => {
   test("accepts optional daemon password hash", () => {

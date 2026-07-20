@@ -2,6 +2,10 @@ import { mkdir, mkdtemp, writeFile, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, test } from "vitest";
+import {
+  BETA_HOSTED_RELEASE,
+  STABLE_HOSTED_RELEASE,
+} from "@bytetrue/byspace-protocol/release-channel";
 
 import { loadConfig } from "./config.js";
 
@@ -49,6 +53,85 @@ describe("daemon relay config", () => {
       daemon: { relay: {} },
     });
     expect(loadConfig(hostedHome, { env: {} }).relayUseTls).toBe(true);
+  });
+
+  test("maps managed stable config to beta infrastructure", async () => {
+    const home = await createBySpaceHome({
+      version: 1,
+      daemon: {
+        relay: {
+          endpoint: STABLE_HOSTED_RELEASE.relayEndpoint,
+          publicEndpoint: BETA_HOSTED_RELEASE.relayEndpoint,
+        },
+        cors: {
+          allowedOrigins: [
+            STABLE_HOSTED_RELEASE.appBaseUrl,
+            BETA_HOSTED_RELEASE.appBaseUrl,
+            "https://custom.example.com",
+          ],
+        },
+      },
+      app: { baseUrl: STABLE_HOSTED_RELEASE.appBaseUrl },
+    });
+
+    const config = loadConfig(home, { env: {}, releaseVersion: "0.2.0-beta.2" });
+
+    expect(config.daemonVersion).toBe("0.2.0-beta.2");
+    expect(config.relayEndpoint).toBe(BETA_HOSTED_RELEASE.relayEndpoint);
+    expect(config.relayPublicEndpoint).toBe(BETA_HOSTED_RELEASE.relayEndpoint);
+    expect(config.relayUseTls).toBe(true);
+    expect(config.relayPublicUseTls).toBe(true);
+    expect(config.appBaseUrl).toBe(BETA_HOSTED_RELEASE.appBaseUrl);
+    expect(config.corsAllowedOrigins).toEqual([
+      BETA_HOSTED_RELEASE.appBaseUrl,
+      "https://custom.example.com",
+    ]);
+  });
+
+  test("maps managed beta config to stable infrastructure", async () => {
+    const home = await createBySpaceHome({
+      version: 1,
+      daemon: { relay: { endpoint: BETA_HOSTED_RELEASE.relayEndpoint } },
+      app: { baseUrl: BETA_HOSTED_RELEASE.appBaseUrl },
+    });
+
+    const config = loadConfig(home, { env: {}, releaseVersion: "0.2.0" });
+
+    expect(config.relayEndpoint).toBe(STABLE_HOSTED_RELEASE.relayEndpoint);
+    expect(config.appBaseUrl).toBe(STABLE_HOSTED_RELEASE.appBaseUrl);
+  });
+
+  test("preserves custom values and adds explicit environment overrides", async () => {
+    const home = await createBySpaceHome({
+      version: 1,
+      daemon: {
+        relay: {
+          endpoint: "persisted-relay.example.com:443",
+          publicEndpoint: "persisted-public.example.com:443",
+        },
+        cors: { allowedOrigins: ["https://persisted.example.com"] },
+      },
+      app: { baseUrl: "https://persisted-app.example.com" },
+    });
+
+    const config = loadConfig(home, {
+      releaseVersion: "0.2.0-beta.2",
+      env: {
+        BYSPACE_RELAY_ENDPOINT: "env-relay.example.com:443",
+        BYSPACE_RELAY_PUBLIC_ENDPOINT: "env-public.example.com:443",
+        BYSPACE_APP_BASE_URL: "https://env-app.example.com",
+        BYSPACE_CORS_ORIGINS:
+          "https://persisted.example.com, https://env.example.com,https://env.example.com",
+      },
+    });
+
+    expect(config.relayEndpoint).toBe("env-relay.example.com:443");
+    expect(config.relayPublicEndpoint).toBe("env-public.example.com:443");
+    expect(config.appBaseUrl).toBe("https://env-app.example.com");
+    expect(config.corsAllowedOrigins).toEqual([
+      "https://persisted.example.com",
+      "https://env.example.com",
+    ]);
   });
 
   test("relayPublicUseTls falls back to relayUseTls when unset", async () => {

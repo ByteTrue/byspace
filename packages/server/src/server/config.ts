@@ -22,10 +22,15 @@ import { AgentProviderSchema } from "@bytetrue/byspace-protocol/provider-manifes
 import { hashDaemonPassword } from "./auth.js";
 import { resolveSpeechConfig } from "./speech/speech-config-resolver.js";
 import { mergeHostnames, parseHostnamesEnv, type HostnamesConfig } from "./hostnames.js";
+import {
+  isBySpaceHostedAppBaseUrl,
+  isBySpaceHostedRelayEndpoint,
+  resolveBySpaceHostedRelease,
+  type BySpaceHostedRelease,
+} from "@bytetrue/byspace-protocol/release-channel";
+import { resolveDaemonVersion } from "./daemon-version.js";
 
 const DEFAULT_PORT = 6777;
-const DEFAULT_RELAY_ENDPOINT = "byspace-relay.bytetrue.workers.dev:443";
-const DEFAULT_APP_BASE_URL = "https://byspace.pages.dev";
 const DEFAULT_TRUSTED_PROXIES = ["loopback"];
 
 interface ResolveBundledWebUiDistDirInput {
@@ -183,6 +188,7 @@ interface ResolveRelayInput {
   persisted: ReturnType<typeof loadPersistedConfig>;
   cliRelayEnabled: boolean | undefined;
   cliRelayUseTls: boolean | undefined;
+  hostedRelease: BySpaceHostedRelease;
 }
 
 interface ResolvedRelay {
@@ -209,6 +215,28 @@ function resolveTlsFromEnv(
   return persistedValue ?? fallback;
 }
 
+function mapHostedRelayEndpoint(
+  value: string | undefined,
+  hostedRelease: BySpaceHostedRelease,
+): string | undefined {
+  return isBySpaceHostedRelayEndpoint(value) ? hostedRelease.relayEndpoint : value;
+}
+
+function mapHostedAppBaseUrl(
+  value: string | undefined,
+  hostedRelease: BySpaceHostedRelease,
+): string | undefined {
+  return isBySpaceHostedAppBaseUrl(value) ? hostedRelease.appBaseUrl : value;
+}
+
+function resolveRelayTlsDefault(
+  endpoint: string,
+  configuredUseTls: boolean | undefined,
+  inheritedUseTls = false,
+): boolean {
+  return configuredUseTls ?? (isBySpaceHostedRelayEndpoint(endpoint) || inheritedUseTls);
+}
+
 function resolveRelayConfig(input: ResolveRelayInput): ResolvedRelay {
   const enabled =
     input.cliRelayEnabled ??
@@ -217,23 +245,21 @@ function resolveRelayConfig(input: ResolveRelayInput): ResolvedRelay {
     true;
   const endpoint =
     input.env.BYSPACE_RELAY_ENDPOINT ??
-    input.persisted.daemon?.relay?.endpoint ??
-    DEFAULT_RELAY_ENDPOINT;
+    mapHostedRelayEndpoint(input.persisted.daemon?.relay?.endpoint, input.hostedRelease) ??
+    input.hostedRelease.relayEndpoint;
   const publicEndpoint =
     input.env.BYSPACE_RELAY_PUBLIC_ENDPOINT ??
-    input.persisted.daemon?.relay?.publicEndpoint ??
+    mapHostedRelayEndpoint(input.persisted.daemon?.relay?.publicEndpoint, input.hostedRelease) ??
     endpoint;
-  const useTls =
+  const configuredUseTls =
     input.cliRelayUseTls ??
-    resolveTlsFromEnv(
-      input.env.BYSPACE_RELAY_USE_TLS,
-      input.persisted.daemon?.relay?.useTls,
-      endpoint === DEFAULT_RELAY_ENDPOINT,
-    );
+    parseBooleanEnv(input.env.BYSPACE_RELAY_USE_TLS) ??
+    input.persisted.daemon?.relay?.useTls;
+  const useTls = resolveRelayTlsDefault(endpoint, configuredUseTls);
   const publicUseTls = resolveTlsFromEnv(
     input.env.BYSPACE_RELAY_PUBLIC_USE_TLS,
     input.persisted.daemon?.relay?.publicUseTls,
-    useTls,
+    resolveRelayTlsDefault(publicEndpoint, configuredUseTls, useTls),
   );
   return { enabled, endpoint, publicEndpoint, useTls, publicUseTls };
 }
@@ -324,13 +350,16 @@ function resolveVoiceLlmConfig(
 function resolveCorsAllowedOrigins(
   env: NodeJS.ProcessEnv,
   persisted: ReturnType<typeof loadPersistedConfig>,
+  hostedRelease: BySpaceHostedRelease,
 ): string[] {
   const envCorsOrigins = env.BYSPACE_CORS_ORIGINS
-    ? env.BYSPACE_CORS_ORIGINS.split(",").map((s) => s.trim())
+    ? env.BYSPACE_CORS_ORIGINS.split(",").map((origin) => origin.trim())
     : [];
-  const persistedCorsOrigins = persisted.daemon?.cors?.allowedOrigins ?? [];
+  const persistedCorsOrigins = (persisted.daemon?.cors?.allowedOrigins ?? []).map((origin) =>
+    isBySpaceHostedAppBaseUrl(origin) ? hostedRelease.appBaseUrl : origin,
+  );
   return Array.from(
-    new Set([...persistedCorsOrigins, ...envCorsOrigins].filter((s) => s.length > 0)),
+    new Set([...persistedCorsOrigins, ...envCorsOrigins].filter((origin) => origin.length > 0)),
   );
 }
 
@@ -419,6 +448,7 @@ function resolveStaticLoadConfigSettings(
   env: NodeJS.ProcessEnv,
   cli: CliConfigOverrides | undefined,
   persisted: ReturnType<typeof loadPersistedConfig>,
+  hostedRelease: BySpaceHostedRelease,
 ) {
   return {
     mcpEnabled: cli?.mcpEnabled ?? persisted.daemon?.mcp?.enabled ?? true,
@@ -433,7 +463,10 @@ function resolveStaticLoadConfigSettings(
       cli?.hostnames,
     ]),
     trustedProxies: resolveTrustedProxiesConfig(env, persisted),
-    appBaseUrl: env.BYSPACE_APP_BASE_URL ?? persisted.app?.baseUrl ?? DEFAULT_APP_BASE_URL,
+    appBaseUrl:
+      env.BYSPACE_APP_BASE_URL ??
+      mapHostedAppBaseUrl(persisted.app?.baseUrl, hostedRelease) ??
+      hostedRelease.appBaseUrl,
   };
 }
 
@@ -442,11 +475,13 @@ export function loadConfig(
   options?: {
     env?: NodeJS.ProcessEnv;
     cli?: CliConfigOverrides;
+    releaseVersion?: string;
   },
 ): BySpaceDaemonConfig {
   const env = options?.env ?? process.env;
+  const daemonVersion = options?.releaseVersion ?? resolveDaemonVersion();
+  const hostedRelease = resolveBySpaceHostedRelease(daemonVersion);
   const persisted = loadPersistedConfig(byspaceHome);
-
   const listen = resolveListenAddress(env, options?.cli, persisted);
   const {
     mcpEnabled,
@@ -457,13 +492,14 @@ export function loadConfig(
     hostnames,
     trustedProxies,
     appBaseUrl,
-  } = resolveStaticLoadConfigSettings(env, options?.cli, persisted);
+  } = resolveStaticLoadConfigSettings(env, options?.cli, persisted, hostedRelease);
 
   const relay = resolveRelayConfig({
     env,
     persisted,
     cliRelayEnabled: options?.cli?.relayEnabled,
     cliRelayUseTls: options?.cli?.relayUseTls,
+    hostedRelease,
   });
   const serviceProxy = resolveServiceProxyConfig(env, persisted);
   const webUi = resolveWebUiConfig(byspaceHome, env, options?.cli, persisted);
@@ -482,8 +518,9 @@ export function loadConfig(
   return {
     listen,
     byspaceHome,
+    daemonVersion,
     worktreesRoot: resolveWorktreesRoot(byspaceHome, persisted),
-    corsAllowedOrigins: resolveCorsAllowedOrigins(env, persisted),
+    corsAllowedOrigins: resolveCorsAllowedOrigins(env, persisted, hostedRelease),
     hostnames,
     trustedProxies,
     mcpEnabled,

@@ -143,6 +143,7 @@ export class DaemonSession {
       const relay = this.daemonRuntimeConfig?.relay;
       const pairing = await generateLocalPairingOffer({
         byspaceHome: this.byspaceHome,
+        releaseVersion: this.daemonVersion ?? undefined,
         relayEnabled: relay?.enabled ?? true,
         relayEndpoint: relay?.endpoint,
         relayPublicEndpoint: relay?.publicEndpoint,

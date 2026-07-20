@@ -3,8 +3,10 @@ import { existsSync, readFileSync, unlinkSync } from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
 import { loadConfig, resolveBySpaceHome, spawnProcess } from "@bytetrue/byspace-server";
+import { resolveBySpaceHostedRelease } from "@bytetrue/byspace-protocol/release-channel";
 import treeKill from "tree-kill";
 import { tryConnectToDaemon } from "../../utils/client.js";
+import { resolveCliVersion } from "../../version.js";
 
 export interface DaemonStartOptions {
   port?: string;
@@ -97,6 +99,8 @@ const DETACHED_STARTUP_GRACE_MS = 1200;
 const PID_POLL_INTERVAL_MS = 100;
 const DAEMON_LOG_FILENAME = "daemon.log";
 const DAEMON_PID_FILENAME = "byspace.pid";
+const CURRENT_RELEASE_RELAY_ENDPOINT =
+  resolveBySpaceHostedRelease(resolveCliVersion()).relayEndpoint;
 
 export const DEFAULT_STOP_TIMEOUT_MS = 15_000;
 export const DEFAULT_KILL_TIMEOUT_MS = 3_000;
@@ -556,9 +560,7 @@ export function resolveLocalDaemonState(options: { home?: string } = {}): LocalD
     listen,
     relayEnabled: config.relayEnabled ?? true,
     relayEndpoint:
-      config.relayPublicEndpoint ??
-      config.relayEndpoint ??
-      "byspace-relay.bytetrue.workers.dev:443",
+      config.relayPublicEndpoint ?? config.relayEndpoint ?? CURRENT_RELEASE_RELAY_ENDPOINT,
     relayUseTls: config.relayUseTls ?? false,
     relayPublicUseTls: config.relayPublicUseTls ?? config.relayUseTls ?? false,
     logPath,

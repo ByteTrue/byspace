@@ -1,10 +1,11 @@
 # Release process
 
-BySpace publishes only:
+BySpace has two complete release channels. A channel is the npm package, Web/PWA, and relay together; mixing those surfaces is not a supported release.
 
-- `@bytetrue/byspace` — the `byspace` CLI and local daemon;
-- the browser Web/PWA to Cloudflare Pages project `byspace`;
-- the encrypted relay to Cloudflare Worker `byspace-relay`.
+| Channel | npm dist-tag | Web                              | Relay                                               |
+| ------- | ------------ | -------------------------------- | --------------------------------------------------- |
+| Stable  | `latest`     | `https://byspace.pages.dev`      | `wss://byspace-relay.bytetrue.workers.dev:443`      |
+| Beta    | `beta`       | `https://byspace-beta.pages.dev` | `wss://byspace-relay-beta.bytetrue.workers.dev:443` |
 
 Electron, native iOS/Android, app-store builds, Browser automation, and a marketing website are not release surfaces.
 
@@ -13,6 +14,16 @@ Electron, native iOS/Android, app-store builds, Browser automation, and a market
 The current source snapshot is upstream `v0.2.0-beta.1`, commit `0bec06c2db7d3ee071416cde80229eabd682b03e`. The default branch has clean BySpace-only ancestry; the root commit records the source URL, commit, tree, and AGPL license, while README keeps the public attribution link.
 
 Future upstream updates are release-level snapshot updates, not per-commit cherry-picks. Build the next clean source snapshot, reapply the bounded Web-only/identity/release changes, verify it, then replace `main` only after explicit approval.
+
+## Release invariants
+
+- `main` runs CI only. It never deploys either public channel.
+- A release tag is created only after push-event `CI` succeeds on that exact current `main` SHA.
+- Release tags match `vX.Y.Z` or `vX.Y.Z-beta.N` and are immutable under the repository's `Immutable release tags` ruleset.
+- `Publish npm` verifies tag, package version, current `main`, and exact-SHA CI before publishing.
+- Successful `Publish npm` is the sole trigger for the channel-specific Pages and Relay workflows.
+- Deployment workflows accept only successful same-repository tag runs, peel annotated tags, and deploy the immutable tagged SHA. They do not require `main` to remain frozen after npm publication.
+- Prerelease daemons default to the Beta Web/Relay and self-update from npm `beta`; stable daemons default to Stable and self-update from npm `latest`. Custom endpoints and environment overrides remain supported.
 
 ## Required checks
 
@@ -31,23 +42,38 @@ npm run release:check
 
 ## Beta release
 
-1. Start from a clean `main` at version `X.Y.Z-beta.N`.
-2. Push the release commit and wait for push-event `CI` on that exact SHA.
-3. Push only tag `vX.Y.Z-beta.N`.
-4. `npm-release.yml` proves the tag still equals current `main` and that exact-SHA CI succeeded.
-5. Trusted Publishing publishes the already-smoked tarball with npm dist-tag `beta` and creates a prerelease.
-6. Keep npm `latest` unchanged until a stable release is approved.
+1. Classify the change as patch or minor and select `X.Y.Z-beta.N`; agents never select major autonomously.
+2. Update the in-place `CHANGELOG.md` beta entry.
+3. Run all required checks and channel-focused tests.
+4. Push the release commit and wait for push-event `CI` on that exact SHA.
+5. Create and push annotated tag `vX.Y.Z-beta.N` once. Do not move it.
+6. `Publish npm` publishes npm dist-tag `beta` and creates a GitHub prerelease.
+7. Successful publication deploys `byspace-beta` Pages and `byspace-relay-beta` Worker from the tagged SHA.
+8. Verify npm `beta`, `https://byspace-beta.pages.dev`, the beta Worker deployment, a real beta daemon pairing URL, and relay connection. Confirm stable surfaces did not move.
 
-## Cloudflare deployment
+## Stable release or beta promotion
 
-`Deploy App` and `Deploy Relay` consume successful push-event CI for `main`, reject stale SHAs before work and immediately before deployment, and serialize production deployment.
+1. Select stable version `X.Y.Z`. For a beta promotion, replace the beta changelog heading with the stable heading; for a fresh stable release, create a stable changelog entry.
+2. Run all required checks.
+3. Push the release commit and wait for exact-SHA CI.
+4. Create and push annotated tag `vX.Y.Z` once.
+5. `Publish npm` publishes npm dist-tag `latest` and creates the stable GitHub release.
+6. Successful publication deploys `byspace` Pages and `byspace-relay` Worker from the tagged SHA.
+7. Verify npm `latest`, Stable Web, Stable Relay, and a real stable daemon pairing/relay connection. Confirm Beta surfaces did not move.
 
-- Pages: `https://byspace.pages.dev`
-- Relay: `wss://byspace-relay.bytetrue.workers.dev:443`
-- Account: `835cd580057df97323a7854a8069c5f1`
+## Cloudflare resources
 
-Manual workflow dispatch is an explicit operator override and still deploys only the current checked-out `main` SHA.
+Cloudflare account: `835cd580057df97323a7854a8069c5f1`.
+
+All four projects are direct-upload resources with no Cloudflare Git integration. GitHub Actions owns normal release deployments:
+
+- Pages projects: `byspace`, `byspace-beta`
+- Workers: `byspace-relay`, `byspace-relay-beta`
+
+Pages rollback uses a prior successful production deployment. Worker rollback uses `wrangler rollback <version-id> --name <worker>`. Rollbacks are operational recovery, not a substitute for publishing a coherent channel release.
 
 ## Rollback
 
-npm versions are immutable: fix forward with a new version. Pages and Relay may be redeployed from a known-good commit. Before a clean-history cutover, preserve the old repository in a verified offline Git bundle; do not keep old ancestry on the public default branch.
+npm versions are immutable: fix forward with a new version. If npm publication succeeded but a channel deployment failed, rerun the failed `Deploy App` or `Deploy Relay` workflow run; the immutable triggering event retains the release tag and SHA. Pages and Relay can be rolled back independently for emergency recovery, then must be reconciled with a new package version.
+
+Before a clean-history cutover, preserve the old repository in a verified offline Git bundle; do not keep old ancestry on the public default branch.

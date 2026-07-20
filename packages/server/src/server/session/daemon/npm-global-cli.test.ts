@@ -56,7 +56,10 @@ describe("DefaultNpmGlobalBySpaceCli", () => {
     ]);
   });
 
-  test("runs the global install command for the latest cli", async () => {
+  test.each([
+    ["latest", "@bytetrue/byspace@latest"],
+    ["beta", "@bytetrue/byspace@beta"],
+  ] as const)("runs the global install command for the %s cli", async (distTag, packageSpec) => {
     const calls: CommandCall[] = [];
     const cli = new DefaultNpmGlobalBySpaceCli(async (command, args, options) => {
       calls.push({
@@ -68,7 +71,7 @@ describe("DefaultNpmGlobalBySpaceCli", () => {
       return { exitCode: 0, stdout: "changed 42 packages", stderr: "" };
     });
 
-    await expect(cli.installLatest()).resolves.toEqual({
+    await expect(cli.install(distTag)).resolves.toEqual({
       exitCode: 0,
       stdout: "changed 42 packages",
       stderr: "",
@@ -76,7 +79,7 @@ describe("DefaultNpmGlobalBySpaceCli", () => {
     expect(calls).toEqual([
       {
         command: "npm",
-        args: ["install", "-g", "@bytetrue/byspace@latest"],
+        args: ["install", "-g", packageSpec],
         timeout: 300_000,
         maxBuffer: 10 * 1024 * 1024,
       },

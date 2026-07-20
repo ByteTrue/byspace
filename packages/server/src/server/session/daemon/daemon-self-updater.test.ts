@@ -15,7 +15,7 @@ interface TestLogger {
 }
 
 type Inspection = NpmGlobalBySpaceInstall | Error;
-type RuntimeCall = "inspect" | "installLatest";
+type RuntimeCall = "inspect" | "install:latest" | "install:beta";
 
 const globalRoot = "/global/lib";
 const globalNodeModules = `${globalRoot}/node_modules`;
@@ -68,8 +68,8 @@ function createRuntime(input: {
         }
         return inspection;
       },
-      async installLatest() {
-        calls.push("installLatest");
+      async install(distTag) {
+        calls.push(`install:${distTag}`);
         return input.installResult ?? { exitCode: 0, stdout: "changed 42 packages", stderr: "" };
       },
     },
@@ -90,7 +90,7 @@ async function runUpdate(input: {
   const updater = new DaemonSelfUpdater(input.runtime);
   const phases = input.phases ?? [];
   const result = await updater.update({
-    daemonVersion: input.daemonVersion ?? "0.1.15",
+    daemonVersion: input.daemonVersion === undefined ? "0.1.15" : input.daemonVersion,
     onProgress: (phase) => phases.push(phase),
     logger,
   });
@@ -113,7 +113,36 @@ describe("DaemonSelfUpdater", () => {
       newVersion: "0.1.96",
     });
     expect(phases).toEqual(["starting", "downloading", "installing", "complete"]);
-    expect(calls).toEqual(["inspect", "installLatest", "inspect"]);
+    expect(calls).toEqual(["inspect", "install:latest", "inspect"]);
+  });
+
+  test("updates beta daemons from the npm beta tag", async () => {
+    const calls: RuntimeCall[] = [];
+    const runtime = createRuntime({
+      calls,
+      inspections: [
+        npmGlobalBySpaceInstall("0.2.0-beta.1"),
+        npmGlobalBySpaceInstall("0.2.0-beta.2"),
+      ],
+    });
+
+    const { result } = await runUpdate({ runtime, daemonVersion: "0.2.0-beta.1" });
+
+    expect(result).toEqual({ success: true, error: null, newVersion: "0.2.0-beta.2" });
+    expect(calls).toEqual(["inspect", "install:beta", "inspect"]);
+  });
+
+  test.each([
+    [null, "Cannot self-update because the running daemon version is unavailable."],
+    ["not-semver", "Invalid BySpace release version: not-semver"],
+  ])("does not install when the running daemon version is %s", async (daemonVersion, error) => {
+    const calls: RuntimeCall[] = [];
+    const runtime = createRuntime({ calls, inspections: [] });
+
+    const update = await runUpdate({ runtime, daemonVersion });
+
+    expect(update.result).toEqual({ success: false, error, newVersion: null });
+    expect(calls).toEqual([]);
   });
 
   test("does not run install when npm global cli is missing", async () => {
@@ -195,8 +224,8 @@ describe("DaemonSelfUpdater", () => {
           calls.push("inspect");
           return npmGlobalBySpaceInstall("0.1.15");
         },
-        async installLatest() {
-          calls.push("installLatest");
+        async install(distTag) {
+          calls.push(`install:${distTag}`);
           installStartedResolve?.();
           return new Promise<CommandResult>((resolve) => {
             resolveInstall = resolve;
@@ -229,6 +258,6 @@ describe("DaemonSelfUpdater", () => {
 
     resolveInstall?.({ exitCode: 0, stdout: "updated", stderr: "" });
     await expect(firstUpdate).resolves.toMatchObject({ success: true });
-    expect(calls).toEqual(["inspect", "installLatest", "inspect"]);
+    expect(calls).toEqual(["inspect", "install:latest", "inspect"]);
   });
 });

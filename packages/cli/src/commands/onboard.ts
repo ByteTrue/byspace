@@ -9,6 +9,7 @@ import {
   type CliConfigOverrides,
   type PersistedConfig,
 } from "@bytetrue/byspace-server";
+import { resolveBySpaceHostedRelease } from "@bytetrue/byspace-protocol/release-channel";
 import {
   resolveLocalBySpaceHome,
   resolveLocalDaemonState,
@@ -18,6 +19,7 @@ import {
   type DaemonStartOptions,
 } from "./daemon/local-daemon.js";
 import { tryConnectToDaemon } from "../utils/client.js";
+import { resolveCliVersion } from "../version.js";
 
 interface OnboardOptions extends DaemonStartOptions {
   timeout?: string;
@@ -41,6 +43,7 @@ type OnboardPersistedConfig = PersistedConfig & {
 
 const DEFAULT_READY_TIMEOUT_MS = 10 * 60 * 1000;
 const READY_PROBE_TIMEOUT_MS = 1200;
+const CURRENT_RELEASE_APP_BASE_URL = resolveBySpaceHostedRelease(resolveCliVersion()).appBaseUrl;
 
 class OnboardCancelledError extends Error {}
 
@@ -294,14 +297,19 @@ async function waitForDaemonReady(args: {
   return poll({ lastStatus: "", lastPrintedAt: 0 });
 }
 
-function printNextSteps(pairingUrl: string | null, byspaceHome: string, richUi: boolean): void {
+function printNextSteps(
+  pairingUrl: string | null,
+  byspaceHome: string,
+  appBaseUrl: string,
+  richUi: boolean,
+): void {
   const daemonLogPath = path.join(byspaceHome, "daemon.log");
   const nextStepsLines = [
     pairingUrl
       ? "1. Open the pairing link above in BySpace."
       : "1. Open BySpace and connect to your daemon.",
-    "2. Web app: https://byspace.pages.dev",
-    "3. Docs: https://byspace.pages.dev/docs",
+    `2. Web app: ${appBaseUrl}`,
+    `3. Docs: ${appBaseUrl}/docs`,
     '4. Example: byspace run --output-schema schema.json "extract fields"',
   ];
   const quickReferenceLines = [
@@ -492,7 +500,7 @@ export async function runOnboard(options: OnboardOptions): Promise<void> {
 
   if (config.relayEnabled === false) {
     log.warn("Relay is disabled; pairing offer is unavailable for this daemon.");
-    printNextSteps(null, byspaceHome, richUi);
+    printNextSteps(null, byspaceHome, config.appBaseUrl ?? CURRENT_RELEASE_APP_BASE_URL, richUi);
     if (richUi) {
       outro("BySpace daemon is running.");
     }
@@ -512,7 +520,7 @@ export async function runOnboard(options: OnboardOptions): Promise<void> {
 
   if (!pairing.url) {
     log.warn("Relay pairing URL is unavailable for this daemon configuration.");
-    printNextSteps(null, byspaceHome, richUi);
+    printNextSteps(null, byspaceHome, config.appBaseUrl ?? CURRENT_RELEASE_APP_BASE_URL, richUi);
     if (richUi) {
       outro("BySpace daemon is running.");
     }
@@ -524,7 +532,12 @@ export async function runOnboard(options: OnboardOptions): Promise<void> {
     "Scan to pair",
   );
   renderNote(pairing.url, "Pairing link");
-  printNextSteps(pairing.url, byspaceHome, richUi);
+  printNextSteps(
+    pairing.url,
+    byspaceHome,
+    config.appBaseUrl ?? CURRENT_RELEASE_APP_BASE_URL,
+    richUi,
+  );
   if (richUi) {
     outro("BySpace is ready!");
   }

@@ -11,8 +11,10 @@ import { connectToDaemon } from "@/utils/test-daemon-connection";
 import { ConnectionOfferSchema } from "@bytetrue/byspace-protocol/connection-offer";
 import { AdaptiveModalSheet, AdaptiveTextInput, type SheetHeader } from "./adaptive-modal-sheet";
 import { Button } from "@/components/ui/button";
+import { resolveAppHostedRelease } from "@/utils/hosted-release";
 
 const FLEX_ONE_STYLE = { flex: 1 } as const;
+const PAIR_LINK_PLACEHOLDER = `${resolveAppHostedRelease().appBaseUrl}/#offer=...`;
 
 const styles = StyleSheet.create((theme) => ({
   helper: {
@@ -189,7 +191,7 @@ export function PairLinkModal({ visible, onClose, onCancel, onSaved }: PairLinkM
           nativeID="pair-link-input"
           accessibilityLabel={t("pairing.link.label")}
           onChangeText={handleChangeOfferUrl}
-          placeholder="https://byspace.pages.dev/#offer=..."
+          placeholder={PAIR_LINK_PLACEHOLDER}
           placeholderTextColor={theme.colors.foregroundMuted}
           style={styles.input}
           autoFocus

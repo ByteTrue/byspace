@@ -46,6 +46,7 @@ import {
 } from "@/utils/project-config-form";
 import { buildProjectsSettingsRoute } from "@/utils/host-routes";
 import type { ProjectHostEntry, ProjectSummary } from "@/utils/projects";
+import { resolveAppHostedRelease } from "@/utils/hosted-release";
 
 const SCRIPT_SERVICE_TYPE = "service";
 
@@ -79,7 +80,7 @@ const METADATA_PROMPT_FIELDS: Record<MetadataPromptKey, MetadataPromptField> = {
   },
 };
 
-const WORKTREE_DOCS_URL = "https://byspace.pages.dev/docs/worktrees";
+const WORKTREE_DOCS_URL = `${resolveAppHostedRelease().appBaseUrl}/docs/worktrees`;
 
 type ReadProjectConfigData = Awaited<ReturnType<DaemonClient["readProjectConfig"]>>;
 

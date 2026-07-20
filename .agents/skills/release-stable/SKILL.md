@@ -6,8 +6,8 @@ user-invocable: true
 
 # Release stable
 
-Read `docs/release.md` in the BySpace repo and follow the **Standard release (stable)** flow if cutting fresh, or the **Beta flow** promotion step if promoting an existing beta. Run the **Stable release (or promotion)** completion checklist at the bottom of that doc.
+Read `docs/release.md` in the BySpace repo and follow the **Stable release or beta promotion** section end-to-end, including its final verification.
 
 For a fresh release, classify the previous-stable-to-`HEAD` diff as patch or minor and show the target version and rationale to the user. Agents never select a major version autonomously.
 
-The doc covers the changelog, pre-release sanity check, and post-release babysit pattern. Don't skip steps.
+Do not finish until npm `latest`, Stable Web, and Stable Relay are verified and Beta is confirmed unchanged.
