@@ -1233,6 +1233,19 @@ describe("PiRpcAgentClient", () => {
         name: "google/gemini-2.5-flash-lite",
         reasoning: true,
       },
+      {
+        provider: "bytetrueapi",
+        id: "reasoning-high-max",
+        reasoning: true,
+        thinkingLevelMap: {
+          off: null,
+          minimal: null,
+          low: null,
+          medium: null,
+          high: "high",
+          max: "max",
+        },
+      },
     ];
 
     const catalog = await catalogPromise;
@@ -1243,14 +1256,23 @@ describe("PiRpcAgentClient", () => {
           id: "openrouter/google/gemini-2.5-flash-lite",
           label: "gemini-2.5-flash-lite",
           defaultThinkingOptionId: "medium",
+          thinkingOptions: [
+            { id: "off" },
+            { id: "minimal" },
+            { id: "low" },
+            { id: "medium" },
+            { id: "high" },
+          ],
+        },
+        {
+          provider: "pi",
+          id: "bytetrueapi/reasoning-high-max",
+          label: "reasoning-high-max",
+          defaultThinkingOptionId: "high",
+          thinkingOptions: [{ id: "high" }, { id: "max" }],
         },
       ],
       modes: [],
-    });
-    expect(catalog.models[0]?.thinkingOptions).toContainEqual({
-      id: "max",
-      label: "Max",
-      description: "Maximum reasoning",
     });
     expect(pi.recordedLaunches[0]).toMatchObject({ cwd: "/workspace/with-extension" });
   });
