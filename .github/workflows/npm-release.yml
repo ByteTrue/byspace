@@ -6,7 +6,7 @@ on:
       - "v*"
 
 concurrency:
-  group: npm-release-${{ github.ref }}
+  group: npm-release-${{ contains(github.ref_name, '-') && 'beta' || 'stable' }}
   cancel-in-progress: false
 
 jobs:

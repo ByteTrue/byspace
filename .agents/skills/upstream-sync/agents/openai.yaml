@@ -1,0 +1,4 @@
+interface:
+  display_name: "Sync BySpace Upstream"
+  short_description: "Rebuild from a frozen upstream release"
+  default_prompt: "Use $upstream-sync to review and rebuild BySpace from the next upstream release snapshot."

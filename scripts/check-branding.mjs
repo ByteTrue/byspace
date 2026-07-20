@@ -15,8 +15,16 @@ const ignoredFiles = new Set([
   "LICENSE",
   ".byspace/upstream-sync.json",
   ".agents/skills/upstream-sync/SKILL.md",
+  "docs/upstream-sync.md",
 ]);
 const attribution = `BySpace is forked from [${legacyName}](https://github.com/get${legacyLower}/${legacyLower}).`;
+const approvedLegacyPhrases = new Map([
+  ["README.md", [attribution, `frozen ${legacyName} release snapshot`]],
+  ["README.zh-CN.md", [`${legacyName} release snapshot`]],
+  ["README.ja.md", [`${legacyName} リリーススナップショット`]],
+  ["AGENTS.md", [`${legacyName} updates`, `${legacyName}/upstream`]],
+  ["CLAUDE.md", [`${legacyName} updates`, `${legacyName}/upstream`]],
+]);
 
 function fail(message) {
   process.stderr.write(`${message}\n`);
@@ -53,7 +61,9 @@ for (const path of gitFiles()) {
   const buffer = readFileSync(resolve(root, path));
   if (buffer.includes(0) || pathAllowed) continue;
   let text = buffer.toString("utf8");
-  if (path === "README.md") text = text.replace(attribution, "");
+  for (const phrase of approvedLegacyPhrases.get(path) ?? []) {
+    text = text.replaceAll(phrase, "");
+  }
   for (const value of forbiddenNames) {
     if (text.includes(value)) fail(`Legacy identity '${value}' in active file: ${path}`);
   }

@@ -47,24 +47,33 @@ You need at least one agent CLI installed and configured with your credentials:
 
 ### CLI / headless
 
-Install the CLI and start BySpace:
+Install or upgrade the Stable channel:
 
 ```bash
-npm install -g @bytetrue/byspace
+npm install -g @bytetrue/byspace@latest
 byspace
 ```
 
-The daemon prints a pairing link for the hosted Web app and keeps agents running after the browser closes.
+Install or upgrade the newest Beta channel:
+
+```bash
+npm install -g @bytetrue/byspace@beta
+byspace
+```
+
+If a daemon is already running, restart it after switching or upgrading channels:
+
+```bash
+byspace daemon restart
+byspace daemon status
+```
+
+The daemon prints a pairing link for its matching hosted Web app and keeps agents running after the browser closes. Stable uses npm `latest`, [byspace.pages.dev](https://byspace.pages.dev), and `byspace-relay`; Beta uses npm `beta`, [byspace-beta.pages.dev](https://byspace-beta.pages.dev), and `byspace-relay-beta`.
 
 For full setup and configuration, see:
 
 - [Docs](https://byspace.pages.dev/docs)
 - [Configuration reference](https://byspace.pages.dev/docs/configuration)
-
-Release channels stay isolated end-to-end:
-
-- Stable: npm `latest`, [byspace.pages.dev](https://byspace.pages.dev), and `byspace-relay`
-- Beta: npm `beta`, [byspace-beta.pages.dev](https://byspace-beta.pages.dev), and `byspace-relay-beta`
 
 ## CLI
 
@@ -107,6 +116,13 @@ Quick monorepo package map:
 - `packages/app`: Expo/React Native Web client
 - `packages/cli`: `byspace` CLI for daemon and agent workflows
 - `packages/relay`: Relay package for remote connectivity
+
+Maintainer workflows are encoded as repo-local skills:
+
+- `upstream-sync` — rebuild from a frozen Paseo release snapshot.
+- `release-beta` — ship npm/Web/Relay Beta as one channel.
+- `release-stable` — ship or promote the Stable channel.
+- `harden-byspace-release` — audit packaging, CI/CD, channel isolation, or recovery.
 
 Common commands:
 

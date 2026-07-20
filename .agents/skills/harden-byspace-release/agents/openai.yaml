@@ -1,0 +1,4 @@
+interface:
+  display_name: "Harden BySpace Release"
+  short_description: "Audit packaging and release safety"
+  default_prompt: "Use $harden-byspace-release to audit BySpace packaging, CI/CD, channel isolation, or release recovery."

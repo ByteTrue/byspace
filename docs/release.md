@@ -2,6 +2,11 @@
 
 BySpace has two complete release channels. A channel is the npm package, Web/PWA, and relay together; mixing those surfaces is not a supported release.
 
+Related process docs:
+
+- `docs/release-engineering.md` — incident-derived controls and proof ladder.
+- `docs/upstream-sync.md` — source-snapshot update workflow.
+
 | Channel | npm dist-tag | Web                              | Relay                                               |
 | ------- | ------------ | -------------------------------- | --------------------------------------------------- |
 | Stable  | `latest`     | `https://byspace.pages.dev`      | `wss://byspace-relay.bytetrue.workers.dev:443`      |
@@ -13,12 +18,14 @@ Electron, native iOS/Android, app-store builds, Browser automation, and a market
 
 The current source snapshot is upstream `v0.2.0-beta.1`, commit `0bec06c2db7d3ee071416cde80229eabd682b03e`. The default branch has clean BySpace-only ancestry; the root commit records the source URL, commit, tree, and AGPL license, while README keeps the public attribution link.
 
-Future upstream updates are release-level snapshot updates, not per-commit cherry-picks. Build the next clean source snapshot, reapply the bounded Web-only/identity/release changes, verify it, then replace `main` only after explicit approval.
+Future upstream updates are release-level snapshot updates, not per-commit cherry-picks. Build the next clean source snapshot, reapply the bounded Web-only/identity/release changes, verify it, then replace `main` only after explicit approval. Follow `docs/upstream-sync.md`.
 
 ## Release invariants
 
 - `main` runs CI only. It never deploys either public channel.
 - A release tag is created only after push-event `CI` succeeds on that exact current `main` SHA.
+- Version scripts update and stage files but do not create a commit or tag; the release commit is reviewed first and the annotated tag is created only after remote exact-SHA CI.
+- Immediately before tagging, release SHA, CI SHA, local `HEAD`, and fetched `origin/main` must still be equal.
 - Release tags match `vX.Y.Z` or `vX.Y.Z-beta.N` and are immutable under the repository's `Immutable release tags` ruleset.
 - `Publish npm` verifies tag, package version, current `main`, and exact-SHA CI before publishing.
 - Successful `Publish npm` is the sole trigger for the channel-specific Pages and Relay workflows.
@@ -42,24 +49,27 @@ npm run release:check
 
 ## Beta release
 
-1. Classify the change as patch or minor and select `X.Y.Z-beta.N`; agents never select major autonomously.
-2. Update the in-place `CHANGELOG.md` beta entry.
-3. Run all required checks and channel-focused tests.
-4. Push the release commit and wait for push-event `CI` on that exact SHA.
-5. Create and push annotated tag `vX.Y.Z-beta.N` once. Do not move it.
-6. `Publish npm` publishes npm dist-tag `beta` and creates a GitHub prerelease.
-7. Successful publication deploys `byspace-beta` Pages and `byspace-relay-beta` Worker from the tagged SHA.
-8. Verify npm `beta`, `https://byspace-beta.pages.dev`, the beta Worker deployment, a real beta daemon pairing URL, and relay connection. Confirm stable surfaces did not move.
+1. Classify the change as patch or minor and select `X.Y.Z-beta.N`; agents never select major autonomously. Run the matching `version:all:beta:*` command, confirm it created no commit/tag, then update the changelog.
+2. Run all required checks and channel-focused tests.
+3. Commit and push the release preparation; wait for push-event `CI` on that exact SHA.
+4. Immediately before tagging, fetch `origin/main` and prove release SHA = CI SHA = local `HEAD` = `origin/main`. Stop if `main` advanced.
+5. Confirm the `main` push did not deploy App or Relay, then record npm `latest` and the current Stable deployment IDs.
+6. Create and push annotated tag `vX.Y.Z-beta.N` once. Do not move it.
+7. `Publish npm` publishes npm dist-tag `beta` and creates a GitHub prerelease.
+8. Successful publication deploys `byspace-beta` Pages and `byspace-relay-beta` Worker from the tagged SHA.
+9. Verify npm `beta`, `https://byspace-beta.pages.dev`, the Beta Worker deployment, a real Beta daemon pairing URL, and relay connection. Confirm npm `latest` and Stable deployment IDs did not move.
 
 ## Stable release or beta promotion
 
-1. Select stable version `X.Y.Z`. For a beta promotion, replace the beta changelog heading with the stable heading; for a fresh stable release, create a stable changelog entry.
+1. Select stable version `X.Y.Z` with `version:all:promote`, `version:all:patch`, or `version:all:minor`; confirm it created no commit/tag. For promotion, replace the Beta changelog heading; for a fresh Stable release, create the Stable entry.
 2. Run all required checks.
-3. Push the release commit and wait for exact-SHA CI.
-4. Create and push annotated tag `vX.Y.Z` once.
-5. `Publish npm` publishes npm dist-tag `latest` and creates the stable GitHub release.
-6. Successful publication deploys `byspace` Pages and `byspace-relay` Worker from the tagged SHA.
-7. Verify npm `latest`, Stable Web, Stable Relay, and a real stable daemon pairing/relay connection. Confirm Beta surfaces did not move.
+3. Commit and push the release preparation; wait for exact-SHA CI.
+4. Immediately before tagging, fetch `origin/main` and prove release SHA = CI SHA = local `HEAD` = `origin/main`. Stop if `main` advanced.
+5. Confirm the `main` push did not deploy App or Relay, then record npm `beta` and the current Beta deployment IDs.
+6. Create and push annotated tag `vX.Y.Z` once.
+7. `Publish npm` publishes npm dist-tag `latest` and creates the Stable GitHub release.
+8. Successful publication deploys `byspace` Pages and `byspace-relay` Worker from the tagged SHA.
+9. Verify npm `latest`, Stable Web, Stable Relay, and a real Stable daemon pairing/relay connection. Confirm npm `beta` and Beta deployment IDs did not move.
 
 ## Cloudflare resources
 

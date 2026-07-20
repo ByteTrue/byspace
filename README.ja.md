@@ -47,14 +47,28 @@ BySpace はコーディングエージェントを管理するローカルサー
 
 ### CLI / ヘッドレス
 
-CLI をインストールして BySpace を起動します。
+Stable チャンネルをインストールまたは更新します。
 
 ```bash
-npm install -g @bytetrue/byspace
+npm install -g @bytetrue/byspace@latest
 byspace
 ```
 
-ターミナルにペアリングリンクが表示されます。そのリンクを開くと、ホストされた Web アプリから接続できます。サーバーやリモートマシンでの利用に適しています。
+最新の Beta チャンネルをインストールまたは更新します。
+
+```bash
+npm install -g @bytetrue/byspace@beta
+byspace
+```
+
+デーモンがすでに動作中の場合は、チャンネルの切り替えまたは更新後に再起動します。
+
+```bash
+byspace daemon restart
+byspace daemon status
+```
+
+ターミナルには対応するチャンネルのペアリングリンクが表示されます。Stable は npm `latest`、[byspace.pages.dev](https://byspace.pages.dev)、`byspace-relay` を使用し、Beta は npm `beta`、[byspace-beta.pages.dev](https://byspace-beta.pages.dev)、`byspace-relay-beta` を使用します。
 
 詳しいセットアップと設定については以下を参照してください。
 
@@ -102,6 +116,13 @@ npx skills add ByteTrue/byspace
 - `packages/app`: ブラウザ Web/PWA クライアント（Expo + React Native Web）
 - `packages/cli`: デーモンおよびエージェントワークフロー向け `byspace` CLI
 - `packages/relay`: リモート接続用リレーパッケージ
+
+メンテナー向けワークフローはリポジトリローカルのスキルとして定義されています。
+
+- `upstream-sync` — 固定した Paseo リリーススナップショットからクリーンに再構築します。
+- `release-beta` — npm、Web、Relay を一つの Beta チャンネルとしてリリースします。
+- `release-stable` — Stable チャンネルをリリースまたは昇格します。
+- `harden-byspace-release` — パッケージング、CI/CD、チャンネル分離、復旧を監査します。
 
 よく使うコマンド：
 

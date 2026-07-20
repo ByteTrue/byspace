@@ -47,14 +47,28 @@ BySpace 会运行一个名为 daemon 的本地服务，用来管理你的 coding
 
 ### CLI / 无头模式
 
-安装 CLI 并启动 BySpace：
+安装或升级 Stable 版本：
 
 ```bash
-npm install -g @bytetrue/byspace
+npm install -g @bytetrue/byspace@latest
 byspace
 ```
 
-终端中会显示配对链接。打开该链接即可从托管 Web app 连接。这个方式适合服务器和远程机器。
+安装或升级最新 Beta 版本：
+
+```bash
+npm install -g @bytetrue/byspace@beta
+byspace
+```
+
+如果 daemon 已在运行，切换或升级 channel 后需要重启：
+
+```bash
+byspace daemon restart
+byspace daemon status
+```
+
+终端会显示对应 channel 的配对链接。Stable 使用 npm `latest`、[byspace.pages.dev](https://byspace.pages.dev) 和 `byspace-relay`；Beta 使用 npm `beta`、[byspace-beta.pages.dev](https://byspace-beta.pages.dev) 和 `byspace-relay-beta`。
 
 完整安装和配置见：
 
@@ -102,6 +116,13 @@ Monorepo 包结构速览：
 - `packages/app`：浏览器 Web/PWA 客户端（Expo + React Native Web）
 - `packages/cli`：用于 daemon 和 agent 工作流的 `byspace` CLI
 - `packages/relay`：用于远程连接的 relay 包
+
+维护流程已经沉淀为仓库内 skills：
+
+- `upstream-sync` — 从冻结的 Paseo release snapshot 干净重建。
+- `release-beta` — 将 npm、Web、Relay 作为完整 Beta channel 发布。
+- `release-stable` — 发布或晋升 Stable channel。
+- `harden-byspace-release` — 审计打包、CI/CD、channel 隔离和故障恢复。
 
 常用命令：
 

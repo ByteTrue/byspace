@@ -1,0 +1,4 @@
+interface:
+  display_name: "Release BySpace Beta"
+  short_description: "Ship the isolated BySpace Beta channel"
+  default_prompt: "Use $release-beta to cut and verify the next BySpace Beta release."

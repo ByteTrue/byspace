@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { computeNextReleaseVersion } from "./release-version-utils.mjs";
+import { buildNpmVersionArgs, computeNextReleaseVersion } from "./release-version-utils.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.resolve(__dirname, "..");
@@ -61,8 +61,4 @@ if (args.print) {
   process.exit(0);
 }
 
-execFileSync(
-  "npm",
-  ["version", nextVersion, "--include-workspace-root", "--message", "chore(release): cut %s"],
-  { cwd: rootDir, stdio: "inherit" },
-);
+execFileSync("npm", buildNpmVersionArgs(nextVersion), { cwd: rootDir, stdio: "inherit" });
