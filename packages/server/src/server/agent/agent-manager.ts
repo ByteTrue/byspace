@@ -1483,15 +1483,14 @@ export class AgentManager {
       }
     }
 
-    const effectiveModelId = runtimeInfo?.model ?? normalizedModelId;
-    agent.config.model = effectiveModelId ?? undefined;
+    agent.config.model = normalizedModelId ?? undefined;
     if (runtimeInfo) {
-      agent.runtimeInfo = runtimeInfo;
+      agent.runtimeInfo = { ...runtimeInfo, model: normalizedModelId };
       if (Object.prototype.hasOwnProperty.call(runtimeInfo, "thinkingOptionId")) {
         agent.config.thinkingOptionId = runtimeInfo.thinkingOptionId ?? undefined;
       }
     } else if (agent.runtimeInfo) {
-      agent.runtimeInfo = { ...agent.runtimeInfo, model: effectiveModelId };
+      agent.runtimeInfo = { ...agent.runtimeInfo, model: normalizedModelId };
     }
     this.touchUpdatedAt(agent);
     this.emitState(agent);
