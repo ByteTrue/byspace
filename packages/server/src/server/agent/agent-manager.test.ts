@@ -3063,6 +3063,95 @@ test("persists live mode, model, and thinking changes without an external snapsh
   expect(persisted?.runtimeInfo?.model).toBe("gpt-5.4");
 });
 
+test("persists authoritative thinking after model changes clamp it", async () => {
+  class ClampingModelSession extends TestAgentSession {
+    private model: string | null;
+    private thinkingOptionId: string | null;
+
+    constructor(config: AgentSessionConfig) {
+      super(config);
+      this.model = config.model ?? null;
+      this.thinkingOptionId = config.thinkingOptionId ?? null;
+    }
+
+    override async setModel(modelId: string | null): Promise<void> {
+      this.model = modelId;
+      this.thinkingOptionId = "high";
+    }
+
+    override async getRuntimeInfo() {
+      return {
+        provider: this.provider,
+        sessionId: this.id,
+        model: this.model,
+        thinkingOptionId: this.thinkingOptionId,
+      };
+    }
+
+    override describePersistence() {
+      return {
+        provider: this.provider,
+        sessionId: this.id,
+        metadata: {
+          model: this.model,
+          thinkingOptionId: this.thinkingOptionId,
+        },
+      };
+    }
+  }
+
+  class ClampingModelClient extends TestAgentClient {
+    override async createSession(config: AgentSessionConfig): Promise<AgentSession> {
+      return new ClampingModelSession(config);
+    }
+  }
+
+  const workdir = mkdtempSync(join(tmpdir(), "agent-manager-model-thinking-clamp-"));
+  const storage = new AgentStorage(join(workdir, "agents"), logger);
+  const manager = new AgentManager({
+    clients: { codex: new ClampingModelClient() },
+    registry: storage,
+    logger,
+    idFactory: () => "00000000-0000-4000-8000-000000000136",
+  });
+  const snapshot = await manager.createAgent(
+    {
+      provider: "codex",
+      cwd: workdir,
+      model: "model-with-max",
+      thinkingOptionId: "max",
+    },
+    undefined,
+    { workspaceId: undefined },
+  );
+
+  await manager.setAgentModel(snapshot.id, "model-without-max");
+  await manager.flush();
+
+  const live = manager.getAgent(snapshot.id);
+  expect(live?.config).toMatchObject({
+    model: "model-without-max",
+    thinkingOptionId: "high",
+  });
+  expect(live?.runtimeInfo).toMatchObject({
+    model: "model-without-max",
+    thinkingOptionId: "high",
+  });
+  expect(live?.persistence?.metadata).toMatchObject({
+    model: "model-without-max",
+    thinkingOptionId: "high",
+  });
+  const persisted = await storage.get(snapshot.id);
+  expect(persisted?.config).toMatchObject({
+    model: "model-without-max",
+    thinkingOptionId: "high",
+  });
+  expect(persisted?.persistence?.metadata).toMatchObject({
+    model: "model-without-max",
+    thinkingOptionId: "high",
+  });
+});
+
 test("session config drift events update state through the stream channel", async () => {
   const workdir = mkdtempSync(join(tmpdir(), "agent-manager-session-config-events-"));
   let capturedSession: TestAgentSession | null = null;
