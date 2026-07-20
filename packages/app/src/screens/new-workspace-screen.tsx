@@ -2275,6 +2275,11 @@ export function NewWorkspaceScreen({
             serverId={selectedServerId}
             isPaneFocused={true}
             onSubmitMessage={handleSubmitNewWorkspace}
+            placeholder={t(
+              isCompact
+                ? "newWorkspace.promptPlaceholderCompact"
+                : "newWorkspace.promptPlaceholder",
+            )}
             allowEmptySubmit={true}
             submitButtonAccessibilityLabel={t("newWorkspace.create")}
             submitButtonTestID="workspace-create-submit"

@@ -899,6 +899,8 @@ export const zhCN: TranslationResources = {
       baseNotApplicable: "不适用",
     },
     titlePlaceholder: "标题（可选）",
+    promptPlaceholder: "给 Agent 发消息（可选）；按 Enter 或点击 ↵ 可直接创建 workspace",
+    promptPlaceholderCompact: "给 Agent 发消息（可选）；点击 ↵ 可直接创建 workspace",
     errors: {
       hostDisconnected: "Host 未连接",
       createWorktreeFailed: "创建 worktree 失败",

@@ -929,6 +929,10 @@ export const ru: TranslationResources = {
       baseNotApplicable: "Неприменимо",
     },
     titlePlaceholder: "Название (необязательно)",
+    promptPlaceholder:
+      "Сообщение агенту (необязательно); нажмите Enter или ↵, чтобы создать рабочее пространство",
+    promptPlaceholderCompact:
+      "Сообщение агенту (необязательно); нажмите ↵, чтобы создать рабочее пространство",
     errors: {
       hostDisconnected: "Host не подключен",
       createWorktreeFailed: "Не удалось создать рабочее дерево.",

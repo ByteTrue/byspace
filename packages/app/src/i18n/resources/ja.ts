@@ -921,6 +921,10 @@ export const ja: TranslationResources = {
       baseNotApplicable: "該当なし",
     },
     titlePlaceholder: "タイトル（任意）",
+    promptPlaceholder:
+      "エージェントへのメッセージ（任意）。Enter または ↵ を押すとワークスペースを作成できます",
+    promptPlaceholderCompact:
+      "エージェントへのメッセージ（任意）。↵ を押すとワークスペースを作成できます",
     errors: {
       hostDisconnected: "ホストが接続されていません",
       createWorktreeFailed: "ワークツリーの作成に失敗しました",

@@ -939,6 +939,10 @@ export const es: TranslationResources = {
       baseNotApplicable: "No aplicable",
     },
     titlePlaceholder: "Título (opcional)",
+    promptPlaceholder:
+      "Mensaje para el agente (opcional); pulsa Enter o ↵ para crear el espacio de trabajo",
+    promptPlaceholderCompact:
+      "Mensaje para el agente (opcional); pulsa ↵ para crear el espacio de trabajo",
     errors: {
       hostDisconnected: "Hostno está conectado",
       createWorktreeFailed: "No se pudo crear el árbol de trabajo",

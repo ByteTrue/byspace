@@ -919,6 +919,9 @@ export const en = {
       baseNotApplicable: "Not applicable",
     },
     titlePlaceholder: "Title (optional)",
+    promptPlaceholder:
+      "Message the agent (optional); press Enter or click ↵ to create the workspace",
+    promptPlaceholderCompact: "Message the agent (optional); click ↵ to create the workspace",
     errors: {
       hostDisconnected: "Host is not connected",
       createWorktreeFailed: "Failed to create worktree",

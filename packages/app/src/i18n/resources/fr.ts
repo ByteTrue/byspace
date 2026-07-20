@@ -937,6 +937,10 @@ export const fr: TranslationResources = {
       baseNotApplicable: "Non applicable",
     },
     titlePlaceholder: "Titre (facultatif)",
+    promptPlaceholder:
+      "Message à l’agent (facultatif) ; appuyez sur Entrée ou sur ↵ pour créer l’espace de travail",
+    promptPlaceholderCompact:
+      "Message à l’agent (facultatif) ; appuyez sur ↵ pour créer l’espace de travail",
     errors: {
       hostDisconnected: "Hostn'est pas connecté",
       createWorktreeFailed: "Échec de la création de l'arbre de travail",

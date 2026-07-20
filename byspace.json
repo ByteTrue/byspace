@@ -4,7 +4,7 @@
       "npm ci",
       "BYSPACE_DEV_MANAGED_HOME=1 BYSPACE_DEV_SEED_HOME=\"$BYSPACE_SOURCE_CHECKOUT_PATH/.dev/byspace-home\" BYSPACE_HOME=\"$PWD/.dev/byspace-home\" ./scripts/dev-home.sh",
       "npm run build:server",
-      "cp \"$BYSPACE_SOURCE_CHECKOUT_PATH/packages/server/.env\" \"$PWD/packages/server/.env\""
+      "if [ -e \"$BYSPACE_SOURCE_CHECKOUT_PATH/packages/server/.env\" ] || [ -L \"$BYSPACE_SOURCE_CHECKOUT_PATH/packages/server/.env\" ]; then cp \"$BYSPACE_SOURCE_CHECKOUT_PATH/packages/server/.env\" \"$PWD/packages/server/.env\"; fi"
     ]
   },
   "scripts": {
