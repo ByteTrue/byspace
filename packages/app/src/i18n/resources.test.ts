@@ -276,6 +276,12 @@ describe("translation resources", () => {
       "Update the host to remove projects.",
     );
     expect(en.newWorkspace.title).toBe("New workspace");
+    expect(en.newWorkspace.promptPlaceholder).toBe(
+      "Message the agent (optional); press Enter or click ↵ to create the workspace",
+    );
+    expect(en.newWorkspace.promptPlaceholderCompact).toBe(
+      "Message the agent (optional); click ↵ to create the workspace",
+    );
     expect(en.newWorkspace.refPicker.searchPlaceholder).toBe("Search branches and PRs");
     expect(en.openProject.tiles.addProject.title).toBe("Add a project");
   });

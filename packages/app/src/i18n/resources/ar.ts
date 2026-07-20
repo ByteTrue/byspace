@@ -908,6 +908,8 @@ export const ar: TranslationResources = {
       baseNotApplicable: "غير قابل للتطبيق",
     },
     titlePlaceholder: "العنوان (اختياري)",
+    promptPlaceholder: "رسالة إلى الوكيل (اختياري)؛ اضغط Enter أو ↵ لإنشاء مساحة العمل",
+    promptPlaceholderCompact: "رسالة إلى الوكيل (اختياري)؛ اضغط ↵ لإنشاء مساحة العمل",
     errors: {
       hostDisconnected: "Host غير متصل",
       createWorktreeFailed: "فشل في إنشاء شجرة العمل",

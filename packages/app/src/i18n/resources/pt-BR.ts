@@ -931,6 +931,10 @@ export const ptBR: TranslationResources = {
       baseNotApplicable: "Não aplicável",
     },
     titlePlaceholder: "Título (opcional)",
+    promptPlaceholder:
+      "Mensagem para o agente (opcional); pressione Enter ou ↵ para criar o workspace",
+    promptPlaceholderCompact:
+      "Mensagem para o agente (opcional); pressione ↵ para criar o workspace",
     errors: {
       hostDisconnected: "Host não está conectado",
       createWorktreeFailed: "Falha ao criar worktree",

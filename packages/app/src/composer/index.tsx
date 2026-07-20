@@ -764,6 +764,8 @@ interface ComposerProps {
   submitBehavior?: "clear" | "preserve-and-lock";
   /** When true, blurs the input immediately when submitting. */
   blurOnSubmit?: boolean;
+  /** Optional placeholder override for composer surfaces with specialized submit behavior. */
+  placeholder?: string;
   value: string;
   onChangeText: (text: string) => void;
   attachments: UserComposerAttachment[];
@@ -974,6 +976,7 @@ export function Composer({
   isSubmitLoading = false,
   submitBehavior = "clear",
   blurOnSubmit = false,
+  placeholder,
   value,
   onChangeText,
   attachments,
@@ -1028,7 +1031,7 @@ export function Composer({
   const isCompactLayout = resolveCompactLayout(isCompactLayoutOverride, isCompactFormFactor);
   const isDesktopWebBreakpoint = resolveIsDesktopWebBreakpoint(isCompactFormFactor);
   const isDesktopLayout = resolveIsDesktopWebBreakpoint(isCompactLayout);
-  const messagePlaceholder = resolveMessagePlaceholder(isDesktopLayout, t);
+  const messagePlaceholder = placeholder ?? resolveMessagePlaceholder(isDesktopLayout, t);
   const userInput = value;
   const setUserInput = onChangeText;
   const workspaceAttachments = useWorkspaceAttachmentsForScopes(attachmentScopeKeys);
