@@ -23,7 +23,6 @@ created: 2026-07-19
 
 - 不移植 beta.1 之后的 upstream commits。
 - 不引入 Paseo Hub。
-- 不加入 Pi `max` thinking；当前保持 upstream beta.1 的 `xhigh` 上限。
 - 不迁移旧 `~/.byspace` 状态；切换时另行备份并使用 fresh home。
 - 不在最终确认前推送、发布、部署或停止当前 daemon。
 

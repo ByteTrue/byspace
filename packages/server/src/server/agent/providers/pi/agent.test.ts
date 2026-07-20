@@ -795,10 +795,10 @@ describe("PiRpcAgentSession", () => {
     fakeSession.setModelResult = { provider: "openrouter", id: "model-a", name: "Model A" };
 
     await session.setModel("openrouter/model-a");
-    await session.setThinkingOption("high");
+    await session.setThinkingOption("max");
 
     expect(fakeSession.setModelRequests).toEqual([{ provider: "openrouter", modelId: "model-a" }]);
-    expect(fakeSession.setThinkingLevelRequests).toEqual(["high"]);
+    expect(fakeSession.setThinkingLevelRequests).toEqual(["max"]);
   });
 
   test("materializes image prompts as text hints for text-only Pi models", async () => {
@@ -1235,7 +1235,8 @@ describe("PiRpcAgentClient", () => {
       },
     ];
 
-    await expect(catalogPromise).resolves.toMatchObject({
+    const catalog = await catalogPromise;
+    expect(catalog).toMatchObject({
       models: [
         {
           provider: "pi",
@@ -1245,6 +1246,11 @@ describe("PiRpcAgentClient", () => {
         },
       ],
       modes: [],
+    });
+    expect(catalog.models[0]?.thinkingOptions).toContainEqual({
+      id: "max",
+      label: "Max",
+      description: "Maximum reasoning",
     });
     expect(pi.recordedLaunches[0]).toMatchObject({ cwd: "/workspace/with-extension" });
   });
