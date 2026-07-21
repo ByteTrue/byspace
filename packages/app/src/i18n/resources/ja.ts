@@ -426,7 +426,6 @@ export const ja: TranslationResources = {
       unableToSubscribe: "ターミナルに接続できません",
       clipboardReadFailed: "クリップボードを読み取れませんでした。",
       clipboardImageTooLarge: "クリップボードの画像が大きすぎます（最大50MB）。",
-      updateHostForImagePaste: "クリップボードの画像を貼り付けるにはホストを更新してください。",
     },
     tabs: {
       loading: "読み込み中...",

@@ -422,7 +422,6 @@ export const ar: TranslationResources = {
       unableToSubscribe: "غير قادر على الاشتراك في المحطة",
       clipboardReadFailed: "تعذرت قراءة الحافظة.",
       clipboardImageTooLarge: "صورة الحافظة كبيرة جدًا (الحد الأقصى 50 ميجابايت).",
-      updateHostForImagePaste: "حدّث المضيف للصق الصور من الحافظة.",
     },
     tabs: {
       loading: "تحميل...",

@@ -58,16 +58,4 @@ describe("terminal restore schemas", () => {
       }).features?.["terminal-restore-modes"],
     ).toBe(true);
   });
-
-  test("accepts terminal clipboard image feature metadata", () => {
-    expect(
-      ServerInfoStatusPayloadSchema.parse({
-        status: "server_info",
-        serverId: "server-1",
-        features: {
-          terminalClipboardImage: true,
-        },
-      }).features?.terminalClipboardImage,
-    ).toBe(true);
-  });
 });

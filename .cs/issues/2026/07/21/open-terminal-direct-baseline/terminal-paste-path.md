@@ -104,9 +104,9 @@ DaemonClient.uploadFile({ fileName, mimeType, bytes })
 2. 只有事件内无图片时，才读取 `text/plain` 并原样进入 `Terminal.paste()`。
 3. 复用 `DaemonClient.uploadFile()` 把 bytes 写到当前 daemon。
 4. 得到 daemon 文件路径后，不依赖 xterm live mode，强制作为一个安全的 bracketed paste block 发给 PTY。
-5. 新 client 对不支持该能力的旧 daemon 使用一个集中 capability gate；不模拟降级路径。
+5. `file.upload.request` 自 v0.1.0 已存在；这是纯 client 行为，不增加 Terminal 专用 capability 或旧-host gate。
 
-现有上传目录不会自动清理成功上传，图片 paste 若直接复用会继承这个生命周期。这不是首个 bracketed paste bug 的范围；图片 Issue 必须显式决定接受现有 attachment 生命周期，还是给上传增加 clipboard purpose 与清理策略。
+图片 paste 继承现有上传目录的生命周期，不增加 clipboard purpose、专用存储或清理旁路。
 
 ## Alt+V 证据边界
 

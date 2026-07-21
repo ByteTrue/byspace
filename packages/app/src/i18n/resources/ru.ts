@@ -425,7 +425,6 @@ export const ru: TranslationResources = {
       unableToSubscribe: "Невозможно подписаться на терминал",
       clipboardReadFailed: "Не удалось прочитать буфер обмена.",
       clipboardImageTooLarge: "Изображение из буфера обмена слишком велико (максимум 50 МБ).",
-      updateHostForImagePaste: "Обновите хост, чтобы вставлять изображения из буфера обмена.",
     },
     tabs: {
       loading: "Загрузка...",

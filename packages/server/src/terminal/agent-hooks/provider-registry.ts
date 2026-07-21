@@ -5,7 +5,6 @@ import {
   type AgentHookInstallOptions,
   type AgentHookInstallResult,
   type AgentHookProvider,
-  agentHooksAreInstalled,
   installAgentHooks,
   uninstallAgentHooks,
 } from "./agent-hook-installer.js";
@@ -68,31 +67,6 @@ export function uninstallRegisteredAgentHook(
       "Failed to remove terminal activity hook provider",
     );
   }
-}
-
-export function installRegisteredAgentHooks(
-  options: RegisteredAgentHookInstallOptions = {},
-): AgentHookInstallResult[] {
-  const results: AgentHookInstallResult[] = [];
-  for (const providerId of Object.keys(AGENT_HOOK_PROVIDERS) as AgentHookProviderId[]) {
-    const result = installRegisteredAgentHook(providerId, options);
-    if (result) results.push(result);
-  }
-  return results;
-}
-
-export function uninstallRegisteredAgentHooks(
-  options: RegisteredAgentHookInstallOptions = {},
-): void {
-  for (const providerId of Object.keys(AGENT_HOOK_PROVIDERS) as AgentHookProviderId[]) {
-    uninstallRegisteredAgentHook(providerId, options);
-  }
-}
-
-export function registeredAgentHooksAreInstalled(options: AgentHookInstallOptions = {}): boolean {
-  return Object.values(AGENT_HOOK_PROVIDERS).every((provider) =>
-    agentHooksAreInstalled(provider, options),
-  );
 }
 
 export async function resolveHookActivity(

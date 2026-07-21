@@ -1,20 +1,10 @@
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { installRegisteredAgentHooks } from "./provider-registry.js";
+import { installRegisteredAgentHook } from "./provider-registry.js";
 
 const temporaryDirs: string[] = [];
-
-interface WarningLogEntry {
-  bindings: Record<string, unknown>;
-  message: string;
-}
-
-interface WarningLogger {
-  entries: WarningLogEntry[];
-  warn(bindings: Record<string, unknown>, message: string): void;
-}
 
 afterEach(() => {
   while (temporaryDirs.length > 0) {
@@ -29,46 +19,23 @@ function createTempDir(prefix: string): string {
   return dir;
 }
 
-function createWarningLogger(): WarningLogger {
-  return {
-    entries: [],
-    warn(bindings, message) {
-      this.entries.push({ bindings, message });
-    },
-  };
-}
-
 describe("terminal agent hook provider registry", () => {
-  it("continues installing provider hooks after one provider fails", () => {
-    const root = createTempDir("byspace-agent-hook-registry-");
-    const badClaudeConfigDir = join(root, "not-a-directory");
-    const codexHome = join(root, "codex");
-    const opencodeConfigDir = join(root, "opencode");
-    const logger = createWarningLogger();
-    writeFileSync(badClaudeConfigDir, "");
+  it("logs and returns null when a provider hook cannot be installed", () => {
+    const configDir = join(createTempDir("byspace-agent-hook-registry-"), "not-a-directory");
+    const entries: Array<{ bindings: Record<string, unknown>; message: string }> = [];
+    writeFileSync(configDir, "");
 
-    const results = installRegisteredAgentHooks({
-      env: {
-        CLAUDE_CONFIG_DIR: badClaudeConfigDir,
-        CODEX_HOME: codexHome,
-        OPENCODE_CONFIG_DIR: opencodeConfigDir,
-        PI_CODING_AGENT_DIR: join(root, "pi"),
-      },
-      homeDir: join(root, "home"),
-      logger,
-    });
-
-    expect(results.map((result) => result.configPath)).toEqual([
-      join(codexHome, "hooks.json"),
-      join(opencodeConfigDir, "plugins", "byspace-terminal-activity.js"),
-      join(root, "pi", "extensions", "byspace-terminal-activity.ts"),
-    ]);
-    expect(existsSync(join(codexHome, "hooks.json"))).toBe(true);
-    expect(existsSync(join(opencodeConfigDir, "plugins", "byspace-terminal-activity.js"))).toBe(
-      true,
-    );
-    expect(existsSync(join(root, "pi", "extensions", "byspace-terminal-activity.ts"))).toBe(true);
-    expect(logger.entries).toEqual([
+    expect(
+      installRegisteredAgentHook("claude", {
+        configDir,
+        logger: {
+          warn(bindings, message) {
+            entries.push({ bindings, message });
+          },
+        },
+      }),
+    ).toBeNull();
+    expect(entries).toEqual([
       {
         bindings: expect.objectContaining({ err: expect.any(Error), provider: "claude" }),
         message: "Failed to install terminal activity hook provider",

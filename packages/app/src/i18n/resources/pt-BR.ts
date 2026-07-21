@@ -426,7 +426,6 @@ export const ptBR: TranslationResources = {
       unableToSubscribe: "Não foi possível assinar o terminal",
       clipboardReadFailed: "Não foi possível ler a área de transferência.",
       clipboardImageTooLarge: "A imagem da área de transferência é muito grande (máximo de 50 MB).",
-      updateHostForImagePaste: "Atualize o host para colar imagens da área de transferência.",
     },
     tabs: {
       loading: "Carregando...",

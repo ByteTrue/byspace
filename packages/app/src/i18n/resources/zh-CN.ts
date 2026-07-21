@@ -422,7 +422,6 @@ export const zhCN: TranslationResources = {
       unableToSubscribe: "无法订阅 Terminal",
       clipboardReadFailed: "无法读取剪贴板。",
       clipboardImageTooLarge: "剪贴板图片过大（最大 50MB）。",
-      updateHostForImagePaste: "更新 Host 以粘贴剪贴板图片。",
     },
     tabs: {
       loading: "正在加载...",

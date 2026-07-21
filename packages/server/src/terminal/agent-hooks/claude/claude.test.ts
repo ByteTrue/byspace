@@ -6,12 +6,11 @@ import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 import { isPlatform } from "../../../test-utils/platform.js";
 import { buildTerminalEnvironment } from "../../terminal.js";
-import { buildAgentHookShellCommand } from "../agent-hook-installer.js";
+import { agentHooksAreInstalled, buildAgentHookShellCommand } from "../agent-hook-installer.js";
 import {
   AGENT_HOOK_PROVIDERS,
-  installRegisteredAgentHooks,
-  registeredAgentHooksAreInstalled,
-  uninstallRegisteredAgentHooks,
+  installRegisteredAgentHook,
+  uninstallRegisteredAgentHook,
 } from "../provider-registry.js";
 
 const temporaryDirs: string[] = [];
@@ -68,13 +67,13 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 describe("Claude terminal agent hooks", () => {
-  it("installs registered provider hooks idempotently", () => {
+  it("installs Claude hooks idempotently", () => {
     const configDir = createTempDir("byspace-claude-config-");
     const provider = AGENT_HOOK_PROVIDERS.claude;
     const install = provider.install;
 
-    installRegisteredAgentHooks({ configDir });
-    installRegisteredAgentHooks({ configDir });
+    installRegisteredAgentHook("claude", { configDir });
+    installRegisteredAgentHook("claude", { configDir });
 
     const settings = readSettings(configDir);
     for (const event of provider.events) {
@@ -86,7 +85,7 @@ describe("Claude terminal agent hooks", () => {
         `if [ -n "$BYSPACE_TERMINAL_ID" ]; then "\${BYSPACE_HOOK_CLI:-byspace}" hooks ${provider.id} ${event.event}; fi`,
       );
     }
-    expect(registeredAgentHooksAreInstalled({ configDir })).toBe(true);
+    expect(agentHooksAreInstalled(provider, { configDir })).toBe(true);
   });
 
   it("preserves unrelated user hooks", () => {
@@ -110,7 +109,7 @@ describe("Claude terminal agent hooks", () => {
       )}\n`,
     );
 
-    installRegisteredAgentHooks({ configDir });
+    installRegisteredAgentHook("claude", { configDir });
 
     const settings = readSettings(configDir);
     expect(settings.theme).toBe("dark");
@@ -122,7 +121,7 @@ describe("Claude terminal agent hooks", () => {
 
   it("uninstalls only marker-matched hooks", () => {
     const configDir = createTempDir("byspace-claude-config-uninstall-");
-    installRegisteredAgentHooks({ configDir });
+    installRegisteredAgentHook("claude", { configDir });
     const settings = readSettings(configDir);
     settings.hooks = {
       ...settings.hooks,
@@ -136,11 +135,11 @@ describe("Claude terminal agent hooks", () => {
     };
     writeFileSync(join(configDir, "settings.json"), `${JSON.stringify(settings, null, 2)}\n`);
 
-    uninstallRegisteredAgentHooks({ configDir });
+    uninstallRegisteredAgentHook("claude", { configDir });
 
     const nextSettings = readSettings(configDir);
     expect(hookCommands(nextSettings, "Stop")).toEqual(["say still-here"]);
-    expect(registeredAgentHooksAreInstalled({ configDir })).toBe(false);
+    expect(agentHooksAreInstalled(AGENT_HOOK_PROVIDERS.claude, { configDir })).toBe(false);
   });
 
   it("builds a minimal gated hook command", () => {

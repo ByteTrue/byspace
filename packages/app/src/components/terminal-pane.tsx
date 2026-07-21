@@ -197,9 +197,6 @@ export function TerminalPane({
   const supportsTerminalRestoreModes = useSessionStore(
     (state) => state.sessions[serverId]?.serverInfo?.features?.["terminal-restore-modes"] === true,
   );
-  const supportsTerminalClipboardImage = useSessionStore(
-    (state) => state.sessions[serverId]?.serverInfo?.features?.terminalClipboardImage === true,
-  );
   const setFocusedTerminalId = useSessionStore((state) => state.setFocusedTerminalId);
 
   const scopeKey = useMemo(() => terminalScopeKey({ serverId, cwd }), [serverId, cwd]);
@@ -668,10 +665,6 @@ export function TerminalPane({
   }, []);
   const handleTerminalPasteImage = useCallback(
     async (image: TerminalClipboardImage): Promise<string | null> => {
-      if (!supportsTerminalClipboardImage) {
-        toast.error(t("workspace.terminal.updateHostForImagePaste"));
-        return null;
-      }
       if (!client) {
         toast.error(t("workspace.terminal.hostDisconnected"));
         return null;
@@ -699,7 +692,7 @@ export function TerminalPane({
         return null;
       }
     },
-    [client, supportsTerminalClipboardImage, t, toast],
+    [client, t, toast],
   );
   const handleTerminalPasteError = useCallback(
     (reason: TerminalPasteErrorReason) => {

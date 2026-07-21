@@ -421,7 +421,6 @@ export const en = {
       unableToSubscribe: "Unable to subscribe to terminal",
       clipboardReadFailed: "Couldn't read the clipboard.",
       clipboardImageTooLarge: "Clipboard image is too large (max 50MB).",
-      updateHostForImagePaste: "Update the host to paste clipboard images.",
     },
     tabs: {
       loading: "Loading...",

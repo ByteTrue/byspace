@@ -402,13 +402,25 @@ describe("terminal emulator runtime in a real browser", () => {
 
   it("forwards Alt+V to the terminal application", async () => {
     await page.viewport(900, 600);
-    const mounted = createTerminalHost({ width: 720, height: 360 });
+    const read = vi.fn(async () => [] as ClipboardItem[]);
+    const onPasteImage = vi.fn(async () => "/tmp/unused.png");
+    const mounted = createTerminalHost({
+      width: 720,
+      height: 360,
+      callbacks: { onPasteImage },
+    });
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { read },
+    });
 
     await waitFor({ predicate: () => mounted.sizes.length > 0 });
     dispatchTerminalKey({ host: mounted.host, key: "v", code: "KeyV", keyCode: 86, altKey: true });
 
     await waitFor({ predicate: () => mounted.inputs.length > 0 });
     expect(mounted.inputs).toEqual(["\x1bv"]);
+    expect(read).not.toHaveBeenCalled();
+    expect(onPasteImage).not.toHaveBeenCalled();
   });
 
   it("preserves bracketed paste mode when replaying a snapshot", async () => {
@@ -483,33 +495,14 @@ describe("terminal emulator runtime in a real browser", () => {
       const mounted = createTerminalHost({ width: 720, height: 360 });
 
       await waitFor({ predicate: () => mounted.sizes.length > 0 });
-      dispatchTerminalPaste({ host: mounted.host, text: "first line\nsecond\x1b[201~line" });
-
-      await waitFor({ predicate: () => mounted.inputs.length > 0 });
-      expect(mounted.inputs).toEqual(["\x1b[200~first line\rsecond\u241b[201~line\x1b[201~"]);
-    } finally {
-      restorePlatform();
-    }
-  });
-
-  it("forces multiline context-menu paste events on Windows without terminal mode state", async () => {
-    const restorePlatform = setNavigatorPlatform("Win32");
-    try {
-      await page.viewport(900, 600);
-      const mounted = createTerminalHost({ width: 720, height: 360 });
-      const clipboardData = new DataTransfer();
-      clipboardData.setData("text/plain", "menu first\nmenu second");
-      const event = new ClipboardEvent("paste", {
-        bubbles: true,
-        cancelable: true,
-        clipboardData,
+      const event = dispatchTerminalPaste({
+        host: mounted.host,
+        text: "first line\nsecond\x1b[201~line",
       });
-
-      mounted.host.querySelector("textarea")?.dispatchEvent(event);
 
       await waitFor({ predicate: () => mounted.inputs.length > 0 });
       expect(event.defaultPrevented).toBe(true);
-      expect(mounted.inputs).toEqual(["\x1b[200~menu first\rmenu second\x1b[201~"]);
+      expect(mounted.inputs).toEqual(["\x1b[200~first line\rsecond\u241b[201~line\x1b[201~"]);
     } finally {
       restorePlatform();
     }
@@ -767,34 +760,6 @@ describe("terminal emulator runtime in a real browser", () => {
     });
     expect(mounted.inputs).toEqual(["\x1b[200~/tmp/uploaded.jpg\x1b[201~"]);
     expect(mounted.inputs.join("")).not.toContain(text);
-  });
-
-  it("leaves Alt+V to the terminal application", async () => {
-    await page.viewport(900, 600);
-    const readText = vi.fn(async () => "clipboard text");
-    const onPasteImage = vi.fn(async () => "/tmp/unused.png");
-    const mounted = createTerminalHost({
-      width: 720,
-      height: 360,
-      callbacks: { onPasteImage },
-    });
-    Object.defineProperty(navigator, "clipboard", {
-      configurable: true,
-      value: { readText, read: vi.fn(async () => [] as ClipboardItem[]) },
-    });
-
-    await waitFor({ predicate: () => mounted.sizes.length > 0 });
-    dispatchTerminalKey({
-      host: mounted.host,
-      key: "v",
-      code: "KeyV",
-      keyCode: 86,
-      altKey: true,
-    });
-    await nextFrame();
-
-    expect(readText).not.toHaveBeenCalled();
-    expect(onPasteImage).not.toHaveBeenCalled();
   });
 
   it.each([
