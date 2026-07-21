@@ -68,6 +68,8 @@ PTY output: CSI ? 2004 h
 
 失败断言稳定落在 snapshot 后第二次 paste；因此根因不是 `readText()`、换行规范化或 PTY input frame，而是 input mode 恢复遗漏。
 
+随后核对 Orca Windows 路径发现第二个独立边界：ConPTY 可能根本不把应用的 DECSET 2004 输出交给 renderer。snapshot fix 只能恢复已观测状态，不能恢复从未观测到的状态；因此 Windows user agent 下含换行 clipboard 文本必须无条件安全地 frame 成一个 bracketed block。该兜底仅限 Windows 多行文本，不改变其他平台或单行 shell paste。
+
 ## BySpace 图片路径
 
 当前 Ctrl+V 分支只调用 `navigator.clipboard.readText()`：
@@ -93,7 +95,7 @@ DaemonClient.uploadFile({ fileName, mimeType, bytes })
 
 1. 浏览器在用户 paste 手势中通过 Clipboard API 读取 image blob。
 2. 复用 `DaemonClient.uploadFile()` 把 bytes 写到当前 daemon。
-3. 得到 daemon 文件路径后，通过 Terminal 的 paste 入口作为一个 bracketed paste block 发给 PTY。
+3. 得到 daemon 文件路径后，不依赖 xterm live mode，强制作为一个安全的 bracketed paste block 发给 PTY。
 4. 新 client 对不支持该能力的旧 daemon 使用一个集中 capability gate；不模拟降级路径。
 
 现有上传目录不会自动清理成功上传，图片 paste 若直接复用会继承这个生命周期。这不是首个 bracketed paste bug 的范围；图片 Issue 必须显式决定接受现有 attachment 生命周期，还是给上传增加 clipboard purpose 与清理策略。
@@ -115,25 +117,25 @@ Cmd/Ctrl+V
   → 无文本/读取失败：navigator.clipboard.read() image
   → chunked clipboard upload RPC
   → runtime host 临时图片路径
-  → 强制 bracketed paste(path)
+  → 强制 bracketed paste(path)，不依赖 renderer 当前 mode
 ```
 
 `terminal-clipboard-paste.ts` 还会对目标变化、超大文本、图片失败和 bracketed paste 中断做集中处理。BySpace 不需要复制它的专用上传 RPC，因为已有 `uploadFile()`；需要复制的是正确的能力归属：浏览器读取本机剪贴板，daemon 产生远端可读路径，Terminal 只粘贴路径。
 
-## 当前行动判断
+## 执行结果
 
-### 首个垂直切片：bracketed paste restore
+### bracketed paste restore 与 Windows fallback
 
 - 扩展现有 `TerminalInputModeTracker` 记录 DEC private mode 2004。
 - 把启用状态放进现有 replay preamble。
-- 不新增协议消息、浏览器状态机或强制所有 multiline paste 的特殊分支。
-- 验证 snapshot 前后多行 paste 都保持一个 bracketed block，并回归 Kitty、Win32、Alt+V 和 raw Direct 基线。
+- snapshot 恢复权威 mode；Windows 多行 clipboard 文本在 ConPTY 未转发 mode 2004 时强制 framing，其他平台与单行文本仍遵循 xterm live mode。
+- Browser runtime 与真实 capture PTY 分别验证 snapshot 后和 mode 2004 off 时都只收到一个安全 paste block；Kitty、Win32、Alt+V 和 raw Direct 基线不退化。
 
-### 相邻独立切片：clipboard image upload
+### clipboard image upload
 
 - 复用 `DaemonClient.uploadFile()` 和现有 binary file transfer。
 - `Ctrl/Cmd+V` 走文本优先、图片 fallback；Windows `Alt+V` 走图片探测、无图片原 chord fallback；两者复用 `DaemonClient.uploadFile()` 和现有 binary file transfer。
-- 验证 browser image clipboard → daemon 真实文件 → PTY bracketed path → Pi editor。
+- Browser image clipboard → daemon 真实文件 → mode 2004 off 的 capture PTY 仍收到一个强制 bracketed path block。
 
 ### 仍待调查
 

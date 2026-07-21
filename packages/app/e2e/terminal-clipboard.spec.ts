@@ -17,7 +17,10 @@ function finish() {
   process.exit(0);
 }
 
-process.stdout.write("\\x1b[?2004hBYSPACE_CLIPBOARD_READY\\r\\n");
+if (process.argv[2] !== "no-mode") {
+  process.stdout.write("\\x1b[?2004h");
+}
+process.stdout.write("BYSPACE_CLIPBOARD_READY\\r\\n");
 if (process.stdin.isTTY) {
   process.stdin.setRawMode(true);
 }
@@ -81,12 +84,22 @@ test.describe("Terminal clipboard", () => {
         await harness.setupPrompt(page);
 
         const terminal = harness.terminalSurface(page);
-        await terminal.pressSequentially("node clipboard-capture.cjs\n", { delay: 0 });
+        await terminal.pressSequentially("node clipboard-capture.cjs no-mode\n", { delay: 0 });
         await waitForTerminalContent(
           page,
           (text) => text.includes("BYSPACE_CLIPBOARD_READY"),
           10_000,
         );
+        expect(
+          await page.evaluate(
+            () =>
+              (
+                window as Window & {
+                  __byspaceTerminal?: { modes?: { bracketedPasteMode?: boolean } };
+                }
+              ).__byspaceTerminal?.modes?.bracketedPasteMode,
+          ),
+        ).toBe(false);
         await terminal.press(shortcut);
         await waitForTerminalContent(
           page,
@@ -108,6 +121,62 @@ test.describe("Terminal clipboard", () => {
       }
     });
   }
+
+  test("forces multiline text into one bracketed paste on Windows without reported mode state", async ({
+    page,
+  }) => {
+    await page.addInitScript(() => {
+      Object.defineProperty(navigator, "platform", {
+        configurable: true,
+        value: "Win32",
+      });
+      Object.defineProperty(navigator, "clipboard", {
+        configurable: true,
+        value: {
+          readText: async () => "first line\nsecond line",
+          read: async () => [],
+        },
+      });
+    });
+
+    const terminalInstance = await harness.createTerminal({ name: "clipboard-text-windows" });
+    try {
+      await harness.openTerminal(page, { terminalId: terminalInstance.id });
+      await harness.setupPrompt(page);
+
+      const terminal = harness.terminalSurface(page);
+      await terminal.pressSequentially("node clipboard-capture.cjs no-mode\n", { delay: 0 });
+      await waitForTerminalContent(
+        page,
+        (text) => text.includes("BYSPACE_CLIPBOARD_READY"),
+        10_000,
+      );
+      await page.waitForFunction(
+        () =>
+          (
+            window as Window & {
+              __byspaceTerminal?: { modes?: { bracketedPasteMode?: boolean } };
+            }
+          ).__byspaceTerminal?.modes?.bracketedPasteMode === false,
+      );
+
+      await terminal.press("Control+v");
+      await waitForTerminalContent(
+        page,
+        (text) => text.includes("BYSPACE_CLIPBOARD_CAPTURED"),
+        10_000,
+      );
+
+      const capture = JSON.parse(
+        await readFile(path.join(harness.tempRepo.path, "clipboard-capture.json"), "utf8"),
+      ) as { captured: string };
+      expect(Buffer.from(capture.captured, "base64").toString("utf8")).toBe(
+        "\x1b[200~first line\rsecond line\x1b[201~",
+      );
+    } finally {
+      await harness.killTerminal(terminalInstance.id);
+    }
+  });
 
   test("restores bracketed paste after a snapshot before multiline text paste", async ({
     page,

@@ -25,7 +25,7 @@ Relay 复用同一套正确的 Terminal 基础，但允许公网 RTT、端到端
 
 首轮 Orca Web Direct 与 BySpace Direct 同条件阶段化基准已经完成：BySpace 在 idle/loaded/TUI keydown→commit、50,000 行 parse/paint、rAF gap 和 resize 的五次样本中均更快，没有证据支持先移植 renderer scheduler 或独立 Terminal WebSocket。
 
-随后按用户真实 Pi CLI workflow 扩展体验边界：先修复 snapshot replay 丢失 bracketed paste mode 导致多行文本逐行 Enter；再设计浏览器图片 clipboard 经 daemon 临时文件写入并向 PTY 粘贴服务端路径。headed 字号、字重、minimum contrast ratio 与 ligatures A/B 保留为后续呈现切片。Relay 特有的 ACK、序号或恢复增强继续单独推进。
+随后按用户真实 Pi CLI workflow 扩展体验边界：恢复 snapshot replay 中的 bracketed paste mode；针对 ConPTY 可能不转发 DECSET 2004 的 Windows 边界，强制把多行 clipboard 文本安全地 frame 成单个 block；浏览器图片 clipboard 经现有 binary upload 写入 daemon，并把服务端路径强制作为单个 bracketed block 送入 PTY。headed 字号、字重、minimum contrast ratio 与 ligatures A/B 保留为后续呈现切片。Relay 特有的 ACK、序号或恢复增强继续单独推进。
 
 ## 需求变化
 
@@ -93,10 +93,11 @@ Relay 复用同一套正确的 Terminal 基础，但允许公网 RTT、端到端
 - [ ] `.cs/issues/2026/07/21/open-terminal-direct-baseline/index.md`：raw 性能和输入语义根因已形成关闭证据；等待用户在真实 Windows + Pi CLI 验证后确认 Explore 毕业。
 - [x] `.cs/issues/2026/07/21/closed-terminal-bracketed-paste-restore/index.md`：snapshot 后恢复 DEC private mode 2004，多行 paste 保持单个 bracketed block。
 - [x] `.cs/issues/2026/07/21/closed-terminal-clipboard-image-paste.md`：复用现有 binary upload，把浏览器 clipboard 图片写入 daemon 并向 PTY paste 服务端 path。
+- [x] `.cs/issues/2026/07/21/closed-terminal-windows-bracketed-paste-fallback/index.md`：Windows 多行文本不依赖 ConPTY 是否转发 DECSET 2004；生成的图片路径始终强制 framing。
 
 ### 剩余阻碍
 
-- 输入语义两个根因已关闭；等待用户用真实 Windows 浏览器 + Pi CLI 复验多行文本和图片粘贴。
+- 已关闭 snapshot restore、Windows ConPTY mode 缺失兜底和浏览器图片上传三个输入语义边界；等待用户用真实 Windows 浏览器 + Pi CLI 复验多行文本与图片粘贴。
 - headed 主观渲染差距仍未分解；跨机器绝对 CI gate 也还没有 CI 样本。
 
 ## 暂不推进范围

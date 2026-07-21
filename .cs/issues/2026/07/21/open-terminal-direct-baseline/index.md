@@ -24,7 +24,7 @@ related_issue: ""
 
 - 已覆盖：双方 Terminal 主路径的源码比较；BySpace 的 worker、二进制 slot、coalescer、snapshot 与 xterm runtime；Orca Web 的独立 `terminal.multiplex` WebSocket、binary stream、receipt ACK、sequence recovery 与共享 renderer scheduler。
 - 明确不展开：Relay 公网波动与加密优化；Electron-local 原生 PTY IPC；Ghostty 集成；最终协议或 scheduler 设计。
-- 仍然未知：headed 浏览器、真实 agent UI、主题与长时间历史能否复现剩余渲染差距；图片上传应复用哪条现有 daemon 文件能力；Windows 真实浏览器是否还会在页面收到事件之前占用 Alt+V。
+- 仍然未知：headed 浏览器、真实 agent UI、主题与长时间历史能否复现剩余渲染差距；真实 Windows ConPTY + headed Chrome 是否与 Windows user-agent E2E 一致，以及浏览器是否会在页面收到事件之前占用 Alt+V。
 
 ## 阅读路径
 
@@ -46,7 +46,7 @@ related_issue: ""
 ## 与具体变化的关系
 
 - 必须修改：完整体验模型要把键盘、文本 paste、图片 paste 与应用协议语义列为一等约束；首个 bug 修复扩展现有 terminal input-mode replay，不另建状态机。
-- 需要验证：snapshot attach/restore 后多行文本仍带 bracketed paste 标记；普通文本、Alt+V、kitty/Win32 输入模式和现有 Direct 性能不退化。
+- 需要验证：snapshot attach/restore 后多行文本仍带 bracketed paste 标记；即使 Windows ConPTY 未转发 DECSET 2004，多行 clipboard 文本与生成的图片路径仍各自只进入一个安全 block；普通单行文本、非 Windows paste、Alt+V fallback、kitty/Win32 输入模式和现有 Direct 性能不退化。
 - 仍待调查：字号、字重、contrast 与 ligatures 对 headed 主观体验的独立贡献；Relay 专项预算另由 Epic 承接。
 
 ## 用户修正与已排除理解
@@ -59,8 +59,8 @@ related_issue: ""
 
 ## 待确认问题
 
-- 探索已经达到行动停止条件：raw 性能完成归因，bracketed paste 与图片 clipboard 两个语义缺口均有真实 Windows-platform E2E、关闭 Issue 和无回退性能证据。
-- 关闭前等待用户在真实 Windows 浏览器 + Pi CLI 复验图片与多行文本；用户确认后把稳定责任边界毕业到 Project Spec。
+- 探索已经达到自动化行动停止条件：raw 性能完成归因，snapshot mode 恢复、Windows mode 缺失兜底与图片 clipboard 均有真实 Browser→daemon→PTY E2E；mode-off capture 明确验证一个 bracketed block。
+- 关闭前等待用户在真实 Windows ConPTY + headed 浏览器 + Pi CLI 复验图片与多行文本；用户确认后把稳定责任边界毕业到 Project Spec。
 
 ## 候选毕业位置
 

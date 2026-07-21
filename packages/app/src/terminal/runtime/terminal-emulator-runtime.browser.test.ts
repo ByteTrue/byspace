@@ -429,6 +429,58 @@ describe("terminal emulator runtime in a real browser", () => {
     expect(mounted.inputs).toEqual([bracketedPaste]);
   });
 
+  it("forces and sanitizes multiline clipboard text on Windows without terminal mode state", async () => {
+    const restorePlatform = setNavigatorPlatform("Win32");
+    try {
+      await page.viewport(900, 600);
+      const mounted = createTerminalHost({ width: 720, height: 360 });
+      Object.defineProperty(navigator, "clipboard", {
+        configurable: true,
+        value: {
+          readText: vi.fn(async () => "first line\nsecond\x1b[201~line"),
+          read: vi.fn(async () => [] as ClipboardItem[]),
+        },
+      });
+
+      await waitFor({ predicate: () => mounted.sizes.length > 0 });
+      dispatchTerminalKey({
+        host: mounted.host,
+        key: "v",
+        code: "KeyV",
+        keyCode: 86,
+        ...(/Macintosh|Mac OS/i.test(navigator.userAgent) ? { metaKey: true } : { ctrlKey: true }),
+      });
+
+      await waitFor({ predicate: () => mounted.inputs.length > 0 });
+      expect(mounted.inputs).toEqual(["\x1b[200~first line\rsecond\u241b[201~line\x1b[201~"]);
+    } finally {
+      restorePlatform();
+    }
+  });
+
+  it("forces multiline context-menu paste events on Windows without terminal mode state", async () => {
+    const restorePlatform = setNavigatorPlatform("Win32");
+    try {
+      await page.viewport(900, 600);
+      const mounted = createTerminalHost({ width: 720, height: 360 });
+      const clipboardData = new DataTransfer();
+      clipboardData.setData("text/plain", "menu first\nmenu second");
+      const event = new ClipboardEvent("paste", {
+        bubbles: true,
+        cancelable: true,
+        clipboardData,
+      });
+
+      mounted.host.querySelector("textarea")?.dispatchEvent(event);
+
+      await waitFor({ predicate: () => mounted.inputs.length > 0 });
+      expect(event.defaultPrevented).toBe(true);
+      expect(mounted.inputs).toEqual(["\x1b[200~menu first\rmenu second\x1b[201~"]);
+    } finally {
+      restorePlatform();
+    }
+  });
+
   it("uploads a clipboard image and pastes the daemon path as one bracketed block", async () => {
     await page.viewport(900, 600);
     const imageBytes = new Uint8Array([137, 80, 78, 71]);
@@ -463,9 +515,6 @@ describe("terminal emulator runtime in a real browser", () => {
     });
 
     await waitFor({ predicate: () => mounted.sizes.length > 0 });
-    await new Promise<void>((resolve) => {
-      mounted.runtime.write({ data: terminalOutput("\x1b[?2004h"), onCommitted: resolve });
-    });
     dispatchTerminalKey({
       host: mounted.host,
       key: "v",
@@ -513,7 +562,7 @@ describe("terminal emulator runtime in a real browser", () => {
 
       await waitFor({ predicate: () => mounted.inputs.length === 1 });
       expect(onPasteImage).toHaveBeenCalledTimes(1);
-      expect(mounted.inputs).toEqual(["/tmp/windows-clipboard.png"]);
+      expect(mounted.inputs).toEqual(["\x1b[200~/tmp/windows-clipboard.png\x1b[201~"]);
       expect(mounted.terminalKeys).toEqual([]);
     } finally {
       restorePlatform();
@@ -617,7 +666,10 @@ describe("terminal emulator runtime in a real browser", () => {
     resolveFirstPaste("/tmp/first.png");
     await waitFor({ predicate: () => onPasteImage.mock.calls.length === 2 });
     await waitFor({ predicate: () => mounted.inputs.length === 2 });
-    expect(mounted.inputs).toEqual(["/tmp/first.png", "/tmp/second.png"]);
+    expect(mounted.inputs).toEqual([
+      "\x1b[200~/tmp/first.png\x1b[201~",
+      "\x1b[200~/tmp/second.png\x1b[201~",
+    ]);
   });
 
   it("rejects clipboard images larger than 50MB before reading their bytes", async () => {
