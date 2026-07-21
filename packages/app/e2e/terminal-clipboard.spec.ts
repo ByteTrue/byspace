@@ -1,6 +1,6 @@
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import type { Locator, Page } from "@playwright/test";
+import type { Locator } from "@playwright/test";
 import { test, expect } from "./fixtures";
 import { TerminalE2EHarness } from "./helpers/terminal-dsl";
 import { waitForTerminalContent } from "./helpers/terminal-perf";
@@ -58,29 +58,6 @@ async function dispatchTerminalPaste(
       new ClipboardEvent("paste", { bubbles: true, cancelable: true, clipboardData }),
     );
   }, clipboard);
-}
-
-async function writeTextAndImageClipboard(page: Page, text: string): Promise<void> {
-  await page.evaluate(async (clipboardText) => {
-    const canvas = document.createElement("canvas");
-    canvas.width = 1;
-    canvas.height = 1;
-    const image = await new Promise<Blob>((resolve, reject) => {
-      canvas.toBlob((blob) => {
-        if (blob) {
-          resolve(blob);
-        } else {
-          reject(new Error("Failed to create clipboard image"));
-        }
-      }, "image/png");
-    });
-    await navigator.clipboard.write([
-      new ClipboardItem({
-        "text/plain": new Blob([clipboardText], { type: "text/plain" }),
-        "image/png": image,
-      }),
-    ]);
-  }, text);
 }
 
 test.describe("Terminal clipboard", () => {
@@ -179,7 +156,6 @@ test.describe("Terminal clipboard", () => {
 
   test("uploads an image over text from the same paste event", async ({ page }) => {
     const pixPinPath = "/Users/byte/Library/Application Support/PixPin/Temp/PixPin_capture.jpg";
-    await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
     const terminalInstance = await harness.createTerminal({
       name: "clipboard-text-and-image",
     });
@@ -195,11 +171,10 @@ test.describe("Terminal clipboard", () => {
         10_000,
       );
 
-      await writeTextAndImageClipboard(page, pixPinPath);
-      const pasteShortcut = await page.evaluate(() =>
-        /Mac/i.test(navigator.platform) ? "Meta+v" : "Control+v",
-      );
-      await terminal.press(pasteShortcut);
+      await dispatchTerminalPaste(terminal, {
+        text: pixPinPath,
+        image: { bytes: IMAGE_BYTES, name: "clipboard.png", type: "image/png" },
+      });
       await waitForTerminalContent(
         page,
         (text) => text.includes("BYSPACE_CLIPBOARD_CAPTURED"),
