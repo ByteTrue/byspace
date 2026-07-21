@@ -1,7 +1,14 @@
 import { page } from "@vitest/browser/context";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { TerminalInputModeState } from "@bytetrue/byspace-protocol/terminal-input-mode";
-import { encodeTerminalOutput, TerminalEmulatorRuntime } from "./terminal-emulator-runtime";
+import {
+  TerminalInputModeTracker,
+  type TerminalInputModeState,
+} from "@bytetrue/byspace-protocol/terminal-input-mode";
+import {
+  encodeTerminalOutput,
+  TerminalEmulatorRuntime,
+  type TerminalEmulatorRuntimeCallbacks,
+} from "./terminal-emulator-runtime";
 
 vi.mock("@xterm/addon-webgl", () => ({
   WebglAddon: class WebglAddon {
@@ -28,6 +35,7 @@ interface TerminalKeyRecord {
 type BrowserTerminal = TerminalSize & {
   refresh: (start: number, end: number) => void;
   reset: () => void;
+  paste: (text: string) => void;
 };
 
 interface MountedTerminal {
@@ -38,6 +46,7 @@ interface MountedTerminal {
   sizes: TerminalSize[];
   terminalKeys: TerminalKeyRecord[];
   inputModeChanges: TerminalInputModeState[];
+  pasteErrors: string[];
 }
 
 const mountedTerminals: MountedTerminal[] = [];
@@ -74,6 +83,7 @@ function createTerminalHost(input: {
   width: number;
   height: number;
   scrollback?: number;
+  callbacks?: TerminalEmulatorRuntimeCallbacks;
 }): MountedTerminal {
   const root = document.createElement("div");
   root.style.width = `${input.width}px`;
@@ -93,6 +103,7 @@ function createTerminalHost(input: {
   const inputs: string[] = [];
   const terminalKeys: TerminalKeyRecord[] = [];
   const inputModeChanges: TerminalInputModeState[] = [];
+  const pasteErrors: string[] = [];
   const runtime = new TerminalEmulatorRuntime();
   runtime.setCallbacks({
     callbacks: {
@@ -108,6 +119,10 @@ function createTerminalHost(input: {
       onInputModeChange: (state) => {
         inputModeChanges.push(state);
       },
+      onPasteError: (reason) => {
+        pasteErrors.push(reason);
+      },
+      ...input.callbacks,
     },
   });
   runtime.mount({
@@ -122,7 +137,16 @@ function createTerminalHost(input: {
     },
   });
 
-  const mounted = { host, root, runtime, inputs, sizes, terminalKeys, inputModeChanges };
+  const mounted = {
+    host,
+    root,
+    runtime,
+    inputs,
+    sizes,
+    terminalKeys,
+    inputModeChanges,
+    pasteErrors,
+  };
   mountedTerminals.push(mounted);
   return mounted;
 }
@@ -146,6 +170,8 @@ function getBrowserTerminal(): BrowserTerminal {
 function dispatchTerminalKey(input: {
   host: HTMLElement;
   key: string;
+  code?: string;
+  keyCode?: number;
   shiftKey?: boolean;
   ctrlKey?: boolean;
   altKey?: boolean;
@@ -156,17 +182,32 @@ function dispatchTerminalKey(input: {
     throw new Error("Expected xterm textarea to be mounted");
   }
   textarea.focus();
-  return textarea.dispatchEvent(
-    new KeyboardEvent("keydown", {
-      key: input.key,
-      shiftKey: input.shiftKey ?? false,
-      ctrlKey: input.ctrlKey ?? false,
-      altKey: input.altKey ?? false,
-      metaKey: input.metaKey ?? false,
-      bubbles: true,
-      cancelable: true,
-    }),
-  );
+  const event = new KeyboardEvent("keydown", {
+    key: input.key,
+    code: input.code ?? "",
+    shiftKey: input.shiftKey ?? false,
+    ctrlKey: input.ctrlKey ?? false,
+    altKey: input.altKey ?? false,
+    metaKey: input.metaKey ?? false,
+    bubbles: true,
+    cancelable: true,
+  });
+  if (input.keyCode !== undefined) {
+    Object.defineProperty(event, "keyCode", { value: input.keyCode });
+  }
+  return textarea.dispatchEvent(event);
+}
+
+function setNavigatorPlatform(platform: string): () => void {
+  const descriptor = Object.getOwnPropertyDescriptor(navigator, "platform");
+  Object.defineProperty(navigator, "platform", { configurable: true, value: platform });
+  return () => {
+    if (descriptor) {
+      Object.defineProperty(navigator, "platform", descriptor);
+    } else {
+      Reflect.deleteProperty(navigator, "platform");
+    }
+  };
 }
 
 afterEach(() => {
@@ -174,6 +215,7 @@ afterEach(() => {
     mounted.runtime.unmount();
     mounted.root.remove();
   }
+  Reflect.deleteProperty(navigator, "clipboard");
 });
 
 describe("terminal emulator runtime in a real browser", () => {
@@ -331,6 +373,353 @@ describe("terminal emulator runtime in a real browser", () => {
         meta: false,
       },
     ]);
+  });
+
+  it("forwards Alt+V to the terminal application", async () => {
+    await page.viewport(900, 600);
+    const mounted = createTerminalHost({ width: 720, height: 360 });
+
+    await waitFor({ predicate: () => mounted.sizes.length > 0 });
+    dispatchTerminalKey({ host: mounted.host, key: "v", code: "KeyV", keyCode: 86, altKey: true });
+
+    await waitFor({ predicate: () => mounted.inputs.length > 0 });
+    expect(mounted.inputs).toEqual(["\x1bv"]);
+  });
+
+  it("preserves bracketed paste mode when replaying a snapshot", async () => {
+    await page.viewport(900, 600);
+    const mounted = createTerminalHost({ width: 720, height: 360 });
+
+    await waitFor({ predicate: () => mounted.sizes.length > 0 });
+    const terminal = getBrowserTerminal();
+    const paste = "first line\nsecond line";
+    const bracketedPaste = "\x1b[200~first line\rsecond line\x1b[201~";
+    const authoritativeInputMode = new TerminalInputModeTracker();
+    authoritativeInputMode.feed("\x1b[?2004h");
+
+    await new Promise<void>((resolve) => {
+      mounted.runtime.write({ data: terminalOutput("\x1b[?2004h"), onCommitted: resolve });
+    });
+    terminal.paste(paste);
+    await waitFor({ predicate: () => mounted.inputs.length > 0 });
+    expect(mounted.inputs).toEqual([bracketedPaste]);
+
+    mounted.inputs.length = 0;
+    await new Promise<void>((resolve) => {
+      mounted.runtime.renderSnapshot({
+        state: {
+          rows: terminal.rows,
+          cols: terminal.cols,
+          scrollback: [],
+          grid: [[{ char: ">" }]],
+          cursor: { row: 0, col: 1 },
+        },
+        onCommitted: resolve,
+      });
+    });
+    await new Promise<void>((resolve) => {
+      mounted.runtime.write({
+        data: terminalOutput(authoritativeInputMode.getPreamble()),
+        onCommitted: resolve,
+      });
+    });
+
+    terminal.paste(paste);
+    await waitFor({ predicate: () => mounted.inputs.length > 0 });
+    expect(mounted.inputs).toEqual([bracketedPaste]);
+  });
+
+  it("uploads a clipboard image and pastes the daemon path as one bracketed block", async () => {
+    await page.viewport(900, 600);
+    const imageBytes = new Uint8Array([137, 80, 78, 71]);
+    const pastedImages: Array<{
+      bytes: Uint8Array;
+      mimeType: string;
+      fileExtension: string;
+    }> = [];
+    const mounted = createTerminalHost({
+      width: 720,
+      height: 360,
+      callbacks: {
+        onPasteImage: async (image) => {
+          pastedImages.push(image);
+          return "/tmp/clipboard-image.png";
+        },
+      },
+    });
+    const read = vi.fn(async () => [
+      {
+        types: ["image/png"],
+        getType: async () => new Blob([imageBytes], { type: "image/png" }),
+        presentationStyle: "unspecified" as const,
+      } satisfies ClipboardItem,
+    ]);
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: {
+        readText: vi.fn(async () => ""),
+        read,
+      },
+    });
+
+    await waitFor({ predicate: () => mounted.sizes.length > 0 });
+    await new Promise<void>((resolve) => {
+      mounted.runtime.write({ data: terminalOutput("\x1b[?2004h"), onCommitted: resolve });
+    });
+    dispatchTerminalKey({
+      host: mounted.host,
+      key: "v",
+      code: "KeyV",
+      keyCode: 86,
+      ...(navigator.platform.includes("Mac") ? { metaKey: true } : { ctrlKey: true }),
+    });
+
+    await waitFor({ predicate: () => mounted.inputs.length > 0 });
+    expect(pastedImages).toEqual([
+      {
+        bytes: imageBytes,
+        mimeType: "image/png",
+        fileExtension: "png",
+      },
+    ]);
+    expect(mounted.inputs).toEqual(["\x1b[200~/tmp/clipboard-image.png\x1b[201~"]);
+  });
+
+  it("uses the browser clipboard image for Pi's Windows Alt+V shortcut", async () => {
+    const restorePlatform = setNavigatorPlatform("Win32");
+    try {
+      await page.viewport(900, 600);
+      const onPasteImage = vi.fn(async () => "/tmp/windows-clipboard.png");
+      const mounted = createTerminalHost({
+        width: 720,
+        height: 360,
+        callbacks: { onPasteImage },
+      });
+      Object.defineProperty(navigator, "clipboard", {
+        configurable: true,
+        value: {
+          read: vi.fn(async () => [
+            {
+              types: ["image/png"],
+              getType: async () => new Blob([new Uint8Array([137, 80, 78, 71])]),
+              presentationStyle: "unspecified" as const,
+            } satisfies ClipboardItem,
+          ]),
+        },
+      });
+
+      await waitFor({ predicate: () => mounted.sizes.length > 0 });
+      dispatchTerminalKey({ host: mounted.host, key: "v", code: "KeyV", altKey: true });
+
+      await waitFor({ predicate: () => mounted.inputs.length === 1 });
+      expect(onPasteImage).toHaveBeenCalledTimes(1);
+      expect(mounted.inputs).toEqual(["/tmp/windows-clipboard.png"]);
+      expect(mounted.terminalKeys).toEqual([]);
+    } finally {
+      restorePlatform();
+    }
+  });
+
+  it("forwards Windows Alt+V when the browser clipboard has no image", async () => {
+    const restorePlatform = setNavigatorPlatform("Win32");
+    try {
+      await page.viewport(900, 600);
+      const mounted = createTerminalHost({
+        width: 720,
+        height: 360,
+        callbacks: { onPasteImage: vi.fn(async () => null) },
+      });
+      Object.defineProperty(navigator, "clipboard", {
+        configurable: true,
+        value: { read: vi.fn(async () => []) },
+      });
+
+      await waitFor({ predicate: () => mounted.sizes.length > 0 });
+      dispatchTerminalKey({ host: mounted.host, key: "v", code: "KeyV", altKey: true });
+
+      await waitFor({ predicate: () => mounted.terminalKeys.length === 1 });
+      expect(mounted.terminalKeys).toEqual([
+        { key: "v", ctrl: false, shift: false, alt: true, meta: false },
+      ]);
+      expect(mounted.inputs).toEqual([]);
+    } finally {
+      restorePlatform();
+    }
+  });
+
+  it("reports Windows Alt+V clipboard read failures without forwarding the chord", async () => {
+    const restorePlatform = setNavigatorPlatform("Win32");
+    try {
+      await page.viewport(900, 600);
+      const mounted = createTerminalHost({
+        width: 720,
+        height: 360,
+        callbacks: { onPasteImage: vi.fn(async () => null) },
+      });
+      Object.defineProperty(navigator, "clipboard", {
+        configurable: true,
+        value: { read: vi.fn(async () => Promise.reject(new Error("clipboard denied"))) },
+      });
+
+      await waitFor({ predicate: () => mounted.sizes.length > 0 });
+      dispatchTerminalKey({ host: mounted.host, key: "v", code: "KeyV", altKey: true });
+
+      await waitFor({ predicate: () => mounted.pasteErrors.length === 1 });
+      expect(mounted.pasteErrors).toEqual(["clipboard-read-failed"]);
+      expect(mounted.terminalKeys).toEqual([]);
+      expect(mounted.inputs).toEqual([]);
+    } finally {
+      restorePlatform();
+    }
+  });
+
+  it("serializes repeated asynchronous clipboard image pastes", async () => {
+    await page.viewport(900, 600);
+    let resolveFirstPaste: (path: string | null) => void = () => {};
+    const firstPaste = new Promise<string | null>((resolve) => {
+      resolveFirstPaste = resolve;
+    });
+    const onPasteImage = vi
+      .fn()
+      .mockImplementationOnce(async () => firstPaste)
+      .mockResolvedValueOnce("/tmp/second.png");
+    const mounted = createTerminalHost({
+      width: 720,
+      height: 360,
+      callbacks: { onPasteImage },
+    });
+    const clipboardItem = {
+      types: ["image/png"],
+      getType: async () => new Blob([new Uint8Array([137, 80, 78, 71])], { type: "image/png" }),
+      presentationStyle: "unspecified" as const,
+    } satisfies ClipboardItem;
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: {
+        readText: vi.fn(async () => ""),
+        read: vi.fn(async () => [clipboardItem]),
+      },
+    });
+
+    await waitFor({ predicate: () => mounted.sizes.length > 0 });
+    const pasteKey = {
+      host: mounted.host,
+      key: "v",
+      code: "KeyV",
+      keyCode: 86,
+      ...(navigator.platform.includes("Mac") ? { metaKey: true } : { ctrlKey: true }),
+    };
+    dispatchTerminalKey(pasteKey);
+    dispatchTerminalKey(pasteKey);
+
+    await waitFor({ predicate: () => onPasteImage.mock.calls.length === 1 });
+    expect(onPasteImage).toHaveBeenCalledTimes(1);
+    resolveFirstPaste("/tmp/first.png");
+    await waitFor({ predicate: () => onPasteImage.mock.calls.length === 2 });
+    await waitFor({ predicate: () => mounted.inputs.length === 2 });
+    expect(mounted.inputs).toEqual(["/tmp/first.png", "/tmp/second.png"]);
+  });
+
+  it("rejects clipboard images larger than 50MB before reading their bytes", async () => {
+    await page.viewport(900, 600);
+    const onPasteImage = vi.fn(async () => "/tmp/unused.png");
+    const onPasteError = vi.fn();
+    const mounted = createTerminalHost({
+      width: 720,
+      height: 360,
+      callbacks: { onPasteImage, onPasteError },
+    });
+    const oversizedBlob = { size: 50 * 1024 * 1024 + 1 } as Blob;
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: {
+        readText: vi.fn(async () => ""),
+        read: vi.fn(async () => [
+          {
+            types: ["image/png"],
+            getType: async () => oversizedBlob,
+            presentationStyle: "unspecified" as const,
+          } satisfies ClipboardItem,
+        ]),
+      },
+    });
+
+    await waitFor({ predicate: () => mounted.sizes.length > 0 });
+    dispatchTerminalKey({
+      host: mounted.host,
+      key: "v",
+      code: "KeyV",
+      keyCode: 86,
+      ...(navigator.platform.includes("Mac") ? { metaKey: true } : { ctrlKey: true }),
+    });
+
+    await waitFor({ predicate: () => onPasteError.mock.calls.length > 0 });
+    expect(onPasteError).toHaveBeenCalledWith("image-too-large");
+    expect(onPasteImage).not.toHaveBeenCalled();
+    expect(mounted.inputs).toEqual([]);
+  });
+
+  it("prefers clipboard text without reading or uploading images", async () => {
+    await page.viewport(900, 600);
+    const onPasteImage = vi.fn(async () => "/tmp/unused.png");
+    const mounted = createTerminalHost({
+      width: 720,
+      height: 360,
+      callbacks: { onPasteImage },
+    });
+    const read = vi.fn(async () => [] as ClipboardItem[]);
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: {
+        readText: vi.fn(async () => "first line\nsecond line"),
+        read,
+      },
+    });
+
+    await waitFor({ predicate: () => mounted.sizes.length > 0 });
+    await new Promise<void>((resolve) => {
+      mounted.runtime.write({ data: terminalOutput("\x1b[?2004h"), onCommitted: resolve });
+    });
+    dispatchTerminalKey({
+      host: mounted.host,
+      key: "v",
+      code: "KeyV",
+      keyCode: 86,
+      ...(navigator.platform.includes("Mac") ? { metaKey: true } : { ctrlKey: true }),
+    });
+
+    await waitFor({ predicate: () => mounted.inputs.length > 0 });
+    expect(mounted.inputs).toEqual(["\x1b[200~first line\rsecond line\x1b[201~"]);
+    expect(read).not.toHaveBeenCalled();
+    expect(onPasteImage).not.toHaveBeenCalled();
+  });
+
+  it("leaves Alt+V to the terminal application", async () => {
+    await page.viewport(900, 600);
+    const readText = vi.fn(async () => "clipboard text");
+    const onPasteImage = vi.fn(async () => "/tmp/unused.png");
+    const mounted = createTerminalHost({
+      width: 720,
+      height: 360,
+      callbacks: { onPasteImage },
+    });
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { readText, read: vi.fn(async () => [] as ClipboardItem[]) },
+    });
+
+    await waitFor({ predicate: () => mounted.sizes.length > 0 });
+    dispatchTerminalKey({
+      host: mounted.host,
+      key: "v",
+      code: "KeyV",
+      keyCode: 86,
+      altKey: true,
+    });
+    await nextFrame();
+
+    expect(readText).not.toHaveBeenCalled();
+    expect(onPasteImage).not.toHaveBeenCalled();
   });
 
   it.each([

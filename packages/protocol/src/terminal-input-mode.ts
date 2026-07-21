@@ -5,15 +5,18 @@ export interface TerminalInputModeFeedResult {
 
 export interface TerminalInputModeState {
   kittyKeyboardFlags: number;
+  bracketedPasteMode: boolean;
   win32InputMode: boolean;
 }
 
 export const DEFAULT_TERMINAL_INPUT_MODE_STATE: TerminalInputModeState = {
   kittyKeyboardFlags: 0,
+  bracketedPasteMode: false,
   win32InputMode: false,
 };
 
 const ESC = String.fromCharCode(0x1b);
+const BRACKETED_PASTE_MODE = 2004;
 const WIN32_INPUT_MODE = 9001;
 const CSI_INPUT_MODE_SEQUENCE = new RegExp(
   `${ESC}\\[(?:([<>=?]?)([0-9;]*)u|\\?([0-9;]*)([hl]))`,
@@ -57,12 +60,14 @@ export function terminalInputModeStatesEqual(
 ): boolean {
   return (
     left.kittyKeyboardFlags === right.kittyKeyboardFlags &&
+    left.bracketedPasteMode === right.bracketedPasteMode &&
     left.win32InputMode === right.win32InputMode
   );
 }
 
 export class TerminalInputModeTracker {
   private kittyKeyboardFlags = 0;
+  private bracketedPasteMode = false;
   private win32InputMode = false;
   private readonly kittyKeyboardStack: number[] = [];
   private pending = "";
@@ -111,6 +116,7 @@ export class TerminalInputModeTracker {
 
   reset(): void {
     this.kittyKeyboardFlags = 0;
+    this.bracketedPasteMode = false;
     this.win32InputMode = false;
     this.kittyKeyboardStack.length = 0;
     this.pending = "";
@@ -119,6 +125,7 @@ export class TerminalInputModeTracker {
   getState(): TerminalInputModeState {
     return {
       kittyKeyboardFlags: this.kittyKeyboardFlags,
+      bracketedPasteMode: this.bracketedPasteMode,
       win32InputMode: this.win32InputMode,
     };
   }
@@ -135,6 +142,9 @@ export class TerminalInputModeTracker {
     const parts: string[] = [];
     if (this.kittyKeyboardFlags > 0) {
       parts.push(`\x1b[=${this.kittyKeyboardFlags};1u`);
+    }
+    if (this.bracketedPasteMode) {
+      parts.push("\x1b[?2004h");
     }
     if (this.win32InputMode) {
       parts.push("\x1b[?9001h");
@@ -183,12 +193,18 @@ export class TerminalInputModeTracker {
 
   private applyPrivateModeSequence(params: string, final: string): boolean {
     const modes = parsePrivateModeParams(params);
-    if (!modes.has(WIN32_INPUT_MODE)) {
-      return false;
+    const enabled = final === "h";
+    let changed = false;
+
+    if (modes.has(BRACKETED_PASTE_MODE)) {
+      changed = this.bracketedPasteMode !== enabled;
+      this.bracketedPasteMode = enabled;
+    }
+    if (modes.has(WIN32_INPUT_MODE)) {
+      changed = this.win32InputMode !== enabled || changed;
+      this.win32InputMode = enabled;
     }
 
-    const previous = this.win32InputMode;
-    this.win32InputMode = final === "h";
-    return this.win32InputMode !== previous;
+    return changed;
   }
 }
