@@ -440,6 +440,41 @@ describe("DaemonConfigStore", () => {
 
     const persisted = loadPersistedConfig(byspaceHome);
     expect(persisted.daemon?.enableTerminalAgentHooks).toBe(true);
+    expect(persisted.daemon?.terminalAgentHooks).toEqual({
+      claude: true,
+      codex: true,
+      opencode: true,
+      pi: true,
+    });
+  });
+
+  test("patch persists provider-scoped terminal agent hooks and derives the aggregate", () => {
+    const byspaceHome = mkdtempSync(path.join(tmpdir(), "byspace-daemon-config-store-"));
+    tempDirs.push(byspaceHome);
+    const store = new DaemonConfigStore(
+      byspaceHome,
+      {
+        mcp: { injectIntoAgents: false },
+        providers: {},
+        metadataGeneration: { providers: [] },
+        autoArchiveAfterMerge: false,
+        enableTerminalAgentHooks: false,
+        appendSystemPrompt: "",
+      },
+      undefined,
+    );
+
+    const config = store.patch({
+      terminalAgentHooks: { claude: false, codex: false, opencode: false, pi: true },
+    });
+
+    expect(config.enableTerminalAgentHooks).toBe(true);
+    expect(loadPersistedConfig(byspaceHome).daemon?.terminalAgentHooks).toEqual({
+      claude: false,
+      codex: false,
+      opencode: false,
+      pi: true,
+    });
   });
 
   test("patch persists metadata generation providers into config.json", () => {

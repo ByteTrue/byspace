@@ -176,7 +176,7 @@ describe("Claude terminal agent hooks", () => {
     for (const filePath of genericFiles) {
       const contents = readFileSync(filePath, "utf8").toLowerCase();
       for (const providerId of Object.keys(AGENT_HOOK_PROVIDERS)) {
-        expect(contents).not.toContain(providerId);
+        expect(contents).not.toMatch(new RegExp(`["']${providerId}["']`));
       }
     }
   });

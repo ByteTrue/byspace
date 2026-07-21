@@ -129,6 +129,17 @@ export const TerminalProfileSchema = z
 
 export type TerminalProfile = z.infer<typeof TerminalProfileSchema>;
 
+export const TerminalAgentHookSettingsSchema = z
+  .object({
+    claude: z.boolean().optional(),
+    codex: z.boolean().optional(),
+    opencode: z.boolean().optional(),
+    pi: z.boolean().optional(),
+  })
+  .passthrough();
+
+export type TerminalAgentHookSettings = z.infer<typeof TerminalAgentHookSettingsSchema>;
+
 export const MutableDaemonConfigSchema = z
   .object({
     mcp: z
@@ -140,6 +151,7 @@ export const MutableDaemonConfigSchema = z
     metadataGeneration: MutableMetadataGenerationConfigSchema.default({ providers: [] }),
     autoArchiveAfterMerge: z.boolean().default(false),
     enableTerminalAgentHooks: z.boolean().default(false),
+    terminalAgentHooks: TerminalAgentHookSettingsSchema.optional(),
     appendSystemPrompt: z.string().default(""),
     terminalProfiles: z.array(TerminalProfileSchema).optional(),
   })
@@ -155,6 +167,7 @@ export const MutableDaemonConfigPatchSchema = z
     metadataGeneration: MutableMetadataGenerationConfigSchema.partial().optional(),
     autoArchiveAfterMerge: z.boolean().optional(),
     enableTerminalAgentHooks: z.boolean().optional(),
+    terminalAgentHooks: TerminalAgentHookSettingsSchema.optional(),
     appendSystemPrompt: z.string().optional(),
     terminalProfiles: z.array(TerminalProfileSchema).optional(),
   })
@@ -2619,6 +2632,8 @@ export const ServerInfoStatusPayloadSchema = z
         "terminal-restore-modes": z.boolean().optional(),
         // COMPAT(terminalClipboardImage): added in v0.2.0, remove gate after 2027-01-21.
         terminalClipboardImage: z.boolean().optional(),
+        // COMPAT(terminalAgentHookProviders): added in v0.2.0, remove gate after 2027-01-21.
+        terminalAgentHookProviders: z.boolean().optional(),
         // COMPAT(rewind): added in v0.1.X, drop the gate when floor >= v0.1.X.
         rewind: z.boolean().optional(),
         // COMPAT(checkoutRefresh): added in v0.1.86, remove gate after 2026-11-29.

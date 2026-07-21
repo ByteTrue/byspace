@@ -23,11 +23,12 @@ describe("resolveTerminalProfiles", () => {
     expect(result).toBe(custom);
   });
 
-  it("default profiles include claude, codex, opencode", () => {
+  it("default profiles include claude, codex, opencode, and pi", () => {
     const ids = DEFAULT_TERMINAL_PROFILES.map((p) => p.id);
     expect(ids).toContain("claude");
     expect(ids).toContain("codex");
     expect(ids).toContain("opencode");
+    expect(ids).toContain("pi");
   });
 
   it("claude profile has the correct icon", () => {
@@ -43,6 +44,11 @@ describe("resolveTerminalProfiles", () => {
   it("opencode profile has the correct icon", () => {
     const opencode = DEFAULT_TERMINAL_PROFILES.find((p) => p.id === "opencode");
     expect(opencode?.icon).toBe("opencode");
+  });
+
+  it("pi profile launches the pi command with the correct icon", () => {
+    const pi = DEFAULT_TERMINAL_PROFILES.find((profile) => profile.id === "pi");
+    expect(pi).toMatchObject({ command: "pi", icon: "pi" });
   });
 });
 

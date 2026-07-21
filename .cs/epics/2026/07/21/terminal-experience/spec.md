@@ -27,6 +27,8 @@ Relay 复用同一套正确的 Terminal 基础，但允许公网 RTT、端到端
 
 随后按用户真实 Pi CLI workflow 扩展体验边界：恢复 snapshot replay 中的 bracketed paste mode；针对 ConPTY 可能不转发 DECSET 2004 的 Windows 边界，强制把多行 clipboard 文本安全地 frame 成单个 block；浏览器图片 clipboard 经现有 binary upload 写入 daemon，并把服务端路径强制作为单个 bracketed block 送入 PTY。headed 字号、字重、minimum contrast ratio 与 ligatures A/B 保留为后续呈现切片。Relay 特有的 ACK、序号或恢复增强继续单独推进。
 
+Terminal agent integration now treats hook installation as a provider-scoped external side effect: Claude Code, Codex, OpenCode, and Pi are independently opt-in, while the legacy global setting remains a compatibility aggregate. Pi uses its documented global extension lifecycle and also appears in the built-in Terminal profiles.
+
 ## 需求变化
 
 - Direct Terminal 从“功能可用”提升为有明确参照对象和性能证据的完整体验。
@@ -45,6 +47,7 @@ Relay 复用同一套正确的 Terminal 基础，但允许公网 RTT、端到端
 - 任何协议扩展都保持新旧 client/daemon 双向可解析，并在单点 capability gate 后提供干净的下游形状。
 - BySpace 已有 authoritative worker `TerminalInputModeTracker` 和 snapshot `replayPreamble`；bracketed paste 应扩展这条现有状态恢复路径，而不是在浏览器另建猜测状态。
 - 图片 clipboard 属于浏览器拥有的二进制数据；不能依赖远端 Pi 进程读取浏览器所在机器的系统剪贴板。应由 client 读取、daemon 安全落盘并把 daemon 可访问路径作为一次 paste 输入。
+- Agent hook state is independent from managed-provider enablement because users can run provider CLIs manually in Terminal. Startup installs enabled hooks but does not let a disabled secondary/test daemon remove another daemon's global hook files; only a live provider switch change performs removal.
 
 ## 质量约束与取舍
 
@@ -94,6 +97,7 @@ Relay 复用同一套正确的 Terminal 基础，但允许公网 RTT、端到端
 - [x] `.cs/issues/2026/07/21/closed-terminal-bracketed-paste-restore/index.md`：snapshot 后恢复 DEC private mode 2004，多行 paste 保持单个 bracketed block。
 - [x] `.cs/issues/2026/07/21/closed-terminal-clipboard-image-paste.md`：复用现有 binary upload，把浏览器 clipboard 图片写入 daemon 并向 PTY paste 服务端 path。
 - [x] `.cs/issues/2026/07/21/closed-terminal-windows-bracketed-paste-fallback/index.md`：Windows 多行文本不依赖 ConPTY 是否转发 DECSET 2004；生成的图片路径始终强制 framing。
+- [x] `.cs/issues/2026/07/21/closed-pi-terminal-agents.md`：Terminal hooks 使用 provider 独立开关；Pi 通过全局 extension 上报 activity，并进入默认 Terminal profiles。
 
 ### 剩余阻碍
 

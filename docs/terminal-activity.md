@@ -45,7 +45,7 @@ Terminals receive four environment variables when the daemon creates the shell:
 - `BYSPACE_TERMINAL_ACTIVITY_URL`
 - `BYSPACE_HOOK_CLI` — absolute path to the current `byspace` CLI executable.
 
-The generated shell command uses `BYSPACE_HOOK_CLI` to run the current CLI. `byspace hooks <agent> <event>` then reads the terminal id, token, and activity URL, asks the agent hook provider registry to resolve the event to a coarse activity state, and silently posts `{ terminalId, token, state }` to the activity URL. Missing env, unsupported agents/events, malformed hook input, and daemon/network failures are no-ops so agent hooks never break the user's terminal session.
+Claude and Codex use generated shell commands that run the current `BYSPACE_HOOK_CLI`; OpenCode and Pi use installed extensions that post to the same loopback endpoint directly. `byspace hooks <agent> <event>` reads the terminal id, token, and activity URL, asks the provider registry to resolve the event to a coarse activity state, and silently posts `{ terminalId, token, state }`. Missing env, unsupported agents/events, malformed hook input, and daemon/network failures are no-ops so hooks never break the user's terminal session.
 
 Claude hook mapping:
 
@@ -67,6 +67,13 @@ OpenCode uses a server plugin instead of command hooks. The plugin listens to Op
 - `permission.asked` → `needs-input`
 - `permission.replied` → `running`
 
+Pi uses a global extension and Pi's documented lifecycle events:
+
+- `agent_start` → `running`
+- ask/question tool start → `needs-input`
+- ask/question tool end → `running`
+- `agent_settled`, `session_shutdown` → `idle`
+
 The daemon maps hook states onto terminal activity like an agent lifecycle plus unread attention: `running` → `state: working`, `idle` → `state: idle`, and `needs-input` → `state: idle` with `attentionReason: needs_input`. A `working` → `idle` transition records `state: idle` with `attentionReason: finished` until the user focuses that terminal; plain idle terminals still contribute no workspace status.
 
 ## Focus clearing
@@ -75,25 +82,20 @@ Client heartbeats include the focused terminal id. When a visible client focuses
 
 ### Agent hook installation
 
-Installing hooks edits the user's real agent config files, so it is opt-in. The daemon setting
-`enableTerminalAgentHooks` (persisted under `daemon.enableTerminalAgentHooks`, default `false`)
-gates installation. It is surfaced in the app under a host's **Terminals** settings as "Enable
-terminal agent hooks" — "Get notifications and status from terminal agents. This installs hooks in
-your agent config files." `applyTerminalAgentHookSetting` reconciles the installed hooks with the
-setting: at startup it installs only when enabled; toggling the setting live installs on enable and
-removes BySpace's marker-matched hooks on disable. `byspace hooks` keeps working regardless — the gate
-only controls whether the daemon writes hooks into agent configs, not whether the CLI can post
-activity when the env is present.
+Installing hooks edits the user's real agent config files, so every provider is opt-in. The provider-scoped `daemon.terminalAgentHooks` map is surfaced under a host's **Terminals → Terminal agent hooks** settings, with independent switches for Claude Code, Codex, OpenCode, and Pi. At startup `applyTerminalAgentHookSetting` installs only enabled providers; live setting changes install or remove only the provider that changed. A disabled secondary/test daemon never removes hooks owned by another daemon startup.
 
-When enabled, BySpace installs provider hooks globally:
+The legacy `daemon.enableTerminalAgentHooks` field remains accepted for protocol compatibility. A legacy-only value applies to every provider; the daemon keeps it as an aggregate (`true` when any provider is enabled) so old clients can still read and control the setting. New clients capability-gate provider switches on `server_info.features.terminalAgentHookProviders`.
+
+When enabled for a provider, BySpace installs its hook globally:
 
 - Claude hooks are written to `~/.claude/settings.json` (or `CLAUDE_CONFIG_DIR/settings.json` when that override is set).
 - Codex hooks are written to `~/.codex/hooks.json` (or `CODEX_HOME/hooks.json` when that override is set). Codex supports a native `commandWindows`, so each BySpace hook includes both POSIX and Windows commands. Non-managed Codex hooks are trust-gated by Codex; users may see Codex's hook review prompt before the hook runs.
 - OpenCode gets a self-contained plugin at `$XDG_CONFIG_HOME/opencode/plugins/byspace-terminal-activity.js` (or `~/.config/opencode/plugins/byspace-terminal-activity.js` when XDG is unset; `OPENCODE_CONFIG_DIR` still wins when set).
+- Pi gets a self-contained extension at `~/.pi/agent/extensions/byspace-terminal-activity.ts` (or `PI_CODING_AGENT_DIR/extensions/byspace-terminal-activity.ts`). Pi auto-discovers this documented global extension location; `/reload` activates a newly installed or updated extension in an already running Pi session.
 
-Installation is marker-based/idempotent for config hooks and exact-file/idempotent for the OpenCode plugin. BySpace preserves user hooks, removes only its own marker-matched command hooks, and leaves hooks installed across daemon shutdown. Outside a BySpace terminal they are inert because the command or plugin is gated on `BYSPACE_TERMINAL_ID`.
+Installation is marker-based/idempotent for config hooks and exact-file/idempotent for the OpenCode and Pi extensions. BySpace preserves user hooks, removes only its own marker-matched command hooks or exact managed extension files, and leaves enabled hooks installed across daemon shutdown. Outside a BySpace terminal they are inert because the command or extension requires BySpace's injected terminal identity and activity token.
 
-Provider variation lives in `AGENT_HOOK_PROVIDERS`: provider id, installed events, config install metadata, and runtime event-to-activity resolution. The daemon calls `installRegisteredAgentHooks()` once; the CLI calls `resolveHookActivity(provider, event, input)`. Adding a provider should add one provider entry and register it in `AGENT_HOOK_PROVIDERS`, without editing the generic CLI command or daemon bootstrap.
+Provider variation lives in `AGENT_HOOK_PROVIDERS`: provider id, installed events, install strategy, and runtime event-to-activity resolution. Pi's extension source is provider-local because it uses Pi's native extension lifecycle; the generic installer and daemon setting reconciliation remain provider-agnostic.
 
 The installed hook command keeps the config portable and resolves the CLI at runtime:
 

@@ -9,7 +9,10 @@ import {
 } from "./agent/provider-launch-config.js";
 import type { AgentProviderRuntimeSettingsMap } from "./agent/provider-launch-config.js";
 import { ensurePrivateFile, writePrivateFileAtomicSync } from "./private-files.js";
-import { TerminalProfileSchema } from "@bytetrue/byspace-protocol/messages";
+import {
+  TerminalAgentHookSettingsSchema,
+  TerminalProfileSchema,
+} from "@bytetrue/byspace-protocol/messages";
 import { resolveBySpaceHostedRelease } from "@bytetrue/byspace-protocol/release-channel";
 import { resolveDaemonVersion } from "./daemon-version.js";
 
@@ -244,6 +247,7 @@ export const PersistedConfigSchema = z
           .optional(),
         autoArchiveAfterMerge: z.boolean().optional(),
         enableTerminalAgentHooks: z.boolean().optional(),
+        terminalAgentHooks: TerminalAgentHookSettingsSchema.optional(),
         appendSystemPrompt: z.string().optional(),
         terminalProfiles: z.array(TerminalProfileSchema).optional(),
         cors: z
