@@ -25,7 +25,7 @@ Relay 复用同一套正确的 Terminal 基础，但允许公网 RTT、端到端
 
 首轮 Orca Web Direct 与 BySpace Direct 同条件阶段化基准已经完成：BySpace 在 idle/loaded/TUI keydown→commit、50,000 行 parse/paint、rAF gap 和 resize 的五次样本中均更快，没有证据支持先移植 renderer scheduler 或独立 Terminal WebSocket。
 
-随后按用户真实 Pi CLI workflow 扩展体验边界：恢复 snapshot replay 中的 bracketed paste mode；针对 ConPTY 可能不转发 DECSET 2004 的 Windows 边界，强制把多行 clipboard 文本安全地 frame 成单个 block；浏览器图片 clipboard 经现有 binary upload 写入 daemon，并把服务端路径强制作为单个 bracketed block 送入 PTY。headed 字号、字重、minimum contrast ratio 与 ligatures A/B 保留为后续呈现切片。Relay 特有的 ACK、序号或恢复增强继续单独推进。
+随后按用户真实 Pi CLI workflow 扩展体验边界：恢复 snapshot replay 中的 bracketed paste mode；标准 `Ctrl/Cmd+V` 不再由 keydown 主动读取剪贴板，而是放行浏览器可信 `ClipboardEvent`，同一事件含受支持图片时统一上传图片、无图片时才 paste `text/plain`；针对 ConPTY 可能不转发 DECSET 2004 的 Windows 边界，强制把多行 clipboard 文本安全地 frame 成单个 block；浏览器图片 clipboard 经现有 binary upload 写入 daemon，并把服务端路径强制作为单个 bracketed block 送入 PTY。Windows `Alt+V` 仍单独使用 Async Clipboard 探测图片。headed 字号、字重、minimum contrast ratio 与 ligatures A/B 保留为后续呈现切片。Relay 特有的 ACK、序号或恢复增强继续单独推进。
 
 Terminal agent integration now treats hook installation as a provider-scoped external side effect: Claude Code, Codex, OpenCode, and Pi are independently opt-in, while the legacy global setting remains a compatibility aggregate. Pi uses its documented global extension lifecycle and also appears in the built-in Terminal profiles.
 
@@ -46,7 +46,7 @@ Terminal agent integration now treats hook installation as a provider-scoped ext
 - 首轮同条件数据未显示 renderer、共享连接或 resize 是 Local Direct 的现行瓶颈；除非后续真实 workload 提供新证据，否则不提前购买这些架构复杂度。
 - 任何协议扩展都保持新旧 client/daemon 双向可解析，并在单点 capability gate 后提供干净的下游形状。
 - BySpace 已有 authoritative worker `TerminalInputModeTracker` 和 snapshot `replayPreamble`；bracketed paste 应扩展这条现有状态恢复路径，而不是在浏览器另建猜测状态。
-- 图片 clipboard 属于浏览器拥有的二进制数据；不能依赖远端 Pi 进程读取浏览器所在机器的系统剪贴板。应由 client 读取、daemon 安全落盘并把 daemon 可访问路径作为一次 paste 输入。
+- 图片 clipboard 属于浏览器拥有的二进制数据；不能依赖远端 Pi 进程读取浏览器所在机器的系统剪贴板。标准 `Ctrl/Cmd+V` 应保留浏览器可信 paste 事件，事件含受支持图片时由 client 统一上传、由 daemon 产生远端可读路径，只有无图片时才使用 `text/plain`；Windows `Alt+V` 的显式图片动作继续单独使用 Async Clipboard。
 - Agent hook state is independent from managed-provider enablement because users can run provider CLIs manually in Terminal. Startup installs enabled hooks but does not let a disabled secondary/test daemon remove another daemon's global hook files; only a live provider switch change performs removal.
 
 ## 质量约束与取舍
@@ -95,13 +95,13 @@ Terminal agent integration now treats hook installation as a provider-scoped ext
 
 - [ ] `.cs/issues/2026/07/21/open-terminal-direct-baseline/index.md`：raw 性能和输入语义根因已形成关闭证据；等待用户在真实 Windows + Pi CLI 验证后确认 Explore 毕业。
 - [x] `.cs/issues/2026/07/21/closed-terminal-bracketed-paste-restore/index.md`：snapshot 后恢复 DEC private mode 2004，多行 paste 保持单个 bracketed block。
-- [x] `.cs/issues/2026/07/21/closed-terminal-clipboard-image-paste.md`：复用现有 binary upload，把浏览器 clipboard 图片写入 daemon 并向 PTY paste 服务端 path。
+- [x] `.cs/issues/2026/07/21/closed-terminal-clipboard-image-paste.md`：复用现有 binary upload，把浏览器 clipboard 图片写入 daemon 并向 PTY paste 服务端 path；标准 `Ctrl/Cmd+V` 放行可信 paste 事件，事件含受支持图片时统一上传、无图片时才 paste 文本。
 - [x] `.cs/issues/2026/07/21/closed-terminal-windows-bracketed-paste-fallback/index.md`：Windows 多行文本不依赖 ConPTY 是否转发 DECSET 2004；生成的图片路径始终强制 framing。
 - [x] `.cs/issues/2026/07/21/closed-pi-terminal-agents.md`：Terminal hooks 使用 provider 独立开关；Pi 通过全局 extension 上报 activity，并进入默认 Terminal profiles。
 
 ### 剩余阻碍
 
-- 已关闭 snapshot restore、Windows ConPTY mode 缺失兜底和浏览器图片上传三个输入语义边界；等待用户用真实 Windows 浏览器 + Pi CLI 复验多行文本与图片粘贴。
+- 已关闭 snapshot restore、Windows ConPTY mode 缺失兜底和浏览器图片上传三个输入语义边界；用户已在 macOS Chrome + PixPin + Direct headed 验收同一事件同时含文本 path 与图片时统一走 daemon upload；仍等待真实 Windows 浏览器 + ConPTY + Pi CLI 验收多行文本、图片粘贴和 Alt+V。
 - headed 主观渲染差距仍未分解；跨机器绝对 CI gate 也还没有 CI 样本。
 
 ## 暂不推进范围
@@ -113,7 +113,7 @@ Terminal agent integration now treats hook installation as a provider-scoped ext
 
 ## 未确认问题
 
-- raw Direct 性能不落后已经确认；用户感知差距至少包含已复现的文本 paste 语义和源码确认缺失的图片 clipboard 路径，视觉呈现仍待 headed A/B。
+- raw Direct 性能不落后已经确认；文本 paste、图片 clipboard 与 PixPin 双格式事件的已知缺口均有自动化覆盖，用户已在 macOS Chrome + PixPin + Direct headed 验收通过；仍待真实 Windows + ConPTY + Pi CLI 验收，视觉呈现仍待 headed A/B。
 - 默认字号目前复用全局 code font size；是否需要 Terminal 专属字号，要由 A/B 收益与设置复杂度共同决定。
 - 独立 Terminal transport 和 renderer scheduler 只有在新的真实负载证据出现时才升级为实现方向。
 

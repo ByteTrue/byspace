@@ -198,6 +198,31 @@ function dispatchTerminalKey(input: {
   return textarea.dispatchEvent(event);
 }
 
+function dispatchTerminalPaste(input: {
+  host: HTMLElement;
+  text?: string;
+  image?: File;
+}): ClipboardEvent {
+  const textarea = input.host.querySelector<HTMLTextAreaElement>("textarea");
+  if (!textarea) {
+    throw new Error("Expected xterm textarea to be mounted");
+  }
+  const clipboardData = new DataTransfer();
+  if (input.text !== undefined) {
+    clipboardData.setData("text/plain", input.text);
+  }
+  if (input.image) {
+    clipboardData.items.add(input.image);
+  }
+  const event = new ClipboardEvent("paste", {
+    bubbles: true,
+    cancelable: true,
+    clipboardData,
+  });
+  textarea.dispatchEvent(event);
+  return event;
+}
+
 function setNavigatorPlatform(platform: string): () => void {
   const descriptor = Object.getOwnPropertyDescriptor(navigator, "platform");
   Object.defineProperty(navigator, "platform", { configurable: true, value: platform });
@@ -429,27 +454,36 @@ describe("terminal emulator runtime in a real browser", () => {
     expect(mounted.inputs).toEqual([bracketedPaste]);
   });
 
+  it("lets the browser dispatch the trusted paste event for the standard shortcut", async () => {
+    await page.viewport(900, 600);
+    const mounted = createTerminalHost({ width: 720, height: 360 });
+    const readText = vi.fn(async () => "/Users/byte/PixPin/image.jpg");
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { readText, read: vi.fn(async () => [] as ClipboardItem[]) },
+    });
+
+    await waitFor({ predicate: () => mounted.sizes.length > 0 });
+    const allowed = dispatchTerminalKey({
+      host: mounted.host,
+      key: "v",
+      code: "KeyV",
+      keyCode: 86,
+      ...(/Macintosh|Mac OS/i.test(navigator.userAgent) ? { metaKey: true } : { ctrlKey: true }),
+    });
+
+    expect(allowed).toBe(true);
+    expect(readText).not.toHaveBeenCalled();
+  });
+
   it("forces and sanitizes multiline clipboard text on Windows without terminal mode state", async () => {
     const restorePlatform = setNavigatorPlatform("Win32");
     try {
       await page.viewport(900, 600);
       const mounted = createTerminalHost({ width: 720, height: 360 });
-      Object.defineProperty(navigator, "clipboard", {
-        configurable: true,
-        value: {
-          readText: vi.fn(async () => "first line\nsecond\x1b[201~line"),
-          read: vi.fn(async () => [] as ClipboardItem[]),
-        },
-      });
 
       await waitFor({ predicate: () => mounted.sizes.length > 0 });
-      dispatchTerminalKey({
-        host: mounted.host,
-        key: "v",
-        code: "KeyV",
-        keyCode: 86,
-        ...(/Macintosh|Mac OS/i.test(navigator.userAgent) ? { metaKey: true } : { ctrlKey: true }),
-      });
+      dispatchTerminalPaste({ host: mounted.host, text: "first line\nsecond\x1b[201~line" });
 
       await waitFor({ predicate: () => mounted.inputs.length > 0 });
       expect(mounted.inputs).toEqual(["\x1b[200~first line\rsecond\u241b[201~line\x1b[201~"]);
@@ -499,30 +533,10 @@ describe("terminal emulator runtime in a real browser", () => {
         },
       },
     });
-    const read = vi.fn(async () => [
-      {
-        types: ["image/png"],
-        getType: async () => new Blob([imageBytes], { type: "image/png" }),
-        presentationStyle: "unspecified" as const,
-      } satisfies ClipboardItem,
-    ]);
-    Object.defineProperty(navigator, "clipboard", {
-      configurable: true,
-      value: {
-        readText: vi.fn(async () => ""),
-        read,
-      },
-    });
+    const image = new File([imageBytes], "clipboard.png", { type: "image/png" });
 
     await waitFor({ predicate: () => mounted.sizes.length > 0 });
-    dispatchTerminalKey({
-      host: mounted.host,
-      key: "v",
-      code: "KeyV",
-      keyCode: 86,
-      ...(navigator.platform.includes("Mac") ? { metaKey: true } : { ctrlKey: true }),
-    });
-
+    dispatchTerminalPaste({ host: mounted.host, image });
     await waitFor({ predicate: () => mounted.inputs.length > 0 });
     expect(pastedImages).toEqual([
       {
@@ -622,128 +636,137 @@ describe("terminal emulator runtime in a real browser", () => {
     }
   });
 
-  it("serializes repeated asynchronous clipboard image pastes", async () => {
+  it("continues queued image pastes after an upload rejection", async () => {
     await page.viewport(900, 600);
-    let resolveFirstPaste: (path: string | null) => void = () => {};
-    const firstPaste = new Promise<string | null>((resolve) => {
-      resolveFirstPaste = resolve;
-    });
     const onPasteImage = vi
       .fn()
-      .mockImplementationOnce(async () => firstPaste)
+      .mockRejectedValueOnce(new Error("upload failed"))
       .mockResolvedValueOnce("/tmp/second.png");
     const mounted = createTerminalHost({
       width: 720,
       height: 360,
       callbacks: { onPasteImage },
     });
-    const clipboardItem = {
-      types: ["image/png"],
-      getType: async () => new Blob([new Uint8Array([137, 80, 78, 71])], { type: "image/png" }),
-      presentationStyle: "unspecified" as const,
-    } satisfies ClipboardItem;
-    Object.defineProperty(navigator, "clipboard", {
-      configurable: true,
-      value: {
-        readText: vi.fn(async () => ""),
-        read: vi.fn(async () => [clipboardItem]),
-      },
+    const image = new File([new Uint8Array([137, 80, 78, 71])], "clipboard.png", {
+      type: "image/png",
     });
 
     await waitFor({ predicate: () => mounted.sizes.length > 0 });
-    const pasteKey = {
-      host: mounted.host,
-      key: "v",
-      code: "KeyV",
-      keyCode: 86,
-      ...(navigator.platform.includes("Mac") ? { metaKey: true } : { ctrlKey: true }),
-    };
-    dispatchTerminalKey(pasteKey);
-    dispatchTerminalKey(pasteKey);
+    dispatchTerminalPaste({ host: mounted.host, image });
+    dispatchTerminalPaste({ host: mounted.host, image });
 
-    await waitFor({ predicate: () => onPasteImage.mock.calls.length === 1 });
-    expect(onPasteImage).toHaveBeenCalledTimes(1);
-    resolveFirstPaste("/tmp/first.png");
     await waitFor({ predicate: () => onPasteImage.mock.calls.length === 2 });
-    await waitFor({ predicate: () => mounted.inputs.length === 2 });
-    expect(mounted.inputs).toEqual([
-      "\x1b[200~/tmp/first.png\x1b[201~",
-      "\x1b[200~/tmp/second.png\x1b[201~",
-    ]);
+    await waitFor({ predicate: () => mounted.inputs.length === 1 });
+    expect(mounted.pasteErrors).toEqual(["clipboard-read-failed"]);
+    expect(mounted.inputs).toEqual(["\x1b[200~/tmp/second.png\x1b[201~"]);
+  });
+
+  it("does not report a delayed Windows clipboard image failure after unmount", async () => {
+    const restorePlatform = setNavigatorPlatform("Win32");
+    try {
+      await page.viewport(900, 600);
+      let rejectImageRead: (error: Error) => void = () => {};
+      const imageRead = new Promise<Blob>((_resolve, reject) => {
+        rejectImageRead = reject;
+      });
+      const getType = vi.fn(() => imageRead);
+      const mounted = createTerminalHost({
+        width: 720,
+        height: 360,
+        callbacks: { onPasteImage: vi.fn(async () => null) },
+      });
+      Object.defineProperty(navigator, "clipboard", {
+        configurable: true,
+        value: {
+          read: vi.fn(async () => [
+            {
+              types: ["image/png"],
+              getType,
+              presentationStyle: "unspecified" as const,
+            } satisfies ClipboardItem,
+          ]),
+        },
+      });
+
+      await waitFor({ predicate: () => mounted.sizes.length > 0 });
+      dispatchTerminalKey({ host: mounted.host, key: "v", code: "KeyV", altKey: true });
+      await waitFor({ predicate: () => getType.mock.calls.length === 1 });
+      mounted.runtime.unmount();
+      rejectImageRead(new Error("clipboard read failed"));
+      await nextFrame();
+
+      expect(mounted.pasteErrors).toEqual([]);
+    } finally {
+      restorePlatform();
+    }
   });
 
   it("rejects clipboard images larger than 50MB before reading their bytes", async () => {
-    await page.viewport(900, 600);
-    const onPasteImage = vi.fn(async () => "/tmp/unused.png");
-    const onPasteError = vi.fn();
-    const mounted = createTerminalHost({
-      width: 720,
-      height: 360,
-      callbacks: { onPasteImage, onPasteError },
-    });
-    const oversizedBlob = { size: 50 * 1024 * 1024 + 1 } as Blob;
-    Object.defineProperty(navigator, "clipboard", {
-      configurable: true,
-      value: {
-        readText: vi.fn(async () => ""),
-        read: vi.fn(async () => [
-          {
-            types: ["image/png"],
-            getType: async () => oversizedBlob,
-            presentationStyle: "unspecified" as const,
-          } satisfies ClipboardItem,
-        ]),
-      },
-    });
+    const restorePlatform = setNavigatorPlatform("Win32");
+    try {
+      await page.viewport(900, 600);
+      const onPasteImage = vi.fn(async () => "/tmp/unused.png");
+      const onPasteError = vi.fn();
+      const mounted = createTerminalHost({
+        width: 720,
+        height: 360,
+        callbacks: { onPasteImage, onPasteError },
+      });
+      const oversizedBlob = { size: 50 * 1024 * 1024 + 1 } as Blob;
+      Object.defineProperty(navigator, "clipboard", {
+        configurable: true,
+        value: {
+          read: vi.fn(async () => [
+            {
+              types: ["image/png"],
+              getType: async () => oversizedBlob,
+              presentationStyle: "unspecified" as const,
+            } satisfies ClipboardItem,
+          ]),
+        },
+      });
 
-    await waitFor({ predicate: () => mounted.sizes.length > 0 });
-    dispatchTerminalKey({
-      host: mounted.host,
-      key: "v",
-      code: "KeyV",
-      keyCode: 86,
-      ...(navigator.platform.includes("Mac") ? { metaKey: true } : { ctrlKey: true }),
-    });
+      await waitFor({ predicate: () => mounted.sizes.length > 0 });
+      dispatchTerminalKey({ host: mounted.host, key: "v", code: "KeyV", altKey: true });
 
-    await waitFor({ predicate: () => onPasteError.mock.calls.length > 0 });
-    expect(onPasteError).toHaveBeenCalledWith("image-too-large");
-    expect(onPasteImage).not.toHaveBeenCalled();
-    expect(mounted.inputs).toEqual([]);
+      await waitFor({ predicate: () => onPasteError.mock.calls.length > 0 });
+      expect(onPasteError).toHaveBeenCalledWith("image-too-large");
+      expect(onPasteImage).not.toHaveBeenCalled();
+      expect(mounted.inputs).toEqual([]);
+    } finally {
+      restorePlatform();
+    }
   });
 
-  it("prefers clipboard text without reading or uploading images", async () => {
+  it("uploads a clipboard image before text from the same paste event", async () => {
     await page.viewport(900, 600);
-    const onPasteImage = vi.fn(async () => "/tmp/unused.png");
+    const onPasteImage = vi.fn(async () => "/tmp/uploaded.jpg");
     const mounted = createTerminalHost({
       width: 720,
       height: 360,
       callbacks: { onPasteImage },
     });
-    const read = vi.fn(async () => [] as ClipboardItem[]);
-    Object.defineProperty(navigator, "clipboard", {
-      configurable: true,
-      value: {
-        readText: vi.fn(async () => "first line\nsecond line"),
-        read,
-      },
+    const text = "/Users/byte/Library/Application Support/PixPin/Temp/capture.jpg";
+    const bytes = new Uint8Array([137, 80, 78, 71]);
+    const image = new File([bytes], "capture.jpg", {
+      type: "image/jpeg",
     });
 
     await waitFor({ predicate: () => mounted.sizes.length > 0 });
     await new Promise<void>((resolve) => {
       mounted.runtime.write({ data: terminalOutput("\x1b[?2004h"), onCommitted: resolve });
     });
-    dispatchTerminalKey({
-      host: mounted.host,
-      key: "v",
-      code: "KeyV",
-      keyCode: 86,
-      ...(navigator.platform.includes("Mac") ? { metaKey: true } : { ctrlKey: true }),
-    });
+    dispatchTerminalPaste({ host: mounted.host, text, image });
 
     await waitFor({ predicate: () => mounted.inputs.length > 0 });
-    expect(mounted.inputs).toEqual(["\x1b[200~first line\rsecond line\x1b[201~"]);
-    expect(read).not.toHaveBeenCalled();
-    expect(onPasteImage).not.toHaveBeenCalled();
+    expect(onPasteImage).toHaveBeenCalledTimes(1);
+    expect(onPasteImage).toHaveBeenCalledWith({
+      bytes,
+      fileExtension: "jpg",
+      mimeType: "image/jpeg",
+    });
+    expect(mounted.inputs).toEqual(["\x1b[200~/tmp/uploaded.jpg\x1b[201~"]);
+    expect(mounted.inputs.join("")).not.toContain(text);
   });
 
   it("leaves Alt+V to the terminal application", async () => {

@@ -25,9 +25,11 @@
 
 ## BySpace 多行文本路径
 
+旧实现把标准 paste 当作 keydown 快捷键处理：
+
 ```text
 Windows Ctrl+V
-  → terminal-emulator-runtime.ts keydown handler
+  → terminal-emulator-runtime.ts keydown handler + preventDefault()
   → navigator.clipboard.readText()
   → xterm Terminal.paste(text)
   → xterm 根据当前 DECSET 2004 模式决定是否包裹
@@ -36,6 +38,10 @@ Windows Ctrl+V
   → PTY
   → Pi editor
 ```
+
+这条路径会阻止浏览器派发带用户手势信任的 `paste` 事件，因而拿不到该事件自己的 `clipboardData`。headed PixPin 暴露了实际后果：同一次 paste 同时提供 `text/plain` 文件 path 与图片，但 keydown + Async Clipboard 路径不能按事件内统一规则处理。
+
+稳定路径是让标准 `Ctrl/Cmd+V` 放行可信 `ClipboardEvent`，并在同一个事件内按确定顺序处理：有受支持图片就统一上传图片并 paste daemon path；只有无图片时才读取 `text/plain` 并调用 `Terminal.paste(text)`。Windows `Alt+V` 是独立的显式图片快捷键，仍单独使用 Async Clipboard 探测图片。
 
 `Terminal.paste()` 本身是正确入口：当 xterm 收到 `CSI ? 2004 h` 后，它会把多行文本转换为：
 
@@ -66,18 +72,19 @@ PTY output: CSI ? 2004 h
 - 直接写入 `CSI ? 2004 h` 后，`terminal.paste("first line\nsecond line")` 正确发送 bracketed paste。
 - 同一个 terminal 执行 snapshot replay 后，只发送 `first line\rsecond line`。
 
-失败断言稳定落在 snapshot 后第二次 paste；因此根因不是 `readText()`、换行规范化或 PTY input frame，而是 input mode 恢复遗漏。
+失败断言稳定落在 snapshot 后第二次 paste；因此该多行问题的根因不是 paste 事件、换行规范化或 PTY input frame，而是 input mode 恢复遗漏。标准 paste 此后改走可信事件，但仍以 `Terminal.paste()` 作为文本入口。
 
 随后核对 Orca Windows 路径发现第二个独立边界：ConPTY 可能根本不把应用的 DECSET 2004 输出交给 renderer。snapshot fix 只能恢复已观测状态，不能恢复从未观测到的状态；因此 Windows user agent 下含换行 clipboard 文本必须无条件安全地 frame 成一个 bracketed block。该兜底仅限 Windows 多行文本，不改变其他平台或单行 shell paste。
 
 ## BySpace 图片路径
 
-当前 Ctrl+V 分支只调用 `navigator.clipboard.readText()`：
+旧的标准 `Ctrl+V` keydown 分支主动调用 Async Clipboard，并阻止可信 paste 事件；它不能稳定消费 PixPin 同时提供的文本 path + 图片。稳定分支直接消费可信事件：
 
 ```text
-image-only clipboard
-  → readText() returns empty / rejects
-  → no terminal input
+trusted ClipboardEvent
+  → 有受支持图片：upload image，paste daemon path，结束
+  → 无图片且 text/plain 非空：paste 原始文本
+  → 无图片也无文本：不产生 terminal input
 ```
 
 BySpace 已有可复用的完整上传能力：
@@ -93,16 +100,17 @@ DaemonClient.uploadFile({ fileName, mimeType, bytes })
 
 因此图片 paste 不需要新增一套 base64 RPC、分块器或服务端写文件实现。最小责任分配是：
 
-1. 浏览器在用户 paste 手势中通过 Clipboard API 读取 image blob。
-2. 复用 `DaemonClient.uploadFile()` 把 bytes 写到当前 daemon。
-3. 得到 daemon 文件路径后，不依赖 xterm live mode，强制作为一个安全的 bracketed paste block 发给 PTY。
-4. 新 client 对不支持该能力的旧 daemon 使用一个集中 capability gate；不模拟降级路径。
+1. 浏览器在可信 paste 事件中先查找受支持的 image blob；存在图片就统一上传，不使用同事件文本。
+2. 只有事件内无图片时，才读取 `text/plain` 并原样进入 `Terminal.paste()`。
+3. 复用 `DaemonClient.uploadFile()` 把 bytes 写到当前 daemon。
+4. 得到 daemon 文件路径后，不依赖 xterm live mode，强制作为一个安全的 bracketed paste block 发给 PTY。
+5. 新 client 对不支持该能力的旧 daemon 使用一个集中 capability gate；不模拟降级路径。
 
 现有上传目录不会自动清理成功上传，图片 paste 若直接复用会继承这个生命周期。这不是首个 bracketed paste bug 的范围；图片 Issue 必须显式决定接受现有 attachment 生命周期，还是给上传增加 clipboard purpose 与清理策略。
 
 ## Alt+V 证据边界
 
-Pi 的 Windows 默认图片绑定明确是 `Alt+V`，但原样透传只能让远端 Pi 读取 daemon 主机剪贴板。BySpace 因此只在 Windows 浏览器 clipboard 含受支持图片时接管 `Alt+V`，上传后 paste daemon path；clipboard 没有图片、API 不可用或图片回调不存在时，通过 `onTerminalKey` 按当前 input mode 透传原 chord，避免破坏 shell/其他 TUI 的 Meta+V。clipboard 读取/解码失败则显示错误并停止，不静默触发远端 Pi 的 daemon clipboard fallback。
+Pi 的 Windows 默认图片绑定明确是 `Alt+V`，但原样透传只能让远端 Pi 读取 daemon 主机剪贴板。BySpace 因此只为这个独立快捷键使用 `navigator.clipboard.read()`：Windows 浏览器 clipboard 含受支持图片时接管 `Alt+V`，上传后 paste daemon path；clipboard 没有图片、API 不可用或图片回调不存在时，通过 `onTerminalKey` 按当前 input mode 透传原 chord，避免破坏 shell/其他 TUI 的 Meta+V。clipboard 读取/解码失败则显示错误并停止，不静默触发远端 Pi 的 daemon clipboard fallback。
 
 真实 Chromium runtime 测试覆盖了图片接管与无图片 fallback；E2E 在 Windows platform 模拟下覆盖真实 upload→PTY 路径。真实 Windows headed Chrome 是否会在页面之前占用该 chord，仍需 Windows 手测确认。
 
@@ -134,11 +142,13 @@ Cmd/Ctrl+V
 ### clipboard image upload
 
 - 复用 `DaemonClient.uploadFile()` 和现有 binary file transfer。
-- `Ctrl/Cmd+V` 走文本优先、图片 fallback；Windows `Alt+V` 走图片探测、无图片原 chord fallback；两者复用 `DaemonClient.uploadFile()` 和现有 binary file transfer。
-- Browser image clipboard → daemon 真实文件 → mode 2004 off 的 capture PTY 仍收到一个强制 bracketed path block。
+- 标准 `Ctrl/Cmd+V` 放行可信 paste 事件，在同一事件内有受支持图片就统一上传、无图片才 paste `text/plain`；Windows `Alt+V` 仍单独走 Async Clipboard 图片探测、无图片原 chord fallback。
+- Browser runtime 33/33 通过；Terminal E2E 5 个场景全部通过。
+- Browser image clipboard → daemon 真实文件 → mode 2004 off 的 capture PTY 仍收到一个强制 bracketed path block；同一 paste 同时包含文本 path 与图片的 PixPin 场景使用 Chromium 系统剪贴板和真实 `Meta/Ctrl+V`（不是合成事件），统一上传图片并只进入 daemon path。用户已在 macOS Chrome + PixPin + Direct headed 验收通过。
 
 ### 仍待调查
 
-- Windows headed Chrome 是否会在页面之前占用 Alt+V。
+- 用户已在 macOS Chrome + PixPin + Direct headed 验收双格式 clipboard 统一走 daemon upload，并由自动化覆盖。
+- Windows headed Chrome 是否会在页面之前占用 Alt+V，以及真实 Windows + ConPTY + Pi CLI 的完整链路验收仍待完成。
 - Pi、shell 和其他 TUI 对含空格 Windows/POSIX 文件路径的插入规则；图片 Issue 需要用真实应用验证，不凭字符串单测猜测。
 - 现有成功 upload 的长期清理策略是否适合高频截图。

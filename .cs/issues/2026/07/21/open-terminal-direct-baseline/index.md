@@ -37,16 +37,16 @@ related_issue: ""
 
 五次同条件数据只证明当前 BySpace raw Direct hot path 在已测时间指标上不落后：idle/loaded/TUI keydown→commit、50,000 行 parse/paint、最大 rAF gap 和 resize→paint 都更快。它不能证明完整 Terminal 体验已经达到 Orca。
 
-用户随后给出两个更基础的输入语义缺口：Windows 浏览器中无法把剪贴板图片交给 Pi CLI，多行文本在初次 snapshot attach 后失去 bracketed paste 包装并被应用逐行当作 Enter。后者已经由真实浏览器红测确认：直接收到 `CSI ? 2004 h` 时 xterm 会正确包裹 paste，但 snapshot reset 后只发送裸文本；前者的浏览器入口只调用 `navigator.clipboard.readText()`，没有图片读取、上传和 daemon 路径插入能力。
+用户随后给出两个更基础的输入语义缺口：Windows 浏览器中无法把剪贴板图片交给 Pi CLI，多行文本在初次 snapshot attach 后失去 bracketed paste 包装并被应用逐行当作 Enter。后者已经由真实浏览器红测确认：直接收到 `CSI ? 2004 h` 时 xterm 会正确包裹 paste，但 snapshot reset 后只发送裸文本；前者最初由 keydown + Async Clipboard 接管标准 `Ctrl/Cmd+V`，这会阻止浏览器可信 paste 事件并丢失事件自己的 clipboard payload。
 
-因此当前证据不支持先搬 renderer scheduler、拆独立 Terminal WebSocket，或先做呈现默认值 A/B。首个改变应先恢复多行文本 paste 语义；图片 paste 需要作为相邻但独立的跨 client/protocol/server 切片设计。
+因此当前证据不支持先搬 renderer scheduler、拆独立 Terminal WebSocket，或先做呈现默认值 A/B。稳定责任边界是：标准 `Ctrl/Cmd+V` 放行可信 `ClipboardEvent`，同一事件含受支持图片时统一上传、无图片时才使用 `text/plain`；Windows `Alt+V` 仍是单独的 Async Clipboard 图片动作。
 
-对应改变已关闭：`closed-terminal-bracketed-paste-restore` 在 snapshot/reload 后恢复 mode 2004；`closed-terminal-clipboard-image-paste` 复用现有 binary file upload，把浏览器图片写到 daemon 并 paste 服务端路径。Windows-platform E2E 已覆盖两条真实链路。
+对应改变已关闭：`closed-terminal-bracketed-paste-restore` 在 snapshot/reload 后恢复 mode 2004；`closed-terminal-clipboard-image-paste` 复用现有 binary file upload，把浏览器图片写到 daemon 并 paste 服务端路径。用户已在 macOS Chrome + PixPin + Direct headed 验收同一 paste 同时携带文本 path 与图片时统一走 daemon upload。Browser runtime 33/33、Terminal E2E 5/5 均通过。
 
 ## 与具体变化的关系
 
 - 必须修改：完整体验模型要把键盘、文本 paste、图片 paste 与应用协议语义列为一等约束；首个 bug 修复扩展现有 terminal input-mode replay，不另建状态机。
-- 需要验证：snapshot attach/restore 后多行文本仍带 bracketed paste 标记；即使 Windows ConPTY 未转发 DECSET 2004，多行 clipboard 文本与生成的图片路径仍各自只进入一个安全 block；普通单行文本、非 Windows paste、Alt+V fallback、kitty/Win32 输入模式和现有 Direct 性能不退化。
+- 需要验证：snapshot attach/restore 后多行文本仍带 bracketed paste 标记；标准 `Ctrl/Cmd+V` 保留可信 paste 事件且同事件含受支持图片时统一上传、无图片时才文本 paste；即使 Windows ConPTY 未转发 DECSET 2004，多行 clipboard 文本与生成的图片路径仍各自只进入一个安全 block；普通单行文本、非 Windows paste、Alt+V fallback、kitty/Win32 输入模式和现有 Direct 性能不退化。当前 Browser runtime 33/33、Terminal E2E 5/5 已通过，PixPin 双格式回归已自动化覆盖。
 - 仍待调查：字号、字重、contrast 与 ligatures 对 headed 主观体验的独立贡献；Relay 专项预算另由 Epic 承接。
 
 ## 用户修正与已排除理解
@@ -59,8 +59,8 @@ related_issue: ""
 
 ## 待确认问题
 
-- 探索已经达到自动化行动停止条件：raw 性能完成归因，snapshot mode 恢复、Windows mode 缺失兜底与图片 clipboard 均有真实 Browser→daemon→PTY E2E；mode-off capture 明确验证一个 bracketed block。
-- 关闭前等待用户在真实 Windows ConPTY + headed 浏览器 + Pi CLI 复验图片与多行文本；用户确认后把稳定责任边界毕业到 Project Spec。
+- 探索已经达到自动化行动停止条件：raw 性能完成归因，snapshot mode 恢复、Windows mode 缺失兜底、可信 paste 事件与图片 clipboard 均有 Browser→daemon→PTY 覆盖；mode-off capture 明确验证一个 bracketed block，PixPin 同事件文本 + 图片明确验证统一上传并只进入 daemon path。Browser runtime 33/33、Terminal E2E 5/5 均通过。
+- 用户已在 macOS Chrome + PixPin + Direct headed 验收统一走 daemon upload；关闭前仍等待真实 Windows ConPTY + headed 浏览器 + Pi CLI 验收图片、多行文本与 Alt+V，用户确认后把稳定责任边界毕业到 Project Spec。
 
 ## 候选毕业位置
 

@@ -1,5 +1,6 @@
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
+import type { Locator, Page } from "@playwright/test";
 import { test, expect } from "./fixtures";
 import { TerminalE2EHarness } from "./helpers/terminal-dsl";
 import { waitForTerminalContent } from "./helpers/terminal-perf";
@@ -36,6 +37,52 @@ setTimeout(finish, 10_000);
 
 const IMAGE_BYTES = [137, 80, 78, 71, 13, 10, 26, 10];
 
+async function dispatchTerminalPaste(
+  terminal: Locator,
+  clipboard: {
+    text?: string;
+    image?: { bytes: number[]; name: string; type: string };
+  },
+): Promise<void> {
+  await terminal.locator("textarea").evaluate((textarea, { text, image }) => {
+    const clipboardData = new DataTransfer();
+    if (text !== undefined) {
+      clipboardData.setData("text/plain", text);
+    }
+    if (image) {
+      clipboardData.items.add(
+        new File([Uint8Array.from(image.bytes)], image.name, { type: image.type }),
+      );
+    }
+    textarea.dispatchEvent(
+      new ClipboardEvent("paste", { bubbles: true, cancelable: true, clipboardData }),
+    );
+  }, clipboard);
+}
+
+async function writeTextAndImageClipboard(page: Page, text: string): Promise<void> {
+  await page.evaluate(async (clipboardText) => {
+    const canvas = document.createElement("canvas");
+    canvas.width = 1;
+    canvas.height = 1;
+    const image = await new Promise<Blob>((resolve, reject) => {
+      canvas.toBlob((blob) => {
+        if (blob) {
+          resolve(blob);
+        } else {
+          reject(new Error("Failed to create clipboard image"));
+        }
+      }, "image/png");
+    });
+    await navigator.clipboard.write([
+      new ClipboardItem({
+        "text/plain": new Blob([clipboardText], { type: "text/plain" }),
+        "image/png": image,
+      }),
+    ]);
+  }, text);
+}
+
 test.describe("Terminal clipboard", () => {
   let harness: TerminalE2EHarness;
 
@@ -55,28 +102,30 @@ test.describe("Terminal clipboard", () => {
     test(`uploads a clipboard image with ${label} and pastes one bracketed path`, async ({
       page,
     }) => {
-      await page.addInitScript(
-        ({ bytes }) => {
-          const imageBytes = Uint8Array.from(bytes);
-          Object.defineProperty(navigator, "platform", {
-            configurable: true,
-            value: "Win32",
-          });
-          Object.defineProperty(navigator, "clipboard", {
-            configurable: true,
-            value: {
-              readText: async () => "",
-              read: async () => [
-                {
-                  types: ["image/png"],
-                  getType: async () => new Blob([imageBytes], { type: "image/png" }),
-                },
-              ],
-            },
-          });
-        },
-        { bytes: IMAGE_BYTES },
-      );
+      if (label === "Alt+V") {
+        await page.addInitScript(
+          ({ bytes }) => {
+            const imageBytes = Uint8Array.from(bytes);
+            Object.defineProperty(navigator, "platform", {
+              configurable: true,
+              value: "Win32",
+            });
+            Object.defineProperty(navigator, "clipboard", {
+              configurable: true,
+              value: {
+                readText: async () => "",
+                read: async () => [
+                  {
+                    types: ["image/png"],
+                    getType: async () => new Blob([imageBytes], { type: "image/png" }),
+                  },
+                ],
+              },
+            });
+          },
+          { bytes: IMAGE_BYTES },
+        );
+      }
 
       const terminalInstance = await harness.createTerminal({ name: `clipboard-image-${label}` });
       try {
@@ -100,7 +149,13 @@ test.describe("Terminal clipboard", () => {
               ).__byspaceTerminal?.modes?.bracketedPasteMode,
           ),
         ).toBe(false);
-        await terminal.press(shortcut);
+        if (label === "Ctrl+V") {
+          await dispatchTerminalPaste(terminal, {
+            image: { bytes: IMAGE_BYTES, name: "clipboard.png", type: "image/png" },
+          });
+        } else {
+          await terminal.press(shortcut);
+        }
         await waitForTerminalContent(
           page,
           (text) => text.includes("BYSPACE_CLIPBOARD_CAPTURED"),
@@ -122,6 +177,51 @@ test.describe("Terminal clipboard", () => {
     });
   }
 
+  test("uploads an image over text from the same paste event", async ({ page }) => {
+    const pixPinPath = "/Users/byte/Library/Application Support/PixPin/Temp/PixPin_capture.jpg";
+    await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+    const terminalInstance = await harness.createTerminal({
+      name: "clipboard-text-and-image",
+    });
+    try {
+      await harness.openTerminal(page, { terminalId: terminalInstance.id });
+      await harness.setupPrompt(page);
+
+      const terminal = harness.terminalSurface(page);
+      await terminal.pressSequentially("node clipboard-capture.cjs\n", { delay: 0 });
+      await waitForTerminalContent(
+        page,
+        (text) => text.includes("BYSPACE_CLIPBOARD_READY"),
+        10_000,
+      );
+
+      await writeTextAndImageClipboard(page, pixPinPath);
+      const pasteShortcut = await page.evaluate(() =>
+        /Mac/i.test(navigator.platform) ? "Meta+v" : "Control+v",
+      );
+      await terminal.press(pasteShortcut);
+      await waitForTerminalContent(
+        page,
+        (text) => text.includes("BYSPACE_CLIPBOARD_CAPTURED"),
+        10_000,
+      );
+
+      const capture = JSON.parse(
+        await readFile(path.join(harness.tempRepo.path, "clipboard-capture.json"), "utf8"),
+      ) as { captured: string };
+      const input = Buffer.from(capture.captured, "base64").toString("utf8");
+      const uploadedPath = input.slice("\x1b[200~".length, -"\x1b[201~".length);
+      expect(input).toBe(`\x1b[200~${uploadedPath}\x1b[201~`);
+      expect(uploadedPath).not.toBe(pixPinPath);
+      expect(uploadedPath).toContain(`${path.sep}uploads${path.sep}`);
+      expect([...(await readFile(uploadedPath)).subarray(0, IMAGE_BYTES.length)]).toEqual(
+        IMAGE_BYTES,
+      );
+    } finally {
+      await harness.killTerminal(terminalInstance.id);
+    }
+  });
+
   test("forces multiline text into one bracketed paste on Windows without reported mode state", async ({
     page,
   }) => {
@@ -129,13 +229,6 @@ test.describe("Terminal clipboard", () => {
       Object.defineProperty(navigator, "platform", {
         configurable: true,
         value: "Win32",
-      });
-      Object.defineProperty(navigator, "clipboard", {
-        configurable: true,
-        value: {
-          readText: async () => "first line\nsecond line",
-          read: async () => [],
-        },
       });
     });
 
@@ -160,7 +253,7 @@ test.describe("Terminal clipboard", () => {
           ).__byspaceTerminal?.modes?.bracketedPasteMode === false,
       );
 
-      await terminal.press("Control+v");
+      await dispatchTerminalPaste(terminal, { text: "first line\nsecond line" });
       await waitForTerminalContent(
         page,
         (text) => text.includes("BYSPACE_CLIPBOARD_CAPTURED"),
@@ -185,13 +278,6 @@ test.describe("Terminal clipboard", () => {
       Object.defineProperty(navigator, "platform", {
         configurable: true,
         value: "Win32",
-      });
-      Object.defineProperty(navigator, "clipboard", {
-        configurable: true,
-        value: {
-          readText: async () => "first line\nsecond line",
-          read: async () => [],
-        },
       });
     });
 
@@ -225,7 +311,7 @@ test.describe("Terminal clipboard", () => {
           ).__byspaceTerminal?.modes?.bracketedPasteMode === true,
       );
 
-      await terminal.press("Control+v");
+      await dispatchTerminalPaste(terminal, { text: "first line\nsecond line" });
       await waitForTerminalContent(
         page,
         (text) => text.includes("BYSPACE_CLIPBOARD_CAPTURED"),

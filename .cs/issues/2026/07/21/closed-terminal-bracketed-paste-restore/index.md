@@ -98,7 +98,7 @@ PTY output
 ## 验证
 
 - `npx vitest run packages/protocol/src/terminal-input-mode.test.ts packages/protocol/src/messages.terminal-restore.test.ts --bail=1`：14/14 通过，其中 input-mode 12/12。
-- `npm --prefix packages/app run test:browser -- src/terminal/runtime/terminal-emulator-runtime.browser.test.ts --bail=1`：26/26 通过；包含 snapshot 前后 bracketed paste、文本优先、超限图片和 Alt+V 透传。
+- `npm --prefix packages/app run test:browser -- src/terminal/runtime/terminal-emulator-runtime.browser.test.ts --bail=1`：26/26 通过；包含 snapshot 前后 bracketed paste、图片剪贴板、超限图片和 Alt+V 透传。
 - `npm --prefix packages/app run test:e2e -- e2e/terminal-clipboard.spec.ts --workers=1`：2/2 通过；Windows platform 的页面 reload/snapshot 后，PTY 收到且只收到 `CSI 200 ~ + first line CR second line + CSI 201 ~`。
 - `BYSPACE_TERMINAL_PERF_E2E=1 npm --prefix packages/app run test:e2e -- e2e/terminal-direct-baseline.spec.ts --workers=1`：1/1 通过；idle p95 8.7ms、loaded p95 10.3ms、TUI p95 9.6ms、50k parse 95.0ms、resize p95 20.6ms，无明显退化。
 - `npm run typecheck`、`npm run lint`、`npm run format:check`、App Web export 与 `git diff --check`：通过。
