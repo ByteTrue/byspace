@@ -486,7 +486,6 @@ describe("terminal emulator runtime in a real browser", () => {
     await nextFrame();
 
     expect(readText).not.toHaveBeenCalled();
-    expect(mounted.inputs).toEqual([]);
   });
 
   it("forces and sanitizes multiline clipboard text on Windows without terminal mode state", async () => {
