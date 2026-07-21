@@ -795,10 +795,42 @@ describe("PiRpcAgentSession", () => {
     fakeSession.setModelResult = { provider: "openrouter", id: "model-a", name: "Model A" };
 
     await session.setModel("openrouter/model-a");
-    await session.setThinkingOption("high");
+    await session.setThinkingOption("max");
 
     expect(fakeSession.setModelRequests).toEqual([{ provider: "openrouter", modelId: "model-a" }]);
-    expect(fakeSession.setThinkingLevelRequests).toEqual(["high"]);
+    expect(fakeSession.setThinkingLevelRequests).toEqual(["max"]);
+  });
+
+  test("syncs Pi-clamped thinking after model updates", async () => {
+    const { pi, session } = await createSession();
+    const fakeSession = pi.latestSession();
+    const model = { provider: "openrouter", id: "model-a", name: "Model A" };
+    fakeSession.setModelResult = model;
+
+    await session.setThinkingOption("max");
+    fakeSession.state = {
+      ...fakeSession.state,
+      model,
+      thinkingLevel: "high",
+    };
+    await session.setModel("openrouter/model-a");
+
+    await expect(session.getRuntimeInfo()).resolves.toMatchObject({
+      model: "openrouter/model-a",
+      thinkingOptionId: "high",
+    });
+    expect(session.describePersistence()?.metadata).toMatchObject({
+      model: "openrouter/model-a",
+      thinkingOptionId: "high",
+    });
+
+    await session.setModel(null);
+
+    await expect(session.getRuntimeInfo()).resolves.toMatchObject({
+      model: "openrouter/model-a",
+      thinkingOptionId: "high",
+    });
+    expect(session.describePersistence()?.metadata?.model).toBeUndefined();
   });
 
   test("materializes image prompts as text hints for text-only Pi models", async () => {
@@ -1233,15 +1265,43 @@ describe("PiRpcAgentClient", () => {
         name: "google/gemini-2.5-flash-lite",
         reasoning: true,
       },
+      {
+        provider: "bytetrueapi",
+        id: "reasoning-high-max",
+        reasoning: true,
+        thinkingLevelMap: {
+          off: null,
+          minimal: null,
+          low: null,
+          medium: null,
+          high: "high",
+          max: "max",
+        },
+      },
     ];
 
-    await expect(catalogPromise).resolves.toMatchObject({
+    const catalog = await catalogPromise;
+    expect(catalog).toMatchObject({
       models: [
         {
           provider: "pi",
           id: "openrouter/google/gemini-2.5-flash-lite",
           label: "gemini-2.5-flash-lite",
           defaultThinkingOptionId: "medium",
+          thinkingOptions: [
+            { id: "off" },
+            { id: "minimal" },
+            { id: "low" },
+            { id: "medium" },
+            { id: "high" },
+          ],
+        },
+        {
+          provider: "pi",
+          id: "bytetrueapi/reasoning-high-max",
+          label: "reasoning-high-max",
+          defaultThinkingOptionId: "high",
+          thinkingOptions: [{ id: "high" }, { id: "max" }],
         },
       ],
       modes: [],

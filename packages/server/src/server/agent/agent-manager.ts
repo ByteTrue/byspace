@@ -1473,12 +1473,23 @@ export class AgentManager {
     const normalizedModelId =
       typeof modelId === "string" && modelId.trim().length > 0 ? modelId : null;
 
+    let runtimeInfo: AgentRuntimeInfo | undefined;
     if (agent.session.setModel) {
       await agent.session.setModel(normalizedModelId);
+      runtimeInfo = await agent.session.getRuntimeInfo();
+      const persistence = agent.session.describePersistence();
+      if (persistence) {
+        agent.persistence = attachPersistenceCwd(persistence, agent.cwd);
+      }
     }
 
     agent.config.model = normalizedModelId ?? undefined;
-    if (agent.runtimeInfo) {
+    if (runtimeInfo) {
+      agent.runtimeInfo = runtimeInfo;
+      if (Object.prototype.hasOwnProperty.call(runtimeInfo, "thinkingOptionId")) {
+        agent.config.thinkingOptionId = runtimeInfo.thinkingOptionId ?? undefined;
+      }
+    } else if (agent.runtimeInfo) {
       agent.runtimeInfo = { ...agent.runtimeInfo, model: normalizedModelId };
     }
     this.touchUpdatedAt(agent);

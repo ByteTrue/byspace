@@ -166,14 +166,14 @@ const PI_THINKING_OPTIONS: ReadonlyArray<{
   id: PiThinkingLevel;
   label: string;
   description: string;
-  isDefault?: boolean;
 }> = [
   { id: "off", label: "Off", description: "No extra reasoning" },
   { id: "minimal", label: "Minimal", description: "Light reasoning" },
   { id: "low", label: "Low", description: "Faster reasoning" },
-  { id: "medium", label: "Medium", description: "Balanced reasoning", isDefault: true },
+  { id: "medium", label: "Medium", description: "Balanced reasoning" },
   { id: "high", label: "High", description: "Deeper reasoning" },
-  { id: "xhigh", label: "XHigh", description: "Maximum reasoning" },
+  { id: "xhigh", label: "XHigh", description: "Extra high reasoning" },
+  { id: "max", label: "Max", description: "Maximum reasoning" },
 ] as const;
 
 export interface PiRpcAgentClientOptions {
@@ -328,7 +328,8 @@ function isPiThinkingLevel(value: string | null | undefined): value is PiThinkin
     value === "low" ||
     value === "medium" ||
     value === "high" ||
-    value === "xhigh"
+    value === "xhigh" ||
+    value === "max"
   );
 }
 
@@ -353,13 +354,49 @@ function parseAutoCompactMode(value: string | undefined): AutoCompactMode {
   return "unknown";
 }
 
-function mapThinkingOption(option: (typeof PI_THINKING_OPTIONS)[number]) {
+function getSupportedPiThinkingOptions(model: PiModel) {
+  if (!model.reasoning) {
+    return undefined;
+  }
+
+  return PI_THINKING_OPTIONS.filter((option) => {
+    const mappedLevel = model.thinkingLevelMap?.[option.id];
+    if (mappedLevel === null) {
+      return false;
+    }
+    if (option.id === "xhigh" || option.id === "max") {
+      return mappedLevel !== undefined;
+    }
+    return true;
+  });
+}
+
+function getDefaultPiThinkingLevel(
+  options: ReturnType<typeof getSupportedPiThinkingOptions>,
+): PiThinkingLevel | undefined {
+  if (!options?.length) {
+    return undefined;
+  }
+
+  const defaultIndex = PI_THINKING_OPTIONS.findIndex(
+    (option) => option.id === DEFAULT_PI_THINKING_LEVEL,
+  );
+  const defaultOrHigher = options.find(
+    (option) => PI_THINKING_OPTIONS.indexOf(option) >= defaultIndex,
+  );
+  return defaultOrHigher?.id ?? options.at(-1)?.id;
+}
+
+function mapThinkingOption(
+  option: (typeof PI_THINKING_OPTIONS)[number],
+  defaultLevel: PiThinkingLevel | undefined,
+) {
   const mappedOption = {
     id: option.id,
     label: option.label,
     description: option.description,
   };
-  if (option.isDefault) {
+  if (option.id === defaultLevel) {
     return {
       ...mappedOption,
       isDefault: true,
@@ -1146,6 +1183,9 @@ function buildExtensionUiResponse(
 }
 
 function mapPiModel(model: PiModel, provider: AgentProvider): AgentModelDefinition {
+  const thinkingOptions = getSupportedPiThinkingOptions(model);
+  const defaultThinkingOptionId = getDefaultPiThinkingLevel(thinkingOptions);
+
   return {
     provider,
     id: `${model.provider}/${model.id}`,
@@ -1155,8 +1195,10 @@ function mapPiModel(model: PiModel, provider: AgentProvider): AgentModelDefiniti
       provider: model.provider,
       modelId: model.id,
     },
-    thinkingOptions: model.reasoning ? PI_THINKING_OPTIONS.map(mapThinkingOption) : undefined,
-    defaultThinkingOptionId: model.reasoning ? DEFAULT_PI_THINKING_LEVEL : undefined,
+    thinkingOptions: thinkingOptions?.map((option) =>
+      mapThinkingOption(option, defaultThinkingOptionId),
+    ),
+    defaultThinkingOptionId,
   };
 }
 
@@ -1484,6 +1526,10 @@ export class PiRpcAgentSession implements AgentSession {
   }
 
   async setModel(modelId: string | null): Promise<void> {
+    if (!modelId?.trim()) {
+      this.config.model = undefined;
+      return;
+    }
     const parsedReference = parseModelReference(modelId);
     if (!parsedReference) {
       return;
@@ -1493,11 +1539,14 @@ export class PiRpcAgentSession implements AgentSession {
     }
 
     const model = await this.runtimeSession.setModel(parsedReference.provider, parsedReference.id);
+    const state = await this.runtimeSession.getState();
     this.state = {
-      ...this.state,
+      ...state,
       model,
     };
+    this.lastKnownThinkingOptionId = state.thinkingLevel;
     this.config.model = `${model.provider}/${model.id}`;
+    this.config.thinkingOptionId = state.thinkingLevel;
   }
 
   async setThinkingOption(thinkingOptionId: string | null): Promise<void> {

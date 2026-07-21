@@ -18,7 +18,7 @@ import {
   type StyleProp,
   type ViewStyle,
 } from "react-native";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { StyleSheet, useUnistyles, withUnistyles } from "react-native-unistyles";
 import { useShallow } from "zustand/shallow";
 import { Brain, ListTodo, Settings2, ShieldCheck, Zap } from "lucide-react-native";
 import { DropdownTrigger } from "@/components/ui/dropdown-trigger";
@@ -43,6 +43,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem } from "@/component
 import { Combobox, ComboboxItem, type ComboboxOption } from "@/components/ui/combobox";
 import { DraftAgentModeControl, AgentModeControl } from "@/composer/agent-controls/mode-control";
 import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
+import type { Theme } from "@/styles/theme";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type {
   AgentFeature,
@@ -62,6 +63,10 @@ import { useIsCompactFormFactor } from "@/constants/layout";
 import { useToast } from "@/contexts/toast-context";
 import { toErrorMessage } from "@/utils/error-messages";
 import { showProviderNoticeToast } from "@/utils/provider-notice-toast";
+
+const ThemedBrain = withUnistyles(Brain);
+const thinkingIconColorMapping = (theme: Theme) => ({ color: theme.colors.foreground });
+const THINKING_COMBOBOX_ICON = <ThemedBrain size={16} uniProps={thinkingIconColorMapping} />;
 
 interface AgentControlOption {
   id: string;
@@ -413,7 +418,6 @@ function ControlledAgentControls({
   modelSelectorServerId = null,
   isCompactLayout,
 }: ControlledAgentControlsProps) {
-  const { theme } = useUnistyles();
   const { t } = useTranslation();
   const isCompactFormFactor = useIsCompactFormFactor();
   const isCompact = isCompactLayout ?? isCompactFormFactor;
@@ -480,10 +484,9 @@ function ControlledAgentControls({
         selected={args.selected}
         active={args.active}
         onPress={args.onPress}
-        iconColor={theme.colors.foreground}
       />
     ),
-    [theme.colors.foreground],
+    [],
   );
 
   const handleOpenChange = useCallback(
@@ -1339,22 +1342,19 @@ function ThinkingComboboxOption({
   selected,
   active,
   onPress,
-  iconColor,
 }: {
   option: ComboboxOption;
   selected: boolean;
   active: boolean;
   onPress: () => void;
-  iconColor: string;
 }) {
-  const leadingSlot = useMemo(() => <Brain size={16} color={iconColor} />, [iconColor]);
   return (
     <ComboboxItem
       label={option.label}
       selected={selected}
       active={active}
       onPress={onPress}
-      leadingSlot={leadingSlot}
+      leadingSlot={THINKING_COMBOBOX_ICON}
     />
   );
 }
