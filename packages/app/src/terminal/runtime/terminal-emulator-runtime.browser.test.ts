@@ -466,7 +466,7 @@ describe("terminal emulator runtime in a real browser", () => {
     expect(mounted.inputs).toEqual([bracketedPaste]);
   });
 
-  it("lets the browser dispatch the trusted paste event for the standard shortcut", async () => {
+  it("does not read the clipboard during keydown for the standard paste shortcut", async () => {
     await page.viewport(900, 600);
     const mounted = createTerminalHost({ width: 720, height: 360 });
     const readText = vi.fn(async () => "/Users/byte/PixPin/image.jpg");
@@ -476,16 +476,17 @@ describe("terminal emulator runtime in a real browser", () => {
     });
 
     await waitFor({ predicate: () => mounted.sizes.length > 0 });
-    const allowed = dispatchTerminalKey({
+    dispatchTerminalKey({
       host: mounted.host,
       key: "v",
       code: "KeyV",
       keyCode: 86,
       ...(/Macintosh|Mac OS/i.test(navigator.userAgent) ? { metaKey: true } : { ctrlKey: true }),
     });
+    await nextFrame();
 
-    expect(allowed).toBe(true);
     expect(readText).not.toHaveBeenCalled();
+    expect(mounted.inputs).toEqual([]);
   });
 
   it("forces and sanitizes multiline clipboard text on Windows without terminal mode state", async () => {
