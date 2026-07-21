@@ -675,7 +675,15 @@ async function requestLifecycleShutdown(
   state: LocalDaemonState,
   timeoutMs: number,
 ): Promise<LifecycleShutdownAttempt> {
-  const host = resolveTcpHostFromListen(state.listen);
+  const ownedListen = state.pidInfo?.listen;
+  if (!ownedListen) {
+    return {
+      requested: false,
+      reason: "daemon PID file has no listen target, falling back to owner PID signal",
+    };
+  }
+
+  const host = resolveTcpHostFromListen(ownedListen);
   if (!host) {
     return {
       requested: false,
@@ -714,13 +722,19 @@ export async function stopLocalDaemon(
   const timeoutMs = options.timeoutMs ?? DEFAULT_STOP_TIMEOUT_MS;
   const killTimeoutMs = options.killTimeoutMs ?? DEFAULT_KILL_TIMEOUT_MS;
   const state = resolveLocalDaemonState({ home: options.home });
+
+  // The home-scoped PID file is the ownership proof. Without it, the configured
+  // endpoint may belong to another daemon and must never receive a shutdown RPC.
+  if (!state.pidInfo) {
+    return createNotRunningStopResult(state, null, "Daemon is not running");
+  }
   const deadline = Date.now() + timeoutMs;
   const remainingTimeoutMs = () => Math.max(1, deadline - Date.now());
 
   const shutdownAttempt = await requestLifecycleShutdown(state, remainingTimeoutMs());
   const lifecycleRequested = shutdownAttempt.requested;
 
-  if (!state.pidInfo || (!state.running && !lifecycleRequested)) {
+  if (!state.running && !lifecycleRequested) {
     const staleSuffix =
       state.stalePidFile && state.pidInfo ? ` (stale PID file for ${state.pidInfo.pid})` : "";
     return createNotRunningStopResult(
