@@ -457,6 +457,45 @@ describe.skipIf(isPlatform("win32"))("send input", () => {
     expect(getRowText(state, 2)).toBe("$");
   });
 
+  it("emits post-subscribe output with monotonic revisions and a drained snapshot that agrees", async () => {
+    // Output is emitted to listeners without waiting for the headless xterm parse
+    // callback; snapshotRevision trails emitRevision in the SAME counter space and
+    // only catches up after drainHeadlessXterm(). This keeps the controller's replay
+    // dedup (revision <= snapshotRevision) correct after the emit/parse decoupling.
+    const session = trackSession(
+      await createTerminal({
+        workspaceId: "ws-test",
+        cwd: "/tmp",
+        shell: "/bin/sh",
+        env: { PS1: "$ " },
+      }),
+    );
+    await waitForLines(session, ["$"]);
+
+    const revisions: number[] = [];
+    session.subscribe((message) => {
+      if (message.type === "output") {
+        expect(typeof message.revision).toBe("number");
+        revisions.push(message.revision as number);
+      }
+    });
+
+    session.send({ type: "input", data: "echo rev-marker\r" });
+    await waitForLines(session, ["$ echo rev-marker", "rev-marker", "$"]);
+
+    expect(revisions.length).toBeGreaterThan(0);
+    for (let i = 1; i < revisions.length; i++) {
+      expect(revisions[i]).toBeGreaterThan(revisions[i - 1]);
+    }
+
+    // Drained snapshot agrees with the last emitted revision and holds the output.
+    const lastEmitted = revisions[revisions.length - 1];
+    await session.drainHeadlessXterm();
+    const snapshot = session.getStateSnapshot();
+    expect(snapshot.revision).toBe(lastEmitted);
+    expect(getLines(snapshot.state).join("\n")).toContain("rev-marker");
+  });
+
   it("captures output from pwd in specified cwd", async () => {
     const session = trackSession(
       await createTerminal({

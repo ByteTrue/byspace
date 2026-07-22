@@ -90,6 +90,7 @@ export interface TerminalSession {
   getSize(): { rows: number; cols: number };
   getState(): TerminalState;
   getStateSnapshot(options?: TerminalStateSnapshotOptions): TerminalStateSnapshot;
+  drainHeadlessXterm(): Promise<void>;
   getReplayPreamble(): string;
   getTitle(): string | undefined;
   getActivity(): TerminalActivity | null;
@@ -830,7 +831,15 @@ export async function createTerminal(options: CreateTerminalOptions): Promise<Te
   let titleDebounceTimer: ReturnType<typeof setTimeout> | null = null;
   let pendingInput = "";
   let inputFlushImmediate: ReturnType<typeof setImmediate> | null = null;
-  let stateRevision = 0;
+  // emitRevision tracks output emission (incremented immediately on PTY data).
+  // snapshotRevision tracks the headless xterm state (incremented when the
+  // headless xterm write callback fires). Output is emitted to listeners
+  // immediately without waiting for the headless xterm, so keystroke echo
+  // isn't serialized behind a backlog of TUI writes. Snapshots use
+  // snapshotRevision to stay consistent with the headless xterm buffer;
+  // drainHeadlessXterm() bridges the gap before on-demand snapshots.
+  let emitRevision = 0;
+  let snapshotRevision = 0;
   const inputModeTracker = new TerminalInputModeTracker();
   const activityTracker = new TerminalActivityTracker();
   const activityChangeListeners = new Set<(transition: TerminalActivityTransition) => void>();
@@ -1071,15 +1080,21 @@ export async function createTerminal(options: CreateTerminalOptions): Promise<Te
   }
 
   function writeOutputToHeadless(data: string): void {
+    emitRevision += 1;
+    const currentRevision = emitRevision;
+    // Write to headless xterm for snapshot fidelity. The callback updates
+    // snapshotRevision so getStateSnapshot() stays consistent with the buffer.
     terminal.write(data, () => {
-      if (disposed || killed) {
-        return;
-      }
-      stateRevision += 1;
-      for (const listener of listeners) {
-        listener({ type: "output", data, revision: stateRevision });
+      if (!disposed && !killed) {
+        snapshotRevision = currentRevision;
       }
     });
+    // Emit to listeners immediately — do not wait for the headless xterm to
+    // parse the write. This removes the serialization that delayed keystroke
+    // echo behind TUI output backlogs (notably ConPTY + Pi on Windows).
+    for (const listener of listeners) {
+      listener({ type: "output", data, revision: currentRevision });
+    }
   }
 
   // Pipe PTY output to terminal emulator
@@ -1170,8 +1185,14 @@ export async function createTerminal(options: CreateTerminalOptions): Promise<Te
   function getStateSnapshot(snapshotOptions?: TerminalStateSnapshotOptions): TerminalStateSnapshot {
     return {
       state: getState(snapshotOptions),
-      revision: stateRevision,
+      revision: snapshotRevision,
     };
+  }
+
+  function drainHeadlessXterm(): Promise<void> {
+    return new Promise<void>((resolve) => {
+      terminal.write("", () => resolve());
+    });
   }
 
   function getSize(): { rows: number; cols: number } {
@@ -1225,7 +1246,10 @@ export async function createTerminal(options: CreateTerminalOptions): Promise<Te
         flushPendingInput();
         terminal.resize(msg.cols, msg.rows);
         ptyProcess.resize(msg.cols, msg.rows);
-        stateRevision += 1;
+        // Resize affects both headless xterm state and emitted output, so increment
+        // both revision counters to keep snapshots consistent.
+        emitRevision += 1;
+        snapshotRevision += 1;
         break;
       case "mouse":
         // Mouse events can be sent as escape sequences if terminal supports it
@@ -1263,7 +1287,7 @@ export async function createTerminal(options: CreateTerminalOptions): Promise<Te
           // (live restore) can replay it without a separate state fetch.
           listener({
             type: "snapshotReady",
-            revision: stateRevision,
+            revision: snapshotRevision,
             replayPreamble: getReplayPreamble(),
           });
         } else {
@@ -1453,6 +1477,7 @@ export async function createTerminal(options: CreateTerminalOptions): Promise<Te
     getSize,
     getState,
     getStateSnapshot,
+    drainHeadlessXterm,
     getReplayPreamble,
     getTitle,
     getActivity,
