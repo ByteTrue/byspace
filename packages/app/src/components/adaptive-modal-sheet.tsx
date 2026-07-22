@@ -50,6 +50,7 @@ export interface SheetHeader {
   back?: SheetHeaderBack;
   leading?: ReactNode;
   actions?: ReactNode;
+  tabs?: ReactNode;
   search?: SheetHeaderSearch;
 }
 
@@ -136,6 +137,10 @@ const styles = StyleSheet.create((theme) => ({
     alignItems: "center",
     gap: theme.spacing[2],
   },
+  tabsRow: {
+    paddingHorizontal: theme.spacing[SHEET_HORIZONTAL_PADDING_SCALE],
+    paddingBottom: theme.spacing[3],
+  },
   closeButton: {
     padding: theme.spacing[2],
     borderRadius: theme.borderRadius.lg,
@@ -157,6 +162,10 @@ const styles = StyleSheet.create((theme) => ({
     flexDirection: "row",
     alignItems: "center",
     gap: theme.spacing[2],
+  },
+  inlineTabsRow: {
+    paddingHorizontal: theme.spacing[3],
+    paddingBottom: theme.spacing[2],
   },
   inlineSearchRow: {
     flexDirection: "row",
@@ -368,6 +377,7 @@ export function SheetHeaderView({
           </Pressable>
         ) : null}
       </View>
+      {header.tabs ? <View style={styles.tabsRow}>{header.tabs}</View> : null}
       {search ? (
         <View style={styles.searchRow}>
           <Search size={theme.iconSize.md} color={theme.colors.foregroundMuted} />
@@ -394,7 +404,7 @@ export function InlineHeaderView({ header }: { header: SheetHeader }) {
   const back = header.back;
   const handleBackPress = back?.onPress;
   const hasInlineRow = Boolean(handleBackPress || header.leading || header.actions);
-  if (!hasInlineRow && !header.search) return null;
+  if (!hasInlineRow && !header.tabs && !header.search) return null;
   return (
     <View>
       {hasInlineRow ? (
@@ -425,6 +435,7 @@ export function InlineHeaderView({ header }: { header: SheetHeader }) {
           {header.actions ? <View style={styles.headerActions}>{header.actions}</View> : null}
         </View>
       ) : null}
+      {header.tabs ? <View style={styles.inlineTabsRow}>{header.tabs}</View> : null}
       {header.search ? (
         <View style={styles.inlineSearchRow}>
           <Search size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />

@@ -861,7 +861,7 @@ export function WorkspaceDesktopTabsRow({
   );
 
   const handleEditProfiles = useCallback(() => {
-    router.push(buildSettingsHostSectionRoute(normalizedServerId, "terminals") as Href);
+    router.push(buildSettingsHostSectionRoute(normalizedServerId, "providers") as Href);
   }, [normalizedServerId, router]);
 
   const terminalDisabled = disableCreateTerminal || isWaitingOnTerminalReadiness;

@@ -54,21 +54,34 @@ test.describe("Settings host page", () => {
 
     await expectHostProvidersCard(page, serverId);
     await expectSettingsHeader(page, "Providers");
+    await expect(page.getByTestId("other-terminal-profiles-row")).toBeVisible();
   });
 
-  test("terminals section scopes hooks by provider and includes Pi profile", async ({ page }) => {
+  test("Pi provider separates its model list from Terminal settings", async ({ page }) => {
     const serverId = getServerId();
 
     await gotoAppShell(page);
     await openSettings(page);
     await openSettingsHost(page, serverId);
-    await openHostSection(page, serverId, "terminals");
+    await openHostSection(page, serverId, "providers");
 
-    await expectSettingsHeader(page, "Terminals");
-    for (const providerId of ["claude", "codex", "opencode", "pi"]) {
-      await expect(page.getByTestId(`terminal-agent-hook-${providerId}`)).toBeVisible();
-    }
-    await expect(page.getByTestId("terminal-profile-row-pi")).toBeVisible();
+    await page.getByTestId("provider-row-pi").click();
+    await expect(page.getByTestId("provider-settings-search")).toBeVisible();
+    await page.getByTestId("provider-settings-tab-models").focus();
+    await page.keyboard.press("ArrowRight");
+
+    await expect(page.getByTestId("provider-settings-search")).toHaveCount(0);
+    await expect(page.getByTestId("terminal-agent-hook-pi")).toBeVisible();
+    const profileRow = page.getByTestId("terminal-profile-row-pi");
+    const profileActions = page.getByTestId("terminal-profile-actions-pi");
+    await expect(profileRow).toBeVisible();
+    await expect(profileRow.getByTestId("terminal-profile-actions-pi")).toHaveCount(0);
+    await profileActions.click();
+    await expect(
+      page.getByRole("dialog").getByRole("button", { name: "Edit profile", exact: true }),
+    ).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(page.getByTestId("provider-terminal-add-profile")).toBeVisible();
   });
 
   test("host section shows the host label and restart/remove action cards", async ({ page }) => {

@@ -17,6 +17,7 @@ import {
   type SheetHeader,
 } from "@/components/adaptive-modal-sheet";
 import { Button } from "@/components/ui/button";
+import { SegmentedControl } from "@/components/ui/segmented-control";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { ScrollableCodeSurface, SurfaceCard } from "@/components/ui/scrollable-code-surface";
 import { useIsCompactFormFactor } from "@/constants/layout";
@@ -25,7 +26,7 @@ import { useToast } from "@/contexts/toast-context";
 import { CODE_SURFACE_DATASET } from "@/styles/code-surface";
 import { useDaemonConfig } from "@/hooks/use-daemon-config";
 import { useProvidersSnapshot } from "@/hooks/use-providers-snapshot";
-import { useHostRuntimeClient } from "@/runtime/host-runtime";
+import { useHostRuntimeClient, useHostRuntimeIsConnected } from "@/runtime/host-runtime";
 import { settingsStyles } from "@/styles/settings";
 import { resolveProviderLabel } from "@/utils/provider-definitions";
 import { formatTimeAgo } from "@/utils/time";
@@ -36,6 +37,8 @@ import {
   resolveProviderDiscoveredModels,
   type ProviderDiscoveredModelsCache,
 } from "./provider-diagnostic-models";
+import { ProviderTerminalSettings } from "@/screens/settings/provider-terminal-settings";
+import { isTerminalProviderId } from "@/screens/settings/terminal-profile-groups";
 
 interface ProviderDiagnosticSheetProps {
   provider: string;
@@ -43,6 +46,8 @@ interface ProviderDiagnosticSheetProps {
   onClose: () => void;
   serverId: string;
 }
+
+type ProviderSettingsTab = "models" | "terminal";
 
 function rankModels<T>(items: T[], query: string, fields: (item: T) => string[]): T[] {
   if (!query.trim()) return items;
@@ -582,16 +587,20 @@ export function ProviderDiagnosticSheet({
   const isCompact = useIsCompactFormFactor();
   const { entries: snapshotEntries, refresh, isRefreshing } = useProvidersSnapshot(serverId);
   const { config, patchConfig } = useDaemonConfig(serverId);
+  const isConnected = useHostRuntimeIsConnected(serverId);
   const [query, setQuery] = useState("");
   const [addSheetOpen, setAddSheetOpen] = useState(false);
   const [diagSheetOpen, setDiagSheetOpen] = useState(false);
   const [deletingModelId, setDeletingModelId] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<ProviderSettingsTab>("models");
+  const [profileAddOpen, setProfileAddOpen] = useState(false);
 
   const providerLabel = resolveProviderLabel(provider, snapshotEntries);
   const providerEntry = useMemo(
     () => snapshotEntries?.find((entry) => entry.provider === provider),
     [snapshotEntries, provider],
   );
+  const terminalProviderId = isTerminalProviderId(provider) ? provider : null;
   const additionalModels = useMemo(
     () => config?.providers?.[provider]?.additionalModels ?? [],
     [config?.providers, provider],
@@ -626,13 +635,13 @@ export function ProviderDiagnosticSheet({
     return formatTimeAgo(new Date(providerEntry.fetchedAt));
   }, [providerEntry?.fetchedAt, clockTick]);
 
-  useEffect(() => {
-    if (!visible) {
-      setQuery("");
-      setAddSheetOpen(false);
-      setDiagSheetOpen(false);
-    }
-  }, [visible]);
+  const handleDismiss = useCallback(() => {
+    setQuery("");
+    setAddSheetOpen(false);
+    setDiagSheetOpen(false);
+    setActiveTab("models");
+    setProfileAddOpen(false);
+  }, []);
 
   const q = query.trim();
   const filteredDiscovered = useMemo(
@@ -652,6 +661,8 @@ export function ProviderDiagnosticSheet({
   const handleCloseAddSheet = useCallback(() => setAddSheetOpen(false), []);
   const handleOpenDiagSheet = useCallback(() => setDiagSheetOpen(true), []);
   const handleCloseDiagSheet = useCallback(() => setDiagSheetOpen(false), []);
+  const handleOpenProfileAdd = useCallback(() => setProfileAddOpen(true), []);
+  const handleCloseProfileAdd = useCallback(() => setProfileAddOpen(false), []);
 
   const handleDeleteCustom = useCallback(
     (modelId: string) => {
@@ -671,26 +682,57 @@ export function ProviderDiagnosticSheet({
     [additionalModels, patchConfig, provider, refresh],
   );
 
+  const tabOptions = useMemo(
+    () => [
+      {
+        value: "models" as const,
+        label: t("settings.providers.tabs.models"),
+        testID: "provider-settings-tab-models",
+        controls: "provider-models-panel",
+      },
+      {
+        value: "terminal" as const,
+        label: t("settings.providers.tabs.terminal"),
+        testID: "provider-settings-tab-terminal",
+        controls: "provider-terminal-panel",
+      },
+    ],
+    [t],
+  );
+  const tabs = useMemo(
+    () =>
+      terminalProviderId ? (
+        <SegmentedControl
+          options={tabOptions}
+          value={activeTab}
+          onValueChange={setActiveTab}
+          size="sm"
+          style={sheetStyles.tabs}
+          role="tablist"
+          testID="provider-settings-tabs"
+        />
+      ) : undefined,
+    [activeTab, tabOptions, terminalProviderId],
+  );
   const sheetHeader = useMemo<SheetHeader>(
     () => ({
       title: providerLabel,
-      search: {
-        onChange: setQuery,
-        placeholder: t("settings.providers.models.searchPlaceholder"),
-        testID: "provider-settings-search",
-      },
+      tabs,
+      search:
+        activeTab === "models"
+          ? {
+              onChange: setQuery,
+              placeholder: t("settings.providers.models.searchPlaceholder"),
+              testID: "provider-settings-search",
+            }
+          : undefined,
     }),
-    [providerLabel, t],
+    [activeTab, providerLabel, t, tabs],
   );
-
-  return (
-    <>
-      <AdaptiveModalSheet
-        header={sheetHeader}
-        visible={visible}
-        onClose={onClose}
-        testID="provider-settings-sheet"
-        footer={renderProviderSheetFooter({
+  const footer = useMemo(
+    () =>
+      activeTab === "models" ? (
+        renderProviderSheetFooter({
           fetchedAtLabel,
           isCompact,
           modelsRefreshing,
@@ -698,9 +740,40 @@ export function ProviderDiagnosticSheet({
           onOpenAddSheet: handleOpenAddSheet,
           onOpenDiagSheet: handleOpenDiagSheet,
           onRefreshModels: handleRefreshModels,
-        })}
-        snapPoints={MAIN_SNAP_POINTS}
-      >
+        })
+      ) : (
+        <View style={sheetStyles.terminalFooter}>
+          <Button
+            variant="default"
+            size="sm"
+            leftIcon={Plus}
+            onPress={handleOpenProfileAdd}
+            disabled={!isConnected || !config}
+            testID="provider-terminal-add-profile"
+          >
+            {t("settings.providers.terminal.addProfile")}
+          </Button>
+        </View>
+      ),
+    [
+      activeTab,
+      config,
+      fetchedAtLabel,
+      handleOpenAddSheet,
+      handleOpenDiagSheet,
+      handleOpenProfileAdd,
+      handleRefreshModels,
+      isConnected,
+      isCompact,
+      modelsRefreshing,
+      t,
+    ],
+  );
+
+  let content = null;
+  if (activeTab === "models") {
+    content = (
+      <View nativeID="provider-models-panel" role="tabpanel">
         <ProviderModalBody
           discoveredCount={discoveredModels.length}
           additionalCount={additionalModels.length}
@@ -715,6 +788,33 @@ export function ProviderDiagnosticSheet({
           onDeleteCustom={handleDeleteCustom}
           theme={theme}
         />
+      </View>
+    );
+  } else if (terminalProviderId) {
+    content = (
+      <View nativeID="provider-terminal-panel" role="tabpanel">
+        <ProviderTerminalSettings
+          serverId={serverId}
+          providerId={terminalProviderId}
+          isAdding={profileAddOpen}
+          onAddClose={handleCloseProfileAdd}
+        />
+      </View>
+    );
+  }
+
+  return (
+    <>
+      <AdaptiveModalSheet
+        header={sheetHeader}
+        visible={visible}
+        onClose={onClose}
+        onDismiss={handleDismiss}
+        testID="provider-settings-sheet"
+        footer={footer}
+        snapPoints={MAIN_SNAP_POINTS}
+      >
+        {content}
       </AdaptiveModalSheet>
       <AddCustomModelSubSheet
         provider={provider}
@@ -861,6 +961,13 @@ const sheetStyles = StyleSheet.create((theme) => ({
     flexDirection: "row",
     justifyContent: "flex-end",
     gap: theme.spacing[2],
+  },
+  tabs: {
+    alignSelf: "flex-start",
+  },
+  terminalFooter: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
   },
   codeBlockLoading: {
     paddingVertical: theme.spacing[4],

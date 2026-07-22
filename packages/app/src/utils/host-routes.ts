@@ -507,7 +507,6 @@ export const HOST_SECTION_SLUGS = [
   "workspaces",
   "providers",
   "usage",
-  "terminals",
   "host",
 ] as const;
 
@@ -515,6 +514,8 @@ export type HostSectionSlug = (typeof HOST_SECTION_SLUGS)[number];
 
 const LEGACY_HOST_SECTION_SLUGS: Record<string, HostSectionSlug> = {
   orchestration: "agents",
+  // COMPAT(terminalsSettingsSection): added in v0.2.0, remove after 2027-01-22.
+  terminals: "providers",
   daemon: "host",
 };
 
