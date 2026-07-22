@@ -1,6 +1,6 @@
 {
   "name": "@bytetrue/byspace",
-  "version": "0.2.0-beta.3",
+  "version": "0.2.0-beta.4",
   "description": "BySpace CLI - control your AI coding agents from the command line",
   "repository": {
     "type": "git",
@@ -30,9 +30,9 @@
     "test:e2e:lifecycle": "npx tsx tests/e2e/agent-lifecycle.test.ts"
   },
   "dependencies": {
-    "@bytetrue/byspace-client": "0.2.0-beta.3",
-    "@bytetrue/byspace-protocol": "0.2.0-beta.3",
-    "@bytetrue/byspace-server": "0.2.0-beta.3",
+    "@bytetrue/byspace-client": "0.2.0-beta.4",
+    "@bytetrue/byspace-protocol": "0.2.0-beta.4",
+    "@bytetrue/byspace-server": "0.2.0-beta.4",
     "@clack/prompts": "^1.0.0",
     "chalk": "^5.3.0",
     "commander": "^12.0.0",

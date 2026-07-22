@@ -1,7 +1,8 @@
 # Changelog
 
-## 0.2.0-beta.3 - 2026-07-21
+## 0.2.0-beta.4 - 2026-07-22
 
-- Adds Pi model-aware thinking controls, including `max`, and keeps configured model/thinking semantics synchronized and persisted.
-- Makes empty workspace creation discoverable and clarifies that environment setup is optional.
-- Hardens release and upstream-maintenance workflows while preserving Stable/Beta channel isolation.
+- Restores native terminal paste behavior, including bracketed multiline paste, clipboard image upload, and Windows ConPTY framing.
+- Integrates terminal launch profiles and activity hooks into provider settings for Claude, Codex, OpenCode, and Pi.
+- Adds persistent conversation controls for jumping to the latest message and collapsing all tool calls.
+- Surfaces terminal settings failures and prevents isolated daemon cleanup from stopping a daemon it does not own.

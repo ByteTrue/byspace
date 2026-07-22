@@ -140,9 +140,10 @@ test.describe("Settings host page", () => {
     await page.keyboard.press("Escape");
     await expect(page.getByTestId("provider-terminal-add-profile")).toBeVisible();
     await page.getByTestId("terminal-agent-hook-pi").click();
-    const updateError = page.getByTestId("provider-terminal-hook-error");
+    const updateError = page.getByTestId("provider-terminal-hook-error").filter({
+      has: page.getByTestId("provider-terminal-hook-error-dismiss"),
+    });
     await expect(updateError).toContainText("Test config write failure.");
-    await expect(page.getByTestId("provider-terminal-hook-error-dismiss")).toBeVisible();
   });
 
   test("host section shows the host label and restart/remove action cards", async ({ page }) => {
