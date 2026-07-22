@@ -82,7 +82,7 @@ Client heartbeats include the focused terminal id. When a visible client focuses
 
 ### Agent hook installation
 
-Installing hooks edits the user's real agent config files, so every provider is opt-in. The provider-scoped `daemon.terminalAgentHooks` map is surfaced under a host's **Terminals → Terminal agent hooks** settings, with independent switches for Claude Code, Codex, OpenCode, and Pi. At startup `applyTerminalAgentHookSetting` installs only enabled providers; live setting changes install or remove only the provider that changed. A disabled secondary/test daemon never removes hooks owned by another daemon startup.
+Installing hooks edits the user's real agent config files, so every provider is opt-in. The provider-scoped `daemon.terminalAgentHooks` map is surfaced under **Providers → provider → Terminal**, with independent switches for Claude Code, Codex, OpenCode, and Pi. Older daemons without provider-scoped support show one shared aggregate switch in the same Terminal tab. At startup `applyTerminalAgentHookSetting` installs only enabled providers; live setting changes install or remove only the provider that changed. A disabled secondary/test daemon never removes hooks owned by another daemon unless that daemon observes a live enabled-to-disabled transition.
 
 The legacy `daemon.enableTerminalAgentHooks` field remains accepted for protocol compatibility. A legacy-only value applies to every provider; the daemon keeps it as an aggregate (`true` when any provider is enabled) so old clients can still read and control the setting. New clients capability-gate provider switches on `server_info.features.terminalAgentHookProviders`.
 

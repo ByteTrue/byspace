@@ -1,4 +1,11 @@
-import { useCallback, useMemo, type ReactNode } from "react";
+import {
+  useCallback,
+  useMemo,
+  type ComponentProps,
+  type ComponentType,
+  type KeyboardEvent,
+  type ReactNode,
+} from "react";
 import { Pressable, Text, View, type PressableStateCallbackType } from "react-native";
 import type { StyleProp, TextStyle, ViewStyle } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
@@ -9,6 +16,10 @@ import {
 } from "@/components/ui/control-geometry";
 import type { Theme } from "@/styles/theme";
 
+const WebPressable = Pressable as ComponentType<
+  ComponentProps<typeof Pressable> & { onKeyDown?: (event: KeyboardEvent<HTMLElement>) => void }
+>;
+
 type SegmentedControlIconRenderer = (props: { color: string; size: number }) => ReactNode;
 
 export interface SegmentedControlOption<T extends string> {
@@ -17,6 +28,7 @@ export interface SegmentedControlOption<T extends string> {
   icon?: SegmentedControlIconRenderer;
   disabled?: boolean;
   testID?: string;
+  controls?: string;
 }
 
 interface SegmentedControlProps<T extends string> {
@@ -27,6 +39,42 @@ interface SegmentedControlProps<T extends string> {
   hideLabels?: boolean;
   style?: StyleProp<ViewStyle>;
   testID?: string;
+  role?: "tablist";
+}
+
+function getTabTargetIndex<T extends string>(
+  options: SegmentedControlOption<T>[],
+  currentIndex: number,
+  key: string,
+): number | null {
+  let targetIndex: number;
+  let step: number;
+  switch (key) {
+    case "Home":
+      targetIndex = 0;
+      step = 1;
+      break;
+    case "End":
+      targetIndex = options.length - 1;
+      step = -1;
+      break;
+    case "ArrowRight":
+      targetIndex = (currentIndex + 1) % options.length;
+      step = 1;
+      break;
+    case "ArrowLeft":
+      targetIndex = (currentIndex - 1 + options.length) % options.length;
+      step = -1;
+      break;
+    default:
+      return null;
+  }
+
+  for (let count = 0; count < options.length; count++) {
+    if (!options[targetIndex]?.disabled) return targetIndex;
+    targetIndex = (targetIndex + step + options.length) % options.length;
+  }
+  return null;
 }
 
 interface SegmentIconProps {
@@ -52,6 +100,7 @@ export function SegmentedControl<T extends string>({
   hideLabels = false,
   style,
   testID,
+  role,
 }: SegmentedControlProps<T>) {
   const containerSizeStyle = size === "sm" ? styles.containerSm : styles.containerMd;
   const segmentSizeStyle = size === "sm" ? styles.segmentSm : styles.segmentMd;
@@ -63,9 +112,25 @@ export function SegmentedControl<T extends string>({
     [containerSizeStyle, style],
   );
 
+  const handleTabKeyDown = useCallback(
+    (event: KeyboardEvent<HTMLElement>, currentIndex: number) => {
+      if (role !== "tablist") return;
+
+      const targetIndex = getTabTargetIndex(options, currentIndex, event.key);
+      if (targetIndex == null) return;
+      const target = options[targetIndex];
+      if (!target) return;
+      event.preventDefault();
+      onValueChange(target.value);
+      const tabs = event.currentTarget.parentElement?.querySelectorAll<HTMLElement>("[role=tab]");
+      tabs?.[targetIndex]?.focus();
+    },
+    [onValueChange, options, role],
+  );
+
   return (
-    <View style={containerStyle} testID={testID}>
-      {options.map((option) => {
+    <View style={containerStyle} role={role} testID={testID}>
+      {options.map((option, index) => {
         const isSelected = option.value === value;
 
         return (
@@ -79,6 +144,9 @@ export function SegmentedControl<T extends string>({
             labelSizeStyle={labelSizeStyle}
             currentValue={value}
             onValueChange={onValueChange}
+            isTab={role === "tablist"}
+            optionIndex={index}
+            onTabKeyDown={handleTabKeyDown}
           />
         );
       })}
@@ -95,6 +163,9 @@ function SegmentItem<T extends string>({
   labelSizeStyle,
   currentValue,
   onValueChange,
+  isTab,
+  optionIndex,
+  onTabKeyDown,
 }: {
   option: SegmentedControlOption<T>;
   isSelected: boolean;
@@ -104,6 +175,9 @@ function SegmentItem<T extends string>({
   labelSizeStyle: StyleProp<TextStyle>;
   currentValue: T;
   onValueChange: (value: T) => void;
+  isTab: boolean;
+  optionIndex: number;
+  onTabKeyDown: (event: KeyboardEvent<HTMLElement>, index: number) => void;
 }) {
   const labelStyle = useMemo(
     () => [styles.label, labelSizeStyle, isSelected && styles.labelSelected],
@@ -114,6 +188,12 @@ function SegmentItem<T extends string>({
       onValueChange(option.value);
     }
   }, [option.disabled, option.value, currentValue, onValueChange]);
+  const handleKeyDown = useCallback(
+    (event: KeyboardEvent<HTMLElement>) => onTabKeyDown(event, optionIndex),
+    [onTabKeyDown, optionIndex],
+  );
+  let tabIndex: -1 | 0 | undefined;
+  if (isTab) tabIndex = isSelected ? 0 : -1;
   const pressableStyle = useCallback(
     ({ hovered, pressed }: PressableStateCallbackType & { hovered?: boolean }) => [
       styles.segment,
@@ -130,10 +210,13 @@ function SegmentItem<T extends string>({
     [isSelected, option.disabled],
   );
   return (
-    <Pressable
-      accessibilityRole="button"
+    <WebPressable
+      accessibilityRole={isTab ? "tab" : "button"}
       accessibilityState={accessibilityState}
+      aria-controls={isTab ? option.controls : undefined}
       aria-selected={isSelected}
+      tabIndex={tabIndex}
+      onKeyDown={isTab ? handleKeyDown : undefined}
       disabled={option.disabled}
       testID={option.testID}
       onPress={handlePress}
@@ -151,7 +234,7 @@ function SegmentItem<T extends string>({
           {option.label}
         </Text>
       )}
-    </Pressable>
+    </WebPressable>
   );
 }
 
