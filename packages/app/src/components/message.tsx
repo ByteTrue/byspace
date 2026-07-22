@@ -2918,6 +2918,9 @@ export const ExpandableBadge = memo(function ExpandableBadge({
     () => (isInteractive ? { expanded: isExpanded } : undefined),
     [isExpanded, isInteractive],
   );
+  // React Native Web does not emit aria-expanded from Pressable accessibilityState.
+  const ariaExpandedProps =
+    isWeb && isInteractive ? ({ "aria-expanded": isExpanded } as Record<string, boolean>) : null;
 
   const isActive = isHovered || isExpanded;
 
@@ -2994,6 +2997,7 @@ export const ExpandableBadge = memo(function ExpandableBadge({
     >
       <Pressable
         {...pressHandlers}
+        {...ariaExpandedProps}
         disabled={!isInteractive}
         accessibilityState={accessibilityState}
         style={pressableStyle}
@@ -3149,7 +3153,7 @@ export const ToolCall = memo(function ToolCall({
         showLoadingSkeleton: presentation.isLoadingDetails,
       });
     } else {
-      setIsExpanded((prev) => !prev);
+      setIsExpanded((previous) => !previous);
     }
   }, [
     shouldRenderInline,

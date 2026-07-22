@@ -172,6 +172,7 @@ export const ru: TranslationResources = {
   agentStream: {
     empty: "Начните общаться с этим агентом...",
     scrollToBottom: "Прокрутить вниз",
+    collapseAllToolCalls: "Свернуть все вызовы инструментов",
     permission: {
       plan: "План",
       required: "Требуется разрешение",

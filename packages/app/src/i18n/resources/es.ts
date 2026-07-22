@@ -172,6 +172,7 @@ export const es: TranslationResources = {
   agentStream: {
     empty: "Comience a chatear con este agente...",
     scrollToBottom: "Desplazarse hacia abajo",
+    collapseAllToolCalls: "Contraer todas las llamadas de herramientas",
     permission: {
       plan: "Plan",
       required: "Permiso requerido",
