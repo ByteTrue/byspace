@@ -17,11 +17,12 @@ import {
   Trash2,
 } from "lucide-react-native";
 import { useCallback, useMemo, useState } from "react";
-import { Alert, Pressable, Text, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
 import { getProviderIcon } from "@/components/provider-icons";
 import { Button } from "@/components/ui/button";
+import { Alert as InlineAlert } from "@/components/ui/alert";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -86,10 +87,6 @@ const MOVE_UP_ICON = <ThemedArrowUp uniProps={mutedIconProps} />;
 const MOVE_DOWN_ICON = <ThemedArrowDown uniProps={mutedIconProps} />;
 const REMOVE_ICON = <ThemedTrash uniProps={destructiveIconProps} />;
 
-function generateProfileId(): string {
-  return `profile_${Date.now().toString(36)}_${Math.random().toString(36).slice(2)}`;
-}
-
 function parseArgsString(raw: string): string[] | undefined {
   const args = raw.trim().split(/\s+/).filter(Boolean);
   return args.length > 0 ? args : undefined;
@@ -137,7 +134,7 @@ function TerminalProfileRow({
         style={styles.profileEditButton}
         onPress={handleEdit}
         accessibilityRole="button"
-        accessibilityLabel={t("settings.host.terminalProfiles.editProfile")}
+        accessibilityLabel={`${t("settings.host.terminalProfiles.editProfile")}: ${profile.name}`}
         testID={`terminal-profile-row-${profile.id}`}
       >
         <ThemedTerminalProfileIcon iconName={icon} uniProps={profileIconProps} />
@@ -205,6 +202,7 @@ export function TerminalProfilesPanel({
     id: string;
     draft: ProfileDraft;
   } | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const allProfiles = useMemo(
     () => (config ? [...resolveTerminalProfiles(config.terminalProfiles)] : null),
     [config],
@@ -224,7 +222,7 @@ export function TerminalProfilesPanel({
     async (draft: ProfileDraft) => {
       const next = allProfiles ? [...allProfiles] : [];
       next.push({
-        id: generateProfileId(),
+        id: crypto.randomUUID(),
         name: draft.name,
         command: draft.command,
         args: parseArgsString(draft.args),
@@ -280,13 +278,11 @@ export function TerminalProfilesPanel({
         destructive: true,
       });
       if (!confirmed || !allProfiles) return;
+      setSaveError(null);
       try {
         await saveProfiles(allProfiles.filter((candidate) => candidate.id !== id));
       } catch (error) {
-        Alert.alert(
-          t("common.errors.unableToSave"),
-          error instanceof Error ? error.message : String(error),
-        );
+        setSaveError(error instanceof Error ? error.message : String(error));
       }
     },
     [allProfiles, saveProfiles, t],
@@ -296,19 +292,18 @@ export function TerminalProfilesPanel({
       if (!allProfiles || !profiles) return;
       const next = moveTerminalProfile(allProfiles, profiles, id, offset);
       if (!next) return;
+      setSaveError(null);
       try {
         await saveProfiles(next);
       } catch (error) {
-        Alert.alert(
-          t("common.errors.unableToSave"),
-          error instanceof Error ? error.message : String(error),
-        );
+        setSaveError(error instanceof Error ? error.message : String(error));
       }
     },
-    [allProfiles, profiles, saveProfiles, t],
+    [allProfiles, profiles, saveProfiles],
   );
   const handleMoveUp = useCallback((id: string) => void moveProfile(id, -1), [moveProfile]);
   const handleMoveDown = useCallback((id: string) => void moveProfile(id, 1), [moveProfile]);
+  const handleDismissSaveError = useCallback(() => setSaveError(null), []);
 
   if (!isConnected) {
     return (
@@ -324,6 +319,18 @@ export function TerminalProfilesPanel({
         <Text style={settingsStyles.sectionHeaderTitle}>
           {t("settings.providers.terminal.launchProfiles")}
         </Text>
+        {saveError ? (
+          <InlineAlert
+            variant="error"
+            title={t("common.errors.unableToSave")}
+            description={saveError}
+            testID="terminal-profiles-save-error"
+          >
+            <Button variant="secondary" size="sm" onPress={handleDismissSaveError}>
+              {t("common.actions.dismiss")}
+            </Button>
+          </InlineAlert>
+        ) : null}
         <View style={settingsStyles.card} testID="terminal-profiles-card">
           {profiles && profiles.length > 0 ? (
             profiles.map((profile, index) => (
@@ -407,6 +414,7 @@ function ProviderTerminalHook({
   );
   const { config, isLoading, patchConfig } = useDaemonConfig(serverId);
   const [isUpdating, setIsUpdating] = useState(false);
+  const [updateError, setUpdateError] = useState<string | null>(null);
   const value = supportsProviderSettings
     ? (config?.terminalAgentHooks?.[providerId] ?? config?.enableTerminalAgentHooks ?? false)
     : (config?.enableTerminalAgentHooks ?? false);
@@ -414,6 +422,7 @@ function ProviderTerminalHook({
   const handleValueChange = useCallback(
     (nextValue: boolean) => {
       if (!config || !isConnected) return;
+      setUpdateError(null);
       setIsUpdating(true);
       let patch: MutableDaemonConfigPatch;
       if (supportsProviderSettings) {
@@ -424,21 +433,31 @@ function ProviderTerminalHook({
       }
       void patchConfig(patch)
         .catch((error) => {
-          Alert.alert(
-            t("settings.providers.terminal.updateError"),
-            error instanceof Error ? error.message : String(error),
-          );
+          setUpdateError(error instanceof Error ? error.message : String(error));
         })
         .finally(() => setIsUpdating(false));
     },
-    [config, isConnected, patchConfig, providerId, supportsProviderSettings, t],
+    [config, isConnected, patchConfig, providerId, supportsProviderSettings],
   );
+  const handleDismissUpdateError = useCallback(() => setUpdateError(null), []);
 
   return (
     <View style={styles.hookSection}>
       <Text style={settingsStyles.sectionHeaderTitle}>
         {t("settings.providers.terminal.activityTitle")}
       </Text>
+      {updateError ? (
+        <InlineAlert
+          variant="error"
+          title={t("settings.providers.terminal.updateError")}
+          description={updateError}
+          testID="provider-terminal-hook-error"
+        >
+          <Button variant="secondary" size="sm" onPress={handleDismissUpdateError}>
+            {t("common.actions.dismiss")}
+          </Button>
+        </InlineAlert>
+      ) : null}
       <View style={settingsStyles.card}>
         <View style={settingsStyles.row}>
           <View style={settingsStyles.rowContent}>
@@ -457,7 +476,11 @@ function ProviderTerminalHook({
             value={value}
             onValueChange={handleValueChange}
             disabled={!isConnected || isLoading || isUpdating || config == null}
-            accessibilityLabel={t("settings.providers.terminal.activityLabel")}
+            accessibilityLabel={t(
+              supportsProviderSettings
+                ? "settings.providers.terminal.activityLabel"
+                : "settings.providers.terminal.legacyActivityLabel",
+            )}
             testID={`terminal-agent-hook-${providerId}`}
           />
         </View>

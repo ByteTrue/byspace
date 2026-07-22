@@ -1,6 +1,7 @@
 import { expect, test } from "./fixtures";
+import type { Page } from "@playwright/test";
 import { gotoAppShell, openSettings } from "./helpers/app";
-import { getE2EDaemonPort } from "./helpers/daemon-port";
+import { daemonWsRoutePattern, getE2EDaemonPort } from "./helpers/daemon-port";
 import { TEST_HOST_LABEL } from "./helpers/daemon-registry";
 import { getServerId } from "./helpers/server-id";
 import {
@@ -19,6 +20,51 @@ import {
   expectHostPageVisible,
   seedSavedSettingsHosts,
 } from "./helpers/settings";
+
+async function rejectNextConfigWrite(page: Page): Promise<void> {
+  let shouldReject = true;
+  await page.routeWebSocket(daemonWsRoutePattern(), (ws) => {
+    const server = ws.connectToServer();
+    ws.onMessage((message) => {
+      let request: { type?: string; requestId?: string } | undefined;
+      if (typeof message === "string") {
+        try {
+          const envelope = JSON.parse(message) as {
+            type?: string;
+            message?: { type?: string; requestId?: string };
+          };
+          if (envelope.type === "session") request = envelope.message;
+        } catch {
+          // Forward non-JSON frames unchanged.
+        }
+      }
+      if (
+        shouldReject &&
+        request?.type === "set_daemon_config_request" &&
+        typeof request.requestId === "string"
+      ) {
+        shouldReject = false;
+        ws.send(
+          JSON.stringify({
+            type: "session",
+            message: {
+              type: "rpc_error",
+              payload: {
+                requestId: request.requestId,
+                requestType: request.type,
+                error: "Test config write failure.",
+                code: "transport",
+              },
+            },
+          }),
+        );
+        return;
+      }
+      server.send(message);
+    });
+    server.onMessage((message) => ws.send(message));
+  });
+}
 
 test.describe("Settings host page", () => {
   test("connections section shows the seeded connection endpoint", async ({ page }) => {
@@ -59,6 +105,7 @@ test.describe("Settings host page", () => {
 
   test("Pi provider separates its model list from Terminal settings", async ({ page }) => {
     const serverId = getServerId();
+    await rejectNextConfigWrite(page);
 
     await gotoAppShell(page);
     await openSettings(page);
@@ -82,6 +129,11 @@ test.describe("Settings host page", () => {
     ).toBeVisible();
     await page.keyboard.press("Escape");
     await expect(page.getByTestId("provider-terminal-add-profile")).toBeVisible();
+    await page.getByTestId("terminal-agent-hook-pi").click();
+    const updateError = page.getByTestId("provider-terminal-hook-error");
+    await expect(updateError).toContainText("Test config write failure.");
+    await updateError.getByRole("button", { name: "Dismiss" }).click();
+    await expect(updateError).toHaveCount(0);
   });
 
   test("host section shows the host label and restart/remove action cards", async ({ page }) => {
