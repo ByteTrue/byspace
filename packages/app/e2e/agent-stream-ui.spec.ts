@@ -311,6 +311,13 @@ test.describe("Agent stream UI", () => {
       });
       await expect(reasoningButtons.first()).toHaveAttribute("aria-expanded", "false");
 
+      const collapsedReasoningCount = await reasoningButtons.count();
+      await agent.client.sendAgentMessage(agent.agentId, "Stream new reasoning after collapse.");
+      await expect.poll(() => reasoningButtons.count()).toBeGreaterThan(collapsedReasoningCount);
+      await expect(reasoningButtons.first()).toHaveAttribute("aria-expanded", "false");
+      await expect(reasoningButtons.last()).toHaveAttribute("aria-expanded", "true");
+      await agent.client.waitForFinish(agent.agentId, 30_000);
+
       await page.setViewportSize({ width: 390, height: 844 });
       await expect(chatScroll).toBeVisible();
       await scrollChatAwayFromBottom(page, {

@@ -1121,7 +1121,6 @@ const ChatAgentReadyContent = memo(function ChatAgentReadyContent({
   const { t } = useTranslation();
   const hasActiveComposer = agentState.archivedAt === null && !isArchivingCurrentAgent;
   const [isNearBottom, setIsNearBottom] = useState(true);
-  useEffect(() => setIsNearBottom(true), [agentId]);
   const handleCollapseAll = useCallback(
     () => streamViewRef.current?.collapseAll(),
     [streamViewRef],
