@@ -170,6 +170,7 @@ export const en = {
   agentStream: {
     empty: "Start chatting with this agent...",
     scrollToBottom: "Scroll to bottom",
+    collapseAllToolCalls: "Collapse all tool calls",
     permission: {
       plan: "Plan",
       required: "Permission Required",

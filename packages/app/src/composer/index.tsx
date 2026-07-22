@@ -791,6 +791,8 @@ interface ComposerProps {
   inputWrapperStyle?: import("react-native").ViewStyle;
   /** Rendered below the input. */
   footer?: ReactNode;
+  /** Rendered beside the message input area. */
+  sideControls?: ReactNode;
   /** Optional panel/container layout breakpoint. Defaults to the screen breakpoint. */
   isCompactLayout?: boolean;
 }
@@ -995,6 +997,7 @@ export function Composer({
   agentControls,
   inputWrapperStyle,
   footer,
+  sideControls,
   isCompactLayout: isCompactLayoutOverride,
 }: ComposerProps) {
   const { t } = useTranslation();
@@ -1895,6 +1898,13 @@ export function Composer({
     () => [styles.inputAreaContainer, isComposerLocked && styles.inputAreaLocked],
     [isComposerLocked],
   );
+  const inputAreaContentStyle = useMemo(
+    () =>
+      sideControls
+        ? [styles.inputAreaContent, styles.inputAreaContentWithSideControls]
+        : styles.inputAreaContent,
+    [sideControls],
+  );
 
   const attachmentTray = useMemo(
     () =>
@@ -1957,7 +1967,7 @@ export function Composer({
         <AttachmentLightbox metadata={lightboxMetadata} onClose={handleLightboxClose} />
         {/* Input area */}
         <View style={inputAreaContainerStyle}>
-          <View style={styles.inputAreaContent}>
+          <View style={inputAreaContentStyle}>
             {queueList}
             {sendErrorNode}
 
@@ -2037,6 +2047,7 @@ export function Composer({
                 renderOption={renderGithubPickerOption}
               />
             </View>
+            {sideControls ? <View style={styles.sideControls}>{sideControls}</View> : null}
           </View>
         </View>
         {renderComposerFooter(footer, footerInlineContent)}
@@ -2068,9 +2079,19 @@ const styles = StyleSheet.create((theme: Theme) => ({
     opacity: 0.6,
   },
   inputAreaContent: {
+    position: "relative",
     width: "100%",
     maxWidth: MAX_CONTENT_WIDTH,
     gap: theme.spacing[3],
+  },
+  inputAreaContentWithSideControls: {
+    maxWidth: MAX_CONTENT_WIDTH + theme.spacing[8] + theme.spacing[2] * 2,
+    paddingRight: theme.spacing[8] + theme.spacing[2] * 2,
+  },
+  sideControls: {
+    position: "absolute",
+    right: 0,
+    bottom: 0,
   },
   footer: {
     width: "100%",
