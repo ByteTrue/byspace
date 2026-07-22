@@ -214,7 +214,7 @@ function SegmentItem<T extends string>({
       accessibilityRole={isTab ? "tab" : "button"}
       accessibilityState={accessibilityState}
       aria-controls={isTab ? option.controls : undefined}
-      aria-selected={isTab ? isSelected : undefined}
+      aria-selected={isSelected}
       tabIndex={tabIndex}
       onKeyDown={isTab ? handleKeyDown : undefined}
       disabled={option.disabled}
