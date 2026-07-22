@@ -359,6 +359,9 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
       new Set(),
     );
     const [collapseRevision, setCollapseRevision] = useState(0);
+    const [collapsedReasoningIds, setCollapsedReasoningIds] = useState<ReadonlySet<string>>(
+      new Set(),
+    );
     const openFileExplorerForCheckout = usePanelStore((state) => state.openFileExplorerForCheckout);
     const setExplorerTabForCheckout = usePanelStore((state) => state.setExplorerTabForCheckout);
 
@@ -400,17 +403,18 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
       : agentHistoryPagination;
     const scrollIndicatorFadeIn = FadeIn.duration(200);
     const scrollIndicatorFadeOut = FadeOut.duration(200);
-    const notifyNearBottomChange = useStableEvent((nextIsNearBottom: boolean) => {
+    const handleNearBottomChange = useStableEvent((nextIsNearBottom: boolean) => {
+      setIsNearBottom(nextIsNearBottom);
       onNearBottomChange?.(nextIsNearBottom);
     });
 
     useEffect(() => {
-      setIsNearBottom(true);
+      handleNearBottomChange(true);
       setExpandedInlineToolCallIds(new Set());
       setExpandedToolCallGroupIds(new Set());
       setCollapseRevision(0);
-      notifyNearBottomChange(true);
-    }, [agentId, notifyNearBottomChange]);
+      setCollapsedReasoningIds(new Set());
+    }, [agentId, handleNearBottomChange]);
 
     const handleInlinePathPress = useStableEvent(
       (target: InlinePathTarget, disposition: OpenFileDisposition) => {
@@ -611,22 +615,24 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
           setExpandedInlineToolCallIds(new Set());
           setExpandedToolCallGroupIds(new Set());
           setCollapseRevision((current) => current + 1);
+          setCollapsedReasoningIds(
+            new Set(
+              [...streamLayout.history, ...streamLayout.liveHead]
+                .filter(({ item }) => item.kind === "thought")
+                .map(({ item }) => item.id),
+            ),
+          );
         },
         prepareForViewportChange() {
           viewportRef.current?.prepareForViewportChange();
         },
       }),
-      [],
+      [streamLayout.history, streamLayout.liveHead],
     );
 
     const scrollToBottom = useCallback(() => {
       viewportRef.current?.scrollToBottom("jump-to-bottom");
     }, []);
-
-    const handleNearBottomChange = useStableEvent((nextIsNearBottom: boolean) => {
-      setIsNearBottom(nextIsNearBottom);
-      notifyNearBottomChange(nextIsNearBottom);
-    });
 
     const setInlineDetailsExpanded = useCallback(
       (itemId: string, expanded: boolean) => {
@@ -709,17 +715,17 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
           <ToolCallSlot
             itemId={item.id}
             onInlineDetailsExpandedChangeByItemId={setInlineDetailsExpanded}
-            collapseRevision={collapseRevision}
+            key={collapseRevision}
             toolName="thinking"
             args={item.text}
             status={item.status === "ready" ? "completed" : "executing"}
             isLastInSequence={layoutItem.isLastInToolSequence}
-            defaultExpanded={autoExpandReasoning}
+            defaultExpanded={autoExpandReasoning && !collapsedReasoningIds.has(item.id)}
             forceInline={autoExpandReasoning}
           />
         );
       },
-      [autoExpandReasoning, collapseRevision, setInlineDetailsExpanded],
+      [autoExpandReasoning, collapsedReasoningIds, collapseRevision, setInlineDetailsExpanded],
     );
 
     const renderSingleToolCallItem = useCallback(
@@ -748,7 +754,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
             <ToolCallSlot
               itemId={item.id}
               onInlineDetailsExpandedChangeByItemId={setInlineDetailsExpanded}
-              collapseRevision={collapseRevision}
+              key={collapseRevision}
               toolName={data.name}
               error={data.error}
               status={data.status}
@@ -767,7 +773,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
           <ToolCallSlot
             itemId={item.id}
             onInlineDetailsExpandedChangeByItemId={setInlineDetailsExpanded}
-            collapseRevision={collapseRevision}
+            key={collapseRevision}
             toolName={data.toolName}
             args={data.arguments}
             result={data.result}

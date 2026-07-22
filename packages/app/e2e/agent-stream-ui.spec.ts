@@ -1,4 +1,5 @@
 import { test, expect } from "./fixtures";
+import type { ElementHandle } from "@playwright/test";
 import {
   awaitAssistantMessage,
   expectAgentIdle,
@@ -14,6 +15,12 @@ import {
   scrollChatAwayFromBottom,
   waitForScrollableChat,
 } from "./helpers/agent-bottom-anchor";
+import {
+  clickSessionRow,
+  expectArchivedAgentFocused,
+  expectSessionRowArchived,
+  openSessions,
+} from "./helpers/archive-tab";
 import { delayCreatedAgentInitialTailResponse } from "./helpers/agent-timeline-gate";
 import { selectModel } from "./helpers/app";
 import { clickNewChat } from "./helpers/launcher";
@@ -21,6 +28,10 @@ import { expectComposerVisible, startRunningMockAgent } from "./helpers/composer
 import { openAgentRoute, seedMockAgentWorkspace } from "./helpers/mock-agent";
 
 const SCROLL_AWAY_MIN_SCROLLABLE_DISTANCE = 360;
+
+async function isElementConnected(element: ElementHandle): Promise<boolean> {
+  return element.evaluate((node) => node.isConnected);
+}
 
 test.describe("Agent stream UI", () => {
   test("auto-scroll sticks to bottom across token bursts", async ({ page }) => {
@@ -209,7 +220,16 @@ test.describe("Agent stream UI", () => {
   test("places stream controls beside the composer and collapses expanded tool calls", async ({
     page,
   }) => {
-    test.setTimeout(60_000);
+    test.setTimeout(90_000);
+    await page.addInitScript(() => {
+      Object.assign(globalThis, {
+        __BYSPACE_E2E_WEB_PARTIAL_VIRTUALIZATION_THRESHOLD: 1,
+        __BYSPACE_E2E_WEB_MOUNTED_RECENT_STREAM_ITEMS: 4,
+      });
+      const key = "@byspace:app-settings";
+      const stored = JSON.parse(localStorage.getItem(key) ?? "{}");
+      localStorage.setItem(key, JSON.stringify({ ...stored, autoExpandReasoning: true }));
+    });
     const agent = await seedMockAgentWorkspace({
       repoPrefix: "stream-side-controls-",
       title: "Stream side controls",
@@ -218,6 +238,13 @@ test.describe("Agent stream UI", () => {
     });
     try {
       await agent.client.waitForFinish(agent.agentId, 30_000);
+      for (let turn = 0; turn < 3; turn += 1) {
+        await agent.client.sendAgentMessage(
+          agent.agentId,
+          `emit 1 coalesced agent stream updates ${turn}`,
+        );
+        await agent.client.waitForFinish(agent.agentId, 30_000);
+      }
       await openAgentRoute(page, {
         workspaceId: agent.workspaceId,
         agentId: agent.agentId,
@@ -247,22 +274,45 @@ test.describe("Agent stream UI", () => {
       expect(controlsBounds!.y).toBeLessThan(composerBounds!.y + composerBounds!.height);
       expect(controlsBounds!.y + controlsBounds!.height).toBeGreaterThan(composerBounds!.y);
 
-      const toolCalls = page.locator('[data-testid="tool-call-badge"] [role="button"]');
-      await expect.poll(() => toolCalls.count()).toBeGreaterThan(1);
+      const chatScroll = page.getByTestId("agent-chat-scroll");
+      await chatScroll.evaluate((scroll) => {
+        scroll.scrollTop = 0;
+      });
+      const reasoningButtons = page
+        .getByTestId("tool-call-badge")
+        .filter({ hasText: "Thinking" })
+        .getByRole("button");
+      const firstReasoning = reasoningButtons.first();
+      await expect(firstReasoning).toHaveAttribute("aria-expanded", "true");
+
+      const toolCalls = page
+        .getByTestId("tool-call-badge")
+        .filter({ hasNotText: "Thinking" })
+        .getByRole("button");
+      await expect.poll(() => toolCalls.count()).toBeGreaterThan(0);
       const firstToolCall = toolCalls.nth(0);
-      const secondToolCall = toolCalls.nth(1);
-      await firstToolCall.scrollIntoViewIfNeeded();
       await firstToolCall.click();
       await expect(firstToolCall).toHaveAttribute("aria-expanded", "true");
-      await secondToolCall.scrollIntoViewIfNeeded();
-      await secondToolCall.click();
-      await expect(secondToolCall).toHaveAttribute("aria-expanded", "true");
 
       await page.getByRole("button", { name: "Collapse all tool calls" }).click();
       await expect(firstToolCall).toHaveAttribute("aria-expanded", "false");
-      await expect(secondToolCall).toHaveAttribute("aria-expanded", "false");
+      await expect(firstReasoning).toHaveAttribute("aria-expanded", "false");
+      const firstReasoningHandle = await firstReasoning.elementHandle();
+      if (!firstReasoningHandle) {
+        throw new Error("Expected the first reasoning row to be mounted");
+      }
+
+      await chatScroll.evaluate((scroll) => {
+        scroll.scrollTop = scroll.scrollHeight;
+      });
+      await expect.poll(() => isElementConnected(firstReasoningHandle)).toBe(false);
+      await chatScroll.evaluate((scroll) => {
+        scroll.scrollTop = 0;
+      });
+      await expect(reasoningButtons.first()).toHaveAttribute("aria-expanded", "false");
 
       await page.setViewportSize({ width: 390, height: 844 });
+      await expect(chatScroll).toBeVisible();
       await scrollChatAwayFromBottom(page, {
         deltaY: -500,
         minDistanceFromBottom: 200,
@@ -282,6 +332,22 @@ test.describe("Agent stream UI", () => {
       await scrollToBottomButton.click();
       await expectNearBottom(page);
       await expect(scrollToBottomButton).toBeHidden();
+
+      await page.setViewportSize({ width: 1280, height: 720 });
+      await agent.client.archiveAgent(agent.agentId);
+      await openSessions(page);
+      await expectSessionRowArchived(page, "Stream side controls");
+      await clickSessionRow(page, "Stream side controls");
+      await expectArchivedAgentFocused(page, agent.agentId);
+      await chatScroll.evaluate((scroll) => {
+        const spacer = document.createElement("div");
+        spacer.style.height = "2000px";
+        spacer.style.flexShrink = "0";
+        scroll.append(spacer);
+        scroll.dispatchEvent(new Event("scroll", { bubbles: true }));
+      });
+      await expect(controls).toHaveCount(0);
+      await expect(page.getByRole("button", { name: "Scroll to bottom" })).toBeVisible();
     } finally {
       await agent.cleanup();
     }

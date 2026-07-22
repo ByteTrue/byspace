@@ -2918,6 +2918,7 @@ export const ExpandableBadge = memo(function ExpandableBadge({
     () => (isInteractive ? { expanded: isExpanded } : undefined),
     [isExpanded, isInteractive],
   );
+  // React Native Web does not emit aria-expanded from Pressable accessibilityState.
   const ariaExpandedProps =
     isWeb && isInteractive ? ({ "aria-expanded": isExpanded } as Record<string, boolean>) : null;
 
@@ -3078,7 +3079,6 @@ interface ToolCallProps {
   onInlineDetailsExpandedChange?: (expanded: boolean) => void;
   onOpenFilePath?: (filePath: string) => void;
   defaultExpanded?: boolean;
-  collapseRevision?: number;
   forceInline?: boolean;
   maxDetailHeight?: number;
 }
@@ -3098,13 +3098,11 @@ export const ToolCall = memo(function ToolCall({
   onInlineDetailsExpandedChange,
   onOpenFilePath,
   defaultExpanded,
-  collapseRevision = 0,
   forceInline = false,
   maxDetailHeight = 400,
 }: ToolCallProps) {
   const { openToolCall } = useToolCallSheet();
-  const [expandedRevision, setExpandedRevision] = useState(defaultExpanded ? collapseRevision : -1);
-  const isExpanded = expandedRevision === collapseRevision;
+  const [isExpanded, setIsExpanded] = useState(defaultExpanded ?? false);
 
   const isMobile = useIsCompactFormFactor();
   const shouldRenderInline = !isMobile || forceInline;
@@ -3155,7 +3153,7 @@ export const ToolCall = memo(function ToolCall({
         showLoadingSkeleton: presentation.isLoadingDetails,
       });
     } else {
-      setExpandedRevision((current) => (current === collapseRevision ? -1 : collapseRevision));
+      setIsExpanded((previous) => !previous);
     }
   }, [
     shouldRenderInline,
@@ -3166,7 +3164,6 @@ export const ToolCall = memo(function ToolCall({
     presentation.icon,
     presentation.isLoadingDetails,
     effectiveDetail,
-    collapseRevision,
   ]);
 
   useEffect(() => {
@@ -3257,7 +3254,6 @@ function areToolCallPropsEqual(previous: ToolCallProps, next: ToolCallProps) {
   if (previous.disableOuterSpacing !== next.disableOuterSpacing) return false;
   if (previous.onOpenFilePath !== next.onOpenFilePath) return false;
   if (previous.defaultExpanded !== next.defaultExpanded) return false;
-  if (previous.collapseRevision !== next.collapseRevision) return false;
   if (previous.forceInline !== next.forceInline) return false;
   if (previous.maxDetailHeight !== next.maxDetailHeight) return false;
   return true;

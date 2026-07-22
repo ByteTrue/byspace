@@ -1119,6 +1119,7 @@ const ChatAgentReadyContent = memo(function ChatAgentReadyContent({
   onOpenWorkspaceFile?: (request: WorkspaceFileOpenRequest) => void;
 }) {
   const { t } = useTranslation();
+  const hasActiveComposer = agentState.archivedAt === null && !isArchivingCurrentAgent;
   const [isNearBottom, setIsNearBottom] = useState(true);
   useEffect(() => setIsNearBottom(true), [agentId]);
   const handleCollapseAll = useCallback(
@@ -1128,6 +1129,16 @@ const ChatAgentReadyContent = memo(function ChatAgentReadyContent({
   const handleScrollToBottom = useCallback(
     () => streamViewRef.current?.scrollToBottom(),
     [streamViewRef],
+  );
+  const streamSideControls = useMemo(
+    () => (
+      <AgentStreamSideControls
+        showScrollToBottom={!isNearBottom}
+        onCollapseAll={handleCollapseAll}
+        onScrollToBottom={handleScrollToBottom}
+      />
+    ),
+    [handleCollapseAll, handleScrollToBottom, isNearBottom],
   );
   const rawAgentInputDraft = useAgentInputDraft({
     draftKey: buildDraftStoreKey({
@@ -1162,6 +1173,7 @@ const ChatAgentReadyContent = memo(function ChatAgentReadyContent({
         hasAppliedAuthoritativeHistory={hasAppliedAuthoritativeHistory}
         toast={toastApi}
         onOpenWorkspaceFile={onOpenWorkspaceFile}
+        hasActiveComposer={hasActiveComposer}
         onNearBottomChange={setIsNearBottom}
       />
     </RenderProfile>
@@ -1181,9 +1193,7 @@ const ChatAgentReadyContent = memo(function ChatAgentReadyContent({
         onAttentionPromptSend={onAttentionPromptSend}
         onComposerHeightChange={handleComposerHeightChange}
         onMessageSent={handleMessageSent}
-        isNearBottom={isNearBottom}
-        onCollapseAll={handleCollapseAll}
-        onScrollToBottom={handleScrollToBottom}
+        sideControls={hasActiveComposer ? streamSideControls : undefined}
       />
     </RenderProfile>
   );
@@ -1228,6 +1238,7 @@ const AgentStreamSection = memo(function AgentStreamSection({
   hasAppliedAuthoritativeHistory,
   toast,
   onOpenWorkspaceFile,
+  hasActiveComposer,
   onNearBottomChange,
 }: {
   streamViewRef: React.RefObject<AgentStreamViewHandle | null>;
@@ -1238,6 +1249,7 @@ const AgentStreamSection = memo(function AgentStreamSection({
   hasAppliedAuthoritativeHistory: boolean;
   toast: ReturnType<typeof useToastHost>["api"];
   onOpenWorkspaceFile?: (request: WorkspaceFileOpenRequest) => void;
+  hasActiveComposer: boolean;
   onNearBottomChange: (isNearBottom: boolean) => void;
 }) {
   const streamItemsRaw = useSessionStore((state) =>
@@ -1283,7 +1295,7 @@ const AgentStreamSection = memo(function AgentStreamSection({
       isAuthoritativeHistoryReady={hasAppliedAuthoritativeHistory}
       toast={toast}
       onOpenWorkspaceFile={onOpenWorkspaceFile}
-      showScrollToBottomButton={false}
+      showScrollToBottomButton={!hasActiveComposer}
       onNearBottomChange={onNearBottomChange}
     />
   );
@@ -1302,9 +1314,7 @@ const AgentComposerSection = memo(function AgentComposerSection({
   onAttentionPromptSend,
   onComposerHeightChange,
   onMessageSent,
-  isNearBottom,
-  onCollapseAll,
-  onScrollToBottom,
+  sideControls,
 }: {
   agentId?: string;
   serverId: string;
@@ -1318,9 +1328,7 @@ const AgentComposerSection = memo(function AgentComposerSection({
   onAttentionPromptSend: () => void;
   onComposerHeightChange: (height: number) => void;
   onMessageSent: () => void;
-  isNearBottom: boolean;
-  onCollapseAll: () => void;
-  onScrollToBottom: () => void;
+  sideControls?: React.ReactNode;
 }) {
   if (!agentId) {
     return null;
@@ -1344,9 +1352,7 @@ const AgentComposerSection = memo(function AgentComposerSection({
       onAttentionPromptSend={onAttentionPromptSend}
       onComposerHeightChange={onComposerHeightChange}
       onMessageSent={onMessageSent}
-      isNearBottom={isNearBottom}
-      onCollapseAll={onCollapseAll}
-      onScrollToBottom={onScrollToBottom}
+      sideControls={sideControls}
     />
   );
 });
@@ -1417,9 +1423,7 @@ function ActiveAgentComposer({
   onAttentionPromptSend,
   onComposerHeightChange,
   onMessageSent,
-  isNearBottom,
-  onCollapseAll,
-  onScrollToBottom,
+  sideControls,
 }: {
   agentId: string;
   serverId: string;
@@ -1431,9 +1435,7 @@ function ActiveAgentComposer({
   onAttentionPromptSend: () => void;
   onComposerHeightChange: (height: number) => void;
   onMessageSent: () => void;
-  isNearBottom: boolean;
-  onCollapseAll: () => void;
-  onScrollToBottom: () => void;
+  sideControls?: React.ReactNode;
 }) {
   const insets = useSafeAreaInsets();
   const isCompactFormFactor = useIsCompactFormFactor();
@@ -1560,16 +1562,6 @@ function ActiveAgentComposer({
       ) : undefined,
     [isCompactComposerLayout, serverId, agentId],
   );
-  const streamSideControls = useMemo(
-    () => (
-      <AgentStreamSideControls
-        showScrollToBottom={!isNearBottom}
-        onCollapseAll={onCollapseAll}
-        onScrollToBottom={onScrollToBottom}
-      />
-    ),
-    [isNearBottom, onCollapseAll, onScrollToBottom],
-  );
 
   return (
     <View style={inputAreaStyle} onLayout={onInputAreaLayout}>
@@ -1601,7 +1593,7 @@ function ActiveAgentComposer({
         onMessageSent={onMessageSent}
         onClientSlashCommand={handleClientSlashCommand}
         footer={composerFooter}
-        sideControls={streamSideControls}
+        sideControls={sideControls}
         isCompactLayout={isCompactComposerLayout}
       />
     </View>
