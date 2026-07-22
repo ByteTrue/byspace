@@ -26,21 +26,31 @@ async function rejectNextConfigWrite(page: Page): Promise<void> {
   await page.routeWebSocket(daemonWsRoutePattern(), (ws) => {
     const server = ws.connectToServer();
     ws.onMessage((message) => {
-      let request: { type?: string; requestId?: string } | undefined;
-      if (typeof message === "string") {
-        try {
-          const envelope = JSON.parse(message) as {
+      let request:
+        | {
             type?: string;
-            message?: { type?: string; requestId?: string };
+            requestId?: string;
+            config?: { terminalAgentHooks?: unknown; enableTerminalAgentHooks?: unknown };
+          }
+        | undefined;
+      try {
+        const envelope = JSON.parse(message.toString()) as {
+          type?: string;
+          message?: {
+            type?: string;
+            requestId?: string;
+            config?: { terminalAgentHooks?: unknown; enableTerminalAgentHooks?: unknown };
           };
-          if (envelope.type === "session") request = envelope.message;
-        } catch {
-          // Forward non-JSON frames unchanged.
-        }
+        };
+        if (envelope.type === "session") request = envelope.message;
+      } catch {
+        // Forward non-JSON frames unchanged.
       }
       if (
         shouldReject &&
         request?.type === "set_daemon_config_request" &&
+        (request.config?.terminalAgentHooks !== undefined ||
+          request.config?.enableTerminalAgentHooks !== undefined) &&
         typeof request.requestId === "string"
       ) {
         shouldReject = false;
