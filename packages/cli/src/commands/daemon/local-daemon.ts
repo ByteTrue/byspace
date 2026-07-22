@@ -46,6 +46,8 @@ export interface LocalDaemonState {
 export interface DetachedStartResult {
   pid: number | null;
   logPath: string;
+  hostedWebUrl: string;
+  webUiUrl: string | null;
 }
 
 export interface StopLocalDaemonOptions {
@@ -533,6 +535,26 @@ export function resolveTcpHostFromListen(listen: string): string | null {
   return null;
 }
 
+function resolveWebUiUrl(listen: string): string | null {
+  const host = resolveTcpHostFromListen(listen);
+  if (!host) return null;
+
+  try {
+    const url = new URL(`http://${host}`);
+    if (
+      url.hostname === "0.0.0.0" ||
+      url.hostname.startsWith("127.") ||
+      url.hostname === "[::]" ||
+      url.hostname === "[::1]"
+    ) {
+      url.hostname = "localhost";
+    }
+    return url.toString();
+  } catch {
+    return null;
+  }
+}
+
 export function resolveLocalDaemonState(options: { home?: string } = {}): LocalDaemonState {
   const env: NodeJS.ProcessEnv = {
     ...envWithHome(options.home),
@@ -589,6 +611,11 @@ export async function startLocalDaemonDetached(
 
   const byspaceHome = runtime.resolveHome(childEnv);
   const logPath = path.join(byspaceHome, DAEMON_LOG_FILENAME);
+  const config = loadConfig(byspaceHome, { env: childEnv });
+  const hostedWebUrl = config.appBaseUrl;
+  if (!hostedWebUrl) {
+    throw new Error("Hosted Web URL is not configured");
+  }
   const child = runtime.spawnDetached(
     process.execPath,
     [...process.execArgv, daemonRunnerEntry, ...buildRunnerArgs(options)],
@@ -642,6 +669,8 @@ export async function startLocalDaemonDetached(
   return {
     pid: child.pid ?? null,
     logPath,
+    webUiUrl: config.webUi?.enabled ? resolveWebUiUrl(config.listen) : null,
+    hostedWebUrl,
   };
 }
 

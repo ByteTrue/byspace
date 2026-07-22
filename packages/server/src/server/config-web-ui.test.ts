@@ -26,12 +26,12 @@ describe("daemon web UI config", () => {
     await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
   });
 
-  test("web UI is disabled by default", async () => {
+  test("web UI is enabled by default", async () => {
     const home = await createBySpaceHome({ version: 1 });
 
     const config = loadConfig(home, { env: {} });
 
-    expect(config.webUi.enabled).toBe(false);
+    expect(config.webUi.enabled).toBe(true);
     expectBundledWebUiDistDir(config.webUi.distDir);
   });
 
@@ -45,6 +45,17 @@ describe("daemon web UI config", () => {
 
     expect(config.webUi.enabled).toBe(true);
     expectBundledWebUiDistDir(config.webUi.distDir);
+  });
+
+  test("disables web UI from persisted config", async () => {
+    const home = await createBySpaceHome({
+      version: 1,
+      features: { webUi: { enabled: false } },
+    });
+
+    const config = loadConfig(home, { env: {} });
+
+    expect(config.webUi.enabled).toBe(false);
   });
 
   test("BYSPACE_WEB_UI_ENABLED overrides persisted setting", async () => {

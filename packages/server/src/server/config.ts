@@ -320,7 +320,7 @@ function resolveWebUiConfig(
     cli?.webUiEnabled ??
     parseBooleanEnv(env.BYSPACE_WEB_UI_ENABLED) ??
     persisted.features?.webUi?.enabled ??
-    false;
+    true;
   const rawDistDir = env.BYSPACE_WEB_UI_DIST_DIR ?? persisted.features?.webUi?.distDir;
   const trimmedDistDir = rawDistDir?.trim();
   const distDir = trimmedDistDir

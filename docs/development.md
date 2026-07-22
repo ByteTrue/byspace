@@ -193,31 +193,9 @@ Service proxy hostnames use the double-dash shape: `web--feature-auth--project.l
 
 > The user-facing guide for this feature (enabling it, reverse proxy, TLS, tunnels, security) lives at [public-docs/web-ui.md](../public-docs/web-ui.md). This section is the contributor/build reference for how the artifact is produced and bundled.
 
-The daemon can optionally serve the browser web client from the same HTTP server. This is disabled by default.
+The daemon serves the bundled browser web client from the same HTTP server by default. `byspace daemon start` prints both the local Web UI URL and the configured Hosted Web URL when startup succeeds.
 
-Enable it for a running daemon with:
-
-```bash
-byspace daemon start --web-ui
-```
-
-Or set the environment variable:
-
-```bash
-BYSPACE_WEB_UI_ENABLED=true byspace daemon start
-```
-
-Or persist it in `config.json`:
-
-```json
-{
-  "features": {
-    "webUi": {
-      "enabled": true
-    }
-  }
-}
-```
+Disable it for one launch with `byspace daemon start --no-web-ui`, set `BYSPACE_WEB_UI_ENABLED=false`, or persist `features.webUi.enabled: false` in `config.json`.
 
 When enabled, opening the daemon HTTP origin (for example `http://localhost:6777/`) serves the web app. The same HTTP server continues to serve `/api/*`, `/mcp/*`, `/public/*`, the WebSocket upgrade, and service-proxy routes. Static files load without daemon bearer auth; API and WebSocket calls still enforce auth.
 

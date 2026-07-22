@@ -125,7 +125,7 @@ byspace agent mode <id> plan     # Set plan mode
 
 ```bash
 byspace daemon start             # Start the daemon
-byspace daemon start --web-ui    # Start and serve the bundled web UI
+byspace daemon start --no-web-ui # Start without the bundled web UI
 byspace daemon status            # Check status
 byspace daemon stop              # Stop the daemon
 ```
