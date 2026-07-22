@@ -281,11 +281,8 @@ async function useCodeFont(page: Page, codeFontSize: number): Promise<void> {
           sendBehavior: "interrupt",
           serviceUrlBehavior: "ask",
           terminalScrollbackLines: 10_000,
-          uiFontFamily: "",
-          monoFontFamily: "",
           uiFontSize: 16,
           codeFontSize: fontSize,
-          syntaxTheme: "one",
         }),
       );
     },
