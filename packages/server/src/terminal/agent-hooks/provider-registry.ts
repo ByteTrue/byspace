@@ -5,13 +5,13 @@ import {
   type AgentHookInstallOptions,
   type AgentHookInstallResult,
   type AgentHookProvider,
-  agentHooksAreInstalled,
   installAgentHooks,
   uninstallAgentHooks,
 } from "./agent-hook-installer.js";
 import { claudeAgentHookProvider } from "./claude/claude.js";
 import { codexAgentHookProvider } from "./codex/codex.js";
 import { opencodeAgentHookProvider } from "./opencode/opencode.js";
+import { piAgentHookProvider } from "./pi/pi.js";
 
 export type {
   AgentHookActivityInput,
@@ -23,6 +23,7 @@ export const AGENT_HOOK_PROVIDERS = {
   [claudeAgentHookProvider.id]: claudeAgentHookProvider,
   [codexAgentHookProvider.id]: codexAgentHookProvider,
   [opencodeAgentHookProvider.id]: opencodeAgentHookProvider,
+  [piAgentHookProvider.id]: piAgentHookProvider,
 } satisfies Record<string, AgentHookProvider>;
 
 export type AgentHookProviderId = keyof typeof AGENT_HOOK_PROVIDERS;
@@ -37,33 +38,35 @@ export interface RegisteredAgentHookInstallOptions extends AgentHookInstallOptio
   logger?: AgentHookInstallLogger;
 }
 
-export function installRegisteredAgentHooks(
+export function installRegisteredAgentHook(
+  providerId: AgentHookProviderId,
   options: RegisteredAgentHookInstallOptions = {},
-): AgentHookInstallResult[] {
-  const results: AgentHookInstallResult[] = [];
-  for (const provider of Object.values(AGENT_HOOK_PROVIDERS)) {
-    try {
-      results.push(installAgentHooks(provider, options));
-    } catch (error) {
-      options.logger?.warn(
-        { err: error, provider: provider.id },
-        "Failed to install terminal activity hook provider",
-      );
-    }
+): AgentHookInstallResult | null {
+  const provider = AGENT_HOOK_PROVIDERS[providerId];
+  try {
+    return installAgentHooks(provider, options);
+  } catch (error) {
+    options.logger?.warn(
+      { err: error, provider: provider.id },
+      "Failed to install terminal activity hook provider",
+    );
+    return null;
   }
-  return results;
 }
 
-export function uninstallRegisteredAgentHooks(options: AgentHookInstallOptions = {}): void {
-  for (const provider of Object.values(AGENT_HOOK_PROVIDERS)) {
+export function uninstallRegisteredAgentHook(
+  providerId: AgentHookProviderId,
+  options: RegisteredAgentHookInstallOptions = {},
+): void {
+  const provider = AGENT_HOOK_PROVIDERS[providerId];
+  try {
     uninstallAgentHooks(provider, options);
+  } catch (error) {
+    options.logger?.warn(
+      { err: error, provider: provider.id },
+      "Failed to remove terminal activity hook provider",
+    );
   }
-}
-
-export function registeredAgentHooksAreInstalled(options: AgentHookInstallOptions = {}): boolean {
-  return Object.values(AGENT_HOOK_PROVIDERS).every((provider) =>
-    agentHooksAreInstalled(provider, options),
-  );
 }
 
 export async function resolveHookActivity(

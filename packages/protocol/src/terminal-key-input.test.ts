@@ -24,7 +24,9 @@ describe("encodeTerminalKeyInput", () => {
   });
 
   it("encodes Enter with modifiers using CSI u after Kitty keyboard mode is active", () => {
-    const options = { inputMode: { kittyKeyboardFlags: 7, win32InputMode: false } };
+    const options = {
+      inputMode: { kittyKeyboardFlags: 7, bracketedPasteMode: false, win32InputMode: false },
+    };
 
     expect(encodeTerminalKeyInput({ key: "Enter", shift: true }, options)).toBe("\x1b[13;2u");
     expect(encodeTerminalKeyInput({ key: "Enter", ctrl: true }, options)).toBe("\x1b[13;5u");
@@ -36,7 +38,9 @@ describe("encodeTerminalKeyInput", () => {
   });
 
   it("encodes Shift+Enter using Win32 input mode when ConPTY requests it", () => {
-    const options = { inputMode: { kittyKeyboardFlags: 0, win32InputMode: true } };
+    const options = {
+      inputMode: { kittyKeyboardFlags: 0, bracketedPasteMode: false, win32InputMode: true },
+    };
 
     expect(encodeTerminalKeyInput({ key: "Enter", shift: true }, options)).toBe(
       "\x1b[13;28;13;1;16;1_",
@@ -44,7 +48,9 @@ describe("encodeTerminalKeyInput", () => {
   });
 
   it("prefers Win32 input mode over CSI u when both modes are active", () => {
-    const options = { inputMode: { kittyKeyboardFlags: 7, win32InputMode: true } };
+    const options = {
+      inputMode: { kittyKeyboardFlags: 7, bracketedPasteMode: false, win32InputMode: true },
+    };
 
     expect(encodeTerminalKeyInput({ key: "Enter", shift: true }, options)).toBe(
       "\x1b[13;28;13;1;16;1_",

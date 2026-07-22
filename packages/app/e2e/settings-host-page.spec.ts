@@ -56,6 +56,21 @@ test.describe("Settings host page", () => {
     await expectSettingsHeader(page, "Providers");
   });
 
+  test("terminals section scopes hooks by provider and includes Pi profile", async ({ page }) => {
+    const serverId = getServerId();
+
+    await gotoAppShell(page);
+    await openSettings(page);
+    await openSettingsHost(page, serverId);
+    await openHostSection(page, serverId, "terminals");
+
+    await expectSettingsHeader(page, "Terminals");
+    for (const providerId of ["claude", "codex", "opencode", "pi"]) {
+      await expect(page.getByTestId(`terminal-agent-hook-${providerId}`)).toBeVisible();
+    }
+    await expect(page.getByTestId("terminal-profile-row-pi")).toBeVisible();
+  });
+
   test("host section shows the host label and restart/remove action cards", async ({ page }) => {
     const serverId = getServerId();
 

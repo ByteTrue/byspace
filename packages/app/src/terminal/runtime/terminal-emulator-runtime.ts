@@ -31,6 +31,14 @@ import {
 
 export type TerminalOutputData = Uint8Array;
 
+export interface TerminalClipboardImage {
+  bytes: Uint8Array;
+  mimeType: string;
+  fileExtension: string;
+}
+
+export type TerminalPasteErrorReason = "clipboard-read-failed" | "image-too-large";
+
 export interface TerminalEmulatorRuntimeMountInput {
   root: HTMLDivElement;
   host: HTMLDivElement;
@@ -61,6 +69,8 @@ export interface TerminalEmulatorRuntimeCallbacks {
     disposition: "main" | "side",
   ) => Promise<void> | void;
   onInputModeChange?: (state: TerminalInputModeState) => Promise<void> | void;
+  onPasteImage?: (image: TerminalClipboardImage) => Promise<string | null>;
+  onPasteError?: (reason: TerminalPasteErrorReason) => Promise<void> | void;
 }
 
 interface TerminalEmulatorRuntimeDisposables {
@@ -115,6 +125,93 @@ const OUTPUT_OPERATION_TIMEOUT_MS = 5_000;
 const EMPTY_TERMINAL_OUTPUT = new Uint8Array(0);
 const RESET_TERMINAL_OUTPUT = new Uint8Array([0x1b, 0x63]);
 const terminalOutputEncoder = new TextEncoder();
+const MAX_TERMINAL_CLIPBOARD_IMAGE_BYTES = 50 * 1024 * 1024;
+const TERMINAL_CLIPBOARD_IMAGE_EXTENSIONS: Readonly<Record<string, string>> = {
+  "image/png": "png",
+  "image/jpeg": "jpg",
+  "image/gif": "gif",
+  "image/webp": "webp",
+};
+const TERMINAL_LINE_BREAK_RE = /[\r\n]/;
+const BRACKETED_PASTE_START = "\x1b[200~";
+const BRACKETED_PASTE_END = "\x1b[201~";
+
+interface TerminalClipboardImageSelection {
+  readBlob: () => Promise<Blob>;
+  mimeType: string;
+  fileExtension: string;
+}
+
+function findTerminalClipboardImage(
+  items: readonly ClipboardItem[],
+): TerminalClipboardImageSelection | null {
+  for (const item of items) {
+    const mimeType = item.types.find((type) => TERMINAL_CLIPBOARD_IMAGE_EXTENSIONS[type]);
+    const fileExtension = mimeType ? TERMINAL_CLIPBOARD_IMAGE_EXTENSIONS[mimeType] : undefined;
+    if (mimeType && fileExtension) {
+      return { readBlob: () => item.getType(mimeType), mimeType, fileExtension };
+    }
+  }
+  return null;
+}
+
+function findTerminalClipboardImageFile(
+  items: DataTransferItemList,
+): TerminalClipboardImageSelection | null {
+  for (let index = 0; index < items.length; index += 1) {
+    const item = items[index];
+    const fileExtension = TERMINAL_CLIPBOARD_IMAGE_EXTENSIONS[item.type];
+    if (fileExtension) {
+      const blob = item.getAsFile();
+      if (blob) {
+        return { readBlob: async () => blob, mimeType: item.type, fileExtension };
+      }
+    }
+  }
+  return null;
+}
+
+function isTerminalPasteShortcut(event: KeyboardEvent): boolean {
+  return (
+    event.key.toLowerCase() === "v" &&
+    !event.shiftKey &&
+    !event.altKey &&
+    (isMac ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey)
+  );
+}
+
+function isWindowsPlatform(): boolean {
+  return (
+    /Windows/i.test(navigator.userAgent ?? "") ||
+    /^Win/i.test((navigator as Navigator & { platform?: string }).platform ?? "")
+  );
+}
+
+function pasteTerminalText(
+  terminal: Terminal,
+  text: string,
+  input?: { forceBracketed?: boolean },
+): void {
+  if (!input?.forceBracketed) {
+    terminal.paste(text);
+    return;
+  }
+
+  const normalized = text.replace(/\r?\n/g, "\r").replaceAll("\x1b", "\u241b");
+  terminal.input(`${BRACKETED_PASTE_START}${normalized}${BRACKETED_PASTE_END}`, true);
+}
+
+function isTerminalWindowsImagePasteShortcut(event: KeyboardEvent): boolean {
+  const isWindows = isWindowsPlatform();
+  return (
+    isWindows &&
+    event.key.toLowerCase() === "v" &&
+    event.altKey &&
+    !event.ctrlKey &&
+    !event.metaKey &&
+    !event.shiftKey
+  );
+}
 
 export function encodeTerminalOutput(text: string): TerminalOutputData {
   return terminalOutputEncoder.encode(text);
@@ -198,6 +295,7 @@ export class TerminalEmulatorRuntime {
   private readonly inputModeTracker = new TerminalInputModeTracker();
   private lastInputModeState: TerminalInputModeState = this.inputModeTracker.getState();
   private themeBackgroundElements: HTMLElement[] = [];
+  private clipboardPasteQueue: Promise<void> = Promise.resolve();
 
   private handleVisibilityRestore = (): void => {
     if (typeof document !== "undefined" && document.visibilityState !== "visible") {
@@ -218,6 +316,90 @@ export class TerminalEmulatorRuntime {
 
   setPendingModifiers(input: { pendingModifiers: PendingTerminalModifiers }): void {
     this.pendingModifiers = input.pendingModifiers;
+  }
+
+  private queueClipboardPaste(operation: () => Promise<void>): void {
+    const queued = this.clipboardPasteQueue.then(operation);
+    this.clipboardPasteQueue = queued.catch(() => {});
+  }
+
+  private async pasteTerminalClipboardImage(
+    terminal: Terminal,
+    image: TerminalClipboardImageSelection,
+  ): Promise<void> {
+    if (this.terminal !== terminal) {
+      return;
+    }
+
+    try {
+      const blob = await image.readBlob();
+      if (this.terminal !== terminal) {
+        return;
+      }
+      if (blob.size > MAX_TERMINAL_CLIPBOARD_IMAGE_BYTES) {
+        this.callbacks.onPasteError?.("image-too-large");
+        return;
+      }
+
+      const bytes = new Uint8Array(await blob.arrayBuffer());
+      if (this.terminal !== terminal) {
+        return;
+      }
+
+      const path = await this.callbacks.onPasteImage?.({
+        bytes,
+        mimeType: image.mimeType,
+        fileExtension: image.fileExtension,
+      });
+      if (this.terminal !== terminal) {
+        return;
+      }
+      if (path) {
+        pasteTerminalText(terminal, path, { forceBracketed: true });
+      }
+    } catch {
+      if (this.terminal === terminal) {
+        this.callbacks.onPasteError?.("clipboard-read-failed");
+      }
+    }
+  }
+
+  private forwardWindowsImagePasteShortcut(terminal: Terminal): void {
+    if (this.terminal !== terminal) {
+      return;
+    }
+    void this.callbacks.onTerminalKey?.({
+      key: "v",
+      ctrl: false,
+      shift: false,
+      alt: true,
+      meta: false,
+    });
+  }
+
+  private async pasteWindowsClipboardImage(terminal: Terminal): Promise<void> {
+    const clipboard = navigator.clipboard;
+    if (!clipboard || typeof clipboard.read !== "function" || !this.callbacks.onPasteImage) {
+      this.forwardWindowsImagePasteShortcut(terminal);
+      return;
+    }
+
+    try {
+      const clipboardItems = await clipboard.read();
+      if (this.terminal !== terminal) {
+        return;
+      }
+      const image = findTerminalClipboardImage(clipboardItems);
+      if (!image) {
+        this.forwardWindowsImagePasteShortcut(terminal);
+        return;
+      }
+      await this.pasteTerminalClipboardImage(terminal, image);
+    } catch {
+      if (this.terminal === terminal) {
+        this.callbacks.onPasteError?.("clipboard-read-failed");
+      }
+    }
   }
 
   mount(input: TerminalEmulatorRuntimeMountInput): void {
@@ -404,9 +586,41 @@ export class TerminalEmulatorRuntime {
       this.callbacks.onInput?.(data);
     });
 
+    const pasteEventHandler = (event: ClipboardEvent): void => {
+      const image = event.clipboardData
+        ? findTerminalClipboardImageFile(event.clipboardData.items)
+        : null;
+      if (image) {
+        event.preventDefault();
+        event.stopPropagation();
+        this.queueClipboardPaste(() => this.pasteTerminalClipboardImage(terminal, image));
+        return;
+      }
+
+      const text = event.clipboardData?.getData("text/plain") ?? "";
+      if (text.length > 0) {
+        event.preventDefault();
+        event.stopPropagation();
+        pasteTerminalText(terminal, text, {
+          forceBracketed: isWindowsPlatform() && TERMINAL_LINE_BREAK_RE.test(text),
+        });
+      }
+    };
+    input.host.addEventListener("paste", pasteEventHandler, true);
+
     terminal.attachCustomKeyEventHandler((event) => {
       if (event.type !== "keydown" || event.isComposing) {
         return true;
+      }
+
+      if (isTerminalPasteShortcut(event)) {
+        return true;
+      }
+
+      if (isTerminalWindowsImagePasteShortcut(event)) {
+        event.preventDefault();
+        this.queueClipboardPaste(() => this.pasteWindowsClipboardImage(terminal));
+        return false;
       }
 
       if (!isMac && event.ctrlKey && !event.shiftKey && !event.altKey && !event.metaKey) {
@@ -415,18 +629,6 @@ export class TerminalEmulatorRuntime {
         // Ctrl+C: copy selection to clipboard if text is selected, otherwise let xterm send SIGINT
         if (key === "c" && terminal.hasSelection()) {
           void navigator.clipboard.writeText(terminal.getSelection());
-          return false;
-        }
-
-        // Ctrl+V: paste from clipboard into terminal
-        if (key === "v") {
-          event.preventDefault();
-          void navigator.clipboard.readText().then((text) => {
-            if (text) {
-              terminal.paste(text);
-            }
-            return;
-          });
           return false;
         }
 
@@ -534,6 +736,7 @@ export class TerminalEmulatorRuntime {
     const disposables: TerminalEmulatorRuntimeDisposables = {
       disposeInput: () => {
         inputDisposable.dispose();
+        input.host.removeEventListener("paste", pasteEventHandler, true);
       },
       disconnectResizeObserver: () => {
         resizeObserver.disconnect();
@@ -783,6 +986,7 @@ export class TerminalEmulatorRuntime {
     this.fitAndEmitResize = null;
     this.lastSize = null;
     this.themeBackgroundElements = [];
+    this.clipboardPasteQueue = Promise.resolve();
     this.suppressInput = false;
     this.inputModeDecoder.decode();
     this.inputModeTracker.reset();

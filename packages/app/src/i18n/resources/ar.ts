@@ -420,6 +420,8 @@ export const ar: TranslationResources = {
     terminal: {
       hostDisconnected: "Host غير متصل",
       unableToSubscribe: "غير قادر على الاشتراك في المحطة",
+      clipboardReadFailed: "تعذرت قراءة الحافظة.",
+      clipboardImageTooLarge: "صورة الحافظة كبيرة جدًا (الحد الأقصى 50 ميجابايت).",
     },
     tabs: {
       loading: "تحميل...",

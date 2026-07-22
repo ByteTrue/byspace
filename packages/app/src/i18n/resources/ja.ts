@@ -424,6 +424,8 @@ export const ja: TranslationResources = {
     terminal: {
       hostDisconnected: "ホストが接続されていません",
       unableToSubscribe: "ターミナルに接続できません",
+      clipboardReadFailed: "クリップボードを読み取れませんでした。",
+      clipboardImageTooLarge: "クリップボードの画像が大きすぎます（最大50MB）。",
     },
     tabs: {
       loading: "読み込み中...",

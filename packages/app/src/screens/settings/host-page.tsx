@@ -15,7 +15,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Alert, Pressable, Text, View } from "react-native";
 import { StyleSheet, useUnistyles, withUnistyles } from "react-native-unistyles";
-import type { TerminalProfile } from "@bytetrue/byspace-protocol/messages";
+import type {
+  MutableDaemonConfigPatch,
+  TerminalProfile,
+} from "@bytetrue/byspace-protocol/messages";
 import {
   getTerminalProfileIcon,
   resolveTerminalProfiles,
@@ -84,6 +87,16 @@ const moveDownIcon = <ThemedArrowDown size={ICON_SIZE.sm} uniProps={mutedColorMa
 const editProfileIcon = <ThemedProfilePencil size={ICON_SIZE.sm} uniProps={mutedColorMapping} />;
 const removeProfileIcon = <ThemedTrash2 size={ICON_SIZE.sm} uniProps={destructiveColorMapping} />;
 const addProfileIcon = <ThemedPlus size={ICON_SIZE.sm} uniProps={mutedColorMapping} />;
+
+const TERMINAL_AGENT_HOOK_PROVIDERS = [
+  { id: "claude", label: "Claude Code" },
+  { id: "codex", label: "Codex" },
+  { id: "opencode", label: "OpenCode" },
+  { id: "pi", label: "Pi" },
+] as const;
+
+type TerminalAgentHookProviderId = (typeof TERMINAL_AGENT_HOOK_PROVIDERS)[number]["id"];
+const TERMINAL_AGENT_HOOK_BORDERED_ROW_STYLE = [settingsStyles.row, settingsStyles.rowBorder];
 
 function formatHostConnectionLabel(connection: HostConnection, t: TFunction): string {
   if (connection.type === "relay") {
@@ -1033,40 +1046,116 @@ function AutoArchiveMergedWorkspacesCard({ serverId }: { serverId: string }) {
 
 function EnableTerminalAgentHooksCard({ serverId }: { serverId: string }) {
   const isConnected = useHostRuntimeIsConnected(serverId);
-  const { config, patchConfig } = useDaemonConfig(serverId);
+  const supportsProviderSettings = useSessionStore(
+    (state) => state.sessions[serverId]?.serverInfo?.features?.terminalAgentHookProviders === true,
+  );
+  const { config, isLoading, patchConfig } = useDaemonConfig(serverId);
+  const [isUpdating, setIsUpdating] = useState(false);
 
-  const handleValueChange = useCallback(
-    (next: boolean) => {
-      void patchConfig({ enableTerminalAgentHooks: next }).catch((error) => {
-        console.error("[HostPage] Failed to update terminal agent hooks", error);
-        Alert.alert(
-          "Unable to update terminal agent hooks",
-          error instanceof Error ? error.message : String(error),
-        );
+  const reportUpdateError = useCallback((error: unknown) => {
+    console.error("[HostPage] Failed to update terminal agent hooks", error);
+    Alert.alert(
+      "Unable to update terminal agent hooks",
+      error instanceof Error ? error.message : String(error),
+    );
+  }, []);
+
+  const updateHooks = useCallback(
+    (patch: MutableDaemonConfigPatch) => {
+      setIsUpdating(true);
+      void patchConfig(patch)
+        .catch(reportUpdateError)
+        .finally(() => setIsUpdating(false));
+    },
+    [patchConfig, reportUpdateError],
+  );
+
+  const handleProviderValueChange = useCallback(
+    (providerId: TerminalAgentHookProviderId, nextValue: boolean) => {
+      if (!config) return;
+      const current = Object.fromEntries(
+        TERMINAL_AGENT_HOOK_PROVIDERS.map(({ id }) => [
+          id,
+          config.terminalAgentHooks?.[id] ?? config.enableTerminalAgentHooks,
+        ]),
+      ) as Record<TerminalAgentHookProviderId, boolean>;
+      const terminalAgentHooks = { ...current, [providerId]: nextValue };
+      updateHooks({
+        terminalAgentHooks,
+        enableTerminalAgentHooks: Object.values(terminalAgentHooks).some(Boolean),
       });
     },
-    [patchConfig],
+    [config, updateHooks],
+  );
+  const providerValueChangeHandlers = useMemo(
+    () =>
+      Object.fromEntries(
+        TERMINAL_AGENT_HOOK_PROVIDERS.map(({ id }) => [
+          id,
+          (nextValue: boolean) => handleProviderValueChange(id, nextValue),
+        ]),
+      ) as Record<TerminalAgentHookProviderId, (nextValue: boolean) => void>,
+    [handleProviderValueChange],
+  );
+
+  const handleLegacyValueChange = useCallback(
+    (nextValue: boolean) => {
+      updateHooks({ enableTerminalAgentHooks: nextValue });
+    },
+    [updateHooks],
   );
 
   if (!isConnected) return null;
 
+  if (!supportsProviderSettings) {
+    return (
+      <View style={settingsStyles.card} testID="host-page-terminal-agent-hooks-card">
+        <View style={settingsStyles.row}>
+          <View style={settingsStyles.rowContent}>
+            <Text style={settingsStyles.rowTitle}>Enable terminal agent hooks</Text>
+            <Text style={settingsStyles.rowHint}>
+              Get notifications and status from terminal agents. This installs hooks in your agent
+              config files.
+            </Text>
+          </View>
+          <Switch
+            value={config?.enableTerminalAgentHooks === true}
+            onValueChange={handleLegacyValueChange}
+            disabled={isLoading || isUpdating || config == null}
+            accessibilityLabel="Enable terminal agent hooks"
+            testID="host-page-terminal-agent-hooks-switch"
+          />
+        </View>
+      </View>
+    );
+  }
+
   return (
     <View style={settingsStyles.card} testID="host-page-terminal-agent-hooks-card">
-      <View style={settingsStyles.row}>
-        <View style={settingsStyles.rowContent}>
-          <Text style={settingsStyles.rowTitle}>Enable terminal agent hooks</Text>
-          <Text style={settingsStyles.rowHint}>
-            Get notifications and status from terminal agents. This installs hooks in your agent
-            config files.
-          </Text>
+      {TERMINAL_AGENT_HOOK_PROVIDERS.map(({ id, label }, index) => (
+        <View
+          key={id}
+          style={index > 0 ? TERMINAL_AGENT_HOOK_BORDERED_ROW_STYLE : settingsStyles.row}
+        >
+          <View style={terminalProfileStyles.iconWrapper}>
+            <ThemedDynamicProviderIcon
+              iconKey={id}
+              size={ICON_SIZE.md}
+              uniProps={mutedColorMapping}
+            />
+          </View>
+          <View style={settingsStyles.rowContent}>
+            <Text style={settingsStyles.rowTitle}>{label}</Text>
+          </View>
+          <Switch
+            value={config?.terminalAgentHooks?.[id] ?? config?.enableTerminalAgentHooks ?? false}
+            onValueChange={providerValueChangeHandlers[id]}
+            disabled={isLoading || isUpdating || config == null}
+            accessibilityLabel={`Enable ${label} terminal agent hook`}
+            testID={`terminal-agent-hook-${id}`}
+          />
         </View>
-        <Switch
-          value={config?.enableTerminalAgentHooks === true}
-          onValueChange={handleValueChange}
-          accessibilityLabel="Enable terminal agent hooks"
-          testID="host-page-terminal-agent-hooks-switch"
-        />
-      </View>
+      ))}
     </View>
   );
 }
@@ -1641,7 +1730,7 @@ export function HostTerminalsPage({ serverId }: { serverId: string }) {
 
   return (
     <View>
-      <SettingsSection title="Terminal agents">
+      <SettingsSection title="Terminal agent hooks">
         <EnableTerminalAgentHooksCard serverId={serverId} />
       </SettingsSection>
       <TerminalProfilesSection serverId={serverId} />

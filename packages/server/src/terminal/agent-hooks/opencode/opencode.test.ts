@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -66,6 +66,33 @@ describe("OpenCode terminal agent hooks", () => {
     expect(result).toEqual({ configPath, changed: true });
     expect(existsSync(configPath)).toBe(false);
     expect(agentHooksAreInstalled(opencodeAgentHookProvider, { configDir })).toBe(false);
+  });
+
+  it("updates the exact legacy BySpace plugin source", () => {
+    const configDir = createTempDir("byspace-opencode-config-legacy-");
+    const configPath = resolveAgentHookConfigPath(opencodeAgentHookProvider, { configDir });
+    mkdirSync(join(configDir, "plugins"), { recursive: true });
+    writeFileSync(
+      configPath,
+      OPENCODE_PLUGIN_SOURCE.replace(/^\/\/ byspace\.opencode-terminal-activity\n/, ""),
+    );
+
+    expect(installAgentHooks(opencodeAgentHookProvider, { configDir }).changed).toBe(true);
+    expect(readFileSync(configPath, "utf8")).toBe(OPENCODE_PLUGIN_SOURCE);
+  });
+
+  it("preserves a foreign same-name plugin containing terminal environment names", () => {
+    const configDir = createTempDir("byspace-opencode-config-foreign-");
+    const configPath = resolveAgentHookConfigPath(opencodeAgentHookProvider, { configDir });
+    const source = "console.log(process.env.BYSPACE_TERMINAL_ID);\n";
+    mkdirSync(join(configDir, "plugins"), { recursive: true });
+    writeFileSync(configPath, source);
+
+    expect(() => installAgentHooks(opencodeAgentHookProvider, { configDir })).toThrow(
+      "Refusing to overwrite non-BySpace plugin file",
+    );
+    expect(uninstallAgentHooks(opencodeAgentHookProvider, { configDir }).changed).toBe(false);
+    expect(readFileSync(configPath, "utf8")).toBe(source);
   });
 
   it("prefers OPENCODE_CONFIG_DIR over the XDG config home", () => {

@@ -1,0 +1,56 @@
+{
+  "environment": {
+    "date": "2026-07-21",
+    "machine": "same macOS host",
+    "browser": "Chromium 145.0.7632.6 headless",
+    "browserUserAgent": "Desktop Chrome (Windows UA) for both products",
+    "viewport": "1280x720",
+    "transport": "loopback Direct",
+    "runsPerProduct": 5,
+    "renderer": "xterm WebGL (one canvas)"
+  },
+  "orca": {
+    "grid": "75x41",
+    "options": {
+      "fontSize": 14,
+      "fontWeight": 500,
+      "fontWeightBold": 700,
+      "lineHeight": 1,
+      "minimumContrastRatio": 4.5
+    },
+    "idleKeydownToCommitP50Ms": [17, 16.8, 17, 16.7, 16.6],
+    "idleKeydownToCommitP95Ms": [17.9, 18.3, 17.7, 18.2, 18],
+    "loadedKeydownToCommitP50Ms": [17.5, 16.8, 14.7, 17.9, 17.5],
+    "loadedKeydownToCommitP95Ms": [26.1, 24.7, 27.2, 26.3, 27.1],
+    "tuiKeydownToCommitP50Ms": [17.3, 17.7, 17.4, 17.4, 17.3],
+    "tuiKeydownToCommitP95Ms": [19, 19.1, 19.2, 19.1, 18.9],
+    "fiftyThousandLinesParsedMs": [141, 138, 139.5, 132.7, 143.3],
+    "fiftyThousandLinesPaintedMs": [148.1, 149.9, 167.5, 162.1, 174.8],
+    "throughputMBps": [1.95, 2, 1.97, 2.08, 1.92],
+    "maxRafGapMs": [26.3, 25.9, 24.9, 25.4, 26.8],
+    "resizeToPaintP50Ms": [49.3, 41.5, 41.4, 41.2, 49.3],
+    "resizeToPaintP95Ms": [67.7, 74.7, 65.4, 59.1, 65.9]
+  },
+  "byspace": {
+    "grid": "131x45",
+    "options": {
+      "fontSize": 12,
+      "fontWeight": "normal",
+      "fontWeightBold": "bold",
+      "lineHeight": 1,
+      "minimumContrastRatio": 1
+    },
+    "idleKeydownToCommitP50Ms": [4.7, 7.8, 8.3, 6.7, 8.1],
+    "idleKeydownToCommitP95Ms": [9, 9.3, 10.2, 8.6, 9.2],
+    "loadedKeydownToCommitP50Ms": [5.8, 6.9, 6.9, 6.1, 7],
+    "loadedKeydownToCommitP95Ms": [11, 11.9, 10.3, 11.4, 10.3],
+    "tuiKeydownToCommitP50Ms": [8.6, 8.7, 8.5, 8.5, 8.5],
+    "tuiKeydownToCommitP95Ms": [9.4, 10, 9, 10.4, 9.1],
+    "fiftyThousandLinesParsedMs": [84.5, 91.9, 85.7, 98.1, 94.2],
+    "fiftyThousandLinesPaintedMs": [94.7, 106.6, 101.7, 108.7, 109.3],
+    "throughputMBps": [3.26, 3, 3.21, 2.81, 2.92],
+    "maxRafGapMs": [10.3, 10.3, 9.7, 10.2, 10],
+    "resizeToPaintP50Ms": [14.2, 14, 13.4, 14.3, 14.8],
+    "resizeToPaintP95Ms": [21.5, 21.3, 19.2, 23.8, 23.8]
+  }
+}

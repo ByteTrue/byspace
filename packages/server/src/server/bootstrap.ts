@@ -347,6 +347,7 @@ export interface BySpaceDaemonConfig {
   mcpInjectIntoAgents?: boolean;
   autoArchiveAfterMerge?: boolean;
   enableTerminalAgentHooks?: boolean;
+  terminalAgentHooks?: MutableDaemonConfig["terminalAgentHooks"];
   appendSystemPrompt?: string;
   terminalProfiles?: TerminalProfile[];
   staticDir: string;
@@ -466,6 +467,7 @@ function createInitialMutableDaemonConfig(config: BySpaceDaemonConfig): MutableD
     },
     autoArchiveAfterMerge: config.autoArchiveAfterMerge ?? false,
     enableTerminalAgentHooks: config.enableTerminalAgentHooks ?? false,
+    terminalAgentHooks: config.terminalAgentHooks,
     appendSystemPrompt: config.appendSystemPrompt ?? "",
   };
 

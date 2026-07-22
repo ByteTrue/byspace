@@ -423,6 +423,8 @@ export const ru: TranslationResources = {
     terminal: {
       hostDisconnected: "Host не подключен",
       unableToSubscribe: "Невозможно подписаться на терминал",
+      clipboardReadFailed: "Не удалось прочитать буфер обмена.",
+      clipboardImageTooLarge: "Изображение из буфера обмена слишком велико (максимум 50 МБ).",
     },
     tabs: {
       loading: "Загрузка...",

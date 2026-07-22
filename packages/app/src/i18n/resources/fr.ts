@@ -423,6 +423,8 @@ export const fr: TranslationResources = {
     terminal: {
       hostDisconnected: "Hostn'est pas connecté",
       unableToSubscribe: "Impossible de s'abonner au terminal",
+      clipboardReadFailed: "Impossible de lire le presse-papiers.",
+      clipboardImageTooLarge: "L’image du presse-papiers est trop grande (50 Mo maximum).",
     },
     tabs: {
       loading: "Chargement...",

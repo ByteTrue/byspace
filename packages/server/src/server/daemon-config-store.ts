@@ -31,6 +31,43 @@ export interface DaemonConfigChangeDetails {
 type ConfigListener = (config: MutableDaemonConfig, details: DaemonConfigChangeDetails) => void;
 type FieldChangeHandler = (value: unknown) => void;
 
+const TERMINAL_AGENT_HOOK_PROVIDER_IDS = ["claude", "codex", "opencode", "pi"] as const;
+
+function normalizeTerminalAgentHookPatch(
+  patch: MutableDaemonConfigPatch,
+): MutableDaemonConfigPatch {
+  if (
+    patch.terminalAgentHooks !== undefined ||
+    typeof patch.enableTerminalAgentHooks !== "boolean"
+  ) {
+    return patch;
+  }
+
+  return {
+    ...patch,
+    terminalAgentHooks: Object.fromEntries(
+      TERMINAL_AGENT_HOOK_PROVIDER_IDS.map((providerId) => [
+        providerId,
+        patch.enableTerminalAgentHooks,
+      ]),
+    ),
+  };
+}
+
+function normalizeTerminalAgentHookAggregate(
+  config: MutableDaemonConfig,
+  patch: MutableDaemonConfigPatch,
+): MutableDaemonConfig {
+  if (patch.terminalAgentHooks === undefined) return config;
+
+  return {
+    ...config,
+    enableTerminalAgentHooks: TERMINAL_AGENT_HOOK_PROVIDER_IDS.some(
+      (providerId) => config.terminalAgentHooks?.[providerId] ?? config.enableTerminalAgentHooks,
+    ),
+  };
+}
+
 function getLogger(logger: LoggerLike | undefined): LoggerLike | undefined {
   return logger?.child({ module: "daemon-config-store" });
 }
@@ -178,10 +215,15 @@ export class DaemonConfigStore {
   }
 
   public patch(partial: MutableDaemonConfigPatch): MutableDaemonConfig {
-    const parsedPatch = MutableDaemonConfigPatchSchema.parse(partial);
+    const parsedPatch = normalizeTerminalAgentHookPatch(
+      MutableDaemonConfigPatchSchema.parse(partial),
+    );
     const { removeProviders = [], ...configPatch } = parsedPatch;
     const removedProviders = Array.from(new Set(removeProviders));
-    const merged = deepMerge(this.current, configPatch);
+    const merged = normalizeTerminalAgentHookAggregate(
+      deepMerge(this.current, configPatch),
+      parsedPatch,
+    );
     const next = MutableDaemonConfigSchema.parse(
       omitMetadataGenerationProvidersFromConfig(
         omitProvidersFromConfig(merged, removedProviders),
@@ -309,6 +351,9 @@ function mergeMutableConfigIntoPersistedConfig(params: {
       },
       autoArchiveAfterMerge: mutable.autoArchiveAfterMerge,
       enableTerminalAgentHooks: mutable.enableTerminalAgentHooks,
+      ...(mutable.terminalAgentHooks !== undefined
+        ? { terminalAgentHooks: mutable.terminalAgentHooks }
+        : {}),
       appendSystemPrompt: mutable.appendSystemPrompt,
       ...(mutable.terminalProfiles !== undefined
         ? { terminalProfiles: mutable.terminalProfiles }

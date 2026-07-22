@@ -13,6 +13,7 @@ import { useTranslation } from "react-i18next";
 import { useHostRuntimeClient, useHostRuntimeIsConnected } from "@/runtime/host-runtime";
 import { useAppVisible } from "@/hooks/use-app-visible";
 import { useStableEvent } from "@/hooks/use-stable-event";
+import { useToast } from "@/contexts/toast-context";
 import {
   hasPendingTerminalModifiers,
   normalizeTerminalTransportKey,
@@ -30,6 +31,10 @@ import {
   type TerminalStreamControllerStatus,
 } from "@/terminal/runtime/terminal-stream-controller";
 import { resolveTerminalRestoreOptions } from "@/terminal/runtime/terminal-restore-options";
+import type {
+  TerminalClipboardImage,
+  TerminalPasteErrorReason,
+} from "@/terminal/runtime/terminal-emulator-runtime";
 import { usePanelStore } from "@/stores/panel-store";
 import { useSessionStore } from "@/stores/session-store";
 import { toXtermTheme } from "@/utils/to-xterm-theme";
@@ -173,6 +178,7 @@ export function TerminalPane({
   onOpenWorkspaceFile,
 }: TerminalPaneProps) {
   const { t } = useTranslation();
+  const toast = useToast();
   const isAppVisible = useAppVisible();
   const { theme } = useUnistyles();
   const { settings } = useAppSettings();
@@ -214,6 +220,7 @@ export function TerminalPane({
   const terminalIdRef = useRef<string>(terminalId);
   const inputModeRef = useRef<TerminalInputModeState>({
     kittyKeyboardFlags: 0,
+    bracketedPasteMode: false,
     win32InputMode: false,
   });
   const pendingTerminalInputRef = useRef<PendingTerminalInput[]>([]);
@@ -225,6 +232,7 @@ export function TerminalPane({
     terminalIdRef.current = terminalId;
     inputModeRef.current = {
       kittyKeyboardFlags: 0,
+      bracketedPasteMode: false,
       win32InputMode: false,
     };
   }, [terminalId]);
@@ -655,6 +663,49 @@ export function TerminalPane({
   const handleInputModeChange = useCallback((state: TerminalInputModeState) => {
     inputModeRef.current = state;
   }, []);
+  const handleTerminalPasteImage = useCallback(
+    async (image: TerminalClipboardImage): Promise<string | null> => {
+      if (!client) {
+        toast.error(t("workspace.terminal.hostDisconnected"));
+        return null;
+      }
+
+      try {
+        const result = await client.uploadFile({
+          fileName: `clipboard-image.${image.fileExtension}`,
+          mimeType: image.mimeType,
+          bytes: image.bytes,
+        });
+        if (result.error) {
+          throw new Error(result.error);
+        }
+        if (!result.file) {
+          throw new Error(t("composer.errors.uploadFailed"));
+        }
+        return result.file.path;
+      } catch (error) {
+        toast.error(
+          error instanceof Error && error.message.length > 0
+            ? error.message
+            : t("composer.errors.uploadFailed"),
+        );
+        return null;
+      }
+    },
+    [client, t, toast],
+  );
+  const handleTerminalPasteError = useCallback(
+    (reason: TerminalPasteErrorReason) => {
+      toast.error(
+        t(
+          reason === "image-too-large"
+            ? "workspace.terminal.clipboardImageTooLarge"
+            : "workspace.terminal.clipboardReadFailed",
+        ),
+      );
+    },
+    [t, toast],
+  );
   const handleResolveLocalFileLink = useCallback(
     async (source: TerminalLocalFileLinkSource): Promise<TerminalLocalFileLinkTarget | null> => {
       const resolution = classifyForResolution(
@@ -773,6 +824,8 @@ export function TerminalPane({
               onResize={handleTerminalResize}
               onTerminalKey={handleTerminalKey}
               onInputModeChange={handleInputModeChange}
+              onPasteImage={handleTerminalPasteImage}
+              onPasteError={handleTerminalPasteError}
               onResolveLocalFileLink={handleResolveLocalFileLink}
               onOpenLocalFileLink={handleOpenLocalFileLink}
               onPendingModifiersConsumed={handlePendingModifiersConsumed}

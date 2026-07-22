@@ -420,6 +420,8 @@ export const zhCN: TranslationResources = {
     terminal: {
       hostDisconnected: "Host 未连接",
       unableToSubscribe: "无法订阅 Terminal",
+      clipboardReadFailed: "无法读取剪贴板。",
+      clipboardImageTooLarge: "剪贴板图片过大（最大 50MB）。",
     },
     tabs: {
       loading: "正在加载...",

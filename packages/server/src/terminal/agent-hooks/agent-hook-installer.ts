@@ -45,6 +45,7 @@ export interface AgentHookConfigFileInstallStrategy<TConfig> extends AgentHookIn
 export interface AgentHookPluginFileInstallStrategy extends AgentHookInstallStrategyBase {
   kind: "plugin-file";
   source: string;
+  legacySources?: readonly string[];
 }
 
 export interface AgentHookConfigFormat<TConfig> {
@@ -89,6 +90,11 @@ export function uninstallAgentHooks<TConfig>(
 ): AgentHookInstallResult {
   if (provider.install.kind === "plugin-file") {
     return uninstallAgentHookPluginFile(provider.install, options);
+  }
+
+  const configPath = resolveAgentHookConfigPath(provider, options);
+  if (!existsSync(configPath)) {
+    return { configPath, changed: false };
   }
 
   const format = provider.install.format;
@@ -149,6 +155,18 @@ export function buildAgentHookWindowsCommand<TConfig>(
   return `if defined BYSPACE_TERMINAL_ID (if defined BYSPACE_HOOK_CLI ("%BYSPACE_HOOK_CLI%" ${hookArgs}) else (byspace ${hookArgs})) else (exit /b 0)`;
 }
 
+function agentHookPluginFileIsOwned(
+  raw: string,
+  install: AgentHookPluginFileInstallStrategy,
+): boolean {
+  return (
+    raw.includes(install.hookMarker) ||
+    install.legacySources?.some(
+      (legacySource) => normalizeRawConfig(legacySource) === normalizeRawConfig(raw),
+    ) === true
+  );
+}
+
 function installAgentHookPluginFile(
   install: AgentHookPluginFileInstallStrategy,
   options: AgentHookInstallOptions,
@@ -157,12 +175,15 @@ function installAgentHookPluginFile(
   const currentRaw = existsSync(configPath) ? readFileSync(configPath, "utf8") : null;
   const nextRaw = normalizeRawConfig(install.source);
 
-  if (currentRaw === null || normalizeRawConfig(currentRaw) !== nextRaw) {
-    writePrivateFileAtomicSync(configPath, nextRaw);
-    return { configPath, changed: true };
+  if (currentRaw !== null && normalizeRawConfig(currentRaw) === nextRaw) {
+    return { configPath, changed: false };
+  }
+  if (currentRaw !== null && !agentHookPluginFileIsOwned(currentRaw, install)) {
+    throw new Error(`Refusing to overwrite non-BySpace plugin file: ${configPath}`);
   }
 
-  return { configPath, changed: false };
+  writePrivateFileAtomicSync(configPath, nextRaw);
+  return { configPath, changed: true };
 }
 
 function uninstallAgentHookPluginFile(
@@ -171,6 +192,10 @@ function uninstallAgentHookPluginFile(
 ): AgentHookInstallResult {
   const configPath = resolveAgentHookInstallPath(install, options);
   if (!existsSync(configPath)) {
+    return { configPath, changed: false };
+  }
+
+  if (!agentHookPluginFileIsOwned(readFileSync(configPath, "utf8"), install)) {
     return { configPath, changed: false };
   }
 

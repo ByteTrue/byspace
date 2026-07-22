@@ -6,7 +6,7 @@ import { delimiter, join } from "node:path";
 import * as pty from "node-pty";
 import { afterEach, describe, expect, it } from "vitest";
 import { resolveBySpaceCliBinDir } from "../../terminal.js";
-import { installRegisteredAgentHooks } from "../provider-registry.js";
+import { installRegisteredAgentHook } from "../provider-registry.js";
 
 interface ActivityPost {
   terminalId: string;
@@ -132,7 +132,7 @@ describe.skipIf(!claudeAvailability.available)(
         throw new Error("Could not resolve byspace CLI bin directory");
       }
 
-      installRegisteredAgentHooks({ configDir });
+      installRegisteredAgentHook("claude", { configDir });
 
       try {
         const claude = pty.spawn(
