@@ -1450,10 +1450,6 @@ export const ja: TranslationResources = {
         options: {
           light: "ライト",
           dark: "ダーク",
-          zinc: "Zinc",
-          midnight: "Midnight",
-          claude: "Claude",
-          ghostty: "Ghostty",
           auto: "システム",
         },
       },
@@ -1463,24 +1459,12 @@ export const ja: TranslationResources = {
       fonts: {
         title: "フォント",
         systemDefault: "システムデフォルト",
-        interfaceFont: "インターフェースフォント",
-        interfaceFontHint:
-          "アプリ全体で使用されます。システムデフォルトにするには空のままにしてください",
-        interfaceFontAccessibility: "インターフェースフォントファミリー",
         interfaceSize: "インターフェースサイズ",
         interfaceSizeAccessibility: "インターフェースフォントサイズ",
-        codeFont: "コードフォント",
-        codeFontHint:
-          "コード、差分、ターミナル出力で使用されます。システムデフォルトにするには空のままにしてください",
-        codeFontAccessibility: "コードフォントファミリー",
         codeSize: "コードサイズ",
         codeSizeAccessibility: "コードフォントサイズ",
       },
       syntax: {
-        title: "構文ハイライト",
-        highlightTheme: "ハイライトテーマ",
-        highlightThemeHint: "コード用の色、アプリのテーマとは独立しています",
-        highlightThemeAccessibility: "ハイライトテーマ: {{value}}",
         previewAccessibility: "構文ハイライトテーマとコードフォントのライブプレビュー",
       },
     },

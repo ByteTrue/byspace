@@ -1462,10 +1462,6 @@ export const ru: TranslationResources = {
         options: {
           light: "Свет",
           dark: "Темный",
-          zinc: "Цинк",
-          midnight: "Полночь",
-          claude: "Клод",
-          ghostty: "Призрачный",
           auto: "Система",
         },
       },
@@ -1475,24 +1471,12 @@ export const ru: TranslationResources = {
       fonts: {
         title: "Шрифты",
         systemDefault: "Система по умолчанию",
-        interfaceFont: "Шрифт интерфейса",
-        interfaceFontHint:
-          "Используется во всем приложении. Оставьте пустым для системного значения по умолчанию.",
-        interfaceFontAccessibility: "Семейство интерфейсных шрифтов",
         interfaceSize: "Размер интерфейса",
         interfaceSizeAccessibility: "Размер шрифта интерфейса",
-        codeFont: "Шрифт кода",
-        codeFontHint:
-          "Используется в коде, различиях и выводе терминала. Оставьте пустым для системного значения по умолчанию.",
-        codeFontAccessibility: "Семейство шрифтов кода",
         codeSize: "Размер кода",
         codeSizeAccessibility: "Размер шрифта кода",
       },
       syntax: {
-        title: "Синтаксис",
-        highlightTheme: "Выделить тему",
-        highlightThemeHint: "Цвета кода независимо от темы приложения",
-        highlightThemeAccessibility: "Выделить тему:{{value}}",
         previewAccessibility:
           "Предварительный просмотр темы синтаксиса и шрифта кода в реальном времени.",
       },

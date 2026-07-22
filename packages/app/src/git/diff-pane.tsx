@@ -27,7 +27,13 @@ import {
   type TextStyle,
 } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
-import { BORDER_WIDTH, ICON_SIZE, SPACING, type Theme } from "@/styles/theme";
+import {
+  BORDER_WIDTH,
+  DEFAULT_MONO_FONT_STACK,
+  ICON_SIZE,
+  SPACING,
+  type Theme,
+} from "@/styles/theme";
 import { useIsCompactFormFactor, WORKSPACE_SECONDARY_HEADER_HEIGHT } from "@/constants/layout";
 import {
   AlignJustify,
@@ -2410,9 +2416,9 @@ export function GitDiffPane({ serverId, workspaceId, cwd, enabled }: GitDiffPane
       layout: effectiveLayout,
       wrapLines,
       codeFontSize,
-      monoFontFamily: appSettings.monoFontFamily,
+      monoFontFamily: DEFAULT_MONO_FONT_STACK,
     }),
-    [appSettings.monoFontFamily, codeFontSize, effectiveLayout, wrapLines],
+    [codeFontSize, effectiveLayout, wrapLines],
   );
   const handleToggleViewMode = useCallback(() => {
     const nextViewMode = viewMode === "flat" ? "tree" : "flat";

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { darkHighlightColors, resolveSyntaxColors } from "@bytetrue/byspace-highlight";
-import { DEFAULT_UI_FONT_STACK } from "@/styles/theme";
+import { DEFAULT_MONO_FONT_STACK, DEFAULT_UI_FONT_STACK } from "@/styles/theme";
 import { applyAppearance, type AppearanceInput } from "./apply-appearance";
 
 // Override the global react-native-unistyles mock (vitest.setup.ts) so that
@@ -8,15 +8,8 @@ import { applyAppearance, type AppearanceInput } from "./apply-appearance";
 const { updateTheme } = vi.hoisted(() => ({ updateTheme: vi.fn() }));
 vi.mock("react-native-unistyles", () => ({ UnistylesRuntime: { updateTheme } }));
 
-// The six registered Unistyles theme keys, in the order applyAppearance patches them.
-const ALL_THEME_KEYS = [
-  "light",
-  "dark",
-  "darkZinc",
-  "darkMidnight",
-  "darkClaude",
-  "darkGhostty",
-] as const;
+// The two registered Unistyles theme keys, in the order applyAppearance patches them.
+const ALL_THEME_KEYS = ["light", "dark"] as const;
 
 // The signature of the updater passed to UnistylesRuntime.updateTheme.
 type ThemeUpdater = (theme: FakeTheme) => FakeTheme;
@@ -64,11 +57,8 @@ function makeFakeTheme(): FakeTheme {
 
 function makeInput(overrides: Partial<AppearanceInput> = {}): AppearanceInput {
   return {
-    uiFontFamily: "",
-    monoFontFamily: "",
     uiFontSize: 16,
-    codeFontSize: 12,
-    syntaxTheme: "one",
+    codeFontSize: 14,
     ...overrides,
   };
 }
@@ -87,20 +77,16 @@ describe("applyAppearance", () => {
   it("patches every registered Unistyles theme exactly once", () => {
     applyAppearance(makeInput());
 
-    expect(updateTheme).toHaveBeenCalledTimes(6);
+    expect(updateTheme).toHaveBeenCalledTimes(2);
     expect(updateTheme.mock.calls.map((call) => call[0])).toEqual([...ALL_THEME_KEYS]);
   });
 
-  it("resolves an empty UI font family to the default stack", () => {
-    applyAppearance(makeInput({ uiFontFamily: "" }));
+  it("always uses the platform default font stacks (fonts are not user-configurable)", () => {
+    applyAppearance(makeInput());
 
-    expect(runCapturedUpdater().fontFamily.ui).toBe(DEFAULT_UI_FONT_STACK);
-  });
-
-  it("passes a non-empty UI font family through trimmed", () => {
-    applyAppearance(makeInput({ uiFontFamily: "  Menlo  " }));
-
-    expect(runCapturedUpdater().fontFamily.ui).toBe("Menlo");
+    const { fontFamily } = runCapturedUpdater();
+    expect(fontFamily.ui).toBe(DEFAULT_UI_FONT_STACK);
+    expect(fontFamily.mono).toBe(DEFAULT_MONO_FONT_STACK);
   });
 
   it("scales the whole UI ramp proportionally while preserving ratios", () => {
@@ -159,15 +145,8 @@ describe("applyAppearance", () => {
     expect(runCapturedUpdater().lineHeight.diff).toBe(Math.round(18 * 1.5)); // 27
   });
 
-  it("swaps colors.syntax to the resolved palette for the named theme", () => {
-    applyAppearance(makeInput({ syntaxTheme: "dracula" }));
-
-    const { colors } = runCapturedUpdater();
-    expect(colors.syntax).toEqual(resolveSyntaxColors("dracula", "dark"));
-  });
-
-  it("resolves a syntax theme using the theme's own color scheme", () => {
-    applyAppearance(makeInput({ syntaxTheme: "github" }));
+  it("always applies the github syntax palette (syntax theme is not user-configurable)", () => {
+    applyAppearance(makeInput());
 
     // makeFakeTheme().colorScheme === "dark" -> github resolves to the dark palette.
     expect(runCapturedUpdater().colors.syntax).toEqual(darkHighlightColors);

@@ -228,7 +228,7 @@ interface AppContainerProps {
   chromeEnabled?: boolean;
 }
 
-const THEME_CYCLE_ORDER: ThemeName[] = ["dark", "zinc", "midnight", "claude", "ghostty", "light"];
+const THEME_CYCLE_ORDER: ThemeName[] = ["light", "dark"];
 
 function AppContainer({ children, chromeEnabled: chromeEnabledOverride }: AppContainerProps) {
   const daemons = useHosts();
@@ -412,20 +412,10 @@ function ProvidersWrapper({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (settingsLoading) return;
     applyAppearance({
-      uiFontFamily: settings.uiFontFamily,
-      monoFontFamily: settings.monoFontFamily,
       uiFontSize: settings.uiFontSize,
       codeFontSize: settings.codeFontSize,
-      syntaxTheme: settings.syntaxTheme,
     });
-  }, [
-    settingsLoading,
-    settings.uiFontFamily,
-    settings.monoFontFamily,
-    settings.uiFontSize,
-    settings.codeFontSize,
-    settings.syntaxTheme,
-  ]);
+  }, [settingsLoading, settings.uiFontSize, settings.codeFontSize]);
 
   return (
     <VoiceProvider>

@@ -214,7 +214,7 @@ describe("translation resources", () => {
     expect(en.settings.diagnostics.title).toBe("Diagnostics");
     expect(en.settings.about.title).toBe("About");
     expect(en.settings.appearance.theme.title).toBe("Theme");
-    expect(en.settings.appearance.fonts.interfaceFont).toBe("Interface font");
+    expect(en.settings.appearance.fonts.interfaceSize).toBe("Interface size");
     expect(en.settings.shortcuts.actions.rebind).toBe("Rebind");
     expect(en.settings.integrations.commandLine.title).toBe("Command line");
     expect(en.settings.integrations.skills.updateAvailable).toBe("Update available");

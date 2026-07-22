@@ -107,7 +107,7 @@ export const baseColors = {
   },
 } as const;
 
-export type ThemeName = "light" | "dark" | "zinc" | "midnight" | "claude" | "ghostty";
+export type ThemeName = "light" | "dark";
 
 // Diff stat colors — light uses muted tones, dark uses the brighter palette values
 const lightDiffColors = {
@@ -344,87 +344,6 @@ const byspaceDarkColors = buildDarkSemanticColors({
   destructive: "#c64f43", // warm red, hue ~7 — reads as red (not pink) against the green tint
 });
 
-// Zinc — neutral gray, no tint
-const zincDarkColors = buildDarkSemanticColors({
-  surface0: "#18181b",
-  surface1: "#1f1f22",
-  surface2: "#27272a",
-  surface3: "#3f3f46",
-  surface4: "#52525b",
-  surfaceDiffEmpty: "#242427",
-  surfaceSidebar: "#131316",
-  surfaceSidebarHover: "#1b1b1e",
-  foregroundMuted: "#a1a1aa",
-  foregroundExtraMuted: "#71717a",
-  scrollbarHandle: "#71717a",
-  border: "#27272a",
-  borderAccent: "#303036",
-  accent: "#e4e4e7",
-  accentBright: "#fafafa",
-  accentForeground: "#18181b", // monochrome zinc accent is near-white — needs dark text
-  destructive: "#c44a4a", // neutral red, hue 0 — clearly red without screaming
-});
-
-// Midnight — subtle blue tint
-const midnightDarkColors = buildDarkSemanticColors({
-  surface0: "#161820",
-  surface1: "#1c1e27",
-  surface2: "#252731",
-  surface3: "#3c3e4c",
-  surface4: "#535564",
-  surfaceDiffEmpty: "#222430",
-  surfaceSidebar: "#121420",
-  surfaceSidebarHover: "#1a1c28",
-  foregroundMuted: "#9a9db0",
-  foregroundExtraMuted: "#6b6e82",
-  scrollbarHandle: "#6b6e82",
-  border: "#242636",
-  borderAccent: "#2e3040",
-  accent: "#3b6fcf",
-  accentBright: "#7eaaeb",
-  destructive: "#c44a52", // red with a hint of cool lean against the blue tint
-});
-
-// Claude — warm neutral with subtle orange undertone
-const claudeDarkColors = buildDarkSemanticColors({
-  surface0: "#1f1f1e",
-  surface1: "#262523",
-  surface2: "#2f2d2b",
-  surface3: "#4a4745",
-  surface4: "#605d5b",
-  surfaceDiffEmpty: "#2a2826",
-  surfaceSidebar: "#1a1918",
-  surfaceSidebarHover: "#222120",
-  foregroundMuted: "#ada9a5",
-  foregroundExtraMuted: "#78746f",
-  scrollbarHandle: "#78746f",
-  border: "#2c2a27",
-  borderAccent: "#36332f",
-  accent: "#d97757",
-  accentBright: "#e89a7f",
-  destructive: "#cf513e", // warm orange-red, hue ~10 — sits with the Claude orange accent
-});
-
-// Ghostty — blue-tinted dark based on Ghostty default background
-const ghosttyDarkColors = buildDarkSemanticColors({
-  surface0: "#282c34",
-  surface1: "#2f333d",
-  surface2: "#383c48",
-  surface3: "#4a4f5e",
-  surface4: "#5b6175",
-  surfaceDiffEmpty: "#323643",
-  surfaceSidebar: "#21252d",
-  surfaceSidebarHover: "#292d36",
-  foregroundMuted: "#c8ccd8",
-  foregroundExtraMuted: "#a0a4b2",
-  scrollbarHandle: "#a0a4b2",
-  border: "#353a47",
-  borderAccent: "#3f4454",
-  accent: "#89b4fa",
-  accentBright: "#b4d0fc",
-  destructive: "#c44a55", // red with slight cool lean against the slate-blue surfaces
-});
-
 export const SPACING = {
   0: 0,
   1: 4,
@@ -443,7 +362,7 @@ export const SPACING = {
 
 export const FONT_SIZE = {
   xs: 12,
-  code: 12,
+  code: 14,
   sm: 14,
   base: 16,
   lg: 18,
@@ -572,10 +491,6 @@ function buildDarkTheme(semanticColors: ReturnType<typeof buildDarkSemanticColor
 }
 
 export const darkTheme = buildDarkTheme(byspaceDarkColors);
-export const darkZincTheme = buildDarkTheme(zincDarkColors);
-export const darkMidnightTheme = buildDarkTheme(midnightDarkColors);
-export const darkClaudeTheme = buildDarkTheme(claudeDarkColors);
-export const darkGhosttyTheme = buildDarkTheme(ghosttyDarkColors);
 
 export const lightTheme = {
   colorScheme: "light" as const,
@@ -613,28 +528,14 @@ export const theme = darkTheme;
 // Export a union type that works for both themes
 export type Theme = typeof darkTheme | typeof lightTheme;
 
-type UnistylesThemeKey =
-  | "light"
-  | "dark"
-  | "darkZinc"
-  | "darkMidnight"
-  | "darkClaude"
-  | "darkGhostty";
+type UnistylesThemeKey = "light" | "dark";
 
 export const THEME_TO_UNISTYLES: Record<ThemeName, UnistylesThemeKey> = {
   light: "light",
   dark: "dark",
-  zinc: "darkZinc",
-  midnight: "darkMidnight",
-  claude: "darkClaude",
-  ghostty: "darkGhostty",
 };
 
 export const THEME_SWATCHES: Record<ThemeName, string> = {
   light: "#ffffff",
   dark: "#2D8B62",
-  zinc: "#808080",
-  midnight: "#4A6BA8",
-  claude: "#D97757",
-  ghostty: "#8caaee",
 };

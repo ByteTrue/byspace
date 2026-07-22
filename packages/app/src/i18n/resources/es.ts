@@ -1471,10 +1471,6 @@ export const es: TranslationResources = {
         options: {
           light: "Luz",
           dark: "Oscuro",
-          zinc: "Zinc",
-          midnight: "Medianoche",
-          claude: "claudio",
-          ghostty: "fantasmal",
           auto: "Sistema",
         },
       },
@@ -1484,24 +1480,12 @@ export const es: TranslationResources = {
       fonts: {
         title: "Fuentes",
         systemDefault: "Valor predeterminado del sistema",
-        interfaceFont: "Fuente de interfaz",
-        interfaceFontHint:
-          "Utilizado en toda la aplicación. Déjelo vacío para el valor predeterminado del sistema.",
-        interfaceFontAccessibility: "Familia de fuentes de interfaz",
         interfaceSize: "Tamaño de la interfaz",
         interfaceSizeAccessibility: "Tamaño de fuente de la interfaz",
-        codeFont: "Fuente de código",
-        codeFontHint:
-          "Se utiliza en código, diferencias y salida del terminal. Déjelo vacío para el valor predeterminado del sistema.",
-        codeFontAccessibility: "Familia de fuentes de código",
         codeSize: "Tamaño del código",
         codeSizeAccessibility: "Tamaño de fuente del código",
       },
       syntax: {
-        title: "Sintaxis",
-        highlightTheme: "Tema destacado",
-        highlightThemeHint: "Colores para el código, independientemente del tema de la aplicación.",
-        highlightThemeAccessibility: "Tema destacado:{{value}}",
         previewAccessibility: "Vista previa en vivo del tema de sintaxis y fuente del código",
       },
     },

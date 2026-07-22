@@ -13,6 +13,7 @@ import { SharedDiffView } from "@/git/diff-pane";
 import { useCommitDiffFiles } from "@/git/use-diff-files";
 import { usePaneContext } from "@/panels/pane-context";
 import type { PanelDescriptor, PanelRegistration } from "@/panels/panel-registry";
+import { DEFAULT_MONO_FONT_STACK } from "@/styles/theme";
 import { useWorkspaceDirectory } from "@/stores/session-store-hooks";
 import type { WorkspaceTabTarget } from "@/stores/workspace-tabs-store";
 
@@ -61,9 +62,9 @@ function CommitDiffPanel() {
       layout: effectiveLayout,
       wrapLines: preferences.wrapLines,
       codeFontSize: settings.codeFontSize,
-      monoFontFamily: settings.monoFontFamily,
+      monoFontFamily: DEFAULT_MONO_FONT_STACK,
     }),
-    [effectiveLayout, preferences.wrapLines, settings.codeFontSize, settings.monoFontFamily],
+    [effectiveLayout, preferences.wrapLines, settings.codeFontSize],
   );
   const commitMode = useMemo(() => ({ kind: "commit" as const }), []);
 

@@ -224,11 +224,8 @@ describe("appearance settings", () => {
 
     const result = await loadAppSettingsFromStorage(deps);
 
-    expect(result.uiFontFamily).toBe("");
-    expect(result.monoFontFamily).toBe("");
     expect(result.uiFontSize).toBe(DEFAULT_UI_FONT_SIZE);
     expect(result.codeFontSize).toBe(DEFAULT_CODE_FONT_SIZE);
-    expect(result.syntaxTheme).toBe("one");
     expect(result.toolCallDetailLevel).toBe("detailed");
   });
 
@@ -296,76 +293,6 @@ describe("appearance settings", () => {
       }),
     });
     expect((await loadAppSettingsFromStorage(bogus)).codeFontSize).toBe(DEFAULT_CODE_FONT_SIZE);
-  });
-
-  it("trims an accepted font family", async () => {
-    const deps = makeDeps({
-      storage: createInMemoryKeyValueStorage({
-        [APP_SETTINGS_KEY]: JSON.stringify({ uiFontFamily: "  Menlo  " }),
-      }),
-    });
-
-    expect((await loadAppSettingsFromStorage(deps)).uiFontFamily).toBe("Menlo");
-  });
-
-  it("keeps an explicit empty font family as the default sentinel", async () => {
-    const deps = makeDeps({
-      storage: createInMemoryKeyValueStorage({
-        [APP_SETTINGS_KEY]: JSON.stringify({ uiFontFamily: "" }),
-      }),
-    });
-
-    expect((await loadAppSettingsFromStorage(deps)).uiFontFamily).toBe("");
-  });
-
-  it("rejects a font family containing CSS-breaking characters", async () => {
-    const deps = makeDeps({
-      storage: createInMemoryKeyValueStorage({
-        [APP_SETTINGS_KEY]: JSON.stringify({ uiFontFamily: "a;b{c}" }),
-      }),
-    });
-
-    expect((await loadAppSettingsFromStorage(deps)).uiFontFamily).toBe("");
-  });
-
-  it("rejects an over-length font family", async () => {
-    const deps = makeDeps({
-      storage: createInMemoryKeyValueStorage({
-        [APP_SETTINGS_KEY]: JSON.stringify({ uiFontFamily: "a".repeat(201) }),
-      }),
-    });
-
-    expect((await loadAppSettingsFromStorage(deps)).uiFontFamily).toBe("");
-  });
-
-  it("accepts a known syntax theme id", async () => {
-    const deps = makeDeps({
-      storage: createInMemoryKeyValueStorage({
-        [APP_SETTINGS_KEY]: JSON.stringify({ syntaxTheme: "dracula" }),
-      }),
-    });
-
-    expect((await loadAppSettingsFromStorage(deps)).syntaxTheme).toBe("dracula");
-  });
-
-  it("drops a removed syntax theme id back to the default", async () => {
-    const deps = makeDeps({
-      storage: createInMemoryKeyValueStorage({
-        [APP_SETTINGS_KEY]: JSON.stringify({ syntaxTheme: "auto" }),
-      }),
-    });
-
-    expect((await loadAppSettingsFromStorage(deps)).syntaxTheme).toBe("one");
-  });
-
-  it("drops an unknown syntax theme id back to the default", async () => {
-    const deps = makeDeps({
-      storage: createInMemoryKeyValueStorage({
-        [APP_SETTINGS_KEY]: JSON.stringify({ syntaxTheme: "bogus" }),
-      }),
-    });
-
-    expect((await loadAppSettingsFromStorage(deps)).syntaxTheme).toBe("one");
   });
 });
 
