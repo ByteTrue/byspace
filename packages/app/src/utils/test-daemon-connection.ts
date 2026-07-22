@@ -83,13 +83,20 @@ export class DaemonConnectionTestError extends Error {
 
 function isLoopbackHost(host: string): boolean {
   const normalized = host.toLowerCase();
+  if (normalized === "localhost" || normalized.endsWith(".localhost")) return true;
+  if (normalized.includes(":")) {
+    try {
+      return new URL(`http://[${normalized}]`).hostname === "[::1]";
+    } catch {
+      return false;
+    }
+  }
+
+  const octets = normalized.split(".");
   return (
-    normalized === "localhost" ||
-    normalized.endsWith(".localhost") ||
-    normalized === "0.0.0.0" ||
-    normalized === "::" ||
-    normalized === "::1" ||
-    normalized.startsWith("127.")
+    octets.length === 4 &&
+    octets[0] === "127" &&
+    octets.every((octet) => /^\d{1,3}$/.test(octet) && Number(octet) <= 255)
   );
 }
 

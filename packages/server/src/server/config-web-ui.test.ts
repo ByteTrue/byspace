@@ -35,18 +35,6 @@ describe("daemon web UI config", () => {
     expectBundledWebUiDistDir(config.webUi.distDir);
   });
 
-  test("enables web UI from persisted config", async () => {
-    const home = await createBySpaceHome({
-      version: 1,
-      features: { webUi: { enabled: true } },
-    });
-
-    const config = loadConfig(home, { env: {} });
-
-    expect(config.webUi.enabled).toBe(true);
-    expectBundledWebUiDistDir(config.webUi.distDir);
-  });
-
   test("disables web UI from persisted config", async () => {
     const home = await createBySpaceHome({
       version: 1,
@@ -67,14 +55,6 @@ describe("daemon web UI config", () => {
     const config = loadConfig(home, { env: { BYSPACE_WEB_UI_ENABLED: "false" } });
 
     expect(config.webUi.enabled).toBe(false);
-  });
-
-  test("BYSPACE_WEB_UI_ENABLED=true enables web UI", async () => {
-    const home = await createBySpaceHome({ version: 1 });
-
-    const config = loadConfig(home, { env: { BYSPACE_WEB_UI_ENABLED: "true" } });
-
-    expect(config.webUi.enabled).toBe(true);
   });
 
   test("CLI web UI enable override wins over env and persisted config", async () => {

@@ -3,6 +3,7 @@ import { existsSync, readFileSync, unlinkSync } from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
 import { loadConfig, resolveBySpaceHome, spawnProcess } from "@bytetrue/byspace-server";
+import { normalizeLoopbackToLocalhost } from "@bytetrue/byspace-protocol/daemon-endpoints";
 import { resolveBySpaceHostedRelease } from "@bytetrue/byspace-protocol/release-channel";
 import treeKill from "tree-kill";
 import { tryConnectToDaemon } from "../../utils/client.js";
@@ -101,8 +102,8 @@ const DETACHED_STARTUP_GRACE_MS = 1200;
 const PID_POLL_INTERVAL_MS = 100;
 const DAEMON_LOG_FILENAME = "daemon.log";
 const DAEMON_PID_FILENAME = "byspace.pid";
-const CURRENT_RELEASE_RELAY_ENDPOINT =
-  resolveBySpaceHostedRelease(resolveCliVersion()).relayEndpoint;
+const CURRENT_RELEASE = resolveBySpaceHostedRelease(resolveCliVersion());
+const CURRENT_RELEASE_RELAY_ENDPOINT = CURRENT_RELEASE.relayEndpoint;
 
 export const DEFAULT_STOP_TIMEOUT_MS = 15_000;
 export const DEFAULT_KILL_TIMEOUT_MS = 3_000;
@@ -540,16 +541,7 @@ function resolveWebUiUrl(listen: string): string | null {
   if (!host) return null;
 
   try {
-    const url = new URL(`http://${host}`);
-    if (
-      url.hostname === "0.0.0.0" ||
-      url.hostname.startsWith("127.") ||
-      url.hostname === "[::]" ||
-      url.hostname === "[::1]"
-    ) {
-      url.hostname = "localhost";
-    }
-    return url.toString();
+    return new URL(`http://${normalizeLoopbackToLocalhost(host)}`).toString();
   } catch {
     return null;
   }
@@ -612,10 +604,6 @@ export async function startLocalDaemonDetached(
   const byspaceHome = runtime.resolveHome(childEnv);
   const logPath = path.join(byspaceHome, DAEMON_LOG_FILENAME);
   const config = loadConfig(byspaceHome, { env: childEnv });
-  const hostedWebUrl = config.appBaseUrl;
-  if (!hostedWebUrl) {
-    throw new Error("Hosted Web URL is not configured");
-  }
   const child = runtime.spawnDetached(
     process.execPath,
     [...process.execArgv, daemonRunnerEntry, ...buildRunnerArgs(options)],
@@ -669,8 +657,13 @@ export async function startLocalDaemonDetached(
   return {
     pid: child.pid ?? null,
     logPath,
-    webUiUrl: config.webUi?.enabled ? resolveWebUiUrl(config.listen) : null,
-    hostedWebUrl,
+    webUiUrl:
+      config.webUi?.enabled &&
+      config.webUi.distDir &&
+      existsSync(path.join(config.webUi.distDir, "index.html"))
+        ? resolveWebUiUrl(config.listen)
+        : null,
+    hostedWebUrl: config.appBaseUrl ?? CURRENT_RELEASE.appBaseUrl,
   };
 }
 

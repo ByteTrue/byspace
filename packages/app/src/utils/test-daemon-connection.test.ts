@@ -89,6 +89,15 @@ describe("test-daemon-connection connectToDaemon", () => {
     expect(
       isPlaintextDirectConnectionBlocked({ ...connection, endpoint: "127.0.0.2:6777" }, "https:"),
     ).toBe(false);
+    for (const endpoint of ["0.0.0.0:6777", "[::]:6777", "127.attacker.test:6777"]) {
+      expect(isPlaintextDirectConnectionBlocked({ ...connection, endpoint }, "https:")).toBe(true);
+    }
+    expect(
+      isPlaintextDirectConnectionBlocked(
+        { ...connection, endpoint: "[0:0:0:0:0:0:0:1]:6777" },
+        "https:",
+      ),
+    ).toBe(false);
 
     vi.stubGlobal("window", { location: { protocol: "https:" } });
     await expect(connectToDaemon(connection, undefined, probe.deps)).rejects.toMatchObject({

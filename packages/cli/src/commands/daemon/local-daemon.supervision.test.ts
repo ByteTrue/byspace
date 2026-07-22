@@ -120,7 +120,10 @@ describe("local daemon launch supervision", () => {
     const home = await createBySpaceHome({
       version: 1,
       app: { baseUrl: "https://web.example.test" },
+      features: { webUi: { enabled: true, distDir: "web-ui-dist" } },
     });
+    await mkdir(path.join(home, "web-ui-dist"));
+    await writeFile(path.join(home, "web-ui-dist", "index.html"), "<!doctype html>");
 
     const resultPromise = startLocalDaemonDetached({ home, mcp: false }, runtime);
     await vi.advanceTimersByTimeAsync(1200);
@@ -139,6 +142,23 @@ describe("local daemon launch supervision", () => {
     expect(launch?.command).toBe(process.execPath);
     expectSupervisorLaunch(launch?.args ?? []);
     expect(launch?.args).toContain("--no-mcp");
+  });
+
+  test("does not advertise a local web UI when its assets are missing", async () => {
+    vi.useFakeTimers();
+    const runtime = new FakeDaemonRuntime();
+    const home = await createBySpaceHome({
+      version: 1,
+      app: { baseUrl: "https://web.example.test" },
+      features: { webUi: { enabled: true, distDir: "missing-web-ui-dist" } },
+    });
+
+    const resultPromise = startLocalDaemonDetached({ home, mcp: false }, runtime);
+    await vi.advanceTimersByTimeAsync(1200);
+    const result = await resultPromise;
+
+    expect(result.webUiUrl).toBeNull();
+    expect(result.hostedWebUrl).toBe("https://web.example.test");
   });
 
   test("relay TLS flag is passed to the supervised daemon", async () => {

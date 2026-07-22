@@ -11,7 +11,7 @@ epic: ""
 
 ## 做了什么
 
-`byspace daemon start` 默认启用 bundled Web UI，并在后台启动提示中同时给出本地地址和配置中的 Hosted Web 地址；保留 `--no-web-ui`、环境变量和持久化配置作为关闭方式，默认监听地址不变。
+`byspace daemon start` 默认启用 bundled Web UI；仅在 bundled `index.html` 可用时，后台启动提示才同时给出本地地址和配置中的 Hosted Web 地址。保留 `--no-web-ui`、环境变量和持久化配置作为关闭方式，默认监听地址不变。
 
 ## 改了哪些
 
@@ -21,7 +21,7 @@ epic: ""
 
 ## 怎么验证的
 
-定向 Vitest 17/17、`build:server`、全仓 typecheck、lint、format check 和 App Web export 均通过。
+定向 Vitest 22/22、`build:server`、全仓 typecheck、lint、format check 和 App Web export 均通过。
 
 ## 对 .cs/ 的影响
 
