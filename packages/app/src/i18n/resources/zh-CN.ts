@@ -172,6 +172,7 @@ export const zhCN: TranslationResources = {
   agentStream: {
     empty: "开始和这个 Agent 对话...",
     scrollToBottom: "滚动到底部",
+    collapseAllToolCalls: "收起所有工具调用",
     permission: {
       plan: "Plan",
       required: "需要权限",

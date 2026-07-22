@@ -227,6 +227,7 @@ function renderLiveHeadStreamItem(input: {
 
 export interface AgentStreamViewHandle {
   scrollToBottom(reason?: BottomAnchorLocalRequest["reason"]): void;
+  collapseAll(): void;
   prepareForViewportChange(): void;
 }
 
@@ -242,6 +243,8 @@ export interface AgentStreamViewProps {
   toast?: ToastApi | null;
   onOpenWorkspaceFile?: (request: WorkspaceFileOpenRequest) => void;
   readOnly?: boolean;
+  showScrollToBottomButton?: boolean;
+  onNearBottomChange?: (isNearBottom: boolean) => void;
   historyPagination?: {
     hasOlder: boolean;
     isLoadingOlder: boolean;
@@ -329,6 +332,8 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
       toast,
       onOpenWorkspaceFile,
       readOnly = false,
+      showScrollToBottomButton = true,
+      onNearBottomChange,
       historyPagination,
     },
     ref,
@@ -353,6 +358,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
     const [expandedToolCallGroupIds, setExpandedToolCallGroupIds] = useState<Set<string>>(
       new Set(),
     );
+    const [collapseRevision, setCollapseRevision] = useState(0);
     const openFileExplorerForCheckout = usePanelStore((state) => state.openFileExplorerForCheckout);
     const setExplorerTabForCheckout = usePanelStore((state) => state.setExplorerTabForCheckout);
 
@@ -394,12 +400,17 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
       : agentHistoryPagination;
     const scrollIndicatorFadeIn = FadeIn.duration(200);
     const scrollIndicatorFadeOut = FadeOut.duration(200);
+    const notifyNearBottomChange = useStableEvent((nextIsNearBottom: boolean) => {
+      onNearBottomChange?.(nextIsNearBottom);
+    });
 
     useEffect(() => {
       setIsNearBottom(true);
       setExpandedInlineToolCallIds(new Set());
       setExpandedToolCallGroupIds(new Set());
-    }, [agentId]);
+      setCollapseRevision(0);
+      notifyNearBottomChange(true);
+    }, [agentId, notifyNearBottomChange]);
 
     const handleInlinePathPress = useStableEvent(
       (target: InlinePathTarget, disposition: OpenFileDisposition) => {
@@ -596,6 +607,11 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
         scrollToBottom(reason = "jump-to-bottom") {
           viewportRef.current?.scrollToBottom(reason);
         },
+        collapseAll() {
+          setExpandedInlineToolCallIds(new Set());
+          setExpandedToolCallGroupIds(new Set());
+          setCollapseRevision((current) => current + 1);
+        },
         prepareForViewportChange() {
           viewportRef.current?.prepareForViewportChange();
         },
@@ -606,6 +622,11 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
     const scrollToBottom = useCallback(() => {
       viewportRef.current?.scrollToBottom("jump-to-bottom");
     }, []);
+
+    const handleNearBottomChange = useStableEvent((nextIsNearBottom: boolean) => {
+      setIsNearBottom(nextIsNearBottom);
+      notifyNearBottomChange(nextIsNearBottom);
+    });
 
     const setInlineDetailsExpanded = useCallback(
       (itemId: string, expanded: boolean) => {
@@ -688,6 +709,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
           <ToolCallSlot
             itemId={item.id}
             onInlineDetailsExpandedChangeByItemId={setInlineDetailsExpanded}
+            collapseRevision={collapseRevision}
             toolName="thinking"
             args={item.text}
             status={item.status === "ready" ? "completed" : "executing"}
@@ -697,7 +719,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
           />
         );
       },
-      [autoExpandReasoning, setInlineDetailsExpanded],
+      [autoExpandReasoning, collapseRevision, setInlineDetailsExpanded],
     );
 
     const renderSingleToolCallItem = useCallback(
@@ -726,6 +748,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
             <ToolCallSlot
               itemId={item.id}
               onInlineDetailsExpandedChangeByItemId={setInlineDetailsExpanded}
+              collapseRevision={collapseRevision}
               toolName={data.name}
               error={data.error}
               status={data.status}
@@ -744,6 +767,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
           <ToolCallSlot
             itemId={item.id}
             onInlineDetailsExpandedChangeByItemId={setInlineDetailsExpanded}
+            collapseRevision={collapseRevision}
             toolName={data.toolName}
             args={data.arguments}
             result={data.result}
@@ -754,7 +778,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
           />
         );
       },
-      [context.cwd, setInlineDetailsExpanded, handleToolCallOpenFile],
+      [collapseRevision, context.cwd, setInlineDetailsExpanded, handleToolCallOpenFile],
     );
 
     const renderToolCallItem = useCallback(
@@ -1014,7 +1038,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
               viewportRef,
               routeBottomAnchorRequest,
               isAuthoritativeHistoryReady,
-              onNearBottomChange: setIsNearBottom,
+              onNearBottomChange: handleNearBottomChange,
               onNearHistoryStart: loadOlder,
               isLoadingOlderHistory: isLoadingOlder,
               hasOlderHistory: hasOlder,
@@ -1024,7 +1048,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
               forwardListContentContainerStyle: stylesheet.forwardListContentContainer,
             })}
           </MessageOuterSpacingProvider>
-          {!isNearBottom && (
+          {showScrollToBottomButton && !isNearBottom && (
             <View style={stylesheet.scrollToBottomContainer} pointerEvents="box-none">
               <Animated.View entering={scrollIndicatorFadeIn} exiting={scrollIndicatorFadeOut}>
                 <Pressable
@@ -1153,6 +1177,10 @@ function agentStreamViewPropsEqual(
   if (left.toast !== right.toast) reasons.push("toast");
   if (left.onOpenWorkspaceFile !== right.onOpenWorkspaceFile) reasons.push("onOpenWorkspaceFile");
   if (left.readOnly !== right.readOnly) reasons.push("readOnly");
+  if (left.showScrollToBottomButton !== right.showScrollToBottomButton) {
+    reasons.push("showScrollToBottomButton");
+  }
+  if (left.onNearBottomChange !== right.onNearBottomChange) reasons.push("onNearBottomChange");
   if (!historyPaginationPropsEqual(left.historyPagination, right.historyPagination)) {
     reasons.push("historyPagination");
   }

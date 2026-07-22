@@ -7,8 +7,8 @@ import {
   expectScrollFollowsNewContent,
 } from "./helpers/agent-stream";
 import {
+  expectNearBottom,
   expectScrollStaysFixed,
-  clickToolCallBesideScrollToBottomButton,
   readScrollMetrics,
   scrollAgentChatToBottom,
   scrollChatAwayFromBottom,
@@ -206,13 +206,15 @@ test.describe("Agent stream UI", () => {
     await expectScrollStaysFixed(page, baseline);
   });
 
-  test("keeps tool calls clickable beside the scroll-to-bottom button", async ({ page }) => {
+  test("places stream controls beside the composer and collapses expanded tool calls", async ({
+    page,
+  }) => {
     test.setTimeout(60_000);
     const agent = await seedMockAgentWorkspace({
-      repoPrefix: "stream-scroll-button-hit-area-",
-      title: "Scroll button hit area",
+      repoPrefix: "stream-side-controls-",
+      title: "Stream side controls",
       model: "ten-second-stream",
-      initialPrompt: "Stream enough content to exercise the scroll button hit area.",
+      initialPrompt: "Stream enough content to exercise the stream controls.",
     });
     try {
       await agent.client.waitForFinish(agent.agentId, 30_000);
@@ -224,14 +226,62 @@ test.describe("Agent stream UI", () => {
         minScrollableDistance: SCROLL_AWAY_MIN_SCROLLABLE_DISTANCE,
         timeout: 30_000,
       });
-
-      const hitArea = await clickToolCallBesideScrollToBottomButton(page);
-
-      expect(hitArea).toEqual({
-        outsideButton: true,
-        toolCallReceivesPointer: true,
-        withinButtonBand: true,
+      await scrollChatAwayFromBottom(page, {
+        deltaY: -900,
+        minDistanceFromBottom: 300,
       });
+
+      const composer = page.getByTestId("message-input-root");
+      const controls = page.getByTestId("agent-stream-controls");
+      const scrollToBottomButton = page.getByRole("button", { name: "Scroll to bottom" });
+      await expect(controls).toBeVisible();
+      await expect(scrollToBottomButton).toBeVisible();
+
+      const [composerBounds, controlsBounds] = await Promise.all([
+        composer.boundingBox(),
+        controls.boundingBox(),
+      ]);
+      expect(composerBounds).not.toBeNull();
+      expect(controlsBounds).not.toBeNull();
+      expect(controlsBounds!.x).toBeGreaterThanOrEqual(composerBounds!.x + composerBounds!.width);
+      expect(controlsBounds!.y).toBeLessThan(composerBounds!.y + composerBounds!.height);
+      expect(controlsBounds!.y + controlsBounds!.height).toBeGreaterThan(composerBounds!.y);
+
+      const toolCalls = page.locator('[data-testid="tool-call-badge"] [role="button"]');
+      await expect.poll(() => toolCalls.count()).toBeGreaterThan(1);
+      const firstToolCall = toolCalls.nth(0);
+      const secondToolCall = toolCalls.nth(1);
+      await firstToolCall.scrollIntoViewIfNeeded();
+      await firstToolCall.click();
+      await expect(firstToolCall).toHaveAttribute("aria-expanded", "true");
+      await secondToolCall.scrollIntoViewIfNeeded();
+      await secondToolCall.click();
+      await expect(secondToolCall).toHaveAttribute("aria-expanded", "true");
+
+      await page.getByRole("button", { name: "Collapse all tool calls" }).click();
+      await expect(firstToolCall).toHaveAttribute("aria-expanded", "false");
+      await expect(secondToolCall).toHaveAttribute("aria-expanded", "false");
+
+      await page.setViewportSize({ width: 390, height: 844 });
+      await scrollChatAwayFromBottom(page, {
+        deltaY: -500,
+        minDistanceFromBottom: 200,
+      });
+      const [compactComposerBounds, compactControlsBounds] = await Promise.all([
+        composer.boundingBox(),
+        controls.boundingBox(),
+      ]);
+      expect(compactComposerBounds).not.toBeNull();
+      expect(compactControlsBounds).not.toBeNull();
+      expect(compactControlsBounds!.x).toBeGreaterThanOrEqual(
+        compactComposerBounds!.x + compactComposerBounds!.width,
+      );
+      expect(compactControlsBounds!.x + compactControlsBounds!.width).toBeLessThanOrEqual(390);
+      expect(compactComposerBounds!.width).toBeGreaterThan(240);
+
+      await scrollToBottomButton.click();
+      await expectNearBottom(page);
+      await expect(scrollToBottomButton).toBeHidden();
     } finally {
       await agent.cleanup();
     }
