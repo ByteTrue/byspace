@@ -142,7 +142,7 @@ test.describe("Settings host page", () => {
     await page.getByTestId("terminal-agent-hook-pi").click();
     const updateError = page.getByTestId("provider-terminal-hook-error");
     await expect(updateError).toContainText("Test config write failure.");
-    await updateError.getByRole("button", { name: "Dismiss" }).click();
+    await page.getByTestId("provider-terminal-hook-error-dismiss").click();
     await expect(updateError).toHaveCount(0);
   });
 

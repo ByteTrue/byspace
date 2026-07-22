@@ -326,7 +326,12 @@ export function TerminalProfilesPanel({
             description={saveError}
             testID="terminal-profiles-save-error"
           >
-            <Button variant="secondary" size="sm" onPress={handleDismissSaveError}>
+            <Button
+              variant="secondary"
+              size="sm"
+              testID="terminal-profiles-save-error-dismiss"
+              onPress={handleDismissSaveError}
+            >
               {t("common.actions.dismiss")}
             </Button>
           </InlineAlert>
@@ -453,7 +458,12 @@ function ProviderTerminalHook({
           description={updateError}
           testID="provider-terminal-hook-error"
         >
-          <Button variant="secondary" size="sm" onPress={handleDismissUpdateError}>
+          <Button
+            variant="secondary"
+            size="sm"
+            testID="provider-terminal-hook-error-dismiss"
+            onPress={handleDismissUpdateError}
+          >
             {t("common.actions.dismiss")}
           </Button>
         </InlineAlert>
