@@ -24,7 +24,7 @@ export function startCommand(): Command {
     .option("--relay-use-tls", "Use wss:// for the relay connection and pairing offers")
     .option("--no-mcp", "Disable the Agent MCP HTTP endpoint")
     .option("--no-inject-mcp", "Disable auto-injecting the BySpace MCP into created agents")
-    .option("--web-ui", "Enable the bundled daemon web UI")
+    .option("--web-ui", "Enable the bundled daemon web UI (default)")
     .option("--no-web-ui", "Disable the bundled daemon web UI")
     .option(
       "--hostnames <hosts>",
@@ -50,6 +50,15 @@ export async function runStart(options: StartOptions): Promise<void> {
       const startup = await startLocalDaemonDetached(options);
       console.log(chalk.green(`Daemon starting in background (PID ${startup.pid ?? "unknown"}).`));
       console.log(chalk.dim(`Logs: ${startup.logPath}`));
+      console.log();
+      if (startup.webUiUrl) {
+        console.log(chalk.green("Local Web UI is running."));
+        console.log("Open BySpace using either:");
+        console.log(`  ${chalk.bold("Local:")}  ${chalk.cyan(startup.webUiUrl)}`);
+        console.log(`  ${chalk.bold("Hosted:")} ${chalk.cyan(startup.hostedWebUrl)}`);
+      } else {
+        console.log(`${chalk.bold("Hosted Web:")} ${chalk.cyan(startup.hostedWebUrl)}`);
+      }
     } catch (err) {
       exitWithError(getErrorMessage(err));
     }

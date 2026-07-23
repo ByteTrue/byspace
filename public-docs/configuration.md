@@ -77,27 +77,21 @@ For voice philosophy, architecture, and complete local/OpenAI setup examples, se
 
 ## Bundled web UI
 
-The daemon can serve the browser Web client from the same HTTP server. Local Docker examples enable it; normal CLI-launched daemons keep it disabled by default.
+The daemon serves the bundled browser Web client from the same HTTP server by default. After `byspace daemon start`, choose between the local Web UI URL and the configured Hosted Web URL printed by the command.
 
-Enable it from the CLI:
-
-```bash
-byspace daemon start --web-ui
-```
-
-Or set the environment variable:
+Disable it for one start with:
 
 ```bash
-BYSPACE_WEB_UI_ENABLED=true byspace daemon start
+byspace daemon start --no-web-ui
 ```
 
-Or persist it in `config.json`:
+Or persist the override in `config.json`:
 
 ```json
 {
   "features": {
     "webUi": {
-      "enabled": true
+      "enabled": false
     }
   }
 }

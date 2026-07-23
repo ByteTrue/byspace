@@ -117,15 +117,24 @@ describe("local daemon launch supervision", () => {
   test("detached start spawns supervisor-entrypoint instead of server/index", async () => {
     vi.useFakeTimers();
     const runtime = new FakeDaemonRuntime();
+    const home = await createBySpaceHome({
+      version: 1,
+      app: { baseUrl: "https://web.example.test" },
+      features: { webUi: { enabled: true, distDir: "web-ui-dist" } },
+    });
+    await mkdir(path.join(home, "web-ui-dist"));
+    await writeFile(path.join(home, "web-ui-dist", "index.html"), "<!doctype html>");
 
-    const resultPromise = startLocalDaemonDetached(
-      { home: "/tmp/byspace-test", mcp: false },
-      runtime,
-    );
+    const resultPromise = startLocalDaemonDetached({ home, mcp: false }, runtime);
     await vi.advanceTimersByTimeAsync(1200);
     const result = await resultPromise;
 
-    expect(result).toEqual({ pid: 4242, logPath: "/tmp/byspace-test/daemon.log" });
+    expect(result).toEqual({
+      pid: 4242,
+      logPath: path.join(home, "daemon.log"),
+      webUiUrl: "http://localhost:6777/",
+      hostedWebUrl: "https://web.example.test",
+    });
     expect(runtime.daemonProcess.wasUnreferenced).toBe(true);
     expect(runtime.recordedLaunches.map((launch) => launch.mode)).toEqual(["detached"]);
     const launch = runtime.recordedLaunches[0];
@@ -133,6 +142,23 @@ describe("local daemon launch supervision", () => {
     expect(launch?.command).toBe(process.execPath);
     expectSupervisorLaunch(launch?.args ?? []);
     expect(launch?.args).toContain("--no-mcp");
+  });
+
+  test("does not advertise a local web UI when its assets are missing", async () => {
+    vi.useFakeTimers();
+    const runtime = new FakeDaemonRuntime();
+    const home = await createBySpaceHome({
+      version: 1,
+      app: { baseUrl: "https://web.example.test" },
+      features: { webUi: { enabled: true, distDir: "missing-web-ui-dist" } },
+    });
+
+    const resultPromise = startLocalDaemonDetached({ home, mcp: false }, runtime);
+    await vi.advanceTimersByTimeAsync(1200);
+    const result = await resultPromise;
+
+    expect(result.webUiUrl).toBeNull();
+    expect(result.hostedWebUrl).toBe("https://web.example.test");
   });
 
   test("relay TLS flag is passed to the supervised daemon", async () => {

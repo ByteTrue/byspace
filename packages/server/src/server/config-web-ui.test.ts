@@ -26,25 +26,24 @@ describe("daemon web UI config", () => {
     await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
   });
 
-  test("web UI is disabled by default", async () => {
+  test("web UI is enabled by default", async () => {
     const home = await createBySpaceHome({ version: 1 });
-
-    const config = loadConfig(home, { env: {} });
-
-    expect(config.webUi.enabled).toBe(false);
-    expectBundledWebUiDistDir(config.webUi.distDir);
-  });
-
-  test("enables web UI from persisted config", async () => {
-    const home = await createBySpaceHome({
-      version: 1,
-      features: { webUi: { enabled: true } },
-    });
 
     const config = loadConfig(home, { env: {} });
 
     expect(config.webUi.enabled).toBe(true);
     expectBundledWebUiDistDir(config.webUi.distDir);
+  });
+
+  test("disables web UI from persisted config", async () => {
+    const home = await createBySpaceHome({
+      version: 1,
+      features: { webUi: { enabled: false } },
+    });
+
+    const config = loadConfig(home, { env: {} });
+
+    expect(config.webUi.enabled).toBe(false);
   });
 
   test("BYSPACE_WEB_UI_ENABLED overrides persisted setting", async () => {
@@ -56,14 +55,6 @@ describe("daemon web UI config", () => {
     const config = loadConfig(home, { env: { BYSPACE_WEB_UI_ENABLED: "false" } });
 
     expect(config.webUi.enabled).toBe(false);
-  });
-
-  test("BYSPACE_WEB_UI_ENABLED=true enables web UI", async () => {
-    const home = await createBySpaceHome({ version: 1 });
-
-    const config = loadConfig(home, { env: { BYSPACE_WEB_UI_ENABLED: "true" } });
-
-    expect(config.webUi.enabled).toBe(true);
   });
 
   test("CLI web UI enable override wins over env and persisted config", async () => {

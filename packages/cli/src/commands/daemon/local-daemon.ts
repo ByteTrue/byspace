@@ -3,6 +3,7 @@ import { existsSync, readFileSync, unlinkSync } from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
 import { loadConfig, resolveBySpaceHome, spawnProcess } from "@bytetrue/byspace-server";
+import { normalizeLoopbackToLocalhost } from "@bytetrue/byspace-protocol/daemon-endpoints";
 import { resolveBySpaceHostedRelease } from "@bytetrue/byspace-protocol/release-channel";
 import treeKill from "tree-kill";
 import { tryConnectToDaemon } from "../../utils/client.js";
@@ -46,6 +47,8 @@ export interface LocalDaemonState {
 export interface DetachedStartResult {
   pid: number | null;
   logPath: string;
+  hostedWebUrl: string;
+  webUiUrl: string | null;
 }
 
 export interface StopLocalDaemonOptions {
@@ -99,8 +102,8 @@ const DETACHED_STARTUP_GRACE_MS = 1200;
 const PID_POLL_INTERVAL_MS = 100;
 const DAEMON_LOG_FILENAME = "daemon.log";
 const DAEMON_PID_FILENAME = "byspace.pid";
-const CURRENT_RELEASE_RELAY_ENDPOINT =
-  resolveBySpaceHostedRelease(resolveCliVersion()).relayEndpoint;
+const CURRENT_RELEASE = resolveBySpaceHostedRelease(resolveCliVersion());
+const CURRENT_RELEASE_RELAY_ENDPOINT = CURRENT_RELEASE.relayEndpoint;
 
 export const DEFAULT_STOP_TIMEOUT_MS = 15_000;
 export const DEFAULT_KILL_TIMEOUT_MS = 3_000;
@@ -533,6 +536,17 @@ export function resolveTcpHostFromListen(listen: string): string | null {
   return null;
 }
 
+function resolveWebUiUrl(listen: string): string | null {
+  const host = resolveTcpHostFromListen(listen);
+  if (!host) return null;
+
+  try {
+    return new URL(`http://${normalizeLoopbackToLocalhost(host)}`).toString();
+  } catch {
+    return null;
+  }
+}
+
 export function resolveLocalDaemonState(options: { home?: string } = {}): LocalDaemonState {
   const env: NodeJS.ProcessEnv = {
     ...envWithHome(options.home),
@@ -589,6 +603,7 @@ export async function startLocalDaemonDetached(
 
   const byspaceHome = runtime.resolveHome(childEnv);
   const logPath = path.join(byspaceHome, DAEMON_LOG_FILENAME);
+  const config = loadConfig(byspaceHome, { env: childEnv });
   const child = runtime.spawnDetached(
     process.execPath,
     [...process.execArgv, daemonRunnerEntry, ...buildRunnerArgs(options)],
@@ -642,6 +657,13 @@ export async function startLocalDaemonDetached(
   return {
     pid: child.pid ?? null,
     logPath,
+    webUiUrl:
+      config.webUi?.enabled &&
+      config.webUi.distDir &&
+      existsSync(path.join(config.webUi.distDir, "index.html"))
+        ? resolveWebUiUrl(config.listen)
+        : null,
+    hostedWebUrl: config.appBaseUrl ?? CURRENT_RELEASE.appBaseUrl,
   };
 }
 

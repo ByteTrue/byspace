@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { DaemonClientConfig } from "@bytetrue/byspace-client/internal/daemon-client";
 import type { DaemonConnectionDependencies, DaemonProbeClient } from "./test-daemon-connection";
 
@@ -66,6 +66,44 @@ describe("test-daemon-connection connectToDaemon", () => {
   beforeEach(() => {
     vi.stubGlobal("__DEV__", false);
     probe = new FakeDaemonProbe();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("blocks plaintext non-loopback direct connections before opening a socket on HTTPS", async () => {
+    const { connectToDaemon, isPlaintextDirectConnectionBlocked } =
+      await import("./test-daemon-connection");
+    const connection = {
+      id: "direct:192.168.1.20:6777",
+      type: "directTcp" as const,
+      endpoint: "192.168.1.20:6777",
+    };
+
+    expect(isPlaintextDirectConnectionBlocked(connection, "https:")).toBe(true);
+    expect(isPlaintextDirectConnectionBlocked(connection, "http:")).toBe(false);
+    expect(isPlaintextDirectConnectionBlocked({ ...connection, useTls: true }, "https:")).toBe(
+      false,
+    );
+    expect(
+      isPlaintextDirectConnectionBlocked({ ...connection, endpoint: "127.0.0.2:6777" }, "https:"),
+    ).toBe(false);
+    for (const endpoint of ["0.0.0.0:6777", "[::]:6777", "127.attacker.test:6777"]) {
+      expect(isPlaintextDirectConnectionBlocked({ ...connection, endpoint }, "https:")).toBe(true);
+    }
+    expect(
+      isPlaintextDirectConnectionBlocked(
+        { ...connection, endpoint: "[0:0:0:0:0:0:0:1]:6777" },
+        "https:",
+      ),
+    ).toBe(false);
+
+    vi.stubGlobal("window", { location: { protocol: "https:" } });
+    await expect(connectToDaemon(connection, undefined, probe.deps)).rejects.toMatchObject({
+      message: "TLS is required for non-local direct connections from an HTTPS page",
+    });
+    expect(probe.createdClients).toHaveLength(0);
   });
 
   it("reuses the app clientId for direct connections", async () => {

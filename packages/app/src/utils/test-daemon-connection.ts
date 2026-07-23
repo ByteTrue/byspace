@@ -6,9 +6,9 @@ import { resolveAppVersion } from "./app-version";
 import {
   buildDaemonWebSocketUrl,
   buildRelayWebSocketUrl,
+  parseHostPort,
   shouldUseTlsForDefaultHostedRelay,
 } from "./daemon-endpoints";
-
 export interface DaemonProbeClient {
   readonly lastError: string | null;
   connect(): Promise<void>;
@@ -81,6 +81,43 @@ export class DaemonConnectionTestError extends Error {
   }
 }
 
+function isLoopbackHost(host: string): boolean {
+  const normalized = host.toLowerCase();
+  if (normalized === "localhost" || normalized.endsWith(".localhost")) return true;
+  if (normalized.includes(":")) {
+    try {
+      return new URL(`http://[${normalized}]`).hostname === "[::1]";
+    } catch {
+      return false;
+    }
+  }
+
+  const octets = normalized.split(".");
+  return (
+    octets.length === 4 &&
+    octets[0] === "127" &&
+    octets.every((octet) => /^\d{1,3}$/.test(octet) && Number(octet) <= 255)
+  );
+}
+
+export function isPlaintextDirectConnectionBlocked(
+  connection: HostConnection,
+  pageProtocol = typeof window === "undefined" ? null : window.location.protocol,
+): boolean {
+  return (
+    pageProtocol === "https:" &&
+    connection.type === "directTcp" &&
+    connection.useTls !== true &&
+    !isLoopbackHost(parseHostPort(connection.endpoint).host)
+  );
+}
+
+function assertDirectConnectionAllowed(connection: HostConnection): void {
+  if (!isPlaintextDirectConnectionBlocked(connection)) return;
+
+  const message = "TLS is required for non-local direct connections from an HTTPS page";
+  throw new DaemonConnectionTestError(message, { reason: message, lastError: null });
+}
 export async function buildClientConfig(
   connection: HostConnection,
   serverId?: string,
@@ -217,6 +254,7 @@ export async function connectToDaemon(
   options?: ProbeOptions,
   deps: DaemonConnectionDependencies<DaemonProbeClient> = defaultDaemonConnectionDependencies,
 ): Promise<{ client: DaemonProbeClient; serverId: string; hostname: string | null }> {
+  assertDirectConnectionAllowed(connection);
   const config = await buildClientConfig(connection, options?.serverId, options, deps);
   return connectAndProbe(config, resolveTimeout(connection, options), deps);
 }
