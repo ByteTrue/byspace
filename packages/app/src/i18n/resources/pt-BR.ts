@@ -1467,7 +1467,6 @@ export const ptBR: TranslationResources = {
       },
       fonts: {
         title: "Fontes",
-        systemDefault: "Sistema padrão",
         interfaceSize: "Tamanho da interface",
         interfaceSizeAccessibility: "Tamanho da fonte da interface",
         codeSize: "Tamanho do código",

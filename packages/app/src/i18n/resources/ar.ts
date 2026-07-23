@@ -1440,7 +1440,6 @@ export const ar: TranslationResources = {
       },
       fonts: {
         title: "الخطوط",
-        systemDefault: "الافتراضي للنظام",
         interfaceSize: "حجم الواجهة",
         interfaceSizeAccessibility: "حجم الخط في الواجهة",
         codeSize: "حجم الكود",

@@ -1474,7 +1474,6 @@ export const fr: TranslationResources = {
       },
       fonts: {
         title: "Polices",
-        systemDefault: "Valeur par défaut du système",
         interfaceSize: "Taille de l'interface",
         interfaceSizeAccessibility: "Taille de la police de l'interface",
         codeSize: "Taille du code",

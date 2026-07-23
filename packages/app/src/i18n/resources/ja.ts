@@ -1455,7 +1455,6 @@ export const ja: TranslationResources = {
       },
       fonts: {
         title: "フォント",
-        systemDefault: "システムデフォルト",
         interfaceSize: "インターフェースサイズ",
         interfaceSizeAccessibility: "インターフェースフォントサイズ",
         codeSize: "コードサイズ",

@@ -42,15 +42,9 @@ describe("orchestration skills", () => {
   it("reports missing skills, installs all targets, and preserves unrelated skills", async () => {
     await writeSkill(targets.installDirs[0], "user-skill", "keep me");
 
-    expect(await getOrchestrationSkillsStatus(targets)).toEqual({
-      state: "not-installed",
-      operations: BYSPACE_ORCHESTRATION_SKILL_NAMES.map((name) => ({ kind: "add", name })),
-    });
+    expect(await getOrchestrationSkillsStatus(targets)).toBe("not-installed");
 
-    expect(await setOrchestrationSkillsInstalled(true, targets)).toEqual({
-      state: "up-to-date",
-      operations: [],
-    });
+    expect(await setOrchestrationSkillsInstalled(true, targets)).toBe("up-to-date");
     for (const installDir of targets.installDirs) {
       for (const name of BYSPACE_ORCHESTRATION_SKILL_NAMES) {
         expect(await fs.readFile(path.join(installDir, name, "SKILL.md"), "utf8")).toBe(
@@ -72,17 +66,8 @@ describe("orchestration skills", () => {
       force: true,
     });
 
-    expect(await getOrchestrationSkillsStatus(targets)).toEqual({
-      state: "drift",
-      operations: [
-        { kind: "update", name: "byspace" },
-        { kind: "update", name: "byspace-loop" },
-      ],
-    });
-    expect(await setOrchestrationSkillsInstalled(true, targets)).toEqual({
-      state: "up-to-date",
-      operations: [],
-    });
+    expect(await getOrchestrationSkillsStatus(targets)).toBe("drift");
+    expect(await setOrchestrationSkillsInstalled(true, targets)).toBe("up-to-date");
     await expect(
       fs.stat(path.join(targets.installDirs[0], "byspace", "obsolete.md")),
     ).rejects.toMatchObject({ code: "ENOENT" });
@@ -92,14 +77,8 @@ describe("orchestration skills", () => {
     await setOrchestrationSkillsInstalled(true, targets);
     await writeSkill(targets.installDirs[1], "user-skill", "keep me");
 
-    expect(await setOrchestrationSkillsInstalled(false, targets)).toEqual({
-      state: "not-installed",
-      operations: BYSPACE_ORCHESTRATION_SKILL_NAMES.map((name) => ({ kind: "add", name })),
-    });
-    expect(await setOrchestrationSkillsInstalled(false, targets)).toEqual({
-      state: "not-installed",
-      operations: BYSPACE_ORCHESTRATION_SKILL_NAMES.map((name) => ({ kind: "add", name })),
-    });
+    expect(await setOrchestrationSkillsInstalled(false, targets)).toBe("not-installed");
+    expect(await setOrchestrationSkillsInstalled(false, targets)).toBe("not-installed");
     expect(
       await fs.readFile(path.join(targets.installDirs[1], "user-skill", "SKILL.md"), "utf8"),
     ).toBe("keep me");

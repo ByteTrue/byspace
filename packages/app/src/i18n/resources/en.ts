@@ -1451,7 +1451,6 @@ export const en = {
       },
       fonts: {
         title: "Fonts",
-        systemDefault: "System default",
         interfaceSize: "Interface size",
         interfaceSizeAccessibility: "Interface font size",
         codeSize: "Code size",

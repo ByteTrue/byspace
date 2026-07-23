@@ -1467,7 +1467,6 @@ export const ru: TranslationResources = {
       },
       fonts: {
         title: "Шрифты",
-        systemDefault: "Система по умолчанию",
         interfaceSize: "Размер интерфейса",
         interfaceSizeAccessibility: "Размер шрифта интерфейса",
         codeSize: "Размер кода",

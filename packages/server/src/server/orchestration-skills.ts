@@ -14,14 +14,6 @@ export const BYSPACE_ORCHESTRATION_SKILL_NAMES = [
 ] as const;
 
 export type OrchestrationSkillsState = "not-installed" | "up-to-date" | "drift";
-export interface OrchestrationSkillOperation {
-  kind: "add" | "update";
-  name: (typeof BYSPACE_ORCHESTRATION_SKILL_NAMES)[number];
-}
-export interface OrchestrationSkillsStatus {
-  state: OrchestrationSkillsState;
-  operations: OrchestrationSkillOperation[];
-}
 
 export interface OrchestrationSkillsTargets {
   sourceDir: string;
@@ -115,9 +107,9 @@ async function writeManifest(
 
 export async function getOrchestrationSkillsStatus(
   targets: OrchestrationSkillsTargets,
-): Promise<OrchestrationSkillsStatus> {
-  const operations: OrchestrationSkillOperation[] = [];
+): Promise<OrchestrationSkillsState> {
   let installedCount = 0;
+  let hasDrift = false;
 
   for (const name of BYSPACE_ORCHESTRATION_SKILL_NAMES) {
     const sourceHash = await hashDirectory(path.join(targets.sourceDir, name));
@@ -126,17 +118,11 @@ export async function getOrchestrationSkillsStatus(
       targets.installDirs.map((directory) => hashDirectory(path.join(directory, name))),
     );
     installedCount += installedHashes.filter((hash) => hash !== null).length;
-
-    if (installedHashes.every((hash) => hash === null)) {
-      operations.push({ kind: "add", name });
-    } else if (installedHashes.some((hash) => hash !== sourceHash)) {
-      operations.push({ kind: "update", name });
-    }
+    hasDrift ||= installedHashes.some((hash) => hash !== sourceHash);
   }
 
-  if (installedCount === 0) return { state: "not-installed", operations };
-  if (operations.length === 0) return { state: "up-to-date", operations };
-  return { state: "drift", operations };
+  if (installedCount === 0) return "not-installed";
+  return hasDrift ? "drift" : "up-to-date";
 }
 
 async function replaceDirectory(source: string, destination: string): Promise<void> {
@@ -239,7 +225,7 @@ let mutationQueue = Promise.resolve();
 export function setOrchestrationSkillsInstalled(
   installed: boolean,
   targets: OrchestrationSkillsTargets,
-): Promise<OrchestrationSkillsStatus> {
+): Promise<OrchestrationSkillsState> {
   const operation = mutationQueue.then(async () => {
     if (installed) await installOrUpdateOrchestrationSkills(targets);
     else await uninstallOrchestrationSkills(targets);

@@ -534,8 +534,3 @@ export const THEME_TO_UNISTYLES: Record<ThemeName, UnistylesThemeKey> = {
   light: "light",
   dark: "dark",
 };
-
-export const THEME_SWATCHES: Record<ThemeName, string> = {
-  light: "#ffffff",
-  dark: "#2D8B62",
-};

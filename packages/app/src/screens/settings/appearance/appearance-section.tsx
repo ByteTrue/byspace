@@ -429,21 +429,6 @@ const styles = StyleSheet.create((theme) => ({
     color: theme.colors.foreground,
     fontSize: theme.fontSize.sm,
   },
-  fontFamilyInput: {
-    flexGrow: 1,
-    flexShrink: 1,
-    maxWidth: 280,
-    minHeight: 36,
-    paddingVertical: theme.spacing[2],
-    paddingHorizontal: theme.spacing[3],
-    borderRadius: theme.borderRadius.md,
-    borderWidth: theme.borderWidth[1],
-    borderColor: theme.colors.border,
-    backgroundColor: theme.colors.surface2,
-    color: theme.colors.foreground,
-    fontSize: theme.fontSize.sm,
-    textAlign: "left",
-  },
   sizeField: {
     flexDirection: "row",
     alignItems: "center",
@@ -465,8 +450,5 @@ const styles = StyleSheet.create((theme) => ({
   unit: {
     color: theme.colors.foregroundMuted,
     fontSize: theme.fontSize.sm,
-  },
-  placeholderColor: {
-    color: theme.colors.foregroundMuted,
   },
 }));
