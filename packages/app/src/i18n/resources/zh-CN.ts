@@ -976,6 +976,8 @@ export const zhCN: TranslationResources = {
     searchPlaceholder: "筛选分支...",
     empty: "没有找到分支。",
     title: "切换分支",
+    localBranch: "本地",
+    remoteBranch: "远程",
     uncommittedTitle: "未 commit 的变更",
     uncommittedMessage: "你有未 commit 的变更。切换分支前要先 stash 吗？",
     stashAndSwitch: "Stash 并切换",

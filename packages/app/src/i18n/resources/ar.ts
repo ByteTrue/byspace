@@ -986,6 +986,8 @@ export const ar: TranslationResources = {
     searchPlaceholder: "تصفية الفروع...",
     empty: "لم يتم العثور على فروع.",
     title: "فرع التبديل",
+    localBranch: "محلي",
+    remoteBranch: "بعيد",
     uncommittedTitle: "تغييرات غير ملتزم بها",
     uncommittedMessage: "لديك تغييرات غير ملتزم بها. خبأهم قبل تبديل الفروع؟",
     stashAndSwitch: "خبأ والتبديل",

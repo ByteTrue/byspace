@@ -1,14 +1,18 @@
-import { useCallback, useMemo, useRef } from "react";
+import { useCallback, useRef } from "react";
 import { Pressable, Text, View, type PressableStateCallbackType } from "react-native";
 import { useQueryClient } from "@tanstack/react-query";
-import { ChevronDown, GitBranch } from "lucide-react-native";
+import { ChevronDown, Download, GitBranch } from "lucide-react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { useTranslation } from "react-i18next";
 import type { Theme } from "@/styles/theme";
 import { Combobox, ComboboxItem, type ComboboxProps } from "@/components/ui/combobox";
 import { useHostRuntimeClient, useHostRuntimeIsConnected } from "@/runtime/host-runtime";
 import { useToast } from "@/contexts/toast-context";
-import { useBranchSwitcher } from "@/hooks/use-branch-switcher";
+import {
+  useBranchSwitcher,
+  type BranchSuggestionScope,
+  type BranchSwitcherOption,
+} from "@/hooks/use-branch-switcher";
 
 interface BranchSwitcherProps {
   currentBranchName: string | null;
@@ -25,6 +29,22 @@ const foregroundMutedIconColorMapping = (theme: Theme) => ({
 
 const ThemedGitBranch = withUnistyles(GitBranch);
 const ThemedChevronDown = withUnistyles(ChevronDown);
+const ThemedDownload = withUnistyles(Download);
+
+function BranchOptionIcon({ scope }: { scope?: BranchSuggestionScope }) {
+  if (scope === "remote") {
+    return <ThemedDownload size={14} uniProps={foregroundMutedIconColorMapping} />;
+  }
+  if (scope === "local-and-remote") {
+    return (
+      <View style={styles.combinedIcon}>
+        <ThemedGitBranch size={12} uniProps={foregroundMutedIconColorMapping} />
+        <ThemedDownload size={12} uniProps={foregroundMutedIconColorMapping} />
+      </View>
+    );
+  }
+  return <ThemedGitBranch size={14} uniProps={foregroundMutedIconColorMapping} />;
+}
 
 export function BranchSwitcher({
   currentBranchName,
@@ -63,22 +83,25 @@ export function BranchSwitcher({
     [],
   );
 
-  const branchLeadingSlot = useMemo(
-    () => <ThemedGitBranch size={14} uniProps={foregroundMutedIconColorMapping} />,
-    [],
-  );
+  const renderBranchOptionLeadingSlot = useCallback((scope?: BranchSuggestionScope) => {
+    return <BranchOptionIcon scope={scope} />;
+  }, []);
 
   const renderBranchOption = useCallback<NonNullable<ComboboxProps["renderOption"]>>(
-    ({ option, selected, active, onPress }) => (
-      <ComboboxItem
-        label={option.label}
-        selected={selected}
-        active={active}
-        onPress={onPress}
-        leadingSlot={branchLeadingSlot}
-      />
-    ),
-    [branchLeadingSlot],
+    ({ option, selected, active, onPress }) => {
+      const branchOption = option as BranchSwitcherOption;
+      return (
+        <ComboboxItem
+          label={option.label}
+          description={option.description}
+          selected={selected}
+          active={active}
+          onPress={onPress}
+          leadingSlot={renderBranchOptionLeadingSlot(branchOption.scope)}
+        />
+      );
+    },
+    [renderBranchOptionLeadingSlot],
   );
 
   if (!currentBranchName) {
@@ -145,5 +168,10 @@ const styles = StyleSheet.create((theme) => ({
     color: theme.colors.foreground,
     fontWeight: theme.fontWeight.medium,
     flexShrink: 1,
+  },
+  combinedIcon: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 1,
   },
 }));

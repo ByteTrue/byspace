@@ -1001,6 +1001,8 @@ export const ja: TranslationResources = {
     searchPlaceholder: "ブランチをフィルタ...",
     empty: "ブランチが見つかりません。",
     title: "ブランチを切り替え",
+    localBranch: "ローカル",
+    remoteBranch: "リモート",
     uncommittedTitle: "未コミットの変更",
     uncommittedMessage: "未コミットの変更があります。ブランチを切り替える前にスタッシュしますか？",
     stashAndSwitch: "スタッシュして切り替え",

@@ -1011,6 +1011,8 @@ export const ptBR: TranslationResources = {
     searchPlaceholder: "Filtrar branches...",
     empty: "Nenhuma branch encontrada.",
     title: "Trocar branch",
+    localBranch: "Local",
+    remoteBranch: "Remota",
     uncommittedTitle: "Alterações sem commit",
     uncommittedMessage: "Você tem alterações sem commit. Fazer stash antes de trocar de branch?",
     stashAndSwitch: "Fazer stash e trocar",
