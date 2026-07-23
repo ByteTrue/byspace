@@ -114,7 +114,12 @@ const temporaryDirs: string[] = [];
 
 afterEach(async () => {
   vi.useRealTimers();
-  await Promise.all(sessions.map((session) => session.killAndWait()));
+  if (isPlatform("win32")) {
+    // Awaiting node-pty teardown can terminate the Vitest worker on Windows.
+    sessions.forEach((session) => session.kill());
+  } else {
+    await Promise.all(sessions.map((session) => session.killAndWait()));
+  }
   sessions.length = 0;
   while (temporaryDirs.length > 0) {
     const dir = temporaryDirs.pop();
