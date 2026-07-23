@@ -1351,12 +1351,9 @@ export const ru: TranslationResources = {
     },
     groupInfo: "О{{title}}",
     sections: {
-      general: "Общий",
-      appearance: "Появление",
+      preferences: "Настройки",
       shortcuts: "Ярлыки",
-      integrations: "Интеграции",
       permissions: "Разрешения",
-      diagnostics: "Диагностика",
       about: "О",
     },
     hostSections: {
@@ -1545,42 +1542,6 @@ export const ru: TranslationResources = {
         showKeyboardShortcuts: "Доступно, когда фокус находится не в текстовом поле или терминале.",
       },
     },
-    integrations: {
-      title: "Интеграции",
-      docs: {
-        cli: "Документация CLI",
-        skills: "Документы по навыкам",
-        openCli: "Открыть документацию CLI",
-        openSkills: "Открытая документация по навыкам",
-      },
-      commandLine: {
-        title: "Командная строка",
-        description: "Агенты управления и сценариев с вашего терминала",
-      },
-      skills: {
-        title: "Навыки оркестровки",
-        description: "Научите своих агентов организовывать работу через CLI",
-        updateAvailable: "Доступно обновление",
-        updateTitle: "Обновить навыки BySpace?",
-        updateFallback: "Синхронизируйте связанные навыки с вашим компьютером.",
-        uninstallTitle: "Удалить навыки BySpace?",
-        uninstallMessage:
-          "Удаляет все навыки оркестровки BySpace из ~/.agents, ~/.claude, ~/.codex.",
-      },
-      actions: {
-        install: "Установить",
-        installing: "Установка...",
-        installed: "Установлено",
-        update: "Обновлять",
-        working: "Работающий...",
-        uninstall: "Удалить",
-      },
-      operations: {
-        add: "Добавить навык",
-        update: "Обновить навык",
-        delete: "Удалить навык",
-      },
-    },
     permissions: {
       title: "Разрешения",
       notifications: "Уведомления",
@@ -1624,6 +1585,28 @@ export const ru: TranslationResources = {
           title: "Включить инструменты BySpace",
           hint: "Агенты смогут управлять рабочими деревьями, агентами и расписаниями.",
           accessibilityLabel: "Инструменты внедрения BySpace",
+        },
+        skills: {
+          title: "Навыки оркестрации",
+          installHint: "Установить пять встроенных навыков BySpace для поддерживаемых агентов",
+          installedHint: "Установлены и актуальны на этом хосте",
+          updateHint: "Установленные навыки отличаются от этой версии BySpace",
+          updateHost: "Обновите хост, чтобы управлять навыками оркестрации",
+          install: "Установить",
+          update: "Обновить",
+          uninstall: "Удалить",
+          saving: "Сохранение...",
+          installConfirmTitle: "Установить или обновить навыки оркестрации?",
+          installConfirmMessage:
+            "BySpace синхронизирует пять встроенных навыков на этом хосте. Остальные навыки не изменятся, а конфликтующие неуправляемые копии будут сохранены.",
+          updateConfirmTitle: "Обновить навыки оркестрации?",
+          updateConfirmMessage:
+            "BySpace заменит управляемые копии пятью навыками из этой версии. Остальные навыки не изменятся.",
+          uninstallConfirmTitle: "Удалить навыки оркестрации?",
+          uninstallConfirmMessage:
+            "BySpace удалит с этого хоста неизменённые управляемые копии. Изменённые копии будут сохранены.",
+          errorTitle: "Не удалось управлять навыками оркестрации",
+          unknownError: "Неизвестная ошибка",
         },
         systemPrompt: {
           title: "Системная подсказка",

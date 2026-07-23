@@ -442,8 +442,7 @@ async function expectExpandedMountedTabDiff(page: Page): Promise<void> {
 
 async function changeCodeFontSizeFromSettings(page: Page, codeFontSize: number): Promise<void> {
   await page.getByTestId("sidebar-settings").click();
-  await expect(page).toHaveURL(new RegExp(`${buildSettingsSectionRoute("general")}|/settings$`));
-  await page.getByRole("button", { name: "Appearance" }).click();
+  await expect(page).toHaveURL(new RegExp(`${buildSettingsSectionRoute("preferences")}$`));
   await page.getByLabel("Code font size").fill(String(codeFontSize));
   await page.getByLabel("Code font size").press("Enter");
   await expect(page.getByLabel("Code font size")).toHaveValue(String(codeFontSize));

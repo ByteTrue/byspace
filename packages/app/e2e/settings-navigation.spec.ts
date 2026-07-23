@@ -30,10 +30,8 @@ import {
   expectDirectHostSslEnabled,
   expectDirectHostUriValue,
   expectDirectHostUriHidden,
-  expectDiagnosticsContent,
+  expectPreferencesContent,
   expectAboutContent,
-  expectGeneralContent,
-  expectAppearanceContent,
   seedSavedSettingsHosts,
   selectSettingsHost,
   expectSettingsHostPickerLabel,
@@ -52,30 +50,30 @@ async function openWorkspace(
 }
 
 test.describe("Settings sidebar navigation", () => {
-  test("clicking a sidebar section updates the URL and renders the section", async ({ page }) => {
+  test("clicking a sidebar section updates the URL and renders Preferences", async ({ page }) => {
     await gotoAppShell(page);
     await openSettings(page);
 
-    await openSettingsSection(page, "diagnostics");
-    await expectSettingsHeader(page, "Diagnostics");
-    await expectDiagnosticsContent(page);
+    await openSettingsSection(page, "preferences");
+    await expectSettingsHeader(page, "Preferences");
+    await expectPreferencesContent(page);
 
     await openSettingsSection(page, "about");
     await expectSettingsHeader(page, "About");
     await expectAboutContent(page);
-
-    await openSettingsSection(page, "general");
-    await expectSettingsHeader(page, "General");
-    await expectGeneralContent(page);
-
-    await openSettingsSection(page, "appearance");
-    await expectSettingsHeader(page, "Appearance");
-    await expectAppearanceContent(page);
   });
 
   test("/h/[serverId]/settings redirects to the host connections section", async ({ page }) => {
     await gotoAppShell(page);
     await verifyLegacyHostSettingsRedirect(page);
+  });
+
+  test("host Agents exposes orchestration skill management", async ({ page }) => {
+    await gotoAppShell(page);
+    await openSettings(page);
+    await openSettingsHostSection(page, getServerId(), "agents");
+
+    await expect(page.getByTestId("host-orchestration-skills-card")).toBeVisible();
   });
 
   test("the + Add host button opens the add-host method modal", async ({ page }) => {
@@ -132,7 +130,7 @@ test.describe("Settings — compact master-detail", () => {
     await gotoAppShell(page);
     await openCompactSettings(page, buildOpenProjectRoute());
 
-    await expectSettingsSidebarSections(page, ["general", "diagnostics", "about"]);
+    await expectSettingsSidebarSections(page, ["preferences", "about"]);
     await expectCompactSettingsList(page);
 
     await expectSettingsBackButton(page);
@@ -144,9 +142,9 @@ test.describe("Settings — compact master-detail", () => {
     await gotoAppShell(page);
     await openCompactSettings(page, buildOpenProjectRoute());
 
-    await openSettingsSection(page, "diagnostics");
-    await expectAppRoute(page, buildSettingsSectionRoute("diagnostics"));
-    await expectDiagnosticsContent(page);
+    await openSettingsSection(page, "preferences");
+    await expectAppRoute(page, buildSettingsSectionRoute("preferences"));
+    await expectPreferencesContent(page);
     await expectSettingsSidebarHidden(page);
     await expectSettingsBackButton(page);
   });

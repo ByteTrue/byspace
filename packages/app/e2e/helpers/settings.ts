@@ -20,12 +20,9 @@ interface SavedSettingsHostInput {
 }
 
 const SECTION_LABELS = {
-  general: "General",
-  appearance: "Appearance",
+  preferences: "Preferences",
   shortcuts: "Shortcuts",
-  integrations: "Integrations",
   permissions: "Permissions",
-  diagnostics: "Diagnostics",
   about: "About",
 } as const;
 
@@ -250,20 +247,14 @@ export async function expectDirectHostUriHidden(page: Page): Promise<void> {
   await expect(page.getByTestId("direct-host-uri-input")).toHaveCount(0);
 }
 
-export async function expectDiagnosticsContent(page: Page): Promise<void> {
+export async function expectPreferencesContent(page: Page): Promise<void> {
+  await expect(page.getByText("Default send", { exact: true }).first()).toBeVisible();
+  await expect(page.getByText("Theme", { exact: true }).first()).toBeVisible();
   await expect(page.getByRole("button", { name: "Play test" })).toBeVisible();
 }
 
 export async function expectAboutContent(page: Page): Promise<void> {
-  await expect(page.getByText("App version", { exact: true }).first()).toBeVisible();
-}
-
-export async function expectGeneralContent(page: Page): Promise<void> {
-  await expect(page.getByText("Default send", { exact: true }).first()).toBeVisible();
-}
-
-export async function expectAppearanceContent(page: Page): Promise<void> {
-  await expect(page.getByText("Highlight theme", { exact: true }).first()).toBeVisible();
+  await expect(page.getByText("App version", { exact: true })).toBeVisible();
 }
 
 export async function expectHostLabelDisplayed(page: Page): Promise<void> {
@@ -367,8 +358,10 @@ export async function expectRetiredSidebarSectionsAbsent(page: Page): Promise<vo
   await expect(sidebar).toBeVisible();
 
   // App group rows remain top-level.
-  await expect(sidebar.getByRole("button", { name: "General", exact: true })).toBeVisible();
-  await expect(sidebar.getByRole("button", { name: "Diagnostics", exact: true })).toBeVisible();
+  await expect(sidebar.getByRole("button", { name: "Preferences", exact: true })).toBeVisible();
+  await expect(sidebar.getByRole("button", { name: "General", exact: true })).toHaveCount(0);
+  await expect(sidebar.getByRole("button", { name: "Appearance", exact: true })).toHaveCount(0);
+  await expect(sidebar.getByRole("button", { name: "Diagnostics", exact: true })).toHaveCount(0);
   await expect(sidebar.getByRole("button", { name: "About", exact: true })).toBeVisible();
   await expect(sidebar.getByRole("button", { name: "Daemon", exact: true })).toHaveCount(0);
 

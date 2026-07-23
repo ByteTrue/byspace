@@ -1312,12 +1312,9 @@ export const zhCN: TranslationResources = {
     },
     groupInfo: "关于 {{title}}",
     sections: {
-      general: "通用",
-      appearance: "外观",
+      preferences: "偏好设置",
       shortcuts: "快捷键",
-      integrations: "集成",
       permissions: "权限",
-      diagnostics: "诊断",
       about: "关于",
     },
     hostSections: {
@@ -1504,41 +1501,6 @@ export const zhCN: TranslationResources = {
         showKeyboardShortcuts: "焦点不在文本输入框或终端内时可用。",
       },
     },
-    integrations: {
-      title: "集成",
-      docs: {
-        cli: "CLI 文档",
-        skills: "Skills 文档",
-        openCli: "打开 CLI 文档",
-        openSkills: "打开 skills 文档",
-      },
-      commandLine: {
-        title: "命令行",
-        description: "从终端控制 Agent 并运行脚本",
-      },
-      skills: {
-        title: "编排 skills",
-        description: "教会 Agent 通过 CLI 编排任务",
-        updateAvailable: "有更新可用",
-        updateTitle: "更新 BySpace skills？",
-        updateFallback: "将内置 skills 同步到你的机器。",
-        uninstallTitle: "卸载 BySpace skills？",
-        uninstallMessage: "会从 ~/.agents、~/.claude、~/.codex 移除所有 BySpace 编排 skills。",
-      },
-      actions: {
-        install: "安装",
-        installing: "正在安装...",
-        installed: "已安装",
-        update: "更新",
-        working: "处理中...",
-        uninstall: "卸载",
-      },
-      operations: {
-        add: "添加 skill",
-        update: "更新 skill",
-        delete: "删除 skill",
-      },
-    },
     permissions: {
       title: "权限",
       notifications: "通知",
@@ -1581,6 +1543,28 @@ export const zhCN: TranslationResources = {
           title: "启用 BySpace tools",
           hint: "Agent 将能够管理 worktree、Agent 和计划",
           accessibilityLabel: "注入 BySpace tools",
+        },
+        skills: {
+          title: "编排 Skills",
+          installHint: "为受支持的编程 Agent 安装 BySpace 内置的五个 Skill",
+          installedHint: "已安装，且与此 Host 上的版本一致",
+          updateHint: "已安装的 Skill 与当前 BySpace 版本不同",
+          updateHost: "更新 Host 后即可管理编排 Skills",
+          install: "安装",
+          update: "更新",
+          uninstall: "卸载",
+          saving: "保存中...",
+          installConfirmTitle: "安装或更新编排 Skills？",
+          installConfirmMessage:
+            "BySpace 将在此 Host 上同步五个内置 Skill。其他 Skill 不会更改，未由 BySpace 管理的同名冲突副本会被保留。",
+          updateConfirmTitle: "更新编排 Skills？",
+          updateConfirmMessage:
+            "BySpace 将用当前版本内置的五个 Skill 替换托管副本。其他 Skill 不会更改。",
+          uninstallConfirmTitle: "卸载编排 Skills？",
+          uninstallConfirmMessage:
+            "BySpace 将移除此 Host 上未修改的托管副本。已修改的副本会被保留。",
+          errorTitle: "无法管理编排 Skills",
+          unknownError: "未知错误",
         },
         systemPrompt: {
           title: "System prompt",

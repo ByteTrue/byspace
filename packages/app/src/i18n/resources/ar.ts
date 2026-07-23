@@ -1324,12 +1324,9 @@ export const ar: TranslationResources = {
     },
     groupInfo: "حول{{title}}",
     sections: {
-      general: "عام",
-      appearance: "مظهر",
+      preferences: "التفضيلات",
       shortcuts: "الاختصارات",
-      integrations: "التكامل",
       permissions: "الأذونات",
-      diagnostics: "التشخيص",
       about: "عن",
     },
     hostSections: {
@@ -1517,41 +1514,6 @@ export const ar: TranslationResources = {
         showKeyboardShortcuts: "متاح عندما لا يكون التركيز في حقل نص أو محطة طرفية.",
       },
     },
-    integrations: {
-      title: "التكامل",
-      docs: {
-        cli: "مستندات CLI",
-        skills: "وثائق المهارات",
-        openCli: "افتح وثائق CLI",
-        openSkills: "فتح وثائق المهارات",
-      },
-      commandLine: {
-        title: "سطر الأوامر",
-        description: "وكلاء التحكم والبرنامج النصي من المحطة الطرفية الخاصة بك",
-      },
-      skills: {
-        title: "مهارات التنسيق",
-        description: "قم بتعليم عملائك كيفية التنسيق من خلال CLI",
-        updateAvailable: "التحديث متاح",
-        updateTitle: "تحديث مهارات BySpace ؟",
-        updateFallback: "مزامنة المهارات المجمعة لجهازك.",
-        uninstallTitle: "إلغاء تثبيت مهارات BySpace ؟",
-        uninstallMessage: "يزيل جميع مهارات تنسيق BySpace من ~/.agents ، ~/.claude ، ~/.codex.",
-      },
-      actions: {
-        install: "ثَبَّتَ",
-        installing: "جارٍ التثبيت...",
-        installed: "تم التثبيت",
-        update: "تحديث",
-        working: "عمل...",
-        uninstall: "إلغاء التثبيت",
-      },
-      operations: {
-        add: "أضف مهارة",
-        update: "تحديث المهارة",
-        delete: "حذف المهارة",
-      },
-    },
     permissions: {
       title: "الأذونات",
       notifications: "إشعارات",
@@ -1594,6 +1556,28 @@ export const ar: TranslationResources = {
           title: "تمكين أدوات BySpace",
           hint: "سيتمكن الوكلاء من إدارة أشجار العمل والوكلاء والجداول الزمنية",
           accessibilityLabel: "حقن أدوات BySpace",
+        },
+        skills: {
+          title: "مهارات التنسيق",
+          installHint: "تثبيت مهارات BySpace الخمس المضمنة للوكلاء المدعومين",
+          installedHint: "مثبتة ومحدّثة على هذا المضيف",
+          updateHint: "تختلف المهارات المثبتة عن إصدار BySpace الحالي",
+          updateHost: "حدّث المضيف لإدارة مهارات التنسيق",
+          install: "تثبيت",
+          update: "تحديث",
+          uninstall: "إلغاء التثبيت",
+          saving: "جارٍ الحفظ...",
+          installConfirmTitle: "تثبيت مهارات التنسيق أو تحديثها؟",
+          installConfirmMessage:
+            "سيزامن BySpace مهاراته الخمس المضمنة على هذا المضيف. لن تتغير المهارات الأخرى، وستُحفظ النسخ المتعارضة غير المُدارة.",
+          updateConfirmTitle: "تحديث مهارات التنسيق؟",
+          updateConfirmMessage:
+            "سيستبدل BySpace نسخه المُدارة بالمهارات الخمس المضمنة في هذا الإصدار. لن تتغير المهارات الأخرى.",
+          uninstallConfirmTitle: "إلغاء تثبيت مهارات التنسيق؟",
+          uninstallConfirmMessage:
+            "سيزيل BySpace النسخ المُدارة غير المعدّلة من هذا المضيف. وستُحفظ النسخ المعدّلة.",
+          errorTitle: "تعذّرت إدارة مهارات التنسيق",
+          unknownError: "خطأ غير معروف",
         },
         systemPrompt: {
           title: "موجه النظام",
