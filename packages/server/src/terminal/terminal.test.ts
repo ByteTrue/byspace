@@ -114,9 +114,7 @@ const temporaryDirs: string[] = [];
 
 afterEach(async () => {
   vi.useRealTimers();
-  for (const session of sessions) {
-    session.kill();
-  }
+  await Promise.all(sessions.map((session) => session.killAndWait()));
   sessions.length = 0;
   while (temporaryDirs.length > 0) {
     const dir = temporaryDirs.pop();
