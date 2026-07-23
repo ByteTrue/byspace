@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.2.0-beta.4 - 2026-07-22
+## 0.2.0 - 2026-07-24
 
 - Restores native terminal paste behavior, including bracketed multiline paste, clipboard image upload, and Windows ConPTY framing.
 - Integrates terminal launch profiles and activity hooks into provider settings for Claude, Codex, OpenCode, and Pi.
