@@ -34,11 +34,7 @@ export function resolveOrchestrationSkillsTargets(byspaceHome: string): Orchestr
   return {
     sourceDir:
       process.env.BYSPACE_NODE_ENV === "development" ? checkoutSourceDir : packagedSourceDir,
-    installDirs: [
-      path.join(home, ".agents", "skills"),
-      path.join(home, ".claude", "skills"),
-      path.join(home, ".codex", "skills"),
-    ],
+    installDirs: [path.join(home, ".agents", "skills"), path.join(home, ".claude", "skills")],
     manifestPath: path.join(byspaceHome, "managed-orchestration-skills.json"),
   };
 }

@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   BYSPACE_ORCHESTRATION_SKILL_NAMES,
   getOrchestrationSkillsStatus,
+  resolveOrchestrationSkillsTargets,
   setOrchestrationSkillsInstalled,
   type OrchestrationSkillsTargets,
 } from "./orchestration-skills.js";
@@ -25,7 +26,6 @@ beforeEach(async () => {
     installDirs: [
       path.join(root, "home", ".agents", "skills"),
       path.join(root, "home", ".claude", "skills"),
-      path.join(root, "home", ".codex", "skills"),
     ],
     manifestPath: path.join(root, "byspace-home", "managed-orchestration-skills.json"),
   };
@@ -36,6 +36,13 @@ beforeEach(async () => {
 
 afterEach(async () => {
   await fs.rm(root, { recursive: true, force: true });
+});
+
+it("installs only to the shared and Claude skill roots", () => {
+  expect(resolveOrchestrationSkillsTargets(root).installDirs).toEqual([
+    path.join(os.homedir(), ".agents", "skills"),
+    path.join(os.homedir(), ".claude", "skills"),
+  ]);
 });
 
 describe("orchestration skills", () => {
@@ -61,7 +68,7 @@ describe("orchestration skills", () => {
     await setOrchestrationSkillsInstalled(true, targets);
     await fs.writeFile(path.join(targets.installDirs[0], "byspace", "SKILL.md"), "locally edited");
     await fs.writeFile(path.join(targets.installDirs[0], "byspace", "obsolete.md"), "stale");
-    await fs.rm(path.join(targets.installDirs[2], "byspace-loop"), {
+    await fs.rm(path.join(targets.installDirs[1], "byspace-loop"), {
       recursive: true,
       force: true,
     });

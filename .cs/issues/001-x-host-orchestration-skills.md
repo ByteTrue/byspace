@@ -15,7 +15,7 @@ epic: ""
 
 ## 范围
 
-- 包含：随 daemon npm 包分发 `skills/byspace*`；Host-scoped 状态与变更 RPC；Web Host 设置入口；安装到 `~/.agents/skills`、`~/.claude/skills`、`~/.codex/skills`；清理已删除桌面 Integrations 的路由、文案和样式残留。
+- 包含：随 daemon npm 包分发 `skills/byspace*`；Host-scoped 状态与变更 RPC；Web Host 设置入口；安装到 `~/.agents/skills`、`~/.claude/skills`；清理已删除桌面 Integrations 的路由、文案和样式残留。
 - 不包含：任意第三方 Skill 市场、上传自定义 Skill、自动安装/自动更新、CLI 安装管理、Provider 启动后自动 reload。
 
 ## 归属
@@ -61,7 +61,7 @@ epic: ""
 
 ## 质量目标
 
-- 功能适宜性：安装/更新后三个目标目录与随包资源一致；非托管同名目录不覆盖，已修改托管副本不卸载；以真实临时文件系统测试验证。
+- 功能适宜性：安装/更新后两个目标目录与随包资源一致；非托管同名目录不覆盖，已修改托管副本不卸载；以真实临时文件系统测试验证。
 - 兼容性：新客户端面对旧 daemon 只显示升级提示；新 RPC 使用 dotted namespace，schema 仅追加可选 feature flag；以协议/typecheck 和 capability 分支验证。
 - 可靠性：重复安装/更新/卸载幂等，失败不会被 UI 隐藏；以 service 单测与 UI 可观察状态验证。
 - 信息安全性：浏览器不能提交路径或 Skill 名称，daemon 只操作内置白名单及固定 home 子目录；以无用户路径输入的 RPC schema 和文件操作测试验证。
@@ -77,7 +77,7 @@ epic: ""
 
 ### 这次要怎么做
 
-构建时把根 `skills/` 复制到 server `dist/skills`。daemon 深模块负责资源定位、内容哈希、所有权 manifest、状态差异、串行变更与三个固定目标目录的整目录替换；session 只做 RPC 转发。Web 通过目标 Host 的 client 调用 RPC，在 Agents 页面呈现状态和动作。
+构建时把根 `skills/` 复制到 server `dist/skills`。daemon 深模块负责资源定位、内容哈希、所有权 manifest、状态差异、串行变更与两个固定目标目录的整目录替换；session 只做 RPC 转发。Web 通过目标 Host 的 client 调用 RPC，在 Agents 页面呈现状态和动作。
 
 ### 请求 / 数据怎么走
 
