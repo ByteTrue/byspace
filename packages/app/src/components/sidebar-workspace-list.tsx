@@ -590,6 +590,7 @@ function WorkspaceRowRightGroup({
   workspace,
   isHovered,
   isTouchPlatform,
+  isCompactBreakpoint,
   isCreating,
   showShortcutBadge,
   shortcutNumber,
@@ -608,6 +609,7 @@ function WorkspaceRowRightGroup({
   workspace: SidebarWorkspaceEntry;
   isHovered: boolean;
   isTouchPlatform: boolean;
+  isCompactBreakpoint: boolean;
   isCreating: boolean;
   showShortcutBadge: boolean;
   shortcutNumber: number | null;
@@ -625,7 +627,7 @@ function WorkspaceRowRightGroup({
 }) {
   const { t } = useTranslation();
   const showShortcut = showShortcutBadge && shortcutNumber !== null;
-  const showKebab = Boolean(onArchive && (isHovered || isTouchPlatform));
+  const showKebab = Boolean(onArchive && (isHovered || isTouchPlatform || isCompactBreakpoint));
   const showKebabInSlot = showKebab && !showShortcut;
   const shouldRenderActionSlot = Boolean(onArchive || workspace.diffStat);
 
@@ -1092,7 +1094,7 @@ function WorkspaceRowInner({
   onTogglePin,
   reserveIdleStatusIndicatorSpace = true,
 }: WorkspaceRowInnerProps) {
-  const _isCompact = useIsCompactFormFactor();
+  const isCompactBreakpoint = useIsCompactFormFactor();
   const isTouchPlatform = platformIsNative;
   const interaction = useLongPressDragInteraction({
     drag,
@@ -1167,6 +1169,7 @@ function WorkspaceRowInner({
                   workspace={workspace}
                   isHovered={isHovered}
                   isTouchPlatform={isTouchPlatform}
+                  isCompactBreakpoint={isCompactBreakpoint}
                   isCreating={isCreating}
                   showShortcutBadge={showShortcutBadge}
                   shortcutNumber={shortcutNumber}

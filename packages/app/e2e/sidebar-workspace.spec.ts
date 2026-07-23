@@ -164,6 +164,31 @@ test.describe("Mobile sidebar panelState transition", () => {
     await closeMobileAgentSidebar(page);
     await expectMobileAgentSidebarHidden(page);
   });
+
+  test("shows the workspace menu trigger without hover in compact layout", async ({ page }) => {
+    const workspace = await seedWorkspace({ repoPrefix: "sidebar-mobile-workspace-menu-" });
+    const workspaceKey = `${getServerId()}:${workspace.workspaceId}`;
+
+    try {
+      await gotoAppShell(page);
+      await openMobileAgentSidebar(page);
+      await expectMobileAgentSidebarVisible(page);
+      await waitForSidebarProject(page, path.basename(workspace.repoPath));
+      await waitForSidebarWorkspace(page, workspace.workspaceId);
+
+      const kebab = page.getByTestId(`sidebar-workspace-kebab-${workspaceKey}`);
+      await expect(kebab).toBeVisible({ timeout: 30_000 });
+      await kebab.click();
+
+      await expect(
+        page.getByTestId(`sidebar-workspace-menu-copy-path-${workspaceKey}`),
+      ).toBeVisible({
+        timeout: 30_000,
+      });
+    } finally {
+      await workspace.cleanup();
+    }
+  });
 });
 
 test.describe("Half-screen desktop layout", () => {
