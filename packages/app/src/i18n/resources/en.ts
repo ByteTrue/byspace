@@ -1336,12 +1336,9 @@ export const en = {
     },
     groupInfo: "About {{title}}",
     sections: {
-      general: "General",
-      appearance: "Appearance",
+      preferences: "Preferences",
       shortcuts: "Shortcuts",
-      integrations: "Integrations",
       permissions: "Permissions",
-      diagnostics: "Diagnostics",
       about: "About",
     },
     hostSections: {
@@ -1446,10 +1443,6 @@ export const en = {
         options: {
           light: "Light",
           dark: "Dark",
-          zinc: "Zinc",
-          midnight: "Midnight",
-          claude: "Claude",
-          ghostty: "Ghostty",
           auto: "System",
         },
       },
@@ -1458,24 +1451,12 @@ export const en = {
       },
       fonts: {
         title: "Fonts",
-        systemDefault: "System default",
-        interfaceFont: "Interface font",
-        interfaceFontHint: "Used across the app. Leave empty for the system default",
-        interfaceFontAccessibility: "Interface font family",
         interfaceSize: "Interface size",
         interfaceSizeAccessibility: "Interface font size",
-        codeFont: "Code font",
-        codeFontHint:
-          "Used in code, diffs, and the terminal output. Leave empty for the system default",
-        codeFontAccessibility: "Code font family",
         codeSize: "Code size",
         codeSizeAccessibility: "Code font size",
       },
       syntax: {
-        title: "Syntax",
-        highlightTheme: "Highlight theme",
-        highlightThemeHint: "Colors for code, independent of the app theme",
-        highlightThemeAccessibility: "Highlight theme: {{value}}",
         previewAccessibility: "Live preview of the syntax theme and code font",
       },
     },
@@ -1543,42 +1524,6 @@ export const en = {
         showKeyboardShortcuts: "Available when focus is not in a text field or terminal.",
       },
     },
-    integrations: {
-      title: "Integrations",
-      docs: {
-        cli: "CLI docs",
-        skills: "Skills docs",
-        openCli: "Open CLI documentation",
-        openSkills: "Open skills documentation",
-      },
-      commandLine: {
-        title: "Command line",
-        description: "Control and script agents from your terminal",
-      },
-      skills: {
-        title: "Orchestration skills",
-        description: "Teach your agents to orchestrate through the CLI",
-        updateAvailable: "Update available",
-        updateTitle: "Update BySpace skills?",
-        updateFallback: "Sync bundled skills to your machine.",
-        uninstallTitle: "Uninstall BySpace skills?",
-        uninstallMessage:
-          "Removes all BySpace orchestration skills from ~/.agents, ~/.claude, ~/.codex.",
-      },
-      actions: {
-        install: "Install",
-        installing: "Installing...",
-        installed: "Installed",
-        update: "Update",
-        working: "Working...",
-        uninstall: "Uninstall",
-      },
-      operations: {
-        add: "Add skill",
-        update: "Update skill",
-        delete: "Delete skill",
-      },
-    },
     permissions: {
       title: "Permissions",
       notifications: "Notifications",
@@ -1621,6 +1566,28 @@ export const en = {
           title: "Enable BySpace tools",
           hint: "Agents will be able to manage worktrees, agents and schedules",
           accessibilityLabel: "Inject BySpace tools",
+        },
+        skills: {
+          title: "Orchestration skills",
+          installHint: "Install the five bundled BySpace skills for supported coding agents",
+          installedHint: "Installed and up to date on this host",
+          updateHint: "Installed skills differ from this BySpace version",
+          updateHost: "Update the host to manage orchestration skills",
+          install: "Install",
+          update: "Update",
+          uninstall: "Uninstall",
+          saving: "Saving...",
+          installConfirmTitle: "Install or update orchestration skills?",
+          installConfirmMessage:
+            "BySpace will sync its five bundled skills on this host. Unrelated skills are not changed, and conflicting unowned copies are preserved.",
+          updateConfirmTitle: "Update orchestration skills?",
+          updateConfirmMessage:
+            "BySpace will replace its managed copies with the five skills bundled in this version. Unrelated skills are not changed.",
+          uninstallConfirmTitle: "Uninstall orchestration skills?",
+          uninstallConfirmMessage:
+            "BySpace will remove its unmodified managed copies from this host. Modified copies are preserved.",
+          errorTitle: "Could not manage orchestration skills",
+          unknownError: "Unknown error",
         },
         systemPrompt: {
           title: "System prompt",

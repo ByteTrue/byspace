@@ -1,4 +1,3 @@
-import { isSyntaxThemeId, type SyntaxThemeId } from "@bytetrue/byspace-highlight";
 import type { QueryClient } from "@tanstack/react-query";
 import { parseAppLanguage, type AppLanguage } from "@/i18n/locales";
 import { THEME_TO_UNISTYLES, type ThemeName } from "@/styles/theme";
@@ -22,10 +21,9 @@ export const MAX_TERMINAL_SCROLLBACK_LINES = 1_000_000;
 export const DEFAULT_UI_FONT_SIZE = 16; // == FONT_SIZE.base
 export const MIN_UI_FONT_SIZE = 11;
 export const MAX_UI_FONT_SIZE = 24;
-export const DEFAULT_CODE_FONT_SIZE = 12; // == FONT_SIZE.code
+export const DEFAULT_CODE_FONT_SIZE = 14; // == FONT_SIZE.code (code, diff, and terminal)
 export const MIN_CODE_FONT_SIZE = 9;
 export const MAX_CODE_FONT_SIZE = 22; // line-height 1.5×22=33 stays safe
-export const MAX_FONT_FAMILY_LENGTH = 200;
 
 export interface AppSettings {
   theme: ThemeName | "auto";
@@ -33,11 +31,8 @@ export interface AppSettings {
   sendBehavior: SendBehavior;
   serviceUrlBehavior: ServiceUrlBehavior;
   terminalScrollbackLines: number;
-  uiFontFamily: string; // "" = platform default UI stack
-  monoFontFamily: string; // "" = platform default mono stack
   uiFontSize: number; // clamped px, default 16
-  codeFontSize: number; // clamped px, default 12
-  syntaxTheme: SyntaxThemeId; // default "one"
+  codeFontSize: number; // clamped px, default 14 (code, diff, and terminal)
   workspaceTitleSource: WorkspaceTitleSource;
   autoExpandReasoning: boolean;
   toolCallDetailLevel: ToolCallDetailLevel;
@@ -53,11 +48,8 @@ export const DEFAULT_CLIENT_SETTINGS: AppSettings = {
   sendBehavior: "interrupt",
   serviceUrlBehavior: "ask",
   terminalScrollbackLines: DEFAULT_TERMINAL_SCROLLBACK_LINES,
-  uiFontFamily: "",
-  monoFontFamily: "",
   uiFontSize: DEFAULT_UI_FONT_SIZE,
   codeFontSize: DEFAULT_CODE_FONT_SIZE,
-  syntaxTheme: "one",
   workspaceTitleSource: "title",
   autoExpandReasoning: false,
   toolCallDetailLevel: "detailed",
@@ -167,14 +159,6 @@ function pickAppSettings(stored: StoredAppSettings): Partial<AppSettings> {
   if (terminalScrollbackLines !== null) {
     result.terminalScrollbackLines = terminalScrollbackLines;
   }
-  const uiFontFamily = sanitizeFontFamily(stored.uiFontFamily);
-  if (uiFontFamily !== null) {
-    result.uiFontFamily = uiFontFamily;
-  }
-  const monoFontFamily = sanitizeFontFamily(stored.monoFontFamily);
-  if (monoFontFamily !== null) {
-    result.monoFontFamily = monoFontFamily;
-  }
   const uiFontSize = parseClampedFontSize(stored.uiFontSize, {
     min: MIN_UI_FONT_SIZE,
     max: MAX_UI_FONT_SIZE,
@@ -188,9 +172,6 @@ function pickAppSettings(stored: StoredAppSettings): Partial<AppSettings> {
   });
   if (codeFontSize !== null) {
     result.codeFontSize = codeFontSize;
-  }
-  if (typeof stored.syntaxTheme === "string" && isSyntaxThemeId(stored.syntaxTheme)) {
-    result.syntaxTheme = stored.syntaxTheme;
   }
   if (
     typeof stored.workspaceTitleSource === "string" &&
@@ -246,24 +227,4 @@ export function parseClampedFontSize(
     return null;
   }
   return Math.min(bounds.max, Math.max(bounds.min, Math.floor(numericValue)));
-}
-
-export function sanitizeFontFamily(value: unknown): string | null {
-  if (typeof value !== "string") {
-    return null;
-  }
-  const trimmed = value.trim();
-  if (trimmed.length === 0) {
-    return ""; // explicit empty = default
-  }
-  if (trimmed.length > MAX_FONT_FAMILY_LENGTH) {
-    return null;
-  }
-  if (/[;{}<>]/.test(trimmed)) {
-    return null; // would break the web CSS font-family declaration
-  }
-  if ([...trimmed].some((char) => char.charCodeAt(0) <= 0x1f)) {
-    return null; // control chars would corrupt the font-family string
-  }
-  return trimmed; // quotes/commas are legit in stacks
 }

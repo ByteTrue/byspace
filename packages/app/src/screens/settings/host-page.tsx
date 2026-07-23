@@ -1,5 +1,6 @@
 import { ArrowUpToLine, Globe, Monitor, Pencil, RotateCw, Trash2 } from "lucide-react-native";
 import type { TFunction } from "i18next";
+import type { OrchestrationSkillsState } from "@bytetrue/byspace-protocol/messages";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Alert, Pressable, Text, View } from "react-native";
@@ -185,6 +186,7 @@ export function HostAgentsPage({ serverId }: { serverId: string }) {
       {isConnected ? (
         <SettingsSection title={t("settings.hostSections.agents")}>
           <InjectBySpaceToolsCard serverId={serverId} />
+          <OrchestrationSkillsCard serverId={serverId} />
           <AppendSystemPromptCard serverId={serverId} />
         </SettingsSection>
       ) : (
@@ -896,6 +898,178 @@ function UpdateDaemonCard({ host }: { host: HostProfile }) {
             title={updateState.title}
             description={updateState.message}
             testID="host-page-update-error"
+          />
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+type OrchestrationSkillsViewState =
+  | { status: "loading" }
+  | { status: "ready"; state: OrchestrationSkillsState }
+  | { status: "confirming"; state: OrchestrationSkillsState }
+  | { status: "saving"; state: OrchestrationSkillsState }
+  | { status: "failed"; message: string };
+
+function OrchestrationSkillsCard({ serverId }: { serverId: string }) {
+  const { t } = useTranslation();
+  const daemonClient = useHostRuntimeClient(serverId);
+  const isConnected = useHostRuntimeIsConnected(serverId);
+  const isSupported = useSessionStore(
+    (state) => state.sessions[serverId]?.serverInfo?.features?.orchestrationSkills === true,
+  );
+  const [view, setView] = useState<OrchestrationSkillsViewState>({ status: "loading" });
+  const requestVersionRef = useRef(0);
+  const invalidateRequests = useCallback(() => {
+    requestVersionRef.current++;
+  }, []);
+
+  const loadStatus = useCallback(() => {
+    if (!daemonClient || !isConnected || !isSupported) return;
+    const requestVersion = ++requestVersionRef.current;
+    setView({ status: "loading" });
+    void (async () => {
+      try {
+        const result = await daemonClient.getOrchestrationSkillsStatus();
+        if (requestVersion === requestVersionRef.current) {
+          setView({ status: "ready", state: result.state });
+        }
+      } catch (error) {
+        if (requestVersion === requestVersionRef.current) {
+          setView({
+            status: "failed",
+            message:
+              error instanceof Error
+                ? error.message
+                : t("settings.host.orchestration.skills.unknownError"),
+          });
+        }
+      }
+    })();
+  }, [daemonClient, isConnected, isSupported, t]);
+
+  useEffect(() => {
+    loadStatus();
+    return invalidateRequests;
+  }, [invalidateRequests, loadStatus]);
+
+  const handleAction = useCallback(() => {
+    if (!daemonClient || view.status !== "ready") return;
+    const actionState = view.state;
+    const installed = actionState !== "up-to-date";
+    const requestVersion = ++requestVersionRef.current;
+    let confirmLabel = t("settings.host.orchestration.skills.install");
+    let confirmTitle = t("settings.host.orchestration.skills.installConfirmTitle");
+    let confirmMessage = t("settings.host.orchestration.skills.installConfirmMessage");
+    if (!installed) {
+      confirmLabel = t("settings.host.orchestration.skills.uninstall");
+      confirmTitle = t("settings.host.orchestration.skills.uninstallConfirmTitle");
+      confirmMessage = t("settings.host.orchestration.skills.uninstallConfirmMessage");
+    } else if (actionState === "drift") {
+      confirmLabel = t("settings.host.orchestration.skills.update");
+      confirmTitle = t("settings.host.orchestration.skills.updateConfirmTitle");
+      confirmMessage = t("settings.host.orchestration.skills.updateConfirmMessage");
+    }
+    setView({ status: "confirming", state: actionState });
+
+    void (async () => {
+      const confirmed = await confirmDialog({
+        title: confirmTitle,
+        message: confirmMessage,
+        confirmLabel,
+        cancelLabel: t("common.actions.cancel"),
+        destructive: !installed,
+      });
+      if (requestVersion !== requestVersionRef.current) return;
+      if (!confirmed) {
+        setView({ status: "ready", state: actionState });
+        return;
+      }
+
+      setView({ status: "saving", state: actionState });
+      try {
+        const result = await daemonClient.setOrchestrationSkillsInstalled(installed);
+        if (requestVersion === requestVersionRef.current) {
+          setView({ status: "ready", state: result.state });
+        }
+      } catch (error) {
+        if (requestVersion === requestVersionRef.current) {
+          setView({
+            status: "failed",
+            message:
+              error instanceof Error
+                ? error.message
+                : t("settings.host.orchestration.skills.unknownError"),
+          });
+        }
+      }
+    })();
+  }, [daemonClient, t, view]);
+
+  if (!isSupported) {
+    return (
+      <View style={settingsStyles.card} testID="host-orchestration-skills-unsupported">
+        <View style={settingsStyles.row}>
+          <View style={settingsStyles.rowContent}>
+            <Text style={settingsStyles.rowTitle}>
+              {t("settings.host.orchestration.skills.title")}
+            </Text>
+            <Text style={settingsStyles.rowHint}>
+              {t("settings.host.orchestration.skills.updateHost")}
+            </Text>
+          </View>
+        </View>
+      </View>
+    );
+  }
+
+  const state =
+    view.status === "ready" || view.status === "confirming" || view.status === "saving"
+      ? view.state
+      : null;
+  let actionLabel = t("settings.host.orchestration.skills.install");
+  let hint = t("settings.host.orchestration.skills.installHint");
+  if (view.status === "saving") {
+    actionLabel = t("settings.host.orchestration.skills.saving");
+  } else if (state === "up-to-date") {
+    actionLabel = t("settings.host.orchestration.skills.uninstall");
+    hint = t("settings.host.orchestration.skills.installedHint");
+  } else if (state === "drift") {
+    actionLabel = t("settings.host.orchestration.skills.update");
+    hint = t("settings.host.orchestration.skills.updateHint");
+  }
+
+  return (
+    <View style={settingsStyles.card} testID="host-orchestration-skills-card">
+      <View style={settingsStyles.row}>
+        <View style={settingsStyles.rowContent}>
+          <Text style={settingsStyles.rowTitle}>
+            {t("settings.host.orchestration.skills.title")}
+          </Text>
+          <Text style={settingsStyles.rowHint}>{hint}</Text>
+        </View>
+        <Button
+          variant="outline"
+          size="sm"
+          onPress={view.status === "failed" ? loadStatus : handleAction}
+          disabled={
+            view.status === "loading" ||
+            view.status === "confirming" ||
+            view.status === "saving" ||
+            !daemonClient
+          }
+          testID="host-orchestration-skills-action"
+        >
+          {view.status === "failed" ? t("common.actions.retry") : actionLabel}
+        </Button>
+      </View>
+      {view.status === "failed" ? (
+        <View style={styles.updateFailure}>
+          <InlineAlert
+            variant="error"
+            title={t("settings.host.orchestration.skills.errorTitle")}
+            description={view.message}
           />
         </View>
       ) : null}

@@ -1358,12 +1358,9 @@ export const es: TranslationResources = {
     },
     groupInfo: "Acerca de{{title}}",
     sections: {
-      general: "General",
-      appearance: "Apariencia",
+      preferences: "Preferencias",
       shortcuts: "Atajos",
-      integrations: "Integraciones",
       permissions: "Permisos",
-      diagnostics: "Diagnóstico",
       about: "Acerca de",
     },
     hostSections: {
@@ -1471,10 +1468,6 @@ export const es: TranslationResources = {
         options: {
           light: "Luz",
           dark: "Oscuro",
-          zinc: "Zinc",
-          midnight: "Medianoche",
-          claude: "claudio",
-          ghostty: "fantasmal",
           auto: "Sistema",
         },
       },
@@ -1483,25 +1476,12 @@ export const es: TranslationResources = {
       },
       fonts: {
         title: "Fuentes",
-        systemDefault: "Valor predeterminado del sistema",
-        interfaceFont: "Fuente de interfaz",
-        interfaceFontHint:
-          "Utilizado en toda la aplicación. Déjelo vacío para el valor predeterminado del sistema.",
-        interfaceFontAccessibility: "Familia de fuentes de interfaz",
         interfaceSize: "Tamaño de la interfaz",
         interfaceSizeAccessibility: "Tamaño de fuente de la interfaz",
-        codeFont: "Fuente de código",
-        codeFontHint:
-          "Se utiliza en código, diferencias y salida del terminal. Déjelo vacío para el valor predeterminado del sistema.",
-        codeFontAccessibility: "Familia de fuentes de código",
         codeSize: "Tamaño del código",
         codeSizeAccessibility: "Tamaño de fuente del código",
       },
       syntax: {
-        title: "Sintaxis",
-        highlightTheme: "Tema destacado",
-        highlightThemeHint: "Colores para el código, independientemente del tema de la aplicación.",
-        highlightThemeAccessibility: "Tema destacado:{{value}}",
         previewAccessibility: "Vista previa en vivo del tema de sintaxis y fuente del código",
       },
     },
@@ -1569,42 +1549,6 @@ export const es: TranslationResources = {
         showKeyboardShortcuts: "Disponible cuando el foco no está en un campo de texto o terminal.",
       },
     },
-    integrations: {
-      title: "Integraciones",
-      docs: {
-        cli: "DocumentosCLI",
-        skills: "Documentos de habilidades",
-        openCli: "Abrir la documentación deCLI",
-        openSkills: "Documentación de habilidades abiertas",
-      },
-      commandLine: {
-        title: "línea de comando",
-        description: "Agentes de control y script desde tu terminal",
-      },
-      skills: {
-        title: "Habilidades de orquestación",
-        description: "Enseñe a sus agentes a orquestar a través delCLI",
-        updateAvailable: "Actualización disponible",
-        updateTitle: "¿Actualizar las habilidades deBySpace?",
-        updateFallback: "Sincronice las habilidades incluidas con su máquina.",
-        uninstallTitle: "¿Desinstalar las habilidadesBySpace?",
-        uninstallMessage:
-          "Elimina todas las habilidades de orquestaciónBySpacede ~/.agents, ~/.claude, ~/.codex.",
-      },
-      actions: {
-        install: "Instalar",
-        installing: "Instalando...",
-        installed: "Instalado",
-        update: "Actualizar",
-        working: "Laboral...",
-        uninstall: "Desinstalar",
-      },
-      operations: {
-        add: "Agregar habilidad",
-        update: "Actualizar habilidad",
-        delete: "Eliminar habilidad",
-      },
-    },
     permissions: {
       title: "Permisos",
       notifications: "Notificaciones",
@@ -1647,6 +1591,28 @@ export const es: TranslationResources = {
           title: "Habilitar herramientasBySpace",
           hint: "Los agentes podrán gestionar árboles de trabajo, agentes y horarios.",
           accessibilityLabel: "Inyectar herramientasBySpace",
+        },
+        skills: {
+          title: "Skills de orquestación",
+          installHint: "Instala los cinco skills incluidos de BySpace para los agentes compatibles",
+          installedHint: "Instalados y actualizados en este host",
+          updateHint: "Los skills instalados difieren de esta versión de BySpace",
+          updateHost: "Actualiza el host para gestionar los skills de orquestación",
+          install: "Instalar",
+          update: "Actualizar",
+          uninstall: "Desinstalar",
+          saving: "Guardando...",
+          installConfirmTitle: "¿Instalar o actualizar los skills de orquestación?",
+          installConfirmMessage:
+            "BySpace sincronizará sus cinco skills incluidos en este host. Los demás skills no cambiarán y se conservarán las copias en conflicto que BySpace no gestione.",
+          updateConfirmTitle: "¿Actualizar los skills de orquestación?",
+          updateConfirmMessage:
+            "BySpace reemplazará sus copias gestionadas por los cinco skills incluidos en esta versión. Los demás skills no cambiarán.",
+          uninstallConfirmTitle: "¿Desinstalar los skills de orquestación?",
+          uninstallConfirmMessage:
+            "BySpace eliminará del host sus copias gestionadas sin modificar. Las copias modificadas se conservarán.",
+          errorTitle: "No se pudieron gestionar los skills de orquestación",
+          unknownError: "Error desconocido",
         },
         systemPrompt: {
           title: "Aviso del sistema",

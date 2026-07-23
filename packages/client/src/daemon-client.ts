@@ -80,6 +80,8 @@ import type {
   DaemonGetStatusResponse,
   DaemonGetPairingOfferResponse,
   DiagnosticsResponse,
+  DaemonOrchestrationSkillsGetStatusResponse,
+  DaemonOrchestrationSkillsSetInstalledResponse,
   AgentRewindResponseMessage,
   ListTerminalsResponse,
   CreateTerminalResponse,
@@ -4196,6 +4198,25 @@ export class DaemonClient {
       },
       responseType: "daemon.get_status.response",
       timeout: options?.timeout,
+    });
+  }
+
+  async getOrchestrationSkillsStatus(
+    requestId?: string,
+  ): Promise<DaemonOrchestrationSkillsGetStatusResponse["payload"]> {
+    return this.sendNamespacedCorrelatedSessionRequest({
+      requestId,
+      message: { type: "daemon.orchestration_skills.get_status.request" },
+    });
+  }
+
+  async setOrchestrationSkillsInstalled(
+    installed: boolean,
+    requestId?: string,
+  ): Promise<DaemonOrchestrationSkillsSetInstalledResponse["payload"]> {
+    return this.sendNamespacedCorrelatedSessionRequest({
+      requestId,
+      message: { type: "daemon.orchestration_skills.set_installed.request", installed },
     });
   }
 

@@ -485,15 +485,7 @@ export function resolveKnownHostRoute(input: {
   return { kind: "redirect", href: "/welcome" };
 }
 
-export const SETTINGS_SECTION_SLUGS = [
-  "general",
-  "appearance",
-  "shortcuts",
-  "integrations",
-  "permissions",
-  "diagnostics",
-  "about",
-] as const;
+export const SETTINGS_SECTION_SLUGS = ["preferences", "shortcuts", "permissions", "about"] as const;
 
 export type SettingsSectionSlug = (typeof SETTINGS_SECTION_SLUGS)[number];
 
@@ -539,7 +531,7 @@ export function buildSettingsSectionRoute(section: SettingsSectionSlug) {
 }
 
 export function buildSettingsAddHostRoute(intentId: string | number = "1") {
-  return `/settings/general?addHost=${encodeURIComponent(String(intentId))}` as const;
+  return `/settings/preferences?addHost=${encodeURIComponent(String(intentId))}` as const;
 }
 
 export function buildSettingsHostRoute(serverId: string) {

@@ -17,17 +17,14 @@ import { Buffer } from "buffer";
 import {
   ArrowLeft,
   Settings,
-  Palette,
   Server,
   Network,
   Bot,
   Boxes,
   Gauge,
   Keyboard,
-  Stethoscope,
   Info,
   Shield,
-  Puzzle,
   Plus,
   FolderGit2,
 } from "lucide-react-native";
@@ -111,22 +108,14 @@ interface SidebarSectionItem {
 }
 
 const SIDEBAR_SECTION_ITEMS: SidebarSectionItem[] = [
-  { id: "general", labelKey: "settings.sections.general", icon: Settings },
-  { id: "appearance", labelKey: "settings.sections.appearance", icon: Palette },
+  { id: "preferences", labelKey: "settings.sections.preferences", icon: Settings },
   { id: "shortcuts", labelKey: "settings.sections.shortcuts", icon: Keyboard, desktopOnly: true },
-  {
-    id: "integrations",
-    labelKey: "settings.sections.integrations",
-    icon: Puzzle,
-    desktopOnly: true,
-  },
   {
     id: "permissions",
     labelKey: "settings.sections.permissions",
     icon: Shield,
     desktopOnly: true,
   },
-  { id: "diagnostics", labelKey: "settings.sections.diagnostics", icon: Stethoscope },
   { id: "about", labelKey: "settings.sections.about", icon: Info },
 ];
 
@@ -744,7 +733,7 @@ function SettingsSidebar({
               isSelected={selectedSectionId === item.id}
               onSelect={onSelectSection}
             />
-            {item.id === "general" ? (
+            {item.id === "preferences" ? (
               <SidebarProjectsButton isSelected={isProjectsSelected} onSelect={onSelectProjects} />
             ) : null}
           </Fragment>
@@ -1023,7 +1012,7 @@ export default function SettingsScreen({ view, openAddHostIntent = null }: Setti
   }, [isCompactLayout, router]);
 
   const handleHostRemoved = useCallback(() => {
-    const fallback = buildSettingsSectionRoute("general");
+    const fallback = buildSettingsSectionRoute("preferences");
     if (isCompactLayout) {
       router.replace("/settings");
     } else {
@@ -1079,28 +1068,26 @@ export default function SettingsScreen({ view, openAddHostIntent = null }: Setti
     }
     if (view.kind === "section") {
       switch (view.section) {
-        case "general":
+        case "preferences":
           return (
-            <GeneralSection
-              settings={settings}
-              handleSendBehaviorChange={handleSendBehaviorChange}
-              handleLanguageChange={handleLanguageChange}
-              handleTerminalScrollbackLinesChange={handleTerminalScrollbackLinesChange}
-            />
+            <>
+              <GeneralSection
+                settings={settings}
+                handleSendBehaviorChange={handleSendBehaviorChange}
+                handleLanguageChange={handleLanguageChange}
+                handleTerminalScrollbackLinesChange={handleTerminalScrollbackLinesChange}
+              />
+              <AppearanceSection />
+              <DiagnosticsSection
+                voiceAudioEngine={voiceAudioEngine}
+                isPlaybackTestRunning={isPlaybackTestRunning}
+                playbackTestResult={playbackTestResult}
+                handlePlaybackTest={handlePlaybackTest}
+              />
+            </>
           );
-        case "appearance":
-          return <AppearanceSection />;
         case "shortcuts":
           return <KeyboardShortcutsSection />;
-        case "diagnostics":
-          return (
-            <DiagnosticsSection
-              voiceAudioEngine={voiceAudioEngine}
-              isPlaybackTestRunning={isPlaybackTestRunning}
-              playbackTestResult={playbackTestResult}
-              handlePlaybackTest={handlePlaybackTest}
-            />
-          );
         case "about":
           return <AboutSection appVersion={appVersion} appVersionText={appVersionText} />;
       }

@@ -1340,12 +1340,9 @@ export const ja: TranslationResources = {
     },
     groupInfo: "{{title}}について",
     sections: {
-      general: "一般",
-      appearance: "外観",
+      preferences: "環境設定",
       shortcuts: "ショートカット",
-      integrations: "連携",
       permissions: "権限",
-      diagnostics: "診断",
       about: "アプリ情報",
     },
     hostSections: {
@@ -1450,10 +1447,6 @@ export const ja: TranslationResources = {
         options: {
           light: "ライト",
           dark: "ダーク",
-          zinc: "Zinc",
-          midnight: "Midnight",
-          claude: "Claude",
-          ghostty: "Ghostty",
           auto: "システム",
         },
       },
@@ -1462,25 +1455,12 @@ export const ja: TranslationResources = {
       },
       fonts: {
         title: "フォント",
-        systemDefault: "システムデフォルト",
-        interfaceFont: "インターフェースフォント",
-        interfaceFontHint:
-          "アプリ全体で使用されます。システムデフォルトにするには空のままにしてください",
-        interfaceFontAccessibility: "インターフェースフォントファミリー",
         interfaceSize: "インターフェースサイズ",
         interfaceSizeAccessibility: "インターフェースフォントサイズ",
-        codeFont: "コードフォント",
-        codeFontHint:
-          "コード、差分、ターミナル出力で使用されます。システムデフォルトにするには空のままにしてください",
-        codeFontAccessibility: "コードフォントファミリー",
         codeSize: "コードサイズ",
         codeSizeAccessibility: "コードフォントサイズ",
       },
       syntax: {
-        title: "構文ハイライト",
-        highlightTheme: "ハイライトテーマ",
-        highlightThemeHint: "コード用の色、アプリのテーマとは独立しています",
-        highlightThemeAccessibility: "ハイライトテーマ: {{value}}",
         previewAccessibility: "構文ハイライトテーマとコードフォントのライブプレビュー",
       },
     },
@@ -1549,42 +1529,6 @@ export const ja: TranslationResources = {
           "テキストフィールドまたはターミナルにフォーカスがない場合に利用できます。",
       },
     },
-    integrations: {
-      title: "連携",
-      docs: {
-        cli: "CLIドキュメント",
-        skills: "スキルドキュメント",
-        openCli: "CLIドキュメントを開く",
-        openSkills: "スキルドキュメントを開く",
-      },
-      commandLine: {
-        title: "コマンドライン",
-        description: "ターミナルからエージェントを制御し、スクリプトで操作",
-      },
-      skills: {
-        title: "オーケストレーションスキル",
-        description: "エージェントがCLI経由でオーケストレーションできるようにします。",
-        updateAvailable: "更新が利用可能",
-        updateTitle: "BySpaceスキルを更新しますか？",
-        updateFallback: "バンドルされたスキルをマシンに同期します。",
-        uninstallTitle: "BySpaceスキルをアンインストールしますか？",
-        uninstallMessage:
-          "~/.agents、~/.claude、~/.codexからすべてのBySpaceオーケストレーションスキルを削除します。",
-      },
-      actions: {
-        install: "インストール",
-        installing: "インストール中...",
-        installed: "インストール済み",
-        update: "更新",
-        working: "処理中...",
-        uninstall: "アンインストール",
-      },
-      operations: {
-        add: "スキルを追加",
-        update: "スキルを更新",
-        delete: "スキルを削除",
-      },
-    },
     permissions: {
       title: "権限",
       notifications: "通知",
@@ -1627,6 +1571,29 @@ export const ja: TranslationResources = {
           title: "BySpaceツールを有効にする",
           hint: "エージェントがワークツリー、エージェント、スケジュールを管理できるようになります",
           accessibilityLabel: "BySpaceツールを有効にする",
+        },
+        skills: {
+          title: "オーケストレーションスキル",
+          installHint:
+            "対応するコーディングエージェント向けに、BySpace同梱の5つのスキルをインストールします",
+          installedHint: "このホストにインストール済みで、最新です",
+          updateHint: "インストール済みのスキルが現在のBySpaceバージョンと異なります",
+          updateHost: "オーケストレーションスキルを管理するにはホストを更新してください",
+          install: "インストール",
+          update: "更新",
+          uninstall: "アンインストール",
+          saving: "保存中...",
+          installConfirmTitle: "オーケストレーションスキルをインストールまたは更新しますか？",
+          installConfirmMessage:
+            "BySpace同梱の5つのスキルをこのホストに同期します。ほかのスキルは変更せず、BySpaceが管理していない同名の競合コピーは保持します。",
+          updateConfirmTitle: "オーケストレーションスキルを更新しますか？",
+          updateConfirmMessage:
+            "BySpaceが管理するコピーを、このバージョンに同梱された5つのスキルで置き換えます。ほかのスキルは変更しません。",
+          uninstallConfirmTitle: "オーケストレーションスキルをアンインストールしますか？",
+          uninstallConfirmMessage:
+            "このホストから未変更の管理対象コピーを削除します。変更されたコピーは保持します。",
+          errorTitle: "オーケストレーションスキルを管理できませんでした",
+          unknownError: "不明なエラー",
         },
         systemPrompt: {
           title: "システムプロンプト",

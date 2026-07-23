@@ -1350,12 +1350,9 @@ export const ptBR: TranslationResources = {
     },
     groupInfo: "Sobre {{title}}",
     sections: {
-      general: "Geral",
-      appearance: "Aparência",
+      preferences: "Preferências",
       shortcuts: "Atalhos",
-      integrations: "Integrações",
       permissions: "Permissões",
-      diagnostics: "Diagnósticos",
       about: "Sobre",
     },
     hostSections: {
@@ -1462,10 +1459,6 @@ export const ptBR: TranslationResources = {
         options: {
           light: "Claro",
           dark: "Escuro",
-          zinc: "Zinc",
-          midnight: "Midnight",
-          claude: "Claude",
-          ghostty: "Ghostty",
           auto: "Sistema",
         },
       },
@@ -1474,24 +1467,12 @@ export const ptBR: TranslationResources = {
       },
       fonts: {
         title: "Fontes",
-        systemDefault: "Sistema padrão",
-        interfaceFont: "Fonte da interface",
-        interfaceFontHint: "Usada em todo o app. Deixe vazio para usar o padrão do sistema",
-        interfaceFontAccessibility: "Família da fonte da interface",
         interfaceSize: "Tamanho da interface",
         interfaceSizeAccessibility: "Tamanho da fonte da interface",
-        codeFont: "Fonte de código",
-        codeFontHint:
-          "Usada em código, diffs e saída do terminal. Deixe vazio para usar o padrão do sistema",
-        codeFontAccessibility: "Família da fonte de código",
         codeSize: "Tamanho do código",
         codeSizeAccessibility: "Tamanho da fonte de código",
       },
       syntax: {
-        title: "Sintaxe",
-        highlightTheme: "Tema de destaque",
-        highlightThemeHint: "Cores para código, independentes do tema do app",
-        highlightThemeAccessibility: "Tema de destaque: {{value}}",
         previewAccessibility: "Prévia ao vivo do tema de sintaxe e da fonte de código",
       },
     },
@@ -1560,42 +1541,6 @@ export const ptBR: TranslationResources = {
           "Disponível quando o foco não está em um campo de texto ou terminal.",
       },
     },
-    integrations: {
-      title: "Integrações",
-      docs: {
-        cli: "Docs da CLI",
-        skills: "Docs das skills",
-        openCli: "Abrir documentação da CLI",
-        openSkills: "Abrir documentação das skills",
-      },
-      commandLine: {
-        title: "Linha de comando",
-        description: "Controle agentes e execute scripts pelo terminal",
-      },
-      skills: {
-        title: "Skills de orquestração",
-        description: "Ensine seus agentes a orquestrar pela CLI",
-        updateAvailable: "Atualização disponível",
-        updateTitle: "Atualizar BySpace skills?",
-        updateFallback: "Sincronize as skills incluídas com sua máquina.",
-        uninstallTitle: "Desinstalar BySpace skills?",
-        uninstallMessage:
-          "Remove todas as skills de orquestração do BySpace de ~/.agents, ~/.claude e ~/.codex.",
-      },
-      actions: {
-        install: "Instalar",
-        installing: "Instalando...",
-        installed: "Instalado",
-        update: "Atualizar",
-        working: "Trabalhando...",
-        uninstall: "Desinstalar",
-      },
-      operations: {
-        add: "Adicionar skill",
-        update: "Atualizar skill",
-        delete: "Excluir skill",
-      },
-    },
     permissions: {
       title: "Permissões",
       notifications: "Notificações",
@@ -1638,6 +1583,28 @@ export const ptBR: TranslationResources = {
           title: "Ativar ferramentas do BySpace",
           hint: "Agentes poderão gerenciar worktrees, agentes e agendamentos",
           accessibilityLabel: "Injetar ferramentas do BySpace",
+        },
+        skills: {
+          title: "Skills de orquestração",
+          installHint: "Instale os cinco skills incluídos do BySpace para agentes compatíveis",
+          installedHint: "Instalados e atualizados neste host",
+          updateHint: "Os skills instalados diferem desta versão do BySpace",
+          updateHost: "Atualize o host para gerenciar os skills de orquestração",
+          install: "Instalar",
+          update: "Atualizar",
+          uninstall: "Desinstalar",
+          saving: "Salvando...",
+          installConfirmTitle: "Instalar ou atualizar os skills de orquestração?",
+          installConfirmMessage:
+            "O BySpace sincronizará seus cinco skills incluídos neste host. Outros skills não serão alterados, e cópias conflitantes não gerenciadas serão preservadas.",
+          updateConfirmTitle: "Atualizar os skills de orquestração?",
+          updateConfirmMessage:
+            "O BySpace substituirá suas cópias gerenciadas pelos cinco skills incluídos nesta versão. Outros skills não serão alterados.",
+          uninstallConfirmTitle: "Desinstalar os skills de orquestração?",
+          uninstallConfirmMessage:
+            "O BySpace removerá deste host as cópias gerenciadas sem modificações. Cópias modificadas serão preservadas.",
+          errorTitle: "Não foi possível gerenciar os skills de orquestração",
+          unknownError: "Erro desconhecido",
         },
         systemPrompt: {
           title: "Prompt do sistema",

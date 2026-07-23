@@ -185,11 +185,11 @@ describe("workspace route parsing", () => {
 
 describe("projects settings routes", () => {
   it("buildSettingsAddHostRoute opens settings with the add-host flag", () => {
-    expect(buildSettingsAddHostRoute()).toBe("/settings/general?addHost=1");
+    expect(buildSettingsAddHostRoute()).toBe("/settings/preferences?addHost=1");
   });
 
   it("buildSettingsAddHostRoute accepts a repeatable intent id", () => {
-    expect(buildSettingsAddHostRoute("retry 1")).toBe("/settings/general?addHost=retry%201");
+    expect(buildSettingsAddHostRoute("retry 1")).toBe("/settings/preferences?addHost=retry%201");
   });
 
   it("buildProjectsSettingsRoute returns /settings/projects", () => {
@@ -269,7 +269,12 @@ describe("host settings section slugs", () => {
 });
 
 describe("settings section slugs", () => {
-  it("no longer treats daemon as a valid app-level settings section", () => {
+  it("keeps current app settings sections", () => {
+    expect(isSettingsSectionSlug("preferences")).toBe(true);
+    expect(isSettingsSectionSlug("about")).toBe(true);
+  });
+
+  it("does not treat daemon as an app settings section", () => {
     expect(isSettingsSectionSlug("daemon")).toBe(false);
   });
 });

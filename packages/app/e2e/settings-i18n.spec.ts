@@ -2,12 +2,12 @@ import { test, expect } from "./fixtures";
 import { gotoAppShell, openSettings } from "./helpers/app";
 import { openSettingsSection } from "./helpers/settings";
 
-test("Settings language selector switches General labels", async ({ page }) => {
+test("Settings language selector switches Preferences labels", async ({ page }) => {
   test.setTimeout(120_000);
 
   await gotoAppShell(page);
   await openSettings(page);
-  await openSettingsSection(page, "general");
+  await openSettingsSection(page, "preferences");
 
   await expect(page.getByText("Default send", { exact: true }).first()).toBeVisible();
 

@@ -282,11 +282,18 @@ async function handleRequest(message: TerminalWorkerRequest): Promise<void> {
       // snapshot's) the controller's revision dedup wouldn't drop it and the client would
       // see the bytes twice. Flushing first sends them with a revision <= the snapshot's.
       outputCoalescerByTerminalId.get(message.terminalId)?.flush();
+      // Drain the headless xterm so snapshotRevision catches up with emitRevision.
+      // Without this, the snapshot could lag behind already-emitted output and
+      // the controller would replay bytes the client already received.
+      const stateSession = manager.getTerminal(message.terminalId);
+      if (stateSession) {
+        await stateSession.drainHeadlessXterm();
+      }
       sendToParent({
         type: "response",
         requestId: message.requestId,
         ok: true,
-        result: buildTerminalStateResult(manager.getTerminal(message.terminalId), message.options),
+        result: buildTerminalStateResult(stateSession, message.options),
       });
       return;
     }

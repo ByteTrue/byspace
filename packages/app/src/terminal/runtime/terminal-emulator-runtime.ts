@@ -119,7 +119,7 @@ const isAppleHandheld =
   });
 
 const DEFAULT_TOUCH_SCROLL_LINE_HEIGHT_PX = 18;
-const DEFAULT_TERMINAL_FONT_SIZE = 13;
+const DEFAULT_TERMINAL_FONT_SIZE = 14;
 const FIT_TIMEOUT_DELAYS_MS = [0, 16, 48, 120, 250, 500, 1_000, 2_000];
 const OUTPUT_OPERATION_TIMEOUT_MS = 5_000;
 const EMPTY_TERMINAL_OUTPUT = new Uint8Array(0);
@@ -228,22 +228,21 @@ function prependTerminalOutput(
 }
 
 const DEFAULT_TERMINAL_FONT_FAMILY = [
-  // Prefer common developer fonts, with Nerd Font variants for prompt/TUI glyphs.
-  "JetBrains Mono",
-  "JetBrainsMono Nerd Font",
-  "JetBrainsMono NF",
-  "MesloLGM Nerd Font",
-  "MesloLGM NF",
-  "Hack Nerd Font",
-  "FiraCode Nerd Font",
-  // PUA-only fallback (many Nerd glyphs live here on some systems).
-  "Symbols Nerd Font",
-  // System fallbacks.
-  "SF Mono",
+  // Each platform's own default monospace. In a browser, `ui-monospace` is the
+  // only reliable way to get SF Mono on macOS (the "SF Mono" family name is not
+  // web-exposed); it resolves to Cascadia/Consolas on Windows and the system
+  // mono on Linux. Explicit names are extra fallbacks; Nerd Fonts only supply
+  // prompt/TUI glyphs; `monospace` is the last resort.
+  "ui-monospace",
+  "SFMono-Regular",
   "Menlo",
   "Monaco",
   "Consolas",
+  "'Cascadia Mono'",
+  "'DejaVu Sans Mono'",
   "'Liberation Mono'",
+  "'JetBrainsMono Nerd Font'",
+  "'Symbols Nerd Font'",
   "monospace",
 ].join(", ");
 
@@ -415,11 +414,20 @@ export class TerminalEmulatorRuntime {
       convertEol: false,
       cursorBlink: true,
       cursorStyle: "bar",
+      // Hollow the cursor when the pane is blurred so an idle terminal reads as
+      // inactive (matches Orca), instead of a persistent solid bar.
+      cursorInactiveStyle: "outline",
       fontFamily: resolveTerminalFontFamily(input.fontFamily),
       fontSize: resolveTerminalFontSize(input.fontSize),
       lineHeight: 1.0,
+      // Medium weight renders cleaner than xterm's default regular/bold, closing
+      // the subjective sharpness gap against Orca's 500/700 default.
+      fontWeight: 500,
+      fontWeightBold: 700,
       macOptionIsMeta: true,
-      minimumContrastRatio: 1,
+      // Lift washed-out ANSI bright/low-contrast text to a readable floor
+      // (Orca uses 4.5); 1 left dim agent-CLI output hard to read on some themes.
+      minimumContrastRatio: 4.5,
       rescaleOverlappingGlyphs: true,
       scrollbar: {
         width: 8,

@@ -1,5 +1,5 @@
 import { UnistylesRuntime } from "react-native-unistyles";
-import { resolveSyntaxColors, type SyntaxThemeId } from "@bytetrue/byspace-highlight";
+import { resolveSyntaxColors } from "@bytetrue/byspace-highlight";
 import {
   DEFAULT_UI_FONT_STACK,
   DEFAULT_MONO_FONT_STACK,
@@ -8,27 +8,17 @@ import {
 } from "@/styles/theme";
 import { applyRootUiFont } from "./apply-root-font";
 
-// All six registered Unistyles keys — pinned literal (greppable, type-checked).
+// The two registered Unistyles keys — pinned literal (greppable, type-checked).
 // The `as const` element types are exactly `keyof UnistylesThemes`, so each key
 // is assignable to `UnistylesRuntime.updateTheme`'s first argument with no cast.
-const ALL_THEME_KEYS = [
-  "light",
-  "dark",
-  "darkZinc",
-  "darkMidnight",
-  "darkClaude",
-  "darkGhostty",
-] as const;
+const ALL_THEME_KEYS = ["light", "dark"] as const;
 
 // The UI font size at which the FONT_SIZE ramp is authored (1.0 scale factor).
 const BASE_UI_REFERENCE = FONT_SIZE.base; // 16
 
 export interface AppearanceInput {
-  uiFontFamily: string; // "" -> default stack
-  monoFontFamily: string; // "" -> default stack
   uiFontSize: number; // already clamped
   codeFontSize: number; // already clamped
-  syntaxTheme: SyntaxThemeId;
 }
 
 /**
@@ -57,13 +47,15 @@ function scaleFontSize(uiSize: number, codeSize: number): Theme["fontSize"] {
 
 /**
  * Patch every registered Unistyles theme with the user's appearance choices.
- * All six keys are patched because the active theme can change and adaptive mode
+ * Both keys are patched because the active theme can change and adaptive mode
  * can flip light/dark — patching all keys keeps the active key always current and
  * makes ordering vs `setTheme`/`setAdaptiveThemes` irrelevant.
  */
 export function applyAppearance(input: AppearanceInput): void {
-  const ui = input.uiFontFamily.trim() || DEFAULT_UI_FONT_STACK;
-  const mono = input.monoFontFamily.trim() || DEFAULT_MONO_FONT_STACK;
+  // Font families are not user-configurable; always use each platform's system
+  // default stack (ui-monospace / system-ui via DEFAULT_*_FONT_STACK).
+  const ui = DEFAULT_UI_FONT_STACK;
+  const mono = DEFAULT_MONO_FONT_STACK;
   const diffLineHeight = Math.round(input.codeFontSize * 1.5); // couple to code size
 
   for (const key of ALL_THEME_KEYS) {
@@ -86,7 +78,7 @@ export function applyAppearance(input: AppearanceInput): void {
           fontFamily,
           fontSize,
           lineHeight,
-          colors: { ...t.colors, syntax: resolveSyntaxColors(input.syntaxTheme, t.colorScheme) },
+          colors: { ...t.colors, syntax: resolveSyntaxColors("github", t.colorScheme) },
         };
       }
       return {
@@ -94,7 +86,7 @@ export function applyAppearance(input: AppearanceInput): void {
         fontFamily,
         fontSize,
         lineHeight,
-        colors: { ...t.colors, syntax: resolveSyntaxColors(input.syntaxTheme, t.colorScheme) },
+        colors: { ...t.colors, syntax: resolveSyntaxColors("github", t.colorScheme) },
       };
     });
   }

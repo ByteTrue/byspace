@@ -1206,6 +1206,8 @@ export class VoiceAssistantWebSocketServer {
         "terminal-restore-modes": true,
         // COMPAT(terminalAgentHookProviders): added in v0.2.0, remove gate after 2027-01-21.
         terminalAgentHookProviders: true,
+        // COMPAT(orchestrationSkills): added in v0.2.0-beta.5, remove gate after 2027-01-22.
+        orchestrationSkills: true,
         // COMPAT(rewind): added in v0.1.X, drop the gate when floor >= v0.1.X.
         rewind: true,
         // COMPAT(checkoutRefresh): added in v0.1.86, remove gate after 2026-11-29.

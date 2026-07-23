@@ -1357,12 +1357,9 @@ export const fr: TranslationResources = {
     },
     groupInfo: "À propos de{{title}}",
     sections: {
-      general: "Général",
-      appearance: "Apparence",
+      preferences: "Préférences",
       shortcuts: "Raccourcis",
-      integrations: "Intégrations",
       permissions: "Autorisations",
-      diagnostics: "Diagnostic",
       about: "À propos",
     },
     hostSections: {
@@ -1469,10 +1466,6 @@ export const fr: TranslationResources = {
         options: {
           light: "Lumière",
           dark: "Sombre",
-          zinc: "Zinc",
-          midnight: "Minuit",
-          claude: "Claude",
-          ghostty: "Fantôme",
           auto: "Système",
         },
       },
@@ -1481,25 +1474,12 @@ export const fr: TranslationResources = {
       },
       fonts: {
         title: "Polices",
-        systemDefault: "Valeur par défaut du système",
-        interfaceFont: "Police d'interface",
-        interfaceFontHint:
-          "Utilisé dans toute l'application. Laisser vide pour la valeur par défaut du système",
-        interfaceFontAccessibility: "Famille de polices d'interface",
         interfaceSize: "Taille de l'interface",
         interfaceSizeAccessibility: "Taille de la police de l'interface",
-        codeFont: "Police de code",
-        codeFontHint:
-          "Utilisé dans le code, les différences et la sortie du terminal. Laisser vide pour la valeur par défaut du système",
-        codeFontAccessibility: "Famille de polices de code",
         codeSize: "Taille du code",
         codeSizeAccessibility: "Taille de la police du code",
       },
       syntax: {
-        title: "Syntaxe",
-        highlightTheme: "Thème de surbrillance",
-        highlightThemeHint: "Couleurs du code, indépendamment du thème de l'application",
-        highlightThemeAccessibility: "Thème phare:{{value}}",
         previewAccessibility: "Aperçu en direct du thème de syntaxe et de la police de code",
       },
     },
@@ -1568,42 +1548,6 @@ export const fr: TranslationResources = {
           "Disponible lorsque le focus n’est pas dans un champ de texte ou un terminal.",
       },
     },
-    integrations: {
-      title: "Intégrations",
-      docs: {
-        cli: "DocumentsCLI",
-        skills: "Documents de compétences",
-        openCli: "Ouvrir la documentationCLI",
-        openSkills: "Documentation des compétences ouvertes",
-      },
-      commandLine: {
-        title: "Ligne de commande",
-        description: "Agents de contrôle et de script depuis votre terminal",
-      },
-      skills: {
-        title: "Compétences en orchestration",
-        description: "Apprenez à vos agents à orchestrer via leCLI",
-        updateAvailable: "Mise à jour disponible",
-        updateTitle: "Mettre à jour les compétencesBySpace?",
-        updateFallback: "Synchronisez les compétences regroupées sur votre machine.",
-        uninstallTitle: "Désinstaller les compétencesBySpace?",
-        uninstallMessage:
-          "Supprime toutes les compétences d'orchestrationBySpacede ~/.agents, ~/.claude, ~/.codex.",
-      },
-      actions: {
-        install: "Installer",
-        installing: "Installation...",
-        installed: "Installé",
-        update: "Mise à jour",
-        working: "Fonctionnement...",
-        uninstall: "Désinstaller",
-      },
-      operations: {
-        add: "Ajouter une compétence",
-        update: "Mettre à jour la compétence",
-        delete: "Supprimer la compétence",
-      },
-    },
     permissions: {
       title: "Autorisations",
       notifications: "Notifications",
@@ -1646,6 +1590,28 @@ export const fr: TranslationResources = {
           title: "Activer les outilsBySpace",
           hint: "Les agents pourront gérer les arbres de travail, les agents et les horaires",
           accessibilityLabel: "Injecter les outilsBySpace",
+        },
+        skills: {
+          title: "Skills d’orchestration",
+          installHint: "Installe les cinq skills BySpace inclus pour les agents compatibles",
+          installedHint: "Installés et à jour sur cet hôte",
+          updateHint: "Les skills installés diffèrent de cette version de BySpace",
+          updateHost: "Mettez à jour l’hôte pour gérer les skills d’orchestration",
+          install: "Installer",
+          update: "Mettre à jour",
+          uninstall: "Désinstaller",
+          saving: "Enregistrement...",
+          installConfirmTitle: "Installer ou mettre à jour les skills d’orchestration ?",
+          installConfirmMessage:
+            "BySpace synchronisera ses cinq skills inclus sur cet hôte. Les autres skills ne seront pas modifiés et les copies en conflit non gérées seront conservées.",
+          updateConfirmTitle: "Mettre à jour les skills d’orchestration ?",
+          updateConfirmMessage:
+            "BySpace remplacera ses copies gérées par les cinq skills inclus dans cette version. Les autres skills ne seront pas modifiés.",
+          uninstallConfirmTitle: "Désinstaller les skills d’orchestration ?",
+          uninstallConfirmMessage:
+            "BySpace supprimera de cet hôte ses copies gérées non modifiées. Les copies modifiées seront conservées.",
+          errorTitle: "Impossible de gérer les skills d’orchestration",
+          unknownError: "Erreur inconnue",
         },
         systemPrompt: {
           title: "Invite système",

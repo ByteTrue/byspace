@@ -355,6 +355,9 @@ export function createWorkerTerminalManager(
           revision: 0,
         };
       },
+      drainHeadlessXterm(): Promise<void> {
+        return Promise.resolve();
+      },
       getReplayPreamble(): string {
         // Refreshed from every getTerminalState response, which the controller fetches
         // before every snapshot replay (legacy + visible-snapshot restore). The one

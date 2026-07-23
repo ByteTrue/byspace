@@ -1337,6 +1337,17 @@ export const DaemonUpdateRequestMessageSchema = z.object({
   requestId: z.string(),
 });
 
+export const DaemonOrchestrationSkillsGetStatusRequestSchema = z.object({
+  type: z.literal("daemon.orchestration_skills.get_status.request"),
+  requestId: z.string(),
+});
+
+export const DaemonOrchestrationSkillsSetInstalledRequestSchema = z.object({
+  type: z.literal("daemon.orchestration_skills.set_installed.request"),
+  installed: z.boolean(),
+  requestId: z.string(),
+});
+
 export const AgentTimelineCursorSchema = z.object({
   epoch: z.string(),
   seq: z.number().int().nonnegative(),
@@ -2356,6 +2367,8 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   ShutdownServerRequestMessageSchema,
   RestartServerRequestMessageSchema,
   DaemonUpdateRequestMessageSchema,
+  DaemonOrchestrationSkillsGetStatusRequestSchema,
+  DaemonOrchestrationSkillsSetInstalledRequestSchema,
   FetchAgentTimelineRequestMessageSchema,
   ProviderSubagentListRequestMessageSchema,
   ProviderSubagentTimelineRequestMessageSchema,
@@ -2632,6 +2645,8 @@ export const ServerInfoStatusPayloadSchema = z
         "terminal-restore-modes": z.boolean().optional(),
         // COMPAT(terminalAgentHookProviders): added in v0.2.0, remove gate after 2027-01-21.
         terminalAgentHookProviders: z.boolean().optional(),
+        // COMPAT(orchestrationSkills): added in v0.2.0-beta.5, remove gate after 2027-01-22.
+        orchestrationSkills: z.boolean().optional(),
         // COMPAT(rewind): added in v0.1.X, drop the gate when floor >= v0.1.X.
         rewind: z.boolean().optional(),
         // COMPAT(checkoutRefresh): added in v0.1.86, remove gate after 2026-11-29.
@@ -4781,6 +4796,31 @@ export const DaemonUpdateResponseSchema = z.object({
 
 export type DaemonUpdateResponse = z.infer<typeof DaemonUpdateResponseSchema>;
 
+export const OrchestrationSkillsStateSchema = z.enum(["not-installed", "up-to-date", "drift"]);
+export type OrchestrationSkillsState = z.infer<typeof OrchestrationSkillsStateSchema>;
+
+export const DaemonOrchestrationSkillsGetStatusResponseSchema = z.object({
+  type: z.literal("daemon.orchestration_skills.get_status.response"),
+  payload: z.object({
+    requestId: z.string(),
+    state: OrchestrationSkillsStateSchema,
+  }),
+});
+export type DaemonOrchestrationSkillsGetStatusResponse = z.infer<
+  typeof DaemonOrchestrationSkillsGetStatusResponseSchema
+>;
+
+export const DaemonOrchestrationSkillsSetInstalledResponseSchema = z.object({
+  type: z.literal("daemon.orchestration_skills.set_installed.response"),
+  payload: z.object({
+    requestId: z.string(),
+    state: OrchestrationSkillsStateSchema,
+  }),
+});
+export type DaemonOrchestrationSkillsSetInstalledResponse = z.infer<
+  typeof DaemonOrchestrationSkillsSetInstalledResponseSchema
+>;
+
 export const DaemonUpdateProgressMessageSchema = z.object({
   type: z.literal("daemon.update.progress"),
   payload: z.object({
@@ -4841,6 +4881,8 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   DaemonGetStatusResponseSchema,
   DaemonGetPairingOfferResponseSchema,
   DiagnosticsResponseSchema,
+  DaemonOrchestrationSkillsGetStatusResponseSchema,
+  DaemonOrchestrationSkillsSetInstalledResponseSchema,
   GetDaemonConfigResponseMessageSchema,
   SetDaemonConfigResponseMessageSchema,
   ReadProjectConfigResponseMessageSchema,

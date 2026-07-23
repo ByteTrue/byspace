@@ -1594,6 +1594,10 @@ export class Session {
         return this.daemonSession.handleGetStatusRequest(msg);
       case "daemon.get_pairing_offer.request":
         return this.daemonSession.handleGetPairingOfferRequest(msg);
+      case "daemon.orchestration_skills.get_status.request":
+        return this.daemonSession.handleOrchestrationSkillsGetStatusRequest(msg);
+      case "daemon.orchestration_skills.set_installed.request":
+        return this.daemonSession.handleOrchestrationSkillsSetInstalledRequest(msg);
       case "diagnostics.request":
         return this.daemonSession.handleDiagnosticsRequest(msg);
       case "daemon.update.request":
