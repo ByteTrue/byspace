@@ -1276,6 +1276,12 @@ const DIFF_OPTIONS_WHITESPACE_ICON = (
 const DIFF_OPTIONS_WRAP_ICON = (
   <ThemedWrapText size={14} uniProps={foregroundMutedIconColorMapping} />
 );
+const DIFF_OPTIONS_SPLIT_ICON = (
+  <ThemedColumns2 size={14} uniProps={foregroundMutedIconColorMapping} />
+);
+const DIFF_OPTIONS_UNIFIED_ICON = (
+  <ThemedAlignJustify size={14} uniProps={foregroundMutedIconColorMapping} />
+);
 
 interface DiffLayoutToggleProps {
   layout: "unified" | "split";
@@ -1410,29 +1416,76 @@ function DiffFilesToolbar({
   );
 }
 
-interface DiffOptionsMenuProps {
+interface DiffRefreshButtonProps {
   brand: string;
-  hideWhitespace: boolean;
   isMobile: boolean;
   isRefreshing: boolean;
-  overflowToggleStyle: PressableStyleFn;
-  refreshSupported: boolean;
-  wrapLines: boolean;
+  toggleStyle: PressableStyleFn;
   onRefresh: () => void;
+}
+
+function DiffRefreshButton({
+  brand,
+  isMobile,
+  isRefreshing,
+  toggleStyle,
+  onRefresh,
+}: DiffRefreshButtonProps) {
+  const { t } = useTranslation();
+  const label = isRefreshing
+    ? t("workspace.git.diff.refreshing")
+    : t("workspace.git.diff.refreshState", { brand });
+
+  return (
+    <Tooltip delayDuration={300}>
+      <TooltipTrigger asChild>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={label}
+          disabled={isRefreshing}
+          testID="changes-refresh"
+          onPress={onRefresh}
+          style={toggleStyle}
+        >
+          {isRefreshing ? (
+            <ThemedLoadingSpinner
+              size={isMobile ? 18 : ICON_SIZE.sm}
+              uniProps={foregroundMutedIconColorMapping}
+            />
+          ) : (
+            <ThemedRotateCw
+              size={isMobile ? 18 : ICON_SIZE.sm}
+              uniProps={foregroundMutedIconColorMapping}
+            />
+          )}
+        </Pressable>
+      </TooltipTrigger>
+      <TooltipContent side="bottom">
+        <Text style={styles.tooltipText}>{label}</Text>
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
+interface DiffOptionsMenuProps {
+  hideWhitespace: boolean;
+  isMobile: boolean;
+  layout?: "unified" | "split";
+  overflowToggleStyle: PressableStyleFn;
+  wrapLines: boolean;
   onToggleHideWhitespace: () => void;
+  onToggleLayout?: () => void;
   onToggleWrapLines: () => void;
 }
 
 function DiffOptionsMenu({
-  brand,
   hideWhitespace,
   isMobile,
-  isRefreshing,
+  layout,
   overflowToggleStyle,
-  refreshSupported,
   wrapLines,
-  onRefresh,
   onToggleHideWhitespace,
+  onToggleLayout,
   onToggleWrapLines,
 }: DiffOptionsMenuProps) {
   const { t } = useTranslation();
@@ -1443,15 +1496,6 @@ function DiffOptionsMenu({
     ? t("workspace.git.diff.scrollLongLines")
     : t("workspace.git.diff.wrapLongLines");
   const optionsLabel = t("workspace.git.diff.options");
-  const refreshIcon = useMemo(
-    () =>
-      isRefreshing ? (
-        <ThemedLoadingSpinner size={ICON_SIZE.sm} uniProps={foregroundMutedIconColorMapping} />
-      ) : (
-        <ThemedRotateCw size={ICON_SIZE.sm} uniProps={foregroundMutedIconColorMapping} />
-      ),
-    [isRefreshing],
-  );
 
   return (
     <DropdownMenu>
@@ -1490,25 +1534,119 @@ function DiffOptionsMenu({
         >
           {wrapLinesLabel}
         </DropdownMenuItem>
-        {refreshSupported ? (
+        {layout === undefined || onToggleLayout === undefined ? null : (
           <>
             <DropdownMenuSeparator />
             <DropdownMenuItem
-              leading={refreshIcon}
-              disabled={isRefreshing}
-              testID="changes-refresh"
-              onSelect={onRefresh}
+              leading={layout === "unified" ? DIFF_OPTIONS_SPLIT_ICON : DIFF_OPTIONS_UNIFIED_ICON}
+              testID="changes-toggle-layout"
+              onSelect={onToggleLayout}
             >
-              {isRefreshing
-                ? t("workspace.git.diff.refreshing")
-                : t("workspace.git.diff.refreshState", {
-                    brand,
-                  })}
+              {layout === "unified"
+                ? t("workspace.git.diff.switchToSplit")
+                : t("workspace.git.diff.switchToUnified")}
             </DropdownMenuItem>
           </>
-        ) : null}
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
+  );
+}
+
+interface DiffStatusButtonsProps {
+  allFileDiffsExpanded: boolean;
+  brand: string;
+  canUseSplitLayout: boolean;
+  expandAllToggleStyle: PressableStyleFn;
+  hasFiles: boolean;
+  hideWhitespace: boolean;
+  isMobile: boolean;
+  isRefreshing: boolean;
+  layout: "unified" | "split";
+  overflowToggleStyle: PressableStyleFn;
+  refreshSupported: boolean;
+  viewMode: "flat" | "tree";
+  viewModeToggleStyle: PressableStyleFn;
+  wrapLines: boolean;
+  onRefresh: () => void;
+  onToggleExpandAll: () => void;
+  onToggleHideWhitespace: () => void;
+  onToggleLayout: () => void;
+  onToggleViewMode: () => void;
+  onToggleWrapLines: () => void;
+}
+
+function DiffStatusButtons({
+  allFileDiffsExpanded,
+  brand,
+  canUseSplitLayout,
+  expandAllToggleStyle,
+  hasFiles,
+  hideWhitespace,
+  isMobile,
+  isRefreshing,
+  layout,
+  overflowToggleStyle,
+  refreshSupported,
+  viewMode,
+  viewModeToggleStyle,
+  wrapLines,
+  onRefresh,
+  onToggleExpandAll,
+  onToggleHideWhitespace,
+  onToggleLayout,
+  onToggleViewMode,
+  onToggleWrapLines,
+}: DiffStatusButtonsProps) {
+  const showLayoutToggleInToolbar = canUseSplitLayout && !refreshSupported;
+  const showLayoutToggleInMenu = canUseSplitLayout && refreshSupported;
+
+  return (
+    <View style={styles.diffStatusButtons}>
+      {showLayoutToggleInToolbar ? (
+        <DiffLayoutToggle
+          layout={layout}
+          isMobile={isMobile}
+          toggleStyle={expandAllToggleStyle}
+          onToggle={onToggleLayout}
+        />
+      ) : null}
+      {refreshSupported ? (
+        <DiffRefreshButton
+          brand={brand}
+          isMobile={isMobile}
+          isRefreshing={isRefreshing}
+          toggleStyle={expandAllToggleStyle}
+          onRefresh={onRefresh}
+        />
+      ) : null}
+      {hasFiles ? (
+        <DiffViewModeToggle
+          viewMode={viewMode}
+          isMobile={isMobile}
+          toggleStyle={viewModeToggleStyle}
+          onToggle={onToggleViewMode}
+        />
+      ) : null}
+      {hasFiles ? (
+        <DiffFilesToolbar
+          allFileDiffsExpanded={allFileDiffsExpanded}
+          isMobile={isMobile}
+          expandAllToggleStyle={expandAllToggleStyle}
+          onToggleExpandAll={onToggleExpandAll}
+        />
+      ) : null}
+      <DiffOptionsMenu
+        hideWhitespace={hideWhitespace}
+        isMobile={isMobile}
+        layout={showLayoutToggleInMenu ? layout : undefined}
+        overflowToggleStyle={overflowToggleStyle}
+        wrapLines={wrapLines}
+        onToggleHideWhitespace={onToggleHideWhitespace}
+        onToggleLayout={showLayoutToggleInMenu ? onToggleLayout : undefined}
+        onToggleWrapLines={onToggleWrapLines}
+      />
+    </View>
   );
 }
 
@@ -2204,11 +2342,6 @@ export function GitDiffPane({ serverId, workspaceId, cwd, enabled }: GitDiffPane
   const codeFontSize = appSettings.codeFontSize;
   const diffModeTriggerStyle = useMemo(() => buildDiffModeTriggerStyle(), []);
 
-  const layoutToggleStyle = useMemo(
-    () => buildToggleButtonStyle(false, styles.expandAllButton),
-    [],
-  );
-
   const viewModeToggleStyle = useMemo(
     () => buildToggleButtonStyle(viewMode === "tree", styles.expandAllButton),
     [viewMode],
@@ -2595,44 +2728,28 @@ export function GitDiffPane({ serverId, workspaceId, cwd, enabled }: GitDiffPane
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
-            <View style={styles.diffStatusButtons}>
-              {canUseSplitLayout ? (
-                <DiffLayoutToggle
-                  layout={changesPreferences.layout}
-                  isMobile={isMobile}
-                  toggleStyle={layoutToggleStyle}
-                  onToggle={handleToggleLayout}
-                />
-              ) : null}
-              {files.length > 0 ? (
-                <DiffViewModeToggle
-                  viewMode={viewMode}
-                  isMobile={isMobile}
-                  toggleStyle={viewModeToggleStyle}
-                  onToggle={handleToggleViewMode}
-                />
-              ) : null}
-              {files.length > 0 ? (
-                <DiffFilesToolbar
-                  allFileDiffsExpanded={allFileDiffsExpanded}
-                  isMobile={isMobile}
-                  expandAllToggleStyle={expandAllToggleStyle}
-                  onToggleExpandAll={handleToggleExpandAll}
-                />
-              ) : null}
-              <DiffOptionsMenu
-                brand={getForgePresentation(forge).brandLabel}
-                hideWhitespace={changesPreferences.hideWhitespace}
-                isMobile={isMobile}
-                isRefreshing={isRefreshing}
-                overflowToggleStyle={overflowToggleStyle}
-                refreshSupported={refreshSupported}
-                wrapLines={wrapLines}
-                onRefresh={handleRefresh}
-                onToggleHideWhitespace={handleToggleHideWhitespace}
-                onToggleWrapLines={handleToggleWrapLines}
-              />
-            </View>
+            <DiffStatusButtons
+              allFileDiffsExpanded={allFileDiffsExpanded}
+              brand={getForgePresentation(forge).brandLabel}
+              canUseSplitLayout={canUseSplitLayout}
+              expandAllToggleStyle={expandAllToggleStyle}
+              hasFiles={hasChanges}
+              hideWhitespace={changesPreferences.hideWhitespace}
+              isMobile={isMobile}
+              isRefreshing={isRefreshing}
+              layout={changesPreferences.layout}
+              overflowToggleStyle={overflowToggleStyle}
+              refreshSupported={refreshSupported}
+              viewMode={viewMode}
+              viewModeToggleStyle={viewModeToggleStyle}
+              wrapLines={wrapLines}
+              onRefresh={handleRefresh}
+              onToggleExpandAll={handleToggleExpandAll}
+              onToggleHideWhitespace={handleToggleHideWhitespace}
+              onToggleLayout={handleToggleLayout}
+              onToggleViewMode={handleToggleViewMode}
+              onToggleWrapLines={handleToggleWrapLines}
+            />
           </View>
         </View>
       ) : null}

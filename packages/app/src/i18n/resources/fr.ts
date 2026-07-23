@@ -1017,6 +1017,8 @@ export const fr: TranslationResources = {
     searchPlaceholder: "Filtrer les branches...",
     empty: "Aucune branche trouvée.",
     title: "Changer de branche",
+    localBranch: "Locale",
+    remoteBranch: "Distante",
     uncommittedTitle: "Modifications non validées",
     uncommittedMessage:
       "Vous avez des modifications non validées. Les ranger avant de changer de branche?",

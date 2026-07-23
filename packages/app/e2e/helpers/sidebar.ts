@@ -11,9 +11,12 @@ async function openWorkspaceSidebarKebab(page: Page, workspaceId: string) {
   const serverId = getServerId();
   const row = page.getByTestId(`sidebar-workspace-row-${serverId}:${workspaceId}`);
   await expect(row).toBeVisible({ timeout: 30_000 });
-  await row.hover();
 
   const kebab = page.getByTestId(`sidebar-workspace-kebab-${serverId}:${workspaceId}`);
+  if (!(await kebab.isVisible())) {
+    await row.hover();
+  }
+
   await expect(kebab).toBeVisible({ timeout: 10_000 });
   await kebab.click();
 
@@ -28,7 +31,8 @@ export async function expectWorkspaceListed(page: Page, name: string): Promise<v
 
 // The workspace row kebab and its menu items carry no web ARIA role, so the sidebar
 // suite addresses them by the stable test ids the app assigns per workspace — the same
-// convention the rename flow uses. The kebab only reveals on hover.
+// convention the rename flow uses. Compact layouts keep the kebab visible; wider layouts
+// still reveal it on hover.
 export async function clickArchiveWorkspaceMenuItem(
   page: Page,
   workspaceId: string,

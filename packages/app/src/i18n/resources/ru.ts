@@ -1010,6 +1010,8 @@ export const ru: TranslationResources = {
     searchPlaceholder: "Фильтровать ветки...",
     empty: "Филиалов не найдено.",
     title: "Переключить ветку",
+    localBranch: "Локальная",
+    remoteBranch: "Удалённая",
     uncommittedTitle: "Незафиксированные изменения",
     uncommittedMessage:
       "У вас есть незафиксированные изменения. Спрятать их перед переключением веток?",

@@ -8,6 +8,37 @@ import { invalidateCheckoutGitQueriesForClient } from "@/git/query-keys";
 import { createBranchSwitcherOperations } from "@/git/branch-switcher-operations";
 import { confirmDialog } from "@/utils/confirm-dialog";
 
+interface BranchSuggestionOption {
+  name: string;
+  hasLocal?: boolean;
+  hasRemote?: boolean;
+}
+
+export type BranchSuggestionScope = "local" | "remote" | "local-and-remote";
+
+export interface BranchSwitcherOption extends ComboboxOption {
+  scope?: BranchSuggestionScope;
+}
+
+export function resolveBranchSuggestionScope(
+  branch: BranchSuggestionOption,
+): BranchSuggestionScope | undefined {
+  if (branch.hasLocal && branch.hasRemote) return "local-and-remote";
+  if (branch.hasLocal) return "local";
+  if (branch.hasRemote) return "remote";
+  return undefined;
+}
+
+export function describeBranchSuggestion(
+  branch: BranchSuggestionOption,
+  labels: { local: string; remote: string },
+): string | undefined {
+  const parts: string[] = [];
+  if (branch.hasLocal) parts.push(labels.local);
+  if (branch.hasRemote) parts.push(labels.remote);
+  return parts.length > 0 ? parts.join(" • ") : undefined;
+}
+
 interface UseBranchSwitcherInput {
   client: DaemonClient | null;
   normalizedServerId: string;
@@ -21,7 +52,7 @@ interface UseBranchSwitcherInput {
 }
 
 interface UseBranchSwitcherResult {
-  branchOptions: ComboboxOption[];
+  branchOptions: BranchSwitcherOption[];
   isOpen: boolean;
   setIsOpen: (open: boolean) => void;
   handleBranchSelect: (branchId: string) => void;
@@ -62,17 +93,30 @@ export function useBranchSwitcher({
       if (payload.error) {
         throw new Error(payload.error);
       }
-      return payload.branches ?? [];
+      return payload;
     },
     enabled: isOpen && isGitCheckout && Boolean(operations) && isConnected,
     retry: false,
     staleTime: 15_000,
   });
 
-  const branchOptions = useMemo<ComboboxOption[]>(() => {
-    const branches = branchSuggestionsQuery.data ?? [];
+  const branchOptions = useMemo<BranchSwitcherOption[]>(() => {
+    const labels = {
+      local: t("branchSwitcher.localBranch"),
+      remote: t("branchSwitcher.remoteBranch"),
+    };
+    const branchDetails = branchSuggestionsQuery.data?.branchDetails;
+    if (branchDetails && branchDetails.length > 0) {
+      return branchDetails.map((branch) => ({
+        id: branch.name,
+        label: branch.name,
+        description: describeBranchSuggestion(branch, labels),
+        scope: resolveBranchSuggestionScope(branch),
+      }));
+    }
+    const branches = branchSuggestionsQuery.data?.branches ?? [];
     return branches.map((name) => ({ id: name, label: name }));
-  }, [branchSuggestionsQuery.data]);
+  }, [branchSuggestionsQuery.data, t]);
 
   const stashListQueryKey = useMemo(
     () => ["stashList", normalizedServerId, normalizedWorkspaceId] as const,

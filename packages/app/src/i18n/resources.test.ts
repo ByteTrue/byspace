@@ -409,6 +409,8 @@ describe("translation resources", () => {
     expect(en.branchSwitcher.searchPlaceholder).toBe("Filter branches...");
     expect(en.branchSwitcher.empty).toBe("No branches found.");
     expect(en.branchSwitcher.title).toBe("Switch branch");
+    expect(en.branchSwitcher.localBranch).toBe("Local");
+    expect(en.branchSwitcher.remoteBranch).toBe("Remote");
     expect(en.panels.file.loading).toBe("Loading file...");
     expect(en.panels.file.noPreview).toBe("No preview available");
     expect(en.panels.file.binaryPreviewUnavailable).toBe("Binary preview unavailable");
