@@ -11,6 +11,11 @@ import { DaemonSelfUpdateSessionController } from "./daemon-self-update-session-
 import type { ManagedAgent } from "../../agent/agent-manager.js";
 import type { PersistedProjectRecord, PersistedWorkspaceRecord } from "../../workspace-registry.js";
 
+import {
+  getOrchestrationSkillsStatus,
+  resolveOrchestrationSkillsTargets,
+  setOrchestrationSkillsInstalled,
+} from "../../orchestration-skills.js";
 export interface DaemonRuntimeConfig {
   listen: string | null;
   worktreesRoot?: string;
@@ -210,6 +215,34 @@ export class DaemonSession {
         },
       });
     }
+  }
+
+  async handleOrchestrationSkillsGetStatusRequest(
+    msg: Extract<SessionInboundMessage, { type: "daemon.orchestration_skills.get_status.request" }>,
+  ): Promise<void> {
+    const result = await getOrchestrationSkillsStatus(
+      resolveOrchestrationSkillsTargets(this.byspaceHome),
+    );
+    this.host.emit({
+      type: "daemon.orchestration_skills.get_status.response",
+      payload: { requestId: msg.requestId, state: result.state },
+    });
+  }
+
+  async handleOrchestrationSkillsSetInstalledRequest(
+    msg: Extract<
+      SessionInboundMessage,
+      { type: "daemon.orchestration_skills.set_installed.request" }
+    >,
+  ): Promise<void> {
+    const result = await setOrchestrationSkillsInstalled(
+      msg.installed,
+      resolveOrchestrationSkillsTargets(this.byspaceHome),
+    );
+    this.host.emit({
+      type: "daemon.orchestration_skills.set_installed.response",
+      payload: { requestId: msg.requestId, state: result.state },
+    });
   }
 
   async handleUpdateRequest(

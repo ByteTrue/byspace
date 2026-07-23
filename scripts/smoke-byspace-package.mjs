@@ -180,6 +180,25 @@ try {
   if (!existsSync(installedPackageBin) || !existsSync(installedBinary)) {
     throw new Error(`Global install did not create ${installedBinary}`);
   }
+  const installedSkillsRoot = join(
+    installedPackageRoot,
+    "node_modules",
+    "@bytetrue",
+    "byspace-server",
+    "dist",
+    "skills",
+  );
+  for (const skillName of [
+    "byspace",
+    "byspace-advisor",
+    "byspace-committee",
+    "byspace-handoff",
+    "byspace-loop",
+  ]) {
+    if (!existsSync(join(installedSkillsRoot, skillName, "SKILL.md"))) {
+      throw new Error(`Global install is missing bundled orchestration skill: ${skillName}`);
+    }
+  }
   const dependencyTree = runNpmResult(
     ["ls", "--global", "--prefix", installRoot, "--all", "--json"],
     { timeout: 120_000 },

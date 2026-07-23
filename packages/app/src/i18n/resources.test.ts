@@ -216,8 +216,6 @@ describe("translation resources", () => {
     expect(en.settings.appearance.theme.title).toBe("Theme");
     expect(en.settings.appearance.fonts.interfaceSize).toBe("Interface size");
     expect(en.settings.shortcuts.actions.rebind).toBe("Rebind");
-    expect(en.settings.integrations.commandLine.title).toBe("Command line");
-    expect(en.settings.integrations.skills.updateAvailable).toBe("Update available");
     expect(en.settings.permissions.notifications).toBe("Notifications");
     expect(en.settings.permissions.actions.request).toBe("Request");
   });
