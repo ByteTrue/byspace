@@ -262,7 +262,7 @@ test.describe("Workspace navigation regression", () => {
     await expectWorkspaceHeaderAbsent(page);
     await expectWorkspaceTabsAbsent(page);
     await openSettings(page);
-    await expect(page).toHaveURL(/\/settings\/general$/);
+    await expect(page).toHaveURL(/\/settings\/preferences$/);
   });
 
   test("cold workspace URL keeps sidebar workspace navigation functional", async ({ page }) => {

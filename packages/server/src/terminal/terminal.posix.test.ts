@@ -840,7 +840,7 @@ describe.skipIf(isPlatform("win32"))("terminal POSIX-only", () => {
       unsubscribe();
     });
 
-    it("emits output only after getState reflects the new data", async () => {
+    it("emits output before getState parsing catches up", async () => {
       const session = trackSession(
         await createTerminal({
           workspaceId: "ws-test",
@@ -863,7 +863,9 @@ describe.skipIf(isPlatform("win32"))("terminal POSIX-only", () => {
       });
 
       session.send({ type: "input", data: "echo state-after-output\r" });
-      expect(await outputSeenInState).toBe(true);
+      expect(await outputSeenInState).toBe(false);
+      await session.drainHeadlessXterm();
+      expect(getLines(session.getState()).join("\n")).toContain("state-after-output");
     });
 
     it("unsubscribe stops receiving messages", async () => {

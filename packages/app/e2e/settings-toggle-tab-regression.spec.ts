@@ -68,7 +68,7 @@ test.describe("Settings toggle tab regression", () => {
       await expectAgentTabActive(page, secondAgent.id);
 
       await pressSettingsToggleShortcut(page);
-      await expect(page).toHaveURL(/\/settings\/general$/);
+      await expect(page).toHaveURL(/\/settings\/preferences$/);
 
       await page.getByRole("button", { name: "Queue", exact: true }).click();
       await expectSendBehavior(page, "queue");
