@@ -153,13 +153,13 @@ try {
     console.log("✓ --json flag is accepted with worktree ls\n");
   }
 
-  // Test 11: byspace --help shows worktree subcommand
+  // Test 11: byspace --help keeps the compatibility command hidden
   {
-    console.log("Test 11: byspace --help shows worktree subcommand");
+    console.log("Test 11: byspace --help hides worktree compatibility command");
     const result = await $`npx byspace --help`.nothrow();
     assert.strictEqual(result.exitCode, 0, "byspace --help should exit 0");
-    assert(result.stdout.includes("worktree"), "help should mention worktree subcommand");
-    console.log("✓ byspace --help shows worktree subcommand\n");
+    assert(!result.stdout.includes("worktree"), "help should not advertise worktree subcommand");
+    console.log("✓ byspace --help hides worktree compatibility command\n");
   }
 } finally {
   // Clean up temp directory

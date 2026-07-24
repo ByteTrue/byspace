@@ -36,6 +36,28 @@ describe("byspace config schema", () => {
     });
   });
 
+  it("parses service port allocation", () => {
+    expect(
+      BySpaceConfigSchema.parse({
+        worktree: {
+          servicePorts: { range: "3000-4000", portScript: "/usr/bin/portmake" },
+        },
+      }),
+    ).toEqual({
+      worktree: {
+        setup: [],
+        teardown: [],
+        servicePorts: { range: "3000-4000", portScript: "/usr/bin/portmake" },
+      },
+    });
+  });
+
+  it("rejects invalid service port ranges", () => {
+    expect(() =>
+      BySpaceConfigRawSchema.parse({ worktree: { servicePorts: { range: "4000-3000" } } }),
+    ).toThrow("Expected an inclusive TCP port range");
+  });
+
   it("normalizes partial worktree lifecycle config without dropping present commands", () => {
     expect(
       BySpaceConfigSchema.parse({

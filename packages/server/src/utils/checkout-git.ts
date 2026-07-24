@@ -7,7 +7,7 @@ import type { Logger } from "pino";
 import type { ParsedDiffFile } from "../server/utils/diff-highlighter.js";
 import { parseAndHighlightDiff } from "../server/utils/diff-highlighter.js";
 import { parseGitHubRepoFromRemote } from "../server/workspace-git-metadata.js";
-import { GitHubCommandError, createGitHubService } from "../services/github-service.js";
+import { createGitHubService } from "../services/github-service.js";
 import type {
   CurrentPullRequestStatus,
   ForgeAuthState,
@@ -15,7 +15,11 @@ import type {
   ForgeSpecificStatusFacts,
   PullRequestMergeable,
 } from "../services/forge-service.js";
-import { ForgeAuthenticationError, ForgeCliMissingError } from "../services/forge-cli-command.js";
+import {
+  ForgeAuthenticationError,
+  ForgeCliMissingError,
+  ForgeCommandError,
+} from "../services/forge-cli-command.js";
 import { parseGitRevParsePath, resolveGitRevParsePath } from "./git-rev-parse-path.js";
 import { runGitCommand } from "./run-git-command.js";
 import { isBySpaceOwnedWorktreeCwd, resolveBySpaceWorktreesBaseRoot } from "./worktree.js";
@@ -66,6 +70,7 @@ interface CheckoutReadCacheOptions {
 
 interface PullRequestStatusLookupTarget {
   headRef: string;
+  headSha?: string;
   headRepositoryOwner?: string;
 }
 
@@ -115,8 +120,8 @@ function createShortstatCache(ttlMs: number) {
   });
 }
 
-function getPullRequestStatusCacheKey(cwd: string): string {
-  return resolve(cwd);
+function getPullRequestStatusCacheKey(cwd: string, headSha: string | null): string {
+  return `${resolve(cwd)}\u0000${headSha ?? ""}`;
 }
 
 function rememberPullRequestStatus(cacheKey: string, status: PullRequestStatusResult): void {
@@ -779,7 +784,7 @@ export interface MergeFromBaseOptions {
 export interface CheckoutContext {
   byspaceHome?: string;
   worktreesRoot?: string;
-  logger?: Pick<Logger, "trace">;
+  logger?: Pick<Logger, "trace" | "warn">;
   facts?: CheckoutSnapshotFacts | null;
 }
 
@@ -803,6 +808,10 @@ export type CheckoutSnapshotFacts =
       branchMergeRef: string | null;
       pullRequestLookupTarget: PullRequestStatusLookupTarget | null;
     };
+
+function isNotGitRepositoryError(error: unknown): boolean {
+  return error instanceof Error && /not a git repository/i.test(error.message);
+}
 
 function isGitError(error: unknown): boolean {
   if (!(error instanceof Error)) {
@@ -835,6 +844,38 @@ export async function getCurrentBranch(cwd: string): Promise<string | null> {
   }
 }
 
+async function getCurrentHeadSha(cwd: string, context?: CheckoutContext): Promise<string | null> {
+  const knownSha = context?.facts?.isGit
+    ? context.facts.pullRequestLookupTarget?.headSha
+    : undefined;
+  if (knownSha) {
+    return knownSha;
+  }
+  try {
+    const { stdout } = await runGitCommand(["rev-parse", "HEAD"], {
+      cwd,
+      envOverlay: READ_ONLY_GIT_ENV,
+      logger: context?.logger,
+    });
+    const sha = stdout.trim();
+    return sha.length > 0 ? sha : null;
+  } catch {
+    return null;
+  }
+}
+
+async function addHeadShaToPullRequestLookupTarget(
+  cwd: string,
+  target: PullRequestStatusLookupTarget | null,
+  context?: CheckoutContext,
+): Promise<PullRequestStatusLookupTarget | null> {
+  if (!target) {
+    return null;
+  }
+  const headSha = await getCurrentHeadSha(cwd, context);
+  return headSha ? { ...target, headSha } : target;
+}
+
 async function getRebaseHeadBranch(cwd: string): Promise<string | null> {
   const paths = ["rebase-merge/head-name", "rebase-apply/head-name"];
   const results = await Promise.all(
@@ -865,7 +906,13 @@ async function getWorktreeRoot(cwd: string, context?: CheckoutContext): Promise<
       logger: context?.logger,
     });
     return parseGitRevParsePath(stdout);
-  } catch {
+  } catch (error) {
+    if (!isNotGitRepositoryError(error)) {
+      context?.logger?.warn(
+        { err: error, cwd },
+        "Git worktree discovery failed; treating directory as non-Git",
+      );
+    }
     return null;
   }
 }
@@ -1760,6 +1807,12 @@ export async function getCheckoutSnapshotFacts(
       )) ?? pullRequestLookupTarget;
   }
 
+  pullRequestLookupTarget = await addHeadShaToPullRequestLookupTarget(
+    cwd,
+    pullRequestLookupTarget,
+    context,
+  );
+
   return {
     isGit: true,
     worktreeRoot: inspected.worktreeRoot,
@@ -1951,9 +2004,9 @@ export async function getCheckoutStatus(
   };
 }
 
-// Cap on how many ahead-of-base commits we enumerate. Branches with more than
-// this many unmerged commits are truncated to the newest MAX_CHECKOUT_COMMITS.
-const MAX_CHECKOUT_COMMITS = 200;
+// Workspace history stays complete; base history is bounded context until the
+// commits list supports paging older base commits.
+const CHECKOUT_BASE_COMMIT_LIMIT = 10;
 // Bytes git emits between fields/records. We split parsed output on these.
 const COMMIT_FIELD_SEPARATOR = "\x00";
 const COMMIT_RECORD_SEPARATOR = "\x1e";
@@ -1971,6 +2024,12 @@ interface ParsedCheckoutCommit {
   authorDate: string;
   subject: string;
   files: CheckoutCommitFile[];
+}
+
+interface CheckoutCommitLogInput {
+  cwd: string;
+  revision: string;
+  maxCount?: number;
 }
 
 function mapNameStatusLetter(letter: string): CheckoutCommitFileStatus | undefined {
@@ -2095,37 +2154,9 @@ function parseCheckoutCommitRecords(stdout: string): ParsedCheckoutCommit[] {
   return commits;
 }
 
-async function resolveCheckoutCommitUpstreamRef(
-  cwd: string,
-  currentBranch: string,
-  context?: CheckoutContext,
-): Promise<string | null> {
-  // Prefer the branch's configured `@{u}`. If it's configured but the
-  // remote-tracking ref isn't present locally (e.g. configured upstream that was
-  // never fetched), fall back to `origin/<branch>` when that ref does exist, so a
-  // standard `origin` push is still recognized. Both missing => no remote.
-  const configured = await getConfiguredUpstreamRef(cwd, currentBranch, context);
-  if (configured && (await doesGitRefExist(cwd, `refs/remotes/${configured}`, context))) {
-    return configured;
-  }
-  if (await doesGitRefExist(cwd, `refs/remotes/origin/${currentBranch}`, context)) {
-    return `origin/${currentBranch}`;
-  }
-  return null;
-}
-
-// Returns the set of SHAs on the current branch that are NOT on the upstream
-// (local-only/unpushed), or `null` when no upstream exists (no remote at all).
-async function getLocalOnlyCommitShas(
-  cwd: string,
-  currentBranch: string,
-  context?: CheckoutContext,
-): Promise<Set<string> | null> {
-  const upstreamRef = await resolveCheckoutCommitUpstreamRef(cwd, currentBranch, context);
-  if (!upstreamRef) {
-    return null;
-  }
-  const { stdout } = await runGitCommand(["rev-list", `${upstreamRef}..HEAD`], {
+// Returns commits reachable from HEAD that are not reachable from any remote ref.
+async function getUnpushedCommitShas(cwd: string, context?: CheckoutContext): Promise<Set<string>> {
+  const { stdout } = await runGitCommand(["rev-list", "HEAD", "--not", "--remotes"], {
     cwd,
     envOverlay: READ_ONLY_GIT_ENV,
     logger: context?.logger,
@@ -2138,70 +2169,104 @@ async function getLocalOnlyCommitShas(
   );
 }
 
-/**
- * Lists the current branch's commits that are ahead of its base branch, newest
- * first, each flagged local-only vs on-remote with per-commit file +/- stats.
- *
- * Base ref is resolved exactly like {@link getCheckoutStatus}: the stored/default
- * base branch, mapped to the best comparison ref (origin/<base> when present,
- * else local <base>). Returns `[]` when the base cannot be resolved, the current
- * ref is the base itself, or there are no commits ahead.
- */
+async function getCheckoutCommitRecords({
+  cwd,
+  revision,
+  maxCount,
+}: CheckoutCommitLogInput): Promise<ParsedCheckoutCommit[]> {
+  const args = [
+    "log",
+    revision,
+    "--diff-merges=first-parent",
+    `--format=${COMMIT_LOG_FORMAT}`,
+    "--raw",
+    "--numstat",
+    "-M",
+  ];
+  if (maxCount !== undefined) {
+    args.splice(2, 0, `--max-count=${maxCount}`);
+  }
+
+  const result = await runGitCommand(args, { cwd, envOverlay: READ_ONLY_GIT_ENV });
+  if (result.truncated) {
+    throw new Error("Commit history exceeded the git output limit");
+  }
+  return parseCheckoutCommitRecords(result.stdout);
+}
+
 export interface CheckoutCommitsResult {
   baseRef: string | null;
   commits: CheckoutCommit[];
 }
 
+async function tryResolveCheckoutCommitsBaseRef(
+  cwd: string,
+  baseRef: string | null,
+  currentBranch: string,
+): Promise<string | null> {
+  if (!baseRef) {
+    return null;
+  }
+  const normalizedBaseRef = normalizeLocalBranchRefName(baseRef);
+  if (!normalizedBaseRef || normalizedBaseRef === currentBranch) {
+    return null;
+  }
+  return resolveMostAheadBaseRef(cwd, normalizedBaseRef).catch(() => null);
+}
+
 export async function listCheckoutCommits({
   cwd,
+  context,
 }: {
   cwd: string;
+  context?: CheckoutContext;
 }): Promise<CheckoutCommitsResult> {
   const currentBranch = await getCurrentBranch(cwd);
   if (!currentBranch) {
     return { baseRef: null, commits: [] };
   }
 
-  const { resolvedBaseRef } = await resolveBaseRefForCwd(cwd);
-  if (!resolvedBaseRef) {
-    return { baseRef: null, commits: [] };
-  }
-
-  const normalizedBaseRef = normalizeLocalBranchRefName(resolvedBaseRef);
-  if (!normalizedBaseRef || normalizedBaseRef === currentBranch) {
-    return { baseRef: null, commits: [] };
-  }
-
-  let comparisonBaseRef: string;
-  try {
-    comparisonBaseRef = await resolveBestComparisonBaseRef(cwd, resolvedBaseRef);
-  } catch {
-    // Base branch is not present locally or on origin — nothing to compare against.
-    return { baseRef: null, commits: [] };
-  }
-
-  // Single pass: `--raw` carries the status letter, `--numstat` the +/- counts.
-  // (`--name-status` cannot be combined with `--numstat` — git emits only one.)
-  const logResult = await runGitCommand(
-    [
-      "log",
-      `${comparisonBaseRef}..HEAD`,
-      "--no-merges",
-      `--max-count=${MAX_CHECKOUT_COMMITS}`,
-      `--format=${COMMIT_LOG_FORMAT}`,
-      "--raw",
-      "--numstat",
-      "-M",
-    ],
-    { cwd, envOverlay: READ_ONLY_GIT_ENV },
+  const { resolvedBaseRef } = await resolveBaseRefForCwd(cwd, context);
+  const normalizedBaseRef = resolvedBaseRef ? normalizeLocalBranchRefName(resolvedBaseRef) : null;
+  let comparisonBaseRef = await tryResolveCheckoutCommitsBaseRef(
+    cwd,
+    resolvedBaseRef,
+    currentBranch,
   );
+  if (!comparisonBaseRef && normalizedBaseRef && normalizedBaseRef !== currentBranch) {
+    // Saved worktree metadata can outlive a renamed or deleted base branch.
+    comparisonBaseRef = await tryResolveCheckoutCommitsBaseRef(
+      cwd,
+      await resolveBaseRef(cwd),
+      currentBranch,
+    );
+  }
 
-  const records = parseCheckoutCommitRecords(logResult.stdout);
+  let workspaceRecords: ParsedCheckoutCommit[] = [];
+  let baseRevision = "HEAD";
+  if (comparisonBaseRef) {
+    const [records, mergeBase] = await Promise.all([
+      getCheckoutCommitRecords({ cwd, revision: `${comparisonBaseRef}..HEAD` }),
+      tryResolveMergeBase(cwd, comparisonBaseRef),
+    ]);
+    workspaceRecords = records;
+    baseRevision = mergeBase ?? "";
+  }
+
+  const baseRecords = baseRevision
+    ? await getCheckoutCommitRecords({
+        cwd,
+        revision: baseRevision,
+        maxCount: CHECKOUT_BASE_COMMIT_LIMIT,
+      })
+    : [];
+  const records = [...workspaceRecords, ...baseRecords];
   if (records.length === 0) {
     return { baseRef: comparisonBaseRef, commits: [] };
   }
 
-  const localOnlyShas = await getLocalOnlyCommitShas(cwd, currentBranch);
+  const unpushedShas = await getUnpushedCommitShas(cwd, context);
+  const workspaceShas = new Set(workspaceRecords.map((record) => record.sha));
 
   const commits = records.map((record) => ({
     sha: record.sha,
@@ -2209,7 +2274,8 @@ export async function listCheckoutCommits({
     subject: record.subject,
     authorName: record.authorName,
     authorDate: record.authorDate,
-    isOnRemote: localOnlyShas === null ? false : !localOnlyShas.has(record.sha),
+    isOnRemote: !unpushedShas.has(record.sha),
+    isOnBase: !workspaceShas.has(record.sha),
     files: record.files,
   }));
 
@@ -3399,7 +3465,8 @@ export async function getPullRequestStatus(
   options?: CheckoutReadCacheOptions,
   context?: CheckoutContext,
 ): Promise<PullRequestStatusResult> {
-  const cacheKey = getPullRequestStatusCacheKey(cwd);
+  const headSha = await getCurrentHeadSha(cwd, context);
+  const cacheKey = getPullRequestStatusCacheKey(cwd, headSha);
   if (!options?.force) {
     const cached = pullRequestStatusCache.get(cacheKey);
     if (cached) {
@@ -3412,14 +3479,14 @@ export async function getPullRequestStatus(
     }
   }
 
-  const lookup = getPullRequestStatusUncached(cwd, forgeService, options, context)
+  const lookup = getPullRequestStatusUncached(cwd, forgeService, options, context, headSha)
     .then((status) => {
       pullRequestStatusCache.set(cacheKey, status);
       rememberPullRequestStatus(cacheKey, status);
       return status;
     })
     .catch((error) => {
-      if (!options?.force && error instanceof GitHubCommandError) {
+      if (!options?.force && error instanceof ForgeCommandError) {
         const stale = lastSuccessfulPullRequestStatus.get(cacheKey);
         if (stale) {
           return stale;
@@ -3440,6 +3507,7 @@ async function getPullRequestStatusUncached(
   forgeService: ForgeService,
   options?: CheckoutReadCacheOptions,
   context?: CheckoutContext,
+  headSha?: string | null,
 ): Promise<PullRequestStatusResult> {
   if (context?.facts?.isGit === false) {
     return buildPullRequestStatusResult(null, "no_remote");
@@ -3452,7 +3520,11 @@ async function getPullRequestStatusUncached(
     return buildPullRequestStatusResult(null, "no_remote");
   }
   try {
-    const lookupTarget = await resolvePullRequestStatusLookupTarget(cwd, head, context);
+    const resolvedLookupTarget = await resolvePullRequestStatusLookupTarget(cwd, head, context);
+    const lookupTarget =
+      headSha && !resolvedLookupTarget.headSha
+        ? { ...resolvedLookupTarget, headSha }
+        : resolvedLookupTarget;
     let status: CurrentPullRequestStatus | null;
     if (options?.force) {
       const reason = options.reason;

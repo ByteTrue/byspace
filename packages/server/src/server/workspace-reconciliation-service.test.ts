@@ -15,6 +15,10 @@ import type {
   WorkspaceRegistry,
 } from "./workspace-registry.js";
 import { WorkspaceReconciliationService } from "./workspace-reconciliation-service.js";
+import {
+  ensureWorkspaceServicePortPlan,
+  releaseWorkspaceServicePortPlan,
+} from "./workspace-service-port-registry.js";
 
 function createTestRegistries() {
   const projects = new Map<string, PersistedProjectRecord>();
@@ -159,6 +163,14 @@ function createTempGitRepo(prefix: string): string {
 
 const timestamp = "2025-01-01T00:00:00.000Z";
 
+function createDeferredPort() {
+  let resolve!: (port: number) => void;
+  const promise = new Promise<number>((resolvePromise) => {
+    resolve = resolvePromise;
+  });
+  return { promise, resolve };
+}
+
 describe("WorkspaceReconciliationService", () => {
   const tempDirs: string[] = [];
 
@@ -208,6 +220,93 @@ describe("WorkspaceReconciliationService", () => {
     const wsChange = result.changesApplied.find((c) => c.kind === "workspace_archived");
     expect(wsChange).toBeDefined();
     expect(workspaces.get("w1")!.archivedAt).toBeTruthy();
+  });
+
+  test("releases completed and pending dynamic port reservations for missing workspaces", async () => {
+    const { projects, workspaces, projectRegistry, workspaceRegistry } = createTestRegistries();
+    const completedWorkspaceId = "reconcile-release-completed";
+    const pendingWorkspaceId = "reconcile-release-pending";
+    const completedReuseWorkspaceId = "reconcile-release-completed-reuse";
+    const pendingReuseWorkspaceId = "reconcile-release-pending-reuse";
+    const completedPort = 41_235;
+    const pendingPort = 41_236;
+    const pendingAllocation = createDeferredPort();
+    const workspaceIds = [
+      completedWorkspaceId,
+      pendingWorkspaceId,
+      completedReuseWorkspaceId,
+      pendingReuseWorkspaceId,
+    ];
+
+    projects.set(
+      "port-release-project",
+      createPersistedProjectRecord({
+        projectId: "port-release-project",
+        rootPath: "/tmp/does-not-exist-reconcile-port-release",
+        kind: "non_git",
+        displayName: "ghost",
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      }),
+    );
+    for (const workspaceId of [completedWorkspaceId, pendingWorkspaceId]) {
+      workspaces.set(
+        workspaceId,
+        createPersistedWorkspaceRecord({
+          workspaceId,
+          projectId: "port-release-project",
+          cwd: `/tmp/does-not-exist-${workspaceId}`,
+          kind: "directory",
+          displayName: "ghost",
+          createdAt: timestamp,
+          updatedAt: timestamp,
+        }),
+      );
+    }
+
+    await ensureWorkspaceServicePortPlan({
+      workspaceId: completedWorkspaceId,
+      services: [{ scriptName: "app" }],
+      allocatePort: async () => completedPort,
+    });
+    const pendingPlan = ensureWorkspaceServicePortPlan({
+      workspaceId: pendingWorkspaceId,
+      services: [{ scriptName: "app" }],
+      allocatePort: async () => await pendingAllocation.promise,
+    });
+
+    try {
+      const service = new WorkspaceReconciliationService({
+        projectRegistry,
+        workspaceRegistry,
+        logger: createTestLogger(),
+      });
+      await service.runOnce();
+
+      await expect(
+        ensureWorkspaceServicePortPlan({
+          workspaceId: completedReuseWorkspaceId,
+          services: [{ scriptName: "app" }],
+          allocatePort: async () => completedPort,
+        }),
+      ).resolves.toEqual(new Map([["app", completedPort]]));
+
+      pendingAllocation.resolve(pendingPort);
+      await expect(pendingPlan).rejects.toThrow("Workspace service port plan was released");
+      await expect(
+        ensureWorkspaceServicePortPlan({
+          workspaceId: pendingReuseWorkspaceId,
+          services: [{ scriptName: "app" }],
+          allocatePort: async () => pendingPort,
+        }),
+      ).resolves.toEqual(new Map([["app", pendingPort]]));
+    } finally {
+      pendingAllocation.resolve(pendingPort);
+      await pendingPlan.catch(() => undefined);
+      for (const workspaceId of workspaceIds) {
+        releaseWorkspaceServicePortPlan(workspaceId);
+      }
+    }
   });
 
   test("keeps a project active after all its workspaces are archived", async () => {

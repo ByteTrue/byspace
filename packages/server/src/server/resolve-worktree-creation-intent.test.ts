@@ -261,6 +261,51 @@ describe("resolveWorktreeCreationIntent", () => {
     expect(deps.headRefLookups).toEqual([]);
   });
 
+  test("uses the detected GitLab forge when checkout source forge is omitted", async () => {
+    const deps = createResolverHarness({
+      forge: "gitlab",
+      forgeService: {
+        getPullRequestCheckoutTarget: async ({ number }) => ({
+          number,
+          baseRefName: "main",
+          headRefName: "feature/mr-source",
+          headOwnerLogin: null,
+          headRepositorySshUrl: null,
+          headRepositoryUrl: null,
+          isCrossRepository: false,
+        }),
+      },
+    });
+
+    await expect(
+      resolveWorktreeCreationIntent(
+        { action: "checkout", checkoutSource: { kind: "change_request", number: 7 } },
+        repoRoot,
+        deps,
+      ),
+    ).resolves.toMatchObject({
+      kind: "checkout-change-request",
+      forge: "gitlab",
+      changeRequestNumber: 7,
+    });
+  });
+
+  test("uses the detected Gitea forge when checkout source forge is omitted", async () => {
+    const deps = createResolverHarness({ forge: "gitea" });
+
+    await expect(
+      resolveWorktreeCreationIntent(
+        { action: "checkout", checkoutSource: { kind: "change_request", number: 8 } },
+        repoRoot,
+        deps,
+      ),
+    ).resolves.toMatchObject({
+      kind: "checkout-change-request",
+      forge: "gitea",
+      changeRequestNumber: 8,
+    });
+  });
+
   test("checks out a cross-repository GitLab MR when the adapter provides a checkout ref", async () => {
     const deps = createResolverHarness({
       forge: "gitlab",

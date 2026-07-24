@@ -4,7 +4,11 @@ import { StyleSheet } from "react-native-unistyles";
 import { useTranslation } from "react-i18next";
 import { useRetainedPanelActive } from "@/components/retained-panel";
 import { useChangesPreferences } from "@/hooks/use-changes-preferences";
-import { useCheckoutCommitsQuery, type CheckoutCommitsQueryResult } from "@/git/use-commits-query";
+import {
+  selectWorkspaceCommits,
+  useCheckoutCommitsQuery,
+  type CheckoutCommitsQueryResult,
+} from "@/git/use-commits-query";
 import { ThemedChevron, chevronColorMapping } from "@/git/themed-chevron";
 import { CommitRow } from "./commit-row";
 import { dotStyles } from "./shared";
@@ -59,7 +63,8 @@ function CommitsSectionContent({
   if (query.status !== "loaded") {
     return <CommitsSectionSkeleton />;
   }
-  if (query.data.commits.length === 0) {
+  const workspaceCommits = selectWorkspaceCommits(query.data.commits);
+  if (workspaceCommits.length === 0) {
     return (
       <Text style={styles.emptyRow} testID="commits-section-empty">
         {t("workspace.git.diff.commits.empty")}
@@ -68,7 +73,7 @@ function CommitsSectionContent({
   }
   return (
     <View style={styles.list}>
-      {query.data.commits.map((commit) => (
+      {workspaceCommits.map((commit) => (
         <CommitRow key={commit.sha} commit={commit} now={now} onCommitPress={onCommitPress} />
       ))}
     </View>
@@ -111,7 +116,8 @@ export function CommitsSection({ serverId, cwd, onCommitPress }: CommitsSectionP
   if (query.status === "unsupported") {
     return null;
   }
-  const commitCount = query.status === "loaded" ? query.data.commits.length : null;
+  const commitCount =
+    query.status === "loaded" ? selectWorkspaceCommits(query.data.commits).length : null;
 
   return (
     <View style={styles.container}>

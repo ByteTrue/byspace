@@ -16,6 +16,12 @@ interface WorkspaceGitWatchTarget {
   lastBranchName: string | null;
 }
 
+export interface WorkspaceGitObserverMetrics {
+  watchedDirectoryCount: number;
+  workspaceRecordCount: number;
+  subscriptionCount: number;
+}
+
 /**
  * Observes a workspace's git state on disk (via WorkspaceGitService) and drives the
  * live update fan-out: branch-change notifications, workspace-card refreshes, and
@@ -36,6 +42,7 @@ export interface WorkspaceGitObserverService {
   shouldSkipUpdate(workspaceId: string, workspace: WorkspaceDescriptorPayload | null): boolean;
   recordDescriptorState(workspaceId: string, workspace: WorkspaceDescriptorPayload | null): void;
   handleBranchSnapshot(cwd: string, branchName: string | null): void;
+  getMetrics(): WorkspaceGitObserverMetrics;
   removeForWorkspaceId(workspaceId: string): void;
   removeForCwd(cwd: string): void;
   dispose(): void;
@@ -206,6 +213,14 @@ export function createWorkspaceGitObserverService(deps: {
     },
 
     handleBranchSnapshot,
+
+    getMetrics() {
+      return {
+        watchedDirectoryCount: watchTargets.size,
+        workspaceRecordCount: watchTargets.size,
+        subscriptionCount: subscriptions.size,
+      };
+    },
 
     removeForWorkspaceId(workspaceId) {
       const target = resolveTargetByWorkspaceId(workspaceId);

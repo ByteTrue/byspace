@@ -353,6 +353,9 @@ export function resolveWaitForFinishError(options: {
 export interface SessionRuntimeMetrics {
   terminalDirectorySubscriptionCount: number;
   terminalSubscriptionCount: number;
+  workspaceGitWatchedDirectoryCount: number;
+  workspaceGitWorkspaceRecordCount: number;
+  workspaceGitSubscriptionCount: number;
   inflightRequests: number;
   peakInflightRequests: number;
 }
@@ -911,6 +914,7 @@ export class Session {
       getDaemonTcpPort: this.getDaemonTcpPort,
       getDaemonTcpHost: this.getDaemonTcpHost,
       serviceProxyPublicBaseUrl: this.serviceProxyPublicBaseUrl,
+      globalServicePorts: daemonRuntimeConfig?.workspaceServicePorts,
       resolveScriptHealth: this.resolveScriptHealth,
       logger: this.sessionLogger,
       emit: (message) => this.emit(message),
@@ -1194,9 +1198,13 @@ export class Session {
 
   public getRuntimeMetrics(): SessionRuntimeMetrics {
     const terminalMetrics = this.terminalController.getMetrics();
+    const workspaceGitMetrics = this.workspaceGitObserver.getMetrics();
     return {
       terminalDirectorySubscriptionCount: terminalMetrics.directorySubscriptionCount,
       terminalSubscriptionCount: terminalMetrics.streamSubscriptionCount,
+      workspaceGitWatchedDirectoryCount: workspaceGitMetrics.watchedDirectoryCount,
+      workspaceGitWorkspaceRecordCount: workspaceGitMetrics.workspaceRecordCount,
+      workspaceGitSubscriptionCount: workspaceGitMetrics.subscriptionCount,
       inflightRequests: this.inflightRequests,
       peakInflightRequests: this.peakInflightRequests,
     };
@@ -2355,11 +2363,12 @@ export class Session {
       const trimmed = customName?.trim() ?? "";
       const nextCustomName = trimmed.length === 0 ? null : trimmed;
 
-      await this.projectRegistry.upsert({
+      const updated = {
         ...existing,
         customName: nextCustomName,
         updatedAt: new Date().toISOString(),
-      });
+      };
+      await this.projectRegistry.upsert(updated);
 
       this.emit({
         type: "project.rename.response",
@@ -2381,6 +2390,14 @@ export class Session {
       if (affectedWorkspaceIds.length > 0) {
         await this.emitWorkspaceUpdatesForWorkspaceIds(affectedWorkspaceIds, {
           skipReconcile: true,
+        });
+      } else if (this.workspaceUpdatesSubscription) {
+        // The existing workspace delta carries empty-project state too. Reuse it
+        // instead of adding another project event to the wire protocol.
+        this.bufferOrEmitWorkspaceUpdate(this.workspaceUpdatesSubscription, {
+          kind: "remove",
+          id: `project:${projectId}`,
+          emptyProject: this.buildProjectDescriptor(updated),
         });
       }
     } catch (error) {
@@ -4440,10 +4457,6 @@ export class Session {
       }
 
       this.bufferOrEmitWorkspaceUpdate(subscription, nextPayload);
-    }
-
-    if (!options?.skipReconcile) {
-      void this.reconcileAndEmitWorkspaceUpdates();
     }
   }
 

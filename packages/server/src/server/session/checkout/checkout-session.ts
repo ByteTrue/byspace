@@ -269,7 +269,14 @@ export class CheckoutSession {
     const { cwd, requestId } = msg;
 
     try {
-      const { baseRef, commits } = await listCheckoutCommits({ cwd: expandTilde(cwd) });
+      const { baseRef, commits } = await listCheckoutCommits({
+        cwd: expandTilde(cwd),
+        context: {
+          byspaceHome: this.byspaceHome,
+          worktreesRoot: this.worktreesRoot,
+          logger: this.logger,
+        },
+      });
       this.host.emit({
         type: "checkout.commits.list.response",
         payload: { cwd, baseRef, commits, error: null, requestId },
@@ -1232,7 +1239,8 @@ export class CheckoutSession {
 
     try {
       // The payload schema keeps checkRunId and workflowRunId optional (a Gitea
-      // Actions run has no check-run id; GitLab routes by changeRequestNumber),
+      // Actions run has no check-run id; forge adapters may also route by
+      // changeRequestNumber),
       // but a request that addresses no check at all is not actionable — reject
       // it here with a clear message instead of failing deep in an adapter. The
       // schema itself cannot enforce this: it is a discriminated-union member, so

@@ -1,7 +1,33 @@
 import { describe, expect, it } from "vitest";
-import { resolveCheckoutCommitsQueryResult, type CheckoutCommitsData } from "./use-commits-query";
+import {
+  resolveCheckoutCommitsQueryResult,
+  selectWorkspaceCommits,
+  type CheckoutCommitsData,
+} from "./use-commits-query";
 
 const EMPTY_COMMITS: CheckoutCommitsData = { baseRef: "main", commits: [] };
+
+describe("selectWorkspaceCommits", () => {
+  it("excludes retained base commits from the Changes commit group", () => {
+    const commit = {
+      sha: "a".repeat(40),
+      shortSha: "aaaaaaa",
+      subject: "Workspace work",
+      authorName: "Test",
+      authorDate: "2026-01-01T00:00:00.000Z",
+      isOnRemote: false,
+      isOnBase: false,
+      files: [],
+    };
+
+    expect(
+      selectWorkspaceCommits([
+        commit,
+        { ...commit, sha: "b".repeat(40), shortSha: "bbbbbbb", isOnBase: true },
+      ]).map((entry) => entry.shortSha),
+    ).toEqual(["aaaaaaa"]);
+  });
+});
 
 describe("resolveCheckoutCommitsQueryResult", () => {
   it("stays idle while the collapsed section has never loaded", () => {

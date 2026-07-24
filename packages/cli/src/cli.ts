@@ -9,6 +9,7 @@ import { createScheduleCommand } from "./commands/schedule/index.js";
 import { createSpeechCommand } from "./commands/speech/index.js";
 import { createTerminalCommand } from "./commands/terminal/index.js";
 import { createWorktreeCommand } from "./commands/worktree/index.js";
+import { createWorkspaceCommand } from "./commands/workspace/index.js";
 import { createHooksCommand } from "./commands/hooks.js";
 import { startCommand as daemonStartCommand } from "./commands/daemon/start.js";
 import { runStatusCommand as runDaemonStatusCommand } from "./commands/daemon/status.js";
@@ -182,8 +183,11 @@ export function createCli(): Command {
   // Speech model commands
   program.addCommand(createSpeechCommand());
 
-  // Worktree commands
-  program.addCommand(createWorktreeCommand());
+  // Workspace commands
+  program.addCommand(createWorkspaceCommand());
+  // COMPAT(worktreeCli): legacy command alias added before workspace was the product unit.
+  // Added in v0.2.0; remove after 2027-01-17.
+  program.addCommand(createWorktreeCommand(), { hidden: true });
 
   return program;
 }

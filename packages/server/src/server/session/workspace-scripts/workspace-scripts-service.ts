@@ -1,3 +1,4 @@
+import type { BySpaceServicePortAllocation } from "@bytetrue/byspace-protocol/byspace-config-schema";
 import type pino from "pino";
 import type {
   SessionOutboundMessage,
@@ -56,6 +57,7 @@ export function createWorkspaceScriptsService(deps: {
   getDaemonTcpPort: (() => number | null) | null;
   getDaemonTcpHost: (() => string | null) | null;
   serviceProxyPublicBaseUrl: string | null;
+  globalServicePorts?: BySpaceServicePortAllocation;
   resolveScriptHealth: ((hostname: string) => ScriptHealthState | null) | null;
   logger: pino.Logger;
   emit: (message: SessionOutboundMessage) => void;
@@ -70,6 +72,7 @@ export function createWorkspaceScriptsService(deps: {
     getDaemonTcpPort,
     getDaemonTcpHost,
     serviceProxyPublicBaseUrl,
+    globalServicePorts,
     resolveScriptHealth,
     logger,
     emit,
@@ -138,6 +141,7 @@ export function createWorkspaceScriptsService(deps: {
         daemonPort: getDaemonTcpPort?.() ?? null,
         daemonListenHost: getDaemonTcpHost?.() ?? null,
         serviceProxyPublicBaseUrl,
+        globalServicePorts,
         serviceProxy,
         runtimeStore: scriptRuntimeStore,
         terminalManager,

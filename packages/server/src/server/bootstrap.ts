@@ -144,6 +144,7 @@ import {
 } from "@bytetrue/byspace-protocol/release-channel";
 import type { AgentClient, AgentProvider } from "./agent/agent-sdk-types.js";
 import type { FirstAgentContext, TerminalProfile } from "@bytetrue/byspace-protocol/messages";
+import type { BySpaceServicePortAllocation } from "@bytetrue/byspace-protocol/byspace-config-schema";
 import type {
   AgentProviderRuntimeSettingsMap,
   ProviderOverride,
@@ -339,6 +340,7 @@ export interface BySpaceDaemonConfig {
   byspaceHome: string;
   daemonVersion?: string;
   worktreesRoot?: string;
+  workspaceServicePorts?: BySpaceServicePortAllocation;
   corsAllowedOrigins: string[];
   allowedHosts?: HostnamesConfig;
   hostnames?: HostnamesConfig;
@@ -1372,6 +1374,7 @@ export async function createBySpaceDaemon(
               {
                 listen: formatListenTarget(boundListenTarget ?? listenTarget),
                 worktreesRoot: config.worktreesRoot,
+                workspaceServicePorts: config.workspaceServicePorts,
                 appBaseUrl,
                 relay: {
                   enabled: relayEnabled,

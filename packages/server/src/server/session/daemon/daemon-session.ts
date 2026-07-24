@@ -1,3 +1,4 @@
+import type { BySpaceServicePortAllocation } from "@bytetrue/byspace-protocol/byspace-config-schema";
 import type pino from "pino";
 import type { ProviderAvailability } from "../../agent/agent-manager.js";
 import type { SessionInboundMessage, SessionOutboundMessage } from "../../messages.js";
@@ -19,6 +20,7 @@ import {
 export interface DaemonRuntimeConfig {
   listen: string | null;
   worktreesRoot?: string;
+  workspaceServicePorts?: BySpaceServicePortAllocation;
   appBaseUrl?: string;
   relay: {
     enabled: boolean;

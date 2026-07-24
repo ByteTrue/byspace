@@ -520,6 +520,7 @@ export function loadConfig(
     byspaceHome,
     daemonVersion,
     worktreesRoot: resolveWorktreesRoot(byspaceHome, persisted),
+    workspaceServicePorts: persisted.worktrees?.servicePorts,
     corsAllowedOrigins: resolveCorsAllowedOrigins(env, persisted, hostedRelease),
     hostnames,
     trustedProxies,

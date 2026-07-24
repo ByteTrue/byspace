@@ -6701,6 +6701,50 @@ test("project.rename.request stores customName and emits an updated workspace de
   });
 });
 
+test("project.rename.request updates a project with no workspaces", async () => {
+  const emitted: SessionOutboundMessage[] = [];
+  const session = asTestSession(
+    createSessionForWorkspaceTests({ onMessage: (message) => emitted.push(message) }),
+  );
+
+  const project = createPersistedProjectRecord({
+    projectId: "prj_empty",
+    rootPath: REPO_CWD,
+    kind: "non_git",
+    displayName: "repo",
+    createdAt: "2026-07-20T12:00:00.000Z",
+    updatedAt: "2026-07-20T12:00:00.000Z",
+  });
+  session.projectRegistry.get = async () => project;
+  session.projectRegistry.list = async () => [project];
+  session.projectRegistry.upsert = async () => project;
+  session.workspaceRegistry.list = async () => [];
+
+  await session.handleMessage({
+    type: "fetch_workspaces_request",
+    requestId: "req-empty-projects",
+    subscribe: { subscriptionId: "sub-empty-projects" },
+  });
+  emitted.length = 0;
+
+  await session.handleMessage({
+    type: "project.rename.request",
+    projectId: project.projectId,
+    customName: "Renamed empty project",
+    requestId: "req-rename-empty",
+  });
+
+  expect(findByType(emitted, "workspace_update")?.payload).toMatchObject({
+    kind: "remove",
+    id: `project:${project.projectId}`,
+    emptyProject: {
+      projectId: project.projectId,
+      projectDisplayName: "Renamed empty project",
+      projectCustomName: "Renamed empty project",
+    },
+  });
+});
+
 test("project.rename.request with whitespace-only customName clears the override", async () => {
   const emitted: SessionOutboundMessage[] = [];
   const session = asTestSession(

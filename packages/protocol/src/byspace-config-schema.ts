@@ -1,5 +1,26 @@
 import { z } from "zod";
 
+const TCP_PORT_RANGE_PATTERN = /^(\d{1,5})-(\d{1,5})$/;
+
+export const BySpaceServicePortAllocationSchema = z
+  .object({
+    range: z.string().trim().regex(TCP_PORT_RANGE_PATTERN).optional(),
+    portScript: z.string().trim().min(1).optional(),
+  })
+  .strict()
+  .refine(
+    (value) => value.range !== undefined || value.portScript !== undefined,
+    "Expected range or portScript",
+  )
+  .refine((value) => {
+    if (!value.range) return true;
+    const match = TCP_PORT_RANGE_PATTERN.exec(value.range);
+    if (!match) return false;
+    const start = Number(match[1]);
+    const end = Number(match[2]);
+    return start >= 1 && end <= 65_535 && start <= end;
+  }, "Expected an inclusive TCP port range from 1-65535");
+
 export function normalizeLifecycleCommands(commands: unknown): string[] {
   if (typeof commands === "string") {
     return commands.trim().length > 0 ? [commands] : [];
@@ -27,6 +48,7 @@ export const BySpaceWorktreeConfigRawSchema = z
     setup: BySpaceLifecycleCommandRawSchema.optional(),
     teardown: BySpaceLifecycleCommandRawSchema.optional(),
     terminals: z.unknown().optional(),
+    servicePorts: BySpaceServicePortAllocationSchema.optional(),
   })
   .passthrough();
 
@@ -92,6 +114,7 @@ export const ProjectConfigRpcErrorSchema = z.discriminatedUnion("code", [
 export type BySpaceScriptEntryRaw = z.infer<typeof BySpaceScriptEntryRawSchema>;
 export type BySpaceMetadataGenerationEntry = z.infer<typeof BySpaceMetadataGenerationEntrySchema>;
 export type BySpaceMetadataGeneration = z.infer<typeof BySpaceMetadataGenerationSchema>;
+export type BySpaceServicePortAllocation = z.infer<typeof BySpaceServicePortAllocationSchema>;
 export type BySpaceConfigRaw = z.infer<typeof BySpaceConfigRawSchema>;
 export type BySpaceConfig = z.infer<typeof BySpaceConfigSchema>;
 export type BySpaceConfigRevision = z.infer<typeof BySpaceConfigRevisionSchema>;

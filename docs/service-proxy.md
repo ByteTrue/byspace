@@ -26,6 +26,30 @@ dev--feature-auth--miniweb.localhost
 
 Local and public routes use one combined leftmost label (`script--branch--project`). This keeps the hostname compatible with normal single-level wildcard DNS and TLS. If the combined label would exceed DNS's 63-character label limit, BySpace truncates it with a deterministic hash suffix to avoid collisions.
 
+## Service port allocation
+
+By default, BySpace asks the operating system for a free port. To constrain allocation globally, add `servicePorts` under `worktrees` in `~/.byspace/config.json`:
+
+```json
+{
+  "worktrees": {
+    "servicePorts": { "range": "3000-3999" }
+  }
+}
+```
+
+A repository can override the global policy with `worktree.servicePorts` in `byspace.json`. Use either an inclusive `range`, or a `portScript` executable that prints one TCP port:
+
+```json
+{
+  "worktree": {
+    "servicePorts": { "portScript": "./scripts/allocate-port" }
+  }
+}
+```
+
+The script runs without a shell from the workspace directory. It receives `scriptName`, `workspaceId`, `branchName`, and workspace path as positional arguments and the same values through `BYSPACE_SCRIPTNAME`, `BYSPACE_WORKSPACE_ID`, `BYSPACE_BRANCH_NAME`, and `BYSPACE_WORKTREE_PATH`. Script execution is capped at 10 seconds and 1 KiB of output. A repository policy takes precedence over the global policy; `portScript` takes precedence over `range` when both are present.
+
 ## Configuration
 
 Add a `serviceProxy` block under `daemon` in `~/.byspace/config.json`:

@@ -16,7 +16,8 @@ import {
   type WorktreeSetupCommandResult,
   type WorktreeRuntimeEnv,
 } from "../utils/worktree.js";
-import { findFreePort, type ServiceProxySubsystem } from "./service-proxy.js";
+import type { ServiceProxySubsystem } from "./service-proxy.js";
+import { allocateWorkspaceServicePort } from "./workspace-service-port-allocator.js";
 import type { WorkspaceScriptRuntimeStore } from "./workspace-script-runtime-store.js";
 import type { AgentTimelineItem, ToolCallDetail } from "./agent/agent-sdk-types.js";
 import {
@@ -29,6 +30,7 @@ import {
   requirePlannedWorkspaceServicePort,
   refreshWorkspaceServicePort,
 } from "./workspace-service-port-registry.js";
+import type { BySpaceServicePortAllocation } from "@bytetrue/byspace-protocol/byspace-config-schema";
 
 export interface WorktreeBootstrapTerminalResult {
   name: string | null;
@@ -706,6 +708,7 @@ export interface SpawnWorkspaceScriptOptions {
   serviceProxy: ServiceProxySubsystem;
   runtimeStore: WorkspaceScriptRuntimeStore;
   terminalManager: TerminalManager;
+  globalServicePorts?: BySpaceServicePortAllocation;
   logger?: Logger;
   onLifecycleChanged?: () => void;
 }
@@ -717,6 +720,7 @@ interface ServiceScriptSetupResult {
 }
 
 async function setupServiceScriptRoute(params: {
+  repoRoot: string;
   scriptConfigs: ReturnType<typeof getScriptConfigs>;
   config: { port?: number };
   scriptName: string;
@@ -728,9 +732,11 @@ async function setupServiceScriptRoute(params: {
   serviceProxyPublicBaseUrl: string | null | undefined;
   existingRuntimeEntry: ReturnType<WorkspaceScriptRuntimeStore["get"]>;
   serviceProxy: ServiceProxySubsystem;
+  servicePortAllocation: BySpaceServicePortAllocation | undefined;
 }): Promise<ServiceScriptSetupResult> {
   const {
     scriptConfigs,
+    repoRoot,
     config,
     scriptName,
     projectSlug,
@@ -741,6 +747,7 @@ async function setupServiceScriptRoute(params: {
     serviceProxyPublicBaseUrl,
     existingRuntimeEntry,
     serviceProxy,
+    servicePortAllocation,
   } = params;
 
   const serviceDeclarations: Array<{ scriptName: string; port?: number }> = [];
@@ -759,14 +766,30 @@ async function setupServiceScriptRoute(params: {
   const plannedPorts = await ensureWorkspaceServicePortPlan({
     workspaceId,
     services: serviceDeclarations,
-    allocatePort: findFreePort,
+    allocatePort: ({ scriptName: serviceScriptName, reservedPorts }) =>
+      allocateWorkspaceServicePort({
+        allocation: servicePortAllocation,
+        cwd: repoRoot,
+        scriptName: serviceScriptName,
+        workspaceId,
+        branchName,
+        reservedPorts,
+      }),
   });
   const port =
     existingRuntimeEntry?.lifecycle === "stopped"
       ? await refreshWorkspaceServicePort({
           workspaceId,
           service: { scriptName, port: config.port },
-          allocatePort: findFreePort,
+          allocatePort: ({ scriptName: serviceScriptName, reservedPorts }) =>
+            allocateWorkspaceServicePort({
+              allocation: servicePortAllocation,
+              cwd: repoRoot,
+              scriptName: serviceScriptName,
+              workspaceId,
+              branchName,
+              reservedPorts,
+            }),
         })
       : requirePlannedWorkspaceServicePort(plannedPorts, scriptName);
 
@@ -848,6 +871,7 @@ export async function spawnWorkspaceScript(
     serviceProxy,
     runtimeStore,
     terminalManager,
+    globalServicePorts,
     logger,
     onLifecycleChanged,
   } = options;
@@ -878,6 +902,7 @@ export async function spawnWorkspaceScript(
     let env: Record<string, string> | undefined;
     if (serviceScript) {
       const serviceSetup = await setupServiceScriptRoute({
+        repoRoot,
         scriptConfigs,
         config,
         scriptName,
@@ -889,6 +914,7 @@ export async function spawnWorkspaceScript(
         serviceProxyPublicBaseUrl,
         existingRuntimeEntry,
         serviceProxy,
+        servicePortAllocation: configResult.config?.worktree?.servicePorts ?? globalServicePorts,
       });
       hostname = serviceSetup.hostname;
       port = serviceSetup.port;

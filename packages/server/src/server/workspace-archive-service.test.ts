@@ -12,11 +12,16 @@ import type { AgentStorage, StoredAgentRecord } from "./agent/agent-storage.js";
 import type { WorkspaceGitService } from "./workspace-git-service.js";
 import {
   archiveByScope,
+  archivePersistedWorkspaceRecord,
   type ActiveWorkspaceRef,
   type ArchiveDependencies,
   type ArchiveResult,
   resolveWorkspaceIdAtPath,
 } from "./workspace-archive-service.js";
+import {
+  ensureWorkspaceServicePortPlan,
+  releaseWorkspaceServicePortPlan,
+} from "./workspace-service-port-registry.js";
 
 const cleanupPaths: string[] = [];
 
@@ -586,5 +591,42 @@ describe("resolveWorkspaceIdAtPath", () => {
     );
 
     expect(result).toBe("ws-nested");
+  });
+});
+
+describe("archivePersistedWorkspaceRecord", () => {
+  test("releases the workspace service-port plan when the record is already gone", async () => {
+    const archivedWorkspaceId = "archive-port-plan-workspace";
+    const nextWorkspaceId = "archive-port-plan-next-workspace";
+    const allocatePort = async () => 41_234;
+
+    try {
+      await ensureWorkspaceServicePortPlan({
+        workspaceId: archivedWorkspaceId,
+        services: [{ scriptName: "app" }],
+        allocatePort,
+      });
+
+      await expect(
+        archivePersistedWorkspaceRecord({
+          workspaceId: archivedWorkspaceId,
+          workspaceRegistry: {
+            get: async () => null,
+            archive: async () => {},
+          },
+        }),
+      ).resolves.toBeNull();
+
+      await expect(
+        ensureWorkspaceServicePortPlan({
+          workspaceId: nextWorkspaceId,
+          services: [{ scriptName: "app" }],
+          allocatePort,
+        }),
+      ).resolves.toEqual(new Map([["app", 41_234]]));
+    } finally {
+      releaseWorkspaceServicePortPlan(archivedWorkspaceId);
+      releaseWorkspaceServicePortPlan(nextWorkspaceId);
+    }
   });
 });

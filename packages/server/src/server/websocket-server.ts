@@ -34,7 +34,13 @@ import { isHostnameAllowed } from "./hostnames.js";
 import { Session, type SessionLifecycleIntent, type SessionRuntimeMetrics } from "./session.js";
 import type { AgentProvider } from "./agent/agent-sdk-types.js";
 import { ProviderSnapshotManager } from "./agent/provider-snapshot-manager.js";
-import type { WorkspaceGitRuntimeSnapshot, WorkspaceGitService } from "./workspace-git-service.js";
+import type {
+  WorkspaceGitRuntimeSnapshot,
+  WorkspaceGitService,
+  WorkspaceGitServiceMetrics,
+} from "./workspace-git-service.js";
+import type { GitCommandRuntimeMetricsSnapshot } from "../utils/git-command-runtime-metrics.js";
+import { snapshotGitCommandRuntimeMetrics } from "../utils/run-git-command.js";
 import type { WorkspaceAutoName } from "./workspace-auto-name.js";
 import { buildWorkspaceGitMetadataFromSnapshot } from "./workspace-git-metadata.js";
 import { PushTokenStore } from "./push/token-store.js";
@@ -107,9 +113,14 @@ interface WebSocketServerConfig {
 }
 
 type WebSocketRuntimeMetrics = SessionRuntimeMetrics & CheckoutDiffMetrics;
+interface GitRuntimeMetrics {
+  commands: GitCommandRuntimeMetricsSnapshot;
+  workspaceService: WorkspaceGitServiceMetrics;
+}
 type WebSocketRuntimeDiagnosticPayload = WebSocketRuntimeDiagnosticSnapshot<
   WebSocketRuntimeMetrics,
-  AgentMetricsSnapshot
+  AgentMetricsSnapshot,
+  GitRuntimeMetrics
 >;
 type WebSocketRuntimeMetricsLogPayload = Omit<WebSocketRuntimeDiagnosticPayload, "collectedAt">;
 
@@ -207,6 +218,20 @@ function createFallbackWorkspaceGitService(): WorkspaceGitService {
     scheduleRefreshForCwd: () => {},
     onWorkspaceStateMayHaveChanged: () => {},
     invalidateForge: () => {},
+    getMetrics: () => ({
+      workspaceTargetCount: 0,
+      workspaceListenerCount: 0,
+      repositoryTargetCount: 0,
+      repositoryWorkspaceLinkCount: 0,
+      workingTreeWatchTargetCount: 0,
+      workingTreeWatchListenerCount: 0,
+      workspaceObservationSetupInFlightCount: 0,
+      workingTreeWatchSetupInFlightCount: 0,
+      workspaceRefreshInFlightCount: 0,
+      workspaceRefreshQueuedCount: 0,
+      fetchInFlightCount: 0,
+      snapshotUpdatedListenerCount: 0,
+    }),
     dispose: () => {},
   };
 }
@@ -1259,6 +1284,8 @@ export class VoiceAssistantWebSocketServer {
         projectCreateDirectory: true,
         // COMPAT(commitsList): added in v0.1.110, remove gate after 2027-01-16.
         commitsList: true,
+        // COMPAT(commitBaseClassification): added in v0.2.0, remove gate after 2027-01-23.
+        commitBaseClassification: true,
         // COMPAT(providerRemoval): added in v0.1.105, drop the gate when floor >= v0.1.105.
         providerRemoval: true,
         // COMPAT(importSessionWorkspaceTarget): added in v0.1.110, remove gate after 2027-01-16.
@@ -1816,6 +1843,9 @@ export class VoiceAssistantWebSocketServer {
     const uniqueConnections = new Set<SessionConnection>(this.externalSessionsByKey.values());
     let terminalDirectorySubscriptionCount = 0;
     let terminalSubscriptionCount = 0;
+    let workspaceGitWatchedDirectoryCount = 0;
+    let workspaceGitWorkspaceRecordCount = 0;
+    let workspaceGitSubscriptionCount = 0;
     let inflightRequests = 0;
     let peakInflightRequests = 0;
 
@@ -1823,6 +1853,9 @@ export class VoiceAssistantWebSocketServer {
       const sessionMetrics = connection.session.getRuntimeMetrics();
       terminalDirectorySubscriptionCount += sessionMetrics.terminalDirectorySubscriptionCount;
       terminalSubscriptionCount += sessionMetrics.terminalSubscriptionCount;
+      workspaceGitWatchedDirectoryCount += sessionMetrics.workspaceGitWatchedDirectoryCount;
+      workspaceGitWorkspaceRecordCount += sessionMetrics.workspaceGitWorkspaceRecordCount;
+      workspaceGitSubscriptionCount += sessionMetrics.workspaceGitSubscriptionCount;
       inflightRequests += sessionMetrics.inflightRequests;
       peakInflightRequests = Math.max(peakInflightRequests, sessionMetrics.peakInflightRequests);
       connection.session.resetPeakInflight();
@@ -1832,6 +1865,9 @@ export class VoiceAssistantWebSocketServer {
       ...this.checkoutDiffManager.getMetrics(),
       terminalDirectorySubscriptionCount,
       terminalSubscriptionCount,
+      workspaceGitWatchedDirectoryCount,
+      workspaceGitWorkspaceRecordCount,
+      workspaceGitSubscriptionCount,
       inflightRequests,
       peakInflightRequests,
     };
@@ -1848,6 +1884,7 @@ export class VoiceAssistantWebSocketServer {
     ).length;
     const sessionMetrics = this.collectSessionRuntimeMetrics();
     const agentSnapshot = this.agentManager.getMetricsSnapshot();
+    const gitCommandMetrics = snapshotGitCommandRuntimeMetrics();
     const loggedMetrics = {
       windowMs: runtimeMetrics.windowMs,
       final: Boolean(options?.final),
@@ -1875,6 +1912,10 @@ export class VoiceAssistantWebSocketServer {
       runtime: sessionMetrics,
       latency: runtimeMetrics.latency,
       agents: agentSnapshot,
+      git: {
+        commands: gitCommandMetrics,
+        workspaceService: this.workspaceGitService.getMetrics(),
+      },
     } satisfies WebSocketRuntimeMetricsLogPayload;
 
     this.lastRuntimeMetricsSnapshot = {

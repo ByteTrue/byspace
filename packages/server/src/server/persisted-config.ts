@@ -14,6 +14,7 @@ import {
   TerminalProfileSchema,
 } from "@bytetrue/byspace-protocol/messages";
 import { resolveBySpaceHostedRelease } from "@bytetrue/byspace-protocol/release-channel";
+import { BySpaceServicePortAllocationSchema } from "@bytetrue/byspace-protocol/byspace-config-schema";
 import { resolveDaemonVersion } from "./daemon-version.js";
 
 export const LogLevelSchema = z.enum(["trace", "debug", "info", "warn", "error", "fatal"]);
@@ -82,6 +83,7 @@ const ProvidersSchema = z
 const WorktreesConfigSchema = z
   .object({
     root: z.string().min(1).optional(),
+    servicePorts: BySpaceServicePortAllocationSchema.optional(),
   })
   .strict();
 

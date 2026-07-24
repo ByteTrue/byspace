@@ -19,6 +19,10 @@ export interface CheckoutCommitsData {
   commits: CheckoutCommit[];
 }
 
+export function selectWorkspaceCommits(commits: CheckoutCommit[]): CheckoutCommit[] {
+  return commits.filter((commit) => !commit.isOnBase);
+}
+
 export type CheckoutCommitsQueryResult =
   | { status: "unsupported" }
   | { status: "idle" }
@@ -69,11 +73,12 @@ export function useCheckoutCommitsQuery({
 }: UseCheckoutCommitsQueryOptions): CheckoutCommitsQueryResult {
   const client = useHostRuntimeClient(serverId);
   const isConnected = useHostRuntimeIsConnected(serverId);
-  // COMPAT(commitsList): added in v0.1.110, remove gate after 2027-01-16.
+  // COMPAT(commitBaseClassification): added in v0.2.0, remove after 2027-01-25.
   // Single capability-detection site; downstream reads a clean load-state union.
-  const capabilityPresent = useSessionStore(
-    (state) => state.sessions[serverId]?.serverInfo?.features?.commitsList === true,
-  );
+  const capabilityPresent = useSessionStore((state) => {
+    const features = state.sessions[serverId]?.serverInfo?.features;
+    return features?.commitsList === true && features.commitBaseClassification === true;
+  });
 
   const canFetch = Boolean(cwd) && Boolean(client) && isConnected;
   const queryEnabled = enabled && capabilityPresent && canFetch;

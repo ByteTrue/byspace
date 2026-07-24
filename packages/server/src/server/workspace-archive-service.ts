@@ -5,6 +5,7 @@ import type { Logger } from "pino";
 import type { AgentManager } from "./agent/agent-manager.js";
 import type { AgentStorage, StoredAgentRecord } from "./agent/agent-storage.js";
 import type { WorkspaceGitService } from "./workspace-git-service.js";
+import { releaseWorkspaceServicePortPlan } from "./workspace-service-port-registry.js";
 import type { ForgeService } from "../services/forge-service.js";
 import {
   deleteBySpaceWorktree,
@@ -400,15 +401,18 @@ export async function archivePersistedWorkspaceRecord(input: {
 }): Promise<PersistedWorkspaceRecord | null> {
   const existingWorkspace = await input.workspaceRegistry.get(input.workspaceId);
   if (!existingWorkspace) {
+    releaseWorkspaceServicePortPlan(input.workspaceId);
     return null;
   }
 
   if (existingWorkspace.archivedAt) {
+    releaseWorkspaceServicePortPlan(input.workspaceId);
     return existingWorkspace;
   }
 
   const archivedAt = input.archivedAt ?? new Date().toISOString();
   await input.workspaceRegistry.archive(input.workspaceId, archivedAt);
+  releaseWorkspaceServicePortPlan(input.workspaceId);
 
   return existingWorkspace;
 }

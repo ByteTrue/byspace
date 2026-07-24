@@ -7,6 +7,7 @@ import type {
   PersistedProjectRecord,
   PersistedWorkspaceRecord,
 } from "./workspace-registry.js";
+import { archivePersistedWorkspaceRecord } from "./workspace-archive-service.js";
 import type { WorkspaceGitService } from "./workspace-git-service.js";
 
 const DEFAULT_RECONCILE_INTERVAL_MS = 60_000;
@@ -139,7 +140,11 @@ export class WorkspaceReconciliationService {
     await Promise.all(
       missingWorkspaces.map(async (workspace) => {
         const timestamp = new Date().toISOString();
-        await this.workspaceRegistry.archive(workspace.workspaceId, timestamp);
+        await archivePersistedWorkspaceRecord({
+          workspaceId: workspace.workspaceId,
+          workspaceRegistry: this.workspaceRegistry,
+          archivedAt: timestamp,
+        });
         changes.push({
           kind: "workspace_archived",
           workspaceId: workspace.workspaceId,
