@@ -1,6 +1,13 @@
-import React, { useEffect, useMemo, useRef } from "react";
-import { useQuery } from "@tanstack/react-query";
-import type { FileReadResult } from "@bytetrue/byspace-client/internal/daemon-client";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
+import type { DaemonClient, FileReadResult } from "@bytetrue/byspace-client/internal/daemon-client";
+import type { FileVersion } from "@bytetrue/byspace-protocol/messages";
 import {
   ActivityIndicator,
   Image as RNImage,
@@ -8,7 +15,7 @@ import {
   Text,
   View,
 } from "react-native";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { StyleSheet, UnistylesRuntime, withUnistyles } from "react-native-unistyles";
 import { useTranslation } from "react-i18next";
 import { MarkdownRenderer } from "@/components/markdown/renderer";
 import { useIsCompactFormFactor } from "@/constants/layout";
@@ -29,6 +36,15 @@ import type { WorkspaceFileLocation } from "@/workspace/file-open";
 import { useRetainedPanelActive } from "@/components/retained-panel";
 import { useAppActivelyVisible } from "@/hooks/use-app-visible";
 import { isFileQueryEnabled } from "@/components/file-pane-enabled";
+import { isWeb } from "@/constants/platform";
+import { useLiveFile } from "@/file-pane/live-file";
+import { FilePanelBar } from "@/file-pane/bar";
+import { FileEditorModel, type FileEditorFile } from "@/file-pane/editor/model";
+import { FileEditorView } from "@/file-pane/editor/view";
+import { confirmDialog } from "@/utils/confirm-dialog";
+import { usePublishPanelInstanceAttributes } from "@/panels/panel-instance-attributes";
+import { AppearanceStyleBoundary } from "@/components/appearance-style-boundary";
+import type { Theme } from "@/styles/theme";
 
 interface CodeLineProps {
   tokens: HighlightToken[];
@@ -42,8 +58,11 @@ interface FilePreviewBodyProps {
   isLoading: boolean;
   isMobile: boolean;
   location: WorkspaceFileLocation;
+  navigationRevision: number;
   imagePreviewUri: string | null;
 }
+
+type TextExplorerFile = ExplorerFile & { kind: "text" };
 
 function trimNonEmpty(value: string | null | undefined): string | null {
   if (typeof value !== "string") {
@@ -190,9 +209,10 @@ function FilePreviewBody({
   isLoading,
   isMobile,
   location,
+  navigationRevision,
   imagePreviewUri,
 }: FilePreviewBodyProps) {
-  const { theme } = useUnistyles();
+  const theme = UnistylesRuntime.getTheme();
   const { t } = useTranslation();
   const filePath = location.path;
   const isMarkdownFile =
@@ -240,7 +260,7 @@ function FilePreviewBody({
       });
     }, 0);
     return () => clearTimeout(timeout);
-  }, [lineHeight, lineSelection]);
+  }, [lineHeight, lineSelection, navigationRevision]);
 
   if (isLoading && !preview) {
     return (
@@ -363,15 +383,30 @@ export function FilePane({
   serverId,
   workspaceRoot,
   location,
+  navigationRevision = 0,
 }: {
   serverId: string;
   workspaceRoot: string;
   location: WorkspaceFileLocation;
+  navigationRevision?: number;
 }) {
   const { t } = useTranslation();
   const isMobile = useIsCompactFormFactor();
+  const [markdownMode, setMarkdownMode] = useState<"preview" | "source">("preview");
+  const [resolvedPreview, setResolvedPreview] = useState<{
+    key: string | null;
+    file: ExplorerFile | null;
+    imageAttachment: AttachmentMetadata | null;
+  }>({ key: null, file: null, imageAttachment: null });
 
   const client = useSessionStore((state) => state.sessions[serverId]?.client ?? null);
+  const lastClientRef = useRef<DaemonClient | null>(client);
+  if (client) lastClientRef.current = client;
+  const retainedClient = client ?? lastClientRef.current;
+  // COMPAT(workspaceFileEditing): added in v0.2.0, remove after 2027-01-18 once daemon floor >= v0.2.0.
+  const supportsEditing = useSessionStore(
+    (state) => state.sessions[serverId]?.serverInfo?.features?.workspaceFileEditing === true,
+  );
   const normalizedWorkspaceRoot = useMemo(() => workspaceRoot.trim(), [workspaceRoot]);
   const normalizedFilePath = useMemo(() => trimNonEmpty(location.path), [location.path]);
   const readTarget = useMemo(
@@ -390,60 +425,399 @@ export function FilePane({
   // from another window after an external edit. The gate lives in isFileQueryEnabled.
   const isActive = useRetainedPanelActive();
   const isAppVisible = useAppActivelyVisible();
-
-  const query = useQuery({
-    queryKey: ["workspaceFile", serverId, readTarget?.cwd ?? null, readTarget?.path ?? null],
-    enabled: isFileQueryEnabled({
-      hasReadTarget: Boolean(client && readTarget),
-      isTabActive: isActive,
-      isAppVisible,
-    }),
-    queryFn: async () => {
-      if (!client || !readTarget) {
-        return {
-          file: null as ExplorerFile | null,
-          error: t("workspace.terminal.hostDisconnected"),
-        };
-      }
-      try {
-        const file = await client.readFile(readTarget.cwd, readTarget.path);
-        const preview = await createFilePanePreview(file);
-        return {
-          file: preview.file,
-          imageAttachment: preview.imageAttachment,
-          error: null,
-        };
-      } catch (error) {
-        return {
-          file: null,
-          imageAttachment: null,
-          error: error instanceof Error ? error.message : t("panels.file.failedToLoad"),
-        };
-      }
-    },
-    staleTime: 5_000,
-    refetchOnMount: true,
+  const enabled = isFileQueryEnabled({
+    hasReadTarget: Boolean(client && readTarget),
+    isTabActive: isActive,
+    isAppVisible,
   });
-  const imagePreviewUri = useAttachmentPreviewUrl(query.data?.imageAttachment ?? null);
+  const { query, version } = useLiveFile({
+    client,
+    serverId,
+    cwd: readTarget?.cwd ?? null,
+    path: readTarget?.path ?? null,
+    enabled,
+    liveUpdates: supportsEditing,
+  });
+
+  useEffect(() => {
+    if (!query.data && query.error) return;
+    let active = true;
+    const key = readTarget ? `${readTarget.cwd}:${readTarget.path}` : null;
+    void (async () => {
+      const nextPreview = await createFilePanePreview(query.data ?? null);
+      if (active) setResolvedPreview({ key, ...nextPreview });
+    })();
+    return () => {
+      active = false;
+    };
+  }, [query.data, query.error, readTarget]);
+
+  useEffect(() => setMarkdownMode("preview"), [readTarget?.path]);
+
+  const previewKey = readTarget ? `${readTarget.cwd}:${readTarget.path}` : null;
+  const preview = resolvedPreview.key === previewKey ? resolvedPreview.file : null;
+  const imagePreviewUri = useAttachmentPreviewUrl(
+    resolvedPreview.key === previewKey ? resolvedPreview.imageAttachment : null,
+  );
+  const isMarkdown = isMarkdownPreview(preview, location.path);
+  const editable = isEditableTextFile({
+    preview,
+    supportsEditing,
+  });
+  const canToggleMarkdownMode = isMarkdown && editable;
+  const lineCount =
+    preview?.kind === "text" ? (preview.content ?? "").split("\n").length : undefined;
+  const errorMessage = getFileErrorMessage(query.error, t("panels.file.failedToLoad"));
+
+  return (
+    <FilePanePresentation
+      serverId={serverId}
+      client={retainedClient}
+      readTarget={readTarget}
+      preview={preview}
+      version={version}
+      filename={getFileNameFromPath(location.path) ?? location.path}
+      markdownMode={canToggleMarkdownMode ? markdownMode : undefined}
+      onMarkdownModeChange={canToggleMarkdownMode ? setMarkdownMode : undefined}
+      lineCount={lineCount}
+      editable={editable}
+      disconnectedMessage={t("workspace.terminal.hostDisconnected")}
+      errorMessage={errorMessage}
+      isLoading={query.isFetching}
+      isMobile={isMobile}
+      location={location}
+      navigationRevision={navigationRevision}
+      imagePreviewUri={imagePreviewUri}
+    />
+  );
+}
+
+function isMarkdownPreview(preview: ExplorerFile | null, path: string): boolean {
+  return preview?.kind === "text" && isRenderedMarkdownFile(path);
+}
+
+function getFileErrorMessage(error: unknown, fallback: string): string | null {
+  if (!error) return null;
+  return error instanceof Error ? error.message : fallback;
+}
+
+function isEditableTextFile(input: {
+  preview: ExplorerFile | null;
+  supportsEditing: boolean;
+}): boolean {
+  return Boolean(
+    isWeb &&
+    input.supportsEditing &&
+    input.preview?.kind === "text" &&
+    input.preview.size <= 1024 * 1024,
+  );
+}
+
+function FilePanePresentation({
+  serverId,
+  client,
+  readTarget,
+  preview,
+  version,
+  filename,
+  markdownMode,
+  onMarkdownModeChange,
+  lineCount,
+  editable,
+  disconnectedMessage,
+  errorMessage,
+  isLoading,
+  isMobile,
+  location,
+  navigationRevision,
+  imagePreviewUri,
+}: {
+  serverId: string;
+  client: DaemonClient | null;
+  readTarget: { cwd: string; path: string } | null;
+  preview: ExplorerFile | null;
+  version: FileVersion | null;
+  filename: string;
+  markdownMode?: "preview" | "source";
+  onMarkdownModeChange?: (mode: "preview" | "source") => void;
+  lineCount?: number;
+  editable: boolean;
+  disconnectedMessage: string;
+  errorMessage: string | null;
+  isLoading: boolean;
+  isMobile: boolean;
+  location: WorkspaceFileLocation;
+  navigationRevision: number;
+  imagePreviewUri: string | null;
+}) {
+  if (editable && client && readTarget && preview?.kind === "text") {
+    return (
+      <ThemedEditableFilePane
+        key={`${serverId}:${readTarget.cwd}:${readTarget.path}`}
+        client={client}
+        cwd={readTarget.cwd}
+        path={readTarget.path}
+        preview={preview as TextExplorerFile}
+        version={version}
+        filename={filename}
+        mode={markdownMode}
+        onModeChange={onMarkdownModeChange}
+        isLoading={isLoading}
+        isMobile={isMobile}
+        location={location}
+        navigationRevision={navigationRevision}
+      />
+    );
+  }
+
+  if (!client && readTarget) {
+    return (
+      <View style={styles.container} testID="workspace-file-pane">
+        <View style={styles.centerState}>
+          <Text style={styles.errorText}>{disconnectedMessage}</Text>
+        </View>
+      </View>
+    );
+  }
+
+  if (errorMessage) {
+    return (
+      <View style={styles.container} testID="workspace-file-pane">
+        <View style={styles.centerState}>
+          <Text style={styles.errorText}>{errorMessage}</Text>
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container} testID="workspace-file-pane">
-      {query.data?.error ? (
-        <View style={styles.centerState}>
-          <Text style={styles.errorText}>{query.data.error}</Text>
-        </View>
+      {preview ? (
+        <FilePanelBar
+          size={preview.size}
+          lineCount={lineCount}
+          mode={markdownMode}
+          onModeChange={onMarkdownModeChange}
+        />
       ) : null}
-
-      <FilePreviewBody
-        preview={query.data?.file ?? null}
-        isLoading={query.isFetching}
-        isMobile={isMobile}
-        location={location}
-        imagePreviewUri={imagePreviewUri}
-      />
+      <AppearanceStyleBoundary>
+        <FilePreviewBody
+          preview={preview}
+          isLoading={isLoading}
+          isMobile={isMobile}
+          location={location}
+          navigationRevision={navigationRevision}
+          imagePreviewUri={imagePreviewUri}
+        />
+      </AppearanceStyleBoundary>
     </View>
   );
 }
+
+function EditableFilePane({
+  client,
+  cwd,
+  path,
+  preview,
+  version,
+  filename,
+  mode,
+  onModeChange,
+  isLoading,
+  isMobile,
+  location,
+  navigationRevision,
+  appearanceTheme,
+}: {
+  client: DaemonClient;
+  cwd: string;
+  path: string;
+  preview: TextExplorerFile;
+  version: FileVersion | null;
+  filename: string;
+  mode?: "preview" | "source";
+  onModeChange?: (mode: "preview" | "source") => void;
+  isLoading: boolean;
+  isMobile: boolean;
+  location: WorkspaceFileLocation;
+  navigationRevision: number;
+  appearanceTheme?: Theme;
+}) {
+  const { t } = useTranslation();
+  const [cursor, setCursor] = useState({ line: 1, column: 1 });
+  const [vimMode, setVimMode] = useState<string | null>(null);
+  const session = useMemo(
+    () => ({
+      async read(): Promise<FileEditorFile> {
+        const file = await client.readFile(cwd, path);
+        const decodedFile = explorerFileFromReadResult(file);
+        if (decodedFile.kind !== "text" || decodedFile.content === undefined) {
+          throw new Error("File is no longer text.");
+        }
+        return {
+          content: decodedFile.content,
+          hasBom: decodedFile.hasBom,
+          version: {
+            status: "ready",
+            cwd,
+            path,
+            size: file.size,
+            modifiedAt: file.modifiedAt,
+            revision: file.revision,
+          },
+        };
+      },
+      write(input: { content: string; expectedModifiedAt: string; expectedRevision?: string }) {
+        return client.writeFile({ cwd, path, ...input });
+      },
+    }),
+    [client, cwd, path],
+  );
+  const [model] = useState(
+    () =>
+      new FileEditorModel({
+        file: {
+          content: preview.content ?? "",
+          hasBom: preview.hasBom,
+          version: {
+            status: "ready",
+            cwd,
+            path,
+            size: preview.size,
+            modifiedAt: preview.modifiedAt,
+            revision: preview.revision,
+          },
+        },
+        session,
+      }),
+  );
+  const snapshot = useSyncExternalStore(model.subscribe, model.getSnapshot, model.getSnapshot);
+  useEffect(() => {
+    if (!snapshot.modified || typeof window === "undefined") return;
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [snapshot.modified]);
+  const suspendPendingSave = useCallback(() => model.suspendAutosave(), [model]);
+  usePublishPanelInstanceAttributes({ modified: snapshot.modified, suspendPendingSave });
+  const theme = appearanceTheme ?? UnistylesRuntime.getTheme();
+  const visualTheme = useMemo(
+    () => ({
+      colorScheme: theme.colorScheme,
+      background: theme.colors.surface0,
+      foreground: theme.colors.foreground,
+      cursor: theme.colors.terminal.cursor,
+      foregroundMuted: theme.colors.foregroundMuted,
+      border: theme.colors.border,
+      selection: theme.colors.terminal.selectionBackground,
+      monoFont: theme.fontFamily.mono,
+      codeFontSize: theme.fontSize.code,
+      syntax: theme.colors.syntax,
+    }),
+    [
+      theme.colors.border,
+      theme.colors.foreground,
+      theme.colors.foregroundMuted,
+      theme.colors.surface0,
+      theme.colors.syntax,
+      theme.colors.terminal.cursor,
+      theme.colors.terminal.selectionBackground,
+      theme.colorScheme,
+      theme.fontFamily.mono,
+      theme.fontSize.code,
+    ],
+  );
+
+  useEffect(() => () => model.dispose(), [model]);
+  useEffect(() => {
+    if (version) model.receiveFileVersion(version);
+  }, [model, version]);
+
+  const handleReload = useCallback(() => {
+    void (async () => {
+      const confirmed = await confirmDialog({
+        title: t("panels.file.editor.reloadTitle"),
+        message: t("panels.file.editor.reloadMessage"),
+        confirmLabel: t("panels.file.editor.reload"),
+        destructive: true,
+      });
+      if (confirmed) void model.reload();
+    })();
+  }, [model, t]);
+  const handleOverwrite = useCallback(() => {
+    void (async () => {
+      const confirmed = await confirmDialog({
+        title: t("panels.file.editor.changedOnDisk"),
+        message: t("panels.file.editor.conflictDescription"),
+        confirmLabel: t("panels.file.editor.overwrite"),
+        destructive: true,
+      });
+      if (confirmed) void model.overwrite();
+    })();
+  }, [model, t]);
+  const handleVimModeChange = useCallback((nextMode: string | null) => setVimMode(nextMode), []);
+  const renderedPreview = useMemo<ExplorerFile>(
+    () => ({
+      ...preview,
+      content: snapshot.content,
+      size: snapshot.version.status === "ready" ? snapshot.version.size : preview.size,
+      modifiedAt:
+        snapshot.version.status === "ready" ? snapshot.version.modifiedAt : preview.modifiedAt,
+      revision: snapshot.version.status === "ready" ? snapshot.version.revision : preview.revision,
+    }),
+    [preview, snapshot.content, snapshot.version],
+  );
+  const showSource = mode !== "preview";
+
+  return (
+    <View style={styles.container} testID="workspace-file-pane">
+      <FilePanelBar
+        size={
+          snapshot.observedVersion.status === "ready" ? snapshot.observedVersion.size : preview.size
+        }
+        lineCount={snapshot.content.split("\n").length}
+        editorStatus={snapshot.status}
+        cursor={showSource ? cursor : undefined}
+        vimMode={showSource ? vimMode : null}
+        conflictUnavailable={snapshot.observedVersion.status !== "ready"}
+        onOverwrite={handleOverwrite}
+        onReload={handleReload}
+        mode={mode}
+        onModeChange={onModeChange}
+      />
+      {showSource ? (
+        <FileEditorView
+          model={model}
+          filename={filename}
+          location={location}
+          navigationRevision={navigationRevision}
+          vimEnabled={false}
+          theme={visualTheme}
+          onCursorChange={setCursor}
+          onVimModeChange={handleVimModeChange}
+        />
+      ) : (
+        <AppearanceStyleBoundary>
+          <FilePreviewBody
+            preview={renderedPreview}
+            isLoading={isLoading}
+            isMobile={isMobile}
+            location={location}
+            navigationRevision={navigationRevision}
+            imagePreviewUri={null}
+          />
+        </AppearanceStyleBoundary>
+      )}
+    </View>
+  );
+}
+
+const editorAppearanceMapping = (theme: Theme) => ({ appearanceTheme: theme });
+
+const ThemedEditableFilePane = withUnistyles(EditableFilePane, editorAppearanceMapping);
 
 const styles = StyleSheet.create((theme) => ({
   container: {

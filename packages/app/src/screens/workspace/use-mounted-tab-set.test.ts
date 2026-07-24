@@ -32,6 +32,20 @@ describe("useMountedTabSet", () => {
     expect(renderCount).toBe(2);
   });
 
+  it("retains modified tabs even when they exceed the normal cap", () => {
+    const retainedTabIds = new Set(["first", "second"]);
+    const { result } = renderHook(() =>
+      useMountedTabSet({
+        activeTabId: "third",
+        allTabIds: ["first", "second", "third"],
+        retainedTabIds,
+        cap: 1,
+      }),
+    );
+
+    expect(mountedIds(result)).toEqual(["third", "first", "second"]);
+  });
+
   it("preserves the cap while synchronously adding the active tab", () => {
     const { result, rerender } = renderHook(
       ({ activeTabId }) =>

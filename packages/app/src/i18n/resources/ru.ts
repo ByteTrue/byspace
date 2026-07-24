@@ -365,6 +365,13 @@ export const ru: TranslationResources = {
       copyBranchName: "Копировать имя ветки",
       copied: "Скопировано",
     },
+    fileActions: {
+      openFile: "Открыть файл",
+      copyPath: "Копировать путь",
+      download: "Скачать",
+      addToChat: "Добавить в чат",
+      focusChatFirst: "Выберите вкладку чата перед добавлением файла",
+    },
     fileExplorer: {
       sort: {
         name: "Имя",
@@ -375,6 +382,8 @@ export const ru: TranslationResources = {
         size: "Размер",
         modified: "Модифицированный",
         copyPath: "Копировать путь",
+        addToChat: "Добавить в чат",
+        actionsFor: "Действия для {{name}}",
         download: "Скачать",
       },
       actions: {
@@ -430,6 +439,7 @@ export const ru: TranslationResources = {
     },
     tabs: {
       loading: "Загрузка...",
+      modified: "Несохранённые изменения",
       loadingAgentTitle: "Название агента загрузки",
       emptyPane: "На этой панели нет вкладок.",
       fallback: {
@@ -498,6 +508,12 @@ export const ru: TranslationResources = {
         close: "Закрывать",
         cancel: "Отмена",
         archive: "Архив",
+        unsavedTitle: "Несохранённые изменения",
+        unsavedMessage:
+          "В этой вкладке есть несохранённые изменения. При закрытии черновик будет удалён.",
+        closeWithoutSaving: "Закрыть без сохранения",
+        bulkUnsaved:
+          "В {{count}} вкладках есть несохранённые изменения. При закрытии черновики будут удалены.",
         closeTerminalTitle: "Закрыть терминал?",
         closeTerminalMessage:
           "Любой запущенный процесс в этом терминале будет немедленно остановлен.",
@@ -1262,6 +1278,28 @@ export const ru: TranslationResources = {
       binaryPreviewUnavailable: "Предварительный просмотр двоичного файла недоступен.",
       failedToLoad: "Не удалось загрузить файл",
       failedToLoadPreview: "Не удалось загрузить предварительный просмотр файла.",
+      editor: {
+        fileSize: "Размер файла {{size}}",
+        lines: "Строк: {{count}}",
+        editorStatus: "Состояние редактора: {{status}}",
+        accessibilityLabel: "Редактор исходного кода для {{filename}}",
+        saved: "Сохранено",
+        unsavedChanges: "Несохранённые изменения",
+        saving: "Сохранение...",
+        saveFailed: "Не удалось сохранить",
+        changedOnDisk: "Файл изменён на диске",
+        vimMode: "Режим Vim: {{mode}}",
+        cursor: "Строка {{line}}, столбец {{column}}",
+        preview: "Предпросмотр",
+        source: "Исходный код",
+        unavailableTitle: "Файл недоступен на диске",
+        conflictDescription:
+          "Локальные изменения сохранены. Выберите версию, которую нужно оставить.",
+        overwrite: "Перезаписать",
+        reload: "Перезагрузить",
+        reloadTitle: "Перезагрузить с диска?",
+        reloadMessage: "Локальные изменения будут потеряны.",
+      },
     },
     diff: {
       changesLabel: "Изменения",

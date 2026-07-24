@@ -71,6 +71,36 @@ describe("draft-store lifecycle", () => {
 });
 
 describe("draft-store normalization", () => {
+  it("preserves uploaded-file and workspace-file attachments when hydrating a draft", () => {
+    const attachments = [
+      {
+        kind: "file" as const,
+        attachment: {
+          type: "uploaded_file" as const,
+          id: "upload-1",
+          fileName: "notes.txt",
+          mimeType: "text/plain",
+          size: 12,
+          path: "/tmp/notes.txt",
+        },
+      },
+      {
+        kind: "workspace_file" as const,
+        path: "src/index.ts",
+        selection: { kind: "whole_file" as const },
+      },
+    ];
+
+    expect(
+      toDraftInputIfReady({
+        input: { text: "Review these", attachments },
+        lifecycle: "active",
+        updatedAt: 1,
+        version: 1,
+      }),
+    ).toEqual({ text: "Review these", attachments });
+  });
+
   it("preserves New Workspace picker ownership when hydrating a draft", () => {
     const pickerAttachment = {
       kind: "github_pr" as const,

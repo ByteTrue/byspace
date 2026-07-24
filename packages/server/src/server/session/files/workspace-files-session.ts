@@ -8,7 +8,10 @@ import {
 import type {
   FileDownloadTokenRequest,
   FileExplorerRequest,
+  FileSubscribeRequest,
+  FileUnsubscribeRequest,
   FileUploadRequest,
+  FileWriteRequest,
   SessionInboundMessage,
   SessionOutboundMessage,
 } from "../../messages.js";
@@ -19,7 +22,9 @@ import {
   listDirectoryEntries,
   readExplorerFile,
   readExplorerFileBytes,
+  writeExplorerFile,
 } from "../../file-explorer/service.js";
+import { workspaceFileObserver, type FileObserver } from "../../file-explorer/observer.js";
 import { getProjectIcon } from "../../../utils/project-icon.js";
 
 /**
@@ -39,7 +44,10 @@ export interface WorkspaceFilesSessionOptions {
   downloadTokenStore: DownloadTokenStore;
   byspaceHome: string;
   logger: pino.Logger;
+  fileObserver?: Pick<FileObserver, "subscribe">;
 }
+
+const MAX_FILE_SUBSCRIPTIONS_PER_SESSION = 128;
 
 /**
  * A client's workspace file-access surface: browsing directories, reading file
@@ -53,12 +61,144 @@ export class WorkspaceFilesSession {
   private readonly downloadTokenStore: DownloadTokenStore;
   private readonly logger: pino.Logger;
   private readonly fileUploads: FileUploadStore;
+  private readonly fileObserver: Pick<FileObserver, "subscribe">;
+  private readonly fileSubscriptions = new Map<string, () => void>();
+  private readonly fileSubscriptionGenerations = new Map<string, number>();
+  private nextFileSubscriptionGeneration = 0;
+  private disposed = false;
 
   constructor(options: WorkspaceFilesSessionOptions) {
     this.host = options.host;
     this.downloadTokenStore = options.downloadTokenStore;
     this.logger = options.logger;
     this.fileUploads = new FileUploadStore({ byspaceHome: options.byspaceHome });
+    this.fileObserver = options.fileObserver ?? workspaceFileObserver;
+  }
+
+  async handleFileSubscribeRequest(request: FileSubscribeRequest): Promise<void> {
+    if (
+      !this.fileSubscriptionGenerations.has(request.subscriptionId) &&
+      this.fileSubscriptionGenerations.size >= MAX_FILE_SUBSCRIPTIONS_PER_SESSION
+    ) {
+      this.host.emit({
+        type: "fs.file.subscribe.response",
+        payload: {
+          subscriptionId: request.subscriptionId,
+          initial: {
+            status: "error",
+            cwd: request.cwd,
+            path: request.path,
+            error: "Too many active file subscriptions",
+          },
+          requestId: request.requestId,
+        },
+      });
+      return;
+    }
+    const generation = ++this.nextFileSubscriptionGeneration;
+    this.fileSubscriptionGenerations.set(request.subscriptionId, generation);
+    this.fileSubscriptions.get(request.subscriptionId)?.();
+    this.fileSubscriptions.delete(request.subscriptionId);
+    try {
+      const subscription = await this.fileObserver.subscribe(
+        { cwd: request.cwd, path: request.path },
+        (version) => {
+          if (
+            this.disposed ||
+            this.fileSubscriptionGenerations.get(request.subscriptionId) !== generation
+          ) {
+            return;
+          }
+          this.host.emit({
+            type: "fs.file.update",
+            payload: { subscriptionId: request.subscriptionId, version },
+          });
+        },
+      );
+      if (
+        this.disposed ||
+        this.fileSubscriptionGenerations.get(request.subscriptionId) !== generation
+      ) {
+        subscription.unsubscribe();
+        if (!this.disposed) {
+          this.host.emit({
+            type: "fs.file.subscribe.response",
+            payload: {
+              subscriptionId: request.subscriptionId,
+              initial: {
+                status: "error",
+                cwd: request.cwd,
+                path: request.path,
+                error: "File subscription was superseded",
+              },
+              requestId: request.requestId,
+            },
+          });
+        }
+        return;
+      }
+      this.fileSubscriptions.set(request.subscriptionId, subscription.unsubscribe);
+      this.host.emit({
+        type: "fs.file.subscribe.response",
+        payload: {
+          subscriptionId: request.subscriptionId,
+          initial: subscription.initial,
+          requestId: request.requestId,
+        },
+      });
+    } catch (error) {
+      if (
+        this.disposed ||
+        this.fileSubscriptionGenerations.get(request.subscriptionId) !== generation
+      ) {
+        return;
+      }
+      this.fileSubscriptionGenerations.delete(request.subscriptionId);
+      this.host.emit({
+        type: "fs.file.subscribe.response",
+        payload: {
+          subscriptionId: request.subscriptionId,
+          initial: {
+            status: "error",
+            cwd: request.cwd,
+            path: request.path,
+            error: getErrorMessage(error),
+          },
+          requestId: request.requestId,
+        },
+      });
+    }
+  }
+
+  handleFileUnsubscribeRequest(request: FileUnsubscribeRequest): void {
+    this.fileSubscriptionGenerations.delete(request.subscriptionId);
+    this.fileSubscriptions.get(request.subscriptionId)?.();
+    this.fileSubscriptions.delete(request.subscriptionId);
+    this.host.emit({
+      type: "fs.file.unsubscribe.response",
+      payload: { subscriptionId: request.subscriptionId, requestId: request.requestId },
+    });
+  }
+
+  async handleFileWriteRequest(request: FileWriteRequest): Promise<void> {
+    const result = await writeExplorerFile({
+      root: request.cwd,
+      relativePath: request.path,
+      content: request.content,
+      expectedModifiedAt: request.expectedModifiedAt,
+      expectedRevision: request.expectedRevision,
+    });
+    this.host.emit({
+      type: "fs.file.write.response",
+      payload: { result, requestId: request.requestId },
+    });
+  }
+
+  dispose(): void {
+    this.disposed = true;
+    this.fileSubscriptionGenerations.clear();
+    for (const unsubscribe of this.fileSubscriptions.values()) unsubscribe();
+    this.fileSubscriptions.clear();
   }
 
   async handleFileExplorerRequest(request: FileExplorerRequest): Promise<void> {
@@ -115,6 +255,7 @@ export class WorkspaceFilesSession {
                 size: file.size,
                 encoding: file.encoding,
                 modifiedAt: file.modifiedAt,
+                revision: file.revision,
               },
             }),
           );

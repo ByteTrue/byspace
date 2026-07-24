@@ -362,6 +362,13 @@ export const ar: TranslationResources = {
       copyBranchName: "نسخ اسم الفرع",
       copied: "تم النسخ",
     },
+    fileActions: {
+      openFile: "فتح الملف",
+      copyPath: "نسخ المسار",
+      download: "تنزيل",
+      addToChat: "إضافة إلى المحادثة",
+      focusChatFirst: "ركّز على علامة تبويب محادثة قبل إضافة ملف",
+    },
     fileExplorer: {
       sort: {
         name: "اسم",
@@ -372,6 +379,8 @@ export const ar: TranslationResources = {
         size: "مقاس",
         modified: "معدل",
         copyPath: "نسخ المسار",
+        addToChat: "إضافة إلى المحادثة",
+        actionsFor: "إجراءات {{name}}",
         download: "تحميل",
       },
       actions: {
@@ -427,6 +436,7 @@ export const ar: TranslationResources = {
     },
     tabs: {
       loading: "تحميل...",
+      modified: "تغييرات غير محفوظة",
       loadingAgentTitle: "جارٍ تحميل عنوان الوكيل",
       emptyPane: "لا توجد علامات تبويب في هذا الجزء.",
       fallback: {
@@ -495,6 +505,12 @@ export const ar: TranslationResources = {
         close: "يغلق",
         cancel: "يلغي",
         archive: "أرشيف",
+        unsavedTitle: "تغييرات غير محفوظة",
+        unsavedMessage:
+          "تحتوي علامة التبويب هذه على تغييرات لم تُحفظ. سيؤدي إغلاقها إلى تجاهل المسودة.",
+        closeWithoutSaving: "إغلاق دون حفظ",
+        bulkUnsaved:
+          "تحتوي {{count}} علامة تبويب على تغييرات غير محفوظة. سيؤدي إغلاقها إلى تجاهل المسودات.",
         closeTerminalTitle: "إغلاق المحطة؟",
         closeTerminalMessage: "سيتم إيقاف أي عملية جارية في هذه المحطة على الفور.",
         archiveRunningAgentTitle: "وكيل تشغيل الأرشيف؟",
@@ -1235,6 +1251,27 @@ export const ar: TranslationResources = {
       binaryPreviewUnavailable: "المعاينة الثنائية غير متاحة",
       failedToLoad: "فشل تحميل الملف",
       failedToLoadPreview: "فشل تحميل معاينة الملف",
+      editor: {
+        fileSize: "حجم الملف {{size}}",
+        lines: "{{count}} سطر",
+        editorStatus: "حالة المحرر: {{status}}",
+        accessibilityLabel: "محرر المصدر للملف {{filename}}",
+        saved: "تم الحفظ",
+        unsavedChanges: "تغييرات غير محفوظة",
+        saving: "جارٍ الحفظ...",
+        saveFailed: "فشل الحفظ",
+        changedOnDisk: "تغيّر الملف على القرص",
+        vimMode: "وضع Vim: {{mode}}",
+        cursor: "السطر {{line}}، العمود {{column}}",
+        preview: "معاينة",
+        source: "المصدر",
+        unavailableTitle: "الملف غير متاح على القرص",
+        conflictDescription: "تم الاحتفاظ بالمحتوى المحلي. اختر الإصدار الذي تريد الاحتفاظ به.",
+        overwrite: "استبدال",
+        reload: "إعادة التحميل",
+        reloadTitle: "إعادة التحميل من القرص؟",
+        reloadMessage: "ستفقد تغييراتك المحلية.",
+      },
     },
     diff: {
       changesLabel: "التغييرات",

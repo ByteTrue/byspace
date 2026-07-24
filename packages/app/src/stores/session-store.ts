@@ -278,9 +278,13 @@ export interface ExplorerFile {
   kind: ExplorerFileKind;
   encoding: ExplorerEncoding;
   content?: string;
+  /** TextDecoder strips a leading UTF-8 BOM; retain it so edits can restore it. */
+  hasBom: boolean;
   mimeType?: string;
   size: number;
   modifiedAt: string;
+  /** Exact daemon-observed file identity used for optimistic edit conflicts. */
+  revision?: string;
 }
 
 interface ExplorerDirectory {

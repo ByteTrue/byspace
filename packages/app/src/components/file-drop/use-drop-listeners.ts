@@ -6,6 +6,10 @@ import { persistAttachmentFromBlob } from "@/attachments/service";
 import { isRasterImageFile } from "@/attachments/file-types";
 import { isWeb } from "@/constants/platform";
 import type { DroppedItem, FileDropSink } from "./types";
+import {
+  parseWorkspaceFileDragPayload,
+  WORKSPACE_FILE_DRAG_MIME,
+} from "@/attachments/workspace-file-drag";
 
 async function fileToImageAttachment(file: File): Promise<ImageAttachment> {
   return await persistAttachmentFromBlob({
@@ -68,7 +72,11 @@ export function useDropListeners({
         if (disabledRef.current) return;
 
         dragCounter.current++;
-        if (e.dataTransfer?.types.includes("Files")) {
+        if (suppressed.value || !hasSink.value) return;
+        const types = new Set(e.dataTransfer?.types ?? []);
+        const acceptsWorkspaceFile =
+          types.has(WORKSPACE_FILE_DRAG_MIME) && Boolean(getSink()?.onWorkspaceFile);
+        if (types.has("Files") || acceptsWorkspaceFile) {
           isDragging.value = true;
         }
       }
@@ -80,7 +88,11 @@ export function useDropListeners({
         if (!e.dataTransfer) return;
         // Only advertise "copy" when the drop would actually be accepted, so the cursor doesn't
         // promise a drop that the handler then discards (suppressed/archived/no consumer mounted).
-        const canAccept = !disabledRef.current && !suppressed.value && hasSink.value;
+        const types = new Set(e.dataTransfer.types);
+        const acceptsWorkspaceFile =
+          types.has(WORKSPACE_FILE_DRAG_MIME) && Boolean(getSink()?.onWorkspaceFile);
+        const acceptsDrop = types.has("Files") || acceptsWorkspaceFile;
+        const canAccept = acceptsDrop && !disabledRef.current && !suppressed.value && hasSink.value;
         e.dataTransfer.dropEffect = canAccept ? "copy" : "none";
       }
 
@@ -107,6 +119,12 @@ export function useDropListeners({
 
         const sink = getSink();
         if (!sink) return;
+
+        const serializedWorkspaceFile = e.dataTransfer?.getData(WORKSPACE_FILE_DRAG_MIME);
+        if (serializedWorkspaceFile && sink.onWorkspaceFile) {
+          const payload = parseWorkspaceFileDragPayload(serializedWorkspaceFile);
+          if (payload) sink.onWorkspaceFile(payload);
+        }
 
         const files = Array.from(e.dataTransfer?.files ?? []);
         const genericItems: DroppedItem[] = files.map((file) => ({

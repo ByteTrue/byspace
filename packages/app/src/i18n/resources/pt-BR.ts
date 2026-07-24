@@ -366,6 +366,13 @@ export const ptBR: TranslationResources = {
       copyBranchName: "Copiar nome da branch",
       copied: "Copiado",
     },
+    fileActions: {
+      openFile: "Abrir arquivo",
+      copyPath: "Copiar caminho",
+      download: "Baixar",
+      addToChat: "Adicionar ao chat",
+      focusChatFirst: "Selecione uma aba de chat antes de adicionar um arquivo",
+    },
     fileExplorer: {
       sort: {
         name: "Nome",
@@ -376,6 +383,8 @@ export const ptBR: TranslationResources = {
         size: "Tamanho",
         modified: "Modificado",
         copyPath: "Copiar caminho",
+        addToChat: "Adicionar ao chat",
+        actionsFor: "Ações para {{name}}",
         download: "Baixar",
       },
       actions: {
@@ -431,6 +440,7 @@ export const ptBR: TranslationResources = {
     },
     tabs: {
       loading: "Carregando...",
+      modified: "Alterações não salvas",
       loadingAgentTitle: "Carregando título do agente",
       emptyPane: "Nenhuma aba neste painel.",
       fallback: {
@@ -499,6 +509,11 @@ export const ptBR: TranslationResources = {
         close: "Fechar",
         cancel: "Cancelar",
         archive: "Arquivar",
+        unsavedTitle: "Alterações não salvas",
+        unsavedMessage: "Esta aba tem alterações não salvas. Fechá-la descartará o rascunho.",
+        closeWithoutSaving: "Fechar sem salvar",
+        bulkUnsaved:
+          "{{count}} abas têm alterações não salvas. Fechá-las descartará esses rascunhos.",
         closeTerminalTitle: "Fechar terminal?",
         closeTerminalMessage:
           "Qualquer processo em execução neste terminal será interrompido imediatamente.",
@@ -1261,6 +1276,27 @@ export const ptBR: TranslationResources = {
       binaryPreviewUnavailable: "Prévia binária indisponível",
       failedToLoad: "Falha ao carregar arquivo",
       failedToLoadPreview: "Falha ao carregar prévia do arquivo",
+      editor: {
+        fileSize: "Tamanho do arquivo {{size}}",
+        lines: "{{count}} linhas",
+        editorStatus: "Status do editor: {{status}}",
+        accessibilityLabel: "Editor de código-fonte de {{filename}}",
+        saved: "Salvo",
+        unsavedChanges: "Alterações não salvas",
+        saving: "Salvando...",
+        saveFailed: "Falha ao salvar",
+        changedOnDisk: "O arquivo foi alterado no disco",
+        vimMode: "Modo Vim {{mode}}",
+        cursor: "Linha {{line}}, coluna {{column}}",
+        preview: "Visualização",
+        source: "Código-fonte",
+        unavailableTitle: "Arquivo indisponível no disco",
+        conflictDescription: "O conteúdo local foi preservado. Escolha qual versão manter.",
+        overwrite: "Sobrescrever",
+        reload: "Recarregar",
+        reloadTitle: "Recarregar do disco?",
+        reloadMessage: "Suas alterações locais serão perdidas.",
+      },
     },
     diff: {
       changesLabel: "Alterações",

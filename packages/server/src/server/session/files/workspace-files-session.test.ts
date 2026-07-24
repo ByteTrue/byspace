@@ -12,6 +12,7 @@ import {
 import {
   WorkspaceFilesSession,
   type WorkspaceFilesSessionHost,
+  type WorkspaceFilesSessionOptions,
 } from "./workspace-files-session.js";
 import { DownloadTokenStore } from "../../file-download/token-store.js";
 import type { SessionOutboundMessage } from "../../messages.js";
@@ -30,7 +31,12 @@ function makeDir(prefix: string): string {
   return dir;
 }
 
-function makeSubsystem(options: { hasBinaryChannel?: boolean } = {}) {
+function makeSubsystem(
+  options: {
+    hasBinaryChannel?: boolean;
+    fileObserver?: WorkspaceFilesSessionOptions["fileObserver"];
+  } = {},
+) {
   const emitted: SessionOutboundMessage[] = [];
   const binary: Uint8Array[] = [];
   let hasBinary = options.hasBinaryChannel ?? false;
@@ -45,6 +51,7 @@ function makeSubsystem(options: { hasBinaryChannel?: boolean } = {}) {
     downloadTokenStore: new DownloadTokenStore({ ttlMs: 60_000 }),
     byspaceHome,
     logger: pino({ level: "silent" }),
+    fileObserver: options.fileObserver,
   });
   return {
     subsystem,
@@ -66,6 +73,196 @@ function uploadFrame(args: Parameters<typeof encodeFileTransferFrame>[0]): FileT
 }
 
 describe("WorkspaceFilesSession", () => {
+  test("disposes a subscription that finishes setup after the session closes", async () => {
+    let finishSubscribe!: (value: {
+      initial: {
+        status: "ready";
+        cwd: string;
+        path: string;
+        size: number;
+        modifiedAt: string;
+        revision: string;
+      };
+      unsubscribe: () => void;
+    }) => void;
+    let unsubscribeCount = 0;
+    const fileObserver: NonNullable<WorkspaceFilesSessionOptions["fileObserver"]> = {
+      subscribe: () =>
+        new Promise((resolve) => {
+          finishSubscribe = resolve;
+        }),
+    };
+    const { subsystem, emitted } = makeSubsystem({ fileObserver });
+    const pending = subsystem.handleFileSubscribeRequest({
+      type: "fs.file.subscribe.request",
+      subscriptionId: "sub-late",
+      cwd: "/workspace",
+      path: "file.txt",
+      requestId: "req-late",
+    });
+
+    subsystem.dispose();
+    finishSubscribe({
+      initial: {
+        status: "ready",
+        cwd: "/workspace",
+        path: "file.txt",
+        size: 1,
+        modifiedAt: "2026-07-24T00:00:00.000Z",
+        revision: "revision-1",
+      },
+      unsubscribe: () => {
+        unsubscribeCount += 1;
+      },
+    });
+    await pending;
+
+    expect(unsubscribeCount).toBe(1);
+    expect(emitted).toEqual([]);
+  });
+
+  test("unsubscribes a superseded in-flight subscription with the same id", async () => {
+    const completions: Array<
+      (value: {
+        initial: {
+          status: "ready";
+          cwd: string;
+          path: string;
+          size: number;
+          modifiedAt: string;
+          revision: string;
+        };
+        unsubscribe: () => void;
+      }) => void
+    > = [];
+    let unsubscribeCount = 0;
+    const fileObserver: NonNullable<WorkspaceFilesSessionOptions["fileObserver"]> = {
+      subscribe: () =>
+        new Promise((resolve) => {
+          completions.push(resolve);
+        }),
+    };
+    const { subsystem, emitted } = makeSubsystem({ fileObserver });
+    const request = (requestId: string) =>
+      subsystem.handleFileSubscribeRequest({
+        type: "fs.file.subscribe.request",
+        subscriptionId: "sub-shared",
+        cwd: "/workspace",
+        path: "file.txt",
+        requestId,
+      });
+    const first = request("req-first");
+    const second = request("req-second");
+    const result = (revision: string) => ({
+      initial: {
+        status: "ready" as const,
+        cwd: "/workspace",
+        path: "file.txt",
+        size: 1,
+        modifiedAt: "2026-07-24T00:00:00.000Z",
+        revision,
+      },
+      unsubscribe: () => {
+        unsubscribeCount += 1;
+      },
+    });
+
+    completions[0]?.(result("revision-1"));
+    completions[1]?.(result("revision-2"));
+    await Promise.all([first, second]);
+    subsystem.dispose();
+
+    expect(unsubscribeCount).toBe(2);
+    expect(emitted).toEqual([
+      expect.objectContaining({
+        type: "fs.file.subscribe.response",
+        payload: expect.objectContaining({ requestId: "req-first" }),
+      }),
+      expect.objectContaining({
+        type: "fs.file.subscribe.response",
+        payload: expect.objectContaining({ requestId: "req-second" }),
+      }),
+    ]);
+  });
+
+  test("releases subscription ids after normal unsubscribe churn", async () => {
+    const fileObserver: NonNullable<WorkspaceFilesSessionOptions["fileObserver"]> = {
+      subscribe: async ({ cwd, path }) => ({
+        initial: {
+          status: "ready" as const,
+          cwd,
+          path,
+          size: 1,
+          modifiedAt: "2026-07-24T00:00:00.000Z",
+          revision: "revision-1",
+        },
+        unsubscribe: () => {},
+      }),
+    };
+    const { subsystem, emitted } = makeSubsystem({ fileObserver });
+
+    for (let index = 0; index < 200; index += 1) {
+      const subscriptionId = `sub-${index}`;
+      await subsystem.handleFileSubscribeRequest({
+        type: "fs.file.subscribe.request",
+        subscriptionId,
+        cwd: "/workspace",
+        path: `file-${index}.txt`,
+        requestId: `req-sub-${index}`,
+      });
+      subsystem.handleFileUnsubscribeRequest({
+        type: "fs.file.unsubscribe.request",
+        subscriptionId,
+        requestId: `req-unsub-${index}`,
+      });
+    }
+
+    expect(
+      emitted.some(
+        (message) =>
+          message.type === "fs.file.subscribe.response" &&
+          message.payload.initial.status === "error" &&
+          message.payload.initial.error === "Too many active file subscriptions",
+      ),
+    ).toBe(false);
+  });
+
+  test("caps pending file subscriptions per session", async () => {
+    const fileObserver: NonNullable<WorkspaceFilesSessionOptions["fileObserver"]> = {
+      subscribe: () => new Promise(() => {}),
+    };
+    const { subsystem, emitted } = makeSubsystem({ fileObserver });
+
+    for (let index = 0; index < 128; index += 1) {
+      void subsystem.handleFileSubscribeRequest({
+        type: "fs.file.subscribe.request",
+        subscriptionId: `sub-${index}`,
+        cwd: "/workspace",
+        path: `file-${index}.txt`,
+        requestId: `req-${index}`,
+      });
+    }
+    await subsystem.handleFileSubscribeRequest({
+      type: "fs.file.subscribe.request",
+      subscriptionId: "sub-over-limit",
+      cwd: "/workspace",
+      path: "overflow.txt",
+      requestId: "req-over-limit",
+    });
+
+    expect(emitted.at(-1)).toEqual({
+      type: "fs.file.subscribe.response",
+      payload: expect.objectContaining({
+        requestId: "req-over-limit",
+        initial: expect.objectContaining({
+          status: "error",
+          error: "Too many active file subscriptions",
+        }),
+      }),
+    });
+    subsystem.dispose();
+  });
+
   test("lists directory entries", async () => {
     const cwd = makeDir("workspace-files-list-");
     writeFileSync(join(cwd, "a.txt"), "alpha");

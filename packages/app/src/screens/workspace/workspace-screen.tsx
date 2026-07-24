@@ -160,6 +160,10 @@ import {
   closeBulkWorkspaceTabs,
 } from "@/screens/workspace/workspace-bulk-close";
 import { resolveCloseAgentTabPolicy } from "@/subagents";
+import {
+  getPanelInstanceAttributes,
+  useModifiedPanelTabIds,
+} from "@/panels/panel-instance-attributes";
 import { findAdjacentPane } from "@/utils/split-navigation";
 import { useIsCompactFormFactor, supportsDesktopPaneSplits } from "@/constants/layout";
 import { isNative, isWeb } from "@/constants/platform";
@@ -365,6 +369,7 @@ interface MobileWorkspaceTabSwitcherProps {
   tabByKey: Map<string, WorkspaceTabDescriptor>;
   normalizedServerId: string;
   normalizedWorkspaceId: string;
+  modifiedTabIds: Set<string>;
   onSelectSwitcherTab: (key: string) => void;
   onCopyResumeCommand: (agentId: string) => Promise<void> | void;
   onCopyAgentId: (agentId: string) => Promise<void> | void;
@@ -381,10 +386,12 @@ function MobileActiveTabTrigger({
   activeTab,
   normalizedServerId,
   normalizedWorkspaceId,
+  isModified,
 }: {
   activeTab: WorkspaceTabDescriptor | null;
   normalizedServerId: string;
   normalizedWorkspaceId: string;
+  isModified: boolean;
 }) {
   if (!activeTab) {
     return null;
@@ -395,6 +402,7 @@ function MobileActiveTabTrigger({
       activeTab={activeTab}
       normalizedServerId={normalizedServerId}
       normalizedWorkspaceId={normalizedWorkspaceId}
+      isModified={isModified}
     />
   );
 }
@@ -403,10 +411,12 @@ function ResolvedMobileActiveTabTrigger({
   activeTab,
   normalizedServerId,
   normalizedWorkspaceId,
+  isModified,
 }: {
   activeTab: WorkspaceTabDescriptor;
   normalizedServerId: string;
   normalizedWorkspaceId: string;
+  isModified: boolean;
 }) {
   const { t } = useTranslation();
   return (
@@ -426,6 +436,15 @@ function ResolvedMobileActiveTabTrigger({
               ? t("workspace.tabs.loading")
               : presentation.label}
           </Text>
+          {isModified ? (
+            <Text
+              testID={`workspace-tab-modified-${activeTab.key}`}
+              style={styles.mobileTabModifiedIndicator}
+              accessibilityElementsHidden
+            >
+              •
+            </Text>
+          ) : null}
         </>
       )}
     </WorkspaceTabPresentationResolver>
@@ -553,6 +572,7 @@ function MobileWorkspaceTabOption({
   normalizedWorkspaceId,
   selected,
   active,
+  isModified,
   onPress,
   onCopyResumeCommand,
   onCopyAgentId,
@@ -571,6 +591,7 @@ function MobileWorkspaceTabOption({
   normalizedWorkspaceId: string;
   selected: boolean;
   active: boolean;
+  isModified: boolean;
   onPress: () => void;
   onCopyResumeCommand: (agentId: string) => Promise<void> | void;
   onCopyAgentId: (agentId: string) => Promise<void> | void;
@@ -647,11 +668,12 @@ function MobileWorkspaceTabOption({
         presentation={presentation}
         selected={selected}
         active={active}
+        modified={isModified}
         onPress={onPress}
         trailingAccessory={trailingAccessory}
       />
     ),
-    [selected, active, onPress, trailingAccessory],
+    [selected, active, isModified, onPress, trailingAccessory],
   );
 
   return (
@@ -673,6 +695,7 @@ const MobileWorkspaceTabSwitcher = memo(function MobileWorkspaceTabSwitcher({
   tabByKey,
   normalizedServerId,
   normalizedWorkspaceId,
+  modifiedTabIds,
   onSelectSwitcherTab,
   onCopyResumeCommand,
   onCopyAgentId,
@@ -729,6 +752,7 @@ const MobileWorkspaceTabSwitcher = memo(function MobileWorkspaceTabSwitcher({
           normalizedWorkspaceId={normalizedWorkspaceId}
           selected={selected}
           active={active}
+          isModified={modifiedTabIds.has(tab.tabId)}
           onPress={onPress}
           onCopyResumeCommand={onCopyResumeCommand}
           onCopyAgentId={onCopyAgentId}
@@ -748,6 +772,7 @@ const MobileWorkspaceTabSwitcher = memo(function MobileWorkspaceTabSwitcher({
       tabs.length,
       normalizedServerId,
       normalizedWorkspaceId,
+      modifiedTabIds,
       onCopyResumeCommand,
       onCopyAgentId,
       onCopyFilePath,
@@ -775,6 +800,7 @@ const MobileWorkspaceTabSwitcher = memo(function MobileWorkspaceTabSwitcher({
             activeTab={activeTab}
             normalizedServerId={normalizedServerId}
             normalizedWorkspaceId={normalizedWorkspaceId}
+            isModified={activeTab ? modifiedTabIds.has(activeTab.tabId) : false}
           />
         </View>
         <ThemedChevronDown size={14} uniProps={mutedColorMapping} />
@@ -1699,6 +1725,15 @@ function WorkspaceScreenContent({
   const openWorkspaceChildTabFocused = useWorkspaceLayoutStore(
     (state) => state.openChildTabFocused,
   );
+  const [fileNavigationRevisionByTabId, setFileNavigationRevisionByTabId] = useState<
+    Record<string, number>
+  >({});
+  const requestFileNavigation = useCallback((tabId: string) => {
+    setFileNavigationRevisionByTabId((current) => ({
+      ...current,
+      [tabId]: (current[tabId] ?? 0) + 1,
+    }));
+  }, []);
   const focusWorkspacePane = useWorkspaceLayoutStore((state) => state.focusPane);
   const hasHydratedWorkspaces = useSessionStore(
     (state) => state.sessions[normalizedServerId]?.hasHydratedWorkspaces ?? false,
@@ -2209,10 +2244,11 @@ function WorkspaceScreenContent({
       }
       const tabId = openWorkspaceTabFocused(persistenceKey, createWorkspaceFileTabTarget(location));
       if (tabId) {
+        requestFileNavigation(tabId);
         navigateToTabId(tabId);
       }
     },
-    [navigateToTabId, openWorkspaceTabFocused, persistenceKey],
+    [navigateToTabId, openWorkspaceTabFocused, persistenceKey, requestFileNavigation],
   );
 
   const handleOpenFileFromChat = useCallback(
@@ -2232,6 +2268,7 @@ function WorkspaceScreenContent({
         ? openWorkspaceChildTabFocused(persistenceKey, target, options.parentTabId)
         : openWorkspaceTabFocused(persistenceKey, target);
       if (tabId) {
+        requestFileNavigation(tabId);
         navigateToTabId(tabId);
       }
     },
@@ -2241,6 +2278,7 @@ function WorkspaceScreenContent({
       openWorkspaceChildTabFocused,
       openWorkspaceTabFocused,
       persistenceKey,
+      requestFileNavigation,
       showMobileAgent,
     ],
   );
@@ -2280,6 +2318,7 @@ function WorkspaceScreenContent({
         ? openWorkspaceChildTabFocused(persistenceKey, target, input.parentTabId)
         : openWorkspaceTabFocused(persistenceKey, target);
       if (tabId) {
+        requestFileNavigation(tabId);
         navigateToTabId(tabId);
       }
     },
@@ -2291,6 +2330,7 @@ function WorkspaceScreenContent({
       openWorkspaceChildTabFocused,
       openWorkspaceTabFocused,
       persistenceKey,
+      requestFileNavigation,
       splitWorkspacePaneEmpty,
       uiTabs,
       workspaceLayout,
@@ -2546,10 +2586,35 @@ function WorkspaceScreenContent({
     [closeWorkspaceTabWithCleanup, persistenceKey],
   );
 
+  const confirmDiscardModifiedTab = useCallback(
+    async (tabId: string): Promise<boolean> => {
+      const attributes = getPanelInstanceAttributes({
+        serverId: normalizedServerId,
+        workspaceId: normalizedWorkspaceId,
+        tabId,
+      });
+      if (!attributes.modified) return true;
+      const resumePendingSave = attributes.suspendPendingSave?.();
+      const confirmed = await confirmDialog({
+        title: t("workspace.tabs.confirmations.unsavedTitle"),
+        message: t("workspace.tabs.confirmations.unsavedMessage"),
+        confirmLabel: t("workspace.tabs.confirmations.closeWithoutSaving"),
+        cancelLabel: t("workspace.tabs.confirmations.cancel"),
+        destructive: true,
+      });
+      if (!confirmed) resumePendingSave?.();
+      return confirmed;
+    },
+    [normalizedServerId, normalizedWorkspaceId, t],
+  );
+
   const handleCloseTabById = useCallback(
     async (tabId: string) => {
       const tab = allTabDescriptorsById.get(tabId);
       if (!tab) {
+        return;
+      }
+      if (!(await confirmDiscardModifiedTab(tabId))) {
         return;
       }
       if (tab.target.kind === "terminal") {
@@ -2562,7 +2627,13 @@ function WorkspaceScreenContent({
       }
       handleCloseDraftOrFileTab({ tabId, target: tab.target });
     },
-    [allTabDescriptorsById, handleCloseAgentTab, handleCloseDraftOrFileTab, handleCloseTerminalTab],
+    [
+      allTabDescriptorsById,
+      confirmDiscardModifiedTab,
+      handleCloseAgentTab,
+      handleCloseDraftOrFileTab,
+      handleCloseTerminalTab,
+    ],
   );
 
   const handleCopyAgentId = useCallback(
@@ -2706,9 +2777,22 @@ function WorkspaceScreenContent({
       }
 
       const groups = classifyBulkClosableTabs(tabsToClose);
+      const modifiedCount = tabsToClose.filter(
+        (tab) =>
+          getPanelInstanceAttributes({
+            serverId: normalizedServerId,
+            workspaceId: normalizedWorkspaceId,
+            tabId: tab.tabId,
+          }).modified,
+      ).length;
+      const bulkMessage = buildBulkCloseConfirmationMessage(groups, bulkCloseConfirmationLabels);
+      const modifiedMessage =
+        modifiedCount === 1
+          ? t("workspace.tabs.confirmations.unsavedMessage")
+          : t("workspace.tabs.confirmations.bulkUnsaved", { count: modifiedCount });
       const confirmed = await confirmDialog({
         title,
-        message: buildBulkCloseConfirmationMessage(groups, bulkCloseConfirmationLabels),
+        message: modifiedCount > 0 ? `${bulkMessage}\n\n${modifiedMessage}` : bulkMessage,
         confirmLabel: t("workspace.tabs.confirmations.close"),
         cancelLabel: t("workspace.tabs.confirmations.cancel"),
         destructive: true,
@@ -2741,6 +2825,8 @@ function WorkspaceScreenContent({
       client,
       closeTab,
       closeWorkspaceTabWithCleanup,
+      normalizedServerId,
+      normalizedWorkspaceId,
       persistenceKey,
       t,
     ],
@@ -2927,12 +3013,14 @@ function WorkspaceScreenContent({
       }
 
       if (action.id === "workspace.pane.close") {
-        for (const tabId of focusedPane.tabIds) {
-          closeWorkspaceTabWithCleanup({
-            tabId,
-            target: allTabDescriptorsById.get(tabId)?.target ?? null,
-          });
-        }
+        const tabsToClose = focusedPane.tabIds
+          .map((tabId) => allTabDescriptorsById.get(tabId))
+          .filter((tab): tab is WorkspaceTabDescriptor => Boolean(tab));
+        void handleBulkCloseTabs({
+          tabsToClose,
+          title: t("settings.shortcuts.help.closePane"),
+          logLabel: "from close pane",
+        });
         return true;
       }
 
@@ -2940,8 +3028,8 @@ function WorkspaceScreenContent({
     },
     [
       allTabDescriptorsById,
-      closeWorkspaceTabWithCleanup,
       focusWorkspacePane,
+      handleBulkCloseTabs,
       handleCreateDraftSplit,
       moveWorkspaceTabToPane,
       persistenceKey,
@@ -2949,6 +3037,7 @@ function WorkspaceScreenContent({
       focusedPaneTabState.pane,
       toggleFocusMode,
       workspaceLayout,
+      t,
     ],
   );
 
@@ -3033,6 +3122,7 @@ function WorkspaceScreenContent({
         tab: input.tab,
         normalizedServerId,
         normalizedWorkspaceId,
+        fileNavigationRevision: fileNavigationRevisionByTabId[input.tab.tabId] ?? 0,
         onOpenTab: (target) => {
           if (!persistenceKey) {
             return;
@@ -3066,6 +3156,7 @@ function WorkspaceScreenContent({
       }),
     [
       handleCloseTabById,
+      fileNavigationRevisionByTabId,
       focusWorkspacePane,
       handleOpenWorkspaceFileFromPane,
       navigateToTabId,
@@ -3082,10 +3173,16 @@ function WorkspaceScreenContent({
     [focusedPaneTabState.pane],
   );
   const focusedPaneTabIds = useMemo(() => tabs.map((tab) => tab.tabId), [tabs]);
+  const modifiedFocusedPaneTabIds = useModifiedPanelTabIds({
+    serverId: normalizedServerId,
+    workspaceId: normalizedWorkspaceId,
+    tabIds: focusedPaneTabIds,
+  });
   const focusedPaneTabDescriptorMap = useStableTabDescriptorMap(tabs);
   const { mountedTabIds: mountedFocusedPaneTabIdsSet } = useMountedTabSet({
     activeTabId,
     allTabIds: focusedPaneTabIds,
+    retainedTabIds: modifiedFocusedPaneTabIds,
     cap: 3,
   });
   const mountedFocusedPaneTabIds = useMemo(
@@ -3132,10 +3229,17 @@ function WorkspaceScreenContent({
       tabs.map((tab) => ({
         tab,
         isActive: tab.tabId === activeTabDescriptor?.tabId,
+        isModified: modifiedFocusedPaneTabIds.has(tab.tabId),
         isCloseHovered: hoveredCloseTabKey === tab.key,
         isClosingTab: closingTabIds.has(tab.tabId),
       })),
-    [activeTabDescriptor?.tabId, closingTabIds, hoveredCloseTabKey, tabs],
+    [
+      activeTabDescriptor?.tabId,
+      closingTabIds,
+      hoveredCloseTabKey,
+      modifiedFocusedPaneTabIds,
+      tabs,
+    ],
   );
 
   const handleFocusPane = useStableEvent(function handleFocusPane(paneId: string) {
@@ -3528,6 +3632,7 @@ function WorkspaceScreenContent({
           tabByKey={tabByKey}
           normalizedServerId={normalizedServerId}
           normalizedWorkspaceId={normalizedWorkspaceId}
+          modifiedTabIds={modifiedFocusedPaneTabIds}
           onSelectSwitcherTab={handleSelectSwitcherTab}
           onCopyResumeCommand={handleCopyResumeCommand}
           onCopyAgentId={handleCopyAgentId}
@@ -3818,6 +3923,10 @@ const styles = StyleSheet.create((theme) => ({
     minWidth: 0,
     flex: 1,
     color: theme.colors.foreground,
+    fontSize: theme.fontSize.sm,
+  },
+  mobileTabModifiedIndicator: {
+    color: theme.colors.statusWarning,
     fontSize: theme.fontSize.sm,
   },
   mobileTabMenuTrigger: {

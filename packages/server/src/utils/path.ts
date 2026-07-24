@@ -59,22 +59,37 @@ export function createRealpathAwarePathMatcher(target: string): (candidate: stri
 }
 
 export function isPathInsideRoot(root: string, candidate: string): boolean {
+  return getRelativePathInsideRoot(root, candidate) !== null;
+}
+
+/** Derives the relative suffix from the same path pair that proves containment. */
+export function getRealpathAwareRelativePath(root: string, candidate: string): string | null {
+  const rootVariants = collectPathVariants(root);
+  const candidateVariants = collectPathVariants(candidate);
+
+  for (const rootVariant of rootVariants) {
+    for (const candidateVariant of candidateVariants) {
+      const relativePath = getRelativePathInsideRoot(rootVariant, candidateVariant);
+      if (relativePath !== null) return relativePath;
+    }
+  }
+  return null;
+}
+
+export function isRealpathInsideRoot(root: string, candidate: string): boolean {
+  return getRealpathAwareRelativePath(root, candidate) !== null;
+}
+
+function getRelativePathInsideRoot(root: string, candidate: string): string | null {
   const compareAsWindows = shouldCompareAsWindows(root, candidate);
   const platformPath = compareAsWindows ? nodePath.win32 : nodePath.posix;
   const normalizedRoot = normalizePathForComparison(root, compareAsWindows);
   const normalizedCandidate = normalizePathForComparison(candidate, compareAsWindows);
   const relative = platformPath.relative(normalizedRoot, normalizedCandidate);
 
-  return relative === "" || (!relative.startsWith("..") && !platformPath.isAbsolute(relative));
-}
-
-export function isRealpathInsideRoot(root: string, candidate: string): boolean {
-  const rootVariants = collectPathVariants(root);
-  const candidateVariants = collectPathVariants(candidate);
-
-  return rootVariants.some((rootVariant) =>
-    candidateVariants.some((candidateVariant) => isPathInsideRoot(rootVariant, candidateVariant)),
-  );
+  return relative === "" || (!relative.startsWith("..") && !platformPath.isAbsolute(relative))
+    ? relative
+    : null;
 }
 
 function collectPathVariants(value: string): string[] {

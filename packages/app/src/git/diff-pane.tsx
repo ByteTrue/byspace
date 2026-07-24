@@ -11,6 +11,8 @@ import {
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import { DiffStat } from "@/components/diff-stat";
+import { FileActionsMenu } from "@/components/file-actions-menu";
+import { addWorkspaceFileToFocusedChat } from "@/composer/add-workspace-file-to-chat";
 import {
   View,
   Text,
@@ -216,6 +218,7 @@ interface DiffFileSectionProps {
   interactive?: boolean;
   onToggle?: (path: string) => void;
   onHeaderHeightChange?: (path: string, height: number) => void;
+  onAddToChat?: (path: string) => void;
   testID?: string;
 }
 
@@ -917,6 +920,7 @@ const DiffFileHeader = memo(function DiffFileHeader({
   interactive = true,
   onToggle,
   onHeaderHeightChange,
+  onAddToChat,
   testID,
 }: DiffFileSectionProps) {
   const { t } = useTranslation();
@@ -987,6 +991,7 @@ const DiffFileHeader = memo(function DiffFileHeader({
   );
 
   const fileName = file.path.split("/").pop() ?? file.path;
+  const handleAddToChat = useCallback(() => onAddToChat?.(file.path), [file.path, onAddToChat]);
   const headerContent = (
     <>
       <View style={styles.fileHeaderLeft}>
@@ -1020,6 +1025,15 @@ const DiffFileHeader = memo(function DiffFileHeader({
       </View>
       <View style={styles.fileHeaderRight}>
         <DiffStat additions={file.additions} deletions={file.deletions} />
+        {onAddToChat ? (
+          <FileActionsMenu
+            fileKind="file"
+            fileExists={!file.isDeleted}
+            onAddToChat={handleAddToChat}
+            accessibilityLabel={t("workspace.fileExplorer.context.actionsFor", { name: fileName })}
+            testIDPrefix={testID}
+          />
+        ) : null}
       </View>
     </>
   );
@@ -1766,6 +1780,7 @@ function DiffBodyContent({
 
 interface SharedDiffViewProps {
   files: ParsedDiffFile[];
+  onAddToChat?: (path: string) => void;
   displayPreferences: {
     layout: "unified" | "split";
     wrapLines: boolean;
@@ -1787,7 +1802,12 @@ interface SharedDiffViewProps {
       };
 }
 
-export function SharedDiffView({ files, displayPreferences, mode }: SharedDiffViewProps) {
+export function SharedDiffView({
+  files,
+  displayPreferences,
+  mode,
+  onAddToChat,
+}: SharedDiffViewProps) {
   const { layout, wrapLines, codeFontSize, monoFontFamily } = displayPreferences;
   const diffBodyLineHeight = Math.round(codeFontSize * 1.5);
   const typographyKey = [monoFontFamily, codeFontSize, diffBodyLineHeight].join(":");
@@ -2063,6 +2083,7 @@ export function SharedDiffView({ files, displayPreferences, mode }: SharedDiffVi
             interactive={interactive}
             onToggle={interactive ? handleToggleExpanded : undefined}
             onHeaderHeightChange={handleHeaderHeightChange}
+            onAddToChat={onAddToChat}
             testID={`diff-file-${item.fileIndex}`}
           />
         );
@@ -2088,6 +2109,7 @@ export function SharedDiffView({ files, displayPreferences, mode }: SharedDiffVi
       handleToggleExpanded,
       handleToggleFolder,
       layout,
+      onAddToChat,
       reviewActions,
       textMetricsStyle,
       viewMode,
@@ -2646,6 +2668,19 @@ export function GitDiffPane({ serverId, workspaceId, cwd, enabled }: GitDiffPane
   );
   const uncommittedLabel = t("workspace.git.diff.uncommitted");
   const committedLabel = t("workspace.git.diff.committed");
+  const handleAddFileToChat = useCallback(
+    (path: string) => {
+      void addWorkspaceFileToFocusedChat({
+        serverId,
+        workspaceId: workspaceId ?? cwd,
+        attachment: { kind: "workspace_file", path, selection: { kind: "whole_file" } },
+      }).then((added) => {
+        if (!added) toast.error(t("workspace.fileActions.focusChatFirst"));
+        return undefined;
+      });
+    },
+    [cwd, serverId, t, toast, workspaceId],
+  );
 
   const emptyMessage = computeEmptyMessage(
     changesPreferences.hideWhitespace,
@@ -2672,6 +2707,7 @@ export function GitDiffPane({ serverId, workspaceId, cwd, enabled }: GitDiffPane
     >
       <SharedDiffView
         files={files}
+        onAddToChat={handleAddFileToChat}
         displayPreferences={sharedDisplayPreferences}
         mode={workingTreeMode}
       />

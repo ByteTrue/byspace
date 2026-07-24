@@ -94,6 +94,7 @@ import type {
   ComposerAttachment,
   UserComposerAttachment,
   WorkspaceComposerAttachment,
+  WorkspaceFileComposerAttachment,
 } from "@/attachments/types";
 import type { PickedFile } from "@/attachments/picked-file";
 import { resolveComposerAttachmentSubmitFormat } from "@/composer/attachments/submit";
@@ -113,6 +114,15 @@ import { getForgePresentation } from "@/git/forge";
 import { ForgeBrandIcon } from "@/git/forge-icon";
 import { useComposerGithubAutoAttach } from "./github/auto-attach";
 import { resolveClientSlashCommand, type ClientSlashCommand } from "@/client-slash-commands";
+import {
+  appendWorkspaceFileAttachment,
+  getWorkspaceFileAttachmentKey,
+  getWorkspaceFileAttachmentSubtitle,
+} from "@/attachments/workspace-file";
+import {
+  resolveWorkspaceFileDrop,
+  type WorkspaceFileDragPayload,
+} from "@/attachments/workspace-file-drag";
 
 type QueuedMessage = QueuedComposerMessage;
 
@@ -383,6 +393,18 @@ function renderComposerAttachmentPill(args: RenderComposerAttachmentPillArgs): R
     return (
       <FileAttachmentPill
         key={attachment.attachment.id}
+        attachment={attachment}
+        index={index}
+        disabled={disabled}
+        onRemove={onRemove}
+        removeLabel={labels.removeFile}
+      />
+    );
+  }
+  if (attachment.kind === "workspace_file") {
+    return (
+      <WorkspaceFileAttachmentPill
+        key={`workspace-file:${getWorkspaceFileAttachmentKey(attachment)}`}
         attachment={attachment}
         index={index}
         disabled={disabled}
@@ -665,6 +687,39 @@ function GithubAttachmentPill({
   );
 }
 
+function WorkspaceFileAttachmentPill({
+  attachment,
+  index,
+  disabled,
+  onRemove,
+  removeLabel,
+}: {
+  attachment: WorkspaceFileComposerAttachment;
+  index: number;
+  disabled: boolean;
+  onRemove: (index: number) => void;
+  removeLabel: string;
+}) {
+  const handleRemove = useCallback(() => onRemove(index), [index, onRemove]);
+  const fileName = attachment.path.split("/").pop() ?? attachment.path;
+  return (
+    <AttachmentPill
+      testID="composer-workspace-file-attachment-pill"
+      onOpen={noopCallback}
+      onRemove={handleRemove}
+      openAccessibilityLabel={fileName}
+      removeAccessibilityLabel={removeLabel}
+      disabled={disabled}
+    >
+      <AttachmentLabel
+        icon={filePillIcon}
+        title={fileName}
+        subtitle={getWorkspaceFileAttachmentSubtitle(attachment)}
+      />
+    </AttachmentPill>
+  );
+}
+
 interface FileAttachmentPillProps {
   attachment: Extract<ComposerAttachment, { kind: "file" }>;
   index: number;
@@ -747,6 +802,7 @@ function GithubPickerOption({
 interface ComposerProps {
   agentId: string;
   serverId: string;
+  workspaceId?: string | null;
   isPaneFocused: boolean;
   onSubmitMessage?: (payload: MessagePayload) => Promise<void>;
   onClientSlashCommand?: (command: ClientSlashCommand) => Promise<void>;
@@ -776,6 +832,8 @@ interface ComposerProps {
   clearDraft: (lifecycle: "sent" | "abandoned") => void;
   /** When true, auto-focuses the text input on web. */
   autoFocus?: boolean;
+  /** Changing this value requests focus again while autoFocus remains true. */
+  autoFocusKey?: string;
   /** Callback to expose a focus function to parent components (desktop only). */
   onFocusInput?: (focus: () => void) => void;
   /** Optional draft context for listing commands before an agent exists. */
@@ -967,6 +1025,7 @@ function ComposerVoiceModeButton({
 export function Composer({
   agentId,
   serverId,
+  workspaceId,
   isPaneFocused,
   onSubmitMessage,
   onClientSlashCommand,
@@ -988,6 +1047,7 @@ export function Composer({
   cwd,
   clearDraft,
   autoFocus = false,
+  autoFocusKey,
   onFocusInput,
   commandDraftConfig,
   onMessageSent,
@@ -1422,6 +1482,17 @@ export function Composer({
       );
     }
   }, [client, pickFiles, t, uploadPickedFiles]);
+
+  const handleWorkspaceFileDropped = useCallback(
+    (payload: WorkspaceFileDragPayload) => {
+      if (!workspaceId) return;
+      const attachment = resolveWorkspaceFileDrop({ payload, serverId, workspaceId });
+      if (!attachment) return;
+      setSelectedAttachments((current) => appendWorkspaceFileAttachment(current, attachment));
+      focusInput();
+    },
+    [focusInput, serverId, setSelectedAttachments, workspaceId],
+  );
 
   const handleGenericFilesDropped = useCallback(
     async (items: DroppedItem[]) => {
@@ -1946,7 +2017,11 @@ export function Composer({
   // so a drop in that window would be lost or land on a locked draft. `disabled` hides the
   // backdrop and rejects the drop atomically, instead of accepting a drop with no feedback.
   useFileDrop(
-    { onFiles: addImages, onGenericFiles: handleGenericFilesDropped },
+    {
+      onFiles: addImages,
+      onGenericFiles: handleGenericFilesDropped,
+      onWorkspaceFile: handleWorkspaceFileDropped,
+    },
     { disabled: isSubmitBusy },
   );
 
@@ -2007,7 +2082,7 @@ export function Composer({
                 isReadyForDictation={isDictationReady}
                 placeholder={messagePlaceholder}
                 autoFocus={messageInputAutoFocus}
-                autoFocusKey={`${serverId}:${agentId}`}
+                autoFocusKey={autoFocusKey ?? `${serverId}:${agentId}`}
                 disabled={isSubmitLoading}
                 isPaneFocused={isPaneFocused}
                 leftContent={leftContent}

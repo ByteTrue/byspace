@@ -38,7 +38,7 @@ import { resolveBySpaceHome } from "../server/byspace-home.js";
 import { createExternalProcessEnv } from "../server/byspace-env.js";
 import { parseGitRevParsePath, resolveGitRevParsePath } from "./git-rev-parse-path.js";
 import { validateBranchSlug } from "@bytetrue/byspace-protocol/branch-slug";
-import { expandTilde } from "./path.js";
+import { expandTilde, getRealpathAwareRelativePath } from "./path.js";
 
 export { slugify, validateBranchSlug } from "@bytetrue/byspace-protocol/branch-slug";
 
@@ -889,13 +889,13 @@ export async function isBySpaceOwnedWorktreeCwd(
   }
 
   const worktreesBaseRoot = resolveBySpaceWorktreesBaseRoot(options);
-  const byspaceWorktreesPrefix = normalizePathForOwnership(worktreesBaseRoot) + sep;
+  const relativePath = getRealpathAwareRelativePath(worktreesBaseRoot, resolvedCwd);
 
   // Ownership is defined by the path living under <worktrees-root>/<hash>/<slug>[/...].
   // The <hash>/<slug> prefix is BySpace-private — nothing else writes there — so the
   // path shape alone is sufficient proof of ownership, even when git has already
   // forgotten about the worktree.
-  if (!resolvedCwd.startsWith(byspaceWorktreesPrefix)) {
+  if (relativePath === null) {
     return {
       allowed: false,
       ...(repoRoot !== undefined ? { repoRoot } : {}),
@@ -903,8 +903,7 @@ export async function isBySpaceOwnedWorktreeCwd(
     };
   }
 
-  const relative = resolvedCwd.slice(byspaceWorktreesPrefix.length);
-  const parts = relative.split(sep).filter((part) => part.length > 0);
+  const parts = relativePath.split(sep).filter((part) => part.length > 0);
   if (parts.length < 2) {
     return {
       allowed: false,
@@ -918,7 +917,7 @@ export async function isBySpaceOwnedWorktreeCwd(
     allowed: true,
     ...(repoRoot !== undefined ? { repoRoot } : {}),
     worktreeRoot: worktreesRoot,
-    worktreePath: resolvedCwd,
+    worktreePath: join(worktreesRoot, parts[1]),
   };
 }
 
@@ -988,10 +987,9 @@ export async function listBySpaceWorktrees({
     envOverlay: READ_ONLY_GIT_ENV,
   });
 
-  const rootPrefix = normalizePathForOwnership(projectWorktreesRoot) + sep;
   return parseWorktreeList(stdout)
     .map((entry) => Object.assign({}, entry, { path: normalizePathForOwnership(entry.path) }))
-    .filter((entry) => entry.path.startsWith(rootPrefix))
+    .filter((entry) => getRealpathAwareRelativePath(projectWorktreesRoot, entry.path) !== null)
     .map((entry) =>
       Object.assign({}, entry, { createdAt: resolveWorktreeCreatedAtIso(entry.path) }),
     );
@@ -1045,7 +1043,6 @@ export async function resolveBySpaceWorktreeRootForCwd(
     options?.byspaceHome,
     options?.worktreesRoot,
   );
-  const resolvedRoot = normalizePathForOwnership(worktreesRoot) + sep;
 
   let worktreeRoot: string | null = null;
   try {
@@ -1063,7 +1060,7 @@ export async function resolveBySpaceWorktreeRootForCwd(
   }
 
   const resolvedWorktreeRoot = normalizePathForOwnership(worktreeRoot);
-  if (!resolvedWorktreeRoot.startsWith(resolvedRoot)) {
+  if (getRealpathAwareRelativePath(worktreesRoot, resolvedWorktreeRoot) === null) {
     return null;
   }
 
@@ -1115,7 +1112,6 @@ export async function deleteBySpaceWorktree({
     throw new Error("cwd or worktreesRoot is required to delete a BySpace worktree");
   }
 
-  const resolvedRoot = normalizePathForOwnership(resolvedWorktreesRoot) + sep;
   const requestedPath = worktreePath ?? join(resolvedWorktreesRoot, worktreeSlug!);
   const resolvedRequested = normalizePathForOwnership(requestedPath);
   const resolvedWorktree =
@@ -1126,7 +1122,11 @@ export async function deleteBySpaceWorktree({
       })
     )?.worktreePath ?? resolvedRequested;
 
-  if (!resolvedWorktree.startsWith(resolvedRoot)) {
+  const relativeWorktreePath = getRealpathAwareRelativePath(
+    resolvedWorktreesRoot,
+    resolvedWorktree,
+  );
+  if (relativeWorktreePath === null || relativeWorktreePath === "") {
     throw new Error("Refusing to delete non-BySpace worktree");
   }
 

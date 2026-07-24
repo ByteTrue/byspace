@@ -11,7 +11,7 @@ import { encodeTerminalKeyInput } from "@bytetrue/byspace-protocol/terminal-key-
 import type { TerminalInputModeState } from "@bytetrue/byspace-protocol/terminal-input-mode";
 import { useTranslation } from "react-i18next";
 import { useHostRuntimeClient, useHostRuntimeIsConnected } from "@/runtime/host-runtime";
-import { useAppVisible } from "@/hooks/use-app-visible";
+import { useAppActivelyVisible } from "@/hooks/use-app-visible";
 import { useStableEvent } from "@/hooks/use-stable-event";
 import { useToast } from "@/contexts/toast-context";
 import {
@@ -179,7 +179,7 @@ export function TerminalPane({
 }: TerminalPaneProps) {
   const { t } = useTranslation();
   const toast = useToast();
-  const isAppVisible = useAppVisible();
+  const isAppVisible = useAppActivelyVisible();
   const { theme } = useUnistyles();
   const { settings } = useAppSettings();
   const xtermTheme = useMemo(() => toXtermTheme(theme.colors.terminal), [theme]);

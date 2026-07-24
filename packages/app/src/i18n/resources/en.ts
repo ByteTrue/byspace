@@ -361,6 +361,13 @@ export const en = {
       copyBranchName: "Copy branch name",
       copied: "Copied",
     },
+    fileActions: {
+      openFile: "Open file",
+      copyPath: "Copy path",
+      download: "Download",
+      addToChat: "Add to chat",
+      focusChatFirst: "Focus a chat tab before adding a file",
+    },
     fileExplorer: {
       sort: {
         name: "Name",
@@ -371,6 +378,8 @@ export const en = {
         size: "Size",
         modified: "Modified",
         copyPath: "Copy path",
+        addToChat: "Add to chat",
+        actionsFor: "Actions for {{name}}",
         download: "Download",
       },
       actions: {
@@ -426,6 +435,7 @@ export const en = {
     },
     tabs: {
       loading: "Loading...",
+      modified: "Unsaved changes",
       loadingAgentTitle: "Loading agent title",
       emptyPane: "No tabs in this pane.",
       fallback: {
@@ -494,6 +504,11 @@ export const en = {
         close: "Close",
         cancel: "Cancel",
         archive: "Archive",
+        unsavedTitle: "Unsaved changes",
+        unsavedMessage:
+          "This tab has changes that have not been saved. Closing it will discard the draft.",
+        closeWithoutSaving: "Close without saving",
+        bulkUnsaved: "{{count}} tabs have unsaved changes. Closing will discard those drafts.",
         closeTerminalTitle: "Close terminal?",
         closeTerminalMessage: "Any running process in this terminal will be stopped immediately.",
         archiveRunningAgentTitle: "Archive running agent?",
@@ -1247,6 +1262,27 @@ export const en = {
       binaryPreviewUnavailable: "Binary preview unavailable",
       failedToLoad: "Failed to load file",
       failedToLoadPreview: "Failed to load file preview",
+      editor: {
+        fileSize: "File size {{size}}",
+        lines: "{{count}} lines",
+        editorStatus: "Editor status {{status}}",
+        accessibilityLabel: "Source editor for {{filename}}",
+        saved: "Saved",
+        unsavedChanges: "Unsaved changes",
+        saving: "Saving...",
+        saveFailed: "Save failed",
+        changedOnDisk: "Changed on disk",
+        vimMode: "Vim mode {{mode}}",
+        cursor: "Line {{line}}, column {{column}}",
+        preview: "Preview",
+        source: "Source",
+        unavailableTitle: "File unavailable on disk",
+        conflictDescription: "The local buffer was preserved. Choose which version to keep.",
+        overwrite: "Overwrite",
+        reload: "Reload",
+        reloadTitle: "Reload from disk?",
+        reloadMessage: "Your local changes will be lost.",
+      },
     },
     diff: {
       changesLabel: "Changes",

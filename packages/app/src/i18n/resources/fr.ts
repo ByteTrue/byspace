@@ -365,6 +365,13 @@ export const fr: TranslationResources = {
       copyBranchName: "Copier le nom de la branche",
       copied: "Copié",
     },
+    fileActions: {
+      openFile: "Ouvrir le fichier",
+      copyPath: "Copier le chemin",
+      download: "Télécharger",
+      addToChat: "Ajouter au chat",
+      focusChatFirst: "Sélectionnez un onglet de chat avant d’ajouter un fichier",
+    },
     fileExplorer: {
       sort: {
         name: "Nom",
@@ -375,6 +382,8 @@ export const fr: TranslationResources = {
         size: "Taille",
         modified: "Modifié",
         copyPath: "Copier le chemin",
+        addToChat: "Ajouter au chat",
+        actionsFor: "Actions pour {{name}}",
         download: "Télécharger",
       },
       actions: {
@@ -430,6 +439,7 @@ export const fr: TranslationResources = {
     },
     tabs: {
       loading: "Chargement...",
+      modified: "Modifications non enregistrées",
       loadingAgentTitle: "Titre d'agent de chargement",
       emptyPane: "Aucun onglet dans ce volet.",
       fallback: {
@@ -499,6 +509,12 @@ export const fr: TranslationResources = {
         close: "Fermer",
         cancel: "Annuler",
         archive: "Archive",
+        unsavedTitle: "Modifications non enregistrées",
+        unsavedMessage:
+          "Cet onglet contient des modifications non enregistrées. Le fermer supprimera le brouillon.",
+        closeWithoutSaving: "Fermer sans enregistrer",
+        bulkUnsaved:
+          "{{count}} onglets contiennent des modifications non enregistrées. Les fermer supprimera ces brouillons.",
         closeTerminalTitle: "Fermer le terminal?",
         closeTerminalMessage:
           "Tout processus en cours d’exécution dans ce terminal sera immédiatement arrêté.",
@@ -1268,6 +1284,27 @@ export const fr: TranslationResources = {
       binaryPreviewUnavailable: "Aperçu binaire indisponible",
       failedToLoad: "Échec du chargement du fichier",
       failedToLoadPreview: "Échec du chargement de l'aperçu du fichier",
+      editor: {
+        fileSize: "Taille du fichier {{size}}",
+        lines: "{{count}} lignes",
+        editorStatus: "État de l’éditeur : {{status}}",
+        accessibilityLabel: "Éditeur source pour {{filename}}",
+        saved: "Enregistré",
+        unsavedChanges: "Modifications non enregistrées",
+        saving: "Enregistrement...",
+        saveFailed: "Échec de l’enregistrement",
+        changedOnDisk: "Le fichier a été modifié sur le disque",
+        vimMode: "Mode Vim {{mode}}",
+        cursor: "Ligne {{line}}, colonne {{column}}",
+        preview: "Aperçu",
+        source: "Source",
+        unavailableTitle: "Fichier indisponible sur le disque",
+        conflictDescription: "Le contenu local a été conservé. Choisissez la version à garder.",
+        overwrite: "Écraser",
+        reload: "Recharger",
+        reloadTitle: "Recharger depuis le disque ?",
+        reloadMessage: "Vos modifications locales seront perdues.",
+      },
     },
     diff: {
       changesLabel: "Modifications",

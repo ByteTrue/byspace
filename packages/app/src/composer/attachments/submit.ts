@@ -5,6 +5,7 @@ import {
   workspaceAttachmentToSubmitAttachment,
 } from "@/attachments/workspace-attachment-utils";
 import type { AgentAttachment } from "@bytetrue/byspace-protocol/messages";
+import { workspaceFileAttachmentToAgentAttachment } from "@/attachments/workspace-file";
 import {
   buildForgeAttachmentFromSearchItem,
   buildLegacyGitHubAttachmentFromSearchItem,
@@ -46,6 +47,11 @@ export function splitComposerAttachmentsForSubmit(
 
     if (attachment.kind === "file") {
       agentAttachments.push(attachment.attachment);
+      continue;
+    }
+
+    if (attachment.kind === "workspace_file") {
+      agentAttachments.push(workspaceFileAttachmentToAgentAttachment(attachment));
       continue;
     }
 

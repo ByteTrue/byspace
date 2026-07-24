@@ -366,6 +366,13 @@ export const es: TranslationResources = {
       copyBranchName: "Copiar nombre de rama",
       copied: "Copiado",
     },
+    fileActions: {
+      openFile: "Abrir archivo",
+      copyPath: "Copiar ruta",
+      download: "Descargar",
+      addToChat: "Añadir al chat",
+      focusChatFirst: "Enfoca una pestaña de chat antes de añadir un archivo",
+    },
     fileExplorer: {
       sort: {
         name: "Nombre",
@@ -376,6 +383,8 @@ export const es: TranslationResources = {
         size: "Tamaño",
         modified: "Modificado",
         copyPath: "Copiar ruta",
+        addToChat: "Añadir al chat",
+        actionsFor: "Acciones para {{name}}",
         download: "Descargar",
       },
       actions: {
@@ -431,6 +440,7 @@ export const es: TranslationResources = {
     },
     tabs: {
       loading: "Cargando...",
+      modified: "Cambios sin guardar",
       loadingAgentTitle: "Título del agente de carga",
       emptyPane: "No hay pestañas en este panel.",
       fallback: {
@@ -500,6 +510,12 @@ export const es: TranslationResources = {
         close: "Cerca",
         cancel: "Cancelar",
         archive: "Archivo",
+        unsavedTitle: "Cambios sin guardar",
+        unsavedMessage:
+          "Esta pestaña tiene cambios sin guardar. Al cerrarla se descartará el borrador.",
+        closeWithoutSaving: "Cerrar sin guardar",
+        bulkUnsaved:
+          "{{count}} pestañas tienen cambios sin guardar. Al cerrarlas se descartarán esos borradores.",
         closeTerminalTitle: "¿Cerrar terminal?",
         closeTerminalMessage:
           "Cualquier proceso en ejecución en esta terminal se detendrá inmediatamente.",
@@ -1269,6 +1285,27 @@ export const es: TranslationResources = {
       binaryPreviewUnavailable: "Vista previa binaria no disponible",
       failedToLoad: "No se pudo cargar el archivo",
       failedToLoadPreview: "No se pudo cargar la vista previa del archivo",
+      editor: {
+        fileSize: "Tamaño del archivo {{size}}",
+        lines: "{{count}} líneas",
+        editorStatus: "Estado del editor: {{status}}",
+        accessibilityLabel: "Editor de código fuente de {{filename}}",
+        saved: "Guardado",
+        unsavedChanges: "Cambios sin guardar",
+        saving: "Guardando...",
+        saveFailed: "Error al guardar",
+        changedOnDisk: "El archivo cambió en el disco",
+        vimMode: "Modo Vim {{mode}}",
+        cursor: "Línea {{line}}, columna {{column}}",
+        preview: "Vista previa",
+        source: "Código fuente",
+        unavailableTitle: "El archivo no está disponible en el disco",
+        conflictDescription: "El búfer local se ha conservado. Elige qué versión mantener.",
+        overwrite: "Sobrescribir",
+        reload: "Volver a cargar",
+        reloadTitle: "¿Volver a cargar desde el disco?",
+        reloadMessage: "Se perderán tus cambios locales.",
+      },
     },
     diff: {
       changesLabel: "Cambios",

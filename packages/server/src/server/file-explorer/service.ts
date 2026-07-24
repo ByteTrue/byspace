@@ -1,6 +1,7 @@
-import { constants, promises as fs } from "fs";
+import { constants, promises as fs, type BigIntStats } from "fs";
 import type { FileHandle } from "fs/promises";
 import path from "path";
+import { createHash, randomUUID } from "crypto";
 import { expandUserPath, resolvePathFromBase } from "../path-utils.js";
 
 export type ExplorerEntryKind = "file" | "directory";
@@ -16,6 +17,29 @@ export interface ReadFileParams {
   root: string;
   relativePath: string;
 }
+
+export interface WriteFileParams extends ReadFileParams {
+  content: string;
+  expectedModifiedAt: string;
+  expectedRevision?: string;
+}
+
+export type ExplorerFileVersion =
+  | {
+      status: "ready";
+      cwd: string;
+      path: string;
+      size: number;
+      modifiedAt: string;
+      revision: string;
+    }
+  | { status: "missing"; cwd: string; path: string }
+  | { status: "error"; cwd: string; path: string; error: string };
+
+export type ExplorerFileWriteResult =
+  | { status: "written"; modifiedAt: string; size: number; revision: string }
+  | { status: "conflict"; version: ExplorerFileVersion }
+  | { status: "error"; error: string };
 
 export interface FileExplorerEntry {
   name: string;
@@ -38,6 +62,7 @@ export interface FileExplorerFile {
   mimeType?: string;
   size: number;
   modifiedAt: string;
+  revision: string;
 }
 
 export interface FileExplorerFileBytes {
@@ -48,6 +73,7 @@ export interface FileExplorerFileBytes {
   mimeType: string;
   size: number;
   modifiedAt: string;
+  revision: string;
 }
 
 const TEXT_MIME_TYPES: Record<string, string> = {
@@ -56,9 +82,39 @@ const TEXT_MIME_TYPES: Record<string, string> = {
 
 const DEFAULT_TEXT_MIME_TYPE = "text/plain";
 const FILE_TYPE_SAMPLE_BYTES = 8192;
+export const MAX_EDITABLE_FILE_BYTES = 1024 * 1024;
 const READ_FILE_OPEN_FLAGS =
   process.platform === "win32" ? constants.O_RDONLY : constants.O_RDONLY | constants.O_NOFOLLOW;
 const ACCESS_OUTSIDE_WORKSPACE_MESSAGE = "Access outside of workspace is not allowed";
+const fileWriteQueues = new Map<string, Promise<void>>();
+
+async function withFileWriteQueue<T>(key: string, operation: () => Promise<T>): Promise<T> {
+  const previous = fileWriteQueues.get(key) ?? Promise.resolve();
+  const result = previous.catch(() => undefined).then(operation);
+  const barrier = result.then(
+    () => undefined,
+    () => undefined,
+  );
+  fileWriteQueues.set(key, barrier);
+  try {
+    return await result;
+  } finally {
+    if (fileWriteQueues.get(key) === barrier) fileWriteQueues.delete(key);
+  }
+}
+
+function fileRevision(stats: BigIntStats, bytes?: Uint8Array): string {
+  const digest = bytes ? createHash("sha256").update(bytes).digest("base64url") : "metadata";
+  return `${stats.dev}:${stats.ino}:${stats.size}:${stats.mtimeNs}:${stats.ctimeNs}:${stats.mode}:${digest}`;
+}
+
+function matchesExpectedRevision(
+  stats: BigIntStats,
+  expectedRevision: string,
+  bytes: Uint8Array,
+): boolean {
+  return fileRevision(stats, bytes) === expectedRevision;
+}
 
 const IMAGE_MIME_TYPES: Record<string, string> = {
   ".png": "image/png",
@@ -151,6 +207,7 @@ export async function readExplorerFile({
       mimeType: file.mimeType,
       size: file.size,
       modifiedAt: file.modifiedAt,
+      revision: file.revision,
     };
   }
 
@@ -162,6 +219,7 @@ export async function readExplorerFile({
       mimeType: file.mimeType,
       size: file.size,
       modifiedAt: file.modifiedAt,
+      revision: file.revision,
     };
   }
 
@@ -173,6 +231,7 @@ export async function readExplorerFile({
     mimeType: file.mimeType,
     size: file.size,
     modifiedAt: file.modifiedAt,
+    revision: file.revision,
   };
 }
 
@@ -184,20 +243,20 @@ export async function readExplorerFileBytes({
   const handle = await openFileForRead(filePath.resolvedPath);
 
   try {
-    const stats = await handle.stat();
+    const stats = await handle.stat({ bigint: true });
 
     if (!stats.isFile()) {
       throw new Error("Requested path is not a file");
     }
 
     const ext = path.extname(filePath.resolvedPath).toLowerCase();
+    const buffer = await handle.readFile();
     const basePayload = {
       path: normalizeRelativePath({ root, targetPath: filePath.requestedPath }),
-      size: stats.size,
+      size: Number(stats.size),
       modifiedAt: stats.mtime.toISOString(),
+      revision: fileRevision(stats, buffer),
     };
-
-    const buffer = await handle.readFile();
     if (ext in IMAGE_MIME_TYPES) {
       return {
         ...basePayload,
@@ -208,7 +267,7 @@ export async function readExplorerFileBytes({
       };
     }
 
-    if (isLikelyBinary(buffer)) {
+    if (isLikelyBinary(buffer) || !isValidUtf8(buffer)) {
       return {
         ...basePayload,
         kind: "binary",
@@ -227,6 +286,201 @@ export async function readExplorerFileBytes({
     };
   } finally {
     await handle.close();
+  }
+}
+
+export async function getExplorerFileVersion({
+  root,
+  relativePath,
+}: ReadFileParams): Promise<ExplorerFileVersion> {
+  const cwd = expandUserPath(root);
+  try {
+    const filePath = await resolveScopedPath({ root, relativePath });
+    const handle = await openFileForRead(filePath.resolvedPath);
+    try {
+      const stats = await handle.stat({ bigint: true });
+      if (!stats.isFile()) {
+        return { status: "error", cwd, path: relativePath, error: "Requested path is not a file" };
+      }
+      const bytes =
+        stats.size <= BigInt(MAX_EDITABLE_FILE_BYTES) ? await handle.readFile() : undefined;
+      return {
+        status: "ready",
+        cwd,
+        path: normalizeRelativePath({ root, targetPath: filePath.requestedPath }),
+        size: Number(stats.size),
+        modifiedAt: stats.mtime.toISOString(),
+        revision: fileRevision(stats, bytes),
+      };
+    } finally {
+      await handle.close();
+    }
+  } catch (error) {
+    if (isMissingEntryError(error)) {
+      return { status: "missing", cwd, path: relativePath };
+    }
+    return {
+      status: "error",
+      cwd,
+      path: relativePath,
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
+export async function resolveExplorerFilePath({
+  root,
+  relativePath,
+}: ReadFileParams): Promise<string> {
+  return (await resolveScopedPath({ root, relativePath })).resolvedPath;
+}
+
+interface WritableFileSnapshot {
+  stats: BigIntStats;
+  bytes: Buffer;
+  mode: number;
+}
+
+async function readWritableFileSnapshot(
+  resolvedPath: string,
+): Promise<WritableFileSnapshot | { error: string }> {
+  const handle = await openFileForRead(resolvedPath);
+  try {
+    const stats = await handle.stat({ bigint: true });
+    if (!stats.isFile()) return { error: "Requested path is not a file" };
+    if (stats.size > BigInt(MAX_EDITABLE_FILE_BYTES)) {
+      return { error: "File is too large to edit" };
+    }
+    const bytes = await handle.readFile();
+    if (isLikelyBinary(bytes) || !isValidUtf8(bytes)) {
+      return { error: "Binary files cannot be edited" };
+    }
+    const mode = Number(stats.mode);
+    if (process.platform !== "win32" && (mode & 0o222) === 0) {
+      return { error: "File is read-only" };
+    }
+    try {
+      await fs.access(resolvedPath, constants.W_OK);
+    } catch {
+      return { error: "File is read-only" };
+    }
+    return { stats, bytes, mode };
+  } finally {
+    await handle.close();
+  }
+}
+
+export async function writeExplorerFile(input: WriteFileParams): Promise<ExplorerFileWriteResult> {
+  let queueKey = path.resolve(expandUserPath(input.root), input.relativePath);
+  try {
+    queueKey = (await resolveScopedPath(input)).resolvedPath;
+  } catch {
+    // Let the write path return the precise missing/out-of-scope result.
+  }
+  return withFileWriteQueue(queueKey, () => writeExplorerFileUnlocked(input));
+}
+
+async function writeExplorerFileUnlocked({
+  root,
+  relativePath,
+  content,
+  expectedRevision,
+}: WriteFileParams): Promise<ExplorerFileWriteResult> {
+  const encoded = Buffer.from(content, "utf8");
+  if (encoded.byteLength > MAX_EDITABLE_FILE_BYTES) {
+    return { status: "error", error: "File is too large to edit" };
+  }
+
+  let filePath: ScopedPath;
+  let currentMode = 0o600;
+  try {
+    filePath = await resolveScopedPath({ root, relativePath });
+    const current = await readWritableFileSnapshot(filePath.resolvedPath);
+    if ("error" in current) return { status: "error", error: current.error };
+    currentMode = current.mode;
+    if (!expectedRevision) {
+      return {
+        status: "error",
+        error: "A precise file revision is required; reload and try again",
+      };
+    }
+    if (!matchesExpectedRevision(current.stats, expectedRevision, current.bytes)) {
+      return {
+        status: "conflict",
+        version: {
+          status: "ready",
+          cwd: expandUserPath(root),
+          path: normalizeRelativePath({ root, targetPath: filePath.requestedPath }),
+          size: Number(current.stats.size),
+          modifiedAt: current.stats.mtime.toISOString(),
+          revision: fileRevision(current.stats, current.bytes),
+        },
+      };
+    }
+  } catch (error) {
+    if (isMissingEntryError(error)) {
+      return {
+        status: "conflict",
+        version: { status: "missing", cwd: expandUserPath(root), path: relativePath },
+      };
+    }
+    return { status: "error", error: error instanceof Error ? error.message : String(error) };
+  }
+
+  const temporaryPath = path.join(
+    path.dirname(filePath.resolvedPath),
+    `.${path.basename(filePath.resolvedPath)}.byspace-${randomUUID()}.tmp`,
+  );
+  let temporaryHandle: FileHandle | null = null;
+  try {
+    temporaryHandle = await fs.open(temporaryPath, "wx", currentMode);
+    if (process.platform !== "win32") {
+      await temporaryHandle.chmod(currentMode & 0o7777);
+    }
+    await temporaryHandle.writeFile(encoded);
+    await temporaryHandle.sync();
+    await temporaryHandle.close();
+    temporaryHandle = null;
+    const revalidatedPath = await resolveScopedPath({ root, relativePath });
+    if (revalidatedPath.resolvedPath !== filePath.resolvedPath) {
+      return { status: "error", error: "File path changed while saving" };
+    }
+    const latest = await readWritableFileSnapshot(filePath.resolvedPath);
+    if ("error" in latest) {
+      return {
+        status: "error",
+        error:
+          latest.error === "File is read-only"
+            ? "File became read-only while saving"
+            : latest.error,
+      };
+    }
+    if (!matchesExpectedRevision(latest.stats, expectedRevision, latest.bytes)) {
+      return {
+        status: "conflict",
+        version: {
+          status: "ready",
+          cwd: expandUserPath(root),
+          path: normalizeRelativePath({ root, targetPath: filePath.requestedPath }),
+          size: Number(latest.stats.size),
+          modifiedAt: latest.stats.mtime.toISOString(),
+          revision: fileRevision(latest.stats, latest.bytes),
+        },
+      };
+    }
+    await fs.rename(temporaryPath, filePath.resolvedPath);
+    const stats = await fs.stat(filePath.resolvedPath, { bigint: true });
+    return {
+      status: "written",
+      modifiedAt: stats.mtime.toISOString(),
+      size: Number(stats.size),
+      revision: fileRevision(stats, encoded),
+    };
+  } catch (error) {
+    return { status: "error", error: error instanceof Error ? error.message : String(error) };
+  } finally {
+    await temporaryHandle?.close().catch(() => undefined);
+    await fs.unlink(temporaryPath).catch(() => undefined);
   }
 }
 
@@ -369,4 +623,13 @@ function isLikelyBinary(buffer: Buffer): boolean {
   }
 
   return suspicious / buffer.length > 0.3;
+}
+
+function isValidUtf8(buffer: Buffer): boolean {
+  try {
+    new TextDecoder("utf-8", { fatal: true }).decode(buffer);
+    return true;
+  } catch {
+    return false;
+  }
 }

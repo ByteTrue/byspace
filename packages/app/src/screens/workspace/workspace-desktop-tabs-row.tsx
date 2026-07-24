@@ -352,6 +352,7 @@ function tabKeyExtractor(tab: WorkspaceDesktopTabRowItem) {
 export interface WorkspaceDesktopTabRowItem {
   tab: WorkspaceTabDescriptor;
   isActive: boolean;
+  isModified: boolean;
   isCloseHovered: boolean;
   isClosingTab: boolean;
 }
@@ -467,12 +468,16 @@ function TabHandleContent({
   presentation,
   isHighlighted,
   showLabel,
+  isModified,
+  modifiedTestID,
   tabLabelSkeletonStyle,
   tabLabelStyle,
 }: {
   presentation: WorkspaceTabPresentation;
   isHighlighted: boolean;
   showLabel: boolean;
+  isModified: boolean;
+  modifiedTestID: string;
   tabLabelSkeletonStyle: React.ComponentProps<typeof View>["style"];
   tabLabelStyle: React.ComponentProps<typeof Text>["style"];
 }) {
@@ -494,6 +499,15 @@ function TabHandleContent({
           {presentation.label}
         </Text>
       ) : null}
+      {showLabel && isModified ? (
+        <Text
+          testID={modifiedTestID}
+          style={styles.tabModifiedIndicator}
+          accessibilityElementsHidden
+        >
+          •
+        </Text>
+      ) : null}
     </View>
   );
 }
@@ -508,6 +522,7 @@ function TabChip({
   showCloseButton,
   isCloseHovered,
   isClosingTab,
+  isModified,
   presentation,
   tooltipLabel,
   resolvedTab,
@@ -525,6 +540,7 @@ function TabChip({
   showCloseButton: boolean;
   isCloseHovered: boolean;
   isClosingTab: boolean;
+  isModified: boolean;
   presentation: WorkspaceTabPresentation;
   tooltipLabel: string;
   resolvedTab: WorkspaceDesktopTabActions;
@@ -648,6 +664,8 @@ function TabChip({
                 presentation={presentation}
                 isHighlighted={isHighlighted}
                 showLabel={showLabel}
+                isModified={isModified}
+                modifiedTestID={`workspace-tab-modified-${tab.key}`}
                 tabLabelSkeletonStyle={tabLabelSkeletonStyle}
                 tabLabelStyle={tabLabelStyle}
               />
@@ -1130,10 +1148,13 @@ function ResolvedDesktopTabChip({
       workspaceId={normalizedWorkspaceId}
     >
       {(presentation) => {
-        const tooltipLabel =
+        const baseTooltipLabel =
           presentation.titleState === "loading"
             ? t("workspace.tabs.loadingAgentTitle")
             : presentation.label;
+        const tooltipLabel = item.isModified
+          ? `${baseTooltipLabel} — ${t("workspace.tabs.modified")}`
+          : baseTooltipLabel;
 
         return (
           <View style={styles.tabSlot}>
@@ -1148,6 +1169,7 @@ function ResolvedDesktopTabChip({
               showCloseButton={showCloseButton}
               isCloseHovered={item.isCloseHovered}
               isClosingTab={item.isClosingTab}
+              isModified={item.isModified}
               presentation={presentation}
               tooltipLabel={tooltipLabel}
               resolvedTab={resolvedTab}
@@ -1281,6 +1303,11 @@ const styles = StyleSheet.create((theme) => ({
   },
   tabLabelWithCloseButton: {
     paddingRight: 0,
+  },
+  tabModifiedIndicator: {
+    color: theme.colors.statusWarning,
+    fontSize: theme.fontSize.sm,
+    lineHeight: theme.fontSize.sm,
   },
   tabLabelActive: {
     color: theme.colors.foreground,

@@ -23,6 +23,7 @@ import {
   Eye,
   EyeOff,
   MoreVertical,
+  MessageSquarePlus,
   RotateCw,
 } from "lucide-react-native";
 import { getFileIconSvg } from "@/components/material-file-icons";
@@ -45,6 +46,9 @@ import { usePanelStore, type SortOption } from "@/stores/panel-store";
 import { formatTimeAgo } from "@/utils/time";
 import { buildAbsoluteExplorerPath } from "@/utils/explorer-paths";
 import { filterVisibleExplorerEntries, isHiddenExplorerPath } from "@/file-explorer/visibility";
+import { useWorkspaceFileDragSource } from "@/attachments/use-workspace-file-drag-source";
+import { addWorkspaceFileToFocusedChat } from "@/composer/add-workspace-file-to-chat";
+import { useToast } from "@/contexts/toast-context";
 
 const SORT_OPTIONS: { value: SortOption }[] = [
   { value: "name" },
@@ -71,6 +75,9 @@ interface TreeRowItemProps {
   onEntryPress: (entry: ExplorerEntry) => void;
   onCopyPath: (path: string) => void;
   onDownloadEntry: (entry: ExplorerEntry) => void;
+  onAddToChat: (entry: ExplorerEntry) => void;
+  serverId: string;
+  workspaceId: string;
 }
 
 function stopPressInPropagation(event: { stopPropagation?: () => void }) {
@@ -112,6 +119,9 @@ function TreeRowItem({
   onEntryPress,
   onCopyPath,
   onDownloadEntry,
+  onAddToChat,
+  serverId,
+  workspaceId,
 }: TreeRowItemProps) {
   const { theme } = useUnistyles();
   const { t } = useTranslation();
@@ -137,6 +147,13 @@ function TreeRowItem({
   const handleDownload = useCallback(() => {
     onDownloadEntry(entry);
   }, [onDownloadEntry, entry]);
+  const handleAddToChat = useCallback(() => onAddToChat(entry), [entry, onAddToChat]);
+  const dragSourceRef = useWorkspaceFileDragSource({
+    enabled: entry.kind === "file",
+    serverId,
+    workspaceId,
+    path: entry.path,
+  });
 
   const copyLeading = useMemo(
     () => <Copy size={14} color={theme.colors.foregroundMuted} />,
@@ -146,9 +163,13 @@ function TreeRowItem({
     () => <Download size={14} color={theme.colors.foregroundMuted} />,
     [theme.colors.foregroundMuted],
   );
+  const addLeading = useMemo(
+    () => <MessageSquarePlus size={14} color={theme.colors.foregroundMuted} />,
+    [theme.colors.foregroundMuted],
+  );
 
   return (
-    <Pressable onPress={handlePress} style={pressableStyle}>
+    <Pressable ref={dragSourceRef} onPress={handlePress} style={pressableStyle}>
       <TreeIndentGuides depth={depth} />
       <View style={styles.entryInfo}>
         <View style={styles.entryIcon}>
@@ -192,9 +213,14 @@ function TreeRowItem({
             {t("workspace.fileExplorer.context.copyPath")}
           </DropdownMenuItem>
           {entry.kind === "file" ? (
-            <DropdownMenuItem leading={downloadLeading} onSelect={handleDownload}>
-              {t("workspace.fileExplorer.context.download")}
-            </DropdownMenuItem>
+            <>
+              <DropdownMenuItem leading={addLeading} onSelect={handleAddToChat}>
+                {t("workspace.fileExplorer.context.addToChat")}
+              </DropdownMenuItem>
+              <DropdownMenuItem leading={downloadLeading} onSelect={handleDownload}>
+                {t("workspace.fileExplorer.context.download")}
+              </DropdownMenuItem>
+            </>
           ) : null}
         </DropdownMenuContent>
       </DropdownMenu>
@@ -221,7 +247,7 @@ export function FileExplorerPane({
   onOpenFile,
 }: FileExplorerPaneProps) {
   const { t } = useTranslation();
-
+  const toast = useToast();
   const daemons = useHosts();
   const daemonProfile = useMemo(
     () => daemons.find((daemon) => daemon.serverId === serverId),
@@ -361,6 +387,21 @@ export function FileExplorerPane({
     [daemonProfile, requestFileDownloadToken, serverId, startDownload, workspaceScopeId],
   );
 
+  const handleAddToChat = useCallback(
+    (entry: ExplorerEntry) => {
+      if (!workspaceScopeId || entry.kind !== "file") return;
+      void addWorkspaceFileToFocusedChat({
+        serverId,
+        workspaceId: workspaceScopeId,
+        attachment: { kind: "workspace_file", path: entry.path, selection: { kind: "whole_file" } },
+      }).then((added) => {
+        if (!added) toast.error(t("workspace.fileActions.focusChatFirst"));
+        return undefined;
+      });
+    },
+    [serverId, t, toast, workspaceScopeId],
+  );
+
   const handleSortCycle = useCallback(() => {
     const currentIndex = SORT_OPTIONS.findIndex((opt) => opt.value === sortOption);
     const nextIndex = (currentIndex + 1) % SORT_OPTIONS.length;
@@ -427,6 +468,9 @@ export function FileExplorerPane({
         onEntryPress={handleEntryPress}
         onCopyPath={handleCopyPath}
         onDownloadEntry={handleDownloadEntry}
+        onAddToChat={handleAddToChat}
+        serverId={serverId}
+        workspaceId={workspaceScopeId ?? ""}
       />
     ),
     [
@@ -434,8 +478,11 @@ export function FileExplorerPane({
       handleEntryPress,
       handleCopyPath,
       handleDownloadEntry,
+      handleAddToChat,
       isDirectoryLoading,
       selectedEntryPath,
+      serverId,
+      workspaceScopeId,
     ],
   );
 
@@ -858,6 +905,9 @@ function TreeRowDispatcher({
   onEntryPress,
   onCopyPath,
   onDownloadEntry,
+  onAddToChat,
+  serverId,
+  workspaceId,
 }: {
   info: ListRenderItemInfo<TreeRow>;
   expandedPaths: Set<string>;
@@ -866,6 +916,9 @@ function TreeRowDispatcher({
   onEntryPress: (entry: ExplorerEntry) => void;
   onCopyPath: (path: string) => void | Promise<void>;
   onDownloadEntry: (entry: ExplorerEntry) => void;
+  onAddToChat: (entry: ExplorerEntry) => void;
+  serverId: string;
+  workspaceId: string;
 }) {
   const entry = info.item.entry;
   const depth = info.item.depth;
@@ -884,6 +937,9 @@ function TreeRowDispatcher({
       onEntryPress={onEntryPress}
       onCopyPath={onCopyPath}
       onDownloadEntry={onDownloadEntry}
+      onAddToChat={onAddToChat}
+      serverId={serverId}
+      workspaceId={workspaceId}
     />
   );
 }

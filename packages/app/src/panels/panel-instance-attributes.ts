@@ -1,0 +1,121 @@
+import { useCallback, useEffect, useMemo, useSyncExternalStore } from "react";
+import { usePaneContext } from "@/panels/pane-context";
+
+export interface PanelInstanceIdentity {
+  serverId: string;
+  workspaceId: string;
+  tabId: string;
+}
+
+export interface PanelInstanceAttributes {
+  modified: boolean;
+  suspendPendingSave?: () => () => void;
+}
+
+const DEFAULT_ATTRIBUTES: PanelInstanceAttributes = { modified: false };
+let attributesByPanel = new Map<string, PanelInstanceAttributes>();
+const listenersByPanel = new Map<string, Set<() => void>>();
+const allListeners = new Set<() => void>();
+
+export function buildPanelInstanceKey(identity: PanelInstanceIdentity): string {
+  return `${identity.serverId}:${identity.workspaceId}:${identity.tabId}`;
+}
+
+export function getPanelInstanceAttributes(
+  identity: PanelInstanceIdentity,
+): PanelInstanceAttributes {
+  return attributesByPanel.get(buildPanelInstanceKey(identity)) ?? DEFAULT_ATTRIBUTES;
+}
+
+export function setPanelInstanceAttributes(
+  identity: PanelInstanceIdentity,
+  attributes: PanelInstanceAttributes,
+): void {
+  const key = buildPanelInstanceKey(identity);
+  const previous = attributesByPanel.get(key) ?? DEFAULT_ATTRIBUTES;
+  if (
+    previous.modified === attributes.modified &&
+    previous.suspendPendingSave === attributes.suspendPendingSave
+  ) {
+    return;
+  }
+  const next = new Map(attributesByPanel);
+  if (attributes.modified) next.set(key, attributes);
+  else next.delete(key);
+  attributesByPanel = next;
+  for (const listener of listenersByPanel.get(key) ?? []) listener();
+  for (const listener of allListeners) listener();
+}
+
+export function useModifiedPanelTabIds(input: {
+  serverId: string;
+  workspaceId: string;
+  tabIds: string[];
+}): Set<string> {
+  const attributes = useSyncExternalStore(
+    useCallback((listener: () => void) => {
+      allListeners.add(listener);
+      return () => allListeners.delete(listener);
+    }, []),
+    () => attributesByPanel,
+    () => attributesByPanel,
+  );
+  return useMemo(
+    () =>
+      new Set(
+        input.tabIds.filter(
+          (tabId) =>
+            attributes.get(
+              buildPanelInstanceKey({
+                serverId: input.serverId,
+                workspaceId: input.workspaceId,
+                tabId,
+              }),
+            )?.modified,
+        ),
+      ),
+    [attributes, input.serverId, input.tabIds, input.workspaceId],
+  );
+}
+
+export function subscribePanelInstanceAttributes(
+  identity: PanelInstanceIdentity,
+  listener: () => void,
+): () => void {
+  const key = buildPanelInstanceKey(identity);
+  const listeners = listenersByPanel.get(key) ?? new Set<() => void>();
+  listeners.add(listener);
+  listenersByPanel.set(key, listeners);
+  return () => {
+    listeners.delete(listener);
+    if (listeners.size === 0) listenersByPanel.delete(key);
+  };
+}
+
+export function usePanelInstanceAttributes({
+  serverId,
+  workspaceId,
+  tabId,
+}: PanelInstanceIdentity): PanelInstanceAttributes {
+  const subscribe = useCallback(
+    (listener: () => void) =>
+      subscribePanelInstanceAttributes({ serverId, workspaceId, tabId }, listener),
+    [serverId, tabId, workspaceId],
+  );
+  const getSnapshot = useCallback(
+    () => getPanelInstanceAttributes({ serverId, workspaceId, tabId }),
+    [serverId, tabId, workspaceId],
+  );
+  return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+}
+
+export function usePublishPanelInstanceAttributes(attributes: PanelInstanceAttributes): void {
+  const { serverId, workspaceId, tabId } = usePaneContext();
+  const modified = attributes.modified;
+  const suspendPendingSave = attributes.suspendPendingSave;
+  useEffect(() => {
+    const identity = { serverId, workspaceId, tabId };
+    setPanelInstanceAttributes(identity, { modified, suspendPendingSave });
+    return () => setPanelInstanceAttributes(identity, DEFAULT_ATTRIBUTES);
+  }, [modified, serverId, suspendPendingSave, tabId, workspaceId]);
+}

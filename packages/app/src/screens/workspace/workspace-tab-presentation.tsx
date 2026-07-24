@@ -171,6 +171,7 @@ interface WorkspaceTabOptionRowProps {
   presentation: WorkspaceTabPresentation;
   selected: boolean;
   active: boolean;
+  modified?: boolean;
   onPress: () => void;
   trailingAccessory?: ReactNode;
 }
@@ -179,6 +180,7 @@ export function WorkspaceTabOptionRow({
   presentation,
   selected,
   active,
+  modified = false,
   onPress,
   trailingAccessory,
 }: WorkspaceTabOptionRowProps): ReactElement {
@@ -206,6 +208,11 @@ export function WorkspaceTabOptionRow({
               ? t("workspace.tabs.loading")
               : presentation.label}
           </Text>
+          {modified ? (
+            <Text style={styles.optionModifiedIndicator} accessibilityElementsHidden>
+              •
+            </Text>
+          ) : null}
         </View>
       </Pressable>
       {selected ? (
@@ -293,10 +300,18 @@ const styles = StyleSheet.create((theme) => ({
   optionContent: {
     flex: 1,
     flexShrink: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[1],
   },
   optionLabel: {
+    flexShrink: 1,
     fontSize: theme.fontSize.sm,
     color: theme.colors.foreground,
+  },
+  optionModifiedIndicator: {
+    color: theme.colors.statusWarning,
+    fontSize: theme.fontSize.sm,
   },
   optionTrailingSlot: {
     width: 16,
