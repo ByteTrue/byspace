@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
 import { homedir } from "node:os";
+import { setImmediate as waitForImmediate, setTimeout as delay } from "node:timers/promises";
 import type { Logger } from "pino";
 import stripAnsi from "strip-ansi";
 
@@ -65,7 +66,10 @@ import {
 } from "./provider-config.js";
 export { formatOmpVersionSupport, resolveOmpDiagnosticPaths } from "./provider-config.js";
 import { OmpSubagentCardTracker, type OmpSubagentCardScheduler } from "./subagent-card-tracker.js";
+import { shouldDisplayOmpCustomMessage } from "./custom-message.js";
 import { getUserMessageText } from "./message-history.js";
+import { mapOmpAdvisorMessageToToolCall } from "./advisor-message.js";
+import { mapOmpSystemNoticeToToolCall } from "./system-notice.js";
 import { materializeProviderImage } from "../provider-image-output.js";
 import { OmpCliRuntime } from "./cli-runtime.js";
 import { listOmpImportableSessions, readOmpImportSessionConfig } from "./session-descriptor.js";
@@ -146,11 +150,22 @@ export interface OmpAgentClientOptions {
   runtime?: OmpRuntime;
   subagentCardScheduler?: OmpSubagentCardScheduler;
   providerIdleScheduler?: OmpProviderIdleScheduler;
+  noTurnScheduler?: OmpNoTurnScheduler;
 }
 
 export interface OmpProviderIdleScheduler {
   waitForRetry(): Promise<void>;
 }
+
+export interface OmpNoTurnScheduler {
+  waitForSettle(signal: AbortSignal): Promise<void>;
+}
+
+// COMPAT(ompDelayedLocalOnlyResult): OMP 17.0.5 can report a regular prompt as
+// local-only shortly before an extension-queued model turn starts. Added in
+// v0.2.0-beta.1; remove after January 20, 2027 once the minimum OMP version
+// guarantees prompt_result waits for queued extension work.
+const OMP_NO_TURN_SETTLE_MS = 5_000;
 
 interface OmpPromptPayload {
   text: string;
@@ -182,6 +197,7 @@ interface OmpAgentSessionOptions {
   logger: Logger;
   subagentCardScheduler?: OmpSubagentCardScheduler;
   providerIdleScheduler?: OmpProviderIdleScheduler;
+  noTurnScheduler?: OmpNoTurnScheduler;
   byspaceTools?: BySpaceToolCatalog;
   /**
    * When false (resumed sessions), replayed session events are dropped until
@@ -195,6 +211,14 @@ function createOmpProviderIdleScheduler(): OmpProviderIdleScheduler {
   return {
     waitForRetry: async () => {
       await new Promise((resolve) => setTimeout(resolve, 10));
+    },
+  };
+}
+
+function createOmpNoTurnScheduler(): OmpNoTurnScheduler {
+  return {
+    waitForSettle: async (signal) => {
+      await delay(OMP_NO_TURN_SETTLE_MS, undefined, { signal });
     },
   };
 }
@@ -509,7 +533,7 @@ function isOmpRequestAbortError(error: unknown): boolean {
 
 function resolveThinkingOptionId(
   cachedThinkingOptionId: string | null,
-  sessionThinkingLevel: OmpThinkingLevel,
+  sessionThinkingLevel: OmpThinkingLevel | undefined,
 ): OmpThinkingLevel | null {
   const currentThinking = cachedThinkingOptionId ?? sessionThinkingLevel;
   return normalizeOmpThinkingOption(currentThinking);
@@ -896,12 +920,15 @@ export class OmpAgentSession implements AgentSession {
   private activeTurnId: string | null = null;
   private activeClientMessageId: string | null = null;
   private activeAssistantMessageId: string | null = null;
+  private activeTurnTerminalAssistantMessage: OmpAgentMessage | null = null;
   private activeTurnStarted = false;
   private activeTurnHasUserMessage = false;
   private activeNoTurnPromptText: string | null = null;
   private readonly pendingNoTurnOutputs: Array<{ turnId: string; message: string }> = [];
   private activePromptRequestId: string | null = null;
+  private activePromptAgentInvoked: boolean | null = null;
   private readonly pendingPromptResults = new Map<string, boolean>();
+  private pendingNoTurnCompletionAbort: AbortController | null = null;
   private lastKnownThinkingOptionId: string | null;
   private outOfBandCompactionEmit: ((event: AgentStreamEvent) => void) | null = null;
   private outOfBandCompactionStarted = false;
@@ -913,6 +940,7 @@ export class OmpAgentSession implements AgentSession {
   private state: OmpSessionState;
   private readonly currentModeId: string | null;
   private readonly providerIdleScheduler: OmpProviderIdleScheduler;
+  private readonly noTurnScheduler: OmpNoTurnScheduler;
   private closed = false;
   private live: boolean;
   private readonly emittedUserMessageIds = new Set<string>();
@@ -926,6 +954,7 @@ export class OmpAgentSession implements AgentSession {
     this.byspaceTools = options.byspaceTools;
     this.live = options.live ?? true;
     this.providerIdleScheduler = options.providerIdleScheduler ?? createOmpProviderIdleScheduler();
+    this.noTurnScheduler = options.noTurnScheduler ?? createOmpNoTurnScheduler();
     this.subagentCardTracker = new OmpSubagentCardTracker({
       scheduler: options.subagentCardScheduler,
     });
@@ -984,6 +1013,7 @@ export class OmpAgentSession implements AgentSession {
     this.activeTurnId = turnId;
     this.activeClientMessageId = options?.clientMessageId ?? null;
     this.activeAssistantMessageId = null;
+    this.activeTurnTerminalAssistantMessage = null;
     this.activeTurnStarted = false;
     this.activeTurnHasUserMessage = false;
     this.activePromptRequestId = null;
@@ -1000,8 +1030,12 @@ export class OmpAgentSession implements AgentSession {
         if (ack.requestId) {
           this.pendingPromptResults.delete(ack.requestId);
         }
-        const agentInvoked = correlatedResult ?? ack.agentInvoked;
-        if (agentInvoked === false) {
+        this.activePromptAgentInvoked = correlatedResult ?? ack.agentInvoked ?? null;
+        if (correlatedResult === false) {
+          this.scheduleNoTurnPromptCompletion(turnId);
+          return;
+        }
+        if (correlatedResult !== true && ack.agentInvoked === false) {
           await this.completeNoTurnPrompt(turnId);
           return;
         }
@@ -1014,6 +1048,7 @@ export class OmpAgentSession implements AgentSession {
         this.activeTurnStarted = false;
         this.activeTurnHasUserMessage = false;
         this.activeAssistantMessageId = null;
+        this.activeTurnTerminalAssistantMessage = null;
         this.clearNoTurnBuffers();
         if (isOmpRequestAbortError(error)) {
           this.emit({
@@ -1149,6 +1184,7 @@ export class OmpAgentSession implements AgentSession {
       this.activeTurnStarted = false;
       this.activeTurnHasUserMessage = false;
       this.activeAssistantMessageId = null;
+      this.activeTurnTerminalAssistantMessage = null;
       this.clearNoTurnBuffers();
       this.emit({
         type: "turn_canceled",
@@ -1177,6 +1213,7 @@ export class OmpAgentSession implements AgentSession {
       return;
     }
     this.closed = true;
+    this.cancelNoTurnPromptCompletion();
     try {
       await this.runtimeSession.close();
     } finally {
@@ -1303,11 +1340,40 @@ export class OmpAgentSession implements AgentSession {
     return this.activeTurnId ?? undefined;
   }
 
+  private scheduleNoTurnPromptCompletion(turnId: string): void {
+    this.cancelNoTurnPromptCompletion();
+    const abort = new AbortController();
+    this.pendingNoTurnCompletionAbort = abort;
+    void this.noTurnScheduler
+      .waitForSettle(abort.signal)
+      .then(async () => {
+        if (this.pendingNoTurnCompletionAbort !== abort) {
+          return undefined;
+        }
+        this.pendingNoTurnCompletionAbort = null;
+        return await this.completeNoTurnPrompt(turnId);
+      })
+      .catch((error: unknown) => {
+        if (!abort.signal.aborted) {
+          this.logger.debug({ err: error }, "OMP local-only settle wait failed");
+        }
+      });
+  }
+
+  private cancelNoTurnPromptCompletion(): void {
+    this.pendingNoTurnCompletionAbort?.abort();
+    this.pendingNoTurnCompletionAbort = null;
+  }
+
   private async completeNoTurnPrompt(turnId: string): Promise<void> {
-    await new Promise<void>((resolve) => {
-      setImmediate(resolve);
-    });
-    if (this.activeTurnId !== turnId || this.activeTurnStarted || this.activeTurnHasUserMessage) {
+    await waitForImmediate();
+    if (
+      this.closed ||
+      this.activeTurnId !== turnId ||
+      this.activeTurnStarted ||
+      this.activePromptAgentInvoked === true ||
+      this.activeTurnHasUserMessage
+    ) {
       return;
     }
     this.emitBufferedNoTurnOutputs(turnId);
@@ -1315,8 +1381,10 @@ export class OmpAgentSession implements AgentSession {
   }
 
   private clearNoTurnBuffers(): void {
+    this.cancelNoTurnPromptCompletion();
     this.activeNoTurnPromptText = null;
     this.activePromptRequestId = null;
+    this.activePromptAgentInvoked = null;
     this.pendingNoTurnOutputs.splice(0, this.pendingNoTurnOutputs.length);
   }
 
@@ -1730,12 +1798,13 @@ export class OmpAgentSession implements AgentSession {
           ? event.agentInvoked
           : undefined;
       if (requestId && agentInvoked !== undefined) {
-        if (
-          requestId === this.activePromptRequestId &&
-          agentInvoked === false &&
-          this.activeTurnId
-        ) {
-          void this.completeNoTurnPrompt(this.activeTurnId);
+        if (requestId === this.activePromptRequestId && this.activeTurnId) {
+          this.activePromptAgentInvoked = agentInvoked;
+          if (agentInvoked === false) {
+            this.scheduleNoTurnPromptCompletion(this.activeTurnId);
+          } else {
+            this.cancelNoTurnPromptCompletion();
+          }
         } else if (this.activePromptRequestId === null) {
           this.pendingPromptResults.set(requestId, agentInvoked);
         }
@@ -1771,6 +1840,7 @@ export class OmpAgentSession implements AgentSession {
     this.activeClientMessageId = null;
     this.activeTurnStarted = false;
     this.activeTurnHasUserMessage = false;
+    this.activeTurnTerminalAssistantMessage = null;
     this.clearNoTurnBuffers();
     this.emit({
       type: "turn_failed",
@@ -1855,17 +1925,20 @@ export class OmpAgentSession implements AgentSession {
           },
         });
         return;
-      case "agent_end":
-        // OMP can end an internal extension-notice cycle before it starts the
-        // model turn for the same prompt. That cycle has no assistant message
-        // and is not the foreground turn's terminal event.
-        if (!(event.messages ?? []).some((message) => message.role === "assistant")) {
+      case "agent_end": {
+        const messages = event.messages ?? [];
+        let terminalMessages: OmpAgentMessage[] | null = null;
+        if (messages.some((message) => message.role === "assistant")) {
+          terminalMessages = messages;
+        } else if (this.activeTurnTerminalAssistantMessage) {
+          terminalMessages = [this.activeTurnTerminalAssistantMessage];
+        }
+        if (!terminalMessages) {
           return;
         }
-        // A state request is processed after OMP's RPC loop becomes promptable,
-        // so do not advertise BySpace idle until it reports that transition.
-        void this.completeTurnAfterProviderIdle(turnId, event.messages ?? []);
+        void this.completeTurnAfterProviderIdle(turnId, terminalMessages);
         return;
+      }
       default:
         return;
     }
@@ -1981,17 +2054,25 @@ export class OmpAgentSession implements AgentSession {
   ): void {
     if (event.message.role === "assistant") {
       this.activeAssistantMessageId = null;
+      if (turnId) {
+        this.activeTurnTerminalAssistantMessage = event.message;
+      }
       return;
     }
     if (event.message.role === "custom") {
-      const text = getUserMessageText(event.message.content);
-      if (text) {
-        this.emit({
-          type: "timeline",
-          provider: this.provider,
-          turnId,
-          item: { type: "assistant_message", text },
-        });
+      if (shouldDisplayOmpCustomMessage(event.message)) {
+        const text = getUserMessageText(event.message.content);
+        if (text) {
+          const item =
+            mapOmpAdvisorMessageToToolCall(event.message, text) ??
+            mapOmpSystemNoticeToToolCall(text);
+          this.emit({
+            type: "timeline",
+            provider: this.provider,
+            turnId,
+            item: item ?? { type: "assistant_message", text },
+          });
+        }
       }
       if (!this.activeTurnHasUserMessage) {
         this.completeTurn(turnId, []);
@@ -2094,6 +2175,7 @@ export class OmpAgentSession implements AgentSession {
     this.activeTurnId = null;
     this.activeClientMessageId = null;
     this.activeAssistantMessageId = null;
+    this.activeTurnTerminalAssistantMessage = null;
     this.activeTurnStarted = false;
     this.activeTurnHasUserMessage = false;
     this.clearNoTurnBuffers();
@@ -2119,7 +2201,7 @@ export class OmpAgentSession implements AgentSession {
     turnId: string | undefined,
     messages: OmpAgentMessage[],
   ): Promise<void> {
-    while (!this.closed && this.activeTurnId === turnId) {
+    while (!this.closed && this.activeTurnStarted && this.currentTurnIdForEvent() === turnId) {
       try {
         const state = await this.runtimeSession.getState();
         this.state = state;
@@ -2168,6 +2250,7 @@ export class OmpAgentClient implements AgentClient {
   private readonly modelRoleParams: OmpModelRoleParams;
   private readonly subagentCardScheduler?: OmpSubagentCardScheduler;
   private readonly providerIdleScheduler?: OmpProviderIdleScheduler;
+  private readonly noTurnScheduler?: OmpNoTurnScheduler;
   private readonly runtime: OmpRuntime;
 
   constructor(options: OmpAgentClientOptions) {
@@ -2189,6 +2272,7 @@ export class OmpAgentClient implements AgentClient {
     this.modelRoleParams = modelRoleParams;
     this.subagentCardScheduler = options.subagentCardScheduler;
     this.providerIdleScheduler = options.providerIdleScheduler;
+    this.noTurnScheduler = options.noTurnScheduler;
     this.runtime = options.runtime ?? createRuntime(options.logger, runtimeSettings);
   }
 
@@ -2229,6 +2313,7 @@ export class OmpAgentClient implements AgentClient {
         logger: this.logger,
         subagentCardScheduler: this.subagentCardScheduler,
         providerIdleScheduler: this.providerIdleScheduler,
+        noTurnScheduler: this.noTurnScheduler,
         byspaceTools: launchContext?.byspaceTools,
       });
     } catch (error) {
@@ -2269,6 +2354,7 @@ export class OmpAgentClient implements AgentClient {
         logger: this.logger,
         subagentCardScheduler: this.subagentCardScheduler,
         providerIdleScheduler: this.providerIdleScheduler,
+        noTurnScheduler: this.noTurnScheduler,
         byspaceTools: launchContext?.byspaceTools,
         live: false,
       });

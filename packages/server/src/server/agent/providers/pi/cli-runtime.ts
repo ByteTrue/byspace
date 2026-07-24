@@ -2,7 +2,11 @@ import type { ChildProcessWithoutNullStreams } from "node:child_process";
 import type { Logger } from "pino";
 
 import type { ProviderRuntimeSettings } from "../../provider-launch-config.js";
-import { JsonlRpcProcess, type JsonlRpcLaunch } from "../jsonl-rpc-process.js";
+import {
+  JSONL_RPC_NO_TIMEOUT,
+  JsonlRpcProcess,
+  type JsonlRpcLaunch,
+} from "../jsonl-rpc-process.js";
 import {
   buildPiLaunch,
   type PiRuntime,
@@ -112,10 +116,13 @@ class PiCliRuntimeSession implements PiRuntimeSession {
   }
 
   async compact(customInstructions?: string): Promise<void> {
-    await this.request({
-      type: "compact",
-      ...(customInstructions ? { customInstructions } : {}),
-    });
+    await this.request(
+      {
+        type: "compact",
+        ...(customInstructions ? { customInstructions } : {}),
+      },
+      JSONL_RPC_NO_TIMEOUT,
+    );
   }
 
   async setAutoCompaction(enabled: boolean): Promise<void> {
@@ -135,7 +142,7 @@ class PiCliRuntimeSession implements PiRuntimeSession {
     return data.messages ?? [];
   }
 
-  async getAvailableModels(timeoutMs?: number): Promise<PiModel[]> {
+  async getAvailableModels(timeoutMs?: number | null): Promise<PiModel[]> {
     const data = (await this.request({ type: "get_available_models" }, timeoutMs)) as {
       models?: PiModel[];
     };
@@ -208,7 +215,7 @@ class PiCliRuntimeSession implements PiRuntimeSession {
     await this.process.close(new Error("Pi RPC session is closed"));
   }
 
-  request(command: PiRpcCommand, timeoutMs?: number): Promise<unknown> {
+  request(command: PiRpcCommand, timeoutMs?: number | null): Promise<unknown> {
     return this.process.request(command, timeoutMs);
   }
 

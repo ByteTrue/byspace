@@ -119,7 +119,7 @@ describe("ProviderSnapshotManager public surface", () => {
       const claude = snapshot.find((entry) => entry.provider === "claude");
       expect(claude?.status).toBe("loading");
       expect(claude?.label).toBe("Claude");
-      expect(claude?.defaultModeId).toBe("default");
+      expect(claude?.defaultModeId).toBe("auto");
     } finally {
       manager.destroy();
     }

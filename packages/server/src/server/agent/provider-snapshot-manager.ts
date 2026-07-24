@@ -803,6 +803,8 @@ export class ProviderSnapshotManager {
         enabled: true,
         models: catalog.models,
         modes: catalog.modes,
+        defaultModeId:
+          catalog.defaultModeId === undefined ? definition.defaultModeId : catalog.defaultModeId,
         fetchedAt: new Date().toISOString(),
       });
     } catch (error) {

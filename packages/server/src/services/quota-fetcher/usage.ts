@@ -2,6 +2,7 @@ import { z } from "zod";
 import type {
   ProviderUsage,
   ProviderUsageBalance,
+  ProviderUsageTone,
   ProviderUsageWindow,
 } from "../../server/messages.js";
 import type { ProviderApiFetch } from "./provider.js";
@@ -67,12 +68,27 @@ export function windowFromUsedPct(input: {
   return window;
 }
 
+export function toneFromUsedPct(usedPct: number | null | undefined): ProviderUsageTone {
+  if (typeof usedPct !== "number") return "default";
+  if (usedPct > 90) return "danger";
+  if (usedPct >= 70) return "warning";
+  return "ok";
+}
+
 export function balanceToneFromRemaining(
   remaining: number | null | undefined,
 ): ProviderUsageBalance["tone"] {
   if (typeof remaining !== "number") return "default";
   if (remaining <= 0) return "danger";
   return "ok";
+}
+
+export function usedPctOf(
+  used: number | null | undefined,
+  limit: number | null | undefined,
+): number | null {
+  if (typeof used !== "number" || typeof limit !== "number" || limit <= 0) return null;
+  return (used / limit) * 100;
 }
 
 export function toIsoStringOrNull(timestampMs: number): string | null {

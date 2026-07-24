@@ -19,7 +19,6 @@ export interface PiRuntimeLaunch {
   modeId?: string;
   session?: string;
   noSession?: boolean;
-  systemPrompt?: string;
   mcpConfigPath?: string;
   extensionPaths?: string[];
   extraArgs?: string[];
@@ -34,7 +33,6 @@ export interface PiStartSessionInput {
   modeId?: string;
   session?: string;
   noSession?: boolean;
-  systemPrompt?: string;
   mcpConfigPath?: string;
   extensionPaths?: string[];
   extraArgs?: string[];
@@ -51,12 +49,15 @@ export interface PiRuntimeSession {
   abort(): Promise<void>;
   getState(): Promise<PiSessionState>;
   getMessages(): Promise<PiAgentMessage[]>;
-  getAvailableModels(timeoutMs?: number): Promise<PiModel[]>;
+  getAvailableModels(timeoutMs?: number | null): Promise<PiModel[]>;
   setModel(provider: string, modelId: string): Promise<PiModel>;
   setThinkingLevel(level: string): Promise<void>;
   getSessionStats(): Promise<PiSessionStats>;
   getCommands(): Promise<PiRpcSlashCommand[]>;
-  request(command: { type: string; [key: string]: unknown }, timeoutMs?: number): Promise<unknown>;
+  request(
+    command: { type: string; [key: string]: unknown },
+    timeoutMs?: number | null,
+  ): Promise<unknown>;
   sendRawFrame(frame: object & { type: string }): void;
   respondToExtensionUiRequest(
     id: string,
@@ -82,8 +83,7 @@ export function buildPiLaunch(input: {
   const argv = [...command];
 
   const protocolMode = input.session.protocolMode ?? "rpc";
-  const systemPrompt = input.session.systemPrompt?.trim();
-  appendPiLaunchArgs(argv, input.session, protocolMode, systemPrompt);
+  appendPiLaunchArgs(argv, input.session, protocolMode);
 
   return {
     cwd: input.session.cwd,
@@ -101,7 +101,6 @@ export function buildPiLaunch(input: {
     modeId: input.session.modeId,
     session: input.session.session,
     noSession: input.session.noSession,
-    systemPrompt,
     mcpConfigPath: input.session.mcpConfigPath,
     extensionPaths: input.session.extensionPaths,
     extraArgs: input.session.extraArgs,
@@ -112,7 +111,6 @@ function appendPiLaunchArgs(
   argv: string[],
   session: PiStartSessionInput,
   protocolMode: "rpc" | "rpc-ui",
-  systemPrompt: string | undefined,
 ): void {
   if (!hasModeFlag(argv)) {
     argv.push("--mode", protocolMode);
@@ -130,9 +128,6 @@ function appendPiLaunchArgs(
     argv.push("--no-session");
   } else if (session.session) {
     argv.push("--session", session.session);
-  }
-  if (systemPrompt) {
-    argv.push("--append-system-prompt", systemPrompt);
   }
   if (session.mcpConfigPath) {
     argv.push("--mcp-config", session.mcpConfigPath);

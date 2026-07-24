@@ -7,9 +7,10 @@ import type { ProviderUsage, ProviderUsageBalance } from "../../../server/messag
 import type { ProviderApiFetch, ProviderUsageFetcher } from "../provider.js";
 import {
   ApiNumberSchema,
-  balanceToneFromRemaining,
   fetchProviderApi,
+  toneFromUsedPct,
   unavailableUsage,
+  usedPctOf,
 } from "../usage.js";
 
 const GrokUsageResponseSchema = z.object({
@@ -89,7 +90,7 @@ export class GrokQuotaProvider implements ProviderUsageFetcher {
         remaining,
         limit: monthlyLimit,
         unit: "credits",
-        tone: balanceToneFromRemaining(remaining),
+        tone: toneFromUsedPct(usedPctOf(creditUsage, monthlyLimit)),
       });
     }
 

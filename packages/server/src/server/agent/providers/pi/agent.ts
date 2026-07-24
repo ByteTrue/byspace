@@ -92,6 +92,7 @@ const PI_CATALOG_REQUEST_TIMEOUT_MS = 120_000;
 const BYSPACE_PI_TREE_EXTENSION_COMMAND = "byspace_tree";
 const BYSPACE_PI_CAPTURE_EXTENSION_COMMAND = "byspace_capture_entries";
 const BYSPACE_PI_ENTRY_CAPTURE_MARKER = "BYSPACE_ENTRY_CAPTURE";
+const BYSPACE_PI_SUBMITTED_USER_ENTRY_MARKER = "BYSPACE_SUBMITTED_USER_ENTRY";
 const BYSPACE_PI_COMMAND_RESULT_MARKER = "BYSPACE_COMMAND_RESULT";
 const DEFAULT_PI_EXTENSION_RESULT_TIMEOUT_MS = 30_000;
 const QUESTION_RESPONSE_HEADER = "Response";
@@ -570,10 +571,6 @@ function buildResumeStartInput(input: {
     session: input.sessionFile,
     model: input.resumeConfig.model,
     thinkingOptionId: normalizePiThinkingOption(input.resumeConfig.thinkingOptionId) ?? undefined,
-    systemPrompt: composeSystemPromptParts(
-      input.resumeConfig.config.systemPrompt,
-      input.resumeConfig.config.daemonAppendSystemPrompt,
-    ),
     mcpConfigPath: input.mcpConfig?.path,
     extensionPaths: input.byspaceExtension ? [input.byspaceExtension.path] : undefined,
   };
@@ -665,7 +662,7 @@ function createPiMcpConfigFile(
   };
 }
 
-function createPiBySpaceExtensionFile(): PiTempFile {
+function createPiBySpaceExtensionFile(systemPrompt?: string): PiTempFile {
   const dir = mkdtempSync(join(tmpdir(), "byspace-pi-extension-"));
   const filePath = join(dir, "byspace-integration.mjs");
   writeFileSync(
@@ -688,15 +685,19 @@ function createPiBySpaceExtensionFile(): PiTempFile {
 	    .join("\\n\\n");
 	}
 
+	function toCapturedUserEntry(entry) {
+	  return {
+	    id: entry.id,
+	    parentId: entry.parentId ?? null,
+	    text: readTextContent(entry.message.content),
+	  };
+	}
+
 	function getCapturedUserEntries(ctx) {
 	  return ctx.sessionManager
 	    .getEntries()
 	    .filter((entry) => entry.type === "message" && entry.message?.role === "user")
-	    .map((entry) => ({
-	      id: entry.id,
-	      parentId: entry.parentId ?? null,
-	      text: readTextContent(entry.message.content),
-	    }));
+	    .map(toCapturedUserEntry);
 	}
 
 	function emitEntryCapture(ctx, reason, requestId) {
@@ -715,11 +716,47 @@ function createPiBySpaceExtensionFile(): PiTempFile {
 	}
 
 	export default function byspaceIntegration(pi) {
+	  const submittedUserMessages = [];
+	  function emitSubmittedUserEntries(ctx) {
+	    const entries = ctx.sessionManager.getEntries();
+	    for (let index = 0; index < submittedUserMessages.length; index += 1) {
+	      const message = submittedUserMessages[index];
+	      const entry = entries.find(
+	        (candidate) => candidate.type === "message" && candidate.message === message,
+	      );
+	      if (!entry) continue;
+	      submittedUserMessages.splice(index, 1);
+	      index -= 1;
+	      ctx.ui.notify(
+	        "${BYSPACE_PI_SUBMITTED_USER_ENTRY_MARKER} " +
+	          JSON.stringify({ entry: toCapturedUserEntry(entry) }),
+	        "info",
+	      );
+	    }
+	  }
+
+	  ${
+      systemPrompt
+        ? `pi.on("before_agent_start", async (event) => ({
+	    systemPrompt: event.systemPrompt + "\\n\\n" + ${JSON.stringify(systemPrompt)},
+	  }));`
+        : ""
+    }
+
+	  pi.on("message_end", async (event) => {
+	    if (event.message?.role === "user") submittedUserMessages.push(event.message);
+	  });
+
+	  pi.on("message_start", async (event, ctx) => {
+	    if (event.message?.role === "assistant") emitSubmittedUserEntries(ctx);
+	  });
+
 	  pi.on("session_start", async (_event, ctx) => {
 	    emitEntryCapture(ctx, "session_start");
 	  });
 
 	  pi.on("turn_end", async (_event, ctx) => {
+	    emitSubmittedUserEntries(ctx);
 	    emitEntryCapture(ctx, "turn_end");
 	  });
 
@@ -1857,6 +1894,35 @@ export class PiRpcAgentSession implements AgentSession {
     }
   }
 
+  private handleSubmittedUserEntryMarker(message: string): boolean {
+    const payload = parseExtensionMarkerPayload(message, BYSPACE_PI_SUBMITTED_USER_ENTRY_MARKER);
+    if (!payload) return false;
+    const [entry] = parseCapturedEntries([payload.entry]);
+    if (!entry) return true;
+
+    const pendingIndex = this.pendingUserMessages.findIndex(
+      (candidate) => candidate.text === entry.text,
+    );
+    const pending =
+      pendingIndex >= 0 ? this.pendingUserMessages.splice(pendingIndex, 1)[0] : undefined;
+    this.capturedUserEntriesById.set(entry.id, entry);
+    this.seenUserEntryIds.add(entry.id);
+    if (pending) {
+      this.emit({
+        type: "timeline",
+        provider: this.provider,
+        turnId: pending.turnId,
+        item: {
+          type: "user_message",
+          text: pending.text,
+          messageId: entry.id,
+          ...(pending.clientMessageId ? { clientMessageId: pending.clientMessageId } : {}),
+        },
+      });
+    }
+    return true;
+  }
+
   private handleEntryCaptureMarker(message: string): boolean {
     const payload = parseExtensionMarkerPayload(message, BYSPACE_PI_ENTRY_CAPTURE_MARKER);
     if (!payload) {
@@ -1892,7 +1958,11 @@ export class PiRpcAgentSession implements AgentSession {
   ): void {
     const message = optionalString(event.message);
     if (event.method === "notify" && message) {
-      if (this.handleEntryCaptureMarker(message) || this.handleCommandResultMarker(message)) {
+      if (
+        this.handleSubmittedUserEntryMarker(message) ||
+        this.handleEntryCaptureMarker(message) ||
+        this.handleCommandResultMarker(message)
+      ) {
         return;
       }
       this.bufferNoTurnOutput(message);
@@ -2232,15 +2302,6 @@ export class PiRpcAgentSession implements AgentSession {
       turnId,
       ...(this.activeClientMessageId ? { clientMessageId: this.activeClientMessageId } : {}),
     });
-    void this.requestEntryCapture("message_end").catch((error: unknown) => {
-      const message = error instanceof Error ? error.message : String(error);
-      this.emit({
-        type: "turn_failed",
-        provider: this.provider,
-        turnId,
-        error: message,
-      });
-    });
   }
 
   private emitToolCallEvent(
@@ -2354,7 +2415,9 @@ export class PiRpcAgentClient implements AgentClient {
       ...launchContext?.env,
     };
     const mcpConfig = await this.prepareMcpConfig(config.cwd, config.mcpServers, mcpEnv);
-    const byspaceExtension = createPiBySpaceExtensionFile();
+    const byspaceExtension = createPiBySpaceExtensionFile(
+      composeSystemPromptParts(config.systemPrompt, config.daemonAppendSystemPrompt),
+    );
     let runtimeSession: PiRuntimeSession;
     try {
       runtimeSession = await this.runtime.startSession({
@@ -2363,10 +2426,6 @@ export class PiRpcAgentClient implements AgentClient {
         thinkingOptionId:
           normalizePiThinkingOption(config.thinkingOptionId) ?? DEFAULT_PI_THINKING_LEVEL,
         noSession: config.internal === true,
-        systemPrompt: composeSystemPromptParts(
-          config.systemPrompt,
-          config.daemonAppendSystemPrompt,
-        ),
         env: launchContext?.env,
         mcpConfigPath: mcpConfig?.path,
         extensionPaths: byspaceExtension ? [byspaceExtension.path] : undefined,
@@ -2415,7 +2474,12 @@ export class PiRpcAgentClient implements AgentClient {
       resumeConfig.config.mcpServers,
       mcpEnv,
     );
-    const byspaceExtension = createPiBySpaceExtensionFile();
+    const byspaceExtension = createPiBySpaceExtensionFile(
+      composeSystemPromptParts(
+        resumeConfig.config.systemPrompt,
+        resumeConfig.config.daemonAppendSystemPrompt,
+      ),
+    );
     let runtimeSession: PiRuntimeSession;
     try {
       runtimeSession = await this.runtime.startSession(

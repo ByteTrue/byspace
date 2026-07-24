@@ -1,6 +1,7 @@
 import { mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { setImmediate as waitForImmediate } from "node:timers/promises";
 import pino from "pino";
 
 import type {
@@ -11,7 +12,12 @@ import type {
   AgentTimelineItem,
 } from "../../../agent-sdk-types.js";
 import type { BySpaceToolCatalog } from "../../../tools/types.js";
-import { OmpAgentClient, OmpAgentSession, type OmpProviderIdleScheduler } from "../agent.js";
+import {
+  OmpAgentClient,
+  OmpAgentSession,
+  type OmpNoTurnScheduler,
+  type OmpProviderIdleScheduler,
+} from "../agent.js";
 import type { OmpRpcSlashCommand } from "../rpc-types.js";
 import { FakeOmp } from "./fake-omp.js";
 
@@ -59,11 +65,17 @@ export class OmpHarness {
   private readonly events: AgentStreamEvent[] = [];
   private session: OmpAgentSession | null = null;
 
-  constructor(options: { providerIdleScheduler?: OmpProviderIdleScheduler } = {}) {
+  constructor(
+    options: {
+      providerIdleScheduler?: OmpProviderIdleScheduler;
+      noTurnScheduler?: OmpNoTurnScheduler;
+    } = {},
+  ) {
     this.client = new OmpAgentClient({
       logger: pino({ level: "silent" }),
       runtime: this.omp,
       providerIdleScheduler: options.providerIdleScheduler,
+      noTurnScheduler: options.noTurnScheduler,
     });
   }
 
@@ -155,16 +167,41 @@ export class OmpHarness {
     return await run;
   }
 
-  async runPromptAfterExtensionNotice(input: string, output: string): Promise<unknown> {
+  async startPromptWithEmptyAgentEnd(
+    input: string,
+    output: string,
+  ): Promise<{ completion: Promise<unknown> }> {
+    const session = this.requireSession();
+    const promptStarted = this.omp.latestSession().nextPrompt();
+    const completion = session.run(input);
+    await promptStarted;
+    const runtime = this.omp.latestSession();
+    runtime.beginTurn();
+    runtime.acceptPrompt(input, "user-1");
+    runtime.streamAssistantText(output);
+    runtime.finishTurnWithEmptyAgentEnd();
+    return { completion };
+  }
+
+  async runPromptAfterExtensionNotice(
+    input: string,
+    output: string,
+    display?: boolean,
+  ): Promise<unknown> {
     const session = this.requireSession();
     const promptStarted = this.omp.latestSession().nextPrompt();
     const run = session.run(input);
     await promptStarted;
     const runtime = this.omp.latestSession();
+    const message = {
+      role: "custom" as const,
+      content: "extension inventory changed",
+      ...(display === undefined ? {} : { display }),
+    };
     runtime.beginTurn();
     runtime.acceptPrompt(input, "user-1");
-    runtime.acceptCustomMessage("extension inventory changed");
-    runtime.finishTurn({ role: "custom", content: "extension inventory changed" });
+    runtime.emit({ type: "message_end", message });
+    runtime.finishTurn(message);
     runtime.beginTurn();
     runtime.streamAssistantText(output);
     runtime.finishTurn();
@@ -215,6 +252,55 @@ export class OmpHarness {
     runtime.streamAssistantText(output);
     runtime.finishTurn();
     return await run;
+  }
+
+  async runPromptWithoutTurn(input: string): Promise<unknown> {
+    const session = this.requireSession();
+    this.omp.latestSession().promptAck = { agentInvoked: false };
+    return await session.run(input);
+  }
+
+  async startPromptWithFalseLocalOnlyResult(
+    input: string,
+  ): Promise<{ completed: () => boolean; completion: Promise<unknown> }> {
+    const session = this.requireSession();
+    const runtime = this.omp.latestSession();
+    runtime.promptAck = { requestId: "prompt-local-only" };
+    const promptStarted = runtime.nextPrompt();
+    const completion = session.run(input);
+    let isCompleted = false;
+    void completion.finally(() => {
+      isCompleted = true;
+    });
+    await promptStarted;
+    await waitForImmediate();
+    runtime.emit({ type: "prompt_result", id: "prompt-local-only", agentInvoked: false });
+    return { completed: () => isCompleted, completion };
+  }
+
+  async runPromptAfterDelayedFalseLocalOnlyResult(
+    input: string,
+    output: string,
+  ): Promise<{ completedBeforeTurn: boolean; result: unknown }> {
+    const session = this.requireSession();
+    const runtime = this.omp.latestSession();
+    runtime.promptAck = { requestId: "prompt-1" };
+    const promptStarted = runtime.nextPrompt();
+    const run = session.run(input);
+    let completed = false;
+    void run.finally(() => {
+      completed = true;
+    });
+    await promptStarted;
+    await waitForImmediate();
+    runtime.emit({ type: "prompt_result", id: "prompt-1", agentInvoked: false });
+    await waitForImmediate();
+    const completedBeforeTurn = completed;
+    runtime.acceptPrompt(input, "user-1");
+    runtime.beginTurn();
+    runtime.streamAssistantText(output);
+    runtime.finishTurn();
+    return { completedBeforeTurn, result: await run };
   }
 
   timeline(): AgentTimelineItem[] {
