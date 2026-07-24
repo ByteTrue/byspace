@@ -10,16 +10,14 @@ import {
   type CheckoutCommitsQueryResult,
 } from "@/git/use-commits-query";
 import { ThemedChevron, chevronColorMapping } from "@/git/themed-chevron";
+import { normalizeBranchOptionName } from "@/utils/branch-suggestions";
 import { CommitRow } from "./commit-row";
-import { dotStyles } from "./shared";
 
 interface CommitsSectionProps {
   serverId: string;
   cwd: string;
   onCommitPress: (sha: string) => void;
 }
-
-const SKELETON_ROW_KEYS = ["commit-skeleton-1", "commit-skeleton-2", "commit-skeleton-3"];
 
 function CommitsSectionSkeleton() {
   const { t } = useTranslation();
@@ -30,15 +28,13 @@ function CommitsSectionSkeleton() {
       style={styles.skeleton}
       testID="commits-section-skeleton"
     >
-      {SKELETON_ROW_KEYS.map((key) => (
-        <View key={key} style={styles.skeletonRow}>
-          <View style={styles.skeletonDot} />
-          <View style={styles.skeletonSha} />
-          <View style={styles.skeletonSubject} />
-          <View style={styles.skeletonTimestamp} />
-          <View style={styles.skeletonCaret} />
-        </View>
-      ))}
+      <View style={styles.skeletonRow}>
+        <View style={styles.skeletonDot} />
+        <View style={styles.skeletonSha} />
+        <View style={styles.skeletonSubject} />
+        <View style={styles.skeletonTimestamp} />
+        <View style={styles.skeletonCaret} />
+      </View>
     </View>
   );
 }
@@ -48,7 +44,7 @@ function CommitsSectionContent({
   now,
   onCommitPress,
 }: {
-  query: Exclude<CheckoutCommitsQueryResult, { status: "unsupported" }>;
+  query: Exclude<CheckoutCommitsQueryResult, { status: "update_host" }>;
   now: Date;
   onCommitPress: (sha: string) => void;
 }) {
@@ -64,17 +60,27 @@ function CommitsSectionContent({
     return <CommitsSectionSkeleton />;
   }
   const workspaceCommits = selectWorkspaceCommits(query.data.commits);
+  const baseRef = normalizeBranchOptionName(query.data.baseRef) ?? t("workspace.git.diff.base");
   if (workspaceCommits.length === 0) {
     return (
-      <Text style={styles.emptyRow} testID="commits-section-empty">
-        {t("workspace.git.diff.commits.empty")}
-      </Text>
+      <View style={styles.noWorkspaceCommitsRow} testID="commits-section-no-workspace-commits">
+        <Text style={styles.noWorkspaceCommitsText}>
+          {t("workspace.git.diff.commits.noneAhead", { baseRef })}
+        </Text>
+      </View>
     );
   }
   return (
     <View style={styles.list}>
-      {workspaceCommits.map((commit) => (
-        <CommitRow key={commit.sha} commit={commit} now={now} onCommitPress={onCommitPress} />
+      {workspaceCommits.map((commit, index) => (
+        <CommitRow
+          key={commit.sha}
+          commit={commit}
+          isFirst={index === 0}
+          isLast={index === workspaceCommits.length - 1}
+          now={now}
+          onCommitPress={onCommitPress}
+        />
       ))}
     </View>
   );
@@ -113,8 +119,12 @@ export function CommitsSection({ serverId, cwd, onCommitPress }: CommitsSectionP
     [collapsed],
   );
 
-  if (query.status === "unsupported") {
-    return null;
+  if (query.status === "update_host") {
+    return (
+      <View style={styles.container} testID="commits-section-update-host">
+        <Text style={styles.updateHostRow}>{t("workspace.git.diff.commits.updateHost")}</Text>
+      </View>
+    );
   }
   const commitCount =
     query.status === "loaded" ? selectWorkspaceCommits(query.data.commits).length : null;
@@ -143,12 +153,6 @@ export function CommitsSection({ serverId, cwd, onCommitPress }: CommitsSectionP
             {commitCount}
           </Text>
         )}
-        <View style={styles.legend}>
-          <View style={dotStyles.dotLocal} />
-          <Text style={styles.legendText}>{t("workspace.git.diff.commits.legendLocal")}</Text>
-          <View style={dotStyles.legendDotRemote} />
-          <Text style={styles.legendText}>{t("workspace.git.diff.commits.legendRemote")}</Text>
-        </View>
       </Pressable>
       {collapsed ? null : (
         <CommitsSectionContent query={query} now={displayNow} onCommitPress={onCommitPress} />
@@ -183,7 +187,6 @@ const styles = StyleSheet.create((theme) => ({
   },
   title: {
     fontSize: theme.fontSize.sm,
-    fontWeight: theme.fontWeight.medium,
     color: theme.colors.foreground,
   },
   count: {
@@ -194,24 +197,25 @@ const styles = StyleSheet.create((theme) => ({
   countSpacer: {
     flex: 1,
   },
-  legend: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: theme.spacing[1],
-    flexShrink: 0,
-  },
-  legendText: {
-    fontSize: theme.fontSize.xs,
-    color: theme.colors.foregroundMuted,
-  },
   list: {
     paddingBottom: theme.spacing[1],
   },
-  emptyRow: {
-    fontSize: theme.fontSize.xs,
-    color: theme.colors.foregroundMuted,
+  noWorkspaceCommitsRow: {
+    flexDirection: "row",
+    alignItems: "center",
     paddingLeft: theme.spacing[2],
     paddingRight: theme.spacing[3],
+    paddingTop: theme.spacing[1],
+    paddingBottom: theme.spacing[2],
+  },
+  noWorkspaceCommitsText: {
+    fontSize: theme.fontSize.xs,
+    color: theme.colors.foregroundMuted,
+  },
+  updateHostRow: {
+    fontSize: theme.fontSize.xs,
+    color: theme.colors.foregroundMuted,
+    paddingHorizontal: theme.spacing[2],
     paddingVertical: theme.spacing[2],
   },
   errorRow: {

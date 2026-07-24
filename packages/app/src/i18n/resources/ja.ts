@@ -62,6 +62,8 @@ export const ja: TranslationResources = {
       newAgent: "新しいエージェント",
       addProject: "プロジェクトを追加",
       home: "ホーム",
+      modelGroupLabel: "モデル",
+      modelSearchKeywords: "モデルを切り替え モデルを変更 モデルを設定 モデルを選択",
     },
   },
   composer: {
@@ -716,6 +718,8 @@ export const ja: TranslationResources = {
         },
       },
       diff: {
+        openChangesTab: "変更タブを開く",
+        closeChangesTab: "変更タブを閉じる",
         binaryFile: "バイナリファイル",
         tooLarge: "差分が大きすぎて表示できません",
         unified: "ユニファイド差分",
@@ -751,14 +755,14 @@ export const ja: TranslationResources = {
         deletedFile: "削除済み",
         commits: {
           title: "コミット",
-          legendLocal: "ローカル",
-          legendRemote: "リモート",
-          countLabel: "ベースより先のコミット数: {{count}}",
+          updateHost: "コミット履歴を表示するにはホストを更新してください。",
+          countLabel: "ワークスペースのコミット数: {{count}}",
+          noneAhead: "{{baseRef}} より先のコミットはまだありません",
           fileDiffEmpty: "表示する変更はありません",
           fileDiffError: "ファイル差分の読み込みに失敗しました",
           loading: "コミットを読み込み中…",
           loadError: "コミットの読み込みに失敗しました",
-          empty: "ベースより先のコミットはありません",
+          empty: "コミットはまだありません",
         },
       },
       openInEditor: {
@@ -891,6 +895,8 @@ export const ja: TranslationResources = {
       actions: {
         menu: "ワークスペースアクション",
         newWorkspace: "新しいワークスペース",
+        showMore: "さらに表示",
+        showLess: "表示を減らす",
         createWorkspaceFor: "{{projectName}}の新しいワークスペースを作成",
         copyPath: "パスをコピー",
         copyBranchName: "ブランチ名をコピー",
@@ -1291,6 +1297,8 @@ export const ja: TranslationResources = {
       changesLabel: "変更",
       changesSubtitle: "作業ツリーの差分",
       commitSubtitle: "コミット差分",
+      uncommittedSubtitle: "未コミットの変更",
+      baseSubtitle: "{{baseRef}} との比較",
       directoryMissing: "ワークスペースディレクトリが見つかりません。",
       empty: "変更はありません",
       loadError: "差分の読み込みに失敗しました",
@@ -1504,6 +1512,7 @@ export const ja: TranslationResources = {
     },
     shortcuts: {
       dialogTitle: "ショートカット",
+      searchPlaceholder: "ショートカットを検索",
       unavailableOnMobile: "キーボードショートカットはデスクトップでのみ利用できます",
       capturePrompt: "ショートカットを押してください...",
       actions: {

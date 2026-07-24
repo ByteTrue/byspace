@@ -56,10 +56,10 @@ describe("buildNotificationRoute", () => {
         agentId: "agent-1",
         workspaceId: "ws-main",
       }),
-    ).toBe("/h/srv-1/agent/agent-1");
+    ).toBe("/h/srv-1/workspace/ws-main?open=agent%3Aagent-1");
   });
 
-  it("routes directly to server-scoped agent path when both ids are present", () => {
+  it("resolves an older agent notification without a workspace id", () => {
     expect(buildNotificationRoute({ serverId: "srv-1", agentId: "agent-1" })).toBe(
       "/h/srv-1/agent/agent-1",
     );
@@ -98,8 +98,9 @@ describe("buildNotificationRoute", () => {
     expect(
       buildNotificationRoute({
         serverId: "srv/with/slash",
+        workspaceId: "workspace-1",
         agentId: "agent with space",
       }),
-    ).toBe("/h/srv%2Fwith%2Fslash/agent/agent%20with%20space");
+    ).toBe("/h/srv%2Fwith%2Fslash/workspace/workspace-1?open=agent%3Aagent%20with%20space");
   });
 });

@@ -30,6 +30,19 @@ describe("selectWorkspaceCommits", () => {
 });
 
 describe("resolveCheckoutCommitsQueryResult", () => {
+  it("requires a host update when commit base classification is unavailable", () => {
+    expect(
+      resolveCheckoutCommitsQueryResult({
+        enabled: true,
+        capabilityPresent: false,
+        canFetch: true,
+        data: undefined,
+        isPlaceholderData: false,
+        error: null,
+      }),
+    ).toEqual({ status: "update_host" });
+  });
+
   it("stays idle while the collapsed section has never loaded", () => {
     expect(
       resolveCheckoutCommitsQueryResult({

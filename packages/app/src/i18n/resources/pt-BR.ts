@@ -62,6 +62,8 @@ export const ptBR: TranslationResources = {
       newAgent: "Novo agente",
       addProject: "Adicionar projeto",
       home: "Início",
+      modelGroupLabel: "Modelo",
+      modelSearchKeywords: "trocar modelo mudar modelo definir modelo selecionar modelo",
     },
   },
   composer: {
@@ -727,6 +729,8 @@ export const ptBR: TranslationResources = {
         },
       },
       diff: {
+        openChangesTab: "Abrir a aba Alterações",
+        closeChangesTab: "Fechar a aba Alterações",
         binaryFile: "Arquivo binário",
         tooLarge: "Diff grande demais para exibir",
         unified: "Diff unificado",
@@ -762,14 +766,14 @@ export const ptBR: TranslationResources = {
         deletedFile: "Excluído",
         commits: {
           title: "Commits",
-          legendLocal: "local",
-          legendRemote: "no remoto",
-          countLabel: "{{count}} commits à frente da base",
+          updateHost: "Atualize o host para ver o histórico de commits.",
+          countLabel: "{{count}} commits do espaço de trabalho",
+          noneAhead: "Ainda não há commits à frente de {{baseRef}}",
           fileDiffEmpty: "Nenhuma alteração para exibir",
           fileDiffError: "Falha ao carregar diff do arquivo",
           loading: "Carregando commits…",
           loadError: "Falha ao carregar commits",
-          empty: "Nenhum commit à frente da base",
+          empty: "Ainda não há commits",
         },
       },
       openInEditor: {
@@ -902,6 +906,8 @@ export const ptBR: TranslationResources = {
       actions: {
         menu: "Ações do workspace",
         newWorkspace: "Novo workspace",
+        showMore: "Mostrar mais",
+        showLess: "Mostrar menos",
         createWorkspaceFor: "Criar um novo workspace para {{projectName}}",
         copyPath: "Copiar caminho",
         copyBranchName: "Copiar nome da branch",
@@ -1302,6 +1308,8 @@ export const ptBR: TranslationResources = {
       changesLabel: "Alterações",
       changesSubtitle: "Diff da árvore de trabalho",
       commitSubtitle: "Diff do commit",
+      uncommittedSubtitle: "Alterações não commitadas",
+      baseSubtitle: "Comparado com {{baseRef}}",
       directoryMissing: "Diretório do workspace não encontrado.",
       empty: "Nenhuma alteração",
       loadError: "Falha ao carregar diff",
@@ -1517,6 +1525,7 @@ export const ptBR: TranslationResources = {
     },
     shortcuts: {
       dialogTitle: "Atalhos",
+      searchPlaceholder: "Pesquisar atalhos",
       unavailableOnMobile: "Atalhos de teclado estão disponíveis apenas no desktop",
       capturePrompt: "Pressione o atalho...",
       actions: {

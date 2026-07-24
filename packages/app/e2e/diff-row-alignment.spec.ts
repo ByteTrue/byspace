@@ -253,6 +253,27 @@ test("changes diff switches between flat and tree file lists", async ({ page }) 
   await expectFlatFileList(page);
 });
 
+test("working diff tab focus navigation expands and locates the requested file", async ({
+  page,
+}) => {
+  const workspace = await createWorkspaceWithMountedTabDiff();
+  const serverId = getServerId();
+  await useUnwrappedDiffLines(page);
+  await seedFocusedWorkingDiffTab(page, {
+    serverId,
+    workspaceId: workspace.id,
+    focusPath: "src/use-mounted-tab-set.ts",
+  });
+
+  await page.setViewportSize({ width: 1400, height: 900 });
+  await page.goto(buildHostWorkspaceRoute(serverId, workspace.id));
+  await waitForWorkspaceTabsVisible(page);
+
+  await expect(page.getByTestId("workspace-tab-working_diff")).toBeVisible();
+  await expect(page.getByTestId("diff-file-0-body")).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText("function createInitialMountedTabIds")).toBeVisible();
+});
+
 test("changes diff keeps unwrapped gutter and code rows aligned after code size changes", async ({
   page,
 }) => {
@@ -270,6 +291,44 @@ test("changes diff keeps unwrapped gutter and code rows aligned after code size 
   await expectVisibleDiffRowsShareTypography(page);
   await expectVisibleDiffRowsAligned(page);
 });
+
+async function seedFocusedWorkingDiffTab(
+  page: Page,
+  input: { serverId: string; workspaceId: string; focusPath: string },
+): Promise<void> {
+  await page.addInitScript(({ serverId, workspaceId, focusPath }) => {
+    const workspaceKey = `${serverId}:${workspaceId}`;
+    localStorage.setItem(
+      "workspace-layout-state",
+      JSON.stringify({
+        state: {
+          layoutByWorkspace: {
+            [workspaceKey]: {
+              root: {
+                kind: "pane",
+                pane: {
+                  id: "main",
+                  tabs: [
+                    {
+                      tabId: "working_diff",
+                      target: { kind: "working_diff", focusPath, focusRequestId: 1 },
+                      createdAt: 1,
+                    },
+                  ],
+                  tabIds: ["working_diff"],
+                  focusedTabId: "working_diff",
+                },
+              },
+              focusedPaneId: "main",
+            },
+          },
+          splitSizesByWorkspace: {},
+        },
+        version: 1,
+      }),
+    );
+  }, input);
+}
 
 async function useCodeFont(page: Page, codeFontSize: number): Promise<void> {
   await page.addInitScript(

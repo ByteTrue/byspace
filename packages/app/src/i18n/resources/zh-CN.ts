@@ -62,6 +62,8 @@ export const zhCN: TranslationResources = {
       newAgent: "新建 Agent",
       addProject: "添加 project",
       home: "首页",
+      modelGroupLabel: "模型",
+      modelSearchKeywords: "切换模型 更改模型 设置模型 选择模型",
     },
   },
   composer: {
@@ -697,6 +699,8 @@ export const zhCN: TranslationResources = {
         },
       },
       diff: {
+        openChangesTab: "打开“更改”标签页",
+        closeChangesTab: "关闭“更改”标签页",
         binaryFile: "二进制文件",
         tooLarge: "Diff 过大，无法显示",
         unified: "Unified diff",
@@ -732,14 +736,14 @@ export const zhCN: TranslationResources = {
         deletedFile: "已删除",
         commits: {
           title: "提交",
-          legendLocal: "本地",
-          legendRemote: "已推送",
-          countLabel: "领先基线 {{count}} 个提交",
+          updateHost: "更新 Host 以查看提交历史。",
+          countLabel: "{{count}} 个工作区提交",
+          noneAhead: "尚无领先于 {{baseRef}} 的提交",
           fileDiffEmpty: "没有可显示的更改",
           fileDiffError: "加载文件差异失败",
           loading: "正在加载提交…",
           loadError: "加载提交失败",
-          empty: "没有领先基线的提交",
+          empty: "暂无提交",
         },
       },
       openInEditor: {
@@ -870,6 +874,8 @@ export const zhCN: TranslationResources = {
       actions: {
         menu: "Workspace 操作",
         newWorkspace: "新建 workspace",
+        showMore: "显示更多",
+        showLess: "收起",
         createWorkspaceFor: "为 {{projectName}} 新建 workspace",
         copyPath: "复制路径",
         copyBranchName: "复制分支名称",
@@ -1263,6 +1269,8 @@ export const zhCN: TranslationResources = {
       changesLabel: "更改",
       changesSubtitle: "工作区差异",
       commitSubtitle: "提交差异",
+      uncommittedSubtitle: "未提交的更改",
+      baseSubtitle: "与 {{baseRef}} 比较",
       directoryMissing: "未找到 workspace 目录。",
       empty: "没有更改",
       loadError: "加载差异失败",
@@ -1476,6 +1484,7 @@ export const zhCN: TranslationResources = {
     },
     shortcuts: {
       dialogTitle: "快捷键",
+      searchPlaceholder: "搜索快捷键",
       unavailableOnMobile: "键盘快捷键仅在桌面端可用",
       capturePrompt: "按下快捷键...",
       actions: {

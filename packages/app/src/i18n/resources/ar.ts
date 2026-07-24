@@ -62,6 +62,8 @@ export const ar: TranslationResources = {
       newAgent: "وكيل جديد",
       addProject: "إضافة مشروع",
       home: "بيت",
+      modelGroupLabel: "النموذج",
+      modelSearchKeywords: "تبديل النموذج تغيير النموذج تعيين النموذج اختيار النموذج",
     },
   },
   composer: {
@@ -705,6 +707,8 @@ export const ar: TranslationResources = {
         },
       },
       diff: {
+        openChangesTab: "فتح علامة تبويب التغييرات",
+        closeChangesTab: "إغلاق علامة تبويب التغييرات",
         binaryFile: "ملف ثنائي",
         tooLarge: "الفرق كبير جدًا بحيث لا يمكن عرضه",
         unified: "الفرق الموحدة",
@@ -740,14 +744,14 @@ export const ar: TranslationResources = {
         deletedFile: "تم الحذف",
         commits: {
           title: "الإيداعات",
-          legendLocal: "محلي",
-          legendRemote: "على المستودع البعيد",
-          countLabel: "{{count}} إيداعات قبل الأساس",
+          updateHost: "حدّث المضيف لعرض سجل الالتزامات.",
+          countLabel: "{{count}} من إيداعات مساحة العمل",
+          noneAhead: "لا توجد إيداعات متقدمة على {{baseRef}} بعد",
           fileDiffEmpty: "لا توجد تغييرات لعرضها",
           fileDiffError: "تعذّر تحميل فروق الملف",
           loading: "جارٍ تحميل الإيداعات…",
           loadError: "تعذّر تحميل الإيداعات",
-          empty: "لا توجد إيداعات قبل الأساس",
+          empty: "لا توجد إيداعات بعد",
         },
       },
       openInEditor: {
@@ -880,6 +884,8 @@ export const ar: TranslationResources = {
       actions: {
         menu: "إجراءات Workspace",
         newWorkspace: "مساحة عمل جديدة",
+        showMore: "عرض المزيد",
+        showLess: "عرض أقل",
         createWorkspaceFor: "قم بإنشاء مساحة عمل جديدة لـ{{projectName}}",
         copyPath: "نسخ المسار",
         copyBranchName: "انسخ اسم الفرع",
@@ -1277,6 +1283,8 @@ export const ar: TranslationResources = {
       changesLabel: "التغييرات",
       changesSubtitle: "فروقات شجرة العمل",
       commitSubtitle: "فروقات الالتزام",
+      uncommittedSubtitle: "تغييرات غير ملتزم بها",
+      baseSubtitle: "مقارنة مع {{baseRef}}",
       directoryMissing: "لم يتم العثور على دليل Workspace.",
       empty: "لا توجد تغييرات",
       loadError: "فشل تحميل الفروقات",
@@ -1491,6 +1499,7 @@ export const ar: TranslationResources = {
     },
     shortcuts: {
       dialogTitle: "الاختصارات",
+      searchPlaceholder: "البحث في الاختصارات",
       unavailableOnMobile: "اختصارات لوحة المفاتيح متاحة فقط على سطح المكتب",
       capturePrompt: "اضغط على الاختصار...",
       actions: {

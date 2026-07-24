@@ -63,6 +63,9 @@ export const fr: TranslationResources = {
       newAgent: "Nouvel agent",
       addProject: "Ajouter un projet",
       home: "Maison",
+      modelGroupLabel: "Modèle",
+      modelSearchKeywords:
+        "changer de modèle modifier le modèle définir le modèle sélectionner le modèle",
     },
   },
   composer: {
@@ -734,6 +737,8 @@ export const fr: TranslationResources = {
         },
       },
       diff: {
+        openChangesTab: "Ouvrir l'onglet Modifications",
+        closeChangesTab: "Fermer l'onglet Modifications",
         binaryFile: "Fichier binaire",
         tooLarge: "Diff trop grand pour être affiché",
         unified: "Différentiel unifié",
@@ -769,14 +774,14 @@ export const fr: TranslationResources = {
         deletedFile: "Supprimé",
         commits: {
           title: "Commits",
-          legendLocal: "local",
-          legendRemote: "sur le distant",
-          countLabel: "{{count}} commits en avance sur la base",
+          updateHost: "Mettez à jour l’hôte pour afficher l’historique des commits.",
+          countLabel: "{{count}} commits de l’espace de travail",
+          noneAhead: "Aucun commit en avance sur {{baseRef}} pour le moment",
           fileDiffEmpty: "Aucune modification à afficher",
           fileDiffError: "Échec du chargement du diff du fichier",
           loading: "Chargement des commits…",
           loadError: "Échec du chargement des commits",
-          empty: "Aucun commit en avance sur la base",
+          empty: "Aucun commit pour le moment",
         },
       },
       openInEditor: {
@@ -909,6 +914,8 @@ export const fr: TranslationResources = {
       actions: {
         menu: "ActionsWorkspace",
         newWorkspace: "Nouvel espace de travail",
+        showMore: "Afficher plus",
+        showLess: "Afficher moins",
         createWorkspaceFor: "Créer un nouvel espace de travail pour{{projectName}}",
         copyPath: "Copier le chemin",
         copyBranchName: "Copier le nom de la branche",
@@ -1310,6 +1317,8 @@ export const fr: TranslationResources = {
       changesLabel: "Modifications",
       changesSubtitle: "Différences de l'arbre de travail",
       commitSubtitle: "Différences du commit",
+      uncommittedSubtitle: "Modifications non validées",
+      baseSubtitle: "Comparé à {{baseRef}}",
       directoryMissing: "Répertoire Workspace introuvable.",
       empty: "Aucune modification",
       loadError: "Échec du chargement des différences",
@@ -1525,6 +1534,7 @@ export const fr: TranslationResources = {
     },
     shortcuts: {
       dialogTitle: "Raccourcis",
+      searchPlaceholder: "Rechercher des raccourcis",
       unavailableOnMobile: "Les raccourcis clavier ne sont disponibles que sur le bureau",
       capturePrompt: "Appuyez sur le raccourci...",
       actions: {

@@ -1,4 +1,5 @@
 import type { CheckoutCommit } from "@bytetrue/byspace-protocol/messages";
+import invariant from "tiny-invariant";
 import { useFetchQuery } from "@/data/query";
 import { checkoutCommitsQueryKey } from "@/git/query-keys";
 import { useHostRuntimeClient, useHostRuntimeIsConnected } from "@/runtime/host-runtime";
@@ -14,17 +15,23 @@ interface UseCheckoutCommitsQueryOptions {
   enabled?: boolean;
 }
 
-export interface CheckoutCommitsData {
-  baseRef: string | null;
-  commits: CheckoutCommit[];
+export interface ClassifiedCheckoutCommit extends CheckoutCommit {
+  isOnBase: boolean;
 }
 
-export function selectWorkspaceCommits(commits: CheckoutCommit[]): CheckoutCommit[] {
+export interface CheckoutCommitsData {
+  baseRef: string | null;
+  commits: ClassifiedCheckoutCommit[];
+}
+
+export function selectWorkspaceCommits(
+  commits: readonly ClassifiedCheckoutCommit[],
+): ClassifiedCheckoutCommit[] {
   return commits.filter((commit) => !commit.isOnBase);
 }
 
 export type CheckoutCommitsQueryResult =
-  | { status: "unsupported" }
+  | { status: "update_host" }
   | { status: "idle" }
   | { status: "connecting" }
   | { status: "loading" }
@@ -49,7 +56,7 @@ export function resolveCheckoutCommitsQueryResult({
   error,
 }: ResolveCheckoutCommitsQueryResultInput): CheckoutCommitsQueryResult {
   if (!capabilityPresent) {
-    return { status: "unsupported" };
+    return { status: "update_host" };
   }
   if (data && !isPlaceholderData) {
     return { status: "loaded", data };
@@ -89,7 +96,12 @@ export function useCheckoutCommitsQuery({
       if (!client) {
         throw new Error("Host disconnected");
       }
-      return client.listCheckoutCommits(cwd);
+      const data = await client.listCheckoutCommits(cwd);
+      const commits = data.commits.map((commit) => {
+        invariant(commit.isOnBase !== undefined, "Host omitted commit base classification");
+        return { ...commit, isOnBase: commit.isOnBase };
+      });
+      return { baseRef: data.baseRef, commits };
     },
     enabled: queryEnabled,
     staleTimeMs: CHECKOUT_COMMITS_STALE_TIME,

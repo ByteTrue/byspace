@@ -44,6 +44,32 @@ describe("provider subagent tab identity", () => {
   });
 });
 
+describe("working diff tab identity", () => {
+  const target = {
+    kind: "working_diff" as const,
+    focusPath: "src/example.ts",
+    focusRequestId: 1,
+  };
+
+  it("normalizes file focus navigation", () => {
+    expect(normalizeWorkspaceTabTarget(target)).toEqual(target);
+    expect(
+      normalizeWorkspaceTabTarget({
+        kind: "working_diff",
+        focusPath: " src\\example.ts ",
+        focusRequestId: 1.9,
+      }),
+    ).toEqual(target);
+  });
+
+  it("keeps one tab identity while treating focus requests as navigation", () => {
+    const nextFocus = { ...target, focusRequestId: 2 };
+    expect(workspaceTabTargetsEqual(target, nextFocus)).toBe(false);
+    expect(buildDeterministicWorkspaceTabId(target)).toBe("working_diff");
+    expect(buildDeterministicWorkspaceTabId(nextFocus)).toBe("working_diff");
+  });
+});
+
 describe("commit diff tab identity", () => {
   it("keys a commit diff tab by its sha", () => {
     expect(buildDeterministicWorkspaceTabId({ kind: "commit_diff", sha: "abc123" })).toBe(

@@ -50,6 +50,7 @@ import {
   List,
   ListChevronsDownUp,
   ListChevronsUpDown,
+  PanelRight,
   Pilcrow,
   RefreshCcw,
   RotateCw,
@@ -1258,6 +1259,9 @@ interface GitDiffPaneProps {
   workspaceId?: string | null;
   cwd: string;
   enabled?: boolean;
+  asWorkspaceTab?: boolean;
+  focusPath?: string;
+  focusRequestId?: number;
 }
 
 type PressableStyleFn = (
@@ -1283,6 +1287,7 @@ const ThemedGitMerge = withUnistyles(GitMerge);
 const ThemedRefreshCcw = withUnistyles(RefreshCcw);
 const ThemedArchive = withUnistyles(Archive);
 const ThemedChevronDown = withUnistyles(ChevronDown);
+const ThemedPanelRight = withUnistyles(PanelRight);
 
 const DIFF_OPTIONS_WHITESPACE_ICON = (
   <ThemedPilcrow size={14} uniProps={foregroundMutedIconColorMapping} />
@@ -1781,6 +1786,8 @@ function DiffBodyContent({
 interface SharedDiffViewProps {
   files: ParsedDiffFile[];
   onAddToChat?: (path: string) => void;
+  focusPath?: string;
+  focusRequestId?: number;
   displayPreferences: {
     layout: "unified" | "split";
     wrapLines: boolean;
@@ -1807,6 +1814,8 @@ export function SharedDiffView({
   displayPreferences,
   mode,
   onAddToChat,
+  focusPath,
+  focusRequestId,
 }: SharedDiffViewProps) {
   const { layout, wrapLines, codeFontSize, monoFontFamily } = displayPreferences;
   const diffBodyLineHeight = Math.round(codeFontSize * 1.5);
@@ -2055,6 +2064,45 @@ export function SharedDiffView({
     },
     [computeItemOffset, effectiveCollapsedFolders, mode],
   );
+
+  const handledFocusRequestRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!focusPath) {
+      return;
+    }
+    const focusRequest = `${focusRequestId ?? 0}:${focusPath}`;
+    if (handledFocusRequestRef.current === focusRequest) {
+      return;
+    }
+    if (mode.kind === "working_tree") {
+      const visibleFolders = Array.from(effectiveCollapsedFolders).filter(
+        (folderPath) => !focusPath.startsWith(`${folderPath}/`),
+      );
+      if (visibleFolders.length !== effectiveCollapsedFolders.size) {
+        mode.onCollapsedFoldersChange(visibleFolders);
+        return;
+      }
+    }
+    const targetOffset = computeItemOffset(
+      (item) => item.type === "header" && item.file.path === focusPath,
+    );
+    if (targetOffset === null) {
+      return;
+    }
+    if (mode.kind === "working_tree" && !expandedPaths.has(focusPath)) {
+      mode.onExpandedPathsChange([...expandedPaths, focusPath]);
+      return;
+    }
+    diffListRef.current?.scrollToOffset({ offset: targetOffset, animated: false });
+    handledFocusRequestRef.current = focusRequest;
+  }, [
+    computeItemOffset,
+    effectiveCollapsedFolders,
+    expandedPaths,
+    focusPath,
+    focusRequestId,
+    mode,
+  ]);
 
   const renderFlatItem = useCallback(
     ({ item }: { item: DiffFlatItem }) => {
@@ -2336,7 +2384,15 @@ function shouldEnableCheckoutDiff(input: { paneEnabled: boolean; isGit: boolean 
   return input.paneEnabled && input.isGit;
 }
 
-export function GitDiffPane({ serverId, workspaceId, cwd, enabled }: GitDiffPaneProps) {
+export function GitDiffPane({
+  serverId,
+  workspaceId,
+  cwd,
+  enabled,
+  asWorkspaceTab = false,
+  focusPath,
+  focusRequestId,
+}: GitDiffPaneProps) {
   const { settings: appSettings } = useAppSettings();
   const { t } = useTranslation();
   const isMobile = useIsCompactFormFactor();
@@ -2391,6 +2447,12 @@ export function GitDiffPane({ serverId, workspaceId, cwd, enabled }: GitDiffPane
     },
     [commitDiffPersistenceKey, openWorkspaceTabFocused],
   );
+  const handleOpenChangesTab = useCallback(() => {
+    if (!commitDiffPersistenceKey) {
+      return;
+    }
+    openWorkspaceTabFocused(commitDiffPersistenceKey, { kind: "working_diff" });
+  }, [commitDiffPersistenceKey, openWorkspaceTabFocused]);
   const refreshSupported = useSessionStore(
     (s) => s.sessions[serverId]?.serverInfo?.features?.checkoutRefresh === true,
   );
@@ -2708,6 +2770,8 @@ export function GitDiffPane({ serverId, workspaceId, cwd, enabled }: GitDiffPane
       <SharedDiffView
         files={files}
         onAddToChat={handleAddFileToChat}
+        focusPath={focusPath}
+        focusRequestId={focusRequestId}
         displayPreferences={sharedDisplayPreferences}
         mode={workingTreeMode}
       />
@@ -2726,7 +2790,27 @@ export function GitDiffPane({ serverId, workspaceId, cwd, enabled }: GitDiffPane
             isGitCheckout={isGit}
             testID="changes-branch-switcher"
           />
-          {isMobile ? <GitActionsSplitButton gitActions={gitActions} /> : null}
+          <View style={styles.headerActions}>
+            {!isMobile && !asWorkspaceTab ? (
+              <Tooltip delayDuration={300}>
+                <TooltipTrigger asChild>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={t("workspace.git.diff.openChangesTab")}
+                    testID="changes-open-workspace-tab"
+                    onPress={handleOpenChangesTab}
+                    style={styles.expandAllButton}
+                  >
+                    <ThemedPanelRight size={14} uniProps={foregroundMutedIconColorMapping} />
+                  </Pressable>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">
+                  <Text style={styles.tooltipText}>{t("workspace.git.diff.openChangesTab")}</Text>
+                </TooltipContent>
+              </Tooltip>
+            ) : null}
+            {isMobile ? <GitActionsSplitButton gitActions={gitActions} /> : null}
+          </View>
         </View>
       ) : null}
 
@@ -2819,6 +2903,11 @@ const styles = StyleSheet.create((theme) => ({
     paddingVertical: theme.spacing[2],
     borderBottomWidth: 1,
     borderBottomColor: theme.colors.border,
+  },
+  headerActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[2],
   },
   diffStatusContainer: {
     height: WORKSPACE_SECONDARY_HEADER_HEIGHT,

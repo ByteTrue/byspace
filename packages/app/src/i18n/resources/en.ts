@@ -60,6 +60,8 @@ export const en = {
       newAgent: "New agent",
       addProject: "Add project",
       home: "Home",
+      modelGroupLabel: "Model",
+      modelSearchKeywords: "switch model change model set model select model",
     },
   },
   composer: {
@@ -715,6 +717,8 @@ export const en = {
         },
       },
       diff: {
+        openChangesTab: "Open Changes tab",
+        closeChangesTab: "Close Changes tab",
         binaryFile: "Binary file",
         tooLarge: "Diff too large to display",
         unified: "Unified diff",
@@ -750,14 +754,14 @@ export const en = {
         deletedFile: "Deleted",
         commits: {
           title: "Commits",
-          legendLocal: "local",
-          legendRemote: "on remote",
-          countLabel: "{{count}} commits ahead of base",
+          updateHost: "Update the host to view commit history.",
+          countLabel: "{{count}} workspace commits",
+          noneAhead: "No commits ahead of {{baseRef}} yet",
           fileDiffEmpty: "No changes to display",
           fileDiffError: "Failed to load file diff",
           loading: "Loading commits…",
           loadError: "Failed to load commits",
-          empty: "No commits ahead of base",
+          empty: "No commits yet",
         },
       },
       openInEditor: {
@@ -890,6 +894,8 @@ export const en = {
       actions: {
         menu: "Workspace actions",
         newWorkspace: "New workspace",
+        showMore: "Show more",
+        showLess: "Show less",
         createWorkspaceFor: "Create a new workspace for {{projectName}}",
         copyPath: "Copy path",
         copyBranchName: "Copy branch name",
@@ -1288,6 +1294,8 @@ export const en = {
       changesLabel: "Changes",
       changesSubtitle: "Working tree diff",
       commitSubtitle: "Commit diff",
+      uncommittedSubtitle: "Uncommitted changes",
+      baseSubtitle: "Compared with {{baseRef}}",
       directoryMissing: "Workspace directory not found.",
       empty: "No changes",
       loadError: "Failed to load diff",
@@ -1501,6 +1509,7 @@ export const en = {
     },
     shortcuts: {
       dialogTitle: "Shortcuts",
+      searchPlaceholder: "Search shortcuts",
       unavailableOnMobile: "Keyboard shortcuts are only available on desktop",
       capturePrompt: "Press shortcut...",
       actions: {

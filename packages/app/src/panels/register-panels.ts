@@ -1,5 +1,6 @@
 import { agentPanelRegistration } from "@/panels/agent-panel";
 import { commitDiffPanelRegistration } from "@/panels/commit-diff-panel";
+import { workingDiffPanelRegistration } from "@/panels/working-diff-panel";
 import { draftPanelRegistration } from "@/panels/draft-panel";
 import { filePanelRegistration } from "@/panels/file-panel";
 import { registerPanel } from "@/panels/panel-registry";
@@ -20,5 +21,6 @@ export function ensurePanelsRegistered(): void {
   registerPanel(terminalPanelRegistration);
   registerPanel(filePanelRegistration);
   registerPanel(commitDiffPanelRegistration);
+  registerPanel(workingDiffPanelRegistration);
   panelsRegistered = true;
 }

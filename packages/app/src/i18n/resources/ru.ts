@@ -62,6 +62,8 @@ export const ru: TranslationResources = {
       newAgent: "Новый агент",
       addProject: "Добавить проект",
       home: "Дом",
+      modelGroupLabel: "Модель",
+      modelSearchKeywords: "сменить модель изменить модель выбрать модель установить модель",
     },
   },
   composer: {
@@ -726,6 +728,8 @@ export const ru: TranslationResources = {
         },
       },
       diff: {
+        openChangesTab: "Открыть вкладку «Изменения»",
+        closeChangesTab: "Закрыть вкладку «Изменения»",
         binaryFile: "Бинарный файл",
         tooLarge: "Разница слишком велика для отображения",
         unified: "Единый дифференциал",
@@ -761,14 +765,14 @@ export const ru: TranslationResources = {
         deletedFile: "Удалено",
         commits: {
           title: "Коммиты",
-          legendLocal: "локально",
-          legendRemote: "на удалённом",
-          countLabel: "{{count}} коммитов впереди базы",
+          updateHost: "Обновите хост, чтобы просмотреть историю коммитов.",
+          countLabel: "{{count}} коммитов рабочего пространства",
+          noneAhead: "Коммитов впереди {{baseRef}} пока нет",
           fileDiffEmpty: "Нет изменений для отображения",
           fileDiffError: "Не удалось загрузить различия файла",
           loading: "Загрузка коммитов…",
           loadError: "Не удалось загрузить коммиты",
-          empty: "Нет коммитов впереди базы",
+          empty: "Коммитов пока нет",
         },
       },
       openInEditor: {
@@ -901,6 +905,8 @@ export const ru: TranslationResources = {
       actions: {
         menu: "Действия Workspace",
         newWorkspace: "Новое рабочее пространство",
+        showMore: "Показать ещё",
+        showLess: "Показать меньше",
         createWorkspaceFor: "Создайте новое рабочее пространство для{{projectName}}.",
         copyPath: "Копировать путь",
         copyBranchName: "Скопировать название ветки",
@@ -1305,6 +1311,8 @@ export const ru: TranslationResources = {
       changesLabel: "Изменения",
       changesSubtitle: "Различия рабочего дерева",
       commitSubtitle: "Различия коммита",
+      uncommittedSubtitle: "Незафиксированные изменения",
+      baseSubtitle: "Сравнение с {{baseRef}}",
       directoryMissing: "Каталог Workspace не найден.",
       empty: "Нет изменений",
       loadError: "Не удалось загрузить различия",
@@ -1520,6 +1528,7 @@ export const ru: TranslationResources = {
     },
     shortcuts: {
       dialogTitle: "Ярлыки",
+      searchPlaceholder: "Поиск сочетаний клавиш",
       unavailableOnMobile: "Сочетания клавиш доступны только на рабочем столе.",
       capturePrompt: "Нажмите ярлык...",
       actions: {

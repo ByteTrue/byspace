@@ -91,7 +91,7 @@ export function useCommitDiffFiles(ctx: CommitDiffFilesContext): CommitDiffFiles
   );
   const commitsLoading = commitsQuery.status === "connecting" || commitsQuery.status === "loading";
   const commitsError = commitsQuery.status === "error" ? commitsQuery.error : null;
-  const capabilityMissing = commitsQuery.status === "unsupported";
+  const capabilityMissing = commitsQuery.status === "update_host";
 
   return useMemo<CommitDiffFilesResult>(() => {
     const resolvedByPath = new Map<string, ParsedDiffFile | null | undefined>();

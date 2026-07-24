@@ -18,7 +18,8 @@ import { AppState, useWindowDimensions, View } from "react-native";
 import { GestureDetector, GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { StyleSheet, UnistylesRuntime } from "react-native-unistyles";
-import { CommandCenter } from "@/components/command-center";
+import { CommandCenter, CommandCenterRootActions } from "@/command-center/command-center";
+import { CommandCenterProvider } from "@/command-center/provider";
 import { AddProjectFlowHost } from "@/components/add-project-flow-host";
 import { WorktreeSetupCalloutSource } from "@/components/worktree-setup-callout-source";
 import { DownloadToast } from "@/components/download-toast";
@@ -100,8 +101,13 @@ function PushNotificationRouter() {
   const router = useRouter();
   const openNotification = useStableEvent((data: Record<string, unknown> | undefined) => {
     const target = resolveNotificationTarget(data);
-    if (target.serverId && target.agentId) {
-      navigateToAgent({ serverId: target.serverId, agentId: target.agentId, pin: true });
+    if (target.serverId && target.workspaceId && target.agentId) {
+      navigateToAgent({
+        serverId: target.serverId,
+        workspaceId: target.workspaceId,
+        agentId: target.agentId,
+        pin: true,
+      });
       return;
     }
     router.navigate(buildNotificationRoute(data));
@@ -329,6 +335,7 @@ function AppContainer({ children, chromeEnabled: chromeEnabledOverride }: AppCon
       {isCompactLayout ? sidebarChrome : null}
       <DownloadToast />
       <WorktreeSetupCalloutSource />
+      <CommandCenterRootActions />
       <CommandCenter />
       <AddProjectFlowHost />
       <HostChooserModal />
@@ -344,7 +351,7 @@ function AppContainer({ children, chromeEnabled: chromeEnabledOverride }: AppCon
     surface
   );
 
-  return content;
+  return <CommandCenterProvider>{content}</CommandCenterProvider>;
 }
 
 function SidebarChrome({

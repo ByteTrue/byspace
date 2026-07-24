@@ -33,6 +33,10 @@ export function resolveNotificationTarget(data: NotificationData): {
 
 export function buildNotificationRoute(data: NotificationData): NotificationRoute {
   const { serverId, agentId, workspaceId, terminalId } = resolveNotificationTarget(data);
+  if (serverId && workspaceId && agentId) {
+    return buildHostWorkspaceOpenRoute(serverId, workspaceId, `agent:${agentId}`);
+  }
+  // COMPAT(notificationWorkspaceId): added in v0.2.0, remove after 2027-01-23.
   if (serverId && agentId) {
     return buildHostAgentDetailRoute(serverId, agentId);
   }

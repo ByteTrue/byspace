@@ -41,6 +41,18 @@ describe("mergeWithRemainder", () => {
     ).toEqual(["b", "a", "x", "y"]);
   });
 
+  it("preserves the complete hidden tail when a limited 20-item group is reordered", () => {
+    const currentOrder = Array.from({ length: 25 }, (_, index) => `workspace-${index + 1}`);
+    const reorderedVisibleKeys = [...currentOrder.slice(19, 20), ...currentOrder.slice(0, 19)];
+
+    expect(
+      mergeWithRemainder({
+        currentOrder,
+        reorderedVisibleKeys,
+      }),
+    ).toEqual([currentOrder[19], ...currentOrder.slice(0, 19), ...currentOrder.slice(20)]);
+  });
+
   it("keeps unknown current keys when no visible keys are reordered", () => {
     expect(
       mergeWithRemainder({

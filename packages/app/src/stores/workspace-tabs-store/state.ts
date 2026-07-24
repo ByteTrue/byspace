@@ -16,12 +16,19 @@ export interface WorkspaceDraftTabSetup {
   featureValues: Record<string, unknown>;
 }
 
+export interface WorkspaceWorkingDiffTabTarget {
+  kind: "working_diff";
+  focusPath?: string;
+  focusRequestId?: number;
+}
+
 export type WorkspaceTabTarget =
   | { kind: "draft"; draftId: string; setup?: WorkspaceDraftTabSetup }
   | { kind: "agent"; agentId: string }
   | { kind: "provider_subagent"; parentAgentId: string; subagentId: string }
   | { kind: "terminal"; terminalId: string }
   | WorkspaceFileTabTarget
+  | WorkspaceWorkingDiffTabTarget
   | { kind: "setup"; workspaceId: string }
   | { kind: "commit_diff"; sha: string };
 
