@@ -1,5 +1,3 @@
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
 import type { Command } from "commander";
 import {
   buildAgentDeepLinkRoute,
@@ -19,7 +17,6 @@ interface OpenAgentResult {
   agentId: string;
   serverId: string;
   url: string;
-  status: "opened";
 }
 
 const openAgentSchema: OutputSchema<OpenAgentResult> = {
@@ -28,7 +25,6 @@ const openAgentSchema: OutputSchema<OpenAgentResult> = {
     { header: "AGENT ID", field: "agentId" },
     { header: "SERVER ID", field: "serverId" },
     { header: "URL", field: "url" },
-    { header: "STATUS", field: "status" },
   ],
 };
 
@@ -37,31 +33,9 @@ export function buildHostedAgentUrl(version: string, target: AgentDeepLinkTarget
   return new URL(buildAgentDeepLinkRoute(target), `${appBaseUrl}/`).toString();
 }
 
-type ExecFile = (file: string, args: readonly string[]) => Promise<unknown>;
-
-export async function openWebUrl(
-  url: string,
-  platform: NodeJS.Platform = process.platform,
-  run: ExecFile = promisify(execFile),
-): Promise<void> {
-  if (platform === "darwin") {
-    await run("open", [url]);
-    return;
-  }
-  if (platform === "win32") {
-    await run("explorer.exe", [url]);
-    return;
-  }
-  if (platform === "linux") {
-    await run("xdg-open", [url]);
-    return;
-  }
-  throw new Error(`Opening a browser is not supported on ${platform}.`);
-}
-
 export function addOpenOptions(command: Command): Command {
   return command
-    .description("Open an existing agent in the BySpace Web app")
+    .description("Print the hosted BySpace Web URL for an existing agent")
     .argument("<agent-id>", "Existing agent ID")
     .option("--server <server-id>", "Server ID (defaults to the local daemon)");
 }
@@ -104,20 +78,10 @@ export async function runOpenCommand(
 
   const serverId = await resolveServerId(options);
   const url = buildHostedAgentUrl(resolveCliVersion(), { serverId, agentId });
-  try {
-    await openWebUrl(url);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    const commandError: CommandError = {
-      code: "OPEN_BROWSER_FAILED",
-      message: `Failed to open the BySpace Web app: ${message} Copy this URL: ${url}`,
-    };
-    throw commandError;
-  }
 
   return {
     type: "single",
-    data: { agentId, serverId, url, status: "opened" },
+    data: { agentId, serverId, url },
     schema: openAgentSchema,
   };
 }
