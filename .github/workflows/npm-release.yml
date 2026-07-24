@@ -66,11 +66,15 @@ jobs:
         id: registry
         run: |
           version="$(node -p 'require("./package.json").version')"
-          if npm view "@bytetrue/byspace@${version}" version >/dev/null 2>&1; then
-            echo "published=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "published=false" >> "$GITHUB_OUTPUT"
-          fi
+          status="$(curl -sS -o /dev/null -w '%{http_code}' "https://registry.npmjs.org/@bytetrue%2Fbyspace/${version}")"
+          case "$status" in
+            200) echo "published=true" >> "$GITHUB_OUTPUT" ;;
+            404) echo "published=false" >> "$GITHUB_OUTPUT" ;;
+            *)
+              echo "npm registry returned HTTP $status for @bytetrue/byspace@$version" >&2
+              exit 1
+              ;;
+          esac
 
       - name: Recheck current main
         run: |
@@ -93,12 +97,13 @@ jobs:
           else
             dist_tag=latest
           fi
-          for attempt in {1..12}; do
+          for attempt in {1..72}; do
             published_version="$(npm view "@bytetrue/byspace@$dist_tag" version 2>/dev/null || true)"
             if [[ "$published_version" == "$version" ]]; then
               exit 0
             fi
-            if (( attempt < 12 )); then
+            echo "attempt $attempt/72: npm $dist_tag resolved to '${published_version:-nothing}', waiting for '$version'"
+            if (( attempt < 72 )); then
               sleep 5
             fi
           done

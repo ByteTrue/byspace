@@ -84,6 +84,6 @@ Pages rollback uses a prior successful production deployment. Worker rollback us
 
 ## Rollback
 
-npm versions are immutable: fix forward with a new version. If npm publication succeeded but a channel deployment failed, rerun the failed `Deploy App` or `Deploy Relay` workflow run; the immutable triggering event retains the release tag and SHA. Pages and Relay can be rolled back independently for emergency recovery, then must be reconciled with a new package version.
+npm versions are immutable: fix forward with a new version. If npm publication succeeded but `Publish npm` failed before creating the GitHub release or triggering deployments, rerun `Publish npm`; it skips republishing the immutable version and resumes the downstream release steps once npm dist-tag verification catches up. If a channel deployment itself failed, rerun the failed `Deploy App` or `Deploy Relay` workflow run; the immutable triggering event retains the release tag and SHA. Pages and Relay can be rolled back independently for emergency recovery, then must be reconciled with a new package version.
 
 Before a clean-history cutover, preserve the old repository in a verified offline Git bundle; do not keep old ancestry on the public default branch.
