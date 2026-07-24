@@ -1,4 +1,4 @@
 interface:
   display_name: "Sync BySpace Upstream"
-  short_description: "Rebuild from a frozen upstream release"
-  default_prompt: "Use $upstream-sync to review and rebuild BySpace from the next upstream release snapshot."
+  short_description: "Port a frozen upstream release delta"
+  default_prompt: "Use $upstream-sync to review and port the next upstream release delta onto the current BySpace main branch."

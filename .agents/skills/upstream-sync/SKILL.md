@@ -1,11 +1,11 @@
 ---
 name: upstream-sync
-description: Rebuild BySpace from a frozen getpaseo/paseo release snapshot while preserving its clean orphan history, Web-only product boundary, BySpace identity, package distribution, and Stable/Beta channels. Use whenever the user asks to check, inspect, compare, review, update, pull, merge, sync, or adopt upstream/Paseo changes or a new Paseo release.
+description: Synchronize the current BySpace main branch with a newer frozen getpaseo/paseo release by reviewing and porting the release-level delta while preserving BySpace behavior, Web-only boundaries, identity, distribution, and Stable/Beta channels. Use for any upstream/Paseo check, comparison, review, update, pull, merge, sync, or adoption request.
 ---
 
-# BySpace upstream sync
+# Sync BySpace with upstream
 
-Import a complete release snapshot; never revive the old per-commit deep-fork workflow.
+Port one upstream release delta onto the current BySpace tree. The current BySpace `main` is always the implementation base.
 
 ## Read first
 
@@ -16,47 +16,72 @@ Read these files completely:
 3. `docs/product.md`
 4. `docs/architecture.md`
 5. `docs/release.md`
-6. The current clean-rebuild spec under `.cs/epics/` when present
 
 Treat `docs/upstream-sync.md` as the process source of truth.
 
 ## Hard gates
 
-- Default to a stable Paseo release tag. Require explicit approval for beta tags or arbitrary commits.
-- Freeze and report the target tag, full commit SHA, and tree SHA before implementation.
-- Inspect upstream tags without importing them into BySpace's tag namespace.
+- Default to a stable Paseo release tag. Require explicit approval for a prerelease tag or arbitrary commit.
+- Read the current upstream baseline from `docs/upstream-sync.md`; freeze and report both baseline and target tag, commit SHA, and tree SHA.
+- Inspect upstream in a disposable clone or dedicated local fork. Do not import upstream tags or ancestry into BySpace.
+- Prove the exact unmodified upstream target builds before porting its changes.
+- Create the candidate from the current, clean BySpace `main`, never from the upstream target tree.
+- Review the aggregate upstream `BASE..TARGET` release delta. Commit history is navigation evidence, not a queue to replay.
+- Do not merge, rebase, or cherry-pick upstream. Port applicable behavior as BySpace-authored commits so public ancestry and contributor identity stay BySpace-owned.
+- Do not redo BySpace identity migration, client deletion, packaging, or release infrastructure. They are existing product invariants; only stop new upstream changes from violating them.
 - Keep current `main`, npm, Cloudflare, `~/.byspace`, and port `6777` untouched during candidate work.
-- Prove the exact unmodified upstream target builds before applying BySpace changes.
-- Build a new orphan-root candidate in isolation; do not merge, rebase, or cherry-pick upstream history.
-- Reimplement the bounded overlay against the new tree. Do not mechanically replay old rename/deletion commits.
 - Keep one writer. Use independent reviewers read-only.
-- Never force-push, publish, deploy, or restart production without explicit approval.
+- Syncing source does not publish a release. Never tag, publish, deploy, or restart production as part of this skill.
+
+## Delta dispositions
+
+Account for every relevant part of the upstream release delta with one of these outcomes:
+
+- **Port** — needed by a retained BySpace subsystem.
+- **Already present** — BySpace independently has equivalent or stronger behavior; add nothing.
+- **Excluded surface** — belongs only to Electron, native iOS/Android, marketing website, Browser automation, or another unsupported authority; skip it and any wiring used only by it.
+- **Superseded by BySpace** — conflicts with a deliberate BySpace product, protocol, security, packaging, or release decision; preserve BySpace and port only compatible fixes.
+- **Deferred** — valuable but unsafe or too broad for this sync; require explicit user approval, record the reason, and do not advance the integrated upstream baseline while it remains unresolved.
+
+Do not create a per-commit ledger. Dispositions are by behavior and retained subsystem, using the release diff as evidence.
 
 ## Workflow
 
-1. Discover the newest candidate release with `git ls-remote` or a disposable upstream clone.
-2. Compare it with the source baseline recorded in `docs/upstream-sync.md` and `docs/release.md`.
-3. Present retained-subsystem impact, excluded-client dependencies, persistence/protocol/toolchain risks, and the rebuild plan.
-4. Wait for target approval.
-5. Build the unmodified target in a disposable checkout.
-6. Create a clean orphan candidate whose root tree exactly equals the frozen upstream tree.
-7. Apply separate responsibilities: client-surface reduction, identity migration, distribution, release infrastructure, docs/skills, then necessary review hardening.
-8. Run focused tests after each responsibility and the complete candidate gates from `docs/upstream-sync.md`.
-9. Audit zero residuals for Electron, native clients, website, Browser automation, old identity, and local Node pins.
-10. Forward-test package installation, native modules, daemon lifecycle, and Stable/Beta endpoint selection in isolated homes and ports.
-11. Obtain independent reviews for product boundary, persistence/protocol trust, package graph, and release trust.
-12. Present source proof, candidate SHA, tests, reviews, backup/cutover sequence, and residual risks.
-13. After explicit approval, create and verify an offline bundle, force-push with `--force-with-lease`, and wait for exact-SHA CI.
-14. Stop after source convergence. Invoke `release-beta` or `release-stable` only when the user separately asks to ship.
+1. Require a clean current BySpace `main`; fetch `origin/main` and record its exact SHA without changing it.
+2. Read the recorded upstream baseline and verify that its tag, commit, and tree are available in a disposable upstream checkout.
+3. Discover the newest candidate release, then freeze `TARGET_TAG`, `TARGET_COMMIT`, and `TARGET_TREE`.
+4. Compare `BASE..TARGET` by retained subsystem: protocol, persistence, lifecycle, Providers/Pi, terminal, Git/worktrees, Web, Relay, packaging, dependencies, and security.
+5. Identify changes tied to excluded surfaces and cross-layer dependencies that must not be resurrected.
+6. Present the frozen target, impact, risks, and proposed dispositions; wait for target approval.
+7. Prove the unmodified target with its own clean install, server build, typecheck, and Web build.
+8. Create an isolated persistent worktree from the recorded current BySpace `main` SHA.
+9. Port the approved release delta in small vertical slices. Preserve current BySpace behavior unless the upstream change intentionally fixes or replaces it.
+10. Import only dependency and lockfile changes required by ported behavior. Rebuild workspace declarations before diagnosing cross-package type errors.
+11. Run focused tests after each slice, then the complete gates in `docs/upstream-sync.md`.
+12. Audit that no excluded client, old identity, upstream package namespace, port, home path, deployment target, or release-channel regression was introduced.
+13. Obtain independent reviews for delta completeness, product boundary, persistence/protocol trust, package graph, and release-channel non-regression.
+14. Resolve every review blocker and every deferred retained behavior. Only then update the recorded upstream baseline.
+15. Present the candidate SHA, normal commit/push plan, validation, dispositions, and residual risks. Push or merge only with user approval.
+16. Stop after source convergence. Use `release-beta` or `release-stable` only for a separate explicit shipping request.
 
 ## Failure discipline
 
 - Treat a timeout as evidence, not restart permission.
-- Rebuild workspace declarations before patching inferred types.
-- Never delete `package-lock.json` or `node_modules` during rename work.
-- Delete unsupported capabilities vertically; do not preserve dead branches with false/null stubs.
-- Report scope expansion before fixing architecture or data-safety issues not required for the source import.
+- Never patch inferred types merely because generated workspace declarations are stale; rebuild the owning stack first.
+- Never delete or regenerate the lockfile to escape conflicts. Preserve unrelated resolved dependency versions.
+- If a port requires architecture or data-safety hardening outside the approved delta, report the scope expansion before implementing it.
+- If upstream changed an excluded surface and a retained shared module together, port the shared fix without restoring the excluded authority.
+- If the baseline marker is wrong or incomplete, stop and repair the evidence before applying code.
 
 ## Required result
 
-Report the frozen source identity, baseline, overlay commits, validation, review findings, backup path, old/new main SHAs, deferred risks, and whether any production action occurred.
+Report:
+
+- current BySpace base SHA;
+- upstream baseline and frozen target tag, commit, and tree;
+- unmodified-target baseline result;
+- release-delta summary and dispositions;
+- candidate commits and changed retained subsystems;
+- focused tests, full gates, and independent reviews;
+- deferred items, whether they block baseline advancement, and residual risks;
+- exact statement of any remote or production mutation.

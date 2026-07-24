@@ -46,7 +46,7 @@ At the start of non-trivial work, list `docs/` and skim anything relevant to the
 | [docs/ad-hoc-daemon-testing.md](docs/ad-hoc-daemon-testing.md) | Isolated in-process daemon test harness                                                                                        |
 | [docs/docker.md](docs/docker.md)                               | Running the daemon and bundled web UI in Docker, volumes, agent images, security                                               |
 | [docs/release.md](docs/release.md)                             | Release playbook, draft releases, completion checklist                                                                         |
-| [docs/upstream-sync.md](docs/upstream-sync.md)                 | Clean release-snapshot rebuild workflow for Paseo updates                                                                      |
+| [docs/upstream-sync.md](docs/upstream-sync.md)                 | Release-level delta workflow for synchronizing upstream changes onto current BySpace `main`                                    |
 | [docs/release-engineering.md](docs/release-engineering.md)     | Packaging, CI/CD, channel isolation, cutover, and incident-derived release controls                                            |
 | [docs/terminal-activity.md](docs/terminal-activity.md)         | Terminal activity indicators — source-agnostic tracker, agent hook reporting, adding a new hook provider                       |
 | [SECURITY.md](SECURITY.md)                                     | Relay threat model, E2E encryption, DNS rebinding, agent auth                                                                  |
@@ -73,7 +73,7 @@ See [docs/development.md](docs/development.md) for full setup, build sync requir
 - **NEVER restart the main BySpace daemon on port 6777 without permission** — it manages all running agents. If you're an agent, restarting it kills your own process.
 - **NEVER assume a timeout means the service needs restarting** — timeouts can be transient.
 - **NEVER add auth checks to tests** — agent providers handle their own auth.
-- **For any Paseo/upstream check or update, use `.agents/skills/upstream-sync/SKILL.md`.** Import a frozen release snapshot on a new orphan root; never merge, rebase, cherry-pick, or revive per-commit sync ledgers.
+- **For any Paseo/upstream check or update, use `.agents/skills/upstream-sync/SKILL.md`.** Freeze the old and new upstream releases, then port their aggregate release delta onto the current BySpace `main`; never merge, rebase, cherry-pick, replace history, or revive per-commit sync ledgers.
 - **For any release, use the matching `release-beta` or `release-stable` skill.** Main runs CI only; never create a release tag before exact-SHA push CI succeeds.
 - **Before changing app routes, startup routing, remembered workspace restore, or active workspace selection, read [docs/expo-router.md](docs/expo-router.md).**
 - **NEVER run the full test suite locally.** The test suites are heavy and will freeze the machine, especially if multiple agents run them in parallel. Rules:

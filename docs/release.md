@@ -5,7 +5,7 @@ BySpace has two complete release channels. A channel is the npm package, Web/PWA
 Related process docs:
 
 - `docs/release-engineering.md` — incident-derived controls and proof ladder.
-- `docs/upstream-sync.md` — source-snapshot update workflow.
+- `docs/upstream-sync.md` — release-level delta synchronization workflow.
 
 | Channel | npm dist-tag | Web                              | Relay                                               |
 | ------- | ------------ | -------------------------------- | --------------------------------------------------- |
@@ -16,9 +16,9 @@ Electron, native iOS/Android, app-store builds, Browser automation, and a market
 
 ## Source baseline
 
-The current source snapshot is upstream `v0.2.0-beta.1`, commit `0bec06c2db7d3ee071416cde80229eabd682b03e`. The default branch has clean BySpace-only ancestry; the root commit records the source URL, commit, tree, and AGPL license, while README keeps the public attribution link.
+The currently integrated upstream baseline is `v0.2.0-beta.1`, commit `0bec06c2db7d3ee071416cde80229eabd682b03e`, tree `bb00a77858523a24ff3de173c5197bb0f6cb0488`. The default branch keeps BySpace-owned ancestry; README and the root commit retain public source attribution.
 
-Future upstream updates are release-level snapshot updates, not per-commit cherry-picks. Build the next clean source snapshot, reapply the bounded Web-only/identity/release changes, verify it, then replace `main` only after explicit approval. Follow `docs/upstream-sync.md`.
+Future upstream updates port the aggregate delta between this baseline and an approved newer stable release onto the current BySpace `main`. They do not replace the current tree, replay upstream commits, repeat identity/client-surface work, or rewrite public history. Follow `docs/upstream-sync.md`.
 
 ## Release invariants
 
@@ -86,4 +86,4 @@ Pages rollback uses a prior successful production deployment. Worker rollback us
 
 npm versions are immutable: fix forward with a new version. If npm publication succeeded but `Publish npm` failed before creating the GitHub release or triggering deployments, rerun `Publish npm`; it skips republishing the immutable version and resumes the downstream release steps once npm dist-tag verification catches up. If a channel deployment itself failed, rerun the failed `Deploy App` or `Deploy Relay` workflow run; the immutable triggering event retains the release tag and SHA. Pages and Relay can be rolled back independently for emergency recovery, then must be reconciled with a new package version.
 
-Before a clean-history cutover, preserve the old repository in a verified offline Git bundle; do not keep old ancestry on the public default branch.
+Before any destructive repository operation, preserve the affected refs in a verified offline Git bundle. Routine upstream synchronization uses normal commits and does not replace public history.
