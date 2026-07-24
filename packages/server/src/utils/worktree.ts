@@ -158,6 +158,10 @@ export interface BySpaceWorktreeOwnership {
   worktreePath?: string;
 }
 
+export interface BySpaceWorktreeOwnershipOptions extends WorktreeRootOptions {
+  knownGitCommonDir?: string | null;
+}
+
 export interface WorktreeRootOptions {
   byspaceHome?: string;
   worktreesRoot?: string;
@@ -865,7 +869,7 @@ function resolveRepoRootFromGitCommonDir(commonDir: string): string {
 
 export async function isBySpaceOwnedWorktreeCwd(
   cwd: string,
-  options?: WorktreeRootOptions,
+  options?: BySpaceWorktreeOwnershipOptions,
 ): Promise<BySpaceWorktreeOwnership> {
   const resolvedCwd = normalizePathForOwnership(cwd);
 
@@ -873,11 +877,15 @@ export async function isBySpaceOwnedWorktreeCwd(
   // previous archive attempt removed the admin dir before the working tree
   // could be fully cleaned up). We still want to allow archiving in that case.
   let repoRoot: string | undefined;
-  try {
-    const gitCommonDir = await getGitCommonDir(cwd);
-    repoRoot = resolveRepoRootFromGitCommonDir(gitCommonDir);
-  } catch {
-    // ignore
+  if (options?.knownGitCommonDir) {
+    repoRoot = resolveRepoRootFromGitCommonDir(options.knownGitCommonDir);
+  } else if (options?.knownGitCommonDir === undefined) {
+    try {
+      const gitCommonDir = await getGitCommonDir(cwd);
+      repoRoot = resolveRepoRootFromGitCommonDir(gitCommonDir);
+    } catch {
+      // ignore
+    }
   }
 
   const worktreesBaseRoot = resolveBySpaceWorktreesBaseRoot(options);

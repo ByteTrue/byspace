@@ -894,6 +894,7 @@ export class OmpAgentSession implements AgentSession {
   private activeAskUserDialog: ActiveAskUserDialog | null = null;
   private pendingCombinedAskUserResponse: PendingCombinedAskUserResponse | null = null;
   private activeTurnId: string | null = null;
+  private activeClientMessageId: string | null = null;
   private activeAssistantMessageId: string | null = null;
   private activeTurnStarted = false;
   private activeTurnHasUserMessage = false;
@@ -972,7 +973,7 @@ export class OmpAgentSession implements AgentSession {
     });
   }
 
-  async startTurn(prompt: AgentPromptInput, _options?: AgentRunOptions): Promise<StartTurnResult> {
+  async startTurn(prompt: AgentPromptInput, options?: AgentRunOptions): Promise<StartTurnResult> {
     if (this.activeTurnId) {
       throw new Error("An OMP turn is already active");
     }
@@ -981,6 +982,7 @@ export class OmpAgentSession implements AgentSession {
     const turnId = randomUUID();
     this.live = true;
     this.activeTurnId = turnId;
+    this.activeClientMessageId = options?.clientMessageId ?? null;
     this.activeAssistantMessageId = null;
     this.activeTurnStarted = false;
     this.activeTurnHasUserMessage = false;
@@ -1008,6 +1010,7 @@ export class OmpAgentSession implements AgentSession {
           return;
         }
         this.activeTurnId = null;
+        this.activeClientMessageId = null;
         this.activeTurnStarted = false;
         this.activeTurnHasUserMessage = false;
         this.activeAssistantMessageId = null;
@@ -1142,6 +1145,7 @@ export class OmpAgentSession implements AgentSession {
     }
     if (turnId && this.activeTurnId === turnId) {
       this.activeTurnId = null;
+      this.activeClientMessageId = null;
       this.activeTurnStarted = false;
       this.activeTurnHasUserMessage = false;
       this.activeAssistantMessageId = null;
@@ -1328,6 +1332,7 @@ export class OmpAgentSession implements AgentSession {
         item: {
           type: "user_message",
           text: promptText,
+          ...(this.activeClientMessageId ? { clientMessageId: this.activeClientMessageId } : {}),
         },
       });
     }
@@ -1763,6 +1768,7 @@ export class OmpAgentSession implements AgentSession {
     }
     const turnId = this.activeTurnId;
     this.activeTurnId = null;
+    this.activeClientMessageId = null;
     this.activeTurnStarted = false;
     this.activeTurnHasUserMessage = false;
     this.clearNoTurnBuffers();
@@ -2002,6 +2008,7 @@ export class OmpAgentSession implements AgentSession {
     }
     const nativeMessage = event.message as OmpAgentMessage & { id?: unknown; entryId?: unknown };
     const messageId = readNativeMessageId(nativeMessage);
+    const clientMessageId = this.activeClientMessageId;
     const emitUserMessage = (resolvedMessageId?: string): void => {
       if (resolvedMessageId) {
         // OMP re-emits user message_end frames for entries it has already
@@ -2020,6 +2027,7 @@ export class OmpAgentSession implements AgentSession {
           type: "user_message",
           text,
           ...(resolvedMessageId ? { messageId: resolvedMessageId } : {}),
+          ...(clientMessageId ? { clientMessageId } : {}),
         },
       });
     };
@@ -2084,6 +2092,7 @@ export class OmpAgentSession implements AgentSession {
 
   private completeTurn(turnId: string | undefined, messages: OmpAgentMessage[]): void {
     this.activeTurnId = null;
+    this.activeClientMessageId = null;
     this.activeAssistantMessageId = null;
     this.activeTurnStarted = false;
     this.activeTurnHasUserMessage = false;

@@ -1013,10 +1013,15 @@ type BySpaceWorktreeForCwd =
   | { isBySpaceOwnedWorktree: false }
   | { isBySpaceOwnedWorktree: true; worktreeRoot: string };
 
+interface BySpaceWorktreeLookupOptions {
+  context?: CheckoutContext;
+  knownWorktreeRoot?: string | null;
+  knownGitCommonDir?: string | null;
+}
+
 async function getBySpaceWorktreeForCwd(
   cwd: string,
-  context?: CheckoutContext,
-  knownWorktreeRoot?: string | null,
+  options: BySpaceWorktreeLookupOptions = {},
 ): Promise<BySpaceWorktreeForCwd> {
   // Fast-path reject: non-worktree paths do not need expensive ownership checks.
   if (!/[\\/]worktrees[\\/]/.test(cwd)) {
@@ -1024,8 +1029,9 @@ async function getBySpaceWorktreeForCwd(
   }
 
   const ownership = await isBySpaceOwnedWorktreeCwd(cwd, {
-    byspaceHome: context?.byspaceHome,
-    worktreesRoot: context?.worktreesRoot,
+    byspaceHome: options.context?.byspaceHome,
+    worktreesRoot: options.context?.worktreesRoot,
+    knownGitCommonDir: options.knownGitCommonDir,
   });
   if (!ownership.allowed) {
     return { isBySpaceOwnedWorktree: false };
@@ -1033,7 +1039,7 @@ async function getBySpaceWorktreeForCwd(
 
   return {
     isBySpaceOwnedWorktree: true,
-    worktreeRoot: knownWorktreeRoot ?? (await getWorktreeRoot(cwd)) ?? cwd,
+    worktreeRoot: options.knownWorktreeRoot ?? (await getWorktreeRoot(cwd, options.context)) ?? cwd,
   };
 }
 
@@ -1048,7 +1054,7 @@ async function getStoredBaseRefForCwd(
   if (context?.facts?.isGit) {
     return context.facts.storedBaseRef;
   }
-  const byspaceWorktree = await getBySpaceWorktreeForCwd(cwd, context);
+  const byspaceWorktree = await getBySpaceWorktreeForCwd(cwd, { context });
   if (!byspaceWorktree.isBySpaceOwnedWorktree) {
     return null;
   }
@@ -1453,30 +1459,6 @@ async function getAheadBehind(
   return { ahead, behind };
 }
 
-async function getAheadOfOrigin(
-  cwd: string,
-  currentBranch: string,
-  context?: CheckoutContext,
-): Promise<number | null> {
-  if (!currentBranch) {
-    return null;
-  }
-  const upstreamRef = await getConfiguredUpstreamRef(cwd, currentBranch, context);
-  if (!upstreamRef) {
-    return null;
-  }
-  try {
-    const { stdout } = await runGitCommand(
-      ["rev-list", "--count", `${upstreamRef}..${currentBranch}`],
-      { cwd, envOverlay: READ_ONLY_GIT_ENV, logger: context?.logger },
-    );
-    const count = Number.parseInt(stdout.trim(), 10);
-    return Number.isNaN(count) ? null : count;
-  } catch {
-    return null;
-  }
-}
-
 async function getConfiguredUpstreamRef(
   cwd: string,
   currentBranch: string,
@@ -1498,11 +1480,11 @@ async function getConfiguredUpstreamRef(
   return upstreamBranch ? `${remoteName}/${upstreamBranch}` : null;
 }
 
-async function getBehindOfOrigin(
+async function getOriginAheadBehind(
   cwd: string,
   currentBranch: string,
   context?: CheckoutContext,
-): Promise<number | null> {
+): Promise<AheadBehind | null> {
   if (!currentBranch) {
     return null;
   }
@@ -1512,11 +1494,13 @@ async function getBehindOfOrigin(
   }
   try {
     const { stdout } = await runGitCommand(
-      ["rev-list", "--count", `${currentBranch}..${upstreamRef}`],
+      ["rev-list", "--left-right", "--count", `${currentBranch}...${upstreamRef}`],
       { cwd, envOverlay: READ_ONLY_GIT_ENV, logger: context?.logger },
     );
-    const count = Number.parseInt(stdout.trim(), 10);
-    return Number.isNaN(count) ? null : count;
+    const [aheadRaw, behindRaw] = stdout.trim().split(/\s+/);
+    const ahead = Number.parseInt(aheadRaw ?? "", 10);
+    const behind = Number.parseInt(behindRaw ?? "", 10);
+    return Number.isNaN(ahead) || Number.isNaN(behind) ? null : { ahead, behind };
   } catch {
     return null;
   }
@@ -1541,14 +1525,17 @@ async function inspectCheckoutContext(
       return null;
     }
 
-    const [currentBranch, remoteUrl, absoluteGitDir, gitCommonDir, byspaceWorktree] =
-      await Promise.all([
-        getCurrentBranch(cwd),
-        getOriginRemoteUrl(cwd),
-        resolveAbsoluteGitDir(cwd),
-        resolveGitCommonDir(cwd),
-        getBySpaceWorktreeForCwd(cwd, context, root),
-      ]);
+    const [currentBranch, remoteUrl, absoluteGitDir, gitCommonDir] = await Promise.all([
+      getCurrentBranch(cwd),
+      getOriginRemoteUrl(cwd),
+      resolveAbsoluteGitDir(cwd),
+      resolveGitCommonDir(cwd),
+    ]);
+    const byspaceWorktree = await getBySpaceWorktreeForCwd(cwd, {
+      context,
+      knownWorktreeRoot: root,
+      knownGitCommonDir: gitCommonDir,
+    });
 
     return {
       worktreeRoot: root,
@@ -1743,7 +1730,9 @@ export async function getCheckoutSnapshotFacts(
     if (branchRemoteName) {
       [branchMergeRef, branchRemoteUrl] = await Promise.all([
         getGitConfigValue(cwd, `branch.${inspected.currentBranch}.merge`, context),
-        getGitConfigValue(cwd, `remote.${branchRemoteName}.url`, context),
+        branchRemoteName === "origin"
+          ? inspected.remoteUrl
+          : getGitConfigValue(cwd, `remote.${branchRemoteName}.url`, context),
       ]);
     }
   }
@@ -1917,17 +1906,16 @@ export async function getCheckoutStatus(
   const baseRef = facts.resolvedBaseRef;
   const mainRepoRoot = facts.mainRepoRoot;
   const factsContext = { ...context, facts };
-  const [aheadBehind, aheadOfOrigin, behindOfOrigin] = await Promise.all([
+  const [aheadBehind, originAheadBehind] = await Promise.all([
     baseRef && currentBranch
       ? getAheadBehind(cwd, baseRef, currentBranch, factsContext)
       : Promise.resolve(null),
     hasRemote && currentBranch
-      ? getAheadOfOrigin(cwd, currentBranch, factsContext)
-      : Promise.resolve(null),
-    hasRemote && currentBranch
-      ? getBehindOfOrigin(cwd, currentBranch, factsContext)
+      ? getOriginAheadBehind(cwd, currentBranch, factsContext)
       : Promise.resolve(null),
   ]);
+  const aheadOfOrigin = originAheadBehind?.ahead ?? null;
+  const behindOfOrigin = originAheadBehind?.behind ?? null;
 
   if (byspaceWorktree.isBySpaceOwnedWorktree && baseRef) {
     return {

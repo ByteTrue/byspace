@@ -2021,7 +2021,7 @@ class ClaudeAgentSession implements AgentSession {
 
   async startTurn(
     prompt: AgentPromptInput,
-    _options?: AgentRunOptions,
+    options?: AgentRunOptions,
   ): Promise<{ turnId: string }> {
     if (this.closed) {
       throw new Error("Claude session is closed");
@@ -2087,7 +2087,7 @@ class ClaudeAgentSession implements AgentSession {
       this.input.push(sdkMessage);
       setTimeout(() => {
         if (this.activeForegroundTurnId === turnId) {
-          this.emitSubmittedUserMessage(sdkMessage, turnId);
+          this.emitSubmittedUserMessage(sdkMessage, turnId, options?.clientMessageId);
         }
       }, 0);
     } catch (error) {
@@ -3664,6 +3664,7 @@ class ClaudeAgentSession implements AgentSession {
   private emitSubmittedUserMessage(
     message: Extract<SDKMessage, { type: "user" }>,
     turnId: string,
+    clientMessageId?: string,
   ): void {
     const events: AgentStreamEvent[] = [];
     this.appendUserMessageEvents(message, events);
@@ -3673,7 +3674,11 @@ class ClaudeAgentSession implements AgentSession {
     this.foregroundHasVisibleActivity = true;
     for (const event of events) {
       if (event.type === "timeline") {
-        this.notifySubscribers({ ...event, turnId });
+        const item =
+          event.item.type === "user_message" && clientMessageId
+            ? { ...event.item, clientMessageId }
+            : event.item;
+        this.notifySubscribers({ ...event, item, turnId });
       } else {
         this.notifySubscribers(event);
       }
