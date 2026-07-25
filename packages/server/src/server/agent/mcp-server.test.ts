@@ -4419,7 +4419,7 @@ describe("update_schedule MCP tool", () => {
         provider: "codex",
         model: "gpt-5.4",
         modeId: "full-access",
-        cwd: "/home/user/project",
+        cwd: resolvePath("/home/user/project"),
       },
     });
     expect(updateInput?.expiresAt).toEqual(expect.any(String));
