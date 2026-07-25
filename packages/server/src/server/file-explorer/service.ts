@@ -348,6 +348,8 @@ async function readWritableFileSnapshot(
   try {
     const stats = await handle.stat({ bigint: true });
     if (!stats.isFile()) return { error: "Requested path is not a file" };
+    if (stats.nlink > 1n)
+      return { error: "Files with multiple hard links cannot be edited safely" };
     if (stats.size > BigInt(MAX_EDITABLE_FILE_BYTES)) {
       return { error: "File is too large to edit" };
     }

@@ -11,6 +11,7 @@ import { createTerminalCommand } from "./commands/terminal/index.js";
 import { createWorktreeCommand } from "./commands/worktree/index.js";
 import { createWorkspaceCommand } from "./commands/workspace/index.js";
 import { createHooksCommand } from "./commands/hooks.js";
+import { createHeartbeatCommand } from "./commands/heartbeat/index.js";
 import { startCommand as daemonStartCommand } from "./commands/daemon/start.js";
 import { runStatusCommand as runDaemonStatusCommand } from "./commands/daemon/status.js";
 import { runRestartCommand as runDaemonRestartCommand } from "./commands/daemon/restart.js";
@@ -173,6 +174,7 @@ export function createCli(): Command {
 
   // Schedule commands
   program.addCommand(createScheduleCommand());
+  program.addCommand(createHeartbeatCommand());
 
   // Permission commands
   program.addCommand(createPermitCommand());

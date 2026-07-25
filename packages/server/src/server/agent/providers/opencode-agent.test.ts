@@ -1919,7 +1919,7 @@ describe("OpenCode adapter startTurn error handling", () => {
     }
   });
 
-  test("retries abort and waits for provider idle before starting the next prompt", async () => {
+  test("keeps the turn active when abort fails and allows a confirmed retry", async () => {
     const { parent: session, openCode } = await createParentSession("ses_unit_test");
     openCode.sessionPromptAsyncEvents = [];
     openCode.sessionAbortImplementation = async () => {
@@ -1935,9 +1935,13 @@ describe("OpenCode adapter startTurn error handling", () => {
 
     try {
       await session.startTurn("first");
-      await session.interrupt();
+      await expect(session.interrupt()).rejects.toThrow("abort transport failed");
       expect(openCode.calls.sessionPromptAsync).toHaveLength(1);
+      await expect(session.startTurn("too early")).rejects.toThrow(
+        "A foreground turn is already active",
+      );
 
+      await session.interrupt();
       await session.startTurn("second");
       expect(openCode.calls.sessionAbort).toHaveLength(2);
       expect(openCode.calls.sessionPromptAsync).toHaveLength(2);

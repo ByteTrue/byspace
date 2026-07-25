@@ -692,6 +692,7 @@ function EditableFilePane({
       }),
   );
   const snapshot = useSyncExternalStore(model.subscribe, model.getSnapshot, model.getSnapshot);
+  useEffect(() => model.updateSession(session), [model, session]);
   useEffect(() => {
     if (!snapshot.modified || typeof window === "undefined") return;
     const handleBeforeUnload = (event: BeforeUnloadEvent) => {

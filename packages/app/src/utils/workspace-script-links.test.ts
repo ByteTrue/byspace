@@ -83,16 +83,11 @@ describe("resolveWorkspaceScriptLink", () => {
       }),
     ).toEqual({
       primary: {
-        kind: "byspace",
-        label: "web--feature--byspace.localhost:6777",
-        url: "http://web--feature--byspace.localhost:6777",
+        kind: "direct",
+        label: "mac-mini.tail123.ts.net:3000",
+        url: "http://mac-mini.tail123.ts.net:3000",
       },
       targets: [
-        {
-          kind: "byspace",
-          label: "web--feature--byspace.localhost:6777",
-          url: "http://web--feature--byspace.localhost:6777",
-        },
         {
           kind: "direct",
           label: "mac-mini.tail123.ts.net:3000",
@@ -112,11 +107,6 @@ describe("resolveWorkspaceScriptLink", () => {
     ).toEqual([
       { kind: "public", label: "web--feature--byspace.services.example.com", url: publicUrl },
       {
-        kind: "byspace",
-        label: "web--feature--byspace.localhost:6777",
-        url: "http://web--feature--byspace.localhost:6777",
-      },
-      {
         kind: "direct",
         label: "mac-mini.tail123.ts.net:3000",
         url: "http://mac-mini.tail123.ts.net:3000",
@@ -124,27 +114,13 @@ describe("resolveWorkspaceScriptLink", () => {
     ]);
   });
 
-  it("keeps service routes available independently of a relay connection", () => {
+  it("only exposes public routes over a relay connection", () => {
     const relay: ActiveConnection = {
       type: "relay",
       endpoint: "relay.byspace.sh:443",
       display: "relay",
     };
-    expect(resolveLink(relay)).toEqual({
-      primary: {
-        kind: "byspace",
-        label: "web--feature--byspace.localhost:6777",
-        url: "http://web--feature--byspace.localhost:6777",
-      },
-      targets: [
-        {
-          kind: "byspace",
-          label: "web--feature--byspace.localhost:6777",
-          url: "http://web--feature--byspace.localhost:6777",
-        },
-        { kind: "direct", label: "localhost:3000", url: "http://localhost:3000" },
-      ],
-    });
+    expect(resolveLink(relay)).toEqual({ primary: null, targets: [] });
 
     const publicUrl = "https://web--feature--byspace.services.example.com";
     expect(
@@ -161,22 +137,13 @@ describe("resolveWorkspaceScriptLink", () => {
           label: "web--feature--byspace.services.example.com",
           url: publicUrl,
         },
-        {
-          kind: "byspace",
-          label: "web--feature--byspace.localhost:6777",
-          url: "http://web--feature--byspace.localhost:6777",
-        },
-        { kind: "direct", label: "localhost:3000", url: "http://localhost:3000" },
       ],
     });
   });
 
   it("classifies proxyUrl from older daemons", () => {
     const { localProxyUrl: _local, publicProxyUrl: _public, ...legacyLocal } = runningService;
-    expect(resolveLink(null, legacyLocal).targets.map((target) => target.kind)).toEqual([
-      "byspace",
-      "direct",
-    ]);
+    expect(resolveLink(null, legacyLocal).targets).toEqual([]);
 
     const publicUrl = "https://web--feature--byspace.services.example.com";
     expect(

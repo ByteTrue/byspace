@@ -28,6 +28,16 @@ describe("canonical CLI surface", () => {
     expect(help).toContain("--forge <forge>");
   });
 
+  it("exposes agent-owned heartbeat management", () => {
+    const heartbeat = createCli().commands.find((command) => command.name() === "heartbeat");
+    expect(heartbeat?.commands.map((command) => command.name())).toEqual([
+      "create",
+      "update",
+      "delete",
+    ]);
+    expect(heartbeat?.helpInformation()).toContain("Manage this agent's heartbeats");
+  });
+
   it("uses background for execution and reserves detach for ownership", () => {
     const run = createCli().commands.find((command) => command.name() === "run");
     expect(run?.helpInformation()).toContain("--background");

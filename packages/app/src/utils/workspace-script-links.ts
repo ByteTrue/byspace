@@ -36,14 +36,20 @@ function stripUrlProtocol(url: string): string {
   return url.replace(/^https?:\/\//, "");
 }
 
+function isLoopbackDirectConnection(activeConnection: ActiveConnection | null): boolean {
+  if (activeConnection?.type !== "directTcp") return false;
+  try {
+    return isLoopbackHost(parseHostPort(activeConnection.endpoint).host);
+  } catch {
+    return false;
+  }
+}
+
 function buildDirectServiceUrl(
   activeConnection: ActiveConnection | null,
   port: number | null,
 ): string | null {
-  if (port === null) return null;
-  if (activeConnection?.type !== "directTcp") {
-    return `http://localhost:${port}`;
-  }
+  if (port === null || activeConnection?.type !== "directTcp") return null;
   try {
     const { host, isIpv6 } = parseHostPort(activeConnection.endpoint);
     let base = host;
@@ -85,7 +91,9 @@ export function resolveWorkspaceScriptLink(input: {
 
   const targets: WorkspaceScriptLinkTarget[] = [];
   addTarget(targets, "public", publicProxyUrl);
-  addTarget(targets, "byspace", localProxyUrl);
+  if (isLoopbackDirectConnection(activeConnection)) {
+    addTarget(targets, "byspace", localProxyUrl);
+  }
   addTarget(targets, "direct", buildDirectServiceUrl(activeConnection, script.port));
 
   return { primary: targets[0] ?? null, targets };

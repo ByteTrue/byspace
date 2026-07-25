@@ -2889,6 +2889,7 @@ class OpenCodeAgentSession implements AgentSession {
   private readonly subscribers = new Set<(event: AgentStreamEvent) => void>();
   private nextTurnOrdinal = 0;
   private turnState: OpenCodeTurnState = { status: "idle" };
+  private interruptingTurnId: string | null = null;
   private readonly runningToolCalls = new Map<string, ToolCallTimelineItem>();
   private subAgentsByCallId = new Map<string, OpenCodeSubAgentActivityState>();
   private subAgentCallIdByChildSessionId = new Map<string, string>();
@@ -2984,23 +2985,29 @@ class OpenCodeAgentSession implements AgentSession {
 
   async interrupt(): Promise<void> {
     const turnId = this.activeForegroundTurnId;
+    if (!turnId) return;
     this.abortController?.abort();
-    if (turnId) {
-      this.beginStoppingTurn(turnId);
-    }
-    // COMPAT(opencodeSlowAbort): OpenCode 1.14.42+ blocks session.abort until
-    // the running tool actually stops, which can be tens of seconds for
-    // long-running tools. Cap the wait so the user-visible cancel lands
-    // quickly while still giving OpenCode a chance to confirm the abort
-    // cleanly. Drop the timeout once upstream returns abort acknowledgement
-    // before tool teardown.
-    const abortPromise = this.abortSession(turnId, "interrupt");
-    await withTimeout(abortPromise, 2_000, "OpenCode session.abort").catch((error) => {
+    this.interruptingTurnId = turnId;
+    try {
+      // COMPAT(opencodeSlowAbort): OpenCode 1.14.42+ blocks session.abort until
+      // the running tool actually stops, which can be tens of seconds for
+      // long-running tools. Cap the wait so cancel failure remains visible
+      // instead of claiming that the provider stopped. Drop the timeout once
+      // upstream acknowledges abort before tool teardown.
+      await withTimeout(this.abortSession(), 2_000, "OpenCode session.abort");
+    } catch (error) {
+      if (this.activeForegroundTurnId === turnId) {
+        this.interruptingTurnId = null;
+      }
       this.logger.warn(
         { err: error, sessionId: this.sessionId, turnId },
-        "OpenCode session.abort exceeded the cancel cap; proceeding with local cancel",
+        "OpenCode session.abort failed; keeping the turn active",
       );
-    });
+      throw error;
+    }
+    if (this.activeForegroundTurnId === turnId) {
+      this.beginStoppingTurn(turnId);
+    }
   }
 
   async revertBoth(input: { messageId: string }): Promise<void> {
@@ -3012,19 +3019,14 @@ class OpenCodeAgentSession implements AgentSession {
     });
   }
 
-  private abortSession(turnId: string | null, reason: string): Promise<void> {
-    return this.client.session
-      .abort({
-        sessionID: this.sessionId,
-        directory: this.config.cwd,
-      })
-      .then(() => undefined)
-      .catch((error) => {
-        this.logger.warn(
-          { err: error, sessionId: this.sessionId, turnId, reason },
-          "OpenCode session.abort rejected",
-        );
-      });
+  private async abortSession(): Promise<void> {
+    const response = await this.client.session.abort({
+      sessionID: this.sessionId,
+      directory: this.config.cwd,
+    });
+    if (response.error) {
+      throw new Error(`OpenCode session.abort failed: ${toDiagnosticErrorMessage(response.error)}`);
+    }
   }
 
   private async waitUntilProviderIdle(): Promise<void> {
@@ -3044,7 +3046,12 @@ class OpenCodeAgentSession implements AgentSession {
     stopping: Extract<OpenCodeTurnState, { status: "stopping" }>,
   ): Promise<void> {
     while (this.turnState === stopping) {
-      void this.abortSession(null, "turn_start_boundary");
+      void this.abortSession().catch((error) => {
+        this.logger.warn(
+          { err: error, sessionId: this.sessionId },
+          "OpenCode session.abort retry rejected while waiting for idle",
+        );
+      });
       const eventStreamTask = this.eventStreamTask;
       const boundary = await (eventStreamTask
         ? Promise.race([
@@ -3602,11 +3609,12 @@ class OpenCodeAgentSession implements AgentSession {
       }
       const terminalEvent = toTerminalTurnEvent(e);
       if (terminalEvent) {
+        const effectiveTerminalEvent = this.resolveTerminalTurnEvent(terminalEvent, turnId);
         this.traceOpenCode("provider.opencode.event.terminal", {
           turnId,
-          type: terminalEvent.type,
+          type: effectiveTerminalEvent.type,
         });
-        this.finishForegroundTurn(terminalEvent, turnId);
+        this.finishForegroundTurn(effectiveTerminalEvent, turnId);
         return;
       }
       this.notifySubscribers(e, turnId);
@@ -3664,6 +3672,14 @@ class OpenCodeAgentSession implements AgentSession {
     return turnId;
   }
 
+  private resolveTerminalTurnEvent(
+    event: NonNullable<ReturnType<typeof toTerminalTurnEvent>>,
+    turnId: string,
+  ): NonNullable<ReturnType<typeof toTerminalTurnEvent>> {
+    if (this.interruptingTurnId !== turnId) return event;
+    return { type: "turn_canceled", provider: "opencode", reason: "interrupted" };
+  }
+
   private finishForegroundTurn(
     event: Extract<AgentStreamEvent, { type: "turn_completed" | "turn_failed" | "turn_canceled" }>,
     turnId: string,
@@ -3677,6 +3693,9 @@ class OpenCodeAgentSession implements AgentSession {
     });
     if (this.activeForegroundTurnId !== turnId) {
       return;
+    }
+    if (this.interruptingTurnId === turnId) {
+      this.interruptingTurnId = null;
     }
     if (event.type === "turn_canceled" || event.type === "turn_failed") {
       this.synthesizeInterruptedToolCalls(turnId);
@@ -3698,6 +3717,7 @@ class OpenCodeAgentSession implements AgentSession {
     this.pendingUserMessageText = null;
     this.pendingClientMessageId = null;
     this.abortController = null;
+    this.interruptingTurnId = null;
     this.turnState = { status: "stopping", idle: createDeferred<void>() };
     this.notifySubscribers(
       { type: "turn_canceled", provider: "opencode", reason: "interrupted" },

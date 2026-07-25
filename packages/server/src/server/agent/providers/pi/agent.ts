@@ -665,9 +665,10 @@ function createPiMcpConfigFile(
 function createPiBySpaceExtensionFile(systemPrompt?: string): PiTempFile {
   const dir = mkdtempSync(join(tmpdir(), "byspace-pi-extension-"));
   const filePath = join(dir, "byspace-integration.mjs");
-  writeFileSync(
-    filePath,
-    `
+  try {
+    writeFileSync(
+      filePath,
+      `
 	function decodePayload(encoded) {
 	  return JSON.parse(Buffer.from(encoded, "base64url").toString("utf8"));
 	}
@@ -785,8 +786,12 @@ function createPiBySpaceExtensionFile(systemPrompt?: string): PiTempFile {
 	  });
 	}
 `.trimStart(),
-    "utf8",
-  );
+      "utf8",
+    );
+  } catch (error) {
+    rmSync(dir, { recursive: true, force: true });
+    throw error;
+  }
   return {
     path: filePath,
     cleanup: () => rmSync(dir, { recursive: true, force: true }),
@@ -2415,9 +2420,15 @@ export class PiRpcAgentClient implements AgentClient {
       ...launchContext?.env,
     };
     const mcpConfig = await this.prepareMcpConfig(config.cwd, config.mcpServers, mcpEnv);
-    const byspaceExtension = createPiBySpaceExtensionFile(
-      composeSystemPromptParts(config.systemPrompt, config.daemonAppendSystemPrompt),
-    );
+    let byspaceExtension: PiTempFile | null = null;
+    try {
+      byspaceExtension = createPiBySpaceExtensionFile(
+        composeSystemPromptParts(config.systemPrompt, config.daemonAppendSystemPrompt),
+      );
+    } catch (error) {
+      mcpConfig?.cleanup();
+      throw error;
+    }
     let runtimeSession: PiRuntimeSession;
     try {
       runtimeSession = await this.runtime.startSession({
@@ -2474,12 +2485,18 @@ export class PiRpcAgentClient implements AgentClient {
       resumeConfig.config.mcpServers,
       mcpEnv,
     );
-    const byspaceExtension = createPiBySpaceExtensionFile(
-      composeSystemPromptParts(
-        resumeConfig.config.systemPrompt,
-        resumeConfig.config.daemonAppendSystemPrompt,
-      ),
-    );
+    let byspaceExtension: PiTempFile | null = null;
+    try {
+      byspaceExtension = createPiBySpaceExtensionFile(
+        composeSystemPromptParts(
+          resumeConfig.config.systemPrompt,
+          resumeConfig.config.daemonAppendSystemPrompt,
+        ),
+      );
+    } catch (error) {
+      mcpConfig?.cleanup();
+      throw error;
+    }
     let runtimeSession: PiRuntimeSession;
     try {
       runtimeSession = await this.runtime.startSession(

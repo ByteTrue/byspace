@@ -1,4 +1,4 @@
-import { chmod, mkdtemp, rm, stat, utimes, writeFile } from "node:fs/promises";
+import { chmod, link, mkdtemp, readFile, rm, stat, utimes, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
@@ -87,6 +87,39 @@ describe("file explorer service", () => {
 
         expect(result.status).toBe("written");
         expect((await stat(filePath)).mode & 0o7777).toBe(0o764);
+      } finally {
+        await rm(root, { recursive: true, force: true });
+      }
+    },
+  );
+
+  it.skipIf(process.platform === "win32")(
+    "rejects replacing a multiply-linked file instead of silently breaking its other name",
+    async () => {
+      const root = await createTempDir("byspace-file-hardlink-");
+      try {
+        const filePath = path.join(root, "notes.txt");
+        const aliasPath = path.join(root, "alias.txt");
+        await writeFile(filePath, "before", "utf8");
+        await link(filePath, aliasPath);
+        const current = await getExplorerFileVersion({ root, relativePath: "notes.txt" });
+        expect(current.status).toBe("ready");
+        if (current.status !== "ready") return;
+
+        const result = await writeExplorerFile({
+          root,
+          relativePath: "notes.txt",
+          content: "after",
+          expectedModifiedAt: current.modifiedAt,
+          expectedRevision: current.revision,
+        });
+
+        expect(result).toEqual({
+          status: "error",
+          error: "Files with multiple hard links cannot be edited safely",
+        });
+        expect(await readFile(filePath, "utf8")).toBe("before");
+        expect(await readFile(aliasPath, "utf8")).toBe("before");
       } finally {
         await rm(root, { recursive: true, force: true });
       }

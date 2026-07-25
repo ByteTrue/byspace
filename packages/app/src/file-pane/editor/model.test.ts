@@ -108,6 +108,23 @@ describe("FileEditorModel", () => {
     expect(model.getSnapshot()).toMatchObject({ status: "clean", modified: false });
   });
 
+  test("uses the current daemon session after a reconnect without replacing the buffer", async () => {
+    const { model, session: disconnected } = makeModel();
+    const reconnected = new FileSession(disconnected.file);
+
+    model.updateSession(reconnected);
+    model.edit("saved after reconnect");
+    await model.save();
+
+    expect(disconnected.writes).toEqual([]);
+    expect(reconnected.writes).toEqual([
+      {
+        content: "saved after reconnect",
+        expectedModifiedAt: "2026-07-18T00:00:00.000Z",
+      },
+    ]);
+  });
+
   test("reloads content before adopting a newly precise revision", async () => {
     const { model, session } = makeModel({ content: "old!" });
     session.file = {
