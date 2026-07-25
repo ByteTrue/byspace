@@ -122,6 +122,23 @@ function createHarness(input: {
       remove: async (id: string) => {
         projects.delete(id);
       },
+      getOrCreateActiveByRoot: async (projectInput) => {
+        const existing = Array.from(projects.values()).find(
+          (project) => project.rootPath === projectInput.rootPath && !project.archivedAt,
+        );
+        if (existing) return existing;
+        const project = createPersistedProjectRecord({
+          projectId: projectInput.rootPath,
+          rootPath: projectInput.rootPath,
+          kind: projectInput.kind,
+          displayName: projectInput.displayName,
+          createdAt: projectInput.timestamp,
+          updatedAt: projectInput.timestamp,
+        });
+        projects.set(project.projectId, project);
+        return project;
+      },
+      subscribeToMutations: () => () => {},
     }),
     workspaceRegistry: createStub<SessionOptions["workspaceRegistry"]>({
       initialize: async () => {},
@@ -138,6 +155,7 @@ function createHarness(input: {
       remove: async (id: string) => {
         workspaces.delete(id);
       },
+      subscribeToMutations: () => () => {},
     }),
     filesystem: { isDirectory: async () => true },
     chatService: createStub<SessionOptions["chatService"]>({}),
@@ -310,10 +328,10 @@ test("S3: re-open active workspace by exact path returns the same record", async
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// S4. Open a subdir of an active git workspace: canonicalizes UP to the repo
-//     root, returns the existing workspace. (Per "always go to the nearest git".)
+// S4. Open a subdir of an active git workspace: exact-folder Project identity
+//     creates a separate workspace for the selected folder.
 // ─────────────────────────────────────────────────────────────────────────────
-test("S4: open subdir of active git workspace returns the repo-root workspace", async () => {
+test("S4: open subdir of active git workspace creates an exact-folder workspace", async () => {
   const h = createHarness({
     workspaces: [gitWorkspace(FOO)],
     projects: [gitProject(FOO)],
@@ -321,8 +339,9 @@ test("S4: open subdir of active git workspace returns the repo-root workspace", 
   });
   await openProject(h.session, FOO_SUB);
   const resp = getOpenResponse(h.emitted, "req-1");
-  expect(resp?.workspace?.id).toBe(workspaceByCwd(h.workspaces, FOO)?.workspaceId);
-  expect(h.workspaces.size).toBe(1);
+  expect(resp?.workspace?.workspaceDirectory).toBe(FOO_SUB);
+  expect(resp?.workspace?.id).not.toBe(workspaceByCwd(h.workspaces, FOO)?.workspaceId);
+  expect(h.workspaces.size).toBe(2);
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -473,16 +492,11 @@ test("S12: resolveWorkspaceIdForPath does not return archived ancestor via prefi
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// S13. Open a subfolder of an archived git repo when that subfolder is not
-//      itself a separate git project: the new workspace is a plain directory.
-//
-// Archive is sticky (S9). The archived parent is out of scope, so there is
-// no git project that owns the subfolder. Reviving the parent or inventing
-// a second git project pointing at the same repo would both be worse than
-// being explicit. To get git features back the user unarchives the parent
-// (S6/S11).
+// S13. Open a subfolder of an archived git repo: exact-folder Project identity
+//      creates a new git-backed workspace for that folder without reviving the
+//      archived parent Project.
 // ─────────────────────────────────────────────────────────────────────────────
-test("S13: subfolder of an archived git repo opens as a directory workspace", async () => {
+test("S13: subfolder of an archived git repo opens as an exact-folder git workspace", async () => {
   const archivedAt = "2026-04-22T13:08:05.400Z";
   const h = createHarness({
     workspaces: [gitWorkspace(TOOLBOX, archivedAt)],
@@ -492,5 +506,7 @@ test("S13: subfolder of an archived git repo opens as a directory workspace", as
   await openProject(h.session, TOOLBOX_FLOMO);
   const resp = getOpenResponse(h.emitted, "req-1");
   expect(resp?.error).toBeNull();
-  expect(resp?.workspace?.workspaceKind).toBe("directory");
+  expect(resp?.workspace?.workspaceDirectory).toBe(TOOLBOX_FLOMO);
+  expect(resp?.workspace?.workspaceKind).toBe("local_checkout");
+  expect(workspaceByCwd(h.workspaces, TOOLBOX)?.archivedAt).toBe(archivedAt);
 });

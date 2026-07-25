@@ -212,6 +212,7 @@ function createSessionForWorkspaceGitWatchTests(options?: {
       remove: async (projectId: string) => {
         projects.delete(projectId);
       },
+      subscribeToMutations: () => () => {},
     }),
     workspaceRegistry: createStub<SessionOptions["workspaceRegistry"]>({
       initialize: async () => {},
@@ -229,6 +230,7 @@ function createSessionForWorkspaceGitWatchTests(options?: {
       remove: async (workspaceId: string) => {
         workspaces.delete(workspaceId);
       },
+      subscribeToMutations: () => () => {},
     }),
     checkoutDiffManager: createStub<SessionOptions["checkoutDiffManager"]>({
       subscribe: async () => ({

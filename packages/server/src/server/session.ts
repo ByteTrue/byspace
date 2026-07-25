@@ -1113,14 +1113,29 @@ export class Session {
     await this.emitWorkspaceUpdatesForWorkspaceIds([workspaceId], { skipReconcile: true });
   }
 
-  private async emitCreatedWorkspaceUpdate(workspace: WorkspaceDescriptorPayload): Promise<void> {
+  private async emitCreatedWorkspaceUpdate(
+    workspace: WorkspaceDescriptorPayload,
+    requestedStatus?: WorkspaceDescriptorPayload["status"],
+  ): Promise<void> {
+    if (requestedStatus) {
+      this.optimisticInitialAgentWorkspaceIds.add(workspace.id);
+    }
     if (this.workspaceUpdatesSubscription) {
-      await this.emitWorkspaceUpdateForWorkspaceId(workspace.id);
+      await this.emitWorkspaceUpdatesForWorkspaceIds([workspace.id], {
+        skipReconcile: true,
+        optimisticStatus: requestedStatus,
+      });
       return;
     }
     // COMPAT(workspaceCreateCausalUpdate): added in v0.1.106, remove after 2027-01-12.
     // Older clients create before subscribing and require the causal update beside the response.
-    this.emit({ type: "workspace_update", payload: { kind: "upsert", workspace } });
+    this.emit({
+      type: "workspace_update",
+      payload: {
+        kind: "upsert",
+        workspace: requestedStatus ? { ...workspace, status: requestedStatus } : workspace,
+      },
+    });
   }
 
   async archiveWorkspaceRecordForExternalMutation(workspaceId: string): Promise<void> {
@@ -2938,6 +2953,9 @@ export class Session {
             ...(trimmedPrompt ? { prompt: trimmedPrompt } : {}),
             ...(attachments && attachments.length > 0 ? { attachments } : {}),
           };
+          const hasFirstAgentContext = Boolean(
+            trimmedPrompt || (attachments && attachments.length > 0),
+          );
           const workspacePromptTitle = resolveFirstAgentPromptTitle(firstAgentContext);
           const createdWorktree = await this.createAgentLifecycleDispatch.createWorktreeForRequest({
             cwd: config.cwd,
@@ -2967,7 +2985,7 @@ export class Session {
                 config.cwd,
                 workspacePromptTitle,
                 undefined,
-                { expectsInitialAgent: Boolean(trimmedPrompt) },
+                { expectsInitialAgent: hasFirstAgentContext },
               );
               return { workspaceId: workspace.workspaceId, cwd: workspace.cwd };
             },
@@ -2975,7 +2993,10 @@ export class Session {
           const createAgentConfig: AgentSessionConfig = { ...config, cwd: intent.cwd };
           const workspaceId = intent.workspaceId;
           const createdDirectoryWorkspaceForAgent = !explicitWorkspaceId && !caller;
-          if (createdDirectoryWorkspaceForAgent && trimmedPrompt) {
+          if (
+            (createdDirectoryWorkspaceForAgent && hasFirstAgentContext) ||
+            this.optimisticInitialAgentWorkspaceIds.has(workspaceId)
+          ) {
             optimisticWorkspaceId = workspaceId;
             this.optimisticInitialAgentWorkspaceIds.add(workspaceId);
           }
@@ -5053,6 +5074,7 @@ export class Session {
           cwd,
           explicitTitle ?? promptTitle,
           request.source.projectId,
+          { expectsInitialAgent: Boolean(request.firstAgentContext) },
         )
       : null;
     if (!workspace) {
@@ -5080,7 +5102,10 @@ export class Session {
         error: null,
       },
     });
-    await this.emitCreatedWorkspaceUpdate(descriptor);
+    await this.emitCreatedWorkspaceUpdate(
+      descriptor,
+      request.firstAgentContext ? "running" : undefined,
+    );
     void this.workspaceGitService
       .getSnapshot(workspace.cwd, { force: true, includeForge: true, reason: "open_project" })
       .catch((error) => {
@@ -5157,7 +5182,10 @@ export class Session {
         error: null,
       },
     });
-    await this.emitCreatedWorkspaceUpdate(descriptor);
+    await this.emitCreatedWorkspaceUpdate(
+      descriptor,
+      request.firstAgentContext ? "running" : undefined,
+    );
   }
 
   private async resolveWorktreeSourceCwd(input: {

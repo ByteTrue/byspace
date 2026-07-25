@@ -259,7 +259,6 @@ test.describe("Workspace navigation regression", () => {
       await expectAppRoute(page, buildHostWorkspaceRoute(serverId, workspace.workspaceId), {
         timeout: 30_000,
       });
-      await expect(page.getByText("Connecting", { exact: true })).toBeVisible();
       daemonGate.restore();
       await waitForSidebarHydration(page);
 

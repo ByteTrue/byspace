@@ -208,7 +208,6 @@ test.describe("Projects settings", () => {
     page,
     gitlabRemoteProject,
   }) => {
-    expect(gitlabRemoteProject.name).toBe("acme/app");
     await openProjects(page);
     await openProjectSettings(page, gitlabRemoteProject.name);
     await editWorktreeSetup(page, updatedSetup);

@@ -46,7 +46,7 @@ async function waitForSidebarWorkspace(page: import("@playwright/test").Page, wo
 }
 
 test.describe("Sidebar workspace list", () => {
-  test("project with GitHub remote shows owner/repo name in sidebar", async ({ page }) => {
+  test("git project keeps exact-folder identity when a remote is configured", async ({ page }) => {
     const workspace = await seedWorkspace({
       repoPrefix: "sidebar-remote-",
       repo: { withRemote: true, originUrl: GITHUB_REMOTE_URL },
@@ -54,16 +54,14 @@ test.describe("Sidebar workspace list", () => {
 
     try {
       await gotoAppShell(page);
-      await waitForSidebarProject(page, "test-owner/test-repo");
+      const projectName = path.basename(workspace.repoPath);
+      await waitForSidebarProject(page, projectName);
       await waitForSidebarWorkspace(page, workspace.workspaceId);
 
-      const projectRow = page
-        .locator('[data-testid^="sidebar-project-row-"]')
-        .filter({ hasText: "test-owner/test-repo" })
-        .first();
-
+      const projectRow = page.getByTestId(`sidebar-project-row-${workspace.projectId}`);
       await expect(projectRow).toBeVisible({ timeout: 30_000 });
-      await expect(projectRow).not.toContainText(path.basename(workspace.repoPath));
+      await expect(projectRow).toContainText(projectName);
+      await expect(projectRow).not.toContainText("test-owner/test-repo");
     } finally {
       await workspace.cleanup();
     }
@@ -104,13 +102,13 @@ test.describe("Sidebar workspace list", () => {
 
     try {
       await gotoAppShell(page);
-      await waitForSidebarProject(page, "test-owner/test-repo");
+      await waitForSidebarProject(page, workspace.projectDisplayName);
       await waitForSidebarWorkspace(page, workspace.workspaceId);
       await openWorkspaceFromSidebar(page, workspace.workspaceId);
 
       await expectWorkspaceHeader(page, {
         title: workspace.workspaceName,
-        subtitle: "test-owner/test-repo",
+        subtitle: workspace.projectDisplayName,
       });
     } finally {
       await workspace.cleanup();
@@ -215,6 +213,7 @@ test.describe("Half-screen desktop layout", () => {
       }
 
       await gotoAppShell(page);
+      await page.getByTestId(`sidebar-project-show-more-${workspace.projectId}`).click();
       await waitForSidebarWorkspace(page, lastWorkspaceId);
 
       const sidebarScroll = page.getByTestId("sidebar-project-workspace-list-scroll");

@@ -370,18 +370,23 @@ function createSessionForTest(options: SessionForTestOptions = {}): Session {
       list: vi.fn().mockResolvedValue([]),
       ...options.agentStorage,
     }),
-    projectRegistry: options.projectRegistry ?? {
+    projectRegistry: {
       list: vi.fn().mockResolvedValue([]),
       get: vi.fn(),
+      getOrCreateActiveByRoot: vi.fn(),
       upsert: vi.fn(),
       archive: vi.fn(),
       remove: vi.fn(),
       initialize: vi.fn(),
       existsOnDisk: vi.fn(),
+      subscribeToMutations: vi.fn(() => () => {}),
+      ...options.projectRegistry,
     },
-    workspaceRegistry: options.workspaceRegistry ?? {
+    workspaceRegistry: {
       get: vi.fn(),
       list: vi.fn().mockResolvedValue([]),
+      subscribeToMutations: vi.fn(() => () => {}),
+      ...options.workspaceRegistry,
     },
     chatService: asChatService(),
     scheduleService: asScheduleService(),
@@ -526,12 +531,21 @@ describe("project command-center RPCs", () => {
     const parentDirectory = realpathSync(mkdtempSync(join(tmpdir(), "byspace-project-session-")));
     const directoryPath = join(parentDirectory, "new-project");
     const messages: SessionOutboundMessage[] = [];
-    const projectUpsert = vi.fn().mockResolvedValue(undefined);
+    const project = {
+      projectId: "prj_new_project",
+      rootPath: directoryPath,
+      kind: "non_git" as const,
+      displayName: "new-project",
+      customName: null,
+      createdAt: "2026-07-25T00:00:00.000Z",
+      updatedAt: "2026-07-25T00:00:00.000Z",
+      archivedAt: null,
+    };
+    const getOrCreateActiveByRoot = vi.fn().mockResolvedValue(project);
     const session = createSessionForTest({
       messages,
       projectRegistry: {
-        list: vi.fn().mockResolvedValue([]),
-        upsert: projectUpsert,
+        getOrCreateActiveByRoot,
       },
       workspaceGitService: {
         getCheckout: vi.fn(async (cwd: string) => ({
@@ -555,7 +569,7 @@ describe("project command-center RPCs", () => {
       });
 
       expect(existsSync(directoryPath)).toBe(true);
-      expect(projectUpsert).toHaveBeenCalledOnce();
+      expect(getOrCreateActiveByRoot).toHaveBeenCalledOnce();
       expect(messages).toEqual([
         {
           type: "project.create_directory.response",
@@ -563,7 +577,7 @@ describe("project command-center RPCs", () => {
             requestId: "req-create-directory",
             directoryPath,
             project: {
-              projectId: directoryPath,
+              projectId: "prj_new_project",
               projectDisplayName: "new-project",
               projectCustomName: null,
               projectRootPath: directoryPath,
@@ -586,8 +600,7 @@ describe("project command-center RPCs", () => {
     const session = createSessionForTest({
       messages,
       projectRegistry: {
-        list: vi.fn().mockResolvedValue([]),
-        upsert: vi.fn().mockRejectedValue(new Error("registry unavailable")),
+        getOrCreateActiveByRoot: vi.fn().mockRejectedValue(new Error("registry unavailable")),
       },
       workspaceGitService: {
         getCheckout: vi.fn(async (cwd: string) => ({

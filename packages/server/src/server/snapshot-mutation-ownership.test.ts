@@ -125,6 +125,7 @@ describe("snapshot mutation ownership boundary", () => {
           upsert: async () => {},
           archive: async () => {},
           remove: async () => {},
+          subscribeToMutations: () => () => {},
         }),
         workspaceRegistry: createStub<SessionOptions["workspaceRegistry"]>({
           initialize: async () => {},
@@ -134,6 +135,7 @@ describe("snapshot mutation ownership boundary", () => {
           upsert: async () => {},
           archive: async () => {},
           remove: async () => {},
+          subscribeToMutations: () => () => {},
         }),
         createAgentMcpTransport: async () => {
           throw new Error("not used");

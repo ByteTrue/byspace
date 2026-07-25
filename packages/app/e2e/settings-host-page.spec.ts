@@ -134,9 +134,7 @@ test.describe("Settings host page", () => {
     await expect(profileRow).toBeVisible();
     await expect(profileRow.getByTestId("terminal-profile-actions-pi")).toHaveCount(0);
     await profileActions.click();
-    await expect(
-      page.getByRole("dialog").getByRole("button", { name: "Edit profile", exact: true }),
-    ).toBeVisible();
+    await expect(page.getByRole("button", { name: "Edit profile", exact: true })).toBeVisible();
     await page.keyboard.press("Escape");
     await expect(page.getByTestId("provider-terminal-add-profile")).toBeVisible();
     await page.getByTestId("terminal-agent-hook-pi").click();

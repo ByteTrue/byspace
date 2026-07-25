@@ -180,7 +180,7 @@ export interface SeededWorkspace {
   workspaceDirectory: string;
   /** Stable project identity the daemon groups workspaces under. */
   projectId: string;
-  /** Project label the UI shows (owner/repo for known remotes, else basename). */
+  /** Project label the UI shows for the selected folder. */
   projectDisplayName: string;
   cleanup(): Promise<void>;
 }

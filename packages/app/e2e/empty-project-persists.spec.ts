@@ -195,6 +195,7 @@ test.describe("Project with no workspaces persists", () => {
 test.describe("Project remove", () => {
   test("removing a project from project actions removes it from the sidebar", async ({ page }) => {
     const workspace = await seedWorkspace({ repoPrefix: "project-remove-sidebar-" });
+    let readdedProjectId: string | null = null;
 
     try {
       const projectRow = page.getByTestId(`sidebar-project-row-${workspace.projectId}`);
@@ -220,16 +221,22 @@ test.describe("Project remove", () => {
       const readded = await workspace.client.addProject(workspace.repoPath);
       expect(readded.error).toBeNull();
       expect(readded.project?.projectDisplayName).toBe(workspace.projectDisplayName);
+      readdedProjectId = readded.project?.projectId ?? null;
+      expect(readdedProjectId).not.toBeNull();
 
       await page.reload();
       await waitForSidebarHydration(page);
-      await expect(projectRow).toBeVisible({ timeout: 30_000 });
-      await expect(projectRow).toContainText(workspace.projectDisplayName);
-      await expect(projectRow).not.toContainText(workspace.repoPath);
+      const readdedProjectRow = page.getByTestId(`sidebar-project-row-${readdedProjectId}`);
+      await expect(readdedProjectRow).toBeVisible({ timeout: 30_000 });
+      await expect(readdedProjectRow).toContainText(workspace.projectDisplayName);
+      await expect(readdedProjectRow).not.toContainText(workspace.repoPath);
       await expect(
-        page.getByTestId(`sidebar-project-new-workspace-row-${workspace.projectId}`),
+        page.getByTestId(`sidebar-project-new-workspace-row-${readdedProjectId}`),
       ).toBeVisible({ timeout: 30_000 });
     } finally {
+      if (readdedProjectId) {
+        await workspace.client.removeProject(readdedProjectId).catch(() => undefined);
+      }
       await workspace.cleanup();
     }
   });

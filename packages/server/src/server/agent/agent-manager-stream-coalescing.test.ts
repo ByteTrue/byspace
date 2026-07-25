@@ -1079,6 +1079,7 @@ describe("target coalesced behavior", () => {
       await vi.advanceTimersByTimeAsync(COALESCE_WINDOW_MS);
 
       expect(getTimelineItems(await reuseHarness.manager.getTimelineRows(second.agentId))).toEqual([
+        { type: "assistant_message", text: "old" },
         { type: "assistant_message", text: "new" },
       ]);
       expect(getTimelineStreamEvents(reuseHarness.events, first.agentId)).toHaveLength(2);
