@@ -95,6 +95,27 @@ function deriveState(input: ResolveScheduleInput): ScheduleDerivedState {
   return "active";
 }
 
+export interface ScheduleRowActionVisibility {
+  edit: boolean;
+  pause: boolean;
+  resume: boolean;
+  runNow: boolean;
+  delete: boolean;
+}
+
+export function resolveScheduleRowActionVisibility(
+  schedule: ScheduleSummary,
+): ScheduleRowActionVisibility {
+  const isHeartbeat = schedule.target.type === "agent";
+  return {
+    edit: true,
+    pause: !isHeartbeat && schedule.status !== "paused",
+    resume: !isHeartbeat && schedule.status === "paused",
+    runNow: !isHeartbeat,
+    delete: true,
+  };
+}
+
 export function scheduleBucket(state: ScheduleDerivedState): ScheduleBucket {
   return state === "active" || state === "paused" ? "runnable" : "ended";
 }

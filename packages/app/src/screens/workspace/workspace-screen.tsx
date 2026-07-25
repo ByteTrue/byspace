@@ -2970,6 +2970,16 @@ function WorkspaceScreenContent({
     [handleToggleExplorer],
   );
 
+  const canRelocateWorkspaceTab = useStableEvent(function canRelocateWorkspaceTab(
+    tabId: string,
+  ): boolean {
+    return !getPanelInstanceAttributes({
+      serverId: normalizedServerId,
+      workspaceId: normalizedWorkspaceId,
+      tabId,
+    }).modified;
+  });
+
   const handleWorkspacePaneAction = useCallback(
     (action: KeyboardActionDefinition): boolean => {
       if (action.id === "workspace.focus.toggle") {
@@ -3018,7 +3028,7 @@ function WorkspaceScreenContent({
         if (direction) {
           const activePaneTabId = focusedPaneTabState.activeTabId;
           const adjacentPaneId = findAdjacentPane(workspaceLayout.root, focusedPane.id, direction);
-          if (activePaneTabId && adjacentPaneId) {
+          if (activePaneTabId && adjacentPaneId && canRelocateWorkspaceTab(activePaneTabId)) {
             paneFocusSuppressedRef.current = true;
             moveWorkspaceTabToPane(persistenceKey, activePaneTabId, adjacentPaneId);
             requestAnimationFrame(() => {
@@ -3045,6 +3055,7 @@ function WorkspaceScreenContent({
     },
     [
       allTabDescriptorsById,
+      canRelocateWorkspaceTab,
       focusWorkspacePane,
       handleBulkCloseTabs,
       handleCreateDraftSplit,
@@ -3272,22 +3283,24 @@ function WorkspaceScreenContent({
       targetPaneId: string;
       position: "left" | "right" | "top" | "bottom";
     }) {
-      if (!persistenceKey) {
-        return;
+      if (!persistenceKey || !canRelocateWorkspaceTab(input.tabId)) {
+        return false;
       }
       splitWorkspacePane(persistenceKey, input);
+      return true;
     },
-    [persistenceKey, splitWorkspacePane],
+    [canRelocateWorkspaceTab, persistenceKey, splitWorkspacePane],
   );
 
   const handleMoveTabToPane = useCallback(
     function handleMoveTabToPane(tabId: string, toPaneId: string) {
-      if (!persistenceKey) {
-        return;
+      if (!persistenceKey || !canRelocateWorkspaceTab(tabId)) {
+        return false;
       }
       moveWorkspaceTabToPane(persistenceKey, tabId, toPaneId);
+      return true;
     },
-    [moveWorkspaceTabToPane, persistenceKey],
+    [canRelocateWorkspaceTab, moveWorkspaceTabToPane, persistenceKey],
   );
 
   const handleResizePaneSplit = useCallback(
@@ -3334,7 +3347,7 @@ function WorkspaceScreenContent({
     [t],
   );
 
-  const containerStyle = containerWithWorkspaceBackgroundStyle;
+  const containerStyle = [styles.container, styles.containerWorkspaceBackground];
 
   const menuNewAgentIcon = MENU_NEW_AGENT_ICON;
   const menuNewTerminalIcon = MENU_NEW_TERMINAL_ICON;
@@ -4074,10 +4087,5 @@ const styles = StyleSheet.create((theme) => ({
     textAlign: "center",
   },
 }));
-
-const containerWithWorkspaceBackgroundStyle = [
-  styles.container,
-  styles.containerWorkspaceBackground,
-];
 
 const EXPLORER_TOGGLE_KEYS: ShortcutKey[] = ["mod", "E"];

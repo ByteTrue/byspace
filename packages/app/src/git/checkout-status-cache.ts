@@ -5,6 +5,7 @@ import type {
 } from "@bytetrue/byspace-protocol/messages";
 import equal from "fast-deep-equal/es6";
 import {
+  checkoutCommitsQueryKey,
   checkoutPrStatusQueryKey,
   checkoutStatusQueryKey,
   invalidatePrPaneTimelineForCheckout,
@@ -52,6 +53,9 @@ export function applyCheckoutStatusUpdateFromEvent({
     : undefined;
   const cachePayload = prStatus ? { ...payload, prStatus } : payload;
   queryClient.setQueryData(checkoutStatusQueryKey(serverId, payload.cwd), cachePayload);
+  void queryClient.invalidateQueries({
+    queryKey: checkoutCommitsQueryKey(serverId, payload.cwd),
+  });
   expireStaleDiffModeOverrides({
     serverId,
     cwd: payload.cwd,

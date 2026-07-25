@@ -431,7 +431,7 @@ function isOpenCodeNotFoundError(error: unknown): boolean {
   );
 }
 
-async function reconcileOpenCodeSessionClose(params: {
+async function abortOpenCodeSession(params: {
   client: Pick<OpencodeClient, "session">;
   sessionId: string;
   directory: string;
@@ -460,31 +460,6 @@ async function reconcileOpenCodeSessionClose(params: {
         error: toDiagnosticErrorMessage(error),
       },
       "Failed to abort OpenCode session during close",
-    );
-  }
-
-  try {
-    const response = await client.session.update({
-      sessionID: sessionId,
-      directory,
-      time: { archived: Date.now() },
-    });
-    if (response.error && !isOpenCodeNotFoundError(response.error)) {
-      logger.warn(
-        {
-          sessionId,
-          error: toDiagnosticErrorMessage(response.error),
-        },
-        "Failed to archive OpenCode session during close",
-      );
-    }
-  } catch (error) {
-    logger.warn(
-      {
-        sessionId,
-        error: toDiagnosticErrorMessage(error),
-      },
-      "Failed to archive OpenCode session during close",
     );
   }
 }
@@ -1255,7 +1230,6 @@ export const __openCodeInternals = {
   hasNormalizedOpenCodeUsage,
   mergeOpenCodeStepFinishUsage,
   parseOpenCodeModelLookupKey,
-  reconcileOpenCodeSessionClose,
   resolveOpenCodeModelLookupKeyFromAssistantMessage,
   resolveOpenCodeSelectedModelContextWindow,
   isSelectableOpenCodeAgent,
@@ -1354,7 +1328,7 @@ export class OpenCodeAgentClient implements AgentClient {
         url,
       );
     } catch (error) {
-      acquisition.release();
+      await acquisition.release();
       throw error;
     }
   }
@@ -1408,7 +1382,7 @@ export class OpenCodeAgentClient implements AgentClient {
         registeredAcquisition !== null,
       );
     } catch (error) {
-      acquisition.release();
+      await acquisition.release();
       throw error;
     }
   }
@@ -1440,7 +1414,7 @@ export class OpenCodeAgentClient implements AgentClient {
       ]);
       return { models, modes };
     } finally {
-      acquisition.release();
+      await acquisition.release();
     }
   }
 
@@ -1456,7 +1430,7 @@ export class OpenCodeAgentClient implements AgentClient {
     try {
       return await listOpenCodeCommandsFromSdk(client, openCodeConfig.cwd);
     } finally {
-      acquisition.release();
+      await acquisition.release();
     }
   }
 
@@ -1477,7 +1451,7 @@ export class OpenCodeAgentClient implements AgentClient {
     try {
       return await collectOpenCodeImportableSessionsFromSdk(client, options);
     } finally {
-      acquisition.release();
+      await acquisition.release();
     }
   }
 
@@ -1513,7 +1487,57 @@ export class OpenCodeAgentClient implements AgentClient {
         },
       });
     } finally {
-      acquisition.release();
+      await acquisition.release();
+    }
+  }
+
+  async archiveNativeSession(handle: AgentPersistenceHandle): Promise<void> {
+    await this.setNativeSessionArchived(handle, Date.now());
+  }
+
+  async unarchiveNativeSession(handle: AgentPersistenceHandle): Promise<void> {
+    await this.setNativeSessionArchived(handle, null);
+  }
+
+  private async setNativeSessionArchived(
+    handle: AgentPersistenceHandle,
+    archivedAt: number | null,
+  ): Promise<void> {
+    const metadata = (handle.metadata ?? {}) as Partial<AgentSessionConfig>;
+    if (!metadata.cwd) {
+      throw new Error("OpenCode native archive update requires the original working directory");
+    }
+
+    const registeredServerUrl = getOpenCodeChildSessionServerUrl(handle.sessionId);
+    const acquisition =
+      (registeredServerUrl ? this.serverManager.acquireExisting(registeredServerUrl) : null) ??
+      (await this.serverManager.acquireCurrent());
+    const client = this.createOpenCodeClient({
+      baseUrl: acquisition.server.url,
+      directory: metadata.cwd,
+    });
+    try {
+      // OpenCode accepts null to clear the archive timestamp, but this SDK
+      // release's generated request type still exposes only number.
+      const updateSession = client.session.update.bind(client.session) as (parameters: {
+        sessionID: string;
+        directory?: string;
+        time?: { archived?: number | null };
+      }) => ReturnType<typeof client.session.update>;
+      const response = readOpenCodeRecord(
+        await updateSession({
+          sessionID: handle.sessionId,
+          directory: metadata.cwd,
+          time: { archived: archivedAt },
+        }),
+      );
+      if (response?.error) {
+        throw new Error(
+          `Failed to ${archivedAt === null ? "unarchive" : "archive"} OpenCode session: ${toDiagnosticErrorMessage(response.error)}`,
+        );
+      }
+    } finally {
+      await acquisition.release();
     }
   }
 
@@ -2738,6 +2762,16 @@ type OpenCodeTurnState =
   | { status: "running"; turnId: string }
   | { status: "stopping"; idle: Deferred<void> };
 
+interface OpenCodePendingInterruptTerminalEvent {
+  turnId: string;
+  event: NonNullable<ReturnType<typeof toTerminalTurnEvent>>;
+}
+
+interface OpenCodeInterruptInFlight {
+  turnId: string;
+  promise: Promise<void>;
+}
+
 function unwrapOpenCodeGlobalEvent(event: unknown): OpenCodeEvent | null {
   const record = readOpenCodeRecord(event);
   if (!record) {
@@ -2890,6 +2924,9 @@ class OpenCodeAgentSession implements AgentSession {
   private nextTurnOrdinal = 0;
   private turnState: OpenCodeTurnState = { status: "idle" };
   private interruptingTurnId: string | null = null;
+  private interruptAbortPendingTurnId: string | null = null;
+  private pendingInterruptTerminalEvent: OpenCodePendingInterruptTerminalEvent | null = null;
+  private interruptInFlight: OpenCodeInterruptInFlight | null = null;
   private readonly runningToolCalls = new Map<string, ToolCallTimelineItem>();
   private subAgentsByCallId = new Map<string, OpenCodeSubAgentActivityState>();
   private subAgentCallIdByChildSessionId = new Map<string, string>();
@@ -2901,7 +2938,7 @@ class OpenCodeAgentSession implements AgentSession {
   private childHydrationCompleted = false;
   private readonly unrelatedSessionIds = new Set<string>();
   private selectedModelContextWindowMaxTokens: number | undefined;
-  private releaseServer: (() => void) | null;
+  private releaseServer: (() => Promise<void>) | null;
   private eventStreamAbortController: AbortController | null = null;
   private eventStreamReady: Deferred<void> | null = null;
   private eventStreamTask: Promise<void> | null = null;
@@ -2914,7 +2951,7 @@ class OpenCodeAgentSession implements AgentSession {
     sessionId: string,
     logger: Logger,
     modelContextWindowsByModelKey: ReadonlyMap<string, number> = new Map(),
-    releaseServer?: () => void,
+    releaseServer?: () => Promise<void>,
     persistSession = true,
     private readonly agentId?: string,
     private readonly serverUrl?: string,
@@ -2983,11 +3020,27 @@ class OpenCodeAgentSession implements AgentSession {
     });
   }
 
-  async interrupt(): Promise<void> {
+  interrupt(): Promise<void> {
     const turnId = this.activeForegroundTurnId;
-    if (!turnId) return;
+    if (!turnId) return Promise.resolve();
+    if (this.interruptInFlight?.turnId === turnId) {
+      return this.interruptInFlight.promise;
+    }
+
+    const promise = this.interruptTurn(turnId).finally(() => {
+      if (this.interruptInFlight?.turnId === turnId) {
+        this.interruptInFlight = null;
+      }
+    });
+    this.interruptInFlight = { turnId, promise };
+    return promise;
+  }
+
+  private async interruptTurn(turnId: string): Promise<void> {
     this.abortController?.abort();
     this.interruptingTurnId = turnId;
+    this.interruptAbortPendingTurnId = turnId;
+    this.pendingInterruptTerminalEvent = null;
     try {
       // COMPAT(opencodeSlowAbort): OpenCode 1.14.42+ blocks session.abort until
       // the running tool actually stops, which can be tens of seconds for
@@ -2996,17 +3049,36 @@ class OpenCodeAgentSession implements AgentSession {
       // upstream acknowledges abort before tool teardown.
       await withTimeout(this.abortSession(), 2_000, "OpenCode session.abort");
     } catch (error) {
-      if (this.activeForegroundTurnId === turnId) {
-        this.interruptingTurnId = null;
+      if (this.interruptAbortPendingTurnId === turnId) {
+        const pendingTerminal = this.takePendingInterruptTerminalEvent(turnId);
+        this.interruptAbortPendingTurnId = null;
+        if (this.activeForegroundTurnId === turnId) {
+          this.interruptingTurnId = null;
+          if (pendingTerminal) {
+            this.finishForegroundTurn(pendingTerminal, turnId);
+          }
+        }
       }
       this.logger.warn(
         { err: error, sessionId: this.sessionId, turnId },
-        "OpenCode session.abort failed; keeping the turn active",
+        "OpenCode session.abort failed",
       );
       throw error;
     }
+    if (this.interruptAbortPendingTurnId !== turnId) {
+      return;
+    }
+    const pendingTerminal = this.takePendingInterruptTerminalEvent(turnId);
+    this.interruptAbortPendingTurnId = null;
     if (this.activeForegroundTurnId === turnId) {
-      this.beginStoppingTurn(turnId);
+      if (pendingTerminal) {
+        this.finishForegroundTurn(
+          { type: "turn_canceled", provider: "opencode", reason: "interrupted" },
+          turnId,
+        );
+      } else {
+        this.beginStoppingTurn(turnId);
+      }
     }
   }
 
@@ -3017,6 +3089,17 @@ class OpenCodeAgentSession implements AgentSession {
       cwd: this.config.cwd,
       messageId: input.messageId,
     });
+  }
+
+  private takePendingInterruptTerminalEvent(
+    turnId: string,
+  ): NonNullable<ReturnType<typeof toTerminalTurnEvent>> | null {
+    const pending = this.pendingInterruptTerminalEvent;
+    if (pending?.turnId !== turnId) {
+      return null;
+    }
+    this.pendingInterruptTerminalEvent = null;
+    return pending.event;
   }
 
   private async abortSession(): Promise<void> {
@@ -3609,12 +3692,7 @@ class OpenCodeAgentSession implements AgentSession {
       }
       const terminalEvent = toTerminalTurnEvent(e);
       if (terminalEvent) {
-        const effectiveTerminalEvent = this.resolveTerminalTurnEvent(terminalEvent, turnId);
-        this.traceOpenCode("provider.opencode.event.terminal", {
-          turnId,
-          type: effectiveTerminalEvent.type,
-        });
-        this.finishForegroundTurn(effectiveTerminalEvent, turnId);
+        this.handleTerminalTurnEvent(terminalEvent, turnId);
         return;
       }
       this.notifySubscribers(e, turnId);
@@ -3672,12 +3750,20 @@ class OpenCodeAgentSession implements AgentSession {
     return turnId;
   }
 
-  private resolveTerminalTurnEvent(
+  private handleTerminalTurnEvent(
     event: NonNullable<ReturnType<typeof toTerminalTurnEvent>>,
     turnId: string,
-  ): NonNullable<ReturnType<typeof toTerminalTurnEvent>> {
-    if (this.interruptingTurnId !== turnId) return event;
-    return { type: "turn_canceled", provider: "opencode", reason: "interrupted" };
+  ): void {
+    if (this.interruptAbortPendingTurnId === turnId) {
+      this.pendingInterruptTerminalEvent = { turnId, event };
+      return;
+    }
+    const effectiveEvent =
+      this.interruptingTurnId === turnId
+        ? { type: "turn_canceled" as const, provider: "opencode" as const, reason: "interrupted" }
+        : event;
+    this.traceOpenCode("provider.opencode.event.terminal", { turnId, type: effectiveEvent.type });
+    this.finishForegroundTurn(effectiveEvent, turnId);
   }
 
   private finishForegroundTurn(
@@ -3696,6 +3782,12 @@ class OpenCodeAgentSession implements AgentSession {
     }
     if (this.interruptingTurnId === turnId) {
       this.interruptingTurnId = null;
+    }
+    if (this.interruptAbortPendingTurnId === turnId) {
+      this.interruptAbortPendingTurnId = null;
+    }
+    if (this.pendingInterruptTerminalEvent?.turnId === turnId) {
+      this.pendingInterruptTerminalEvent = null;
     }
     if (event.type === "turn_canceled" || event.type === "turn_failed") {
       this.synthesizeInterruptedToolCalls(turnId);
@@ -3974,7 +4066,7 @@ class OpenCodeAgentSession implements AgentSession {
       this.eventStreamReady = null;
       this.eventStreamTask = null;
       this.subscribers.clear();
-      await reconcileOpenCodeSessionClose({
+      await abortOpenCodeSession({
         client: this.client,
         sessionId: this.sessionId,
         directory: this.config.cwd,
@@ -3986,7 +4078,7 @@ class OpenCodeAgentSession implements AgentSession {
       }
       this.turnState = { status: "idle" };
     } finally {
-      this.releaseServer?.();
+      await this.releaseServer?.();
       this.releaseServer = null;
     }
   }

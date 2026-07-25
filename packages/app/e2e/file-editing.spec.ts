@@ -2,6 +2,7 @@ import { readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { expect, test, type Page } from "./fixtures";
 import { expectFileTabOpen, openFileExplorer, openFileFromExplorer } from "./helpers/file-explorer";
+import { openSettingsSection } from "./helpers/settings";
 
 function editor(page: Page) {
   return page.getByTestId("file-source-editor").filter({ visible: true }).locator(".cm-content");
@@ -59,6 +60,31 @@ test.describe("workspace file editing", () => {
     page.once("dialog", (dialog) => dialog.accept());
     await page.getByRole("button", { name: "Reload", exact: true }).click();
     await expect(editor(page)).toContainText("const diskWins = 8;");
+  });
+
+  test("enables Vim keybindings from Preferences", async ({ page, withWorkspace }) => {
+    const workspace = await withWorkspace({ prefix: "file-editing-vim-" });
+    const sourcePath = path.join(workspace.repoPath, "vim.ts");
+    await writeFile(sourcePath, "const initial = 1;\n", "utf8");
+    await workspace.navigateTo();
+
+    await page.getByTestId("sidebar-settings").filter({ visible: true }).click();
+    await openSettingsSection(page, "preferences");
+    const vimToggle = page.getByRole("switch", { name: "Vim keybindings" });
+    await expect(vimToggle).not.toBeChecked();
+    await vimToggle.click();
+    await expect(vimToggle).toBeChecked();
+
+    await workspace.navigateTo();
+    await openWorkspaceFile(page, "vim.ts");
+    await editor(page).click();
+    await expect(page.getByText("NORMAL", { exact: true })).toBeVisible();
+    await editor(page).press("i");
+    await expect(page.getByText("INSERT", { exact: true })).toBeVisible();
+    await editor(page).pressSequentially("X");
+    await editor(page).press("Escape");
+    await expect(page.getByText("NORMAL", { exact: true })).toBeVisible();
+    await expect.poll(() => readFile(sourcePath, "utf8")).toBe("const initial = 1;\nX");
   });
 
   test("preserves BOM and CRLF while saving", async ({ page, withWorkspace }) => {

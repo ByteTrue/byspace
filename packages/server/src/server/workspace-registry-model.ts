@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { resolve } from "node:path";
+import { normalize, resolve } from "node:path";
 
 import type {
   ProjectCheckoutLitePayload,
@@ -30,6 +30,14 @@ export interface DetectStaleWorkspacesInput {
 
 export function generateWorkspaceId(): string {
   return `wks_${randomBytes(8).toString("hex")}`;
+}
+
+export function generateProjectId(): string {
+  return `prj_${randomBytes(8).toString("hex")}`;
+}
+
+export function normalizeProjectRootPath(rootPath: string): string {
+  return normalize(resolve(rootPath));
 }
 
 // Path-derived grouping key for a workspace directory. This is NOT the opaque
@@ -204,6 +212,144 @@ export function checkoutLiteFromGitSnapshot(
     isBySpaceOwnedWorktree: false,
     mainRepoRoot: git.mainRepoRoot,
   };
+}
+
+export type PersistedWorkspacePlacement = Pick<
+  PersistedWorkspaceRecord,
+  | "cwd"
+  | "kind"
+  | "displayName"
+  | "branch"
+  | "worktreeRoot"
+  | "baseBranch"
+  | "isBySpaceOwnedWorktree"
+  | "mainRepoRoot"
+>;
+
+export type MutableWorkspacePlacement = Pick<
+  PersistedWorkspaceRecord,
+  "kind" | "branch" | "worktreeRoot" | "isBySpaceOwnedWorktree" | "mainRepoRoot"
+>;
+
+export type InitialWorkspacePlacementInput =
+  | {
+      source: "checkout";
+      cwd: string;
+      checkout: ProjectCheckoutLitePayload;
+    }
+  | {
+      source: "created_worktree";
+      cwd: string;
+      worktreeRoot: string;
+      branch: string | null;
+      baseBranch: string | null;
+      mainRepoRoot: string;
+    };
+
+export interface WorkspacePlacementUpdate {
+  workspace: PersistedWorkspaceRecord;
+  fields: Partial<MutableWorkspacePlacement>;
+}
+
+export function initialWorkspacePlacement(
+  input: InitialWorkspacePlacementInput,
+): PersistedWorkspacePlacement {
+  if (input.source === "created_worktree") {
+    return {
+      cwd: input.cwd,
+      kind: "worktree",
+      displayName: input.branch || input.cwd,
+      branch: input.branch,
+      worktreeRoot: input.worktreeRoot,
+      baseBranch: input.baseBranch,
+      isBySpaceOwnedWorktree: true,
+      mainRepoRoot: input.mainRepoRoot,
+    };
+  }
+
+  const branch = normalizeBranch(input.checkout.currentBranch);
+  return {
+    cwd: input.cwd,
+    kind: deriveWorkspaceKind(input.checkout),
+    displayName: deriveWorkspaceDisplayName(input),
+    branch,
+    worktreeRoot: input.checkout.isGit ? (input.checkout.worktreeRoot ?? input.cwd) : null,
+    baseBranch: null,
+    isBySpaceOwnedWorktree: input.checkout.isGit && input.checkout.isBySpaceOwnedWorktree,
+    mainRepoRoot: input.checkout.isGit ? input.checkout.mainRepoRoot : null,
+  };
+}
+
+export function reconcileWorkspacePlacement(input: {
+  workspace: PersistedWorkspaceRecord;
+  checkout: ProjectCheckoutLitePayload;
+  updatedAt: string;
+}): WorkspacePlacementUpdate | null {
+  const observed = initialWorkspacePlacement({
+    source: "checkout",
+    cwd: input.workspace.cwd,
+    checkout: input.checkout,
+  });
+  const fields: Partial<MutableWorkspacePlacement> = {};
+  if (input.workspace.kind !== observed.kind) fields.kind = observed.kind;
+  if (input.workspace.branch !== observed.branch) fields.branch = observed.branch;
+  if (input.workspace.worktreeRoot !== observed.worktreeRoot)
+    fields.worktreeRoot = observed.worktreeRoot;
+  if (input.workspace.isBySpaceOwnedWorktree !== observed.isBySpaceOwnedWorktree)
+    fields.isBySpaceOwnedWorktree = observed.isBySpaceOwnedWorktree;
+  if (input.workspace.mainRepoRoot !== observed.mainRepoRoot)
+    fields.mainRepoRoot = observed.mainRepoRoot;
+
+  if (Object.keys(fields).length === 0) return null;
+  return {
+    workspace: { ...input.workspace, ...fields, updatedAt: input.updatedAt },
+    fields,
+  };
+}
+
+export function checkoutFromPersistedWorkspacePlacement(input: {
+  workspace: PersistedWorkspaceRecord;
+  fallbackBranch?: string | null;
+  fallbackWorktreeRoot?: string | null;
+}): ProjectPlacementPayload["checkout"] {
+  const { workspace } = input;
+  if (workspace.kind === "directory") {
+    return {
+      cwd: workspace.cwd,
+      isGit: false,
+      currentBranch: null,
+      remoteUrl: null,
+      worktreeRoot: null,
+      isBySpaceOwnedWorktree: false,
+      mainRepoRoot: null,
+    };
+  }
+
+  const checkout = {
+    cwd: workspace.cwd,
+    currentBranch: workspace.branch ?? input.fallbackBranch ?? null,
+    remoteUrl: null,
+    worktreeRoot: workspace.worktreeRoot ?? input.fallbackWorktreeRoot ?? workspace.cwd,
+  };
+  if (workspace.isBySpaceOwnedWorktree && workspace.mainRepoRoot) {
+    return {
+      ...checkout,
+      isGit: true,
+      isBySpaceOwnedWorktree: true,
+      mainRepoRoot: workspace.mainRepoRoot,
+    };
+  }
+  return {
+    ...checkout,
+    isGit: true,
+    isBySpaceOwnedWorktree: false,
+    mainRepoRoot: workspace.mainRepoRoot ?? null,
+  };
+}
+
+function normalizeBranch(branch: string | null | undefined): string | null {
+  const normalized = branch?.trim() ?? null;
+  return normalized && normalized.toUpperCase() !== "HEAD" ? normalized : null;
 }
 
 export async function detectStaleWorkspaces(

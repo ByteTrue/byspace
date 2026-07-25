@@ -172,6 +172,7 @@ describe("cloneGithubProjectDirectly", () => {
       targetDirectory: "~/workspace",
       cloneProtocol: "https",
       isConnected: true,
+      canCloneGithubProject: true,
       client: github,
       addEmptyProject: session.addEmptyProject,
       setHasHydratedWorkspaces: session.setHasHydratedWorkspaces,
@@ -197,6 +198,30 @@ describe("cloneGithubProjectDirectly", () => {
     expect(session.hydrated).toEqual([{ serverId: SERVER_ID, hydrated: true }]);
   });
 
+  it("fails before cloning when stable project identity is unavailable", async () => {
+    const session = createFakeSession();
+    const github = createFakeGithubCloneClient(buildProjectPayload());
+
+    const result = await cloneGithubProjectDirectly({
+      serverId: SERVER_ID,
+      repo: "owner/project",
+      targetDirectory: "~/workspace",
+      isConnected: true,
+      canCloneGithubProject: false,
+      client: github,
+      addEmptyProject: session.addEmptyProject,
+      setHasHydratedWorkspaces: session.setHasHydratedWorkspaces,
+    });
+
+    expect(result).toEqual({
+      ok: false,
+      errorCode: null,
+      error: "Update the host to clone projects with stable identity.",
+    });
+    expect(github.clones).toEqual([]);
+    expect(session.projects).toEqual([]);
+  });
+
   it("does not register a project when cloning fails", async () => {
     const session = createFakeSession();
     const github = createFakeGithubCloneClient(null);
@@ -207,6 +232,7 @@ describe("cloneGithubProjectDirectly", () => {
       targetDirectory: "~/workspace",
       cloneProtocol: "https",
       isConnected: true,
+      canCloneGithubProject: true,
       client: github,
       addEmptyProject: session.addEmptyProject,
       setHasHydratedWorkspaces: session.setHasHydratedWorkspaces,

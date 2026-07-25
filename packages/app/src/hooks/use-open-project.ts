@@ -14,11 +14,12 @@ export function useOpenProject(
   const normalizedServerId = serverId?.trim() ?? "";
   const client = useHostRuntimeClient(normalizedServerId);
   const isConnected = useHostRuntimeIsConnected(normalizedServerId);
-  const canAddProject = useSessionStore((state) =>
-    normalizedServerId
-      ? state.sessions[normalizedServerId]?.serverInfo?.features?.projectAdd === true
-      : false,
-  );
+  const canAddProject = useSessionStore((state) => {
+    if (!normalizedServerId) return false;
+    const features = state.sessions[normalizedServerId]?.serverInfo?.features;
+    // COMPAT(stableProjectIdentity): added in v0.2.0, remove gate after 2027-01-23.
+    return features?.projectAdd === true && features.stableProjectIdentity === true;
+  });
   const addEmptyProject = useSessionStore((state) => state.addEmptyProject);
   const setHasHydratedWorkspaces = useSessionStore((state) => state.setHasHydratedWorkspaces);
 
@@ -56,6 +57,12 @@ export function useCloneGithubProject(
   const normalizedServerId = serverId?.trim() ?? "";
   const client = useHostRuntimeClient(normalizedServerId);
   const isConnected = useHostRuntimeIsConnected(normalizedServerId);
+  const canCloneGithubProject = useSessionStore((state) => {
+    if (!normalizedServerId) return false;
+    const features = state.sessions[normalizedServerId]?.serverInfo?.features;
+    // COMPAT(stableProjectIdentity): added in v0.2.0, remove gate after 2027-01-23.
+    return features?.projectGithubClone === true && features.stableProjectIdentity === true;
+  });
   const addEmptyProject = useSessionStore((state) => state.addEmptyProject);
   const setHasHydratedWorkspaces = useSessionStore((state) => state.setHasHydratedWorkspaces);
 
@@ -67,11 +74,19 @@ export function useCloneGithubProject(
         targetDirectory,
         ...(cloneProtocol ? { cloneProtocol } : {}),
         isConnected,
+        canCloneGithubProject,
         client,
         addEmptyProject,
         setHasHydratedWorkspaces,
       });
     },
-    [addEmptyProject, client, isConnected, normalizedServerId, setHasHydratedWorkspaces],
+    [
+      addEmptyProject,
+      canCloneGithubProject,
+      client,
+      isConnected,
+      normalizedServerId,
+      setHasHydratedWorkspaces,
+    ],
   );
 }

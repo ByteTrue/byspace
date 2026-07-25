@@ -335,6 +335,7 @@ export interface CreateAgentRequestOptions extends AgentConfigOverrides {
   cwd?: string;
   env?: CreateAgentRequestMessage["env"];
   workspaceId?: string;
+  callerAgentId?: string;
   initialPrompt?: string;
   clientMessageId?: string;
   outputSchema?: Record<string, unknown>;
@@ -2311,6 +2312,7 @@ export class DaemonClient {
       config,
       ...(options.env ? { env: options.env } : {}),
       ...(options.workspaceId !== undefined ? { workspaceId: options.workspaceId } : {}),
+      ...(options.callerAgentId !== undefined ? { callerAgentId: options.callerAgentId } : {}),
       ...(options.initialPrompt ? { initialPrompt: options.initialPrompt } : {}),
       ...(options.clientMessageId ? { clientMessageId: options.clientMessageId } : {}),
       ...(options.outputSchema ? { outputSchema: options.outputSchema } : {}),

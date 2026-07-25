@@ -33,14 +33,14 @@ The MCP server itself is controlled by `daemon.mcp.enabled`. Existing agents may
 | `get_agent_activity` | Return recent agent timeline entries as a curated summary.                                           |
 | `set_agent_mode`     | Switch an agent's session mode.                                                                      |
 
-### Workspaces and worktrees
+### Workspaces
 
-| Tool               | Function                                                                        |
-| ------------------ | ------------------------------------------------------------------------------- |
-| `rename_workspace` | Change the user-visible name of the current or specified workspace.             |
-| `list_worktrees`   | List BySpace-managed git worktrees for a repository.                            |
-| `create_worktree`  | Create a BySpace-managed git worktree from a branch, base branch, or GitHub PR. |
-| `archive_worktree` | Delete a BySpace-managed git worktree.                                          |
+| Tool                | Function                                                                                     |
+| ------------------- | -------------------------------------------------------------------------------------------- |
+| `create_workspace`  | Create a local or worktree-isolated workspace from a branch, base branch, or change request. |
+| `list_workspaces`   | List active workspaces with their directories and isolation.                                 |
+| `rename_workspace`  | Change the user-visible name of the current or specified workspace.                          |
+| `archive_workspace` | Archive a workspace and its agents and terminals; remove its final BySpace-owned worktree.   |
 
 ### Terminals
 
@@ -54,17 +54,19 @@ The MCP server itself is controlled by `daemon.mcp.enabled`. Existing agents may
 
 ### Schedules
 
-| Tool               | Function                                                          |
-| ------------------ | ----------------------------------------------------------------- |
-| `create_schedule`  | Create a recurring schedule that runs on an agent or a new agent. |
-| `create_heartbeat` | Send a recurring prompt back into the current agent.              |
-| `list_schedules`   | List schedules managed by the daemon.                             |
-| `inspect_schedule` | Inspect a schedule and its run history.                           |
-| `pause_schedule`   | Pause an active schedule.                                         |
-| `resume_schedule`  | Resume a paused schedule.                                         |
-| `update_schedule`  | Change the cadence, prompt, limits, or other schedule settings.   |
-| `schedule_logs`    | Return recent runs and output for a schedule.                     |
-| `delete_schedule`  | Delete a schedule permanently.                                    |
+| Tool                | Function                                                               |
+| ------------------- | ---------------------------------------------------------------------- |
+| `create_schedule`   | Create a recurring cron schedule that starts a new agent on every run. |
+| `create_heartbeat`  | Send a recurring prompt back into the current agent.                   |
+| `delete_heartbeat`  | Delete a heartbeat owned by the current agent.                         |
+| `list_schedules`    | List new-agent schedules managed by the daemon.                        |
+| `inspect_schedule`  | Inspect a new-agent schedule and its run history.                      |
+| `pause_schedule`    | Pause an active new-agent schedule.                                    |
+| `resume_schedule`   | Resume a paused new-agent schedule.                                    |
+| `update_schedule`   | Change a new-agent schedule's cadence, prompt, limits, or target.      |
+| `schedule_logs`     | Return recent runs and output for a new-agent schedule.                |
+| `run_schedule_once` | Run a new-agent schedule immediately without changing its cadence.     |
+| `delete_schedule`   | Delete a new-agent schedule permanently.                               |
 
 ### Providers
 

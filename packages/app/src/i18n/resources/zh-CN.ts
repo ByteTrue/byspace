@@ -949,9 +949,6 @@ export const zhCN: TranslationResources = {
     refPicker: {
       startingRef: "起始 ref",
       chooseStart: "选择起始位置",
-      checkoutHint: "Checkout {{noun}} {{numberPrefix}}{{number}}？",
-      checkoutPr: "Checkout {{noun}} {{numberPrefix}}{{number}}",
-      dismissCheckoutHint: "忽略 {{noun}} {{numberPrefix}}{{number}} checkout 提示",
       intoBase: "进入 {{baseRef}}",
       searching: "正在搜索...",
       noMatchingRefs: "没有匹配的 refs。",
@@ -1413,6 +1410,10 @@ export const zhCN: TranslationResources = {
         label: "终端回滚",
         description: "内置终端缓冲区保留的行数",
         accessibilityLabel: "终端回滚行数",
+      },
+      vimKeybindings: {
+        label: "Vim 键位",
+        description: "编辑源文件时使用 Vim 键位",
       },
       autoExpandReasoning: {
         label: "始终展开推理过程",

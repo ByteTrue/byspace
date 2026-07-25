@@ -77,7 +77,51 @@ export interface ScheduleFormProjectOption {
 }
 
 export type ScheduleFormTargetKind = "agent" | "new-agent";
+type CronCadence = Extract<ScheduleCadence, { type: "cron" }>;
 type ProviderResolutionStatus = "idle" | "pending" | "complete";
+
+export interface ScheduleFormFieldVisibility {
+  name: boolean;
+  prompt: boolean;
+  target: boolean;
+  cadence: boolean;
+  maxRuns: boolean;
+}
+
+export interface HeartbeatScheduleUpdate {
+  id: string;
+  cadence: CronCadence;
+}
+
+export function resolveScheduleFormFieldVisibility(
+  targetKind: ScheduleFormTargetKind,
+): ScheduleFormFieldVisibility {
+  const isHeartbeat = targetKind === "agent";
+  return {
+    name: !isHeartbeat,
+    prompt: !isHeartbeat,
+    target: true,
+    cadence: true,
+    maxRuns: !isHeartbeat,
+  };
+}
+
+export function resolveScheduleFormTitle(
+  mode: ScheduleFormSnapshot["mode"],
+  targetKind: ScheduleFormTargetKind,
+): string {
+  if (mode === "edit" && targetKind === "agent") {
+    return "Edit heartbeat";
+  }
+  return mode === "edit" ? "Edit schedule" : "New schedule";
+}
+
+export function buildHeartbeatScheduleUpdate(
+  id: string,
+  cadence: ScheduleCadence | undefined,
+): HeartbeatScheduleUpdate | null {
+  return cadence?.type === "cron" ? { id, cadence } : null;
+}
 
 export interface ScheduleFormState {
   mode: "create" | "edit";
@@ -86,7 +130,7 @@ export interface ScheduleFormState {
   prompt: string;
   maxRuns: string;
   cadence: ScheduleCadence;
-  submitCadence: ScheduleCadence;
+  submitCadence: CronCadence | undefined;
   hosts: ScheduleFormHost[];
   projectOptions: ScheduleFormProjectOption[];
   selectedServerId: string | null;
@@ -435,14 +479,22 @@ function formatInitialMaxRuns(schedule: ScheduleFormSnapshot["schedule"]): strin
   return String(schedule.maxRuns);
 }
 
-function resolveInitialSubmitCadence(
+function resolveInitialCadence(
   snapshot: ScheduleFormSnapshot,
-  initialCadence: ScheduleCadence,
-): ScheduleCadence {
-  if (snapshot.mode === "edit" && snapshot.schedule) {
-    return snapshot.schedule.cadence;
+  targetKind: ScheduleFormTargetKind,
+): CronCadence {
+  const timezone = snapshot.defaults.timezone ?? DEFAULT_TIMEZONE;
+  if (targetKind === "agent" && snapshot.schedule?.cadence.type === "every") {
+    return { type: "cron", expression: "", timezone };
   }
-  return initialCadence;
+  return normalizeScheduleFormCadence(snapshot.schedule?.cadence ?? DEFAULT_CADENCE, timezone);
+}
+
+function resolveInitialSubmitCadence(
+  schedule: ScheduleFormSnapshot["schedule"],
+  initialCadence: CronCadence,
+): CronCadence | undefined {
+  return schedule ? undefined : initialCadence;
 }
 
 function resolveInitialIsolation(input: {
@@ -547,11 +599,11 @@ function resolveDisclosure(state: ScheduleFormState): ScheduleDisclosureState {
 }
 
 function resolveCanSubmit(state: ScheduleFormState): boolean {
+  if (state.targetKind === "agent") {
+    return state.submitCadence !== undefined;
+  }
   if (state.prompt.trim().length === 0) {
     return false;
-  }
-  if (state.targetKind === "agent") {
-    return true;
   }
   const hasWorkingDir = state.workingDir.trim().length > 0;
   const hasMatchedProject = state.selectedProjectOptionId.trim().length > 0;
@@ -643,10 +695,7 @@ function buildInitialState(snapshot: ScheduleFormSnapshot): ScheduleFormState {
     selectedServerId,
     workingDir,
   });
-  const initialCadence = normalizeScheduleFormCadence(
-    snapshot.schedule?.cadence ?? DEFAULT_CADENCE,
-    snapshot.defaults.timezone ?? DEFAULT_TIMEZONE,
-  );
+  const initialCadence = resolveInitialCadence(snapshot, targetKind);
   const initialModel = config?.model ?? "";
   const initialMode = config?.modeId ?? "";
   const initialThinking = config?.thinkingOptionId ?? "";
@@ -657,7 +706,7 @@ function buildInitialState(snapshot: ScheduleFormSnapshot): ScheduleFormState {
     prompt: snapshot.schedule?.prompt ?? "",
     maxRuns: formatInitialMaxRuns(snapshot.schedule),
     cadence: initialCadence,
-    submitCadence: resolveInitialSubmitCadence(snapshot, initialCadence),
+    submitCadence: resolveInitialSubmitCadence(snapshot.schedule, initialCadence),
     hosts: [...snapshot.hosts],
     projectOptions: buildProjectOptions(snapshot.defaults.projectTargets, selectedServerId),
     selectedServerId,

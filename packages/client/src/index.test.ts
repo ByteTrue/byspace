@@ -310,6 +310,7 @@ test("agent handles delegate create, send, timeline refetch, archive, and local 
     provider: "codex",
     cwd: "/repo/sdk",
     initialPrompt: "ship it",
+    callerAgentId: "agent_parent",
   });
   const createRequest = parseSentSessionMessage(ws.sent.at(-1));
   expect(createRequest).toMatchObject({
@@ -319,6 +320,7 @@ test("agent handles delegate create, send, timeline refetch, archive, and local 
       cwd: "/repo/sdk",
     },
     initialPrompt: "ship it",
+    callerAgentId: "agent_parent",
   });
 
   ws.message(

@@ -12,6 +12,7 @@ import {
   type PersistedProjectRecord,
 } from "../../workspace-registry.js";
 import type { CreateBySpaceWorktreeWorkflowResult } from "../../worktree-session.js";
+import { WorkspaceLifecycleCoordinator } from "../../workspace-lifecycle-coordinator.js";
 import {
   createWorkspaceProvisioningService,
   type WorkspaceProvisioningService,
@@ -30,6 +31,23 @@ let gitRoots: Set<string>;
 let workspaceRegistry: FileBackedWorkspaceRegistry;
 let projectRegistry: FileBackedProjectRegistry;
 let provisioning: WorkspaceProvisioningService;
+
+class FailingWorkspaceRegistry extends FileBackedWorkspaceRegistry {
+  failNextUpsert = false;
+  readonly events: string[] = [];
+
+  override async upsert(
+    record: Parameters<FileBackedWorkspaceRegistry["upsert"]>[0],
+    context?: Parameters<FileBackedWorkspaceRegistry["upsert"]>[1],
+  ): Promise<void> {
+    if (this.failNextUpsert) {
+      this.failNextUpsert = false;
+      this.events.push("workspace:persist-failed");
+      throw new Error("workspace registry write failed");
+    }
+    await super.upsert(record, context);
+  }
+}
 
 function gitService() {
   return createNoopWorkspaceGitService({
@@ -74,6 +92,7 @@ beforeEach(async () => {
     workspaceRegistry,
     projectRegistry,
     workspaceGitService: gitService(),
+    isDirectory: async () => true,
     logger,
   });
 });
@@ -154,6 +173,48 @@ test("ensureWorkspaceRecordUnarchived clears archivedAt on the workspace and its
   expect((await projectRegistry.get(created.projectId))?.archivedAt).toBeNull();
 });
 
+test("restores the prior project record when workspace unarchive persistence fails", async () => {
+  const repo = path.join(tmpDir, "repo");
+  gitRoots.add(repo);
+  const failingWorkspaceRegistry = new FailingWorkspaceRegistry(
+    path.join(tmpDir, "projects", "failing-workspaces.json"),
+    logger,
+  );
+  await failingWorkspaceRegistry.initialize();
+  const failingProvisioning = createWorkspaceProvisioningService({
+    workspaceRegistry: failingWorkspaceRegistry,
+    projectRegistry,
+    workspaceGitService: gitService(),
+    isDirectory: async () => true,
+    logger,
+  });
+  const created = await failingProvisioning.createWorkspaceForDirectory(repo);
+  await projectRegistry.archive(created.projectId, ARCHIVED_AT);
+  await failingWorkspaceRegistry.archive(created.workspaceId, ARCHIVED_AT);
+  const priorProject = await projectRegistry.get(created.projectId);
+  projectRegistry.subscribeToMutations?.((mutation) => {
+    failingWorkspaceRegistry.events.push(
+      `project:${mutation.project?.archivedAt ? "archived" : "active"}`,
+    );
+  });
+  failingWorkspaceRegistry.failNextUpsert = true;
+
+  await expect(
+    failingProvisioning.ensureWorkspaceRecordUnarchived({
+      ...created,
+      archivedAt: ARCHIVED_AT,
+    }),
+  ).rejects.toThrow("workspace registry write failed");
+
+  expect(failingWorkspaceRegistry.events).toEqual([
+    "project:active",
+    "workspace:persist-failed",
+    "project:archived",
+  ]);
+  expect(await projectRegistry.get(created.projectId)).toEqual(priorProject);
+  expect((await failingWorkspaceRegistry.get(created.workspaceId))?.archivedAt).toBe(ARCHIVED_AT);
+});
+
 test("resolveOrCreateWorkspaceIdForCreateAgent returns a created worktree's id without touching the registry", async () => {
   // The branch only reads workspace.workspaceId off the worktree result.
   const createdWorktree = {
@@ -207,14 +268,31 @@ test("createWorkspaceForDirectory always mints a fresh workspace even when one a
   expect(await workspaceRegistry.list()).toHaveLength(2);
 });
 
-test("findOrCreateProjectForDirectory reuses the active project for the same root", async () => {
+test("nested selected roots receive independent opaque project identities", async () => {
+  const repo = path.join(tmpDir, "repo");
+  const nested = path.join(repo, "packages", "app");
+  gitRoots.add(repo);
+
+  const outerProject = await provisioning.findOrCreateProjectForDirectory(repo);
+  const nestedProject = await provisioning.findOrCreateProjectForDirectory(nested);
+
+  expect(outerProject.projectId).toMatch(/^prj_[0-9a-f]{16}$/);
+  expect(nestedProject.projectId).toMatch(/^prj_[0-9a-f]{16}$/);
+  expect(nestedProject.projectId).not.toBe(outerProject.projectId);
+  expect(await projectRegistry.list()).toHaveLength(2);
+});
+
+test("concurrent registration of the same selected root creates one project", async () => {
   const repo = path.join(tmpDir, "repo");
   gitRoots.add(repo);
 
-  const first = await provisioning.findOrCreateProjectForDirectory(repo);
-  const second = await provisioning.findOrCreateProjectForDirectory(path.join(repo, "sub"));
+  const [left, right] = await Promise.all([
+    provisioning.findOrCreateProjectForDirectory(repo),
+    provisioning.findOrCreateProjectForDirectory(path.join(repo, ".")),
+  ]);
 
-  expect(second.projectId).toBe(first.projectId);
+  expect(left.projectId).toMatch(/^prj_[0-9a-f]{16}$/);
+  expect(right.projectId).toBe(left.projectId);
   expect(await projectRegistry.list()).toHaveLength(1);
 });
 
@@ -351,3 +429,68 @@ test.each(["missing", "archived"] as const)(
     expect(await projectRegistry.list()).toEqual(previousProject ? [previousProject] : []);
   },
 );
+
+for (const target of ["requested", "untargeted"] as const) {
+  test(`runInImportWorkspace keeps a ${target} import callback inside the archive barrier`, async () => {
+    const cwd = path.join(tmpDir, `${target}-import-archive-race`);
+    mkdirSync(cwd);
+    const lifecycle = new WorkspaceLifecycleCoordinator();
+    const raceProvisioning = createWorkspaceProvisioningService({
+      workspaceRegistry,
+      projectRegistry,
+      workspaceGitService: gitService(),
+      isDirectory: async () => true,
+      logger,
+      lifecycleCoordinator: lifecycle,
+    });
+    const requestedWorkspace =
+      target === "requested" ? await raceProvisioning.createWorkspaceForDirectory(cwd) : null;
+    let targetWorkspaceId: string | null = null;
+    let signalImportEntered!: () => void;
+    const importEntered = new Promise<void>((resolve) => {
+      signalImportEntered = resolve;
+    });
+    let releaseImport!: () => void;
+    const importGate = new Promise<void>((resolve) => {
+      releaseImport = resolve;
+    });
+    const liveAgentWorkspaceIds: string[] = [];
+
+    const importOperation = raceProvisioning.runInImportWorkspace(
+      {
+        cwd,
+        ...(requestedWorkspace ? { requestedWorkspaceId: requestedWorkspace.workspaceId } : {}),
+      },
+      async (workspace) => {
+        targetWorkspaceId = workspace.workspaceId;
+        signalImportEntered();
+        await importGate;
+        liveAgentWorkspaceIds.push(workspace.workspaceId);
+        return workspace.workspaceId;
+      },
+    );
+    await importEntered;
+
+    let archiveCompleted = false;
+    const archiveOperation = lifecycle.runExclusive(async () => {
+      const workspaceId = targetWorkspaceId;
+      if (!workspaceId) throw new Error("Import did not resolve a workspace");
+      liveAgentWorkspaceIds.splice(
+        0,
+        liveAgentWorkspaceIds.length,
+        ...liveAgentWorkspaceIds.filter((candidate) => candidate !== workspaceId),
+      );
+      await workspaceRegistry.archive(workspaceId, ARCHIVED_AT);
+      archiveCompleted = true;
+    });
+    await Promise.resolve();
+    expect(archiveCompleted).toBe(false);
+
+    releaseImport();
+    const [result] = await Promise.all([importOperation, archiveOperation]);
+    const workspaceId = result.value;
+    expect(workspaceId).toBe(targetWorkspaceId);
+    expect((await workspaceRegistry.get(workspaceId))?.archivedAt).toBe(ARCHIVED_AT);
+    expect(liveAgentWorkspaceIds).toEqual([]);
+  });
+}

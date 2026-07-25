@@ -13,7 +13,7 @@ import { Text, View } from "react-native";
 import { Brain, Folder, GitBranch } from "lucide-react-native";
 import { StyleSheet } from "react-native-unistyles";
 import type { AgentProvider } from "@bytetrue/byspace-protocol/agent-types";
-import type { ScheduleSummary } from "@bytetrue/byspace-protocol/schedule/types";
+import type { ScheduleCadence, ScheduleSummary } from "@bytetrue/byspace-protocol/schedule/types";
 import { useStoreWithEqualityFn } from "zustand/traditional";
 import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
 import { ComboboxItem } from "@/components/ui/combobox";
@@ -54,6 +54,11 @@ import type {
   ScheduleFormSnapshot,
   ScheduleFormState,
 } from "@/schedules/schedule-form-model";
+import {
+  buildHeartbeatScheduleUpdate,
+  resolveScheduleFormFieldVisibility,
+  resolveScheduleFormTitle,
+} from "@/schedules/schedule-form-model";
 import { validateCron } from "@/utils/schedule-format";
 import { toErrorMessage } from "@/utils/error-messages";
 import { getDeviceTimeZone } from "@/utils/device-timezone";
@@ -69,6 +74,15 @@ export interface ScheduleFormSheetProps {
 function parseMaxRuns(raw: string): number | null {
   const parsed = Number.parseInt(raw, 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+}
+
+function requireCronCadence(
+  cadence: Extract<ScheduleCadence, { type: "cron" }> | undefined,
+): Extract<ScheduleCadence, { type: "cron" }> {
+  if (!cadence) {
+    throw new Error("Choose a cron cadence before creating this schedule");
+  }
+  return cadence;
 }
 
 function resolveCreateServerId(input: {
@@ -309,15 +323,13 @@ function OpenScheduleFormSheet({
     if (!schedule) {
       return false;
     }
-    await updateSchedule({
-      id: schedule.id,
-      name: state.name.trim() || null,
-      prompt: state.prompt.trim(),
-      cadence: state.submitCadence,
-      maxRuns: parseMaxRuns(state.maxRuns),
-    });
+    const update = buildHeartbeatScheduleUpdate(schedule.id, state.submitCadence);
+    if (!update) {
+      return false;
+    }
+    await updateSchedule(update);
     return true;
-  }, [schedule, state.maxRuns, state.name, state.prompt, state.submitCadence, updateSchedule]);
+  }, [schedule, state.submitCadence, updateSchedule]);
 
   const submitNewAgent = useCallback(async (): Promise<boolean> => {
     const provider = state.selectedProvider;
@@ -333,7 +345,7 @@ function OpenScheduleFormSheet({
         id: schedule.id,
         name: state.name.trim() || null,
         prompt: state.prompt.trim(),
-        cadence: state.submitCadence,
+        ...(state.submitCadence ? { cadence: state.submitCadence } : {}),
         newAgentConfig: {
           provider,
           model: state.selectedModel || null,
@@ -353,7 +365,7 @@ function OpenScheduleFormSheet({
     await createSchedule({
       prompt: state.prompt.trim(),
       name: state.name.trim() || undefined,
-      cadence: state.submitCadence,
+      cadence: requireCronCadence(state.submitCadence),
       target: {
         type: "new-agent",
         config: {
@@ -395,8 +407,8 @@ function OpenScheduleFormSheet({
   }, [handleSubmit]);
 
   const header = useMemo<SheetHeader>(
-    () => ({ title: mode === "edit" ? "Edit schedule" : "New schedule" }),
-    [mode],
+    () => ({ title: resolveScheduleFormTitle(mode, state.targetKind) }),
+    [mode, state.targetKind],
   );
 
   const footer = useMemo(
@@ -466,66 +478,77 @@ function ScheduleFormFields({
   cadenceError,
   mutationServerId,
 }: ScheduleFormFieldsProps): ReactElement {
+  const fields = resolveScheduleFormFieldVisibility(state.targetKind);
   return (
     <>
-      <Field label="Name">
-        <FormTextInput
-          size={controlSize}
-          testID="schedule-name-input"
-          accessibilityLabel="Schedule name"
-          initialValue={state.name}
-          value={state.name}
-          onChangeText={model.setName}
-          placeholder="Optional"
-          autoCapitalize="none"
-          autoCorrect={false}
+      {fields.name ? (
+        <Field label="Name">
+          <FormTextInput
+            size={controlSize}
+            testID="schedule-name-input"
+            accessibilityLabel="Schedule name"
+            initialValue={state.name}
+            value={state.name}
+            onChangeText={model.setName}
+            placeholder="Optional"
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
+        </Field>
+      ) : null}
+
+      {fields.prompt ? (
+        <Field label="Prompt">
+          <FormTextInput
+            size={controlSize}
+            testID="schedule-prompt-input"
+            accessibilityLabel="Prompt"
+            initialValue={state.prompt}
+            value={state.prompt}
+            onChangeText={model.setPrompt}
+            placeholder="What should the agent do each run?"
+            style={styles.multilineInput}
+            multiline
+            numberOfLines={4}
+            textAlignVertical="top"
+          />
+        </Field>
+      ) : null}
+
+      {fields.target ? (
+        <ScheduleTargetFields
+          model={model}
+          state={state}
+          providerSnapshot={providerSnapshot}
+          agentTargetLabel={agentTargetLabel}
+          controlSize={controlSize}
+          mutationServerId={mutationServerId}
         />
-      </Field>
+      ) : null}
 
-      <Field label="Prompt">
-        <FormTextInput
+      {fields.cadence ? (
+        <CadenceEditor
+          value={state.cadence}
+          onChange={model.setCadence}
+          error={cadenceError ?? undefined}
           size={controlSize}
-          testID="schedule-prompt-input"
-          accessibilityLabel="Prompt"
-          initialValue={state.prompt}
-          value={state.prompt}
-          onChangeText={model.setPrompt}
-          placeholder="What should the agent do each run?"
-          style={styles.multilineInput}
-          multiline
-          numberOfLines={4}
-          textAlignVertical="top"
         />
-      </Field>
+      ) : null}
 
-      <ScheduleTargetFields
-        model={model}
-        state={state}
-        providerSnapshot={providerSnapshot}
-        agentTargetLabel={agentTargetLabel}
-        controlSize={controlSize}
-        mutationServerId={mutationServerId}
-      />
-
-      <CadenceEditor
-        value={state.cadence}
-        onChange={model.setCadence}
-        error={cadenceError ?? undefined}
-        size={controlSize}
-      />
-
-      <Field label="Max runs">
-        <FormTextInput
-          size={controlSize}
-          testID="schedule-max-runs-input"
-          accessibilityLabel="Max runs"
-          initialValue={state.maxRuns}
-          value={state.maxRuns}
-          onChangeText={model.setMaxRuns}
-          placeholder="Unlimited"
-          keyboardType="number-pad"
-        />
-      </Field>
+      {fields.maxRuns ? (
+        <Field label="Max runs">
+          <FormTextInput
+            size={controlSize}
+            testID="schedule-max-runs-input"
+            accessibilityLabel="Max runs"
+            initialValue={state.maxRuns}
+            value={state.maxRuns}
+            onChangeText={model.setMaxRuns}
+            placeholder="Unlimited"
+            keyboardType="number-pad"
+          />
+        </Field>
+      ) : null}
 
       {state.submitError ? <Text style={styles.submitError}>{state.submitError}</Text> : null}
     </>

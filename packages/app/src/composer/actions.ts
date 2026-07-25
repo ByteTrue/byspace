@@ -172,40 +172,50 @@ export async function dispatchComposerAgentMessage(
     images: wirePayload.images,
     attachments: wirePayload.attachments,
   });
-  appendUserMessageToStream(input.agentId, userMessage, input.stream);
-  const imagesData = await input.encodeImages(wirePayload.images);
-  await input.client.sendAgentMessage(input.agentId, input.text, {
-    messageId,
-    images: imagesData ?? [],
-    attachments: wirePayload.attachments,
-  });
+  const rollbackOptimisticMessage = appendUserMessageToStream(
+    input.agentId,
+    userMessage,
+    input.stream,
+  );
+  try {
+    const imagesData = await input.encodeImages(wirePayload.images);
+    await input.client.sendAgentMessage(input.agentId, input.text, {
+      messageId,
+      images: imagesData ?? [],
+      attachments: wirePayload.attachments,
+    });
+  } catch (error) {
+    rollbackOptimisticMessage();
+    throw error;
+  }
 }
 
 function appendUserMessageToStream(
   agentId: string,
   userMessage: UserMessageItem,
   stream: AgentStreamWriter,
-): void {
+): () => void {
   const result = appendOptimisticUserMessageToStream({
     tail: stream.getTail(agentId) ?? [],
     head: stream.getHead(agentId) ?? [],
     message: userMessage,
     placement: "active-head",
   });
-  if (result.changedHead) {
-    stream.setHead((prev) => {
-      const next = new Map(prev);
-      next.set(agentId, result.head);
-      return next;
+  const write = result.changedHead ? stream.setHead : stream.setTail;
+  const items = result.changedHead ? result.head : result.tail;
+  write((prev) => new Map(prev).set(agentId, items));
+
+  return () => {
+    write((prev) => {
+      const current = prev.get(agentId);
+      if (!current) return prev;
+      const nextItems = current.filter(
+        (item) => item.id !== userMessage.id || item.kind !== "user_message" || !item.optimistic,
+      );
+      if (nextItems.length === current.length) return prev;
+      return new Map(prev).set(agentId, nextItems);
     });
-  }
-  if (result.changedTail) {
-    stream.setTail((prev) => {
-      const next = new Map(prev);
-      next.set(agentId, result.tail);
-      return next;
-    });
-  }
+  };
 }
 
 export interface QueueComposerMessageInput {
@@ -355,14 +365,16 @@ function isForgeAttachment(
   );
 }
 
+function isSameForgeSearchItem(left: ForgeSearchItem, right: ForgeSearchItem): boolean {
+  return left.kind === right.kind && left.number === right.number && left.url === right.url;
+}
+
 export function toggleForgeAttachment(
   current: UserComposerAttachment[],
   item: ForgeSearchItem,
 ): UserComposerAttachment[] {
   const matches = (attachment: UserComposerAttachment) =>
-    isForgeAttachment(attachment) &&
-    attachment.item.kind === item.kind &&
-    attachment.item.number === item.number;
+    isForgeAttachment(attachment) && isSameForgeSearchItem(attachment.item, item);
   if (current.some(matches)) {
     return current.filter((attachment) => !matches(attachment));
   }
@@ -381,10 +393,7 @@ export function toggleGithubAttachmentFromPicker({
   markGithubAttachmentRemoved,
 }: ToggleGithubAttachmentFromPickerInput): UserComposerAttachment[] {
   const existingAttachment = current.find(
-    (attachment) =>
-      isForgeAttachment(attachment) &&
-      attachment.item.kind === item.kind &&
-      attachment.item.number === item.number,
+    (attachment) => isForgeAttachment(attachment) && isSameForgeSearchItem(attachment.item, item),
   );
   if (existingAttachment) {
     markGithubAttachmentRemoved(existingAttachment);
@@ -404,10 +413,7 @@ export function isAttachmentSelectedForGithubItem(
   item: ForgeSearchItem,
 ): boolean {
   return userAttachmentsOnly(current).some(
-    (attachment) =>
-      isForgeAttachment(attachment) &&
-      attachment.item.kind === item.kind &&
-      attachment.item.number === item.number,
+    (attachment) => isForgeAttachment(attachment) && isSameForgeSearchItem(attachment.item, item),
   );
 }
 

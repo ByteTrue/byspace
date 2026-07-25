@@ -287,6 +287,13 @@ export async function selectBranchInPicker(page: Page, name: string): Promise<vo
   await branchRow.click();
 }
 
+export async function searchAndSelectBranchInPicker(page: Page, name: string): Promise<void> {
+  const searchInput = page.getByPlaceholder("Search branches and PRs");
+  await expect(searchInput).toBeVisible({ timeout: 30_000 });
+  await searchInput.fill(name);
+  await selectBranchInPicker(page, name);
+}
+
 export async function selectGitHubPrInPicker(page: Page, number: number): Promise<void> {
   const prRow = page.getByTestId(`new-workspace-ref-picker-pr-${number}`);
   await expect(prRow).toBeVisible({ timeout: 30_000 });
@@ -348,6 +355,13 @@ export async function expectComposerGithubAttachmentPill(
   await expect(pills.first()).toContainText(input.title);
 }
 
+export async function pasteGithubPrUrl(page: Page, url: string): Promise<void> {
+  await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+  await page.evaluate((value) => navigator.clipboard.writeText(value), url);
+  await page.getByRole("textbox", { name: "Message agent..." }).focus();
+  await page.keyboard.press("ControlOrMeta+V");
+}
+
 export async function assertNewWorkspaceSidebarAndHeader(
   page: Page,
   input: {
@@ -358,7 +372,12 @@ export async function assertNewWorkspaceSidebarAndHeader(
     assertSidebarRow?: boolean;
     assertHeader?: boolean;
   },
-): Promise<{ workspaceId: string; workspaceName: string; workspaceDirectory: string }> {
+): Promise<{
+  workspaceId: string;
+  projectKey: string;
+  workspaceName: string;
+  workspaceDirectory: string;
+}> {
   // URL is the source of truth so concurrent sidebar rows cannot satisfy this.
   await expect
     .poll(
@@ -393,6 +412,7 @@ export async function assertNewWorkspaceSidebarAndHeader(
 
   return {
     workspaceId: workspace.id,
+    projectKey: workspace.projectId,
     workspaceName: workspace.name,
     workspaceDirectory: workspace.workspaceDirectory,
   };

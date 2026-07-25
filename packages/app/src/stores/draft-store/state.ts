@@ -104,8 +104,8 @@ export function isUserComposerAttachment(value: unknown): value is UserComposerA
   }
   if (
     record.kind === "github_pr" &&
-    record.owner !== undefined &&
-    record.owner !== NEW_WORKSPACE_PICKER_ATTACHMENT_OWNER
+    ((record.owner !== undefined && record.owner !== NEW_WORKSPACE_PICKER_ATTACHMENT_OWNER) ||
+      (record.ownerTargetId !== undefined && typeof record.ownerTargetId !== "string"))
   ) {
     return false;
   }
@@ -140,7 +140,10 @@ export function normalizeComposerAttachment(
       kind: "github_pr",
       item,
       ...(attachment.owner === NEW_WORKSPACE_PICKER_ATTACHMENT_OWNER
-        ? { owner: attachment.owner }
+        ? {
+            owner: attachment.owner,
+            ...(attachment.ownerTargetId ? { ownerTargetId: attachment.ownerTargetId } : {}),
+          }
         : {}),
     };
   }

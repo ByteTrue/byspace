@@ -77,6 +77,7 @@ export interface CloneGithubProjectDirectlyInput extends ProjectRegistrationCall
   repo: string;
   targetDirectory: string;
   cloneProtocol?: ProjectGithubCloneProtocol;
+  canCloneGithubProject: boolean;
   client: Pick<DaemonClient, "cloneGithubProject"> | null;
 }
 
@@ -131,6 +132,14 @@ export async function cloneGithubProjectDirectly(
     !input.isConnected
   ) {
     return { ok: false, errorCode: null, error: null };
+  }
+
+  if (!input.canCloneGithubProject) {
+    return {
+      ok: false,
+      errorCode: null,
+      error: "Update the host to clone projects with stable identity.",
+    };
   }
 
   const payload = await input.client.cloneGithubProject({

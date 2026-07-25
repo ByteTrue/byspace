@@ -242,6 +242,10 @@ function createNoopProjectRegistry(): ProjectRegistry {
     existsOnDisk: async () => true,
     list: async () => [],
     get: async () => null,
+    getOrCreateActiveByRoot: async () => {
+      throw new Error("Project registry unavailable");
+    },
+    update: async () => null,
     upsert: async () => {},
     archive: async () => {},
     remove: async () => {},
@@ -1248,12 +1252,16 @@ export class VoiceAssistantWebSocketServer {
         rewind: true,
         // COMPAT(checkoutRefresh): added in v0.1.86, remove gate after 2026-11-29.
         checkoutRefresh: true,
+        // COMPAT(cliCallerAgentContext): added in v0.2.0, remove after 2027-01-25.
+        cliCallerAgentContext: true,
         // COMPAT(workspaceMultiplicity): added in v0.1.97, drop the gate when floor >= v0.1.97
         workspaceMultiplicity: true,
         // COMPAT(projectRemove): added in v0.1.97, drop the gate when floor >= v0.1.97.
         projectRemove: true,
         // COMPAT(projectAdd): added in v0.1.97, drop the gate when floor >= v0.1.97.
         projectAdd: true,
+        // COMPAT(stableProjectIdentity): added in v0.2.0, remove gate after 2027-01-23.
+        stableProjectIdentity: true,
         // COMPAT(worktreeRestore): keep through 2027-01-11 for clients older than v0.1.105.
         worktreeRestore: true,
         // COMPAT(workspaceRecovery): added in v0.1.105, remove after 2027-01-11 once daemon floor >= v0.1.105.

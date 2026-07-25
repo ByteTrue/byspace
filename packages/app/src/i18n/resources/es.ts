@@ -993,9 +993,6 @@ export const es: TranslationResources = {
     refPicker: {
       startingRef: "Árbitro inicial",
       chooseStart: "Elige por dónde empezar",
-      checkoutHint: "¿Mira {{noun}} {{numberPrefix}}{{number}}?",
-      checkoutPr: "Echa un vistazo a {{noun}} {{numberPrefix}}{{number}}",
-      dismissCheckoutHint: "Descartar la sugerencia de pago de {{noun}} {{numberPrefix}}{{number}}",
       intoBase: "en {{baseRef}}",
       searching: "Búsqueda...",
       noMatchingRefs: "No hay árbitros coincidentes.",
@@ -1463,6 +1460,10 @@ export const es: TranslationResources = {
         label: "Historial de terminal",
         description: "Líneas mantenidas en el búfer de terminal incorporado",
         accessibilityLabel: "Líneas del historial de terminal",
+      },
+      vimKeybindings: {
+        label: "Atajos de Vim",
+        description: "Usar atajos de Vim al editar archivos fuente",
       },
       autoExpandReasoning: {
         label: "Siempre expandir razonamiento",

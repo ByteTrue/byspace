@@ -60,7 +60,7 @@ Use `workspace` for placement:
 
 - No worktree: `workspace: { kind: "current" }`.
 - Worktree: `workspace: { kind: "create", source: { kind: "worktree", target: { kind: "branch-off", worktreeSlug: "<short-task-slug>", branchName: "fix/<short-task-slug>" } } }`.
-- Existing worktree already created by `create_worktree`: `workspace: { kind: "existing", workspaceId: "<returned-workspace-id>" }`.
+- Existing workspace already created by `create_workspace`: `workspace: { kind: "existing", workspaceId: "<returned-workspace-id>" }`.
 
 Do not use `workspace: { kind: "current", cwd: "<worktreePath>" }` to place a handoff in a worktree; that keeps the agent in the caller's workspace with only a different runtime cwd.
 

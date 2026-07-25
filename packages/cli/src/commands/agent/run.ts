@@ -532,23 +532,51 @@ export async function resolveExistingRunWorkspace(
   } satisfies CommandError;
 }
 
+export function resolveRunCallerAgentId(env: NodeJS.ProcessEnv = process.env): string | undefined {
+  return env.BYSPACE_AGENT_ID?.trim() || undefined;
+}
+
+function assertCallerAgentContextSupported(
+  client: ConnectedDaemonClient,
+  callerAgentId: string | undefined,
+): void {
+  if (
+    !callerAgentId ||
+    client.getLastServerInfoMessage()?.features?.cliCallerAgentContext === true
+  ) {
+    return;
+  }
+  throw {
+    code: "HOST_UPDATE_REQUIRED",
+    message: "Update the host to run child agents from a managed agent.",
+  } satisfies CommandError;
+}
+
 // Workspace policy for `byspace run`. Precedence:
 //   1. --workspace <id>          -> run in that existing workspace
-//   2. $BYSPACE_WORKSPACE_ID     -> exported by workspace terminals
-//   3. --new-workspace <kind>    -> mint a new workspace explicitly
-//   4. bare run                  -> mint a new local-backed workspace for cwd
+//   2. $BYSPACE_AGENT_ID         -> daemon inherits the caller's workspace
+//   3. $BYSPACE_WORKSPACE_ID     -> exported by workspace terminals
+//   4. --new-workspace <kind>    -> mint a new workspace explicitly
+//   5. bare run                  -> mint a new local-backed workspace for cwd
 async function resolveRunWorkspace(
   client: ConnectedDaemonClient,
   options: AgentRunOptions,
   cwd: string,
+  callerAgentId: string | undefined,
 ): Promise<RunWorkspace> {
   const newWorkspace = resolveNewWorkspaceKind(options);
-  const explicit = newWorkspace
-    ? undefined
-    : options.workspace?.trim() || process.env.BYSPACE_WORKSPACE_ID?.trim();
-  if (explicit) {
-    console.error(`Using workspace ${explicit}`);
-    return resolveExistingRunWorkspace(client, explicit);
+  const explicitWorkspaceId = newWorkspace ? undefined : options.workspace?.trim();
+  if (explicitWorkspaceId) {
+    console.error(`Using workspace ${explicitWorkspaceId}`);
+    return resolveExistingRunWorkspace(client, explicitWorkspaceId);
+  }
+  if (!newWorkspace && callerAgentId) {
+    return { cwd };
+  }
+  const ambientWorkspaceId = newWorkspace ? undefined : process.env.BYSPACE_WORKSPACE_ID?.trim();
+  if (ambientWorkspaceId) {
+    console.error(`Using workspace ${ambientWorkspaceId}`);
+    return resolveExistingRunWorkspace(client, ambientWorkspaceId);
   }
 
   const source = buildRunWorkspaceSource(options, cwd);
@@ -606,7 +634,9 @@ export async function runRunCommand(
     const env = parseRunEnv(options.env);
     const requestEnv = Object.keys(env).length > 0 ? env : undefined;
 
-    const workspace = await resolveRunWorkspace(client, options, cwd);
+    const callerAgentId = resolveRunCallerAgentId();
+    assertCallerAgentContextSupported(client, callerAgentId);
+    const workspace = await resolveRunWorkspace(client, options, cwd, callerAgentId);
     const workspaceId = workspace.id;
     const runCwd = workspace.cwd;
 
@@ -619,6 +649,7 @@ export async function runRunCommand(
             provider: resolvedProviderModel.provider,
             cwd: runCwd,
             workspaceId,
+            callerAgentId,
             title: resolvedTitle,
             modeId: options.mode,
             model: resolvedProviderModel.model,
@@ -689,6 +720,7 @@ export async function runRunCommand(
       provider: resolvedProviderModel.provider,
       cwd: runCwd,
       workspaceId,
+      callerAgentId,
       title: resolvedTitle,
       modeId: options.mode,
       model: resolvedProviderModel.model,

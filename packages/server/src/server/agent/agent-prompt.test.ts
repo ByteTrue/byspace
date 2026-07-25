@@ -64,6 +64,7 @@ function createFinishNotificationScenario(
   Reflect.set(callerAgent, "config", { title: "Caller Agent" });
 
   const agentManager: AgentManager = Object.create(AgentManager.prototype);
+  Reflect.set(agentManager, "waitForAgentClose", async () => undefined);
   Reflect.set(agentManager, "getAgent", (agentId: string) => {
     if (agentId === "child-agent") {
       return childAgent;
@@ -145,6 +146,11 @@ test("sendPromptToAgent forwards the client message id as run options", async ()
 
   const streamAgentSpy = vi.fn(() => (async function* noop() {})());
   const agentManager: AgentManager = Object.create(AgentManager.prototype);
+  Reflect.set(
+    agentManager,
+    "waitForAgentClose",
+    vi.fn(async () => undefined),
+  );
   Reflect.set(
     agentManager,
     "getAgent",

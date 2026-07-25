@@ -168,6 +168,7 @@ export interface BySpaceAgentCreateOptions extends BySpaceAgentConfigOverrides {
   workspaceId?: string;
   initialPrompt?: string;
   clientMessageId?: string;
+  callerAgentId?: string;
   outputSchema?: Record<string, unknown>;
   images?: CreateAgentRequestMessage["images"];
   attachments?: CreateAgentRequestMessage["attachments"];

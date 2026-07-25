@@ -1,7 +1,7 @@
 import equal from "fast-deep-equal";
 import { v4 as uuidv4 } from "uuid";
 import { lstat, mkdir, mkdtemp, rename, rm, stat } from "node:fs/promises";
-import { basename, normalize, resolve, sep } from "path";
+import { resolve, sep } from "path";
 import { homedir } from "node:os";
 import { CLIENT_CAPS, type ClientCapability } from "@bytetrue/byspace-protocol/client-capabilities";
 import {
@@ -71,6 +71,7 @@ import type {
   ManagedAgent,
 } from "./agent/agent-manager.js";
 import { createAgentCommand } from "./agent/create-agent/create.js";
+import { resolveCreateAgentIntent } from "./agent/create-agent/intent.js";
 import {
   archiveAgentCommand,
   cancelAgentRunCommand,
@@ -123,7 +124,9 @@ import {
   resolveWorkspaceName,
   type PersistedProjectRecord,
   type PersistedWorkspaceRecord,
+  type ProjectMutation,
   type ProjectRegistry,
+  type WorkspaceMutation,
   type WorkspaceRegistry,
 } from "./workspace-registry.js";
 import { wrapSpokenInput } from "./voice-config.js";
@@ -160,6 +163,7 @@ import {
 } from "./session/git-mutation/git-mutation-service.js";
 import {
   createWorkspaceProvisioningService,
+  WorkspaceProvisioningError,
   type WorkspaceProvisioningService,
 } from "./session/workspace-provisioning/workspace-provisioning-service.js";
 import {
@@ -200,7 +204,6 @@ import {
 } from "./workspace-directory.js";
 import { shouldEmitPendingBootstrapUpdate } from "./workspace-bootstrap-dedupe.js";
 import {
-  createLocalCheckoutWorkspace,
   createBySpaceWorktree,
   type CreateBySpaceWorktreeInput,
   type CreateBySpaceWorktreeResult,
@@ -217,19 +220,15 @@ import {
   handleWorkspaceSetupStatusRequest as handleWorkspaceSetupStatusRequestMessage,
 } from "./worktree-session.js";
 import { archiveByScope, type ActiveWorkspaceRef } from "./workspace-archive-service.js";
-import {
-  WorktreeRequestError,
-  toWorktreeRequestError,
-  toWorktreeWireError,
-} from "./worktree-errors.js";
+import { WorktreeRequestError, toWorktreeWireError } from "./worktree-errors.js";
 import { parseGitRemoteLocation } from "@bytetrue/byspace-protocol/git-remote";
 import {
   createProjectDirectory,
   ProjectDirectoryRequestError,
 } from "./project-directory-service.js";
-import { type WorktreeConfig, createWorktree } from "../utils/worktree.js";
-import { runGitCommand } from "../utils/run-git-command.js";
 import { CreateAgentLifecycleDispatch } from "./agent/create-agent-lifecycle-dispatch.js";
+import { runGitCommand } from "../utils/run-git-command.js";
+import { workspaceLifecycleCoordinator } from "./workspace-lifecycle-coordinator.js";
 
 // TODO: Remove once all app store clients are on >=0.1.45 and understand arbitrary provider strings.
 // Clients before 0.1.45 validate providers with z.enum(["claude", "codex", "opencode"]) and reject
@@ -396,6 +395,7 @@ interface WorkspaceUpdatesSubscriptionState {
   isBootstrapping: boolean;
   pendingUpdatesByWorkspaceId: Map<string, WorkspaceUpdatePayload>;
   lastEmittedByWorkspaceId: Map<string, WorkspaceUpdatePayload>;
+  visibleEmptyProjectIds?: Set<string>;
 }
 
 class SessionRequestError extends Error {
@@ -406,6 +406,12 @@ class SessionRequestError extends Error {
     super(message);
     this.name = "SessionRequestError";
   }
+}
+
+function directoryNotFoundErrorCode(error: unknown): "directory_not_found" | undefined {
+  return error instanceof WorkspaceProvisioningError && error.code === "directory_not_found"
+    ? error.code
+    : undefined;
 }
 
 export interface SessionFileSystem {
@@ -585,6 +591,11 @@ export class Session {
   private readonly daemonConfigStore: DaemonConfigStore;
   private readonly pushTokenStore: PushTokenStore;
   private unsubscribeAgentEvents: (() => void) | null = null;
+  private unsubscribeProjectMutations: (() => void) | null = null;
+  private unsubscribeWorkspaceMutations: (() => void) | null = null;
+  private registryMutationQueue: Promise<void> = Promise.resolve();
+  private readonly optimisticInitialAgentWorkspaceIds = new Set<string>();
+  private isCleanedUp = false;
   private viewedTimelineAgentIds = new Set<string>();
   private readonly viewedTimelineAgentIdsBySource = new Map<object, Set<string>>();
   private readonly selectiveTimelineCapabilityBySource = new Map<object, boolean>();
@@ -722,13 +733,15 @@ export class Session {
       workspaceRegistry: this.workspaceRegistry,
       projectRegistry: this.projectRegistry,
       workspaceGitService: this.workspaceGitService,
+      isDirectory: (path) => this.filesystem.isDirectory(path),
       logger: this.sessionLogger,
     });
     this.workspaceRecovery = createWorkspaceRecoveryService({
+      byspaceHome: this.byspaceHome,
+      worktreesRoot: this.worktreesRoot,
       getWorkspace: (workspaceId) => this.workspaceRegistry.get(workspaceId),
       getProject: (projectId) => this.projectRegistry.get(projectId),
       isDirectory: (path) => this.filesystem.isDirectory(path),
-      recreateWorktree: (workspace) => this.recreateArchivedWorktree(workspace),
       unarchiveWorkspace: async (workspace) => {
         await this.workspaceProvisioning.ensureWorkspaceRecordUnarchived(workspace);
       },
@@ -809,6 +822,13 @@ export class Session {
         emit: (msg) => this.emit(msg),
       },
       operations: {
+        ensureLoaded: async (agentId) => {
+          await ensureUnarchivedAgentLoaded(agentId, {
+            agentManager,
+            agentStorage,
+            logger: this.sessionLogger,
+          });
+        },
         setMode: async (agentId, modeId) =>
           (await setAgentModeCommand({ agentManager }, { agentId, modeId })).notice,
         setModel: (agentId, modelId) => agentManager.setAgentModel(agentId, modelId),
@@ -962,6 +982,7 @@ export class Session {
     });
 
     this.subscribeToAgentEvents();
+    this.subscribeToRegistryMutations();
 
     this.sessionLogger.trace({}, "agent.session.lifecycle.created");
   }
@@ -1299,6 +1320,147 @@ export class Session {
         });
     }
     this.providerCatalogSession.start();
+  }
+
+  private subscribeToRegistryMutations(): void {
+    this.unsubscribeProjectMutations?.();
+    this.unsubscribeProjectMutations =
+      this.projectRegistry.subscribeToMutations?.((mutation) =>
+        this.enqueueRegistryMutation(() => this.handleProjectMutation(mutation)),
+      ) ?? null;
+    this.unsubscribeWorkspaceMutations?.();
+    this.unsubscribeWorkspaceMutations =
+      this.workspaceRegistry.subscribeToMutations?.((mutation) =>
+        this.enqueueRegistryMutation(() => this.handleWorkspaceMutation(mutation)),
+      ) ?? null;
+  }
+
+  private enqueueRegistryMutation(handleMutation: () => Promise<void>): Promise<void> {
+    const next = this.registryMutationQueue.then(handleMutation);
+    this.registryMutationQueue = next.catch(() => {});
+    return next;
+  }
+
+  private async handleWorkspaceMutation(mutation: WorkspaceMutation): Promise<void> {
+    try {
+      if (this.isCleanedUp) return;
+      if (mutation.initialAgentSettled) {
+        this.optimisticInitialAgentWorkspaceIds.delete(mutation.workspaceId);
+      }
+      if (
+        mutation.kind === "archive" ||
+        mutation.kind === "remove" ||
+        mutation.workspace?.archivedAt
+      ) {
+        this.optimisticInitialAgentWorkspaceIds.delete(mutation.workspaceId);
+        this.workspaceGitObserver.removeForWorkspaceId(mutation.workspaceId);
+        const subscription = this.workspaceUpdatesSubscription;
+        if (!subscription) return;
+        const lastEmitted = subscription.lastEmittedByWorkspaceId.get(mutation.workspaceId);
+        if (lastEmitted?.kind === "remove") return;
+        subscription.lastEmittedByWorkspaceId.delete(mutation.workspaceId);
+        this.bufferOrEmitWorkspaceUpdate(
+          subscription,
+          await this.buildWorkspaceRemoveUpdatePayload(mutation.workspaceId),
+        );
+        return;
+      }
+      if (mutation.expectsInitialAgent) {
+        this.optimisticInitialAgentWorkspaceIds.add(mutation.workspaceId);
+        await this.emitWorkspaceUpdatesForWorkspaceIds([mutation.workspaceId], {
+          skipReconcile: true,
+          optimisticStatus: "running",
+        });
+        return;
+      }
+      await this.syncWorkspaceMutationObserver(mutation);
+      if (this.isCleanedUp) return;
+      await this.emitWorkspaceUpdatesForWorkspaceIds([mutation.workspaceId], {
+        skipReconcile: true,
+      });
+    } catch (error) {
+      this.sessionLogger.warn(
+        { err: error, workspaceId: mutation.workspaceId, mutationKind: mutation.kind },
+        "Failed to apply workspace mutation to session",
+      );
+    }
+  }
+
+  private async syncWorkspaceMutationObserver(mutation: WorkspaceMutation): Promise<void> {
+    const subscription = this.workspaceUpdatesSubscription;
+    if (!mutation.workspace || !subscription) return;
+    const descriptorsByWorkspaceId = await this.buildWorkspaceDescriptorMap({
+      workspaceIds: [mutation.workspaceId],
+      includeGitData: false,
+    });
+    const descriptor = descriptorsByWorkspaceId.get(mutation.workspaceId);
+    if (
+      !descriptor ||
+      !this.matchesWorkspaceFilter({ workspace: descriptor, filter: subscription.filter })
+    ) {
+      this.workspaceGitObserver.removeForWorkspaceId(mutation.workspaceId);
+      return;
+    }
+    const currentWorkspace = await this.workspaceRegistry.get(mutation.workspaceId);
+    if (!currentWorkspace || currentWorkspace.archivedAt) {
+      this.workspaceGitObserver.removeForWorkspaceId(mutation.workspaceId);
+      return;
+    }
+    await this.workspaceGitObserver.syncObserverForWorkspace(currentWorkspace);
+    if (this.isCleanedUp) {
+      this.workspaceGitObserver.removeForWorkspaceId(mutation.workspaceId);
+    }
+  }
+
+  private async handleProjectMutation(mutation: ProjectMutation): Promise<void> {
+    try {
+      const subscription = this.workspaceUpdatesSubscription;
+      if (this.isCleanedUp || !subscription) return;
+      const projectWorkspaceIds = (await this.workspaceRegistry.list())
+        .filter((workspace) => workspace.projectId === mutation.projectId)
+        .map((workspace) => workspace.workspaceId);
+
+      if (mutation.kind === "remove") {
+        const visibleWorkspaceIds = projectWorkspaceIds.filter((workspaceId) => {
+          const lastEmitted = subscription.lastEmittedByWorkspaceId.get(workspaceId);
+          return (
+            lastEmitted?.kind === "upsert" ||
+            (lastEmitted?.kind === "remove" &&
+              lastEmitted.emptyProject?.projectId === mutation.projectId)
+          );
+        });
+        let updateIds = visibleWorkspaceIds;
+        if (
+          updateIds.length === 0 &&
+          subscription.visibleEmptyProjectIds?.has(mutation.projectId)
+        ) {
+          updateIds = [mutation.projectId];
+        }
+        if (updateIds.length === 0) return;
+        for (const workspaceId of projectWorkspaceIds) {
+          this.workspaceGitObserver.removeForWorkspaceId(workspaceId);
+        }
+        await this.emitWorkspaceUpdatesForWorkspaceIds(updateIds, {
+          skipReconcile: true,
+          removedProjectId: mutation.projectId,
+        });
+        return;
+      }
+
+      if (mutation.kind === "archive" || mutation.project?.archivedAt) {
+        for (const workspaceId of projectWorkspaceIds) {
+          this.workspaceGitObserver.removeForWorkspaceId(workspaceId);
+        }
+      }
+      await this.emitWorkspaceUpdatesForWorkspaceIds(projectWorkspaceIds, {
+        skipReconcile: true,
+      });
+    } catch (error) {
+      this.sessionLogger.warn(
+        { err: error, projectId: mutation.projectId, mutationKind: mutation.kind },
+        "Failed to apply project mutation to session",
+      );
+    }
   }
 
   private subscribeToAgentEvents(): void {
@@ -2098,7 +2260,7 @@ export class Session {
 
     try {
       await this.agentStorage.remove(agentId);
-      await this.agentManager.deleteCommittedTimeline(agentId);
+      await this.agentManager.deleteAgentState(agentId);
     } catch (error) {
       this.sessionLogger.error({ err: error, agentId }, `Failed to fully delete agent ${agentId}`);
     }
@@ -2429,62 +2591,64 @@ export class Session {
     this.sessionLogger.info({ projectId, requestId }, "session: project.remove.request");
 
     try {
-      const projectWorkspaces = (await this.workspaceRegistry.list()).filter(
-        (workspace) => workspace.projectId === projectId,
-      );
-      const activeWorkspaceIds = projectWorkspaces
-        .filter((workspace) => !workspace.archivedAt)
-        .map((workspace) => workspace.workspaceId);
+      await workspaceLifecycleCoordinator.runExclusive(async () => {
+        const projectWorkspaces = (await this.workspaceRegistry.list()).filter(
+          (workspace) => workspace.projectId === projectId,
+        );
+        const activeWorkspaceIds = projectWorkspaces
+          .filter((workspace) => !workspace.archivedAt)
+          .map((workspace) => workspace.workspaceId);
 
-      if (activeWorkspaceIds.length > 0) {
-        this.markWorkspaceArchiving(activeWorkspaceIds, new Date().toISOString());
-        await this.emitWorkspaceUpdatesForWorkspaceIds(activeWorkspaceIds, {
-          skipReconcile: true,
-        });
-      }
-
-      const removedWorkspaceIds: string[] = [];
-      try {
-        for (const workspaceId of activeWorkspaceIds) {
-          await archiveWorkspaceContents(
-            {
-              agentManager: this.agentManager,
-              agentStorage: this.agentStorage,
-              killTerminalsForWorkspace: (id) =>
-                this.terminalController.killTerminalsForWorkspace(id),
-              sessionLogger: this.sessionLogger,
-            },
-            workspaceId,
-          );
-          await this.archiveWorkspaceRecord(workspaceId);
-          removedWorkspaceIds.push(workspaceId);
-        }
-
-        await this.projectRegistry.remove(projectId);
-      } finally {
         if (activeWorkspaceIds.length > 0) {
-          this.clearWorkspaceArchiving(activeWorkspaceIds);
+          this.markWorkspaceArchiving(activeWorkspaceIds, new Date().toISOString());
+          await this.emitWorkspaceUpdatesForWorkspaceIds(activeWorkspaceIds, {
+            skipReconcile: true,
+          });
         }
-      }
 
-      const updateIds =
-        removedWorkspaceIds.length > 0
-          ? removedWorkspaceIds
-          : [projectWorkspaces[0]?.workspaceId ?? projectId];
-      await this.emitWorkspaceUpdatesForWorkspaceIds(updateIds, {
-        skipReconcile: true,
-        removedProjectId: projectId,
-      });
+        const removedWorkspaceIds: string[] = [];
+        try {
+          for (const workspaceId of activeWorkspaceIds) {
+            await archiveWorkspaceContents(
+              {
+                agentManager: this.agentManager,
+                agentStorage: this.agentStorage,
+                killTerminalsForWorkspace: (id) =>
+                  this.terminalController.killTerminalsForWorkspace(id),
+                sessionLogger: this.sessionLogger,
+              },
+              workspaceId,
+            );
+            await this.archiveWorkspaceRecord(workspaceId);
+            removedWorkspaceIds.push(workspaceId);
+          }
 
-      this.emit({
-        type: "project.remove.response",
-        payload: {
-          requestId,
-          projectId,
-          accepted: true,
-          removedWorkspaceIds,
-          error: null,
-        },
+          await this.projectRegistry.remove(projectId);
+        } finally {
+          if (activeWorkspaceIds.length > 0) {
+            this.clearWorkspaceArchiving(activeWorkspaceIds);
+          }
+        }
+
+        const updateIds =
+          removedWorkspaceIds.length > 0
+            ? removedWorkspaceIds
+            : [projectWorkspaces[0]?.workspaceId ?? projectId];
+        await this.emitWorkspaceUpdatesForWorkspaceIds(updateIds, {
+          skipReconcile: true,
+          removedProjectId: projectId,
+        });
+
+        this.emit({
+          type: "project.remove.response",
+          payload: {
+            requestId,
+            projectId,
+            accepted: true,
+            removedWorkspaceIds,
+            error: null,
+          },
+        });
       });
     } catch (error) {
       this.sessionLogger.error(
@@ -2749,6 +2913,7 @@ export class Session {
       attachments,
       labels,
       env,
+      callerAgentId,
     } = msg;
     this.sessionLogger.info(
       { cwd: config.cwd, provider: config.provider, worktreeName },
@@ -2759,105 +2924,135 @@ export class Session {
 
     let createdWorktreeForCleanup: CreateBySpaceWorktreeWorkflowResult | null = null;
     let createdAgentId: string | null = null;
+    let optimisticWorkspaceId: string | null = null;
     try {
-      const trimmedPrompt = initialPrompt?.trim();
-      const { provisionalTitle } = resolveCreateAgentTitles({
-        configTitle: config.title,
-        initialPrompt: trimmedPrompt,
-      });
+      await workspaceLifecycleCoordinator.runExclusive(async () => {
+        try {
+          const trimmedPrompt = initialPrompt?.trim();
+          const { provisionalTitle } = resolveCreateAgentTitles({
+            configTitle: config.title,
+            initialPrompt: trimmedPrompt,
+          });
 
-      const firstAgentContext: FirstAgentContext = {
-        ...(trimmedPrompt ? { prompt: trimmedPrompt } : {}),
-        ...(attachments && attachments.length > 0 ? { attachments } : {}),
-      };
-      const workspacePromptTitle = resolveFirstAgentPromptTitle(firstAgentContext);
-      const createdWorktree = await this.createAgentLifecycleDispatch.createWorktreeForRequest({
-        cwd: config.cwd,
-        target: worktree,
-        firstAgentContext,
-        hasLegacyGitOptions: Boolean(git),
-      });
-      createdWorktreeForCleanup = createdWorktree;
-      const createAgentConfig: AgentSessionConfig = createdWorktree
-        ? { ...config, cwd: createdWorktree.worktree.worktreePath }
-        : config;
-      const workspaceId = await this.workspaceProvisioning.resolveOrCreateWorkspaceIdForCreateAgent(
-        {
-          createdWorktree,
-          requestedWorkspaceId: msg.workspaceId,
-          cwd: createAgentConfig.cwd,
-          initialTitle: workspacePromptTitle,
-        },
-      );
-      const createdDirectoryWorkspaceForAgent = !createdWorktree && !msg.workspaceId;
-
-      const { snapshot, liveSnapshot } = await createAgentCommand(
-        {
-          agentManager: this.agentManager,
-          agentStorage: this.agentStorage,
-          logger: this.sessionLogger,
-          byspaceHome: this.byspaceHome,
-          worktreesRoot: this.worktreesRoot,
-          providerSnapshotManager: this.providerSnapshotManager,
-        },
-        {
-          kind: "session",
-          config: createAgentConfig,
-          workspaceId,
-          worktreeName,
-          initialPrompt,
-          clientMessageId,
-          outputSchema,
-          images,
-          attachments,
-          git,
-          labels,
-          env,
-          provisionalTitle,
-          firstAgentContext,
-          buildSessionConfig: (sessionConfig, gitOptions, legacyWorktreeName, ctx) =>
-            this.buildAgentSessionConfig(sessionConfig, gitOptions, legacyWorktreeName, ctx),
-        },
-      );
-      createdAgentId = snapshot.id;
-      await this.agentUpdates.forwardLiveAgent(snapshot);
-      if (createdDirectoryWorkspaceForAgent && trimmedPrompt) {
-        this.workspaceAutoName.scheduleForDirectory(
-          {
-            workspaceId,
-            cwd: createAgentConfig.cwd,
+          const firstAgentContext: FirstAgentContext = {
+            ...(trimmedPrompt ? { prompt: trimmedPrompt } : {}),
+            ...(attachments && attachments.length > 0 ? { attachments } : {}),
+          };
+          const workspacePromptTitle = resolveFirstAgentPromptTitle(firstAgentContext);
+          const createdWorktree = await this.createAgentLifecycleDispatch.createWorktreeForRequest({
+            cwd: config.cwd,
+            target: worktree,
             firstAgentContext,
-          },
-          { currentSelection: this.getFocusedAgentSelectionForCwd(createAgentConfig.cwd) },
-        );
-      }
-      this.createAgentLifecycleDispatch.registerAutoArchiveIfRequested({
-        autoArchive,
-        agentId: snapshot.id,
-        createdWorktree,
-      });
-      if (requestId) {
-        const agentPayload = await this.buildAgentPayload(liveSnapshot);
-        this.emit({
-          type: "status",
-          payload: {
-            status: "agent_created",
-            agentId: liveSnapshot.id,
-            requestId,
-            agent: agentPayload,
-          },
-        });
-      }
+            hasLegacyGitOptions: Boolean(git),
+          });
+          createdWorktreeForCleanup = createdWorktree;
+          const caller = callerAgentId ? this.agentManager.getAgent(callerAgentId) : null;
+          if (callerAgentId && !caller) {
+            throw new Error(`Caller agent not found: ${callerAgentId}`);
+          }
+          const explicitWorkspaceId = createdWorktree?.workspace.workspaceId ?? msg.workspaceId;
+          const intent = await resolveCreateAgentIntent({
+            explicitWorkspaceId,
+            caller,
+            labels,
+            resolveWorkspace: async (workspaceId) => {
+              const workspace = await this.workspaceRegistry.get(workspaceId);
+              if (!workspace || workspace.archivedAt) {
+                throw new Error(`Workspace not found: ${workspaceId}`);
+              }
+              return { workspaceId, cwd: workspace.cwd };
+            },
+            createWorkspace: async () => {
+              const workspace = await this.workspaceProvisioning.createWorkspaceForDirectory(
+                config.cwd,
+                workspacePromptTitle,
+                undefined,
+                { expectsInitialAgent: Boolean(trimmedPrompt) },
+              );
+              return { workspaceId: workspace.workspaceId, cwd: workspace.cwd };
+            },
+          });
+          const createAgentConfig: AgentSessionConfig = { ...config, cwd: intent.cwd };
+          const workspaceId = intent.workspaceId;
+          const createdDirectoryWorkspaceForAgent = !explicitWorkspaceId && !caller;
+          if (createdDirectoryWorkspaceForAgent && trimmedPrompt) {
+            optimisticWorkspaceId = workspaceId;
+            this.optimisticInitialAgentWorkspaceIds.add(workspaceId);
+          }
 
-      this.sessionLogger.info(
-        { agentId: snapshot.id, provider: snapshot.provider },
-        `Created agent ${snapshot.id} (${snapshot.provider})`,
-      );
-    } catch (error) {
-      await this.createAgentLifecycleDispatch.cleanupCreatedWorktreeAfterFailedAgentCreate({
-        createdWorktree: createdWorktreeForCleanup,
-        createdAgentId,
+          const { snapshot, liveSnapshot } = await createAgentCommand(
+            {
+              agentManager: this.agentManager,
+              agentStorage: this.agentStorage,
+              logger: this.sessionLogger,
+              byspaceHome: this.byspaceHome,
+              worktreesRoot: this.worktreesRoot,
+              providerSnapshotManager: this.providerSnapshotManager,
+            },
+            {
+              kind: "session",
+              config: createAgentConfig,
+              workspaceId,
+              worktreeName,
+              initialPrompt,
+              clientMessageId,
+              outputSchema,
+              images,
+              attachments,
+              git,
+              labels: intent.labels,
+              env,
+              provisionalTitle,
+              firstAgentContext,
+              buildSessionConfig: (sessionConfig, gitOptions, legacyWorktreeName, ctx) =>
+                this.buildAgentSessionConfig(sessionConfig, gitOptions, legacyWorktreeName, ctx),
+            },
+          );
+          createdAgentId = snapshot.id;
+          await this.agentUpdates.forwardLiveAgent(snapshot);
+          await this.finalizeOptimisticInitialAgentWorkspace(optimisticWorkspaceId);
+          if (createdDirectoryWorkspaceForAgent && trimmedPrompt) {
+            this.workspaceAutoName.scheduleForDirectory(
+              {
+                workspaceId,
+                cwd: createAgentConfig.cwd,
+                firstAgentContext,
+              },
+              { currentSelection: this.getFocusedAgentSelectionForCwd(createAgentConfig.cwd) },
+            );
+          }
+          this.createAgentLifecycleDispatch.registerAutoArchiveIfRequested({
+            autoArchive,
+            agentId: snapshot.id,
+            createdWorktree,
+          });
+          if (requestId) {
+            const agentPayload = await this.buildAgentPayload(liveSnapshot);
+            this.emit({
+              type: "status",
+              payload: {
+                status: "agent_created",
+                agentId: liveSnapshot.id,
+                requestId,
+                agent: agentPayload,
+              },
+            });
+          }
+
+          this.sessionLogger.info(
+            { agentId: snapshot.id, provider: snapshot.provider },
+            `Created agent ${snapshot.id} (${snapshot.provider})`,
+          );
+        } catch (error) {
+          await this.createAgentLifecycleDispatch.cleanupCreatedWorktreeAfterFailedAgentCreate({
+            createdWorktree: createdWorktreeForCleanup,
+            createdAgentId,
+          });
+          await this.finalizeOptimisticInitialAgentWorkspace(optimisticWorkspaceId);
+          throw error;
+        }
       });
+    } catch (error) {
       const wireError = toWorktreeWireError(error);
       this.sessionLogger.error({ err: error }, "Failed to create agent");
       if (requestId) {
@@ -2880,6 +3075,20 @@ export class Session {
           content: `Failed to create agent: ${wireError.message}`,
         },
       });
+    }
+  }
+
+  private async finalizeOptimisticInitialAgentWorkspace(workspaceId: string | null): Promise<void> {
+    if (!workspaceId) return;
+    try {
+      await this.workspaceRegistry.update(workspaceId, (workspace) => workspace, {
+        initialAgentSettled: true,
+      });
+    } catch (error) {
+      this.sessionLogger.warn(
+        { err: error, workspaceId },
+        "Failed to finalize optimistic initial-agent workspace update",
+      );
     }
   }
 
@@ -3246,6 +3455,15 @@ export class Session {
     const agentIds = Array.isArray(agentId) ? agentId : [agentId];
 
     try {
+      await Promise.all(
+        agentIds.map((id) =>
+          ensureAgentLoaded(id, {
+            agentManager: this.agentManager,
+            agentStorage: this.agentStorage,
+            logger: this.sessionLogger,
+          }),
+        ),
+      );
       await Promise.all(agentIds.map((id) => this.agentManager.clearAgentAttention(id)));
       if (requestId) {
         const agents = (
@@ -3332,8 +3550,16 @@ export class Session {
     );
 
     try {
-      const agents = this.agentManager.listAgents();
-      const agent = agents.find((a) => a.id === agentId);
+      const existing = this.agentManager.getAgent(agentId);
+      const stored = existing ? null : await this.agentStorage.get(agentId);
+      const agent =
+        existing || (stored && !stored.archivedAt)
+          ? await ensureAgentLoaded(agentId, {
+              agentManager: this.agentManager,
+              agentStorage: this.agentStorage,
+              logger: this.sessionLogger,
+            })
+          : null;
 
       if (agent?.session?.listCommands) {
         const commands = await agent.session.listCommands();
@@ -4082,6 +4308,16 @@ export class Session {
     subscription: WorkspaceUpdatesSubscriptionState,
     payload: WorkspaceUpdatePayload,
   ): void {
+    if (payload.kind === "upsert") {
+      subscription.visibleEmptyProjectIds?.delete(payload.workspace.projectId);
+    } else {
+      if (payload.emptyProject) {
+        subscription.visibleEmptyProjectIds?.add(payload.emptyProject.projectId);
+      }
+      if (payload.removedProjectId) {
+        subscription.visibleEmptyProjectIds?.delete(payload.removedProjectId);
+      }
+    }
     if (subscription.isBootstrapping) {
       const workspaceId = payload.kind === "upsert" ? payload.workspace.id : payload.id;
       subscription.pendingUpdatesByWorkspaceId.set(workspaceId, payload);
@@ -4155,65 +4391,6 @@ export class Session {
     };
   }
 
-  private async recreateArchivedWorktree(workspace: PersistedWorkspaceRecord): Promise<void> {
-    const branch = workspace.branch;
-    if (!branch) {
-      throw new WorktreeRequestError({
-        code: "unknown",
-        message: `Workspace ${workspace.workspaceId} has no branch to restore`,
-      });
-    }
-    const project = await this.projectRegistry.get(workspace.projectId);
-    if (!project) {
-      throw new WorktreeRequestError({
-        code: "unknown",
-        message: `Project ${workspace.projectId} not found for workspace ${workspace.workspaceId}`,
-      });
-    }
-    const projectRootExists = await this.filesystem
-      .isDirectory(project.rootPath)
-      .catch(() => false);
-    if (!projectRootExists) {
-      throw new WorktreeRequestError({
-        code: "unknown",
-        message: `Project root is missing for ${workspace.projectId}: ${project.rootPath}`,
-      });
-    }
-
-    // Archiving through the default path (scope "workspace", worktreePath only)
-    // resolves repoRoot=null, so deleteBySpaceWorktree's `git worktree remove`/
-    // `prune` is skipped and the admin registration survives — pinning the
-    // branch as "already checked out". Prune here frees any stale registration
-    // whose working dir is missing (a no-op for live worktrees) so the recreate
-    // below succeeds regardless of how the worktree was archived.
-    try {
-      await runGitCommand(["worktree", "prune"], { cwd: project.rootPath, timeout: 30_000 });
-    } catch {
-      // not critical; git will prune lazily
-    }
-
-    let result: WorktreeConfig;
-    try {
-      result = await createWorktree({
-        cwd: project.rootPath,
-        worktreeSlug: basename(workspace.cwd),
-        source: { kind: "checkout-branch", branchName: branch },
-        runSetup: false,
-        byspaceHome: this.byspaceHome,
-        worktreesRoot: this.worktreesRoot,
-      });
-    } catch (error) {
-      throw toWorktreeRequestError(error);
-    }
-
-    if (normalize(result.worktreePath) !== normalize(workspace.cwd)) {
-      throw new WorktreeRequestError({
-        code: "unknown",
-        message: `Recreated worktree diverged from ${workspace.cwd}: ${result.worktreePath}`,
-      });
-    }
-  }
-
   private async restoreWorkspaceAndEmit(workspaceId: string): Promise<void> {
     await this.workspaceRecovery.restore(workspaceId);
     const workspace = await this.workspaceRegistry.get(workspaceId);
@@ -4262,8 +4439,7 @@ export class Session {
       ...(options?.resolveDefaultBranch
         ? { resolveDefaultBranch: options.resolveDefaultBranch }
         : {}),
-      projectRegistry: this.projectRegistry,
-      workspaceRegistry: this.workspaceRegistry,
+      workspaceProvisioning: this.workspaceProvisioning,
       workspaceGitService: this.workspaceGitService,
     });
     void Promise.all([
@@ -4286,6 +4462,9 @@ export class Session {
         workspaceId: workspace.workspaceId,
         cwd: workspace.cwd,
         kind: workspace.kind,
+        worktreeRoot: workspace.worktreeRoot,
+        isBySpaceOwnedWorktree: workspace.isBySpaceOwnedWorktree,
+        mainRepoRoot: workspace.mainRepoRoot,
       }));
   }
 
@@ -4394,9 +4573,15 @@ export class Session {
     return changedWorkspaceIds;
   }
 
+  // oxlint-disable-next-line eslint/complexity -- projection preserves independent compatibility exits.
   private async emitWorkspaceUpdatesForWorkspaceIds(
     workspaceIds: Iterable<string>,
-    options?: { skipReconcile?: boolean; dedupeGitState?: boolean; removedProjectId?: string },
+    options?: {
+      skipReconcile?: boolean;
+      dedupeGitState?: boolean;
+      removedProjectId?: string;
+      optimisticStatus?: WorkspaceDescriptorPayload["status"];
+    },
   ): Promise<void> {
     const subscription = this.workspaceUpdatesSubscription;
     if (!subscription) {
@@ -4415,10 +4600,15 @@ export class Session {
 
     for (const workspaceId of uniqueWorkspaceIds) {
       const workspace = descriptorsByWorkspaceId.get(workspaceId);
-      const nextWorkspace =
+      const filteredWorkspace =
         workspace && this.matchesWorkspaceFilter({ workspace, filter: subscription.filter })
           ? workspace
           : null;
+      const nextWorkspace = this.applyOptimisticWorkspaceStatus(
+        filteredWorkspace,
+        options?.optimisticStatus,
+      );
+      const lastEmitted = subscription.lastEmittedByWorkspaceId.get(workspaceId);
       if (
         options?.dedupeGitState &&
         this.workspaceGitObserver.shouldSkipUpdate(workspaceId, nextWorkspace)
@@ -4428,7 +4618,15 @@ export class Session {
       this.workspaceGitObserver.recordDescriptorState(workspaceId, nextWorkspace);
 
       if (!nextWorkspace) {
-        if (workspace && !subscription.lastEmittedByWorkspaceId.has(workspaceId)) {
+        let isKnownArchive = false;
+        if (!lastEmitted && !options?.removedProjectId) {
+          const storedWorkspace = await this.workspaceRegistry.get(workspaceId);
+          isKnownArchive = Boolean(storedWorkspace?.archivedAt);
+        }
+        if (
+          !isKnownArchive &&
+          this.shouldSkipWorkspaceRemoval(lastEmitted, options?.removedProjectId)
+        ) {
           continue;
         }
         subscription.lastEmittedByWorkspaceId.delete(workspaceId);
@@ -4444,7 +4642,6 @@ export class Session {
         workspace: nextWorkspace,
       };
 
-      const lastEmitted = subscription.lastEmittedByWorkspaceId.get(workspaceId);
       if (
         lastEmitted &&
         lastEmitted.kind === "upsert" &&
@@ -4455,6 +4652,32 @@ export class Session {
 
       this.bufferOrEmitWorkspaceUpdate(subscription, nextPayload);
     }
+
+    if (!options?.skipReconcile) {
+      void this.reconcileAndEmitWorkspaceUpdates();
+    }
+  }
+
+  private applyOptimisticWorkspaceStatus(
+    workspace: WorkspaceDescriptorPayload | null,
+    requestedStatus: WorkspaceDescriptorPayload["status"] | undefined,
+  ): WorkspaceDescriptorPayload | null {
+    if (!workspace) return workspace;
+    const optimisticStatus =
+      requestedStatus ??
+      (this.optimisticInitialAgentWorkspaceIds.has(workspace.id) ? "running" : undefined);
+    if (!optimisticStatus) return workspace;
+    return { ...workspace, status: optimisticStatus };
+  }
+
+  private shouldSkipWorkspaceRemoval(
+    lastEmitted: WorkspaceUpdatePayload | undefined,
+    removedProjectId: string | undefined,
+  ): boolean {
+    if (lastEmitted?.kind === "remove") {
+      return !removedProjectId || lastEmitted.removedProjectId === removedProjectId;
+    }
+    return !lastEmitted && !removedProjectId;
   }
 
   private async buildWorkspaceRemoveUpdatePayload(
@@ -4668,6 +4891,7 @@ export class Session {
           isBootstrapping: true,
           pendingUpdatesByWorkspaceId: new Map(),
           lastEmittedByWorkspaceId: new Map(),
+          visibleEmptyProjectIds: new Set(),
         };
       }
 
@@ -4683,7 +4907,12 @@ export class Session {
         "fetch_workspaces_response_ready",
       );
       const snapshot = this.buildBootstrapSnapshot(payload.entries);
-      this.seedWorkspaceSubscriptionSnapshot(subscriptionId, request.filter, payload.entries);
+      this.seedWorkspaceSubscriptionSnapshot(
+        subscriptionId,
+        request.filter,
+        payload.entries,
+        payload.emptyProjects,
+      );
 
       this.emit({
         type: "fetch_workspaces_response",
@@ -4748,6 +4977,7 @@ export class Session {
     subscriptionId: string | null,
     filter: FetchWorkspacesRequestFilter | undefined,
     entries: FetchWorkspacesResponseEntry[],
+    emptyProjects: WorkspaceProjectDescriptorPayload[],
   ): void {
     const subscription = this.workspaceUpdatesSubscription;
     if (!subscription) return;
@@ -4758,6 +4988,9 @@ export class Session {
         kind: "upsert",
         workspace: entry,
       });
+    }
+    for (const project of emptyProjects) {
+      subscription.visibleEmptyProjectIds?.add(project.projectId);
     }
   }
 
@@ -4798,6 +5031,7 @@ export class Session {
           workspace: null,
           setupTerminalId: null,
           error: message,
+          errorCode: directoryNotFoundErrorCode(error),
         },
       });
     }
@@ -4811,8 +5045,17 @@ export class Session {
     }
 
     const cwd = expandTilde(request.source.path);
+    const explicitTitle = request.title?.trim() || null;
+    const promptTitle = resolveFirstAgentPromptTitle(request.firstAgentContext);
     const directoryExists = await this.filesystem.isDirectory(cwd).catch(() => false);
-    if (!directoryExists) {
+    const workspace = directoryExists
+      ? await this.workspaceProvisioning.createWorkspaceForDirectory(
+          cwd,
+          explicitTitle ?? promptTitle,
+          request.source.projectId,
+        )
+      : null;
+    if (!workspace) {
       this.emit({
         type: "workspace.create.response",
         payload: {
@@ -4826,16 +5069,6 @@ export class Session {
       return;
     }
 
-    const explicitTitle = request.title?.trim() || null;
-    const promptTitle = resolveFirstAgentPromptTitle(request.firstAgentContext);
-    const workspace = await createLocalCheckoutWorkspace(
-      { cwd, title: explicitTitle ?? promptTitle },
-      {
-        projectRegistry: this.projectRegistry,
-        workspaceRegistry: this.workspaceRegistry,
-        workspaceGitService: this.workspaceGitService,
-      },
-    );
     await this.syncWorkspaceGitObserverForWorkspace(workspace);
     const descriptor = await this.describeWorkspaceRecord(workspace);
     this.emit({
@@ -4907,20 +5140,12 @@ export class Session {
         checkoutSource: source.checkoutSource,
         githubPrNumber: source.githubPrNumber,
         firstAgentContext: request.firstAgentContext,
+        title: request.title?.trim() || undefined,
       },
       source.baseBranch
         ? { resolveDefaultBranch: async () => source.baseBranch as string }
         : undefined,
     );
-
-    if (request.title?.trim()) {
-      await this.workspaceRegistry.upsert({
-        ...result.workspace,
-        title: request.title.trim(),
-        updatedAt: new Date().toISOString(),
-      });
-      result.workspace.title = request.title.trim();
-    }
 
     const descriptor = await this.describeCreatedWorktreeWorkspace(result);
     this.emit({
@@ -5033,6 +5258,7 @@ export class Session {
           requestId: request.requestId,
           workspace: null,
           error: message,
+          errorCode: directoryNotFoundErrorCode(error),
         },
       });
     }
@@ -5096,6 +5322,7 @@ export class Session {
           requestId: request.requestId,
           project: null,
           error: message,
+          errorCode: directoryNotFoundErrorCode(error),
         },
       });
     }
@@ -5850,6 +6077,11 @@ export class Session {
     msg: Extract<SessionInboundMessage, { type: "agent.provider_subagents.list.request" }>,
   ): Promise<void> {
     try {
+      await ensureUnarchivedAgentLoaded(msg.parentAgentId, {
+        agentManager: this.agentManager,
+        agentStorage: this.agentStorage,
+        logger: this.sessionLogger,
+      });
       this.emit({
         type: "agent.provider_subagents.list.response",
         payload: {
@@ -5877,6 +6109,11 @@ export class Session {
   ): Promise<void> {
     const direction: AgentTimelineFetchDirection = msg.direction ?? (msg.cursor ? "after" : "tail");
     try {
+      await ensureUnarchivedAgentLoaded(msg.parentAgentId, {
+        agentManager: this.agentManager,
+        agentStorage: this.agentStorage,
+        logger: this.sessionLogger,
+      });
       const descriptor = this.agentManager.getProviderSubagent(msg.parentAgentId, msg.subagentId);
       if (!descriptor) {
         throw new Error("Provider subagent not found");
@@ -6253,11 +6490,17 @@ export class Session {
    */
   public async cleanup(): Promise<void> {
     this.sessionLogger.trace({}, "agent.session.lifecycle.cleanup");
+    this.isCleanedUp = true;
 
     if (this.unsubscribeAgentEvents) {
       this.unsubscribeAgentEvents();
       this.unsubscribeAgentEvents = null;
     }
+    this.unsubscribeProjectMutations?.();
+    this.unsubscribeProjectMutations = null;
+    this.unsubscribeWorkspaceMutations?.();
+    this.unsubscribeWorkspaceMutations = null;
+    this.optimisticInitialAgentWorkspaceIds.clear();
     this.agentUpdates.dispose();
     if (this.unsubscribeTerminalWorkspaceContributionEvents) {
       this.unsubscribeTerminalWorkspaceContributionEvents();

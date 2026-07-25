@@ -24,7 +24,7 @@ type CurrentSelection = GenerateBranchNameFromFirstAgentContextOptions["currentS
 
 interface WorkspaceAutoNameOptions {
   agentManager: AgentManager;
-  workspaceRegistry: Pick<WorkspaceRegistry, "get" | "upsert">;
+  workspaceRegistry: Pick<WorkspaceRegistry, "update">;
   workspaceGitService: WorkspaceGitService;
   providerSnapshotManager: ProviderSnapshotManager;
   readDaemonConfig: () => StructuredGenerationDaemonConfig;
@@ -41,7 +41,7 @@ interface ScheduleContext {
 
 export class WorkspaceAutoName {
   private readonly agentManager: AgentManager;
-  private readonly workspaceRegistry: Pick<WorkspaceRegistry, "get" | "upsert">;
+  private readonly workspaceRegistry: Pick<WorkspaceRegistry, "update">;
   private readonly workspaceGitService: WorkspaceGitService;
   private readonly providerSnapshotManager: ProviderSnapshotManager;
   private readonly readDaemonConfig: () => StructuredGenerationDaemonConfig;
@@ -136,15 +136,12 @@ export class WorkspaceAutoName {
       return;
     }
 
-    // K4: re-read from the registry before writing so any concurrent upsert
-    // that happened between workspace creation and this async path is not clobbered.
-    // When the first-agent rename changed the git branch too, persist that branch
-    // alongside the title — both are this path's own fields.
-    await this.applyGeneratedWorkspaceTitle(input.workspace.workspaceId, {
+    const titleApplied = await this.applyGeneratedWorkspaceTitle(input.workspace.workspaceId, {
       title: generatedTitle,
       ...(result.renamed ? { branch: result.branchName } : {}),
       promptTitle: resolveFirstAgentPromptTitle(input.firstAgentContext),
     });
+    if (!titleApplied) return;
     if (result.renamed) {
       await this.gitMutation.notifyGitMutation(input.workspace.cwd, "rename-branch");
     }
@@ -166,33 +163,32 @@ export class WorkspaceAutoName {
     if (!title) {
       return;
     }
-    // K4: applyGeneratedWorkspaceTitle re-reads from the registry before writing.
-    // Directory workspaces have no branch — write only the title.
-    await this.applyGeneratedWorkspaceTitle(input.workspaceId, {
+    const titleApplied = await this.applyGeneratedWorkspaceTitle(input.workspaceId, {
       title,
       promptTitle: resolveFirstAgentPromptTitle(input.firstAgentContext),
     });
+    if (!titleApplied) return;
     await this.emitWorkspaceUpdateForWorkspaceId(input.workspaceId);
   }
 
   private async applyGeneratedWorkspaceTitle(
     workspaceId: string,
     input: { title: string; branch?: string | null; promptTitle?: string | null },
-  ): Promise<void> {
-    const current = await this.workspaceRegistry.get(workspaceId);
-    if (!current) {
-      return;
-    }
-    let title = current.title;
-    if (!title || (input.promptTitle && title === input.promptTitle)) {
-      title = input.title;
-    }
-    await this.workspaceRegistry.upsert({
-      ...current,
-      title,
-      ...(input.branch ? { branch: input.branch } : {}),
-      updatedAt: new Date().toISOString(),
+  ): Promise<boolean> {
+    const updated = await this.workspaceRegistry.update(workspaceId, (current) => {
+      if (current.archivedAt) return null;
+      let title = current.title;
+      if (!title || (input.promptTitle && title === input.promptTitle)) {
+        title = input.title;
+      }
+      return {
+        ...current,
+        title,
+        ...(input.branch ? { branch: input.branch } : {}),
+        updatedAt: new Date().toISOString(),
+      };
     });
+    return updated !== null;
   }
 
   private generateFromContext(input: {

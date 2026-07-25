@@ -124,13 +124,12 @@ export async function archiveCommand(
 ): Promise<ArchiveCommandResult> {
   const resolvedTarget = await resolveArchiveTarget(dependencies, input);
   const scope = input.scope ?? "workspace";
+  const ownership = await isBySpaceOwnedWorktreeCwd(resolvedTarget.targetPath, {
+    byspaceHome: dependencies.byspaceHome,
+    worktreesRoot: dependencies.byspaceWorktreesBaseRoot,
+  });
 
   if (scope === "worktree") {
-    const ownership = await isBySpaceOwnedWorktreeCwd(resolvedTarget.targetPath, {
-      byspaceHome: dependencies.byspaceHome,
-      worktreesRoot: dependencies.byspaceWorktreesBaseRoot,
-    });
-
     if (!ownership.allowed) {
       return {
         ok: false,
@@ -170,7 +169,7 @@ export async function archiveCommand(
 
   const result = await archiveByScope(dependencies, {
     scope: { kind: "workspace", workspaceId },
-    repoRoot: resolvedTarget.repoRoot,
+    repoRoot: resolvedTarget.repoRoot ?? ownership.repoRoot ?? null,
     byspaceWorktreesBaseRoot: dependencies.byspaceWorktreesBaseRoot,
     requestId: input.requestId,
   });

@@ -960,9 +960,6 @@ export const ar: TranslationResources = {
     refPicker: {
       startingRef: "بدء المرجع",
       chooseStart: "اختر من أين تبدأ",
-      checkoutHint: "تحقق من {{noun}} {{numberPrefix}}{{number}}؟",
-      checkoutPr: "تحقق من {{noun}} {{numberPrefix}}{{number}}",
-      dismissCheckoutHint: "تجاهل تلميح الخروج {{noun}} {{numberPrefix}}{{number}}",
       intoBase: "إلى {{baseRef}}",
       searching: "جارٍ البحث...",
       noMatchingRefs: "لا توجد مراجع مطابقة.",
@@ -1428,6 +1425,10 @@ export const ar: TranslationResources = {
         label: "التمرير Terminal",
         description: "يتم الاحتفاظ بالخطوط في المخزن المؤقت الطرفي المدمج",
         accessibilityLabel: "خطوط التمرير Terminal",
+      },
+      vimKeybindings: {
+        label: "اختصارات Vim",
+        description: "استخدام اختصارات Vim عند تحرير ملفات المصدر",
       },
       autoExpandReasoning: {
         label: "عرض التفكير دائماً",

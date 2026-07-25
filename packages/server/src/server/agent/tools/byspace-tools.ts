@@ -23,9 +23,12 @@ import type { AgentStorage } from "../agent-storage.js";
 import { ensureAgentLoaded } from "../agent-loading.js";
 import { isStoredAgentProviderAvailable } from "../../persistence-hooks.js";
 import {
+  archiveByScope,
   killTerminalsForWorkspace,
+  requireActiveWorkspaceForArchive,
   type ArchiveDependencies,
 } from "../../workspace-archive-service.js";
+import { workspaceLifecycleCoordinator } from "../../workspace-lifecycle-coordinator.js";
 import { createAgentCommand, type CreateAgentFromMcpInput } from "../create-agent/create.js";
 import type { VoiceCallerContext, VoiceSpeakHandler } from "../../voice-types.js";
 import type { FirstAgentContext } from "../../messages.js";
@@ -33,6 +36,7 @@ import { expandUserPath, isSameOrDescendantPath, resolvePathFromBase } from "../
 import type { TerminalManager } from "../../../terminal/terminal-manager.js";
 import type { CreateBySpaceWorktreeWorkflowFn } from "../../worktree-session.js";
 import type { ScheduleService } from "../../schedule/service.js";
+import { everyMsToFiveFieldCron } from "@bytetrue/byspace-protocol/schedule/cadence";
 import {
   ScheduleRunSchema,
   ScheduleSummarySchema,
@@ -65,14 +69,16 @@ import {
 } from "../lifecycle-command.js";
 import type { ForgeService } from "../../../services/forge-service.js";
 import type { WorkspaceGitService } from "../../workspace-git-service.js";
-import type { WorkspaceRegistry } from "../../workspace-registry.js";
-import { WorktreeRequestError } from "../../worktree-errors.js";
+import type {
+  PersistedWorkspaceRecord,
+  ProjectRegistry,
+  WorkspaceRegistry,
+} from "../../workspace-registry.js";
+import { resolveWorktreeSourceCwd } from "../../workspace-source.js";
 import {
-  archiveCommand,
   type ArchiveCommandDependencies,
   createBySpaceWorktreeCommand,
   type CreateBySpaceWorktreeCommandInput,
-  listBySpaceWorktreesCommand,
 } from "../../worktree/commands.js";
 import type {
   BySpaceToolCatalog,
@@ -98,7 +104,14 @@ export interface BySpaceToolHostDependencies {
   listActiveWorkspaces?: ArchiveDependencies["listActiveWorkspaces"];
   archiveWorkspaceRecord?: ArchiveDependencies["archiveWorkspaceRecord"];
   emitWorkspaceUpdatesForWorkspaceIds?: ArchiveDependencies["emitWorkspaceUpdatesForWorkspaceIds"];
-  workspaceRegistry?: Pick<WorkspaceRegistry, "get" | "upsert">;
+  workspaceRegistry?: Pick<WorkspaceRegistry, "get" | "update" | "upsert"> &
+    Partial<Pick<WorkspaceRegistry, "list">>;
+  projectRegistry?: Pick<ProjectRegistry, "get">;
+  createDirectoryWorkspace?: (
+    cwd: string,
+    title?: string | null,
+    projectId?: string,
+  ) => Promise<PersistedWorkspaceRecord>;
   markWorkspaceArchiving?: ArchiveDependencies["markWorkspaceArchiving"];
   clearWorkspaceArchiving?: ArchiveDependencies["clearWorkspaceArchiving"];
   createBySpaceWorktree?: CreateBySpaceWorktreeWorkflowFn;
@@ -151,6 +164,105 @@ interface ProviderSummary {
   modes: AgentMode[];
   status: string;
   error?: string;
+}
+
+const WorkspaceAutomationSummarySchema = z.object({
+  workspaceId: z.string(),
+  projectId: z.string(),
+  cwd: z.string(),
+  isolation: z.enum(["local", "worktree"]),
+  kind: z.enum(["directory", "local_checkout", "worktree"]),
+  title: z.string().nullable(),
+});
+
+function toWorkspaceAutomationSummary(workspace: PersistedWorkspaceRecord) {
+  return {
+    workspaceId: workspace.workspaceId,
+    projectId: workspace.projectId,
+    cwd: workspace.cwd,
+    isolation: workspace.kind === "worktree" ? ("worktree" as const) : ("local" as const),
+    kind: workspace.kind,
+    title: workspace.title,
+  };
+}
+
+type WorkspaceWorktreeMode = "branch-off" | "checkout-branch" | "checkout-pr";
+
+interface WorkspaceWorktreeOptions {
+  mode?: WorkspaceWorktreeMode;
+  worktreeSlug?: string;
+  branchName?: string;
+  baseBranch?: string;
+  branch?: string;
+  prNumber?: number;
+  forge?: string;
+}
+
+type WorkspaceWorktreeTarget = Pick<
+  CreateBySpaceWorktreeCommandInput,
+  "action" | "branchName" | "refName" | "checkoutSource"
+>;
+
+function assertOptionsAbsent(
+  options: Array<[name: string, value: unknown]>,
+  message: string,
+): void {
+  if (options.some(([, value]) => value !== undefined)) {
+    throw new Error(message);
+  }
+}
+
+function resolveWorkspaceWorktreeTarget(input: WorkspaceWorktreeOptions): WorkspaceWorktreeTarget {
+  switch (input.mode ?? "branch-off") {
+    case "branch-off":
+      assertOptionsAbsent(
+        [
+          ["branch", input.branch],
+          ["prNumber", input.prNumber],
+          ["forge", input.forge],
+        ],
+        "branch, prNumber, and forge require a checkout mode",
+      );
+      return {
+        action: "branch-off",
+        ...(input.branchName ? { branchName: input.branchName } : {}),
+        ...(input.baseBranch ? { refName: input.baseBranch } : {}),
+      };
+    case "checkout-branch":
+      if (!input.branch) {
+        throw new Error("branch is required for checkout-branch mode");
+      }
+      assertOptionsAbsent(
+        [
+          ["branchName", input.branchName],
+          ["baseBranch", input.baseBranch],
+          ["prNumber", input.prNumber],
+          ["forge", input.forge],
+        ],
+        "branchName, baseBranch, prNumber, and forge are not valid for checkout-branch mode",
+      );
+      return { action: "checkout", refName: input.branch };
+    case "checkout-pr":
+      if (input.prNumber === undefined) {
+        throw new Error("prNumber is required for checkout-pr mode");
+      }
+      assertOptionsAbsent(
+        [
+          ["branchName", input.branchName],
+          ["baseBranch", input.baseBranch],
+          ["branch", input.branch],
+        ],
+        "branchName, baseBranch, and branch are not valid for checkout-pr mode",
+      );
+      return {
+        action: "checkout",
+        checkoutSource: {
+          kind: "change_request",
+          ...(input.forge ? { forge: input.forge } : {}),
+          number: input.prNumber,
+        },
+      };
+  }
 }
 
 function toProviderSummary(entry: {
@@ -291,7 +403,10 @@ function normalizeScheduleTimeZoneArg(value: string | undefined): string | undef
   return normalizeScheduleCadenceArg(value);
 }
 
-function resolveScheduleUpdateCadence(input: ScheduleUpdateToolInput): ScheduleCadence | undefined {
+function resolveScheduleUpdateCadence(
+  input: ScheduleUpdateToolInput,
+  defaultTimeZone: string,
+): ScheduleCadence | undefined {
   const every = normalizeScheduleCadenceArg(input.every);
   const cron = normalizeScheduleCadenceArg(input.cron);
   const timeZone = normalizeScheduleTimeZoneArg(input.timezone);
@@ -303,13 +418,18 @@ function resolveScheduleUpdateCadence(input: ScheduleUpdateToolInput): ScheduleC
     throw new Error("timezone can only be used with cron");
   }
   if (every !== undefined) {
-    return { type: "every", everyMs: parseDurationString(every) };
+    // COMPAT(scheduleEveryInput): added in v0.2.0; remove after 2027-01-31.
+    const expression = everyMsToFiveFieldCron(parseDurationString(every));
+    if (!expression) {
+      throw new Error(`${every} cannot be represented faithfully by five-field cron`);
+    }
+    return { type: "cron", expression, timezone: defaultTimeZone };
   }
   if (cron !== undefined) {
     return {
       type: "cron",
       expression: cron,
-      ...(timeZone !== undefined ? { timezone: timeZone } : {}),
+      timezone: timeZone ?? defaultTimeZone,
     };
   }
   return undefined;
@@ -328,8 +448,11 @@ function resolveScheduleUpdateExpiresAt(input: ScheduleUpdateToolInput): string 
   return undefined;
 }
 
-function buildScheduleUpdateInput(input: ScheduleUpdateToolInput): UpdateScheduleInput {
-  const cadence = resolveScheduleUpdateCadence(input);
+function buildScheduleUpdateInput(
+  input: ScheduleUpdateToolInput,
+  defaultTimeZone: string,
+): UpdateScheduleInput {
+  const cadence = resolveScheduleUpdateCadence(input, defaultTimeZone);
   const expiresAt = resolveScheduleUpdateExpiresAt(input);
   const providerModelPatch = resolveScheduleUpdateProviderAndModel({
     provider: input.provider,
@@ -376,13 +499,6 @@ const TerminalSummarySchema = z.object({
   id: z.string(),
   name: z.string(),
   cwd: z.string(),
-});
-
-const WorktreeSummarySchema = z.object({
-  path: z.string(),
-  createdAt: z.string(),
-  branchName: z.string().optional(),
-  head: z.string().optional(),
 });
 
 function resolveTerminalKeyToken(key: string, literal: boolean): string {
@@ -489,11 +605,13 @@ export function createBySpaceToolCatalog(options: BySpaceToolHostDependencies): 
     if (!expression) {
       throw new Error("cron is required");
     }
-    const timezone = normalizeScheduleTimeZoneArg(input.timezone);
+    const timezone =
+      normalizeScheduleTimeZoneArg(input.timezone) ??
+      Intl.DateTimeFormat().resolvedOptions().timeZone;
     return {
       type: "cron",
       expression,
-      ...(timezone !== undefined ? { timezone } : {}),
+      timezone,
     };
   };
 
@@ -629,17 +747,33 @@ export function createBySpaceToolCatalog(options: BySpaceToolHostDependencies): 
     };
   };
 
-  const resolveNewAgentScheduleTarget = (params?: { provider?: string; cwd?: string }) => {
-    if (!params?.provider?.trim()) {
-      throw new Error("provider is required when target is new-agent");
-    }
-
+  const resolveNewAgentScheduleTarget = (params?: {
+    provider?: string;
+    cwd?: string;
+    isolation?: "local" | "worktree";
+  }) => {
+    const resolvedCwd = resolveScopedCwd(
+      params?.cwd ?? (callerAgentId ? undefined : process.cwd()),
+      {
+        required: true,
+      },
+    );
     const callerAgent = resolveCallerAgent();
     if (callerAgent) {
       return {
         type: "new-agent" as const,
-        config: buildCallerAgentScheduleConfig(callerAgent, params),
+        config: {
+          ...buildCallerAgentScheduleConfig(callerAgent, {
+            provider: params?.provider,
+            cwd: resolvedCwd,
+          }),
+          ...(params?.isolation ? { isolation: params.isolation } : {}),
+        },
       };
+    }
+
+    if (!params?.provider?.trim()) {
+      throw new Error("provider is required when target is new-agent");
     }
 
     const resolvedProviderModel = resolveScheduleProviderAndModel({
@@ -650,11 +784,36 @@ export function createBySpaceToolCatalog(options: BySpaceToolHostDependencies): 
       type: "new-agent" as const,
       config: {
         provider: resolvedProviderModel.provider,
-        cwd: params?.cwd?.trim() ? expandUserPath(params.cwd) : process.cwd(),
+        cwd: resolvedCwd,
         ...(resolvedProviderModel.model ? { model: resolvedProviderModel.model } : {}),
+        ...(params?.isolation ? { isolation: params.isolation } : {}),
       },
     };
   };
+  async function requireScheduleTarget(id: string, type: "agent" | "new-agent") {
+    if (!scheduleService) {
+      throw new Error("Schedule service is not configured");
+    }
+    const schedule = await scheduleService.inspect(id);
+    if (schedule.target.type !== type) {
+      throw new Error(
+        type === "agent" ? `Heartbeat not found: ${id}` : `Schedule not found: ${id}`,
+      );
+    }
+    return schedule;
+  }
+
+  async function requireCallerHeartbeat(id: string) {
+    if (!callerAgentId) {
+      throw new Error("Heartbeat operations require an agent-scoped session");
+    }
+    const schedule = await requireScheduleTarget(id, "agent");
+    if (schedule.target.type !== "agent" || schedule.target.agentId !== callerAgentId) {
+      throw new Error(`Heartbeat ${id} does not belong to caller ${callerAgentId}`);
+    }
+    return schedule;
+  }
+
   const ProviderModelInputSchema = AgentProviderEnum.trim()
     .refine((value) => value.includes("/"), {
       message: "provider must be provider/model, for example codex/gpt-5.4",
@@ -1023,6 +1182,213 @@ export function createBySpaceToolCatalog(options: BySpaceToolHostDependencies): 
   }
 
   registerTool(
+    "create_workspace",
+    {
+      title: "Create workspace",
+      description:
+        "Create a workspace using an existing local checkout or a new BySpace-managed worktree.",
+      inputSchema: {
+        isolation: z.enum(["local", "worktree"]),
+        path: z
+          .string()
+          .optional()
+          .describe("Local directory or source checkout. Defaults to your current workspace."),
+        projectId: z.string().optional().describe("Existing project id to own the workspace."),
+        title: z.string().trim().min(1).optional(),
+        mode: z
+          .enum(["branch-off", "checkout-branch", "checkout-pr"])
+          .optional()
+          .describe("Worktree creation mode. Defaults to branch-off."),
+        worktreeSlug: z.string().trim().min(1).optional(),
+        branchName: z
+          .string()
+          .trim()
+          .min(1)
+          .optional()
+          .describe("New branch name for branch-off mode."),
+        baseBranch: z.string().trim().min(1).optional().describe("Base ref for branch-off mode."),
+        branch: z
+          .string()
+          .trim()
+          .min(1)
+          .optional()
+          .describe("Existing branch for checkout-branch mode."),
+        prNumber: z
+          .number()
+          .int()
+          .positive()
+          .optional()
+          .describe("Pull request or change request number for checkout-pr mode."),
+        forge: z
+          .string()
+          .trim()
+          .min(1)
+          .optional()
+          .describe("Forge for checkout-pr mode. Defaults to the source checkout."),
+      },
+      outputSchema: WorkspaceAutomationSummarySchema.shape,
+    },
+    async ({
+      isolation,
+      path,
+      projectId,
+      title,
+      mode,
+      worktreeSlug,
+      branchName,
+      baseBranch,
+      branch,
+      prNumber,
+      forge,
+    }) => {
+      let workspace: PersistedWorkspaceRecord;
+      if (isolation === "local") {
+        const cwd = resolveScopedCwd(path, { required: true });
+        assertOptionsAbsent(
+          [
+            ["mode", mode],
+            ["worktreeSlug", worktreeSlug],
+            ["branchName", branchName],
+            ["baseBranch", baseBranch],
+            ["branch", branch],
+            ["prNumber", prNumber],
+            ["forge", forge],
+          ],
+          "Worktree options require isolation worktree",
+        );
+        if (!options.createDirectoryWorkspace) {
+          throw new Error("Workspace provisioning is not configured");
+        }
+        workspace = await options.createDirectoryWorkspace(cwd, title, projectId);
+      } else {
+        let cwd =
+          path !== undefined || !projectId ? resolveScopedCwd(path, { required: true }) : null;
+        if (!cwd) {
+          if (!options.projectRegistry) {
+            throw new Error("Project registry is not configured");
+          }
+          cwd = await resolveWorktreeSourceCwd({ projectId }, options.projectRegistry);
+          cwd = resolveScopedCwd(cwd, { required: true });
+        }
+        const worktreeTarget = resolveWorkspaceWorktreeTarget({
+          mode,
+          worktreeSlug,
+          branchName,
+          baseBranch,
+          branch,
+          prNumber,
+          forge,
+        });
+        const result = await createBySpaceWorktreeCommand(
+          {
+            byspaceHome: options.byspaceHome,
+            worktreesRoot: options.worktreesRoot,
+            createBySpaceWorktreeWorkflow: options.createBySpaceWorktree,
+          },
+          {
+            cwd,
+            ...(projectId ? { projectId } : {}),
+            ...(worktreeSlug ? { worktreeSlug } : {}),
+            ...worktreeTarget,
+            ...(title ? { title } : {}),
+          },
+        );
+        if (!result.ok) {
+          throw result.cause;
+        }
+        workspace = result.createdWorktree.workspace;
+      }
+
+      return {
+        content: [],
+        structuredContent: ensureValidJson(toWorkspaceAutomationSummary(workspace)),
+      };
+    },
+  );
+
+  registerTool(
+    "list_workspaces",
+    {
+      title: "List workspaces",
+      description: "List active workspaces.",
+      inputSchema: {},
+      outputSchema: { workspaces: z.array(WorkspaceAutomationSummarySchema) },
+    },
+    async () => {
+      if (!options.workspaceRegistry?.list) {
+        throw new Error("Workspace registry is not configured");
+      }
+      const workspaces = (await options.workspaceRegistry.list())
+        .filter((workspace) => !workspace.archivedAt)
+        .map(toWorkspaceAutomationSummary);
+      return {
+        content: [],
+        structuredContent: ensureValidJson({ workspaces }),
+      };
+    },
+  );
+
+  registerTool(
+    "archive_workspace",
+    {
+      title: "Archive workspace",
+      description: "Archive a workspace and everything it owns.",
+      inputSchema: { workspaceId: z.string().min(1) },
+      outputSchema: {
+        workspaceId: z.string(),
+        archivedAgentIds: z.array(z.string()),
+        removedDirectory: z.boolean(),
+      },
+    },
+    async ({ workspaceId }) => {
+      if (!options.listActiveWorkspaces) {
+        throw new Error("Active workspace lister is required to archive workspaces");
+      }
+      const workspace = await requireActiveWorkspaceForArchive(
+        { listActiveWorkspaces: options.listActiveWorkspaces },
+        workspaceId,
+      );
+      const resolvedCwd = resolveScopedCwd(workspace.cwd, { required: true });
+      const callerAgent = resolveCallerAgent();
+      if (
+        callerAgent &&
+        callerContext?.allowCustomCwd === false &&
+        workspace.workspaceId !== callerAgent.workspaceId
+      ) {
+        throw new Error(`Workspace ${workspaceId} does not belong to caller ${callerAgent.id}`);
+      }
+      const repoRoot =
+        workspace.kind === "worktree"
+          ? await options.workspaceGitService?.resolveRepoRoot(resolvedCwd).catch(() => null)
+          : null;
+      const result = await archiveByScope(
+        archiveWorktreeDependencies(options, {
+          agentManager,
+          agentStorage,
+          terminalManager: terminalManager ?? null,
+          logger: childLogger,
+        }),
+        {
+          requestId: "mcp:archive_workspace",
+          scope: { kind: "workspace", workspaceId: workspace.workspaceId },
+          repoRoot: repoRoot ?? null,
+        },
+      );
+      if (!result.archivedWorkspaceIds.includes(workspaceId)) {
+        throw new Error(`Workspace ${workspaceId} could not be fully archived`);
+      }
+      return {
+        content: [],
+        structuredContent: ensureValidJson({
+          workspaceId,
+          archivedAgentIds: result.archivedAgentIds,
+          removedDirectory: result.removedDirectory,
+        }),
+      };
+    },
+  );
+
+  registerTool(
     "create_agent",
     {
       title: "Create agent",
@@ -1043,57 +1409,61 @@ export function createBySpaceToolCatalog(options: BySpaceToolHostDependencies): 
       },
     },
     async (args: unknown) => {
-      const resolvedArgs = await resolveCreateAgentToolArgs(args);
-      const { parsedArgs, worktree } = resolvedArgs;
-      let requestedBackground: boolean;
-      let notifyOnFinish: boolean;
-      let detached: boolean;
-      if (resolvedArgs.kind === "agent-scoped") {
-        requestedBackground = true;
-        notifyOnFinish = parsedArgs.notifyOnFinish;
-        detached = resolvedArgs.relationship.kind === "detached";
-      } else {
-        requestedBackground = resolvedArgs.parsedArgs.background;
-        notifyOnFinish = resolvedArgs.parsedArgs.notifyOnFinish ?? false;
-        detached = resolvedArgs.parsedArgs.relationship.kind === "detached";
-      }
       const {
         snapshot,
         background: createdInBackground,
         initialPromptStarted,
-      } = await createAgentCommand(
-        {
-          agentManager,
-          agentStorage,
-          logger: childLogger,
-          byspaceHome: options.byspaceHome,
-          worktreesRoot: options.worktreesRoot,
-          terminalManager,
-          providerSnapshotManager,
-          createBySpaceWorktree: options.createBySpaceWorktree,
-          ...(options.ensureWorkspaceForCreate
-            ? { ensureWorkspaceForCreate: options.ensureWorkspaceForCreate }
-            : {}),
-        },
-        {
-          kind: "mcp",
-          provider: parsedArgs.provider,
-          title: parsedArgs.title,
-          initialPrompt: parsedArgs.initialPrompt,
-          cwd: resolvedArgs.cwd,
-          workspaceId: resolvedArgs.workspaceId,
-          thinking: parsedArgs.settings?.thinkingOptionId,
-          features: parsedArgs.settings?.features,
-          labels: parsedArgs.labels,
-          mode: parsedArgs.settings?.modeId,
-          background: requestedBackground,
-          notifyOnFinish,
-          detached,
-          callerAgentId,
-          callerContext,
-          worktree,
-        },
-      );
+        notifyOnFinish,
+      } = await workspaceLifecycleCoordinator.runExclusive(async () => {
+        const resolvedArgs = await resolveCreateAgentToolArgs(args);
+        const { parsedArgs, worktree } = resolvedArgs;
+        let requestedBackground: boolean;
+        let shouldNotifyOnFinish: boolean;
+        let detached: boolean;
+        if (resolvedArgs.kind === "agent-scoped") {
+          requestedBackground = true;
+          shouldNotifyOnFinish = parsedArgs.notifyOnFinish;
+          detached = resolvedArgs.relationship.kind === "detached";
+        } else {
+          requestedBackground = resolvedArgs.parsedArgs.background;
+          shouldNotifyOnFinish = resolvedArgs.parsedArgs.notifyOnFinish ?? false;
+          detached = resolvedArgs.parsedArgs.relationship.kind === "detached";
+        }
+        const result = await createAgentCommand(
+          {
+            agentManager,
+            agentStorage,
+            logger: childLogger,
+            byspaceHome: options.byspaceHome,
+            worktreesRoot: options.worktreesRoot,
+            terminalManager,
+            providerSnapshotManager,
+            createBySpaceWorktree: options.createBySpaceWorktree,
+            ...(options.ensureWorkspaceForCreate
+              ? { ensureWorkspaceForCreate: options.ensureWorkspaceForCreate }
+              : {}),
+          },
+          {
+            kind: "mcp",
+            provider: parsedArgs.provider,
+            title: parsedArgs.title,
+            initialPrompt: parsedArgs.initialPrompt,
+            cwd: resolvedArgs.cwd,
+            workspaceId: resolvedArgs.workspaceId,
+            thinking: parsedArgs.settings?.thinkingOptionId,
+            features: parsedArgs.settings?.features,
+            labels: parsedArgs.labels,
+            mode: parsedArgs.settings?.modeId,
+            background: requestedBackground,
+            notifyOnFinish: shouldNotifyOnFinish,
+            detached,
+            callerAgentId,
+            callerContext,
+            worktree,
+          },
+        );
+        return { ...result, notifyOnFinish: shouldNotifyOnFinish };
+      });
 
       try {
         if (!createdInBackground && initialPromptStarted) {
@@ -1316,6 +1686,14 @@ export function createBySpaceToolCatalog(options: BySpaceToolHostDependencies): 
       const callerAgent = resolveCallerAgent();
       if (!callerAgent?.workspaceId) {
         throw new Error(`Caller agent ${callerAgentId} has no current workspace`);
+      }
+      if (options.listActiveWorkspaces) {
+        const workspaceIsActive = (await options.listActiveWorkspaces()).some(
+          (candidate) => candidate.workspaceId === callerAgent.workspaceId,
+        );
+        if (!workspaceIsActive) {
+          throw new Error(`Workspace ${callerAgent.workspaceId} not found`);
+        }
       }
       return {
         cwd: workspace.cwd,
@@ -1743,19 +2121,19 @@ export function createBySpaceToolCatalog(options: BySpaceToolHostDependencies): 
       }
 
       const workspaceId = resolveWorkspaceIdForRename(requestedWorkspaceId);
-      const existing = await options.workspaceRegistry.get(workspaceId);
-      if (!existing) {
+      const updated = await options.workspaceRegistry.update(workspaceId, (existing) => {
+        if (existing.archivedAt) {
+          throw new Error(`Workspace ${workspaceId} is archived`);
+        }
+        return {
+          ...existing,
+          title,
+          updatedAt: new Date().toISOString(),
+        };
+      });
+      if (!updated) {
         throw new Error(`Workspace ${workspaceId} not found`);
       }
-      if (existing.archivedAt) {
-        throw new Error(`Workspace ${workspaceId} is archived`);
-      }
-
-      await options.workspaceRegistry.upsert({
-        ...existing,
-        title,
-        updatedAt: new Date().toISOString(),
-      });
       await options.emitWorkspaceUpdatesForWorkspaceIds([workspaceId]);
 
       return {
@@ -1980,18 +2358,21 @@ export function createBySpaceToolCatalog(options: BySpaceToolHostDependencies): 
           .trim()
           .min(1)
           .optional()
-          .describe("IANA time zone for the cron cadence. For example: America/New_York."),
+          .describe(
+            "IANA time zone for the cron cadence. Defaults to the daemon's current IANA time zone and is persisted. For example: America/New_York.",
+          ),
         name: z.string().optional(),
-        provider: AgentProviderEnum.optional().describe(
-          "Provider, or provider/model (for example: codex or codex/gpt-5.4).",
+        provider: (callerAgentId ? AgentProviderEnum.optional() : AgentProviderEnum).describe(
+          "Provider, or provider/model (for example: codex or codex/gpt-5.4). Defaults to the caller's provider in an agent-scoped session.",
         ),
         cwd: z.string().optional(),
+        isolation: z.enum(["local", "worktree"]).optional(),
         maxRuns: z.number().int().positive().optional(),
         expiresIn: z.string().optional(),
       },
       outputSchema: ScheduleSummarySchema.shape,
     },
-    async ({ prompt, cron, timezone, name, provider, cwd, maxRuns, expiresIn }) => {
+    async ({ prompt, cron, timezone, name, provider, cwd, isolation, maxRuns, expiresIn }) => {
       if (!scheduleService) {
         throw new Error("Schedule service is not configured");
       }
@@ -2003,7 +2384,7 @@ export function createBySpaceToolCatalog(options: BySpaceToolHostDependencies): 
           cron,
           ...(timezone !== undefined ? { timezone } : {}),
         }),
-        target: resolveNewAgentScheduleTarget({ provider, cwd }),
+        target: resolveNewAgentScheduleTarget({ provider, cwd, isolation }),
         ...(name?.trim() ? { name: name.trim() } : {}),
         ...(maxRuns === undefined ? {} : { maxRuns }),
         ...(expiresAt === undefined ? {} : { expiresAt }),
@@ -2029,7 +2410,9 @@ export function createBySpaceToolCatalog(options: BySpaceToolHostDependencies): 
           .trim()
           .min(1)
           .optional()
-          .describe("IANA time zone for the cron cadence. For example: America/New_York."),
+          .describe(
+            "IANA time zone for the cron cadence. Defaults to the daemon's current IANA time zone and is persisted. For example: America/New_York.",
+          ),
         name: z.string().optional(),
         maxRuns: z.number().int().positive().optional(),
         expiresIn: z.string().optional(),
@@ -2066,6 +2449,27 @@ export function createBySpaceToolCatalog(options: BySpaceToolHostDependencies): 
   );
 
   registerTool(
+    "delete_heartbeat",
+    {
+      title: "Delete heartbeat",
+      description: "Delete one of your heartbeats.",
+      inputSchema: { id: z.string().min(1) },
+      outputSchema: { success: z.boolean() },
+    },
+    async ({ id }) => {
+      if (!scheduleService) {
+        throw new Error("Schedule service is not configured");
+      }
+      await requireCallerHeartbeat(id);
+      await scheduleService.delete(id);
+      return {
+        content: [],
+        structuredContent: ensureValidJson({ success: true }),
+      };
+    },
+  );
+
+  registerTool(
     "list_schedules",
     {
       title: "List schedules",
@@ -2080,9 +2484,9 @@ export function createBySpaceToolCatalog(options: BySpaceToolHostDependencies): 
         throw new Error("Schedule service is not configured");
       }
 
-      const schedules = (await scheduleService.list()).map((schedule) =>
-        toScheduleSummary(schedule),
-      );
+      const schedules = (await scheduleService.list())
+        .filter((schedule) => schedule.target.type === "new-agent")
+        .map((schedule) => toScheduleSummary(schedule));
       return {
         content: [],
         structuredContent: ensureValidJson({ schedules }),
@@ -2105,7 +2509,7 @@ export function createBySpaceToolCatalog(options: BySpaceToolHostDependencies): 
         throw new Error("Schedule service is not configured");
       }
 
-      const schedule = await scheduleService.inspect(id);
+      const schedule = await requireScheduleTarget(id, "new-agent");
       return {
         content: [],
         structuredContent: ensureValidJson(schedule),
@@ -2130,6 +2534,7 @@ export function createBySpaceToolCatalog(options: BySpaceToolHostDependencies): 
         throw new Error("Schedule service is not configured");
       }
 
+      await requireScheduleTarget(id, "new-agent");
       await scheduleService.pause(id);
       return {
         content: [],
@@ -2155,6 +2560,7 @@ export function createBySpaceToolCatalog(options: BySpaceToolHostDependencies): 
         throw new Error("Schedule service is not configured");
       }
 
+      await requireScheduleTarget(id, "new-agent");
       await scheduleService.resume(id);
       return {
         content: [],
@@ -2180,6 +2586,7 @@ export function createBySpaceToolCatalog(options: BySpaceToolHostDependencies): 
         throw new Error("Schedule service is not configured");
       }
 
+      await requireScheduleTarget(id, "new-agent");
       await scheduleService.delete(id);
       return {
         content: [],
@@ -2204,7 +2611,7 @@ export function createBySpaceToolCatalog(options: BySpaceToolHostDependencies): 
           .min(1)
           .optional()
           .describe(
-            "IANA time zone for cron cadence; requires cron. For example: America/New_York.",
+            "IANA time zone for a new cron cadence; requires cron. Defaults to the daemon's current IANA time zone. For example: America/New_York.",
           ),
         name: z.string().nullable().optional().describe("New name (null to clear)."),
         prompt: z.string().trim().min(1).optional().describe("New prompt text."),
@@ -2249,7 +2656,18 @@ export function createBySpaceToolCatalog(options: BySpaceToolHostDependencies): 
         throw new Error("Schedule service is not configured");
       }
 
-      const schedule = await scheduleService.update(buildScheduleUpdateInput(input));
+      const current = await requireScheduleTarget(input.id, "new-agent");
+      const defaultTimeZone =
+        current.cadence.type === "cron" && current.cadence.timezone
+          ? current.cadence.timezone
+          : Intl.DateTimeFormat().resolvedOptions().timeZone;
+      const scopedInput =
+        input.cwd === undefined
+          ? input
+          : { ...input, cwd: resolveScopedCwd(input.cwd, { required: true }) };
+      const schedule = await scheduleService.update(
+        buildScheduleUpdateInput(scopedInput, defaultTimeZone),
+      );
 
       return {
         content: [],
@@ -2275,10 +2693,32 @@ export function createBySpaceToolCatalog(options: BySpaceToolHostDependencies): 
         throw new Error("Schedule service is not configured");
       }
 
+      await requireScheduleTarget(id, "new-agent");
       const runs = await scheduleService.logs(id);
       return {
         content: [],
         structuredContent: ensureValidJson({ runs }),
+      };
+    },
+  );
+
+  registerTool(
+    "run_schedule_once",
+    {
+      title: "Run schedule once",
+      description: "Run a schedule immediately without changing its cron cadence.",
+      inputSchema: { id: z.string().min(1) },
+      outputSchema: StoredScheduleSchema.shape,
+    },
+    async ({ id }) => {
+      if (!scheduleService) {
+        throw new Error("Schedule service is not configured");
+      }
+      await requireScheduleTarget(id, "new-agent");
+      const schedule = await scheduleService.runOnce(id);
+      return {
+        content: [],
+        structuredContent: ensureValidJson(schedule),
       };
     },
   );
@@ -2390,146 +2830,6 @@ export function createBySpaceToolCatalog(options: BySpaceToolHostDependencies): 
           selectedModel: selectedModel ?? null,
           features,
         }),
-      };
-    },
-  );
-
-  registerTool(
-    "list_worktrees",
-    {
-      title: "List worktrees",
-      description: "List BySpace-managed git worktrees for a repository.",
-      inputSchema: {
-        cwd: z
-          .string()
-          .optional()
-          .describe("Optional repository cwd. Defaults to your current working directory."),
-      },
-      outputSchema: {
-        worktrees: z.array(WorktreeSummarySchema),
-      },
-    },
-    async ({ cwd }) => {
-      const resolvedCwd = resolveScopedCwd(cwd, { required: true });
-      if (!options.workspaceGitService) {
-        throw new Error("WorkspaceGitService is required to list worktrees");
-      }
-      const worktrees = await listBySpaceWorktreesCommand(
-        { workspaceGitService: options.workspaceGitService },
-        {
-          cwd: resolvedCwd,
-          reason: "mcp:list-worktrees",
-        },
-      );
-
-      return {
-        content: [],
-        structuredContent: ensureValidJson({ worktrees }),
-      };
-    },
-  );
-
-  registerTool(
-    "create_worktree",
-    {
-      title: "Create worktree",
-      description:
-        "Create a BySpace-managed git worktree. Branch off a new branch, check out an existing branch, or check out a GitHub PR.",
-      inputSchema: {
-        cwd: z.string().optional().describe("Repository directory. Defaults to the agent's cwd."),
-        target: AgentCreateWorktreeTargetInputSchema.describe("What the worktree should contain."),
-      },
-      outputSchema: {
-        branchName: z.string(),
-        worktreePath: z.string(),
-        workspaceId: z.string(),
-      },
-    },
-    async ({ cwd, target }) => {
-      const repoRoot = resolveScopedCwd(cwd, { required: true });
-      const commandResult = await createBySpaceWorktreeCommand(
-        {
-          byspaceHome: options.byspaceHome,
-          worktreesRoot: options.worktreesRoot,
-          createBySpaceWorktreeWorkflow: options.createBySpaceWorktree,
-        },
-        createMcpWorktreeCommandInput(repoRoot, target),
-      );
-      if (!commandResult.ok) {
-        throw new WorktreeRequestError(commandResult.error);
-      }
-      const { worktree, workspace } = commandResult.createdWorktree;
-      await options.workspaceGitService?.listWorktrees?.(repoRoot, {
-        force: true,
-        reason: "mcp:create-worktree",
-      });
-
-      return {
-        content: [],
-        structuredContent: ensureValidJson({
-          branchName: worktree.branchName,
-          worktreePath: worktree.worktreePath,
-          workspaceId: workspace.workspaceId,
-        }),
-      };
-    },
-  );
-
-  registerTool(
-    "archive_worktree",
-    {
-      title: "Archive worktree",
-      description: "Delete a BySpace-managed git worktree.",
-      inputSchema: {
-        cwd: z
-          .string()
-          .optional()
-          .describe("Optional repository cwd. Defaults to your current working directory."),
-        worktreePath: z.string().optional(),
-        worktreeSlug: z.string().optional(),
-      },
-      outputSchema: {
-        success: z.boolean(),
-      },
-    },
-    async ({ cwd, worktreePath, worktreeSlug }) => {
-      const resolvedCwd = resolveScopedCwd(cwd, { required: true });
-      if (!worktreePath && !worktreeSlug) {
-        throw new Error("worktreePath or worktreeSlug is required");
-      }
-      if (!options.workspaceGitService) {
-        throw new Error("WorkspaceGitService is required to archive worktrees");
-      }
-      const repoRoot = await options.workspaceGitService.resolveRepoRoot(resolvedCwd);
-
-      const result = await archiveCommand(
-        archiveWorktreeDependencies(options, {
-          agentManager,
-          agentStorage,
-          terminalManager: terminalManager ?? null,
-          logger: childLogger,
-        }),
-        {
-          requestId: "mcp:archive_worktree",
-          repoRoot,
-          worktreePath,
-          worktreeSlug,
-          // This tool archives every workspace on the directory, then removes the
-          // directory. Disk removal is derived from scope + last-reference.
-          scope: "worktree",
-        },
-      );
-      if (!result.ok) {
-        throw new Error(result.message);
-      }
-      await options.workspaceGitService.listWorktrees(repoRoot, {
-        force: true,
-        reason: "mcp:archive-worktree",
-      });
-
-      return {
-        content: [],
-        structuredContent: ensureValidJson({ success: true }),
       };
     },
   );
@@ -2681,11 +2981,6 @@ export function createBySpaceToolCatalog(options: BySpaceToolHostDependencies): 
   return toCatalog();
 }
 
-type McpCreateWorktreeTarget =
-  | { kind: "branch-off"; worktreeSlug?: string; branchName?: string; baseBranch?: string }
-  | { kind: "checkout-branch"; branch: string }
-  | { kind: "checkout-pr"; githubPrNumber: number };
-
 interface ArchiveWorktreeCommandContext {
   agentManager: AgentManager;
   agentStorage: AgentStorage;
@@ -2744,27 +3039,4 @@ function archiveWorktreeDependencies(
       ),
     sessionLogger: context.logger,
   };
-}
-
-function createMcpWorktreeCommandInput(
-  repoRoot: string,
-  target: McpCreateWorktreeTarget,
-): CreateBySpaceWorktreeCommandInput {
-  const base = { cwd: repoRoot } as const;
-  switch (target.kind) {
-    case "branch-off":
-      return {
-        ...base,
-        worktreeSlug: target.worktreeSlug,
-        branchName: target.branchName,
-        action: "branch-off",
-        ...(target.baseBranch ? { refName: target.baseBranch } : {}),
-      };
-    case "checkout-branch":
-      return { ...base, action: "checkout", refName: target.branch };
-    case "checkout-pr":
-      return { ...base, action: "checkout", githubPrNumber: target.githubPrNumber };
-    default:
-      throw new Error("unreachable");
-  }
 }

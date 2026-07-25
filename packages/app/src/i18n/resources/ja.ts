@@ -973,9 +973,6 @@ export const ja: TranslationResources = {
     refPicker: {
       startingRef: "開始Ref",
       chooseStart: "開始点を選択",
-      checkoutHint: "{{noun}} {{numberPrefix}}{{number}}をチェックアウトしますか？",
-      checkoutPr: "{{noun}} {{numberPrefix}}{{number}}をチェックアウト",
-      dismissCheckoutHint: "{{noun}} {{numberPrefix}}{{number}}のチェックアウトヒントを閉じる",
       intoBase: "{{baseRef}}に",
       searching: "検索中...",
       noMatchingRefs: "一致するRefがありません。",
@@ -1441,6 +1438,10 @@ export const ja: TranslationResources = {
         label: "ターミナルスクロールバック",
         description: "組み込みターミナルバッファに保持する行数",
         accessibilityLabel: "ターミナルスクロールバック行数",
+      },
+      vimKeybindings: {
+        label: "Vim キーバインド",
+        description: "ソースファイルの編集時に Vim キーバインドを使用します",
       },
       autoExpandReasoning: {
         label: "常に思考プロセスを展開",

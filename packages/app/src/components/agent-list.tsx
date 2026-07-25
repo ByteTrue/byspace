@@ -545,7 +545,7 @@ export function AgentList({
             </Text>
             <View style={styles.sheetButtonRow}>
               <Pressable
-                style={SHEET_CANCEL_BUTTON_STYLE}
+                style={[styles.sheetButton, styles.sheetCancelButton]}
                 onPress={handleCloseActionSheet}
                 testID="agent-action-cancel"
               >
@@ -553,7 +553,7 @@ export function AgentList({
               </Pressable>
               <Pressable
                 disabled={isActionDaemonUnavailable}
-                style={SHEET_ARCHIVE_BUTTON_STYLE}
+                style={[styles.sheetButton, styles.sheetArchiveButton]}
                 onPress={handleArchiveAgent}
                 testID="agent-action-archive"
               >
@@ -790,6 +790,3 @@ const styles = StyleSheet.create((theme) => ({
     fontSize: theme.fontSize.base,
   },
 }));
-
-const SHEET_CANCEL_BUTTON_STYLE = [styles.sheetButton, styles.sheetCancelButton];
-const SHEET_ARCHIVE_BUTTON_STYLE = [styles.sheetButton, styles.sheetArchiveButton];

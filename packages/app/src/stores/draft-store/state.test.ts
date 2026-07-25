@@ -105,6 +105,7 @@ describe("draft-store normalization", () => {
     const pickerAttachment = {
       kind: "github_pr" as const,
       owner: "new-workspace-picker" as const,
+      ownerTargetId: "server-a\u0000project-a\u0000/repo-a",
       item: {
         kind: "change_request" as const,
         number: 202,

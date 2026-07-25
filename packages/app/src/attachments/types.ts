@@ -78,6 +78,7 @@ export type UserComposerAttachment =
       kind: "github_pr";
       item: ForgeSearchItem;
       owner?: typeof NEW_WORKSPACE_PICKER_ATTACHMENT_OWNER;
+      ownerTargetId?: string;
     };
 
 export type WorkspaceComposerAttachment =

@@ -35,6 +35,7 @@ import { resolveFilePreviewReadTarget } from "@/file-explorer/preview-target";
 import type { WorkspaceFileLocation } from "@/workspace/file-open";
 import { useRetainedPanelActive } from "@/components/retained-panel";
 import { useAppActivelyVisible } from "@/hooks/use-app-visible";
+import { useAppSettings } from "@/hooks/use-settings";
 import { isFileQueryEnabled } from "@/components/file-pane-enabled";
 import { isWeb } from "@/constants/platform";
 import { useLiveFile } from "@/file-pane/live-file";
@@ -644,6 +645,7 @@ function EditableFilePane({
   appearanceTheme?: Theme;
 }) {
   const { t } = useTranslation();
+  const { settings } = useAppSettings();
   const [cursor, setCursor] = useState({ line: 1, column: 1 });
   const [vimMode, setVimMode] = useState<string | null>(null);
   const session = useMemo(
@@ -795,7 +797,7 @@ function EditableFilePane({
           filename={filename}
           location={location}
           navigationRevision={navigationRevision}
-          vimEnabled={false}
+          vimEnabled={settings.vimKeybindings}
           theme={visualTheme}
           onCursorChange={setCursor}
           onVimModeChange={handleVimModeChange}

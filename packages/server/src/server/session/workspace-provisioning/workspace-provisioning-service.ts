@@ -1,12 +1,11 @@
-import { resolve } from "node:path";
+import { basename, resolve } from "node:path";
 import type { Logger } from "pino";
 import {
-  checkoutLiteFromGitSnapshot,
-  classifyDirectoryForProjectMembership,
   generateWorkspaceId,
+  initialWorkspacePlacement,
+  reconcileWorkspacePlacement,
 } from "../../workspace-registry-model.js";
 import {
-  createPersistedProjectRecord,
   createPersistedWorkspaceRecord,
   type PersistedProjectRecord,
   type PersistedWorkspaceRecord,
@@ -15,20 +14,12 @@ import {
 } from "../../workspace-registry.js";
 import type { WorkspaceGitService } from "../../workspace-git-service.js";
 import type { CreateBySpaceWorktreeWorkflowResult } from "../../worktree-session.js";
-import { createRealpathAwarePathMatcher } from "../../../utils/path.js";
+import { areEquivalentPaths, createRealpathAwarePathMatcher } from "../../../utils/path.js";
+import {
+  type WorkspaceLifecycleCoordinator,
+  workspaceLifecycleCoordinator,
+} from "../../workspace-lifecycle-coordinator.js";
 
-/**
- * Resolves which workspace and project records a directory belongs to, creating,
- * reclassifying, or unarchiving them as needed. Every path that needs a workspace
- * for a cwd — opening a project, importing an agent, creating an agent, restoring
- * an archived worktree — funnels through this one module, so the
- * classify → resolve-project → persist → unarchive sequence (and the
- * archived-reopen-at-a-different-path and reclassify-vs-unarchive special cases)
- * lives in a single place instead of being smeared across the session.
- *
- * Read-only path resolution (no create/persist) lives in resolve-workspace-id-for-path.ts;
- * this module owns the create-and-persist side.
- */
 export interface ResolveOrCreateWorkspaceIdInput {
   createdWorktree: CreateBySpaceWorktreeWorkflowResult | null;
   requestedWorkspaceId?: string;
@@ -46,6 +37,18 @@ export interface ImportWorkspaceResult<T> {
   createdWorkspace: PersistedWorkspaceRecord | null;
 }
 
+export interface CreateWorktreeWorkspaceInput {
+  sourceCwd: string;
+  projectId?: string;
+  repoRoot: string;
+  cwd: string;
+  worktreeRoot: string;
+  branch: string | null;
+  baseBranch: string | null;
+  title: string | null;
+  expectsInitialAgent?: boolean;
+}
+
 export interface WorkspaceProvisioningService {
   runInImportWorkspace<T>(
     input: ImportWorkspaceInput,
@@ -56,6 +59,11 @@ export interface WorkspaceProvisioningService {
   createWorkspaceForDirectory(
     cwd: string,
     title?: string | null,
+    projectId?: string,
+    context?: { expectsInitialAgent?: boolean },
+  ): Promise<PersistedWorkspaceRecord>;
+  createWorkspaceForWorktree(
+    input: CreateWorktreeWorkspaceInput,
   ): Promise<PersistedWorkspaceRecord>;
   findOrCreateProjectForDirectory(cwd: string): Promise<PersistedProjectRecord>;
   ensureWorkspaceRecordUnarchived(
@@ -63,50 +71,95 @@ export interface WorkspaceProvisioningService {
   ): Promise<PersistedWorkspaceRecord>;
 }
 
+export type WorkspaceProvisioningErrorCode =
+  | "unknown_project"
+  | "archived_project"
+  | "directory_not_found";
+
+function provisioningErrorMessage(code: WorkspaceProvisioningErrorCode, target: string): string {
+  switch (code) {
+    case "unknown_project":
+      return `Unknown project: ${target}`;
+    case "archived_project":
+      return `Archived project: ${target}`;
+    case "directory_not_found":
+      return `Directory not found: ${target}`;
+  }
+}
+
+export class WorkspaceProvisioningError extends Error {
+  constructor(
+    readonly code: WorkspaceProvisioningErrorCode,
+    target: string,
+  ) {
+    super(provisioningErrorMessage(code, target));
+    this.name = "WorkspaceProvisioningError";
+  }
+}
+
 export function createWorkspaceProvisioningService(deps: {
   workspaceRegistry: WorkspaceRegistry;
   projectRegistry: ProjectRegistry;
   workspaceGitService: Pick<WorkspaceGitService, "getCheckout" | "peekSnapshot">;
+  isDirectory(path: string): Promise<boolean>;
   logger: Logger;
+  lifecycleCoordinator?: WorkspaceLifecycleCoordinator;
 }): WorkspaceProvisioningService {
-  const { workspaceRegistry, projectRegistry, workspaceGitService, logger } = deps;
+  const { workspaceRegistry, projectRegistry, workspaceGitService, isDirectory, logger } = deps;
+  const lifecycle = deps.lifecycleCoordinator ?? workspaceLifecycleCoordinator;
+
+  async function runForDirectory<T>(
+    cwd: string,
+    operation: (normalizedCwd: string) => Promise<T>,
+  ): Promise<T> {
+    return lifecycle.runExclusive(async () => {
+      const normalizedCwd = resolve(cwd);
+      const exists = await isDirectory(normalizedCwd).catch(() => false);
+      if (!exists) {
+        throw new WorkspaceProvisioningError("directory_not_found", normalizedCwd);
+      }
+      return operation(normalizedCwd);
+    });
+  }
 
   async function runInImportWorkspace<T>(
     input: ImportWorkspaceInput,
     operation: (workspace: PersistedWorkspaceRecord) => Promise<T>,
   ): Promise<ImportWorkspaceResult<T>> {
-    if (input.requestedWorkspaceId) {
-      const workspace = await workspaceRegistry.get(input.requestedWorkspaceId);
-      if (!workspace || workspace.archivedAt) {
-        throw new Error(`Workspace not found: ${input.requestedWorkspaceId}`);
+    return lifecycle.runExclusive(async () => {
+      if (input.requestedWorkspaceId) {
+        const workspace = await workspaceRegistry.get(input.requestedWorkspaceId);
+        if (!workspace || workspace.archivedAt) {
+          throw new Error(`Workspace not found: ${input.requestedWorkspaceId}`);
+        }
+        const project = await projectRegistry.get(workspace.projectId);
+        if (!project || project.archivedAt) {
+          throw new Error(`Project not found: ${workspace.projectId}`);
+        }
+        if (!createRealpathAwarePathMatcher(workspace.cwd)(input.cwd)) {
+          throw new Error(`Import cwd does not match workspace: ${workspace.workspaceId}`);
+        }
+        return {
+          value: await operation(workspace),
+          createdWorkspace: null,
+        };
       }
-      const project = await projectRegistry.get(workspace.projectId);
-      if (!project || project.archivedAt) {
-        throw new Error(`Project not found: ${workspace.projectId}`);
-      }
-      if (!createRealpathAwarePathMatcher(workspace.cwd)(input.cwd)) {
-        throw new Error(`Import cwd does not match workspace: ${workspace.workspaceId}`);
-      }
-      return {
-        value: await operation(workspace),
-        createdWorkspace: null,
-      };
-    }
 
-    const projectsBeforeImport = await projectRegistry.list();
-    const workspace = await createWorkspaceForDirectory(input.cwd);
-    const previousProject =
-      projectsBeforeImport.find((project) => project.projectId === workspace.projectId) ?? null;
+      const projectsBeforeImport = await projectRegistry.list();
+      const workspace = await createWorkspaceForDirectoryInternal(input.cwd);
+      const previousProject =
+        projectsBeforeImport.find((project) => project.projectId === workspace.projectId) ?? null;
 
-    try {
-      return {
-        value: await operation(workspace),
-        createdWorkspace: workspace,
-      };
-    } catch (error) {
-      await rollbackFailedImportWorkspace(workspace, previousProject);
-      throw error;
-    }
+      try {
+        return {
+          value: await operation(workspace),
+          createdWorkspace: workspace,
+        };
+      } catch (error) {
+        await rollbackFailedImportWorkspace(workspace, previousProject);
+        throw error;
+      }
+    });
   }
 
   async function rollbackFailedImportWorkspace(
@@ -114,18 +167,20 @@ export function createWorkspaceProvisioningService(deps: {
     previousProject: PersistedProjectRecord | null,
   ): Promise<void> {
     try {
-      await workspaceRegistry.remove(workspace.workspaceId);
-      const projectHasActiveWorkspace = (await workspaceRegistry.list()).some(
-        (candidate) => candidate.projectId === workspace.projectId && !candidate.archivedAt,
-      );
-      if (projectHasActiveWorkspace) {
-        return;
-      }
-      if (previousProject?.archivedAt) {
-        await projectRegistry.upsert(previousProject);
-      } else if (!previousProject) {
-        await projectRegistry.remove(workspace.projectId);
-      }
+      await lifecycle.runExclusive(async () => {
+        await workspaceRegistry.remove(workspace.workspaceId);
+        const projectHasActiveWorkspace = (await workspaceRegistry.list()).some(
+          (candidate) => candidate.projectId === workspace.projectId && !candidate.archivedAt,
+        );
+        if (projectHasActiveWorkspace) {
+          return;
+        }
+        if (previousProject?.archivedAt) {
+          await projectRegistry.upsert(previousProject);
+        } else if (!previousProject) {
+          await projectRegistry.remove(workspace.projectId);
+        }
+      });
     } catch (error) {
       logger.error(
         { err: error, workspaceId: workspace.workspaceId, projectId: workspace.projectId },
@@ -134,232 +189,265 @@ export function createWorkspaceProvisioningService(deps: {
     }
   }
 
-  async function resolveWorkspaceDirectory(
+  async function findOrCreateProjectForDirectoryInternal(
     cwd: string,
-    options?: { refreshGit?: boolean },
-  ): Promise<string> {
-    const normalizedCwd = resolve(cwd);
-    if (options?.refreshGit === false) {
-      const snapshot = workspaceGitService.peekSnapshot(normalizedCwd);
-      return resolve(snapshot?.git.repoRoot ?? normalizedCwd);
-    }
-
-    const checkout = await workspaceGitService.getCheckout(normalizedCwd);
-    return resolve(checkout.worktreeRoot ?? normalizedCwd);
-  }
-
-  async function findExactWorkspaceByDirectory(
-    cwd: string,
-    options?: { refreshGit?: boolean },
-  ): Promise<PersistedWorkspaceRecord | null> {
-    const normalizedCwd = await resolveWorkspaceDirectory(cwd, options);
-    const workspaces = await workspaceRegistry.list();
-    return workspaces.find((workspace) => workspace.cwd === normalizedCwd) ?? null;
-  }
-
-  async function resolveProjectRecordForPlacement(input: {
-    membership: ReturnType<typeof classifyDirectoryForProjectMembership>;
-    timestamp: string;
-  }): Promise<PersistedProjectRecord> {
-    const rootPath = input.membership.projectRootPath;
-    const kind = input.membership.projectKind;
-    const projects = await projectRegistry.list();
-    const existingProject =
-      projects.find((project) => !project.archivedAt && project.rootPath === rootPath) ??
-      projects.find((project) => project.rootPath === rootPath) ??
-      null;
-
-    if (!existingProject) {
-      return createPersistedProjectRecord({
-        projectId: input.membership.projectKey,
-        rootPath,
-        kind,
-        displayName: input.membership.projectName,
-        createdAt: input.timestamp,
-        updatedAt: input.timestamp,
-      });
-    }
-
-    return {
-      ...existingProject,
-      rootPath,
-      kind,
-      archivedAt: null,
-      updatedAt: input.timestamp,
-    };
-  }
-
-  async function reclassifyOrUnarchiveWorkspaceForDirectory(input: {
-    workspace: PersistedWorkspaceRecord;
-    project: PersistedProjectRecord | null;
-    cwd: string;
-  }): Promise<PersistedWorkspaceRecord> {
-    const checkout = await workspaceGitService.getCheckout(input.cwd);
-    const membership = classifyDirectoryForProjectMembership({ cwd: input.cwd, checkout });
+  ): Promise<PersistedProjectRecord> {
+    const rootPath = resolve(cwd);
+    const checkout = await workspaceGitService.getCheckout(rootPath);
     const timestamp = new Date().toISOString();
-    const projectRecord = await resolveProjectRecordForPlacement({
-      membership,
+    return projectRegistry.getOrCreateActiveByRoot({
+      rootPath,
+      kind: checkout.isGit ? "git" : "non_git",
+      displayName: basename(rootPath) || rootPath,
       timestamp,
     });
-    const projectId = projectRecord.projectId;
-    const kind = membership.workspaceKind;
-    const displayName = membership.workspaceDisplayName;
-
-    if (
-      input.workspace.projectId === projectId &&
-      input.workspace.kind === kind &&
-      input.workspace.displayName === displayName
-    ) {
-      if (!input.project) {
-        await projectRegistry.upsert(projectRecord);
-      }
-      return ensureWorkspaceRecordUnarchived(input.workspace);
-    }
-
-    await projectRegistry.upsert(projectRecord);
-
-    const nextWorkspace = {
-      ...input.workspace,
-      projectId,
-      cwd: input.cwd,
-      kind,
-      displayName,
-      archivedAt: null,
-      updatedAt: timestamp,
-    };
-    await workspaceRegistry.upsert(nextWorkspace);
-    return nextWorkspace;
   }
 
-  async function findOrCreateWorkspaceForDirectory(cwd: string): Promise<PersistedWorkspaceRecord> {
-    const inputCwd = resolve(cwd);
-    const normalizedCwd = await resolveWorkspaceDirectory(cwd);
-    const existingWorkspace = await findExactWorkspaceByDirectory(normalizedCwd, {
-      refreshGit: false,
+  async function requireActiveProject(projectId: string): Promise<PersistedProjectRecord> {
+    const project = await projectRegistry.get(projectId);
+    if (!project) throw new WorkspaceProvisioningError("unknown_project", projectId);
+    if (project.archivedAt) throw new WorkspaceProvisioningError("archived_project", projectId);
+    return project;
+  }
+
+  async function createWorkspaceForDirectoryInternal(
+    cwd: string,
+    title?: string | null,
+    projectId?: string,
+    context?: { expectsInitialAgent?: boolean },
+  ): Promise<PersistedWorkspaceRecord> {
+    const normalizedCwd = resolve(cwd);
+    const checkout = await workspaceGitService.getCheckout(normalizedCwd);
+    const project = projectId
+      ? await refreshProjectKind(await requireActiveProject(projectId), normalizedCwd, checkout)
+      : // COMPAT(workspaceCreateMissingProjectId): added in v0.1.107, remove after 2027-01-15.
+        await findOrCreateProjectForDirectoryInternal(normalizedCwd);
+    const timestamp = new Date().toISOString();
+    const workspace = createPersistedWorkspaceRecord({
+      workspaceId: generateWorkspaceId(),
+      projectId: project.projectId,
+      ...initialWorkspacePlacement({ source: "checkout", cwd: normalizedCwd, checkout }),
+      title: title?.trim() || null,
+      createdAt: timestamp,
+      updatedAt: timestamp,
     });
-    if (existingWorkspace) {
-      if (existingWorkspace.archivedAt && inputCwd !== normalizedCwd) {
-        const timestamp = new Date().toISOString();
-        const checkout = checkoutLiteFromGitSnapshot(inputCwd, {
-          isGit: false,
-          currentBranch: null,
-          remoteUrl: null,
-          repoRoot: null,
-          isBySpaceOwnedWorktree: false,
-          mainRepoRoot: null,
-        });
-        const membership = classifyDirectoryForProjectMembership({ cwd: inputCwd, checkout });
-        const projectRecord = await resolveProjectRecordForPlacement({
-          membership,
-          timestamp,
-        });
-        await projectRegistry.upsert(projectRecord);
-        const workspaceRecord = createPersistedWorkspaceRecord({
-          workspaceId: generateWorkspaceId(),
-          projectId: projectRecord.projectId,
-          cwd: inputCwd,
-          kind: membership.workspaceKind,
-          displayName: membership.workspaceDisplayName,
-          createdAt: timestamp,
-          updatedAt: timestamp,
-        });
-        await workspaceRegistry.upsert(workspaceRecord);
-        return workspaceRecord;
-      }
-      return reclassifyOrUnarchiveWorkspaceForDirectory({
-        workspace: existingWorkspace,
-        project: await projectRegistry.get(existingWorkspace.projectId),
-        cwd: normalizedCwd,
-      });
+    await workspaceRegistry.upsert(workspace, context);
+    return workspace;
+  }
+
+  async function createWorkspaceForWorktreeInternal(
+    input: CreateWorktreeWorkspaceInput,
+  ): Promise<PersistedWorkspaceRecord> {
+    const sourceCwd = resolve(input.sourceCwd);
+    const repoRoot = resolve(input.repoRoot);
+    const cwd = resolve(input.cwd);
+    const worktreeRoot = resolve(input.worktreeRoot);
+    const project = await resolveSourceProjectForWorktree({
+      sourceCwd,
+      projectId: input.projectId,
+      repoRoot,
+    });
+    const timestamp = new Date().toISOString();
+    const workspace = createPersistedWorkspaceRecord({
+      workspaceId: generateWorkspaceId(),
+      projectId: project.projectId,
+      ...initialWorkspacePlacement({
+        source: "created_worktree",
+        cwd,
+        worktreeRoot,
+        branch: input.branch,
+        baseBranch: input.baseBranch,
+        mainRepoRoot: repoRoot,
+      }),
+      title: input.title,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    });
+    await workspaceRegistry.upsert(workspace, {
+      expectsInitialAgent: input.expectsInitialAgent,
+    });
+    return workspace;
+  }
+
+  async function resolveSourceProjectForWorktree(input: {
+    sourceCwd: string;
+    projectId?: string;
+    repoRoot: string;
+  }): Promise<PersistedProjectRecord> {
+    if (input.projectId) {
+      return refreshProjectKind(await requireActiveProject(input.projectId));
     }
 
-    return createWorkspaceForDirectory(normalizedCwd);
+    const workspaces = await workspaceRegistry.list();
+    const sourceWorkspace =
+      workspaces.find(
+        (workspace) => !workspace.archivedAt && areEquivalentPaths(workspace.cwd, input.sourceCwd),
+      ) ??
+      workspaces.find(
+        (workspace) => !workspace.archivedAt && areEquivalentPaths(workspace.cwd, input.repoRoot),
+      );
+    if (sourceWorkspace) {
+      const project = await projectRegistry.get(sourceWorkspace.projectId);
+      if (project) return refreshProjectKind(project);
+      // COMPAT(worktreeMissingSourceProject): added in v0.1.107, remove after 2027-01-15.
+      // Orphaned legacy workspace FKs fall through to exact-root allocation.
+    }
+
+    const project = await projectRegistry.getOrCreateActiveByRoot({
+      rootPath: input.repoRoot,
+      kind: "git",
+      displayName: basename(input.repoRoot) || input.repoRoot,
+      timestamp: new Date().toISOString(),
+    });
+    return refreshProjectKind(project);
+  }
+
+  async function findOrCreateWorkspaceForDirectoryInternal(
+    cwd: string,
+  ): Promise<PersistedWorkspaceRecord> {
+    const normalizedCwd = resolve(cwd);
+    const workspaces = await workspaceRegistry.list();
+    const active = workspaces
+      .filter(
+        (workspace) => !workspace.archivedAt && areEquivalentPaths(workspace.cwd, normalizedCwd),
+      )
+      .sort(
+        (left, right) =>
+          Date.parse(left.createdAt) - Date.parse(right.createdAt) ||
+          left.workspaceId.localeCompare(right.workspaceId),
+      )[0];
+    if (active) return refreshWorkspaceRecord(active);
+    const archived = workspaces
+      .filter(
+        (workspace) => workspace.archivedAt && areEquivalentPaths(workspace.cwd, normalizedCwd),
+      )
+      .sort(
+        (left, right) =>
+          Date.parse(left.createdAt) - Date.parse(right.createdAt) ||
+          left.workspaceId.localeCompare(right.workspaceId),
+      )[0];
+    if (archived) {
+      const project = await projectRegistry.get(archived.projectId);
+      if (project) return ensureWorkspaceRecordUnarchivedInternal(archived);
+    }
+    return createWorkspaceForDirectoryInternal(normalizedCwd);
   }
 
   async function resolveOrCreateWorkspaceIdForCreateAgent(
     input: ResolveOrCreateWorkspaceIdInput,
   ): Promise<string> {
-    if (input.createdWorktree) {
-      return input.createdWorktree.workspace.workspaceId;
-    }
-
-    if (input.requestedWorkspaceId) {
-      return input.requestedWorkspaceId;
-    }
-
-    return (await createWorkspaceForDirectory(input.cwd, input.initialTitle)).workspaceId;
+    if (input.createdWorktree) return input.createdWorktree.workspace.workspaceId;
+    if (input.requestedWorkspaceId) return input.requestedWorkspaceId;
+    return (
+      await lifecycle.runExclusive(() =>
+        createWorkspaceForDirectoryInternal(input.cwd, input.initialTitle, undefined, {
+          expectsInitialAgent: true,
+        }),
+      )
+    ).workspaceId;
   }
 
-  async function createWorkspaceForDirectory(
-    cwd: string,
-    title?: string | null,
-  ): Promise<PersistedWorkspaceRecord> {
-    const checkout = await workspaceGitService.getCheckout(cwd);
-    const membership = classifyDirectoryForProjectMembership({ cwd, checkout });
-    const timestamp = new Date().toISOString();
-
-    const projectRecord = await resolveProjectRecordForPlacement({
-      membership,
-      timestamp,
-    });
-    await projectRegistry.upsert(projectRecord);
-
-    const workspaceRecord = createPersistedWorkspaceRecord({
-      workspaceId: generateWorkspaceId(),
-      projectId: projectRecord.projectId,
-      cwd,
-      kind: membership.workspaceKind,
-      displayName: membership.workspaceDisplayName,
-      title: title ?? null,
-      createdAt: timestamp,
-      updatedAt: timestamp,
-    });
-    await workspaceRegistry.upsert(workspaceRecord);
-    return workspaceRecord;
-  }
-
-  async function findOrCreateProjectForDirectory(cwd: string): Promise<PersistedProjectRecord> {
-    const normalizedCwd = resolve(cwd);
-    const checkout = await workspaceGitService.getCheckout(normalizedCwd);
-    const membership = classifyDirectoryForProjectMembership({ cwd: normalizedCwd, checkout });
-    const projectRecord = await resolveProjectRecordForPlacement({
-      membership,
-      timestamp: new Date().toISOString(),
-    });
-    await projectRegistry.upsert(projectRecord);
-    return projectRecord;
-  }
-
-  async function ensureWorkspaceRecordUnarchived(
+  async function ensureWorkspaceRecordUnarchivedInternal(
     workspace: PersistedWorkspaceRecord,
   ): Promise<PersistedWorkspaceRecord> {
     const project = await projectRegistry.get(workspace.projectId);
-    if (!workspace.archivedAt && (!project || !project.archivedAt)) {
-      return workspace;
-    }
-
+    if (!project) throw new Error(`Unknown project: ${workspace.projectId}`);
     const timestamp = new Date().toISOString();
-    let unarchivedWorkspace = workspace;
-    if (workspace.archivedAt) {
-      unarchivedWorkspace = { ...workspace, archivedAt: null, updatedAt: timestamp };
-      await workspaceRegistry.upsert(unarchivedWorkspace);
-    }
-    if (project?.archivedAt) {
-      await projectRegistry.upsert({
-        ...project,
-        archivedAt: null,
+    const checkout =
+      workspace.archivedAt || project.archivedAt
+        ? await workspaceGitService.getCheckout(workspace.cwd)
+        : null;
+    let next: PersistedWorkspaceRecord | null = null;
+    if (workspace.archivedAt && checkout) {
+      const placementUpdate = reconcileWorkspacePlacement({
+        workspace,
+        checkout,
         updatedAt: timestamp,
       });
+      next = {
+        ...(placementUpdate?.workspace ?? workspace),
+        archivedAt: null,
+        updatedAt: timestamp,
+      };
     }
-    return unarchivedWorkspace;
+    let projectWasUpdated = false;
+    if (checkout && (project.archivedAt || workspace.archivedAt)) {
+      const projectCheckout = areEquivalentPaths(project.rootPath, workspace.cwd)
+        ? checkout
+        : await workspaceGitService.getCheckout(project.rootPath);
+      const kind = projectCheckout.isGit ? "git" : "non_git";
+      if (project.archivedAt || project.kind !== kind) {
+        await projectRegistry.upsert({ ...project, kind, archivedAt: null, updatedAt: timestamp });
+        projectWasUpdated = true;
+      }
+    }
+    if (!next) return workspace;
+    try {
+      await workspaceRegistry.upsert(next);
+    } catch (error) {
+      if (projectWasUpdated) {
+        try {
+          await projectRegistry.upsert(project);
+        } catch (compensationError) {
+          logger.error(
+            { err: compensationError, projectId: project.projectId },
+            "Failed to restore project after workspace unarchive failure",
+          );
+        }
+      }
+      throw error;
+    }
+    return next;
+  }
+
+  async function refreshWorkspaceRecord(
+    workspace: PersistedWorkspaceRecord,
+  ): Promise<PersistedWorkspaceRecord> {
+    const checkout = await workspaceGitService.getCheckout(workspace.cwd);
+    const project = await projectRegistry.get(workspace.projectId);
+    if (project && !project.archivedAt) {
+      await refreshProjectKind(project, workspace.cwd, checkout);
+    }
+    const update = reconcileWorkspacePlacement({
+      workspace,
+      checkout,
+      updatedAt: new Date().toISOString(),
+    });
+    if (!update) return workspace;
+    await workspaceRegistry.upsert(update.workspace);
+    return update.workspace;
+  }
+
+  async function refreshProjectKind(
+    project: PersistedProjectRecord,
+    workspaceCwd?: string,
+    workspaceCheckout?: Awaited<ReturnType<WorkspaceGitService["getCheckout"]>>,
+  ): Promise<PersistedProjectRecord> {
+    const projectCheckout =
+      workspaceCwd && workspaceCheckout && areEquivalentPaths(project.rootPath, workspaceCwd)
+        ? workspaceCheckout
+        : await workspaceGitService.getCheckout(project.rootPath);
+    const kind: PersistedProjectRecord["kind"] = projectCheckout.isGit ? "git" : "non_git";
+    if (project.kind === kind) return project;
+    const refreshed = { ...project, kind, updatedAt: new Date().toISOString() };
+    await projectRegistry.upsert(refreshed);
+    return refreshed;
   }
 
   return {
     runInImportWorkspace,
-    findOrCreateWorkspaceForDirectory,
+    findOrCreateWorkspaceForDirectory: (cwd) =>
+      runForDirectory(cwd, findOrCreateWorkspaceForDirectoryInternal),
     resolveOrCreateWorkspaceIdForCreateAgent,
-    createWorkspaceForDirectory,
-    findOrCreateProjectForDirectory,
-    ensureWorkspaceRecordUnarchived,
+    createWorkspaceForDirectory: (cwd, title, projectId, context) =>
+      runForDirectory(cwd, (normalizedCwd) =>
+        createWorkspaceForDirectoryInternal(normalizedCwd, title, projectId, context),
+      ),
+    createWorkspaceForWorktree: (input) =>
+      lifecycle.runExclusive(() => createWorkspaceForWorktreeInternal(input)),
+    findOrCreateProjectForDirectory: (cwd) =>
+      runForDirectory(cwd, findOrCreateProjectForDirectoryInternal),
+    ensureWorkspaceRecordUnarchived: (workspace) =>
+      lifecycle.runExclusive(() => ensureWorkspaceRecordUnarchivedInternal(workspace)),
   };
 }

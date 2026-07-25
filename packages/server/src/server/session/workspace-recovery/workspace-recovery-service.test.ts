@@ -5,6 +5,7 @@ import {
   type PersistedProjectRecord,
   type PersistedWorkspaceRecord,
 } from "../../workspace-registry.js";
+import { WorkspaceLifecycleCoordinator } from "../../workspace-lifecycle-coordinator.js";
 import { createWorkspaceRecoveryService } from "./workspace-recovery-service.js";
 
 const NOW = "2026-07-11T10:12:30.752Z";
@@ -43,13 +44,18 @@ function createHarness(input?: {
   project?: PersistedProjectRecord | null;
   directories?: string[];
   recreate?: (workspace: PersistedWorkspaceRecord) => Promise<void>;
+  rollback?: (workspace: PersistedWorkspaceRecord) => Promise<void>;
+  unarchive?: (workspace: PersistedWorkspaceRecord) => Promise<void>;
+  lifecycleCoordinator?: WorkspaceLifecycleCoordinator;
 }) {
   const workspace = input?.workspace === undefined ? createWorkspace() : input.workspace;
   const project = input?.project === undefined ? createProject() : input.project;
   const directories = new Set(input?.directories ?? ["/repo"]);
   const unarchived: string[] = [];
   const recreated: string[] = [];
+  const rolledBack: string[] = [];
   const service = createWorkspaceRecoveryService({
+    byspaceHome: "/byspace-home",
     getWorkspace: async (workspaceId) =>
       workspace?.workspaceId === workspaceId ? workspace : null,
     getProject: async (projectId) => (project?.projectId === projectId ? project : null),
@@ -57,12 +63,21 @@ function createHarness(input?: {
     recreateWorktree: async (record) => {
       recreated.push(record.workspaceId);
       await input?.recreate?.(record);
+      return {
+        rollback: async (cause) => {
+          rolledBack.push(record.workspaceId);
+          await input?.rollback?.(record);
+          throw cause;
+        },
+      };
     },
     unarchiveWorkspace: async (record) => {
+      await input?.unarchive?.(record);
       unarchived.push(record.workspaceId);
     },
+    lifecycleCoordinator: input?.lifecycleCoordinator,
   });
-  return { service, recreated, unarchived };
+  return { service, recreated, rolledBack, unarchived };
 }
 
 describe("workspace recovery", () => {
@@ -127,5 +142,89 @@ describe("workspace recovery", () => {
     });
     expect(recreated).toEqual(["wks_15a1b5630ebaab33", "wks_15a1b5630ebaab33"]);
     expect(unarchived).toEqual(["wks_15a1b5630ebaab33"]);
+  });
+
+  test("rolls back a recreated worktree when the registry update fails", async () => {
+    let recreatedDirectoryExists = false;
+    const { service, rolledBack, unarchived } = createHarness({
+      recreate: async () => {
+        recreatedDirectoryExists = true;
+      },
+      rollback: async () => {
+        recreatedDirectoryExists = false;
+      },
+      unarchive: async () => {
+        throw new Error("workspace registry write failed");
+      },
+    });
+
+    await expect(service.restore("wks_15a1b5630ebaab33")).rejects.toThrow(
+      "workspace registry write failed",
+    );
+
+    expect(recreatedDirectoryExists).toBe(false);
+    expect(rolledBack).toEqual(["wks_15a1b5630ebaab33"]);
+    expect(unarchived).toEqual([]);
+  });
+
+  test("holds the lifecycle barrier from recreation through registry update", async () => {
+    const coordinator = new WorkspaceLifecycleCoordinator();
+    let project: PersistedProjectRecord | null = createProject();
+    let workspace: PersistedWorkspaceRecord | null = createWorkspace();
+    let recreatedDirectoryExists = false;
+    const events: string[] = [];
+    let signalRecreated!: () => void;
+    const recreated = new Promise<void>((resolve) => {
+      signalRecreated = resolve;
+    });
+    let releaseRecreation!: () => void;
+    const recreationGate = new Promise<void>((resolve) => {
+      releaseRecreation = resolve;
+    });
+    const service = createWorkspaceRecoveryService({
+      byspaceHome: "/byspace-home",
+      getWorkspace: async (workspaceId) =>
+        workspace?.workspaceId === workspaceId ? workspace : null,
+      getProject: async (projectId) => (project?.projectId === projectId ? project : null),
+      isDirectory: async (target) => target === "/repo",
+      lifecycleCoordinator: coordinator,
+      recreateWorktree: async () => {
+        events.push("recreate");
+        recreatedDirectoryExists = true;
+        signalRecreated();
+        await recreationGate;
+        return {
+          rollback: async (cause) => {
+            recreatedDirectoryExists = false;
+            throw cause;
+          },
+        };
+      },
+      unarchiveWorkspace: async (record) => {
+        events.push("unarchive");
+        workspace = { ...record, archivedAt: null };
+      },
+    });
+
+    const recovery = service.restore("wks_15a1b5630ebaab33");
+    await recreated;
+    const removal = coordinator.runExclusive(async () => {
+      events.push("remove");
+      if (workspace && !workspace.archivedAt) recreatedDirectoryExists = false;
+      workspace = null;
+      project = null;
+    });
+    await Promise.resolve();
+
+    expect(events).toEqual(["recreate"]);
+    expect(project).not.toBeNull();
+
+    releaseRecreation();
+    await Promise.all([recovery, removal]);
+
+    expect(events).toEqual(["recreate", "unarchive", "remove"]);
+    expect(project).toBeNull();
+    expect(workspace).toBeNull();
+    expect(recreatedDirectoryExists).toBe(false);
   });
 });

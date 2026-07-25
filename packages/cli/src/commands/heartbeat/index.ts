@@ -10,6 +10,7 @@ import {
   type ScheduleRow,
 } from "../schedule/shared.js";
 import { scheduleSchema } from "../schedule/schema.js";
+import type { ScheduleTarget } from "../schedule/types.js";
 
 interface HeartbeatOptions extends CommandOptions {
   cron?: string;
@@ -40,6 +41,10 @@ function requireCallerAgentId(): string {
   return agentId;
 }
 
+export function isHeartbeatOwnedByAgent(target: ScheduleTarget, agentId: string): boolean {
+  return (target.type === "agent" || target.type === "self") && target.agentId === agentId;
+}
+
 async function requireOwnedHeartbeat(
   client: Awaited<ReturnType<typeof connectScheduleClient>>["client"],
   id: string,
@@ -49,7 +54,7 @@ async function requireOwnedHeartbeat(
   if (payload.error || !payload.schedule) {
     throw new Error(payload.error ?? `Heartbeat not found: ${id}`);
   }
-  if (payload.schedule.target.type !== "agent" || payload.schedule.target.agentId !== agentId) {
+  if (!isHeartbeatOwnedByAgent(payload.schedule.target, agentId)) {
     throw new Error(`Heartbeat ${id} does not belong to agent ${agentId}`);
   }
 }

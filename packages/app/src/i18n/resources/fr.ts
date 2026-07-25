@@ -992,9 +992,6 @@ export const fr: TranslationResources = {
     refPicker: {
       startingRef: "Réf de départ",
       chooseStart: "Choisissez par où commencer",
-      checkoutHint: "Découvrez {{noun}} {{numberPrefix}}{{number}} ?",
-      checkoutPr: "Découvrez {{noun}} {{numberPrefix}}{{number}}",
-      dismissCheckoutHint: "Ignorer l'indice de paiement {{noun}} {{numberPrefix}}{{number}}",
       intoBase: "dans {{baseRef}}",
       searching: "Recherche...",
       noMatchingRefs: "Aucune référence correspondante.",
@@ -1463,6 +1460,10 @@ export const fr: TranslationResources = {
         label: "DéfilementTerminal",
         description: "Lignes conservées dans le tampon du terminal intégré",
         accessibilityLabel: "Lignes de défilementTerminal",
+      },
+      vimKeybindings: {
+        label: "Raccourcis Vim",
+        description: "Utiliser les raccourcis Vim lors de l’édition des fichiers source",
       },
       autoExpandReasoning: {
         label: "Toujours afficher le raisonnement",

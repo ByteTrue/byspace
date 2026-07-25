@@ -229,6 +229,22 @@ describe("appearance settings", () => {
     expect(result.toolCallDetailLevel).toBe("detailed");
   });
 
+  it("loads Vim keybindings only from a boolean setting", async () => {
+    const enabled = makeDeps({
+      storage: createInMemoryKeyValueStorage({
+        [APP_SETTINGS_KEY]: JSON.stringify({ vimKeybindings: true }),
+      }),
+    });
+    const invalid = makeDeps({
+      storage: createInMemoryKeyValueStorage({
+        [APP_SETTINGS_KEY]: JSON.stringify({ vimKeybindings: "yes" }),
+      }),
+    });
+
+    expect((await loadAppSettingsFromStorage(enabled)).vimKeybindings).toBe(true);
+    expect((await loadAppSettingsFromStorage(invalid)).vimKeybindings).toBe(false);
+  });
+
   it("migrates the enabled compact tool call preference to overview", async () => {
     const deps = makeDeps({
       storage: createInMemoryKeyValueStorage({

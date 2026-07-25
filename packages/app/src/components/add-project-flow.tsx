@@ -292,6 +292,8 @@ export function AddProjectFlow({ request, onClose }: AddProjectFlowProps) {
   const hostIds = useMemo(() => hosts.map((host) => host.serverId), [hosts]);
   const connectionStatuses = useHostRuntimeConnectionStatuses(hostIds);
   const projectAddByHost = useHostFeatureMap(hostIds, "projectAdd");
+  // COMPAT(stableProjectIdentity): added in v0.2.0, remove gate after 2027-01-23.
+  const stableProjectIdentityByHost = useHostFeatureMap(hostIds, "stableProjectIdentity");
   // COMPAT(projectGithubClone): added in v0.1.108, remove gate after 2027-01-15.
   const githubCloneByHost = useHostFeatureMap(hostIds, "projectGithubClone");
   // COMPAT(workspaceGithubRepositorySearch): added in v0.1.108, remove gate after 2027-01-15.
@@ -302,14 +304,17 @@ export function AddProjectFlow({ request, onClose }: AddProjectFlowProps) {
     () =>
       hosts.flatMap((host) => {
         if (connectionStatuses.get(host.serverId) !== "online") return [];
-        const canAddProject = projectAddByHost.get(host.serverId) === true;
+        const hasStableProjectIdentity = stableProjectIdentityByHost.get(host.serverId) === true;
+        const canAddProject =
+          projectAddByHost.get(host.serverId) === true && hasStableProjectIdentity;
         return [
           {
             serverId: host.serverId,
             label: host.label,
             canAddProject,
             canBrowse: false,
-            canCloneGithubRepositories: githubCloneByHost.get(host.serverId) === true,
+            canCloneGithubRepositories:
+              githubCloneByHost.get(host.serverId) === true && hasStableProjectIdentity,
             canSearchGithubRepositories: githubSearchByHost.get(host.serverId) === true,
             canCreateDirectory: createDirectoryByHost.get(host.serverId) === true,
           },
@@ -322,6 +327,7 @@ export function AddProjectFlow({ request, onClose }: AddProjectFlowProps) {
       githubSearchByHost,
       hosts,
       projectAddByHost,
+      stableProjectIdentityByHost,
     ],
   );
   const [state, setState] = useState(() =>

@@ -984,9 +984,6 @@ export const ptBR: TranslationResources = {
     refPicker: {
       startingRef: "Ref inicial",
       chooseStart: "Escolha de onde começar",
-      checkoutHint: "Fazer checkout da {{noun}} {{numberPrefix}}{{number}}?",
-      checkoutPr: "Fazer checkout da {{noun}} {{numberPrefix}}{{number}}",
-      dismissCheckoutHint: "Dispensar dica de checkout da {{noun}} {{numberPrefix}}{{number}}",
       intoBase: "em {{baseRef}}",
       searching: "Buscando...",
       noMatchingRefs: "Nenhuma ref correspondente.",
@@ -1453,6 +1450,10 @@ export const ptBR: TranslationResources = {
         label: "Scrollback do terminal",
         description: "Linhas mantidas no buffer do terminal integrado",
         accessibilityLabel: "Linhas do scrollback do terminal",
+      },
+      vimKeybindings: {
+        label: "Atalhos do Vim",
+        description: "Usar atalhos do Vim ao editar arquivos-fonte",
       },
       autoExpandReasoning: {
         label: "Sempre expandir raciocínio",

@@ -3,7 +3,7 @@ import type { Logger } from "pino";
 import type { AgentPromptInput, AgentRunOptions } from "./agent-sdk-types.js";
 import type { AgentManager, ManagedAgent } from "./agent-manager.js";
 import type { AgentStorage } from "./agent-storage.js";
-import { ensureAgentLoaded } from "./agent-loading.js";
+import { ensureUnarchivedAgentLoaded } from "./agent-loading.js";
 
 export type AgentUnarchiveController = Pick<AgentManager, "notifyAgentState" | "unarchiveSnapshot">;
 
@@ -186,7 +186,7 @@ export async function sendPromptToAgent(
     await unarchiveAgentState(params.agentStorage, params.agentManager, params.agentId);
   }
 
-  await ensureAgentLoaded(params.agentId, {
+  await ensureUnarchivedAgentLoaded(params.agentId, {
     agentManager: params.agentManager,
     agentStorage: params.agentStorage,
     logger: params.logger,

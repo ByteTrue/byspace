@@ -36,6 +36,7 @@ export interface AppSettings {
   workspaceTitleSource: WorkspaceTitleSource;
   autoExpandReasoning: boolean;
   toolCallDetailLevel: ToolCallDetailLevel;
+  vimKeybindings: boolean;
 }
 
 export type Settings = AppSettings;
@@ -53,6 +54,7 @@ export const DEFAULT_CLIENT_SETTINGS: AppSettings = {
   workspaceTitleSource: "title",
   autoExpandReasoning: false,
   toolCallDetailLevel: "detailed",
+  vimKeybindings: false,
 };
 
 export const DEFAULT_APP_SETTINGS: Settings = DEFAULT_CLIENT_SETTINGS;
@@ -172,6 +174,9 @@ function pickAppSettings(stored: StoredAppSettings): Partial<AppSettings> {
   });
   if (codeFontSize !== null) {
     result.codeFontSize = codeFontSize;
+  }
+  if (typeof stored.vimKeybindings === "boolean") {
+    result.vimKeybindings = stored.vimKeybindings;
   }
   if (
     typeof stored.workspaceTitleSource === "string" &&

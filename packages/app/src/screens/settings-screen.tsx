@@ -54,6 +54,7 @@ import { AddHostModal } from "@/components/add-host-modal";
 import { PairLinkModal } from "@/components/pair-link-modal";
 import { KeyboardShortcutsSection } from "@/screens/settings/keyboard-shortcuts-section";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
 import { CommunityLinks } from "@/components/community-links";
 import { SegmentedControl } from "@/components/ui/segmented-control";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
@@ -174,8 +175,6 @@ function selectedSidebarItemStyle({ hovered }: PressableStateCallbackType & { ho
   ];
 }
 
-const ROW_WITH_BORDER_STYLE = [settingsStyles.row, settingsStyles.rowBorder];
-
 function getSendBehaviorOptions(t: TFunction) {
   return [
     { value: "interrupt" as const, label: t("settings.general.defaultSend.options.interrupt") },
@@ -197,6 +196,7 @@ interface GeneralSectionProps {
   handleSendBehaviorChange: (behavior: SendBehavior) => void;
   handleLanguageChange: (language: AppLanguage) => void;
   handleTerminalScrollbackLinesChange: (lines: number) => void;
+  handleVimKeybindingsChange: (enabled: boolean) => void;
 }
 
 interface LanguageMenuItemProps {
@@ -228,6 +228,7 @@ function GeneralSection({
   handleSendBehaviorChange,
   handleLanguageChange,
   handleTerminalScrollbackLinesChange,
+  handleVimKeybindingsChange,
 }: GeneralSectionProps) {
   const { t, i18n } = useTranslation();
   const activeLocale = getActiveLocale(i18n.language);
@@ -286,7 +287,7 @@ function GeneralSection({
             options={sendBehaviorOptions}
           />
         </View>
-        <View style={ROW_WITH_BORDER_STYLE}>
+        <View style={[settingsStyles.row, settingsStyles.rowBorder]}>
           <View style={settingsStyles.rowContent}>
             <Text style={settingsStyles.rowTitle}>{t("settings.general.language.label")}</Text>
             <Text style={settingsStyles.rowHint}>{t("settings.general.language.description")}</Text>
@@ -312,7 +313,7 @@ function GeneralSection({
             </DropdownMenuContent>
           </DropdownMenu>
         </View>
-        <View style={ROW_WITH_BORDER_STYLE}>
+        <View style={[settingsStyles.row, settingsStyles.rowBorder]}>
           <View style={settingsStyles.rowContent}>
             <Text style={settingsStyles.rowTitle}>
               {t("settings.general.terminalScrollback.label")}
@@ -331,6 +332,21 @@ function GeneralSection({
             selectTextOnFocus
             style={styles.terminalScrollbackInput}
             accessibilityLabel={t("settings.general.terminalScrollback.accessibilityLabel")}
+          />
+        </View>
+        <View style={[settingsStyles.row, settingsStyles.rowBorder]}>
+          <View style={settingsStyles.rowContent}>
+            <Text style={settingsStyles.rowTitle}>
+              {t("settings.general.vimKeybindings.label")}
+            </Text>
+            <Text style={settingsStyles.rowHint}>
+              {t("settings.general.vimKeybindings.description")}
+            </Text>
+          </View>
+          <Switch
+            value={settings.vimKeybindings}
+            onValueChange={handleVimKeybindingsChange}
+            accessibilityLabel={t("settings.general.vimKeybindings.label")}
           />
         </View>
       </View>
@@ -880,6 +896,13 @@ export default function SettingsScreen({ view, openAddHostIntent = null }: Setti
     [updateSettings],
   );
 
+  const handleVimKeybindingsChange = useCallback(
+    (vimKeybindings: boolean) => {
+      void updateSettings({ vimKeybindings });
+    },
+    [updateSettings],
+  );
+
   const handlePlaybackTest = useCallback(async () => {
     if (!voiceAudioEngine || isPlaybackTestRunning) {
       return;
@@ -1076,6 +1099,7 @@ export default function SettingsScreen({ view, openAddHostIntent = null }: Setti
                 handleSendBehaviorChange={handleSendBehaviorChange}
                 handleLanguageChange={handleLanguageChange}
                 handleTerminalScrollbackLinesChange={handleTerminalScrollbackLinesChange}
+                handleVimKeybindingsChange={handleVimKeybindingsChange}
               />
               <AppearanceSection />
               <DiagnosticsSection

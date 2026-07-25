@@ -235,6 +235,8 @@ export interface CreateAgentOptions {
   env?: Record<string, string>;
   persistSession?: boolean;
   initialTitle?: string | null;
+  // Destructive reuse is opt-in; lazy restoration must retain committed timeline state.
+  replaceExistingState?: boolean;
   // undefined is an explicit decision: the agent never appears in the sidebar.
   workspaceId: string | undefined;
 }
@@ -391,6 +393,21 @@ export interface AgentMetricsSnapshot {
     totalItems: number;
     maxItemsPerAgent: number;
   };
+}
+
+export interface IdleAgentCollectionEntry {
+  agentId: string;
+  provider: AgentProvider;
+  sessionId?: string;
+}
+
+export interface IdleAgentCollectionFailure extends IdleAgentCollectionEntry {
+  error: unknown;
+}
+
+export interface IdleAgentCollectionResult {
+  collected: IdleAgentCollectionEntry[];
+  failures: IdleAgentCollectionFailure[];
 }
 
 type ActiveManagedAgent =
@@ -570,6 +587,7 @@ export class AgentManager {
   private readonly previousStatuses = new Map<string, AgentLifecycleStatus>();
   private readonly backgroundTasks = new Set<Promise<void>>();
   private readonly agentRegistrationTasks = new Set<Promise<void>>();
+  private readonly agentLifecycleMutations = new Map<string, Promise<unknown>>();
   private readonly agentStreamCoalescer: AgentStreamCoalescer;
   private mcpBaseUrl: string | null;
   private readonly mcpAuthToken: string | null;
@@ -947,6 +965,35 @@ export class AgentManager {
     return agent ? { ...agent } : null;
   }
 
+  touchAgentActivity(id: string): ManagedAgent | null {
+    const agent = this.agents?.get(id);
+    if (!agent) {
+      return null;
+    }
+    this.touchUpdatedAt(agent);
+    return { ...agent };
+  }
+
+  async waitForAgentClose(agentId: string): Promise<void> {
+    await this.agentLifecycleMutations.get(agentId)?.catch(() => undefined);
+  }
+
+  private async runAgentLifecycleMutation<T>(
+    agentId: string,
+    mutation: () => Promise<T>,
+  ): Promise<T> {
+    const previous = this.agentLifecycleMutations.get(agentId) ?? Promise.resolve();
+    const next = previous.catch(() => undefined).then(mutation);
+    this.agentLifecycleMutations.set(agentId, next);
+    try {
+      return await next;
+    } finally {
+      if (this.agentLifecycleMutations.get(agentId) === next) {
+        this.agentLifecycleMutations.delete(agentId);
+      }
+    }
+  }
+
   getTimeline(id: string): AgentTimelineItem[] {
     this.requireAgent(id);
     return this.timelineStore.getItems(id);
@@ -1002,6 +1049,9 @@ export class AgentManager {
   ): Promise<ManagedAgent> {
     this.assertAcceptingAgentRegistrations();
     const resolvedAgentId = validateAgentId(agentId ?? this.idFactory(), "createAgent");
+    if (options.replaceExistingState) {
+      await this.deleteAgentState(resolvedAgentId);
+    }
     const { storedConfig, launchConfig } = await this.prepareSessionConfig(
       config,
       resolvedAgentId,
@@ -1094,7 +1144,10 @@ export class AgentManager {
       launchContext,
       resumeOptions,
     );
-    return this.registerSession(session, storedConfig, resolvedAgentId, options);
+    return this.registerSession(session, storedConfig, resolvedAgentId, {
+      ...options,
+      persistence: handle,
+    });
   }
 
   importProviderSession(input: {
@@ -1314,7 +1367,17 @@ export class AgentManager {
     }
   }
 
-  async closeAgent(agentId: string): Promise<void> {
+  closeAgent(agentId: string): Promise<void> {
+    const wasLive = this.agents.has(agentId);
+    return this.runAgentLifecycleMutation(agentId, async () => {
+      if (wasLive && !this.agents.has(agentId)) {
+        return;
+      }
+      await this.closeAgentRuntime(agentId);
+    });
+  }
+
+  private async closeAgentRuntime(agentId: string): Promise<void> {
     const agent = this.requireAgent(agentId);
     this.logger.trace(
       {
@@ -1329,12 +1392,19 @@ export class AgentManager {
       "agent.manager.close.start",
     );
     const closedAgent = this.prepareAgentForClosure(agent, "agent closed");
-    await agent.session.close();
-    this.timelineStore.delete(agentId);
-    for (const event of this.providerSubagents.deleteParent(agentId)) {
-      this.dispatch({ type: "provider_subagent", event });
+    let closeError: unknown;
+    try {
+      await agent.session.close();
+    } catch (error) {
+      closeError = error;
     }
-    await this.persistSnapshot(closedAgent);
+
+    let persistError: unknown;
+    try {
+      await this.persistSnapshot(closedAgent);
+    } catch (error) {
+      persistError = error;
+    }
     this.emitClosedAgent(closedAgent, { persist: false });
     this.logger.trace(
       {
@@ -1344,10 +1414,71 @@ export class AgentManager {
       },
       "agent.manager.close.complete",
     );
+
+    if (closeError !== undefined) {
+      throw closeError;
+    }
+    if (persistError !== undefined) {
+      throw persistError;
+    }
   }
 
-  async archiveAgent(agentId: string): Promise<{ archivedAt: string }> {
-    const agent = this.requireAgent(agentId);
+  async collectIdleAgents(options: {
+    cutoff: Date;
+    protectedAgentIds: ReadonlySet<string>;
+  }): Promise<IdleAgentCollectionResult> {
+    const result: IdleAgentCollectionResult = { collected: [], failures: [] };
+
+    for (const agent of Array.from(this.agents.values())) {
+      const current = this.agents.get(agent.id);
+      if (!current || !this.isIdleAgentCollectable(current, options)) {
+        continue;
+      }
+
+      const entry: IdleAgentCollectionEntry = {
+        agentId: current.id,
+        provider: current.provider,
+        ...(current.persistence?.sessionId ? { sessionId: current.persistence.sessionId } : {}),
+      };
+      try {
+        await this.closeAgent(current.id);
+        result.collected.push(entry);
+      } catch (error) {
+        result.failures.push({ ...entry, error });
+      }
+    }
+
+    return result;
+  }
+
+  private isIdleAgentCollectable(
+    agent: LiveManagedAgent,
+    options: { cutoff: Date; protectedAgentIds: ReadonlySet<string> },
+  ): agent is ManagedAgentIdle {
+    return (
+      agent.lifecycle === "idle" &&
+      agent.updatedAt.getTime() <= options.cutoff.getTime() &&
+      !agent.internal &&
+      !options.protectedAgentIds.has(agent.id) &&
+      agent.activeForegroundTurnId === null &&
+      !this.runs.hasRun(agent.id) &&
+      !agent.pendingReplacement &&
+      agent.pendingPermissions.size === 0 &&
+      agent.inFlightPermissionResponses.size === 0
+    );
+  }
+
+  archiveAgent(agentId: string): Promise<{ archivedAt: string }> {
+    return this.runAgentLifecycleMutation(agentId, () => this.archiveAgentInternal(agentId));
+  }
+
+  private async archiveAgentInternal(agentId: string): Promise<{ archivedAt: string }> {
+    const agent = this.agents.get(agentId);
+    if (!agent) {
+      const archivedAt = new Date().toISOString();
+      await this.archiveSnapshotInternal(agentId, archivedAt);
+      return { archivedAt };
+    }
     if (!this.registry) {
       throw new Error("Agent storage is not configured");
     }
@@ -1362,7 +1493,8 @@ export class AgentManager {
 
     const { archivedAt } = await this.markRecordArchived(stored);
     agent.updatedAt = new Date(archivedAt);
-    await this.closeAgent(agentId);
+    await this.closeAgentRuntime(agentId);
+    this.discardRetainedAgentState(agentId);
 
     await this.cascadeArchiveChildren(agentId);
 
@@ -1389,8 +1521,7 @@ export class AgentManager {
       if (this.agents.has(record.id)) {
         await this.archiveAgent(record.id);
       } else {
-        await this.markRecordArchived(record);
-        await this.cascadeArchiveChildren(record.id);
+        await this.archiveSnapshot(record.id, new Date().toISOString());
       }
     }
   }
@@ -1553,10 +1684,18 @@ export class AgentManager {
     this.emitState(agent);
   }
 
-  async setTitle(agentId: string, title: string): Promise<void> {
-    const agent = this.requireAgent(agentId);
+  setTitle(agentId: string, title: string): Promise<void> {
+    return this.runAgentLifecycleMutation(agentId, () => this.setTitleInternal(agentId, title));
+  }
+
+  private async setTitleInternal(agentId: string, title: string): Promise<void> {
     const normalizedTitle = title.trim();
     if (!normalizedTitle) {
+      return;
+    }
+    const agent = this.agents.get(agentId);
+    if (!agent) {
+      await this.writeStoredMetadata(agentId, { title: normalizedTitle });
       return;
     }
     if (
@@ -1571,9 +1710,10 @@ export class AgentManager {
     this.emitState(agent, { persist: false });
   }
 
-  async setLabels(agentId: string, labels: Record<string, string>): Promise<void> {
-    const agent = this.requireAgent(agentId);
-    await this.writeLabels(agent.id, labels);
+  setLabels(agentId: string, labels: Record<string, string>): Promise<void> {
+    return this.runAgentLifecycleMutation(agentId, async () => {
+      await this.writeLabels(agentId, labels);
+    });
   }
 
   private async writeLabels(agentId: string, patch: AgentLabelPatch): Promise<WriteLabelsResult> {
@@ -1611,7 +1751,15 @@ export class AgentManager {
     return nextRecord;
   }
 
-  async detachAgent(agentId: string): Promise<{
+  detachAgent(agentId: string): Promise<{
+    record: StoredAgentRecord;
+    live: boolean;
+    previousParentAgentId: string | null;
+  }> {
+    return this.runAgentLifecycleMutation(agentId, () => this.detachAgentInternal(agentId));
+  }
+
+  private async detachAgentInternal(agentId: string): Promise<{
     record: StoredAgentRecord;
     live: boolean;
     previousParentAgentId: string | null;
@@ -1670,7 +1818,16 @@ export class AgentManager {
     }
   }
 
-  async archiveSnapshot(agentId: string, archivedAt: string): Promise<StoredAgentRecord> {
+  archiveSnapshot(agentId: string, archivedAt: string): Promise<StoredAgentRecord> {
+    return this.runAgentLifecycleMutation(agentId, () =>
+      this.archiveSnapshotInternal(agentId, archivedAt),
+    );
+  }
+
+  private async archiveSnapshotInternal(
+    agentId: string,
+    archivedAt: string,
+  ): Promise<StoredAgentRecord> {
     const registry = this.requireRegistry();
     const liveAgent = this.getAgent(agentId);
     if (liveAgent) {
@@ -1691,16 +1848,29 @@ export class AgentManager {
 
     if (this.agents.has(agentId)) {
       this.notifyAgentState(agentId);
-    } else if (!nextRecord.internal) {
-      this.dispatchArchivedStoredAgent(nextRecord);
+    } else {
+      this.discardRetainedAgentState(agentId);
+      if (!nextRecord.internal) {
+        this.dispatchArchivedStoredAgent(nextRecord);
+      }
     }
 
     await this.fireAgentArchived(agentId);
+    await this.cascadeArchiveChildren(agentId);
 
     return nextRecord;
   }
 
-  async unarchiveSnapshot(
+  unarchiveSnapshot(
+    agentId: string,
+    updates?: { workspaceId?: string; labels?: AgentLabelPatch },
+  ): Promise<boolean> {
+    return this.runAgentLifecycleMutation(agentId, () =>
+      this.unarchiveSnapshotInternal(agentId, updates),
+    );
+  }
+
+  private async unarchiveSnapshotInternal(
     agentId: string,
     updates?: { workspaceId?: string; labels?: AgentLabelPatch },
   ): Promise<boolean> {
@@ -1738,24 +1908,47 @@ export class AgentManager {
       return;
     }
 
-    await this.unarchiveSnapshot(matched.id);
+    await this.runAgentLifecycleMutation(matched.id, () =>
+      this.unarchiveSnapshotInternal(matched.id),
+    );
   }
 
-  async updateAgentMetadata(
+  updateAgentMetadata(
     agentId: string,
     updates: {
       title?: string;
       labels?: Record<string, string>;
     },
   ): Promise<void> {
-    const liveAgent = this.getAgent(agentId);
+    return this.runAgentLifecycleMutation(agentId, () =>
+      this.updateAgentMetadataInternal(agentId, updates),
+    );
+  }
+
+  private async updateAgentMetadataInternal(
+    agentId: string,
+    updates: {
+      title?: string;
+      labels?: Record<string, string>;
+    },
+  ): Promise<void> {
+    const liveAgent = this.agents.get(agentId);
     if (liveAgent) {
-      if (updates.title) {
-        await this.setTitle(agentId, updates.title);
-      }
+      const previousLabels = liveAgent.labels;
+      const previousUpdatedAt = liveAgent.updatedAt;
+      const title = updates.title?.trim();
       if (updates.labels) {
-        await this.writeLabels(agentId, updates.labels);
+        liveAgent.labels = applyLabelPatch(liveAgent.labels, updates.labels);
       }
+      this.touchUpdatedAt(liveAgent);
+      try {
+        await this.persistSnapshot(liveAgent, title ? { title } : undefined);
+      } catch (error) {
+        liveAgent.labels = previousLabels;
+        liveAgent.updatedAt = previousUpdatedAt;
+        throw error;
+      }
+      this.emitState(liveAgent, { persist: false });
       return;
     }
 
@@ -2346,6 +2539,11 @@ export class AgentManager {
     await this.durableTimelineStore.deleteAgent(agentId);
   }
 
+  async deleteAgentState(agentId: string): Promise<void> {
+    this.discardRetainedAgentState(agentId);
+    await this.deleteCommittedTimeline(agentId);
+  }
+
   async getLastAssistantMessage(agentId: string): Promise<string | null> {
     const agent = this.agents.get(agentId);
     if (!agent) {
@@ -2654,6 +2852,7 @@ export class AgentManager {
       await this.refreshSessionState(managed, { emit: false });
       this.assertAgentRegistrationActive(managed);
       managed.lifecycle = "idle";
+      this.touchUpdatedAt(managed);
       await this.persistSnapshot(managed);
       this.assertAgentRegistrationActive(managed);
       this.emitState(managed, { persist: false });
@@ -2702,6 +2901,7 @@ export class AgentManager {
       | undefined;
   }): Promise<{ durableTimelineHasRows: boolean }> {
     const { agentId, now, options } = params;
+    const timelineAlreadyPrimed = this.timelineStore.has(agentId);
     const explicitTimelineSeed = buildExplicitTimelineSeedForRegister(now, options);
     const shouldSeedFromDurable =
       !explicitTimelineSeed &&
@@ -2711,7 +2911,8 @@ export class AgentManager {
       ? await this.loadCommittedTimelineSeed(agentId, now)
       : null;
     const durableTimelineHasRows =
-      durableTimelineSeed != null && (durableTimelineSeed.nextSeq ?? 1) > 1;
+      timelineAlreadyPrimed ||
+      (durableTimelineSeed != null && (durableTimelineSeed.nextSeq ?? 1) > 1);
     const timelineSeed = explicitTimelineSeed ?? durableTimelineSeed;
     if (timelineSeed || !this.timelineStore.has(agentId)) {
       this.timelineStore.initialize(agentId, timelineSeed ?? { timestamp: now.toISOString() });
@@ -2817,7 +3018,21 @@ export class AgentManager {
       lifecycle: "closed",
       session: null,
       activeForegroundTurnId: null,
+      pendingPermissions: new Map(),
+      bufferedPermissionResolutions: new Map(),
+      inFlightPermissionResponses: new Set(),
+      pendingReplacement: false,
+      foregroundTurnWaiters: new Set(),
+      finalizedForegroundTurnIds: new Set(),
+      unsubscribeSession: null,
     };
+  }
+
+  private discardRetainedAgentState(agentId: string): void {
+    this.timelineStore.delete(agentId);
+    for (const event of this.providerSubagents.deleteParent(agentId)) {
+      this.dispatch({ type: "provider_subagent", event });
+    }
   }
 
   private emitClosedAgent(agent: ManagedAgentClosed, options?: { persist?: boolean }): void {

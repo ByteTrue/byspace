@@ -1,3 +1,9 @@
+import { copyFile as copyProjectConfig, stat as statProjectConfig } from "node:fs/promises";
+import { resolve as resolveProjectPath } from "node:path";
+import {
+  getRealpathAwareRelativePath as getProjectRelativePath,
+  isPathInsideRoot as isProjectPathInsideRoot,
+} from "./path.js";
 import { execFile } from "child_process";
 import { promisify } from "util";
 import { existsSync, mkdirSync, realpathSync, rmSync, statSync } from "fs";
@@ -1648,4 +1654,68 @@ async function isBranchCheckedOut(cwd: string, branchName: string): Promise<bool
     envOverlay: READ_ONLY_GIT_ENV,
   });
   return parseWorktreeList(stdout).some((entry) => entry.branchName === branchName);
+}
+
+export async function seedBySpaceConfigFile(options: {
+  sourceCwd: string;
+  targetCwd: string;
+}): Promise<void> {
+  const sourceConfigPath = resolveProjectPath(options.sourceCwd, "byspace.json");
+  const targetConfigPath = resolveProjectPath(options.targetCwd, "byspace.json");
+  try {
+    await statProjectConfig(targetConfigPath);
+    return;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+  }
+  await copyProjectConfig(sourceConfigPath, targetConfigPath).catch((error) => {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+  });
+}
+
+export function mapWorkspaceCwdToWorktree(input: {
+  sourceWorktreePath: string;
+  workspaceCwd: string;
+  targetWorktreePath: string;
+}): string {
+  const relativeWorkspaceCwd = getProjectRelativePath(input.sourceWorktreePath, input.workspaceCwd);
+  if (relativeWorkspaceCwd === null) {
+    throw new Error(`Workspace cwd is outside its source worktree: ${input.workspaceCwd}`);
+  }
+  return mapWorkspaceRelativeCwdToWorktree({
+    relativeWorkspaceCwd,
+    targetWorktreePath: input.targetWorktreePath,
+  });
+}
+
+export function mapWorkspaceRelativeCwdToWorktree(input: {
+  relativeWorkspaceCwd: string;
+  targetWorktreePath: string;
+}): string {
+  const mappedCwd = resolveProjectPath(input.targetWorktreePath, input.relativeWorkspaceCwd);
+  if (!isProjectPathInsideRoot(input.targetWorktreePath, mappedCwd)) {
+    throw new Error(`Workspace cwd escapes its target worktree: ${input.relativeWorkspaceCwd}`);
+  }
+  return mappedCwd;
+}
+
+export async function rollbackCreatedBySpaceWorktree(
+  options: Parameters<typeof deleteBySpaceWorktree>[0],
+  cause: unknown,
+): Promise<never> {
+  let cleanupError: unknown;
+  try {
+    await deleteBySpaceWorktree(options);
+  } catch (error) {
+    cleanupError = error;
+  }
+  if (cleanupError) {
+    const failure = new Error(
+      `${cause instanceof Error ? cause.message : "Worktree workflow failed"}; rollback also failed: ${cleanupError instanceof Error ? cleanupError.message : String(cleanupError)}`,
+      { cause },
+    );
+    Object.assign(failure, { cleanupError });
+    throw failure;
+  }
+  throw cause;
 }

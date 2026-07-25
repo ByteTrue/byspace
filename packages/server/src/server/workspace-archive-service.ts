@@ -15,11 +15,18 @@ import {
 } from "../utils/worktree.js";
 import type { TerminalManager } from "../terminal/terminal-manager.js";
 import type { PersistedWorkspaceRecord, WorkspaceRegistry } from "./workspace-registry.js";
+import {
+  type WorkspaceLifecycleCoordinator,
+  workspaceLifecycleCoordinator,
+} from "./workspace-lifecycle-coordinator.js";
 
 export interface ActiveWorkspaceRef {
   workspaceId: string;
   cwd: string;
   kind?: "local_checkout" | "worktree" | "directory";
+  worktreeRoot?: string | null;
+  isBySpaceOwnedWorktree?: boolean;
+  mainRepoRoot?: string | null;
 }
 
 export interface ArchiveDependencies {
@@ -28,7 +35,8 @@ export interface ArchiveDependencies {
   // when the request does not supply a per-repo root.
   byspaceWorktreesBaseRoot?: string;
   github: ForgeService;
-  workspaceGitService: Pick<WorkspaceGitService, "getSnapshot">;
+  workspaceGitService: Pick<WorkspaceGitService, "getSnapshot"> &
+    Partial<Pick<WorkspaceGitService, "invalidateWorktreeLists">>;
   agentManager: Pick<AgentManager, "listAgents" | "archiveAgent" | "archiveSnapshot">;
   agentStorage: Pick<AgentStorage, "list">;
   // Resolves the worktree at a path to its workspaceId for archive-by-path. The
@@ -46,6 +54,7 @@ export interface ArchiveDependencies {
   clearWorkspaceArchiving: (workspaceIds: Iterable<string>) => void;
   killTerminalsForWorkspace: (workspaceId: string) => Promise<void>;
   sessionLogger?: Logger;
+  lifecycleCoordinator?: WorkspaceLifecycleCoordinator;
 }
 
 export interface KillTerminalsForWorkspaceDependencies {
@@ -75,6 +84,19 @@ export interface ArchiveByScopeRequest {
   requestId: string;
 }
 
+export async function requireActiveWorkspaceForArchive(
+  dependencies: Pick<ArchiveDependencies, "listActiveWorkspaces">,
+  workspaceId: string,
+): Promise<ActiveWorkspaceRef> {
+  const workspace = (await dependencies.listActiveWorkspaces()).find(
+    (candidate) => candidate.workspaceId === workspaceId,
+  );
+  if (!workspace) {
+    throw new Error(`Workspace not found: ${workspaceId}`);
+  }
+  return workspace;
+}
+
 export async function resolveWorkspaceIdAtPath(
   dependencies: Pick<ArchiveDependencies, "findWorkspaceIdForCwd" | "listActiveWorkspaces">,
   targetPath: string,
@@ -93,6 +115,15 @@ export async function resolveWorkspaceIdAtPath(
 // (agents + terminals + record), then removes the backing directory iff it is
 // BySpace-owned AND no active workspace still references it.
 export async function archiveByScope(
+  dependencies: ArchiveDependencies,
+  request: ArchiveByScopeRequest,
+): Promise<ArchiveResult> {
+  return (dependencies.lifecycleCoordinator ?? workspaceLifecycleCoordinator).runExclusive(() =>
+    archiveByScopeUnlocked(dependencies, request),
+  );
+}
+
+async function archiveByScopeUnlocked(
   dependencies: ArchiveDependencies,
   request: ArchiveByScopeRequest,
 ): Promise<ArchiveResult> {
@@ -172,7 +203,10 @@ async function resolveArchiveTargets(
       );
       return { targetDir: null, targetWorkspaceIds: [] };
     }
-    return { targetDir: resolve(record.cwd), targetWorkspaceIds: [workspaceId] };
+    return {
+      targetDir: resolve(record.worktreeRoot ?? record.cwd),
+      targetWorkspaceIds: [workspaceId],
+    };
   }
 
   let targetPath = scope.targetPath;
@@ -185,7 +219,7 @@ async function resolveArchiveTargets(
   }
   const targetDir = resolve(targetPath);
   const targetWorkspaceIds = activeWorkspaces
-    .filter((workspace) => resolve(workspace.cwd) === targetDir)
+    .filter((workspace) => resolve(workspace.worktreeRoot ?? workspace.cwd) === targetDir)
     .map((workspace) => workspace.workspaceId);
   return { targetDir, targetWorkspaceIds };
 }
@@ -251,6 +285,7 @@ async function maybeRemoveDirectory(
       worktreesBaseRoot: request.byspaceWorktreesBaseRoot ?? dependencies.byspaceWorktreesBaseRoot,
     });
     dependencies.github.invalidate({ cwd: targetDir });
+    dependencies.workspaceGitService.invalidateWorktreeLists?.();
     return true;
   } catch (error) {
     if (error instanceof WorktreeTeardownError) {
@@ -335,7 +370,8 @@ function isDirectoryUnreferenced(
   const target = resolve(targetDir);
   return !activeWorkspaces.some(
     (workspace) =>
-      !archivedWorkspaceIds.has(workspace.workspaceId) && resolve(workspace.cwd) === target,
+      !archivedWorkspaceIds.has(workspace.workspaceId) &&
+      resolve(workspace.worktreeRoot ?? workspace.cwd) === target,
   );
 }
 

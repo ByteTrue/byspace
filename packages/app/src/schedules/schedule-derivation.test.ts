@@ -1,6 +1,11 @@
 import type { ScheduleSummary } from "@bytetrue/byspace-protocol/schedule/types";
 import { describe, expect, it } from "vitest";
-import { resolveSchedule, scheduleBucket, type ScheduleTargetAgent } from "./schedule-derivation";
+import {
+  resolveSchedule,
+  resolveScheduleRowActionVisibility,
+  scheduleBucket,
+  type ScheduleTargetAgent,
+} from "./schedule-derivation";
 
 const NOW = Date.parse("2026-07-02T00:00:00.000Z");
 const AGENT_ID = "00000000-0000-4000-8000-000000000000";
@@ -41,6 +46,30 @@ function resolve(
     agentDataLoaded: options?.agentDataLoaded ?? true,
   });
 }
+
+describe("schedule row actions", () => {
+  it("shows only Edit and Delete for heartbeats", () => {
+    const heartbeat = makeSchedule({ target: { type: "agent", agentId: AGENT_ID } });
+
+    expect(resolveScheduleRowActionVisibility(heartbeat)).toEqual({
+      edit: true,
+      pause: false,
+      resume: false,
+      runNow: false,
+      delete: true,
+    });
+  });
+
+  it("keeps lifecycle actions for new-agent schedules", () => {
+    expect(resolveScheduleRowActionVisibility(makeSchedule({ status: "paused" }))).toEqual({
+      edit: true,
+      pause: false,
+      resume: true,
+      runNow: true,
+      delete: true,
+    });
+  });
+});
 
 describe("resolveSchedule state", () => {
   it("keeps active and paused schedules runnable", () => {

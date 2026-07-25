@@ -32,7 +32,11 @@ import {
 import type { TerminalManager } from "../terminal/terminal-manager.js";
 import type { TerminalSession } from "../terminal/terminal.js";
 import type { AgentStorage, StoredAgentRecord } from "./agent/agent-storage.js";
-import type { PersistedProjectRecord, PersistedWorkspaceRecord } from "./workspace-registry.js";
+import {
+  createPersistedProjectRecord,
+  type PersistedProjectRecord,
+  type PersistedWorkspaceRecord,
+} from "./workspace-registry.js";
 import type { ForgeService } from "../services/forge-service.js";
 import {
   createBySpaceWorktree as createBySpaceWorktreeService,
@@ -304,6 +308,22 @@ function createBySpaceWorktreeForTest(options: {
         : {}),
       projectRegistry: {
         get: async (projectId) => projects.get(projectId) ?? null,
+        getOrCreateActiveByRoot: async (projectInput) => {
+          const existing = Array.from(projects.values()).find(
+            (project) => !project.archivedAt && project.rootPath === projectInput.rootPath,
+          );
+          if (existing) return existing;
+          const project = createPersistedProjectRecord({
+            projectId: "prj_0000000000000001",
+            rootPath: projectInput.rootPath,
+            kind: projectInput.kind,
+            displayName: projectInput.displayName,
+            createdAt: projectInput.timestamp,
+            updatedAt: projectInput.timestamp,
+          });
+          projects.set(project.projectId, project);
+          return project;
+        },
         upsert: async (record) => {
           options.events?.push(`project:${record.projectId}`);
           projects.set(record.projectId, record);

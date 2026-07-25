@@ -5,6 +5,7 @@ import type {
 } from "@bytetrue/byspace-protocol/messages";
 import { isPipelineActiveStatus, mapPipelineStatus } from "@/git/forges/gitlab";
 import {
+  buildPrPaneCheckDetailsRequest,
   deriveAvatarColor,
   formatAge,
   getActivityVerb,
@@ -66,6 +67,27 @@ function status(overrides: Partial<CheckoutPrStatus> = {}): CheckoutPrStatus {
 function timeline(overrides: Partial<PullRequestTimeline> = {}): PullRequestTimeline {
   return { ...baseTimeline, ...overrides };
 }
+
+describe("buildPrPaneCheckDetailsRequest", () => {
+  it("includes the change request number when requesting check logs", () => {
+    expect(
+      buildPrPaneCheckDetailsRequest({
+        cwd: "/repo",
+        changeRequestNumber: 42,
+        repoOwner: "ByteTrue",
+        repoName: "byspace",
+        detailRef: { checkRunId: 123, workflowRunId: 456 },
+      }),
+    ).toEqual({
+      cwd: "/repo",
+      repoOwner: "ByteTrue",
+      repoName: "byspace",
+      checkRunId: 123,
+      workflowRunId: 456,
+      changeRequestNumber: 42,
+    });
+  });
+});
 
 describe("mapPrPaneData", () => {
   it("returns null when no PR status exists", () => {

@@ -1236,6 +1236,7 @@ export const CreateAgentRequestMessageSchema = z.object({
   config: AgentSessionConfigSchema,
   env: z.record(z.string(), z.string()).optional(),
   workspaceId: z.string().optional(),
+  callerAgentId: z.string().optional(),
   worktreeName: z.string().optional(),
   initialPrompt: z.string().optional(),
   clientMessageId: z.string().optional(),
@@ -2712,6 +2713,8 @@ export const ServerInfoStatusPayloadSchema = z
         rewind: z.boolean().optional(),
         // COMPAT(checkoutRefresh): added in v0.1.86, remove gate after 2026-11-29.
         checkoutRefresh: z.boolean().optional(),
+        // COMPAT(cliCallerAgentContext): added in v0.2.0, remove after 2027-01-25.
+        cliCallerAgentContext: z.boolean().optional(),
         // COMPAT(workspaceMultiplicity): added in v0.1.97, drop the gate when floor >= v0.1.97
         workspaceMultiplicity: z.boolean().optional(),
         // COMPAT(projectRemove): added in v0.1.97, drop the gate when floor >= v0.1.97.
@@ -2760,6 +2763,8 @@ export const ServerInfoStatusPayloadSchema = z
         forgeProviders: z.boolean().optional(),
         // COMPAT(selectiveAgentTimeline): added in v0.1.106, remove after 2027-01-12.
         selectiveAgentTimeline: z.boolean().optional(),
+        // COMPAT(stableProjectIdentity): added in v0.2.0, remove gate after 2027-01-23.
+        stableProjectIdentity: z.boolean().optional(),
       })
       .optional(),
   })

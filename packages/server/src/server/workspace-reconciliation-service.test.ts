@@ -14,6 +14,7 @@ import type {
   ProjectRegistry,
   WorkspaceRegistry,
 } from "./workspace-registry.js";
+import { WorkspaceLifecycleCoordinator } from "./workspace-lifecycle-coordinator.js";
 import { WorkspaceReconciliationService } from "./workspace-reconciliation-service.js";
 import {
   ensureWorkspaceServicePortPlan,
@@ -29,6 +30,29 @@ function createTestRegistries() {
     existsOnDisk: async () => true,
     list: async () => Array.from(projects.values()),
     get: async (id: string) => projects.get(id) ?? null,
+    getOrCreateActiveByRoot: async (input) => {
+      const existing = Array.from(projects.values()).find(
+        (project) => !project.archivedAt && project.rootPath === input.rootPath,
+      );
+      if (existing) return existing;
+      const record = createPersistedProjectRecord({
+        projectId: `prj_${projects.size}`,
+        rootPath: input.rootPath,
+        kind: input.kind,
+        displayName: input.displayName,
+        createdAt: input.timestamp,
+        updatedAt: input.timestamp,
+      });
+      projects.set(record.projectId, record);
+      return record;
+    },
+    update: async (id, updater) => {
+      const existing = projects.get(id);
+      if (!existing) return null;
+      const updated = updater(existing);
+      projects.set(id, updated);
+      return updated;
+    },
     upsert: async (record: PersistedProjectRecord) => {
       projects.set(record.projectId, record);
     },
@@ -48,6 +72,14 @@ function createTestRegistries() {
     existsOnDisk: async () => true,
     list: async () => Array.from(workspaces.values()),
     get: async (id: string) => workspaces.get(id) ?? null,
+    update: async (id, updater) => {
+      const existing = workspaces.get(id);
+      if (!existing) return null;
+      const updated = updater(existing);
+      if (!updated) return null;
+      workspaces.set(id, updated);
+      return updated;
+    },
     upsert: async (record: PersistedWorkspaceRecord) => {
       workspaces.set(record.workspaceId, record);
     },
@@ -456,7 +488,75 @@ describe("WorkspaceReconciliationService", () => {
     expect(workspaces.get("w1")!.kind).toBe("local_checkout");
   });
 
-  test("moves workspaces from a path-keyed duplicate project to the existing remote-keyed project", async () => {
+  test("holds the lifecycle barrier from Git read through registry update", async () => {
+    const projectRoot = createTempGitRepo("reconcile-lifecycle-barrier-");
+    tempDirs.push(projectRoot);
+    const { projects, projectRegistry, workspaceRegistry } = createTestRegistries();
+    const coordinator = new WorkspaceLifecycleCoordinator();
+    const events: string[] = [];
+    let signalReadStarted!: () => void;
+    const readStarted = new Promise<void>((resolve) => {
+      signalReadStarted = resolve;
+    });
+    let releaseRead!: () => void;
+    const readGate = new Promise<void>((resolve) => {
+      releaseRead = resolve;
+    });
+
+    projects.set(
+      "p1",
+      createPersistedProjectRecord({
+        projectId: "p1",
+        rootPath: projectRoot,
+        kind: "non_git",
+        displayName: "repo",
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      }),
+    );
+    const service = new WorkspaceReconciliationService({
+      projectRegistry,
+      workspaceRegistry,
+      logger: createTestLogger(),
+      lifecycleCoordinator: coordinator,
+      workspaceGitService: {
+        getWorkspaceGitMetadata: async (cwd) => {
+          events.push("git:start");
+          signalReadStarted();
+          await readGate;
+          events.push("git:end");
+          return {
+            projectKind: "git",
+            projectDisplayName: "repo",
+            workspaceDisplayName: "main",
+            gitRemote: null,
+            isWorktree: false,
+            projectSlug: "repo",
+            repoRoot: cwd,
+            currentBranch: "main",
+            remoteUrl: null,
+          };
+        },
+      },
+    });
+
+    const reconciliation = service.runOnce();
+    await readStarted;
+    const removal = coordinator.runExclusive(async () => {
+      events.push("remove");
+      await projectRegistry.remove("p1");
+    });
+    await Promise.resolve();
+    expect(events).toEqual(["git:start"]);
+
+    releaseRead();
+    await Promise.all([reconciliation, removal]);
+
+    expect(events).toEqual(["git:start", "git:end", "remove"]);
+    expect(projects.has("p1")).toBe(false);
+  });
+
+  test("keeps legacy duplicate projects and workspace membership intact", async () => {
     const repoDir = createTempGitRepo("reconcile-duplicate-project-");
     tempDirs.push(repoDir);
     const canonicalWorktreeDir = path.join(repoDir, ".byspace", "worktrees", "focused-bat");
@@ -543,28 +643,47 @@ describe("WorkspaceReconciliationService", () => {
 
     expect(result.changesApplied).toEqual(
       expect.arrayContaining([
+        {
+          kind: "project_updated",
+          projectId: repoDir,
+          directory: repoDir,
+          fields: { displayName: "blank-dot-page/editor" },
+        },
+        expect.objectContaining({
+          kind: "workspace_updated",
+          workspaceId: "focused-bat",
+          fields: { branch: "update-og-image", kind: "local_checkout" },
+        }),
         expect.objectContaining({
           kind: "workspace_updated",
           workspaceId: "gigantic-blowfish",
-          fields: { projectId: "remote:github.com/blank-dot-page/editor" },
-        }),
-        expect.objectContaining({
-          kind: "project_updated",
-          projectId: "remote:github.com/blank-dot-page/editor",
-          fields: { customName: "Editor" },
-        }),
-        expect.objectContaining({
-          kind: "project_archived",
-          projectId: repoDir,
-          reason: "merged_duplicate",
+          fields: { branch: "markdown-view", kind: "local_checkout" },
         }),
       ]),
     );
-    expect(workspaces.get("gigantic-blowfish")!.projectId).toBe(
-      "remote:github.com/blank-dot-page/editor",
-    );
-    expect(projects.get("remote:github.com/blank-dot-page/editor")!.customName).toBe("Editor");
-    expect(projects.get(repoDir)!.archivedAt).toBeTruthy();
+    expect(result.changesApplied).toHaveLength(3);
+    expect(projects.get("remote:github.com/blank-dot-page/editor")).toMatchObject({
+      projectId: "remote:github.com/blank-dot-page/editor",
+      rootPath: repoDir,
+      displayName: "blank-dot-page/editor",
+      customName: null,
+      archivedAt: null,
+    });
+    expect(projects.get(repoDir)).toMatchObject({
+      projectId: repoDir,
+      rootPath: repoDir,
+      displayName: "blank-dot-page/editor",
+      customName: "Editor",
+      archivedAt: null,
+    });
+    expect(workspaces.get("focused-bat")).toMatchObject({
+      projectId: "remote:github.com/blank-dot-page/editor",
+      archivedAt: null,
+    });
+    expect(workspaces.get("gigantic-blowfish")).toMatchObject({
+      projectId: repoDir,
+      archivedAt: null,
+    });
   });
 
   test("updates project display name when git remote changes", async () => {
@@ -622,6 +741,56 @@ describe("WorkspaceReconciliationService", () => {
     const projUpdate = result.changesApplied.find((c) => c.kind === "project_updated");
     expect(projUpdate).toBeDefined();
     expect(projects.get("p1")!.displayName).toBe("new-owner/new-repo");
+  });
+
+  test("preserves an opaque project's selected-root display name", async () => {
+    const dir = createTempGitRepo("reconcile-opaque-display-");
+    tempDirs.push(dir);
+
+    const { projects, workspaces, projectRegistry, workspaceRegistry } = createTestRegistries();
+    const projectId = "prj_0123456789abcdef";
+
+    projects.set(
+      projectId,
+      createPersistedProjectRecord({
+        projectId,
+        rootPath: dir,
+        kind: "git",
+        displayName: "main-only",
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      }),
+    );
+    workspaces.set(
+      "w1",
+      createPersistedWorkspaceRecord({
+        workspaceId: "w1",
+        projectId,
+        cwd: dir,
+        kind: "local_checkout",
+        displayName: "main",
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      }),
+    );
+
+    const service = new WorkspaceReconciliationService({
+      projectRegistry,
+      workspaceRegistry,
+      logger: createTestLogger(),
+      workspaceGitService: createWorkspaceGitServiceStub({
+        [dir]: {
+          projectKind: "git",
+          projectDisplayName: "acme/repo",
+          workspaceDisplayName: "main",
+          gitRemote: "git@github.com:acme/repo.git",
+        },
+      }),
+    });
+
+    await service.runOnce();
+
+    expect(projects.get(projectId)?.displayName).toBe("main-only");
   });
 
   test("preserves customName even when the derived displayName changes", async () => {

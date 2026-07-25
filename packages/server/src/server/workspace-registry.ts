@@ -4,7 +4,13 @@ import type { Logger } from "pino";
 import { z } from "zod";
 
 import { writeJsonFileAtomic } from "./atomic-file.js";
-import type { PersistedProjectKind, PersistedWorkspaceKind } from "./workspace-registry-model.js";
+import { areEquivalentPaths } from "../utils/path.js";
+import { WorkspaceLifecycleCoordinator } from "./workspace-lifecycle-coordinator.js";
+import {
+  generateProjectId,
+  type PersistedProjectKind,
+  type PersistedWorkspaceKind,
+} from "./workspace-registry-model.js";
 
 const PersistedProjectRecordSchema = z.object({
   projectId: z.string(),
@@ -53,6 +59,17 @@ const PersistedWorkspaceRecordSchema = z.object({
     .nullable()
     .optional()
     .transform((value) => value ?? null),
+  worktreeRoot: z
+    .string()
+    .nullable()
+    .optional()
+    .transform((value) => value ?? null),
+  isBySpaceOwnedWorktree: z.boolean().optional().default(false),
+  mainRepoRoot: z
+    .string()
+    .nullable()
+    .optional()
+    .transform((value) => value ?? null),
   createdAt: z.string(),
   updatedAt: z.string(),
   archivedAt: z.string().nullable(),
@@ -66,14 +83,44 @@ const PersistedWorkspaceRecordSchema = z.object({
 export type PersistedProjectRecord = z.infer<typeof PersistedProjectRecordSchema>;
 export type PersistedWorkspaceRecord = z.infer<typeof PersistedWorkspaceRecordSchema>;
 
+export interface WorkspaceMutation {
+  kind: "upsert" | "archive" | "remove";
+  workspaceId: string;
+  workspace: PersistedWorkspaceRecord | null;
+  expectsInitialAgent?: boolean;
+  initialAgentSettled?: boolean;
+}
+
+export interface WorkspaceMutationContext {
+  expectsInitialAgent?: boolean;
+  initialAgentSettled?: boolean;
+}
+
+export interface ProjectMutation {
+  kind: "upsert" | "archive" | "remove";
+  projectId: string;
+  project: PersistedProjectRecord | null;
+}
+
 export interface ProjectRegistry {
   initialize(): Promise<void>;
   existsOnDisk(): Promise<boolean>;
   list(): Promise<PersistedProjectRecord[]>;
   get(projectId: string): Promise<PersistedProjectRecord | null>;
+  getOrCreateActiveByRoot(input: {
+    rootPath: string;
+    kind: PersistedProjectKind;
+    displayName: string;
+    timestamp: string;
+  }): Promise<PersistedProjectRecord>;
+  update(
+    projectId: string,
+    updater: (record: PersistedProjectRecord) => PersistedProjectRecord | null,
+  ): Promise<PersistedProjectRecord | null>;
   upsert(record: PersistedProjectRecord): Promise<void>;
   archive(projectId: string, archivedAt: string): Promise<void>;
   remove(projectId: string): Promise<void>;
+  subscribeToMutations?(listener: (mutation: ProjectMutation) => void | Promise<void>): () => void;
 }
 
 export interface WorkspaceRegistry {
@@ -83,11 +130,15 @@ export interface WorkspaceRegistry {
   get(workspaceId: string): Promise<PersistedWorkspaceRecord | null>;
   update(
     workspaceId: string,
-    updater: (record: PersistedWorkspaceRecord) => PersistedWorkspaceRecord,
+    updater: (record: PersistedWorkspaceRecord) => PersistedWorkspaceRecord | null,
+    context?: WorkspaceMutationContext,
   ): Promise<PersistedWorkspaceRecord | null>;
-  upsert(record: PersistedWorkspaceRecord): Promise<void>;
+  upsert(record: PersistedWorkspaceRecord, context?: WorkspaceMutationContext): Promise<void>;
   archive(workspaceId: string, archivedAt: string): Promise<void>;
   remove(workspaceId: string): Promise<void>;
+  subscribeToMutations?(
+    listener: (mutation: WorkspaceMutation) => void | Promise<void>,
+  ): () => void;
 }
 
 type RegistryRecord = PersistedProjectRecord | PersistedWorkspaceRecord;
@@ -147,39 +198,62 @@ class FileBackedRegistry<TRecord extends RegistryRecord> {
     await this.enqueuePersist();
   }
 
-  async update(id: string, updater: (record: TRecord) => TRecord): Promise<TRecord | null> {
+  async update(id: string, updater: (record: TRecord) => TRecord | null): Promise<TRecord | null> {
     await this.load();
     const existing = this.cache.get(id);
     if (!existing) {
       return null;
     }
-    const next = this.schema.parse(updater(existing));
+    const candidate = updater(existing);
+    if (!candidate) {
+      return null;
+    }
+    const next = this.schema.parse(candidate);
     this.cache.set(id, next);
     await this.enqueuePersist();
     return next;
   }
 
   async archive(id: string, archivedAt: string): Promise<void> {
+    await this.archiveIfPresent(id, archivedAt);
+  }
+
+  protected async archiveIfPresent(id: string, archivedAt: string): Promise<TRecord | null> {
     await this.load();
     const existing = this.cache.get(id);
-    if (!existing) {
-      return;
-    }
+    if (!existing) return null;
+    return this.persistArchive(existing, archivedAt);
+  }
+
+  protected async archiveIfActive(id: string, archivedAt: string): Promise<TRecord | null> {
+    await this.load();
+    const existing = this.cache.get(id);
+    if (!existing || existing.archivedAt) return null;
+    return this.persistArchive(existing, archivedAt);
+  }
+
+  private async persistArchive(existing: TRecord, archivedAt: string): Promise<TRecord> {
     const next = this.schema.parse({
       ...existing,
       updatedAt: archivedAt,
       archivedAt,
     });
-    this.cache.set(id, next);
+    this.cache.set(this.getId(next), next);
     await this.enqueuePersist();
+    return next;
   }
 
   async remove(id: string): Promise<void> {
+    await this.removeIfPresent(id);
+  }
+
+  protected async removeIfPresent(id: string): Promise<TRecord | null> {
     await this.load();
-    if (!this.cache.delete(id)) {
-      return;
-    }
+    const existing = this.cache.get(id);
+    if (!existing) return null;
+    this.cache.delete(id);
     await this.enqueuePersist();
+    return existing;
   }
 
   private async load(): Promise<void> {
@@ -219,7 +293,13 @@ export class FileBackedProjectRegistry
   extends FileBackedRegistry<PersistedProjectRecord>
   implements ProjectRegistry
 {
-  constructor(filePath: string, logger: Logger) {
+  private readonly allocationCoordinator = new WorkspaceLifecycleCoordinator();
+  private readonly projectIdFactory: () => string;
+  private readonly mutationListeners = new Set<
+    (mutation: ProjectMutation) => void | Promise<void>
+  >();
+
+  constructor(filePath: string, logger: Logger, options?: { projectIdFactory?: () => string }) {
     super({
       filePath,
       logger,
@@ -227,6 +307,83 @@ export class FileBackedProjectRegistry
       getId: (record) => record.projectId,
       component: "projects",
     });
+    this.projectIdFactory = options?.projectIdFactory ?? generateProjectId;
+  }
+
+  async getOrCreateActiveByRoot(input: {
+    rootPath: string;
+    kind: PersistedProjectKind;
+    displayName: string;
+    timestamp: string;
+  }): Promise<PersistedProjectRecord> {
+    return this.allocationCoordinator.runExclusive(async () => {
+      const active = (await this.list())
+        .filter(
+          (project) => !project.archivedAt && areEquivalentPaths(project.rootPath, input.rootPath),
+        )
+        .sort(
+          (left, right) =>
+            Date.parse(left.createdAt) - Date.parse(right.createdAt) ||
+            left.projectId.localeCompare(right.projectId),
+        )[0];
+      if (active) {
+        if (active.kind === input.kind) return active;
+        const refreshed = { ...active, kind: input.kind, updatedAt: input.timestamp };
+        await this.upsert(refreshed);
+        return refreshed;
+      }
+
+      for (;;) {
+        const projectId = this.projectIdFactory();
+        if (await this.get(projectId)) continue;
+        const record = createPersistedProjectRecord({
+          projectId,
+          rootPath: input.rootPath,
+          kind: input.kind,
+          displayName: input.displayName,
+          createdAt: input.timestamp,
+          updatedAt: input.timestamp,
+        });
+        await this.upsert(record);
+        return record;
+      }
+    });
+  }
+
+  subscribeToMutations(listener: (mutation: ProjectMutation) => void | Promise<void>): () => void {
+    this.mutationListeners.add(listener);
+    return () => this.mutationListeners.delete(listener);
+  }
+
+  override async upsert(record: PersistedProjectRecord): Promise<void> {
+    await super.upsert(record);
+    await this.notifyMutation({ kind: "upsert", projectId: record.projectId, project: record });
+  }
+
+  override async update(
+    projectId: string,
+    updater: (record: PersistedProjectRecord) => PersistedProjectRecord | null,
+  ): Promise<PersistedProjectRecord | null> {
+    const project = await super.update(projectId, updater);
+    if (!project) return null;
+    await this.notifyMutation({ kind: "upsert", projectId, project });
+    return project;
+  }
+
+  override async archive(projectId: string, archivedAt: string): Promise<void> {
+    const project = await this.archiveIfActive(projectId, archivedAt);
+    if (!project) return;
+    await this.notifyMutation({ kind: "archive", projectId, project });
+  }
+
+  override async remove(projectId: string): Promise<void> {
+    const project = await this.removeIfPresent(projectId);
+    if (!project) return;
+    await this.notifyMutation({ kind: "remove", projectId, project: null });
+  }
+
+  private async notifyMutation(mutation: ProjectMutation): Promise<void> {
+    await Promise.all([...this.mutationListeners].map((listener) => listener(mutation)));
   }
 }
 
@@ -234,6 +391,10 @@ export class FileBackedWorkspaceRegistry
   extends FileBackedRegistry<PersistedWorkspaceRecord>
   implements WorkspaceRegistry
 {
+  private readonly mutationListeners = new Set<
+    (mutation: WorkspaceMutation) => void | Promise<void>
+  >();
+
   constructor(filePath: string, logger: Logger) {
     super({
       filePath,
@@ -242,6 +403,54 @@ export class FileBackedWorkspaceRegistry
       getId: (record) => record.workspaceId,
       component: "workspaces",
     });
+  }
+
+  subscribeToMutations(
+    listener: (mutation: WorkspaceMutation) => void | Promise<void>,
+  ): () => void {
+    this.mutationListeners.add(listener);
+    return () => this.mutationListeners.delete(listener);
+  }
+
+  override async update(
+    workspaceId: string,
+    updater: (record: PersistedWorkspaceRecord) => PersistedWorkspaceRecord | null,
+    context?: WorkspaceMutationContext,
+  ): Promise<PersistedWorkspaceRecord | null> {
+    const workspace = await super.update(workspaceId, updater);
+    if (workspace) {
+      await this.notifyMutation({ kind: "upsert", workspaceId, workspace, ...context });
+    }
+    return workspace;
+  }
+
+  override async upsert(
+    record: PersistedWorkspaceRecord,
+    context?: WorkspaceMutationContext,
+  ): Promise<void> {
+    await super.upsert(record);
+    await this.notifyMutation({
+      kind: "upsert",
+      workspaceId: record.workspaceId,
+      workspace: record,
+      ...(context?.expectsInitialAgent ? { expectsInitialAgent: true } : {}),
+    });
+  }
+
+  override async archive(workspaceId: string, archivedAt: string): Promise<void> {
+    const workspace = await this.archiveIfPresent(workspaceId, archivedAt);
+    if (!workspace) return;
+    await this.notifyMutation({ kind: "archive", workspaceId, workspace });
+  }
+
+  override async remove(workspaceId: string): Promise<void> {
+    const workspace = await this.removeIfPresent(workspaceId);
+    if (!workspace) return;
+    await this.notifyMutation({ kind: "remove", workspaceId, workspace: null });
+  }
+
+  private async notifyMutation(mutation: WorkspaceMutation): Promise<void> {
+    await Promise.all([...this.mutationListeners].map((listener) => listener(mutation)));
   }
 }
 
@@ -275,6 +484,9 @@ export function createPersistedWorkspaceRecord(input: {
   title?: string | null;
   branch?: string | null;
   baseBranch?: string | null;
+  worktreeRoot?: string | null;
+  isBySpaceOwnedWorktree?: boolean;
+  mainRepoRoot?: string | null;
   createdAt: string;
   updatedAt: string;
   archivedAt?: string | null;
@@ -285,6 +497,9 @@ export function createPersistedWorkspaceRecord(input: {
     title: input.title ?? null,
     branch: input.branch ?? null,
     baseBranch: input.baseBranch ?? null,
+    worktreeRoot: input.worktreeRoot ?? null,
+    isBySpaceOwnedWorktree: input.isBySpaceOwnedWorktree ?? false,
+    mainRepoRoot: input.mainRepoRoot ?? null,
     archivedAt: input.archivedAt ?? null,
     pinnedAt: input.pinnedAt ?? null,
   });

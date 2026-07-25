@@ -16,6 +16,7 @@ import { useIsCompactFormFactor } from "@/constants/layout";
 import { settingsStyles } from "@/styles/settings";
 import type { Theme } from "@/styles/theme";
 import type { ScheduleDerivedState } from "@/schedules/schedule-derivation";
+import { resolveScheduleRowActionVisibility } from "@/schedules/schedule-derivation";
 import { formatCadence, formatNextRun, resolveScheduleTitle } from "@/utils/schedule-format";
 import { formatTimeAgo } from "@/utils/time";
 import type { ScheduleSummary } from "@bytetrue/byspace-protocol/schedule/types";
@@ -156,6 +157,7 @@ export function ScheduleRow({
   const badge = stateBadge(state);
   const meta = buildMeta(schedule, state, serverName, singleHost ?? false);
   const canRun = state === "active" || state === "paused";
+  const actionVisibility = resolveScheduleRowActionVisibility(schedule);
 
   const rowStyle = useCallback(
     ({ pressed }: PressableStateCallbackType) => [
@@ -178,7 +180,7 @@ export function ScheduleRow({
         style={rowStyle}
         onPress={onEdit}
         accessibilityRole="button"
-        accessibilityLabel={`Edit schedule ${title}`}
+        accessibilityLabel={`Edit ${schedule.target.type === "agent" ? "heartbeat" : "schedule"} ${title}`}
         testID={`schedule-row-${schedule.id}`}
       >
         <View style={styles.main}>
@@ -203,6 +205,7 @@ export function ScheduleRow({
           <ScheduleKebabMenu
             schedule={schedule}
             canRun={canRun}
+            actionVisibility={actionVisibility}
             pending={pending}
             onEdit={onEdit}
             onPause={onPause}
@@ -234,6 +237,7 @@ function renderKebabTriggerIcon({ hovered }: { hovered?: boolean }): ReactElemen
 function ScheduleKebabMenu({
   schedule,
   canRun,
+  actionVisibility,
   pending,
   onEdit,
   onPause,
@@ -245,6 +249,7 @@ function ScheduleKebabMenu({
   "schedule" | "pending" | "onEdit" | "onPause" | "onResume" | "onRunNow" | "onDelete"
 > & {
   canRun: boolean;
+  actionVisibility: ReturnType<typeof resolveScheduleRowActionVisibility>;
 }): ReactElement {
   return (
     <DropdownMenu>
@@ -263,9 +268,9 @@ function ScheduleKebabMenu({
           onSelect={onEdit}
           testID={`schedule-menu-edit-${schedule.id}`}
         >
-          Edit schedule
+          {schedule.target.type === "agent" ? "Edit heartbeat" : "Edit schedule"}
         </DropdownMenuItem>
-        {schedule.status === "paused" ? (
+        {actionVisibility.resume ? (
           <DropdownMenuItem
             leading={resumeLeading}
             disabled={!canRun}
@@ -276,7 +281,8 @@ function ScheduleKebabMenu({
           >
             Resume schedule
           </DropdownMenuItem>
-        ) : (
+        ) : null}
+        {actionVisibility.pause ? (
           <DropdownMenuItem
             leading={pauseLeading}
             disabled={schedule.status === "completed" || !canRun}
@@ -287,17 +293,19 @@ function ScheduleKebabMenu({
           >
             Pause schedule
           </DropdownMenuItem>
-        )}
-        <DropdownMenuItem
-          leading={runLeading}
-          disabled={!canRun}
-          status={pending?.runNow ? "pending" : "idle"}
-          pendingLabel="Starting..."
-          onSelect={onRunNow}
-          testID={`schedule-menu-run-${schedule.id}`}
-        >
-          Run now
-        </DropdownMenuItem>
+        ) : null}
+        {actionVisibility.runNow ? (
+          <DropdownMenuItem
+            leading={runLeading}
+            disabled={!canRun}
+            status={pending?.runNow ? "pending" : "idle"}
+            pendingLabel="Starting..."
+            onSelect={onRunNow}
+            testID={`schedule-menu-run-${schedule.id}`}
+          >
+            Run now
+          </DropdownMenuItem>
+        ) : null}
         <DropdownMenuSeparator />
         <DropdownMenuItem
           leading={deleteLeading}
@@ -307,7 +315,7 @@ function ScheduleKebabMenu({
           onSelect={onDelete}
           testID={`schedule-menu-delete-${schedule.id}`}
         >
-          Delete schedule
+          {schedule.target.type === "agent" ? "Delete heartbeat" : "Delete schedule"}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

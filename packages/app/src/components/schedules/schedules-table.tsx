@@ -113,8 +113,9 @@ function SchedulesTableRow({
 
   const handleDelete = useCallback(() => {
     void (async () => {
+      const targetKind = schedule.target.type === "agent" ? "heartbeat" : "schedule";
       const confirmed = await confirmDialog({
-        title: "Delete schedule",
+        title: `Delete ${targetKind}`,
         message: `Delete "${resolveScheduleTitle(schedule)}"? This cannot be undone.`,
         confirmLabel: "Delete",
         destructive: true,

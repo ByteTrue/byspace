@@ -97,6 +97,31 @@ export interface PrPaneData {
   activity: PrPaneActivity[];
 }
 
+interface PrPaneCheckDetailsRequestInput {
+  cwd: string;
+  changeRequestNumber: number;
+  repoOwner?: string;
+  repoName?: string;
+  detailRef: PrPaneCheck["detailRef"];
+}
+
+export function buildPrPaneCheckDetailsRequest({
+  cwd,
+  changeRequestNumber,
+  repoOwner,
+  repoName,
+  detailRef,
+}: PrPaneCheckDetailsRequestInput) {
+  return {
+    cwd,
+    repoOwner,
+    repoName,
+    checkRunId: detailRef?.checkRunId,
+    workflowRunId: detailRef?.workflowRunId,
+    changeRequestNumber,
+  };
+}
+
 type CheckoutPrStatus = CheckoutPrStatusResponse["payload"]["status"];
 type PullRequestTimeline = PullRequestTimelineResponse["payload"];
 type PullRequestTimelineItem = PullRequestTimeline["items"][number];

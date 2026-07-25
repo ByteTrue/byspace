@@ -983,10 +983,6 @@ export const ru: TranslationResources = {
     refPicker: {
       startingRef: "Начальная ссылка",
       chooseStart: "Выберите, с чего начать",
-      checkoutHint: "Проверьте {{noun}} {{numberPrefix}}{{number}}?",
-      checkoutPr: "Проверьте {{noun}} {{numberPrefix}}{{number}}",
-      dismissCheckoutHint:
-        "Отклонить подсказку по оформлению заказа {{noun}} {{numberPrefix}}{{number}}",
       intoBase: "в {{baseRef}}",
       searching: "Идет поиск...",
       noMatchingRefs: "Нет подходящих ссылок.",
@@ -1455,6 +1451,10 @@ export const ru: TranslationResources = {
         label: "Terminal прокрутка назад",
         description: "Строки, хранящиеся во встроенном буфере терминала.",
         accessibilityLabel: "Линии прокрутки Terminal",
+      },
+      vimKeybindings: {
+        label: "Клавиши Vim",
+        description: "Использовать клавиши Vim при редактировании исходных файлов",
       },
       autoExpandReasoning: {
         label: "Всегда разворачивать размышления",

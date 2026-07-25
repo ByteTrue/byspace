@@ -111,7 +111,7 @@ interface SplitContainerProps {
     targetPaneId: string;
     position: "left" | "right" | "top" | "bottom";
   }) => void;
-  onMoveTabToPane: (tabId: string, toPaneId: string) => void;
+  onMoveTabToPane: (tabId: string, toPaneId: string) => boolean | void;
   onResizeSplit: (groupId: string, sizes: number[]) => void;
   onReorderTabsInPane: (paneId: string, tabIds: string[]) => void;
   renderPaneEmptyState?: () => ReactNode;
@@ -385,6 +385,12 @@ export function SplitContainer({
   const [activeDragTabId, setActiveDragTabId] = useState<string | null>(null);
   const [dropPreview, setDropPreview] = useState<SplitDropZoneHover | null>(null);
   const [tabDropPreview, setTabDropPreview] = useState<TabDropPreview | null>(null);
+  const workspaceTabIds = useMemo(() => uiTabs.map((tab) => tab.tabId), [uiTabs]);
+  const modifiedTabIds = useModifiedPanelTabIds({
+    serverId: normalizedServerId,
+    workspaceId: normalizedWorkspaceId,
+    tabIds: workspaceTabIds,
+  });
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -501,18 +507,26 @@ export function SplitContainer({
         return;
       }
 
+      if (modifiedTabIds.has(activeData.tabId)) {
+        return;
+      }
       const nextTargetTabIds = targetTabs.map((tab) => tab.tabId);
       nextTargetTabIds.splice(resolvedTabDropPreview.insertionIndex, 0, activeData.tabId);
-      onMoveTabToPane(activeData.tabId, overData.paneId);
+      if (onMoveTabToPane(activeData.tabId, overData.paneId) === false) {
+        return;
+      }
       onReorderTabsInPane(overData.paneId, nextTargetTabIds);
     },
-    [onMoveTabToPane, onReorderTabsInPane, panesById, tabDropPreview, uiTabs],
+    [modifiedTabIds, onMoveTabToPane, onReorderTabsInPane, panesById, tabDropPreview, uiTabs],
   );
 
   const applyPaneDropEnd = useCallback(
     (input: { activeData: WorkspaceTabDragData; overData: SplitPaneDropData }): void => {
       const { activeData, overData } = input;
       if (dropPreview?.paneId !== overData.paneId) {
+        return;
+      }
+      if (modifiedTabIds.has(activeData.tabId)) {
         return;
       }
       if (dropPreview.position === "center") {
@@ -527,7 +541,7 @@ export function SplitContainer({
         position: dropPreview.position,
       });
     },
-    [dropPreview, onMoveTabToPane, onSplitPane],
+    [dropPreview, modifiedTabIds, onMoveTabToPane, onSplitPane],
   );
 
   const handleDragEnd = useCallback(

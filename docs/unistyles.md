@@ -44,6 +44,22 @@ const styles = StyleSheet.create({ row: sharedStyles.row });
 <View style={sharedStyles.row} />;
 ```
 
+## Keep style proxy reads at render time
+
+Never read a Unistyles style property into a module-level constant. This includes cached arrays:
+
+```tsx
+// Wrong: evaluated while the app may still be using the temporary system theme.
+const ROW_STYLE = [settingsStyles.row, settingsStyles.rowBorder];
+
+// Right: each style proxy is read when this view renders.
+<View style={[settingsStyles.row, settingsStyles.rowBorder]} />;
+```
+
+BySpace starts with adaptive themes, then applies the persisted `light`, `dark`, or `auto` setting after async settings load. A module-level read can therefore materialize styles from the temporary startup theme. If the view mounts after the theme change, Unistyles registers it for future changes but does not retroactively replace its stale initial props.
+
+Render-time array syntax is intentional and exempt from the app's JSX array-allocation lint rule. Keep the entries separate so each retains its Unistyles metadata. If composition is needed outside JSX, create the array inside the component or in a `useMemo` that first runs when the component mounts—never at module evaluation time.
+
 ## Theme-aware leaf props
 
 For icons and other leaf components whose color or tint is a regular prop, wrap the leaf with `withUnistyles` and pass a `uniProps` mapping:

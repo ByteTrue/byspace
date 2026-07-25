@@ -164,6 +164,7 @@ export interface WorkspaceGitService {
     cwdOrRepoRoot: string,
     options?: WorkspaceGitReadOptions,
   ): Promise<WorkspaceGitWorktreeInfo[]>;
+  invalidateWorktreeLists?(): void;
   getWorkspaceGitMetadata(
     cwd: string,
     options?: WorkspaceGitReadOptions & { directoryName?: string },
@@ -677,6 +678,10 @@ export class WorkspaceGitServiceImpl implements WorkspaceGitService {
       });
       return parseWorkspaceGitStashList(stdout, { byspaceOnly });
     });
+  }
+
+  invalidateWorktreeLists(): void {
+    this.worktreeListCache.clear();
   }
 
   async listWorktrees(

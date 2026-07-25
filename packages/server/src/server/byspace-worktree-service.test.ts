@@ -55,6 +55,7 @@ test("creates a worktree and registers it in the source workspace project withou
     {
       cwd: repoDir,
       worktreeSlug: "feature-one",
+      title: "Feature one workspace",
       runSetup: false,
       byspaceHome: path.join(tempDir, ".byspace"),
     },
@@ -67,12 +68,10 @@ test("creates a worktree and registers it in the source workspace project withou
   expect(result.workspace.workspaceId).toMatch(/^wks_[0-9a-f]{16}$/);
   expect(result.workspace.projectId).toBe("remote:github.com/acme/repo");
   expect(result.workspace.displayName).toBe("feature-one");
+  expect(result.workspace.title).toBe("Feature one workspace");
   expect(result.workspace.baseBranch).toBe("main");
   expect(deps.workspaceGitService.getSnapshot).not.toHaveBeenCalled();
-  expect(events).toEqual([
-    "project:remote:github.com/acme/repo",
-    `workspace:${result.workspace.workspaceId}`,
-  ]);
+  expect(events).toEqual([`workspace:${result.workspace.workspaceId}`]);
 });
 
 test("registers a new worktree in the existing root project after the main checkout workspace is removed", async () => {
@@ -80,9 +79,9 @@ test("registers a new worktree in the existing root project after the main check
   cleanupPaths.push(tempDir);
   const deps = createDeps();
   const sourceProject = createPersistedProjectRecordForTest({
-    projectId: "remote:github.com/acme/repo",
+    projectId: "prj_0123456789abcdef",
     rootPath: repoDir,
-    displayName: "acme/repo",
+    displayName: "main-only",
   });
   const existingWorktree = createPersistedWorkspaceRecordForTest({
     workspaceId: "ws-existing-worktree",
@@ -105,8 +104,9 @@ test("registers a new worktree in the existing root project after the main check
     deps,
   );
 
-  expect(result.workspace.projectId).toBe("remote:github.com/acme/repo");
-  expect(Array.from(deps.projects.keys()).sort()).toEqual(["remote:github.com/acme/repo"]);
+  expect(result.workspace.projectId).toBe(sourceProject.projectId);
+  expect(Array.from(deps.projects.keys())).toEqual([sourceProject.projectId]);
+  expect(deps.projects.get(sourceProject.projectId)?.displayName).toBe("main-only");
 });
 
 // POSIX-only: Windows git worktree paths need separate canonicalization coverage.
@@ -151,6 +151,37 @@ test.skipIf(isPlatform("win32"))(
     expect(second.workspace.workspaceId).not.toBe(first.workspace.workspaceId);
   },
 );
+
+test("uses an explicit active project for a local checkout workspace", async () => {
+  const { repoDir, tempDir } = createGitRepo();
+  cleanupPaths.push(tempDir);
+  const deps = createDeps();
+  deps.workspaceGitService.getCheckout = async (cwd) => ({
+    cwd,
+    isGit: true,
+    currentBranch: "main",
+    remoteUrl: null,
+    worktreeRoot: repoDir,
+    isBySpaceOwnedWorktree: false,
+    mainRepoRoot: repoDir,
+  });
+  const project = createPersistedProjectRecordForTest({
+    projectId: "project-explicit",
+    rootPath: repoDir,
+    displayName: "Explicit",
+  });
+  project.kind = "non_git";
+  deps.projects.set(project.projectId, project);
+
+  const workspace = await createLocalCheckoutWorkspace(
+    { cwd: repoDir, projectId: project.projectId },
+    deps,
+  );
+
+  expect(workspace.projectId).toBe(project.projectId);
+  expect(deps.projects.get(project.projectId)?.kind).toBe("git");
+  expect(Array.from(deps.projects.keys())).toEqual([project.projectId]);
+});
 
 test("creates a distinct local checkout workspace for the same cwd on every call", async () => {
   const { repoDir, tempDir } = createGitRepo();
@@ -679,7 +710,7 @@ test.skipIf(isPlatform("win32"))(
 );
 
 interface TestDeps extends CreateBySpaceWorktreeDeps {
-  projectRegistry: Pick<ProjectRegistry, "get" | "list" | "upsert">;
+  projectRegistry: Pick<ProjectRegistry, "get" | "list" | "getOrCreateActiveByRoot" | "upsert">;
   projects: Map<string, PersistedProjectRecord>;
   workspaces: Map<string, PersistedWorkspaceRecord>;
 }
@@ -700,6 +731,23 @@ function createDeps(options?: {
     projectRegistry: {
       get: async (projectId) => projects.get(projectId) ?? null,
       list: async () => Array.from(projects.values()),
+      getOrCreateActiveByRoot: async (input) => {
+        const existing = Array.from(projects.values()).find(
+          (project) => path.resolve(project.rootPath) === path.resolve(input.rootPath),
+        );
+        if (existing) return existing;
+        const project = createPersistedProjectRecordForTest({
+          projectId: `prj_test_${projects.size + 1}`,
+          rootPath: input.rootPath,
+          displayName: input.displayName,
+        });
+        project.kind = input.kind;
+        project.createdAt = input.timestamp;
+        project.updatedAt = input.timestamp;
+        events.push(`project:${project.projectId}`);
+        projects.set(project.projectId, project);
+        return project;
+      },
       upsert: async (record) => {
         events.push(`project:${record.projectId}`);
         projects.set(record.projectId, record);

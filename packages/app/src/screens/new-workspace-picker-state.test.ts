@@ -2,10 +2,15 @@ import { describe, expect, it } from "vitest";
 import type { UserComposerAttachment } from "@/attachments/types";
 import {
   clearPickerPrAttachmentForTargetChange,
-  findCheckoutHintPrAttachment,
+  initialPickerSelectionState,
+  markPickerOwnedPrAttachment,
+  reducePickerSelection,
+  restorePickerPrSelection,
   syncPickerPrAttachment,
 } from "./new-workspace-picker-state";
 import type { ForgeSearchItem } from "@bytetrue/byspace-protocol/messages";
+
+const TARGET_ID = "server-a\u0000project-a\u0000/repo-a";
 
 function makePrItem(number: number, title: string, headRefName = "feature/x"): ForgeSearchItem {
   return {
@@ -24,29 +29,42 @@ function makePrItem(number: number, title: string, headRefName = "feature/x"): F
 function prAttachment(
   item: ForgeSearchItem,
   owner?: "new-workspace-picker",
+  ownerTargetId = TARGET_ID,
 ): Extract<UserComposerAttachment, { kind: "github_pr" }> {
-  return { kind: "github_pr", item, ...(owner ? { owner } : {}) };
+  return {
+    kind: "github_pr",
+    item,
+    ...(owner ? { owner, ownerTargetId } : {}),
+  };
+}
+
+function forgePrAttachment(
+  item: ForgeSearchItem,
+): Extract<UserComposerAttachment, { kind: "forge_change_request" }> {
+  return { kind: "forge_change_request", item };
+}
+
+function makeIssueItem(number: number): ForgeSearchItem {
+  return {
+    kind: "issue",
+    number,
+    title: `Issue ${number}`,
+    url: `https://example.com/issues/${number}`,
+    state: "open",
+    body: null,
+    labels: [],
+  };
 }
 
 function issueAttachment(number: number): UserComposerAttachment {
-  return {
-    kind: "github_issue",
-    item: {
-      kind: "issue",
-      number,
-      title: `Issue ${number}`,
-      url: `https://example.com/issues/${number}`,
-      state: "open",
-      body: null,
-      labels: [],
-    },
-  };
+  return { kind: "github_issue", item: makeIssueItem(number) };
 }
 
 describe("syncPickerPrAttachment", () => {
   it("selects a PR when no previous picker PR is set", () => {
     const pr = makePrItem(202, "Refactor picker");
     const result = syncPickerPrAttachment({
+      targetId: TARGET_ID,
       attachments: [],
       item: { kind: "github-pr", item: pr },
     });
@@ -56,6 +74,7 @@ describe("syncPickerPrAttachment", () => {
   it("selects a branch without modifying attachments when no previous picker PR", () => {
     const issue = issueAttachment(44);
     const result = syncPickerPrAttachment({
+      targetId: TARGET_ID,
       attachments: [issue],
       item: { kind: "branch", name: "dev" },
     });
@@ -66,6 +85,7 @@ describe("syncPickerPrAttachment", () => {
     const prA = makePrItem(202, "Refactor picker", "feature/picker");
     const prB = makePrItem(303, "Polish chip", "feature/chip");
     const result = syncPickerPrAttachment({
+      targetId: TARGET_ID,
       attachments: [prAttachment(prA, "new-workspace-picker")],
       item: { kind: "github-pr", item: prB },
     });
@@ -76,6 +96,7 @@ describe("syncPickerPrAttachment", () => {
     const pr = makePrItem(202, "Refactor picker");
     const issue = issueAttachment(44);
     const result = syncPickerPrAttachment({
+      targetId: TARGET_ID,
       attachments: [issue, prAttachment(pr, "new-workspace-picker")],
       item: { kind: "branch", name: "dev" },
     });
@@ -85,10 +106,36 @@ describe("syncPickerPrAttachment", () => {
   it("does not duplicate a PR that was already manually attached by the user", () => {
     const pr = makePrItem(202, "Refactor picker");
     const result = syncPickerPrAttachment({
+      targetId: TARGET_ID,
       attachments: [prAttachment(pr)],
       item: { kind: "github-pr", item: pr },
     });
     expect(result).toEqual([prAttachment(pr)]);
+  });
+
+  it("does not duplicate a generalized PR attachment", () => {
+    const pr = makePrItem(202, "Refactor picker");
+    const result = syncPickerPrAttachment({
+      targetId: TARGET_ID,
+      attachments: [forgePrAttachment(pr)],
+      item: { kind: "github-pr", item: pr },
+    });
+    expect(result).toEqual([forgePrAttachment(pr)]);
+  });
+
+  it("does not collapse same-number PRs from different repositories", () => {
+    const first = makePrItem(202, "First repository");
+    const second = {
+      ...makePrItem(202, "Second repository"),
+      url: "https://example.com/other/pull/202",
+    };
+    const result = syncPickerPrAttachment({
+      targetId: TARGET_ID,
+      attachments: [prAttachment(first)],
+      item: { kind: "github-pr", item: second },
+    });
+
+    expect(result).toEqual([prAttachment(first), prAttachment(second, "new-workspace-picker")]);
   });
 
   it("clears a persisted picker selection without removing user-added attachments", () => {
@@ -97,11 +144,44 @@ describe("syncPickerPrAttachment", () => {
     const issue = issueAttachment(44);
 
     const result = syncPickerPrAttachment({
+      targetId: TARGET_ID,
       attachments: [issue, pickerPr, manuallyAttachedPr],
       item: null,
     });
 
     expect(result).toEqual([issue, manuallyAttachedPr]);
+  });
+});
+
+describe("persisted picker PR selection", () => {
+  it("marks an auto-attached PR as picker-owned and restores it", () => {
+    const pr = makePrItem(202, "Restore PR");
+    const attachments = markPickerOwnedPrAttachment({
+      targetId: TARGET_ID,
+      attachments: [forgePrAttachment(pr)],
+      item: { kind: "github-pr", item: pr },
+    });
+
+    expect(attachments).toEqual([prAttachment(pr, "new-workspace-picker")]);
+    expect(restorePickerPrSelection(attachments, TARGET_ID)).toEqual({
+      kind: "github-pr",
+      item: pr,
+    });
+  });
+
+  it("does not restore a picker PR owned by another target", () => {
+    const pr = makePrItem(202, "Other target");
+    expect(
+      restorePickerPrSelection(
+        [prAttachment(pr, "new-workspace-picker", "server-b\u0000project-b\u0000/repo-b")],
+        TARGET_ID,
+      ),
+    ).toBeNull();
+  });
+
+  it("does not restore an ordinary user-added PR", () => {
+    const pr = makePrItem(202, "Manual PR");
+    expect(restorePickerPrSelection([prAttachment(pr)], TARGET_ID)).toBeNull();
   });
 });
 
@@ -119,67 +199,82 @@ describe("clearPickerPrAttachmentForTargetChange", () => {
     ).toBe(attachments);
   });
 
-  it("clears only the picker-owned PR when the target changes", () => {
+  it("clears all PR attachments when the target changes", () => {
     const pickerPr = prAttachment(makePrItem(202, "Picker PR"), "new-workspace-picker");
     const manualPr = prAttachment(makePrItem(303, "Manual PR"));
+    const forgePr = forgePrAttachment(makePrItem(404, "Forge PR"));
+    const issue = issueAttachment(44);
 
     expect(
       clearPickerPrAttachmentForTargetChange({
-        attachments: [pickerPr, manualPr],
+        attachments: [issue, pickerPr, manualPr, forgePr],
         currentTargetId: "server-a",
         nextTargetId: "server-b",
       }),
-    ).toEqual([manualPr]);
+    ).toEqual([issue]);
   });
 });
 
-describe("findCheckoutHintPrAttachment", () => {
-  it("returns the first attached PR that is not selected or dismissed", () => {
-    const first = prAttachment(makePrItem(101, "A"));
-    const second = prAttachment(makePrItem(202, "B"));
+describe("reducePickerSelection", () => {
+  it("selects a PR that was newly detected and added", () => {
+    const item = { kind: "github-pr" as const, item: makePrItem(101, "A") };
+    const detected = reducePickerSelection(initialPickerSelectionState, { type: "pr-detected" });
 
-    expect(
-      findCheckoutHintPrAttachment({
-        attachments: [issueAttachment(44), first, second],
-        selectedItem: null,
-        dismissedPrNumbers: new Set(),
-      }),
-    ).toBe(first);
+    expect(reducePickerSelection(detected, { type: "pr-added", item })).toEqual({
+      selectedItem: item,
+      allowAutoPrSelection: false,
+    });
   });
 
-  it("skips the selected PR and offers the next attached PR", () => {
-    const selected = prAttachment(makePrItem(101, "A"));
-    const next = prAttachment(makePrItem(202, "B"));
+  it("keeps the first PR selected when one edit adds multiple PRs", () => {
+    const detected = reducePickerSelection(initialPickerSelectionState, { type: "pr-detected" });
+    const first = reducePickerSelection(detected, {
+      type: "pr-added",
+      item: { kind: "github-pr", item: makePrItem(101, "A") },
+    });
 
     expect(
-      findCheckoutHintPrAttachment({
-        attachments: [selected, next],
-        selectedItem: { kind: "github-pr", item: selected.item },
-        dismissedPrNumbers: new Set(),
+      reducePickerSelection(first, {
+        type: "pr-added",
+        item: { kind: "github-pr", item: makePrItem(202, "B") },
       }),
-    ).toBe(next);
+    ).toEqual(first);
   });
 
-  it("skips dismissed PRs and ignores issues", () => {
-    const dismissed = prAttachment(makePrItem(101, "A"));
-    const next = prAttachment(makePrItem(202, "B"));
+  it("keeps a branch selected after a pending PR is added", () => {
+    const detected = reducePickerSelection(initialPickerSelectionState, { type: "pr-detected" });
+    const branchSelected = reducePickerSelection(detected, {
+      type: "picker-selected",
+      item: { kind: "branch", name: "main" },
+    });
 
     expect(
-      findCheckoutHintPrAttachment({
-        attachments: [issueAttachment(44), dismissed, next],
-        selectedItem: null,
-        dismissedPrNumbers: new Set([101]),
+      reducePickerSelection(branchSelected, {
+        type: "pr-added",
+        item: { kind: "github-pr", item: makePrItem(101, "A") },
       }),
-    ).toBe(next);
+    ).toEqual(branchSelected);
   });
 
-  it("returns null when only issues qualify", () => {
+  it("does not derive checkout selection from an existing attachment", () => {
     expect(
-      findCheckoutHintPrAttachment({
-        attachments: [issueAttachment(44)],
-        selectedItem: null,
-        dismissedPrNumbers: new Set(),
+      reducePickerSelection(initialPickerSelectionState, {
+        type: "pr-added",
+        item: { kind: "github-pr", item: makePrItem(101, "A") },
       }),
-    ).toBeNull();
+    ).toEqual(initialPickerSelectionState);
+  });
+
+  it("lets a newly detected PR replace an earlier explicit branch", () => {
+    const branchSelected = reducePickerSelection(initialPickerSelectionState, {
+      type: "picker-selected",
+      item: { kind: "branch", name: "main" },
+    });
+    const detected = reducePickerSelection(branchSelected, { type: "pr-detected" });
+    const pr = { kind: "github-pr" as const, item: makePrItem(101, "A") };
+
+    expect(reducePickerSelection(detected, { type: "pr-added", item: pr }).selectedItem).toEqual(
+      pr,
+    );
   });
 });
