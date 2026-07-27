@@ -313,6 +313,56 @@ describe("terminal emulator runtime in a real browser", () => {
     expect(grownSize.shouldClaim).toBe(true);
   });
 
+  it("does not emit a duplicate claim when the immediate resize succeeds", async () => {
+    await page.viewport(900, 600);
+    const mounted = createTerminalHost({ width: 720, height: 360 });
+
+    await waitFor({ predicate: () => mounted.sizes.length > 0 });
+    const previousEventCount = mounted.sizes.length;
+
+    mounted.runtime.resizeAfterLayout({ force: true, shouldClaim: true });
+    await nextFrame();
+
+    const claimEvents = mounted.sizes
+      .slice(previousEventCount)
+      .filter((event) => event.shouldClaim);
+    expect(claimEvents).toHaveLength(1);
+  });
+
+  it("retries a requested resize after a retained panel becomes measurable", async () => {
+    await page.viewport(900, 600);
+    const NativeResizeObserver = window.ResizeObserver;
+    window.ResizeObserver = class ResizeObserver {
+      observe(): void {}
+      unobserve(): void {}
+      disconnect(): void {}
+    };
+
+    try {
+      const mounted = createTerminalHost({ width: 720, height: 360 });
+
+      await waitFor({ predicate: () => mounted.sizes.length > 0 });
+      const initialSize = latestSize(mounted.sizes);
+
+      mounted.root.style.display = "none";
+      mounted.root.style.width = "360px";
+      await nextFrame();
+
+      mounted.runtime.resizeAfterLayout({ force: true, shouldClaim: false });
+      mounted.root.style.display = "block";
+
+      await waitFor({
+        predicate: () => latestSize(mounted.sizes).cols < initialSize.cols,
+      });
+
+      const restoredSize = latestSize(mounted.sizes);
+      expect(restoredSize.cols).toBeLessThan(initialSize.cols);
+      expect(restoredSize.shouldClaim).toBe(false);
+    } finally {
+      window.ResizeObserver = NativeResizeObserver;
+    }
+  });
+
   it("refreshes visible rows on a forced same-size resize", async () => {
     await page.viewport(900, 600);
     const mounted = createTerminalHost({ width: 720, height: 360 });

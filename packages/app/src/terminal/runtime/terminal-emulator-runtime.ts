@@ -301,12 +301,7 @@ export class TerminalEmulatorRuntime {
       return;
     }
 
-    this.fitAndEmitResize?.({ force: true, shouldClaim: false });
-    if (typeof window.requestAnimationFrame === "function") {
-      window.requestAnimationFrame(() => {
-        this.fitAndEmitResize?.({ force: true, shouldClaim: false });
-      });
-    }
+    this.resizeAfterLayout({ force: true, shouldClaim: false });
   };
 
   setCallbacks(input: { callbacks: TerminalEmulatorRuntimeCallbacks }): void {
@@ -867,6 +862,18 @@ export class TerminalEmulatorRuntime {
 
   resize(input?: { force?: boolean; shouldClaim?: boolean }): void {
     this.fitAndEmitResize?.(input);
+  }
+
+  resizeAfterLayout(input?: { force?: boolean; shouldClaim?: boolean }): void {
+    const terminal = this.terminal;
+    this.resize(input);
+    if (typeof window.requestAnimationFrame === "function") {
+      window.requestAnimationFrame(() => {
+        if (this.terminal === terminal) {
+          this.resize(input ? { ...input, force: false } : input);
+        }
+      });
+    }
   }
 
   setTheme(input: { theme: ITheme }): void {
