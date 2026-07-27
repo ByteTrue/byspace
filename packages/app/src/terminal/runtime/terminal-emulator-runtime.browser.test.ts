@@ -59,6 +59,24 @@ function nextFrame(): Promise<void> {
   });
 }
 
+function countClaimEvents(sizes: TerminalSize[]): number {
+  return sizes.filter((size) => size.shouldClaim).length;
+}
+
+async function withoutResizeObserver(run: () => Promise<void>): Promise<void> {
+  const NativeResizeObserver = window.ResizeObserver;
+  window.ResizeObserver = class ResizeObserver {
+    observe(): void {}
+    unobserve(): void {}
+    disconnect(): void {}
+  };
+  try {
+    await run();
+  } finally {
+    window.ResizeObserver = NativeResizeObserver;
+  }
+}
+
 function terminalOutput(text: string): Uint8Array {
   return encodeTerminalOutput(text);
 }
@@ -323,22 +341,32 @@ describe("terminal emulator runtime in a real browser", () => {
     mounted.runtime.resizeAfterLayout({ force: true, shouldClaim: true });
     await nextFrame();
 
-    const claimEvents = mounted.sizes
-      .slice(previousEventCount)
-      .filter((event) => event.shouldClaim);
-    expect(claimEvents).toHaveLength(1);
+    expect(countClaimEvents(mounted.sizes.slice(previousEventCount))).toBe(1);
+  });
+
+  it("preserves an explicit claim queued behind a passive hidden-panel refit", async () => {
+    await page.viewport(900, 600);
+    await withoutResizeObserver(async () => {
+      const mounted = createTerminalHost({ width: 720, height: 360 });
+
+      await waitFor({ predicate: () => mounted.sizes.length > 0 });
+      const previousEventCount = mounted.sizes.length;
+      mounted.root.style.display = "none";
+      mounted.root.style.width = "360px";
+      await nextFrame();
+
+      mounted.runtime.resizeAfterLayout({ force: true, shouldClaim: false });
+      mounted.runtime.resizeAfterLayout({ force: true, shouldClaim: true });
+      mounted.root.style.display = "block";
+      await nextFrame();
+
+      expect(countClaimEvents(mounted.sizes.slice(previousEventCount))).toBe(1);
+    });
   });
 
   it("retries a requested resize after a retained panel becomes measurable", async () => {
     await page.viewport(900, 600);
-    const NativeResizeObserver = window.ResizeObserver;
-    window.ResizeObserver = class ResizeObserver {
-      observe(): void {}
-      unobserve(): void {}
-      disconnect(): void {}
-    };
-
-    try {
+    await withoutResizeObserver(async () => {
       const mounted = createTerminalHost({ width: 720, height: 360 });
 
       await waitFor({ predicate: () => mounted.sizes.length > 0 });
@@ -358,9 +386,7 @@ describe("terminal emulator runtime in a real browser", () => {
       const restoredSize = latestSize(mounted.sizes);
       expect(restoredSize.cols).toBeLessThan(initialSize.cols);
       expect(restoredSize.shouldClaim).toBe(false);
-    } finally {
-      window.ResizeObserver = NativeResizeObserver;
-    }
+    });
   });
 
   it("refreshes visible rows on a forced same-size resize", async () => {
