@@ -273,8 +273,9 @@ export class TerminalEmulatorRuntime {
   };
   private terminal: Terminal | null = null;
   private fitAddon: FitAddon | null = null;
-  private fitAndEmitResize: ((input?: { force?: boolean; shouldClaim?: boolean }) => void) | null =
-    null;
+  private fitAndEmitResize:
+    | ((input?: { force?: boolean; shouldClaim?: boolean }) => boolean)
+    | null = null;
   private lastSize: { rows: number; cols: number } | null = null;
   private cleanup: (() => void) | null = null;
   private outputOperations: TerminalOutputOperation[] = [];
@@ -301,12 +302,7 @@ export class TerminalEmulatorRuntime {
       return;
     }
 
-    this.fitAndEmitResize?.({ force: true, shouldClaim: false });
-    if (typeof window.requestAnimationFrame === "function") {
-      window.requestAnimationFrame(() => {
-        this.fitAndEmitResize?.({ force: true, shouldClaim: false });
-      });
-    }
+    this.resizeAfterLayout({ force: true, shouldClaim: false });
   };
 
   setCallbacks(input: { callbacks: TerminalEmulatorRuntimeCallbacks }): void {
@@ -549,30 +545,33 @@ export class TerminalEmulatorRuntime {
     this.fitAddon = fitAddon;
     window.__byspaceTerminal = terminal;
 
-    const fitAndEmitResize = (resizeInput?: { force?: boolean; shouldClaim?: boolean }): void => {
+    const fitAndEmitResize = (resizeInput?: {
+      force?: boolean;
+      shouldClaim?: boolean;
+    }): boolean => {
       const force = resizeInput?.force ?? false;
       const shouldClaim = resizeInput?.shouldClaim ?? true;
       const currentTerminal = this.terminal;
       const currentFitAddon = this.fitAddon;
       if (!currentTerminal || !currentFitAddon) {
-        return;
+        return false;
       }
 
       if (input.root.offsetWidth === 0 || input.root.offsetHeight === 0) {
-        return;
+        return false;
       }
 
       try {
         currentFitAddon.fit();
       } catch {
-        return;
+        return false;
       }
 
       const nextRows = currentTerminal.rows;
       const nextCols = currentTerminal.cols;
       const previous = this.lastSize;
       if (!force && previous && previous.rows === nextRows && previous.cols === nextCols) {
-        return;
+        return true;
       }
 
       this.lastSize = { rows: nextRows, cols: nextCols };
@@ -582,6 +581,7 @@ export class TerminalEmulatorRuntime {
         cols: nextCols,
         shouldClaim,
       });
+      return true;
     };
     this.fitAndEmitResize = fitAndEmitResize;
 
@@ -865,8 +865,20 @@ export class TerminalEmulatorRuntime {
     this.processOutputQueue();
   }
 
-  resize(input?: { force?: boolean; shouldClaim?: boolean }): void {
-    this.fitAndEmitResize?.(input);
+  resize(input?: { force?: boolean; shouldClaim?: boolean }): boolean {
+    return this.fitAndEmitResize?.(input) ?? false;
+  }
+
+  resizeAfterLayout(input?: { force?: boolean; shouldClaim?: boolean }): void {
+    const terminal = this.terminal;
+    const fitSucceeded = this.resize(input);
+    if (typeof window.requestAnimationFrame === "function") {
+      window.requestAnimationFrame(() => {
+        if (this.terminal === terminal) {
+          this.resize(fitSucceeded && input ? { ...input, force: false } : input);
+        }
+      });
+    }
   }
 
   setTheme(input: { theme: ITheme }): void {

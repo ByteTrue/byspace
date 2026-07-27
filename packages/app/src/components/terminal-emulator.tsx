@@ -460,7 +460,7 @@ export default function TerminalEmulator({
     if (focusRequestToken <= 0) {
       return () => {};
     }
-    runtimeRef.current?.resize({ force: true, shouldClaim: true });
+    runtimeRef.current?.resizeAfterLayout({ force: true, shouldClaim: true });
     return focusWithRetries({
       focus: () => {
         runtimeRef.current?.focus();
@@ -480,7 +480,7 @@ export default function TerminalEmulator({
     if (resizeRequestToken <= 0) {
       return;
     }
-    runtimeRef.current?.resize({ force: true, shouldClaim: true });
+    runtimeRef.current?.resizeAfterLayout({ force: true, shouldClaim: true });
   }, [resizeRequestToken]);
 
   const handleRootPointerDown = useCallback(() => {

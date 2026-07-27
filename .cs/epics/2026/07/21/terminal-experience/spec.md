@@ -99,6 +99,7 @@ Terminal agent integration now treats hook installation as a provider-scoped ext
 - [x] `.cs/issues/2026/07/21/closed-terminal-windows-bracketed-paste-fallback/index.md`：Windows 多行文本不依赖 ConPTY 是否转发 DECSET 2004；生成的图片路径始终强制 framing。
 - [x] `.cs/issues/2026/07/21/closed-pi-terminal-agents.md`：Terminal hooks 使用 provider 独立开关；Pi 通过全局 extension 上报 activity，并进入默认 Terminal profiles。
 - [x] `.cs/issues/2026/07/22/closed-terminal-presentation-defaults.md`：Terminal/编辑器呈现改为极简。用户 headed 验收通过后经四轮减法收敛为：字体全用各平台系统默认（UI=system-ui、代码/终端=ui-monospace 领头栈），字号仅「界面」+「代码」两项、代码/diff/终端统一 14；语法高亮固定 GitHub（自带亮/暗）；主题仅保留 浅色/深色/跟随系统（删 zinc/midnight/claude/ghostty 变体）。字体族、终端专属字号、语法主题、深色变体的自定义 UI 全部移除。
+- [ ] `.cs/issues/006-o-terminal-retained-panel-layout.md`：修复 retained Terminal 恢复可见时首次 fit 落在零尺寸布局窗口，导致字符横向拉伸或右侧空白直至点击/输入的问题。
 
 ### 剩余阻碍
 
