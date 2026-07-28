@@ -125,17 +125,21 @@ import {
   TerminalStreamOpcode,
   type FileTransferFrame,
 } from "@bytetrue/byspace-protocol/binary-frames/index";
+import { createRelayE2eeTransportFactory } from "./daemon-client-relay-e2ee-transport.js";
+import type {
+  DaemonTransport,
+  DaemonTransportFactory,
+  WebSocketFactory,
+} from "./daemon-client-transport-types.js";
 import {
-  createRelayE2eeTransportFactory,
-  createWebSocketTransportFactory,
   decodeMessageData,
-  defaultWebSocketFactory,
   describeTransportClose,
   describeTransportError,
-  type DaemonTransport,
-  type DaemonTransportFactory,
-  type WebSocketFactory,
-} from "./daemon-client-transport.js";
+} from "./daemon-client-transport-utils.js";
+import {
+  createWebSocketTransportFactory,
+  defaultWebSocketFactory,
+} from "./daemon-client-websocket-transport.js";
 import { DaemonClientRuntimeMetrics } from "./daemon-client-runtime-metrics.js";
 import {
   normalizeListProviderModelsPayload,
@@ -230,7 +234,7 @@ export type {
   DaemonTransportFactory,
   WebSocketFactory,
   WebSocketLike,
-} from "./daemon-client-transport.js";
+} from "./daemon-client-transport-types.js";
 
 export type { TerminalStreamEvent };
 

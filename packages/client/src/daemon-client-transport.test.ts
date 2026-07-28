@@ -1,14 +1,14 @@
 import { EventEmitter } from "node:events";
 import { describe, expect, test, vi } from "vitest";
+import { createEncryptedTransport } from "./daemon-client-relay-e2ee-transport.js";
 import {
-  createEncryptedTransport,
-  createWebSocketTransportFactory,
   decodeMessageData,
   describeTransportClose,
   describeTransportError,
   encodeUtf8String,
   extractRelayMessageData,
-} from "./daemon-client-transport.js";
+} from "./daemon-client-transport-utils.js";
+import { createWebSocketTransportFactory } from "./daemon-client-websocket-transport.js";
 
 const createClientChannelMock = vi.hoisted(() => vi.fn());
 
