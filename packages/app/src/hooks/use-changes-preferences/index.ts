@@ -14,10 +14,6 @@ export { DEFAULT_CHANGES_PREFERENCES, type ChangesPreferences, type KeyValueStor
 
 const productionStorage: KeyValueStorage = AsyncStorage;
 
-export function loadChangesPreferencesFromStorage(): Promise<ChangesPreferences> {
-  return loadChangesPreferencesFromStoragePure(productionStorage);
-}
-
 export interface UseChangesPreferencesReturn {
   preferences: ChangesPreferences;
   isLoading: boolean;
@@ -28,7 +24,7 @@ export function useChangesPreferences(): UseChangesPreferencesReturn {
   const queryClient = useQueryClient();
   const { data, isPending } = useQuery({
     queryKey: CHANGES_PREFERENCES_QUERY_KEY,
-    queryFn: loadChangesPreferencesFromStorage,
+    queryFn: () => loadChangesPreferencesFromStoragePure(productionStorage),
     staleTime: Infinity,
     gcTime: Infinity,
   });
