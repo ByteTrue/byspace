@@ -92,15 +92,16 @@ App 编译期平台常量固定为 Web，却仍把 Native shimmer 组件及依�
 - 2026-07-28：删除 Native shimmer 组件、测量状态与 MaskedView/SVG/Reanimated 专用代码；Web CSS shimmer 直接沿浏览器路径运行。
 - 删除 4 个零调用 App 文件、失效 Relay 延迟脚本和内部 transport barrel；Client 改为直接导入所属模块。
 - locale 改用 SSR-safe 的 `navigator.languages` / `navigator.language`，字体栈改为浏览器常量，Changes preferences 直接调用 pure storage loader，删除未使用的 `isDev`。
-- 从 manifests/lockfile 删除 `@react-native-masked-view/masked-view`、`expo-localization`、`p-memoize` 及其仅有传递依赖；当前 tracked diff 为 38 additions / 651 deletions，未引入新抽象。
+- 从 manifests/lockfile 删除 `@react-native-masked-view/masked-view`、`expo-localization`、`p-memoize` 及其仅有传递依赖；最终实现 diff 为 62 additions / 705 deletions（净减 643 行），未引入新抽象。
 - 独立 App reviewer 未发现行为回归；协议 reviewer 发现 `@bytetrue/byspace-protocol/literal-union` 受 `packages/protocol/package.json` wildcard export map 公开，已恢复该文件，避免把“仓内零引用”误当成可破坏公开子路径的证据。
+- PR code review 未发现 blocker/high/medium；Ponytail review 进一步内联单次使用的 secondary-label 组件，并删除 Web-only 后等同 `isLoading` 的 `isWebShimmer` 中间状态与逐层转发。
 - 与方案无偏差；协议 schema、生成器、发布门禁、Terminal 路径及主 daemon 均未改动。
 
 ## 关闭结论
 
 - 判断：目标与范围已达成，可关闭。实现只删除现有 Web-only 产品边界下不可达、零调用或只转发的代码，没有扩展协议、发布、Terminal 或 daemon 行为。
-- 可维护性证据：tracked diff 为 38 additions / 651 deletions；目标依赖和已删除文件不再出现在 Knip 报告中；保留项均有当前产品边界或公开兼容原因。
-- 兼容性证据：Client transport 10 项测试、Changes preferences 8 项测试、真实浏览器 shimmer E2E、全仓 typecheck/lint、无目标依赖的 Web export 与两轮独立 review 均通过。协议公开的 `literal-union` 子路径经 review 识别并保留。
+- 可维护性证据：最终实现 diff 为 62 additions / 705 deletions（净减 643 行）；目标依赖和已删除文件不再出现在 Knip 报告中；保留项均有当前产品边界或公开兼容原因。
+- 兼容性证据：Client transport 10 项测试、Changes preferences 8 项测试、真实浏览器 shimmer E2E、全仓 typecheck/lint、无目标依赖的 Web export 与独立 review 均通过。协议公开的 `literal-union` 子路径经 review 识别并保留；PR code review 无 blocker/high/medium。
 - 遗留事项：无。本 issue 未把仓库既有 Knip 动态入口/公开导出报告纳入范围，也未引入新的待办。
 
 ## 关闭回写

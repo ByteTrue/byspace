@@ -2220,27 +2220,6 @@ interface ExpandableBadgeProps {
   testID?: string;
 }
 
-interface ExpandableBadgeSecondaryLabelProps {
-  secondaryLabel?: string;
-  secondaryLabelStyle: StyleProp<TextStyle>;
-  onSecondaryLayout: (event: LayoutChangeEvent) => void;
-}
-
-function ExpandableBadgeSecondaryLabel({
-  secondaryLabel,
-  secondaryLabelStyle,
-  onSecondaryLayout,
-}: ExpandableBadgeSecondaryLabelProps) {
-  if (!secondaryLabel) {
-    return null;
-  }
-  return (
-    <Text style={secondaryLabelStyle} numberOfLines={1} onLayout={onSecondaryLayout}>
-      {secondaryLabel}
-    </Text>
-  );
-}
-
 interface ExpandableBadgeWebShimmerOverlayProps {
   label: string;
   secondaryLabel?: string;
@@ -2283,7 +2262,7 @@ interface ExpandableBadgeLabelRowProps {
   labelStyle: StyleProp<TextStyle>;
   secondaryLabel?: string;
   secondaryLabelStyle: StyleProp<TextStyle>;
-  isWebShimmer: boolean;
+  isLoading: boolean;
   shimmerLabelTextStyle: StyleProp<TextStyle>;
   shimmerSecondaryTextStyle: StyleProp<TextStyle>;
   onLabelLayout: (event: LayoutChangeEvent) => void;
@@ -2300,7 +2279,7 @@ function ExpandableBadgeLabelRow({
   labelStyle,
   secondaryLabel,
   secondaryLabelStyle,
-  isWebShimmer,
+  isLoading,
   shimmerLabelTextStyle,
   shimmerSecondaryTextStyle,
   onLabelLayout,
@@ -2317,11 +2296,11 @@ function ExpandableBadgeLabelRow({
       <Text style={labelStyle} numberOfLines={1} onLayout={onLabelLayout}>
         {label}
       </Text>
-      <ExpandableBadgeSecondaryLabel
-        secondaryLabel={secondaryLabel}
-        secondaryLabelStyle={secondaryLabelStyle}
-        onSecondaryLayout={onSecondaryLayout}
-      />
+      {secondaryLabel ? (
+        <Text style={secondaryLabelStyle} numberOfLines={1} onLayout={onSecondaryLayout}>
+          {secondaryLabel}
+        </Text>
+      ) : null}
       {showOpenFileButton ? (
         <Pressable
           onPress={onOpenFilePress}
@@ -2339,7 +2318,7 @@ function ExpandableBadgeLabelRow({
           />
         </Pressable>
       ) : null}
-      {isWebShimmer ? (
+      {isLoading ? (
         <ExpandableBadgeWebShimmerOverlay
           label={label}
           secondaryLabel={secondaryLabel}
@@ -2423,7 +2402,6 @@ function renderExpandableBadgeIconSlot({
 function computeShimmerMetrics(input: {
   label: string;
   secondaryLabel: string | undefined;
-  isLoading: boolean;
   labelOffsetX: number;
   labelWidth: number;
   secondaryOffsetX: number;
@@ -2435,7 +2413,6 @@ function computeShimmerMetrics(input: {
     1,
     Math.min(2.3, 1.25 + totalShimmerChars * 0.008 - shortTextDurationAdjustment),
   );
-  const isWebShimmer = input.isLoading;
   const webShimmerSpanStartX = input.labelOffsetX;
   const webShimmerSpanEndX = input.secondaryLabel
     ? input.secondaryOffsetX + input.secondaryWidth
@@ -2446,7 +2423,6 @@ function computeShimmerMetrics(input: {
   const webShimmerTrackEnd = webShimmerSpanEndX;
   return {
     shimmerDuration,
-    isWebShimmer,
     webShimmerPeakWidth,
     webShimmerTrackStart,
     webShimmerTrackEnd,
@@ -2483,14 +2459,14 @@ const SHIMMER_GRADIENT =
   "linear-gradient(90deg, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 0.45) 24%, #ffffff 40%, #ffffff 60%, rgba(255, 255, 255, 0.45) 76%, rgba(255, 255, 255, 0) 100%)";
 
 function buildShimmerTextStyle(input: {
-  isWebShimmer: boolean;
+  isLoading: boolean;
   webShimmerPeakWidth: number;
   shimmerDuration: number;
   webShimmerTrackStart: number;
   webShimmerTrackEnd: number;
   offsetX: number;
 }): object | null {
-  if (!input.isWebShimmer) return null;
+  if (!input.isLoading) return null;
   return inlineUnistylesStyle({
     opacity: 1,
     color: "transparent",
@@ -2559,21 +2535,15 @@ export const ExpandableBadge = memo(function ExpandableBadge({
   const [secondaryOffsetX, setSecondaryOffsetX] = useState(0);
   const [secondaryWidth, setSecondaryWidth] = useState(0);
 
-  const {
-    shimmerDuration,
-    isWebShimmer,
-    webShimmerPeakWidth,
-    webShimmerTrackStart,
-    webShimmerTrackEnd,
-  } = computeShimmerMetrics({
-    label,
-    secondaryLabel,
-    isLoading,
-    labelOffsetX,
-    labelWidth,
-    secondaryOffsetX,
-    secondaryWidth,
-  });
+  const { shimmerDuration, webShimmerPeakWidth, webShimmerTrackStart, webShimmerTrackEnd } =
+    computeShimmerMetrics({
+      label,
+      secondaryLabel,
+      labelOffsetX,
+      labelWidth,
+      secondaryOffsetX,
+      secondaryWidth,
+    });
 
   const handleLabelLayout = useCallback((event: LayoutChangeEvent) => {
     const { x, width } = event.nativeEvent.layout;
@@ -2594,11 +2564,11 @@ export const ExpandableBadge = memo(function ExpandableBadge({
   );
 
   useEffect(() => {
-    if (!isWebShimmer) {
+    if (!isLoading) {
       return;
     }
     ensureWebToolCallShimmerKeyframes();
-  }, [isWebShimmer]);
+  }, [isLoading]);
 
   useDetailWheelPropagationBlocker({
     detailWrapperRef,
@@ -2608,7 +2578,7 @@ export const ExpandableBadge = memo(function ExpandableBadge({
   const shimmerLabelStyle = useMemo<StyleProp<TextStyle>>(
     () =>
       buildShimmerTextStyle({
-        isWebShimmer,
+        isLoading,
         webShimmerPeakWidth,
         shimmerDuration,
         webShimmerTrackStart,
@@ -2616,7 +2586,7 @@ export const ExpandableBadge = memo(function ExpandableBadge({
         offsetX: labelOffsetX,
       }),
     [
-      isWebShimmer,
+      isLoading,
       webShimmerPeakWidth,
       shimmerDuration,
       webShimmerTrackStart,
@@ -2628,7 +2598,7 @@ export const ExpandableBadge = memo(function ExpandableBadge({
   const shimmerSecondaryStyle = useMemo<StyleProp<TextStyle>>(
     () =>
       buildShimmerTextStyle({
-        isWebShimmer,
+        isLoading,
         webShimmerPeakWidth,
         shimmerDuration,
         webShimmerTrackStart,
@@ -2636,7 +2606,7 @@ export const ExpandableBadge = memo(function ExpandableBadge({
         offsetX: secondaryOffsetX,
       }),
     [
-      isWebShimmer,
+      isLoading,
       webShimmerPeakWidth,
       shimmerDuration,
       webShimmerTrackStart,
@@ -2770,7 +2740,7 @@ export const ExpandableBadge = memo(function ExpandableBadge({
             labelStyle={labelStyle}
             secondaryLabel={secondaryLabel}
             secondaryLabelStyle={secondaryLabelStyle}
-            isWebShimmer={isWebShimmer}
+            isLoading={isLoading}
             shimmerLabelTextStyle={shimmerLabelTextStyle}
             shimmerSecondaryTextStyle={shimmerSecondaryTextStyle}
             onLabelLayout={handleLabelLayout}
