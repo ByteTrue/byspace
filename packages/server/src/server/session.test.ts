@@ -4062,20 +4062,24 @@ describe("session workspace script handling", () => {
   test("passes service-owned git metadata into workspace script spawning", async () => {
     const messages: unknown[] = [];
     const workspaceGitService = {
-      peekSnapshot: vi.fn(() => null),
-      getWorkspaceGitMetadata: vi.fn().mockResolvedValue({
-        projectKind: "git",
-        projectDisplayName: "ByteTrue/byspace",
-        workspaceDisplayName: "feature/service-scripts",
-        projectSlug: "byspace",
-        currentBranch: "feature/service-scripts",
-      }),
+      peekSnapshot: vi.fn(() => ({
+        git: {
+          isGit: true,
+          remoteUrl: "https://github.com/ByteTrue/byspace.git",
+          currentBranch: "feature/service-scripts",
+        },
+      })),
     };
     const workspaceRegistry = {
       get: vi.fn().mockResolvedValue({
         workspaceId: "workspace-1",
+        projectId: "project-1",
         cwd: "/tmp/repo",
+        branch: null,
       }),
+    };
+    const projectRegistry = {
+      get: vi.fn().mockResolvedValue(null),
     };
     spawnMocks.spawnWorkspaceScript.mockResolvedValue({
       scriptName: "api",
@@ -4084,6 +4088,7 @@ describe("session workspace script handling", () => {
     const session = createSessionForTest({
       workspaceGitService,
       workspaceRegistry,
+      projectRegistry,
       terminalManager: {
         subscribeTerminalsChanged: vi.fn(() => () => {}),
         subscribeTerminalWorkspaceContributionChanged: vi.fn(() => () => {}),
@@ -4102,8 +4107,8 @@ describe("session workspace script handling", () => {
       requestId: "request-script",
     });
 
-    expect(workspaceGitService.getWorkspaceGitMetadata).toHaveBeenCalledTimes(1);
-    expect(workspaceGitService.getWorkspaceGitMetadata).toHaveBeenCalledWith("/tmp/repo");
+    expect(workspaceGitService.peekSnapshot).toHaveBeenCalledTimes(1);
+    expect(workspaceGitService.peekSnapshot).toHaveBeenCalledWith("/tmp/repo");
     expect(spawnMocks.spawnWorkspaceScript).toHaveBeenCalledWith(
       expect.objectContaining({
         repoRoot: "/tmp/repo",

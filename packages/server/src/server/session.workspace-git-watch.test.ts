@@ -474,7 +474,6 @@ describe("workspace git watch targets", () => {
         onBranchChanged: handleBranchChange,
       },
     );
-    const sessionAny = session as unknown as SessionInternals;
     seedGitWorkspace({
       projects,
       workspaces,
@@ -498,15 +497,6 @@ describe("workspace git watch targets", () => {
       expect.objectContaining({
         hostname: "app--new-branch--byspace.localhost",
         scriptName: "app",
-      }),
-    ]);
-    expect(sessionAny.buildWorkspaceScriptPayloadSnapshot("ws-10", "/tmp/repo")).toEqual([
-      expect.objectContaining({
-        scriptName: "app",
-        hostname: "app--new-branch--byspace.localhost",
-        localProxyUrl: "http://app--new-branch--byspace.localhost:6777",
-        publicProxyUrl: null,
-        proxyUrl: "http://app--new-branch--byspace.localhost:6777",
       }),
     ]);
 

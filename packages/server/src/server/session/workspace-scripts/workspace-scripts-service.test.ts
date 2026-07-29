@@ -146,6 +146,32 @@ describe("buildSnapshot", () => {
     expect(service.buildSnapshot(workspace as PersistedWorkspaceRecord)).toEqual([]);
   });
 
+  test("projects service URLs from the workspace git snapshot", () => {
+    const dir = mkdtempSync(join(tmpdir(), "workspace-scripts-"));
+    tempDirs.push(dir);
+    writeFileSync(
+      join(dir, "byspace.json"),
+      JSON.stringify({ scripts: { web: { type: "service", command: "npm run web", port: 3000 } } }),
+    );
+    const workspace = {
+      workspaceId: "ws-1",
+      projectId: "project-1",
+      cwd: dir,
+      branch: null,
+    } as PersistedWorkspaceRecord;
+    const { service } = buildService({ workspace });
+
+    expect(service.buildSnapshot(workspace)).toEqual([
+      expect.objectContaining({
+        scriptName: "web",
+        hostname: "web--feature-scripts--byspace.localhost",
+        localProxyUrl: "http://web--feature-scripts--byspace.localhost:6777",
+        publicProxyUrl: null,
+        proxyUrl: "http://web--feature-scripts--byspace.localhost:6777",
+      }),
+    ]);
+  });
+
   test("returns no scripts for a workspace without a byspace.json", () => {
     const dir = mkdtempSync(join(tmpdir(), "workspace-scripts-"));
     tempDirs.push(dir);
