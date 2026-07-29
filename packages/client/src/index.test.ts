@@ -39,7 +39,7 @@ class FakeWebSocket {
   }
 
   message(data: string): void {
-    this.onmessage?.(data);
+    this.onmessage?.({ data });
   }
 }
 

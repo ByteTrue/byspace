@@ -80,7 +80,7 @@ function ProviderSubagentPanel() {
   );
   const client = useSessionStore((state) => state.sessions[serverId]?.client ?? null);
   const serverInfo = useSessionStore((state) => state.sessions[serverId]?.serverInfo ?? null);
-  // COMPAT(providerSubagents): added in v0.2.11, remove after 2027-01-12.
+  // COMPAT(providerSubagents): added in v0.2.1, remove after 2027-01-12.
   const supported = serverInfo?.features?.providerSubagents === true;
   const [isLoadingOlder, setIsLoadingOlder] = useState(false);
 
@@ -129,6 +129,9 @@ function ProviderSubagentPanel() {
     target.subagentId,
     timeline,
   ]);
+  const firstTimelineSeq = timeline?.rows.size ? Math.min(...timeline.rows.keys()) : null;
+  const progressKey =
+    timeline?.epoch && firstTimelineSeq !== null ? `${timeline.epoch}:${firstTimelineSeq}` : null;
 
   const streamContext = useMemo<AgentScreenAgent>(
     () => ({
@@ -146,9 +149,10 @@ function ProviderSubagentPanel() {
     () => ({
       hasOlder: timeline?.hasOlder === true,
       isLoadingOlder,
+      progressKey,
       onLoadOlder: loadOlder,
     }),
-    [isLoadingOlder, loadOlder, timeline?.hasOlder],
+    [isLoadingOlder, loadOlder, progressKey, timeline?.hasOlder],
   );
 
   if (serverInfo && !supported) {

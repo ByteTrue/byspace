@@ -1,6 +1,7 @@
 import { useEffect, useRef, useSyncExternalStore } from "react";
 import { useTranslation } from "react-i18next";
 import { Annotation, Compartment, EditorState, Transaction } from "@codemirror/state";
+import { isRenderedMarkdownFile } from "@/components/file-pane-render-mode";
 import { EditorView } from "@codemirror/view";
 import { getLanguageForFile } from "@bytetrue/byspace-highlight";
 import { getCM, vim } from "@replit/codemirror-vim";
@@ -20,8 +21,13 @@ interface FileEditorViewProps {
 }
 
 const languageCompartment = new Compartment();
+const wrappingCompartment = new Compartment();
 const themeCompartment = new Compartment();
 const vimCompartment = new Compartment();
+
+function wrappingForFile(filename: string) {
+  return isRenderedMarkdownFile(filename) ? EditorView.lineWrapping : [];
+}
 
 export function FileEditorView({
   model,
@@ -52,6 +58,7 @@ export function FileEditorView({
           vimCompartment.of(values.vimEnabled ? vim() : []),
           ...editorBaseExtensions(() => void values.model.save()),
           languageCompartment.of(getLanguageForFile(values.filename)?.extension ?? []),
+          wrappingCompartment.of(wrappingForFile(values.filename)),
           themeCompartment.of(editorTheme(values.theme)),
           EditorView.updateListener.of((update) => {
             if (
@@ -106,7 +113,10 @@ export function FileEditorView({
 
   useEffect(() => {
     viewRef.current?.dispatch({
-      effects: languageCompartment.reconfigure(getLanguageForFile(filename)?.extension ?? []),
+      effects: [
+        languageCompartment.reconfigure(getLanguageForFile(filename)?.extension ?? []),
+        wrappingCompartment.reconfigure(wrappingForFile(filename)),
+      ],
     });
   }, [filename]);
 

@@ -75,7 +75,7 @@ describe("OMP agent client and session", () => {
       cwd: "/tmp/byspace-omp-agent-test",
       protocolMode: "rpc-ui",
       modeId: "ask",
-      argv: ["omp", "--mode", "rpc-ui", "--approval-mode", "always-ask", "--thinking", "medium"],
+      argv: ["omp", "--mode", "rpc-ui", "--approval-mode", "always-ask"],
     });
     expect(omp.registeredHostTools()).toEqual([
       [expect.objectContaining({ name: "create_agent" })],
@@ -94,7 +94,7 @@ describe("OMP agent client and session", () => {
       cwd: "/tmp/byspace-omp-agent-test",
       protocolMode: "rpc-ui",
       modeId: "write",
-      argv: ["omp", "--mode", "rpc-ui", "--approval-mode", "write", "--thinking", "medium"],
+      argv: ["omp", "--mode", "rpc-ui", "--approval-mode", "write"],
     });
   });
 
@@ -103,6 +103,21 @@ describe("OMP agent client and session", () => {
     await omp.start({ thinkingOptionId: "max" });
 
     expect(omp.launchConfiguration().argv).toEqual(expect.arrayContaining(["--thinking", "max"]));
+  });
+
+  test("passes --thinking when a thinking option is provided", async () => {
+    const omp = new OmpHarness();
+    await omp.start({ modeId: "ask", thinkingOptionId: "xhigh" }, createToolCatalog());
+
+    expect(omp.launchConfiguration().argv).toEqual([
+      "omp",
+      "--mode",
+      "rpc-ui",
+      "--approval-mode",
+      "always-ask",
+      "--thinking",
+      "xhigh",
+    ]);
   });
 
   test("streams a prompt through completion", async () => {

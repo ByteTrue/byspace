@@ -3,9 +3,18 @@ import path from "node:path";
 import { expect, test, type Page } from "./fixtures";
 import { expectFileTabOpen, openFileExplorer, openFileFromExplorer } from "./helpers/file-explorer";
 import { openSettingsSection } from "./helpers/settings";
+import { openAgentRoute, seedMockAgentWorkspace } from "./helpers/mock-agent";
 
 function editor(page: Page) {
   return page.getByTestId("file-source-editor").filter({ visible: true }).locator(".cm-content");
+}
+
+function hasHorizontalOverflow(element: HTMLElement): boolean {
+  return element.scrollWidth > element.clientWidth;
+}
+
+function fitsViewportWidth(element: HTMLElement): boolean {
+  return element.scrollWidth === element.clientWidth;
 }
 
 function modifiedIndicator(page: Page) {
@@ -27,6 +36,67 @@ async function openWorkspaceFile(page: Page, filename: string): Promise<void> {
 }
 
 test.describe("workspace file editing", () => {
+  test("wraps Markdown while source code remains horizontally scrollable", async ({
+    page,
+    withWorkspace,
+  }) => {
+    const workspace = await withWorkspace({ prefix: "file-editing-wrap-" });
+    const longLine = "word ".repeat(300);
+    await writeFile(path.join(workspace.repoPath, "notes.md"), `${longLine}\n`, "utf8");
+    await writeFile(
+      path.join(workspace.repoPath, "source.ts"),
+      `const value = "${longLine}";\n`,
+      "utf8",
+    );
+    await workspace.navigateTo();
+    await openWorkspaceFile(page, "notes.md");
+    await page.getByTestId("file-mode-source").click();
+
+    const markdownScroller = page
+      .getByTestId("file-source-editor")
+      .filter({ visible: true })
+      .locator(".cm-scroller");
+    await expect.poll(() => markdownScroller.evaluate(fitsViewportWidth)).toBe(true);
+
+    await openWorkspaceFile(page, "source.ts");
+    const sourceScroller = page
+      .getByTestId("file-source-editor")
+      .filter({ visible: true })
+      .locator(".cm-scroller");
+    await expect.poll(() => sourceScroller.evaluate(hasHorizontalOverflow)).toBe(true);
+  });
+
+  test("clicking the editor focuses its pane beside an agent", async ({ page }) => {
+    const session = await seedMockAgentWorkspace({
+      repoPrefix: "file-editing-pane-focus-",
+      title: "Editor pane focus",
+    });
+
+    try {
+      await writeFile(path.join(session.cwd, "target.ts"), "export const target = 42;\n", "utf8");
+      await page.setViewportSize({ width: 1280, height: 900 });
+      await openAgentRoute(page, session);
+
+      await page.getByRole("button", { name: "Split pane right" }).first().click();
+      await expect(page.getByTestId("workspace-tabs-row").filter({ visible: true })).toHaveCount(2);
+      await openWorkspaceFile(page, "target.ts");
+
+      await page
+        .getByTestId(`workspace-tab-agent_${session.agentId}`)
+        .filter({ visible: true })
+        .click();
+      await editor(page).click();
+      await page.keyboard.press("Alt+Shift+W");
+
+      await expect(page.getByTestId("workspace-tab-file_target.ts")).not.toBeVisible();
+      await expect(
+        page.getByTestId(`workspace-tab-agent_${session.agentId}`).filter({ visible: true }),
+      ).toBeVisible();
+    } finally {
+      await session.cleanup();
+    }
+  });
+
   test("autosaves, saves immediately, and resolves external conflicts", async ({
     page,
     withWorkspace,

@@ -26,6 +26,18 @@ dev--feature-auth--miniweb.localhost
 
 Local and public routes use one combined leftmost label (`script--branch--project`). This keeps the hostname compatible with normal single-level wildcard DNS and TLS. If the combined label would exceed DNS's 63-character label limit, BySpace truncates it with a deterministic hash suffix to avoid collisions.
 
+## Managing workspace scripts
+
+Configured `byspace.json` scripts can be managed without addressing their backing terminal directly:
+
+```bash
+byspace script ls [--cwd <path> | --workspace <workspace-id>]
+byspace script start <name> [--cwd <path> | --workspace <workspace-id>]
+byspace script stop <name> [--cwd <path> | --workspace <workspace-id>]
+```
+
+The commands return the same script metadata shown by the workspace: lifecycle, service port, proxy URLs, health, exit code, and supervised terminal ID. `stop` terminates the managed terminal rather than only removing the proxy route, so normal script lifecycle cleanup remains authoritative. MCP exposes matching `list_workspace_scripts`, `start_workspace_script`, and `stop_workspace_script` tools; those require an explicit workspace ID. An agent session with restricted cwd authority may only target its own workspace.
+
 ## Service port allocation
 
 By default, BySpace asks the operating system for a free port. To constrain allocation globally, add `servicePorts` under `worktrees` in `~/.byspace/config.json`:
@@ -118,6 +130,27 @@ server {
     }
 }
 ```
+
+Nginx's `$host` drops the port. If you terminate on a non-default port, use `$http_host` instead so the port survives — that is what "forwards the `Host` header unchanged" means here.
+
+## Forwarded headers
+
+BySpace sets these when it forwards a request to a workspace service:
+
+| Header              | Value                                                                                                                                   |
+| ------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `X-Forwarded-Host`  | The `Host` header verbatim, including the port when the client used one                                                                 |
+| `X-Forwarded-Proto` | The request scheme (`http` on the WebSocket upgrade path)                                                                               |
+| `X-Forwarded-For`   | The immediate peer address. Replaces any existing chain, so behind your own reverse proxy this is the proxy's address, not the client's |
+| `X-Forwarded-Port`  | The port from the `Host` header when it has one, otherwise whatever your proxy already set                                              |
+
+`X-Forwarded-Port` follows the same trust rule as `X-Forwarded-Host`: the authority BySpace observed wins. When the `Host` header carries a port, that port replaces any inbound `X-Forwarded-Port`. When `Host` carries no port there is nothing to derive, so a value your reverse proxy set survives untouched — the case where nginx's `$host` drops the port and `X-Forwarded-Port` is the only source. BySpace never derives the port from the scheme. Services that build absolute URLs should prefer `Host` or `X-Forwarded-Host`.
+
+### The forwarded authority is not authenticated
+
+Route lookup normalizes the port away before matching a service hostname, so a client can address the daemon with any port in `Host` and still reach the service. That port lands in `X-Forwarded-Host` and `X-Forwarded-Port`. BySpace also does not check whether an inbound `X-Forwarded-Port` came from a proxy in `trustedProxies` — when `Host` carries no port, a client-supplied value is passed through.
+
+Treat the forwarded authority as client-influenced input. A service that builds password reset links, absolute redirects, or cached URLs from it should pin its own public origin in configuration rather than deriving one from request headers. This is not specific to `X-Forwarded-Port`: the `Host` header has always carried a client-chosen port.
 
 ## Environment variables
 

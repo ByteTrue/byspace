@@ -42,6 +42,14 @@ Some providers can create their own child sessions inside one provider runtime. 
 
 The provider still owns the underlying runtime. BySpace keeps an agent record so the child can be opened, tracked, archived, and cascaded with the parent, but prompts and history hydration route through the provider adapter for that native child handle.
 
+## Idle runtime collection
+
+The daemon collects an eligible idle runtime after 30 minutes and sweeps every minute. Only unarchived, non-internal agents that are exactly `idle`, have no active or pending run, replacement, or permission, and have not been activated during the idle window are eligible. `running`, `initializing`, and `error` agents stay resident.
+
+An idle parent also stays resident while current in-memory state shows a running managed child or provider subagent. Closing a parent runtime marks any still-running provider-owned subagents as canceled before persistence, so stale provider-child state cannot keep a later resumed parent resident forever. Otherwise agents are evaluated independently; collection does not cascade or change parentage.
+
+Active schedules targeting an existing agent protect that agent from collection. Paused, completed, and new-agent schedules do not. A pane may remain open after collection; its next prompt resumes the durable provider session through `ensureAgentLoaded()` with the same BySpace agent ID.
+
 ## Archive
 
 Archive is a **soft delete**: the agent record stays on disk with `archivedAt` set, the runtime is closed, and the agent disappears from active lists. Archive is **global** — it lives on the server and propagates to every connected client.

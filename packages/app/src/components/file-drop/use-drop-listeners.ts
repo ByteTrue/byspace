@@ -3,7 +3,7 @@ import type { RefObject } from "react";
 import type { SharedValue } from "react-native-reanimated";
 import type { ImageAttachment } from "@/composer/types";
 import { persistAttachmentFromBlob } from "@/attachments/service";
-import { isRasterImageFile } from "@/attachments/file-types";
+import { isRasterImageFile, resolveRasterImageMimeType } from "@/attachments/file-types";
 import { isWeb } from "@/constants/platform";
 import type { DroppedItem, FileDropSink } from "./types";
 import {
@@ -12,9 +12,13 @@ import {
 } from "@/attachments/workspace-file-drag";
 
 async function fileToImageAttachment(file: File): Promise<ImageAttachment> {
+  const mimeType = resolveRasterImageMimeType({ mimeType: file.type, path: file.name });
+  if (!mimeType) {
+    throw new Error(`Unsupported image type for '${file.name}'.`);
+  }
   return await persistAttachmentFromBlob({
     blob: file,
-    mimeType: file.type || "image/jpeg",
+    mimeType,
     fileName: file.name,
   });
 }

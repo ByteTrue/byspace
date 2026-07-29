@@ -20,6 +20,11 @@ import { useAggregatedAgents, type AggregatedAgent } from "@/hooks/use-aggregate
 import { useKeyboardShortcutOverrides } from "@/hooks/use-keyboard-shortcut-overrides";
 import { useOpenAddProject } from "@/hooks/use-open-add-project";
 import { useProjects } from "@/hooks/use-projects";
+import {
+  OverlayLayerProvider,
+  useGlobalWebOverlayLayer,
+  useWebOverlayRegistration,
+} from "@/lib/overlay-root";
 import { useHosts } from "@/runtime/host-runtime";
 import { useKeyboardShortcutsStore } from "@/stores/keyboard-shortcuts-store";
 import { navigateToWorkspace } from "@/stores/navigation-active-workspace-store";
@@ -41,6 +46,7 @@ import type { CommandCenterContribution, CommandCenterIconProps } from "./contri
 import { useCommandCenterActions, useCommandCenterContributions } from "./provider";
 import {
   buildContributionSections,
+  joinSubtitleParts,
   moveActiveResultId,
   preserveActiveResultId,
   projectCommandCenterRows,
@@ -188,7 +194,7 @@ function useBuiltInSections(open: boolean, query: string): CommandCenterResultSe
   const { t } = useTranslation();
   const { agents } = useAggregatedAgents();
   const { projects } = useProjects({ enabled: open });
-  const showAgentHost = useHosts().length > 1;
+  const showHost = useHosts().length > 1;
 
   return useMemo(() => {
     if (!open) return [];
@@ -198,9 +204,11 @@ function useBuiltInSections(open: boolean, query: string): CommandCenterResultSe
         for (const workspace of host.workspaces) {
           if (workspace.archivingAt) continue;
           const title = workspace.title ?? workspace.name;
-          const subtitle = workspace.currentBranch
-            ? `${host.serverName} · ${workspace.currentBranch}`
-            : host.serverName;
+          const subtitle = joinSubtitleParts([
+            showHost ? host.serverName : null,
+            project.projectName,
+            workspace.currentBranch,
+          ]);
           const searchText = `${title} ${subtitle}`.toLowerCase();
           allWorkspaces.push({
             kind: "workspace",
@@ -236,13 +244,11 @@ function useBuiltInSections(open: boolean, query: string): CommandCenterResultSe
           ? workspaceTitleByKey.get(`${agent.serverId}:${agent.workspaceId}`)
           : undefined;
         const location = workspaceTitle ?? shortenPath(agent.cwd);
-        const subtitle = [
-          showAgentHost ? agent.serverLabel : null,
+        const subtitle = joinSubtitleParts([
+          showHost ? agent.serverLabel : null,
           location,
           formatTimeAgo(agent.lastActivityAt),
-        ]
-          .filter((part): part is string => Boolean(part))
-          .join(" · ");
+        ]);
         return {
           kind: "agent",
           id: `agent:${agent.serverId}:${agent.id}`,
@@ -267,7 +273,7 @@ function useBuiltInSections(open: boolean, query: string): CommandCenterResultSe
       },
       { id: "agents", rank: 3, title: t("shell.commandCenter.agents"), results: agentResults },
     ];
-  }, [agents, open, projects, query, showAgentHost, t]);
+  }, [agents, open, projects, query, showHost, t]);
 }
 
 interface CommandCenterState {
@@ -356,15 +362,6 @@ function useCommandCenterState(): CommandCenterState {
     return cancel;
   }, [open]);
 
-  useEffect(() => {
-    if (!open || !isWeb) return;
-    const listener = (event: KeyboardEvent) => {
-      if (key(event.key)) event.preventDefault();
-    };
-    window.addEventListener("keydown", listener, true);
-    return () => window.removeEventListener("keydown", listener, true);
-  }, [key, open]);
-
   return {
     open,
     query,
@@ -446,7 +443,11 @@ function ResultContent({ result }: { result: CommandCenterResult }) {
             <Text style={styles.title} numberOfLines={1}>
               {result.title}
             </Text>
-            <Text style={styles.subtitle} numberOfLines={1}>
+            <Text
+              style={styles.subtitle}
+              numberOfLines={1}
+              testID="command-center-workspace-subtitle"
+            >
               {result.subtitle}
             </Text>
           </View>
@@ -531,6 +532,7 @@ function SectionRow({ row }: { row: Extract<CommandCenterListRow, { kind: "secti
 export function CommandCenter() {
   const { t } = useTranslation();
   const state = useCommandCenterState();
+  const modalLayer = useGlobalWebOverlayLayer("modal", isWeb && state.open);
   const listRef = useRef<FlatList<CommandCenterListRow>>(null);
 
   useEffect(() => {
@@ -578,29 +580,44 @@ export function CommandCenter() {
     maxToRenderPerBatch: 10,
     windowSize: 5,
   };
+  const handleWebOverlayKeyDown = useCallback(
+    (event: KeyboardEvent) => {
+      if (!state.key(event.key)) return false;
+      event.preventDefault();
+      return true;
+    },
+    [state],
+  );
+  const setWebOverlayScope = useWebOverlayRegistration({
+    active: isWeb && state.open,
+    layer: modalLayer,
+    onKeyDown: handleWebOverlayKeyDown,
+  });
   if (!state.open) return null;
   return (
-    <Modal visible transparent animationType="fade" onRequestClose={state.close}>
-      <View style={styles.overlay}>
-        <Pressable style={styles.backdrop} onPress={state.close} />
-        <View testID="command-center-panel" style={styles.panel}>
-          <View style={styles.header}>
-            <ThemedTextInput
-              testID="command-center-input"
-              ref={state.inputRef}
-              value={state.query}
-              onChangeText={state.setQuery}
-              placeholder={t("shell.commandCenter.placeholder")}
-              style={styles.input}
-              autoCapitalize="none"
-              autoCorrect={false}
-              autoFocus
-            />
+    <OverlayLayerProvider layer={modalLayer}>
+      <Modal visible transparent animationType="fade" onRequestClose={state.close}>
+        <View style={styles.overlay}>
+          <Pressable style={styles.backdrop} onPress={state.close} />
+          <View ref={setWebOverlayScope} testID="command-center-panel" style={styles.panel}>
+            <View style={styles.header}>
+              <ThemedTextInput
+                testID="command-center-input"
+                ref={state.inputRef}
+                value={state.query}
+                onChangeText={state.setQuery}
+                placeholder={t("shell.commandCenter.placeholder")}
+                style={styles.input}
+                autoCapitalize="none"
+                autoCorrect={false}
+                autoFocus
+              />
+            </View>
+            <FlatList ref={listRef} style={styles.results} {...commonListProps} />
           </View>
-          <FlatList ref={listRef} style={styles.results} {...commonListProps} />
         </View>
-      </View>
-    </Modal>
+      </Modal>
+    </OverlayLayerProvider>
   );
 }
 

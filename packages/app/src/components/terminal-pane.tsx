@@ -1,11 +1,6 @@
+import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import {
-  ActivityIndicator,
-  Pressable,
-  Text,
-  View,
-  type PressableStateCallbackType,
-} from "react-native";
+import { Pressable, Text, View, type PressableStateCallbackType } from "react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { encodeTerminalKeyInput } from "@bytetrue/byspace-protocol/terminal-key-input";
 import type { TerminalInputModeState } from "@bytetrue/byspace-protocol/terminal-input-mode";
@@ -835,7 +830,7 @@ export function TerminalPane({
 
         {showLoadingOverlay ? (
           <View style={styles.attachOverlay} pointerEvents="none" testID="terminal-attach-loading">
-            <ActivityIndicator size="small" color={theme.colors.foregroundMuted} />
+            <LoadingSpinner size="small" color={theme.colors.foregroundMuted} />
           </View>
         ) : null}
       </View>

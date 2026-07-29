@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pino } from "pino";
@@ -6,8 +6,11 @@ import { afterEach, describe, expect, test } from "vitest";
 import type { SessionOutboundMessage, StartWorkspaceScriptRequest } from "../../messages.js";
 import { createServiceProxySubsystem, type ServiceProxySubsystem } from "../../service-proxy.js";
 import type { TerminalManager } from "../../../terminal/terminal-manager.js";
-import type { PersistedWorkspaceRecord, WorkspaceRegistry } from "../../workspace-registry.js";
-import type { WorkspaceGitMetadata } from "../../workspace-git-metadata.js";
+import type {
+  PersistedWorkspaceRecord,
+  ProjectRegistry,
+  WorkspaceRegistry,
+} from "../../workspace-registry.js";
 import { WorkspaceScriptRuntimeStore } from "../../workspace-script-runtime-store.js";
 import type {
   SpawnWorkspaceScriptOptions,
@@ -15,24 +18,10 @@ import type {
 } from "../../worktree-bootstrap.js";
 import { createWorkspaceScriptsService } from "./workspace-scripts-service.js";
 
-// The production module reads only WorkspaceGitService.{peekSnapshot,getWorkspaceGitMetadata},
-// WorkspaceRegistry.get, and forwards the launcher + opaque managers to the injected
-// spawnWorkspaceScript port. The fakes below implement exactly that slice; the service proxy and
-// runtime store are the real in-memory implementations, and spawning is injected so no process runs.
+// The production module reads only WorkspaceGitService.peekSnapshot and the two registries' get
+// methods, then forwards the launcher and opaque managers to the injected spawn port.
 
 const logger = pino({ level: "silent" });
-
-const gitMetadata: WorkspaceGitMetadata = {
-  projectKind: "git",
-  projectDisplayName: "repo",
-  workspaceDisplayName: "repo",
-  gitRemote: null,
-  isWorktree: false,
-  projectSlug: "byspace",
-  repoRoot: "/tmp/repo",
-  currentBranch: "feature/scripts",
-  remoteUrl: null,
-};
 
 function fakeWorkspaceRegistry(
   record: PersistedWorkspaceRecord | null,
@@ -44,13 +33,24 @@ function fakeWorkspaceRegistry(
   };
 }
 
-function fakeGitService(metadata: WorkspaceGitMetadata = gitMetadata) {
+function fakeProjectRegistry(): Pick<ProjectRegistry, "get"> {
   return {
-    peekSnapshot() {
+    async get() {
       return null;
     },
-    async getWorkspaceGitMetadata() {
-      return metadata;
+  };
+}
+
+function fakeGitService() {
+  return {
+    peekSnapshot() {
+      return {
+        git: {
+          isGit: true,
+          remoteUrl: "git@github.com:bytetrue/byspace.git",
+          currentBranch: "feature/scripts",
+        },
+      };
     },
   };
 }
@@ -72,7 +72,12 @@ function buildService(options: BuildOptions = {}) {
   const spawnCalls: SpawnWorkspaceScriptOptions[] = [];
   const workspace =
     options.workspace === undefined
-      ? ({ workspaceId: "ws-1", cwd: "/tmp/repo" } as PersistedWorkspaceRecord)
+      ? ({
+          workspaceId: "ws-1",
+          projectId: "project-1",
+          cwd: "/tmp/repo",
+          branch: "feature/scripts",
+        } as PersistedWorkspaceRecord)
       : options.workspace;
 
   const service = createWorkspaceScriptsService({
@@ -87,6 +92,7 @@ function buildService(options: BuildOptions = {}) {
     terminalManager:
       options.terminalManager === undefined ? availableTerminalManager : options.terminalManager,
     workspaceRegistry: fakeWorkspaceRegistry(workspace),
+    projectRegistry: fakeProjectRegistry(),
     workspaceGitService: fakeGitService(),
     getDaemonTcpPort: () => 6777,
     getDaemonTcpHost: () => "127.0.0.1",
@@ -109,7 +115,7 @@ function buildService(options: BuildOptions = {}) {
     },
   });
 
-  return { service, emitted, spawnCalls };
+  return { service, emitted, spawnCalls, workspace };
 }
 
 const request: StartWorkspaceScriptRequest = {
@@ -131,30 +137,89 @@ afterEach(() => {
 
 describe("buildSnapshot", () => {
   test("returns no scripts when the service proxy is unavailable", () => {
-    const { service } = buildService({ serviceProxy: null });
-    expect(service.buildSnapshot("ws-1", "/tmp/repo")).toEqual([]);
+    const { service, workspace } = buildService({ serviceProxy: null });
+    expect(service.buildSnapshot(workspace as PersistedWorkspaceRecord)).toEqual([]);
   });
 
   test("returns no scripts when the runtime store is unavailable", () => {
-    const { service } = buildService({ scriptRuntimeStore: null });
-    expect(service.buildSnapshot("ws-1", "/tmp/repo")).toEqual([]);
+    const { service, workspace } = buildService({ scriptRuntimeStore: null });
+    expect(service.buildSnapshot(workspace as PersistedWorkspaceRecord)).toEqual([]);
   });
 
   test("returns no scripts for a workspace without a byspace.json", () => {
     const dir = mkdtempSync(join(tmpdir(), "workspace-scripts-"));
     tempDirs.push(dir);
-    const { service } = buildService();
-    expect(service.buildSnapshot("ws-1", dir)).toEqual([]);
+    const workspace = {
+      workspaceId: "ws-1",
+      projectId: "project-1",
+      cwd: dir,
+      branch: null,
+    } as PersistedWorkspaceRecord;
+    const { service } = buildService({ workspace });
+    expect(service.buildSnapshot(workspace)).toEqual([]);
   });
 });
 
 describe("emitStatusUpdate", () => {
-  test("emits one script_status_update carrying the snapshot", () => {
+  test("emits one script_status_update carrying the snapshot", async () => {
     const { service, emitted } = buildService();
-    service.emitStatusUpdate("ws-1", "/tmp/repo");
+    await service.emitStatusUpdate("ws-1", "/tmp/repo");
     expect(emitted).toEqual([
       { type: "script_status_update", payload: { workspaceId: "ws-1", scripts: [] } },
     ]);
+  });
+});
+
+describe("stop", () => {
+  test("kills the supervised terminal and returns the stopped service metadata", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "workspace-scripts-"));
+    tempDirs.push(dir);
+    writeFileSync(
+      join(dir, "byspace.json"),
+      JSON.stringify({ scripts: { web: { type: "service", command: "npm run web", port: 3000 } } }),
+    );
+    const runtimeStore = new WorkspaceScriptRuntimeStore();
+    runtimeStore.set({
+      workspaceId: "ws-1",
+      scriptName: "web",
+      type: "service",
+      lifecycle: "running",
+      terminalId: "terminal-1",
+      exitCode: null,
+    });
+    const terminalManager = {
+      getTerminal: (terminalId: string) => (terminalId === "terminal-1" ? {} : undefined),
+      async killTerminalAndWait(terminalId: string) {
+        expect(terminalId).toBe("terminal-1");
+        runtimeStore.set({
+          workspaceId: "ws-1",
+          scriptName: "web",
+          type: "service",
+          lifecycle: "stopped",
+          terminalId,
+          exitCode: 143,
+        });
+      },
+    } as unknown as TerminalManager;
+    const { service } = buildService({
+      workspace: {
+        workspaceId: "ws-1",
+        projectId: "project-1",
+        cwd: dir,
+        branch: null,
+      } as PersistedWorkspaceRecord,
+      scriptRuntimeStore: runtimeStore,
+      terminalManager,
+    });
+
+    await expect(service.stop({ workspaceId: "ws-1", scriptName: "web" })).resolves.toMatchObject({
+      scriptName: "web",
+      type: "service",
+      port: 3000,
+      lifecycle: "stopped",
+      exitCode: 143,
+      terminalId: "terminal-1",
+    });
   });
 });
 
@@ -190,6 +255,32 @@ describe("start", () => {
           scriptName: "app",
           terminalId: null,
           error: "Workspace not found: ws-1",
+        },
+      },
+    ]);
+  });
+
+  test("reports an error when the workspace is archived", async () => {
+    const { service, emitted, spawnCalls } = buildService({
+      workspace: {
+        workspaceId: "ws-1",
+        projectId: "project-1",
+        cwd: "/tmp/repo",
+        branch: "feature/scripts",
+        archivedAt: "2026-07-29T00:00:00.000Z",
+      } as PersistedWorkspaceRecord,
+    });
+    await service.start(request);
+    expect(spawnCalls).toEqual([]);
+    expect(emitted).toEqual([
+      {
+        type: "start_workspace_script_response",
+        payload: {
+          requestId: "req-1",
+          workspaceId: "ws-1",
+          scriptName: "app",
+          terminalId: null,
+          error: "Workspace is archived: ws-1",
         },
       },
     ]);

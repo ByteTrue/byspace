@@ -1,3 +1,4 @@
+import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import React, {
   useCallback,
   useEffect,
@@ -8,13 +9,7 @@ import React, {
 } from "react";
 import type { DaemonClient, FileReadResult } from "@bytetrue/byspace-client/internal/daemon-client";
 import type { FileVersion } from "@bytetrue/byspace-protocol/messages";
-import {
-  ActivityIndicator,
-  Image as RNImage,
-  ScrollView as RNScrollView,
-  Text,
-  View,
-} from "react-native";
+import { Image as RNImage, ScrollView as RNScrollView, Text, View } from "react-native";
 import { StyleSheet, UnistylesRuntime, withUnistyles } from "react-native-unistyles";
 import { useTranslation } from "react-i18next";
 import { MarkdownRenderer } from "@/components/markdown/renderer";
@@ -46,6 +41,11 @@ import { confirmDialog } from "@/utils/confirm-dialog";
 import { usePublishPanelInstanceAttributes } from "@/panels/panel-instance-attributes";
 import { AppearanceStyleBoundary } from "@/components/appearance-style-boundary";
 import type { Theme } from "@/styles/theme";
+
+const ThemedLoadingSpinner = withUnistyles(LoadingSpinner);
+const foregroundMutedColorMapping = (theme: Theme) => ({
+  color: theme.colors.foregroundMuted,
+});
 
 interface CodeLineProps {
   tokens: HighlightToken[];
@@ -266,7 +266,7 @@ function FilePreviewBody({
   if (isLoading && !preview) {
     return (
       <View style={styles.centerState}>
-        <ActivityIndicator size="small" />
+        <ThemedLoadingSpinner size="small" uniProps={foregroundMutedColorMapping} />
         <Text style={styles.loadingText}>{t("panels.file.loading")}</Text>
       </View>
     );
@@ -348,7 +348,7 @@ function FilePreviewBody({
     if (!imagePreviewUri) {
       return (
         <View style={styles.centerState}>
-          <ActivityIndicator size="small" />
+          <ThemedLoadingSpinner size="small" uniProps={foregroundMutedColorMapping} />
           <Text style={styles.loadingText}>{t("panels.file.loading")}</Text>
         </View>
       );

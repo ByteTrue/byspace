@@ -17,6 +17,7 @@ import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import type { AgentProvider } from "@bytetrue/byspace-protocol/agent-types";
 import type { SheetHeader } from "@/components/adaptive-modal-sheet";
 import { useProviderSettingsStore } from "@/stores/provider-settings-store";
+import { useCurrentOverlayLayer } from "@/lib/overlay-root";
 import { Button } from "@/components/ui/button";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
 import {
@@ -620,6 +621,7 @@ export function CombinedModelSelector({
   triggerFill = false,
 }: CombinedModelSelectorProps) {
   const { t } = useTranslation();
+  const overlayParentLayer = useCurrentOverlayLayer();
   const anchorRef = useRef<View>(null);
   const [isOpen, setIsOpen] = useState(false);
   const [isContentReady, setIsContentReady] = useState(platformIsWeb);
@@ -773,8 +775,10 @@ export function CombinedModelSelector({
 
   const openProviderSettings = useCallback(() => {
     if (!serverId || view.kind !== "provider") return;
-    useProviderSettingsStore.getState().open({ serverId, provider: view.providerId });
-  }, [serverId, view]);
+    useProviderSettingsStore
+      .getState()
+      .open({ serverId, provider: view.providerId, overlayParentLayer });
+  }, [overlayParentLayer, serverId, view]);
 
   const sheetHeader = useMemo<SheetHeader>(() => {
     if (view.kind === "all") {

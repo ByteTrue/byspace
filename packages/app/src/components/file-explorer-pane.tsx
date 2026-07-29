@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, type ReactElement, type RefObj
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import {
-  ActivityIndicator,
   FlatList,
   ListRenderItemInfo,
   Pressable,
@@ -12,7 +11,7 @@ import {
   type StyleProp,
   type ViewStyle,
 } from "react-native";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { StyleSheet, useUnistyles, withUnistyles } from "react-native-unistyles";
 import { WORKSPACE_SECONDARY_HEADER_HEIGHT } from "@/constants/layout";
 import * as Clipboard from "expo-clipboard";
 import { SvgXml } from "react-native-svg";
@@ -49,12 +48,18 @@ import { filterVisibleExplorerEntries, isHiddenExplorerPath } from "@/file-explo
 import { useWorkspaceFileDragSource } from "@/attachments/use-workspace-file-drag-source";
 import { addWorkspaceFileToFocusedChat } from "@/composer/add-workspace-file-to-chat";
 import { useToast } from "@/contexts/toast-context";
+import type { Theme } from "@/styles/theme";
 
 const SORT_OPTIONS: { value: SortOption }[] = [
   { value: "name" },
   { value: "modified" },
   { value: "size" },
 ];
+
+const ThemedLoadingSpinner = withUnistyles(LoadingSpinner);
+const foregroundMutedColorMapping = (theme: Theme) => ({
+  color: theme.colors.foregroundMuted,
+});
 
 function formatFileSize({ size }: { size: number }): string {
   if (size < 1024) {
@@ -177,7 +182,9 @@ function TreeRowItem({
             if (!isDirectory) {
               return <SvgXml xml={getFileIconSvg(entry.name)} width={16} height={16} />;
             }
-            if (loading) return <ActivityIndicator size="small" />;
+            if (loading) {
+              return <ThemedLoadingSpinner size={12} uniProps={foregroundMutedColorMapping} />;
+            }
             return <TreeChevron expanded={isExpanded} />;
           })()}
         </View>
@@ -615,7 +622,7 @@ function FileExplorerPaneContent(props: FileExplorerPaneContentProps) {
   if (showInitialLoading) {
     return (
       <View style={styles.centerState}>
-        <ActivityIndicator size="small" />
+        <ThemedLoadingSpinner size="small" uniProps={foregroundMutedColorMapping} />
         <Text style={styles.loadingText}>{t("workspace.fileExplorer.states.loading")}</Text>
       </View>
     );

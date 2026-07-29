@@ -89,7 +89,7 @@ export async function pickAndPersistImages(input: {
     result.map((picked) =>
       input.persister.persistFromBlob({
         blob: picked.source.blob,
-        mimeType: picked.mimeType || "image/jpeg",
+        mimeType: picked.mimeType,
         fileName: picked.fileName ?? null,
       }),
     ),

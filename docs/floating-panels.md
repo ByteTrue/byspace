@@ -31,6 +31,12 @@ A portaled subtree can outlive the visible screen or pane that opened it. Gate
 `visible` on the owning screen's focus signal. Inside an agent pane, include
 `isPaneFocused` in that condition.
 
+The shared overlay scale is relative for interactive surfaces: a base floating panel is below a base modal, while a floating panel rendered from inside a modal inherits that modal's layer and paints above it. Wrap portal content in `OverlayLayerProvider`; do not assign one global menu z-index. Web comboboxes must use `overlay-root` too. Rendering them through React Native Web's `<Modal>` puts them in the browser top layer, where no ordinary modal portal can cover them.
+
+Painting and keyboard ownership use the same relative layer model. Register modal, combobox, and dropdown focus scopes with `useWebOverlayRegistration`; the highest painted scope alone receives overlay keys, traps focus, and restores focus when it closes. Do not add component-local global Escape listeners: two stacked overlays would both close on one keypress.
+
+If an overlay is rendered by a global host rather than beneath its opener in the React tree, carry the opener's current layer through the host store and restore it with `OverlayLayerProvider`. Otherwise painting and keyboard ownership silently reset at the app root. When the opener is a global keyboard action and has no component context to carry, resolve the host layer with `useGlobalWebOverlayLayer` on its closed-to-open transition. It captures the current top registered layer before the new host joins the stack; do not give a global dialog a fixed root-derived modal layer.
+
 ## Measurement and coordinates
 
 `measureInWindow` returns window coordinates, while a Portal renders in its

@@ -5,9 +5,9 @@ BySpace synchronizes with Paseo by porting the aggregate delta between two froze
 ## Current baseline
 
 - Upstream: `https://github.com/getpaseo/paseo`
-- Integrated source release: `v0.2.0`
-- Integrated source commit: `d98c5e77f77fbf386553eeeaf85177a3d374ef90`
-- Integrated source tree: `46a01d6c6e3533dbd65d4819d498b9452d6146a7`
+- Integrated source release: `v0.2.3`
+- Integrated source commit: `43cf858c3760679ec9be805ba8b903cdf20f7103`
+- Integrated source tree: `54f51bd995bccf77d77ea3e33df4c39d37c033b2`
 
 Update this marker and the matching marker in `docs/release.md` only after a sync is fully implemented and verified.
 

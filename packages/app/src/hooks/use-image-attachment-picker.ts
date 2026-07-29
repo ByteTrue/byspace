@@ -1,30 +1,35 @@
 import { useCallback, useRef } from "react";
 import { useTranslation } from "react-i18next";
-import type { PickedImageAttachmentInput } from "@/hooks/image-attachment-picker";
+import {
+  normalizePickedImageFiles,
+  type PickedImageAttachmentInput,
+} from "@/hooks/image-attachment-picker";
 
 interface UseImageAttachmentPickerResult {
   pickImages: () => Promise<PickedImageAttachmentInput[] | null>;
 }
 
+const RASTER_IMAGE_ACCEPT = "image/png,image/jpeg,image/gif,image/webp,.png,.jpg,.jpeg,.gif,.webp";
+
 function pickImagesWithWebInput(): Promise<PickedImageAttachmentInput[] | null> {
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     const input = document.createElement("input");
     input.type = "file";
-    input.accept = "image/*";
+    input.accept = RASTER_IMAGE_ACCEPT;
     input.multiple = true;
     input.style.display = "none";
     input.addEventListener("change", () => {
       const files = Array.from(input.files ?? []);
       input.remove();
-      resolve(
-        files.length === 0
-          ? null
-          : files.map((file) => ({
-              source: { kind: "blob" as const, blob: file },
-              mimeType: file.type || null,
-              fileName: file.name,
-            })),
-      );
+      if (files.length === 0) {
+        resolve(null);
+        return;
+      }
+      try {
+        resolve(normalizePickedImageFiles(files));
+      } catch (error) {
+        reject(error);
+      }
     });
     input.addEventListener("cancel", () => {
       input.remove();

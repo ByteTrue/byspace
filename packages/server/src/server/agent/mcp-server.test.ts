@@ -3305,8 +3305,80 @@ describe("workspace automation MCP tools", () => {
   });
 });
 
+describe("workspace script MCP tools", () => {
+  const logger = createTestLogger();
+
+  it.each([
+    ["list_workspace_scripts", { workspaceId: "wks_other" }],
+    ["start_workspace_script", { workspaceId: "wks_other", scriptName: "dev" }],
+    ["stop_workspace_script", { workspaceId: "wks_other", scriptName: "dev" }],
+  ])("rejects restricted cross-workspace access through %s", async (toolName, input) => {
+    const { agentManager, agentStorage, spies } = createTestDeps();
+    spies.agentManager.getAgent.mockReturnValue(
+      createManagedAgent({
+        id: "restricted-agent",
+        cwd: REPO_CWD,
+        workspaceId: "wks_allowed",
+      }),
+    );
+    const workspaceScripts = {
+      list: vi.fn().mockResolvedValue([]),
+      launch: vi.fn(),
+      stop: vi.fn(),
+    };
+    const server = await createAgentMcpServer({
+      agentManager,
+      agentStorage,
+      providerSnapshotManager: createOpenCodeManager().manager,
+      callerAgentId: "restricted-agent",
+      resolveCallerContext: () => ({ allowCustomCwd: false }),
+      workspaceScripts,
+      logger,
+    });
+
+    await expect(
+      invokeToolWithParsedInput(registeredTool(server, toolName), input),
+    ).rejects.toThrow("Workspace wks_other does not belong to caller restricted-agent");
+    expect(workspaceScripts.list).not.toHaveBeenCalled();
+    expect(workspaceScripts.launch).not.toHaveBeenCalled();
+    expect(workspaceScripts.stop).not.toHaveBeenCalled();
+  });
+});
+
 describe("rename_workspace MCP tool", () => {
   const logger = createTestLogger();
+
+  it("rejects an explicit workspace outside a restricted caller workspace", async () => {
+    const { agentManager, agentStorage, spies } = createTestDeps();
+    spies.agentManager.getAgent.mockReturnValue(
+      createManagedAgent({
+        id: "restricted-agent",
+        cwd: REPO_CWD,
+        workspaceId: "wks_allowed",
+      }),
+    );
+    const server = await createAgentMcpServer({
+      agentManager,
+      agentStorage,
+      providerSnapshotManager: createOpenCodeManager().manager,
+      callerAgentId: "restricted-agent",
+      resolveCallerContext: () => ({ allowCustomCwd: false }),
+      workspaceRegistry: {
+        get: async () => null,
+        update: async () => null,
+        upsert: async () => {},
+      },
+      emitWorkspaceUpdatesForWorkspaceIds: async () => {},
+      logger,
+    });
+
+    await expect(
+      invokeToolWithParsedInput(registeredTool(server, "rename_workspace"), {
+        workspaceId: "wks_other",
+        title: "Other",
+      }),
+    ).rejects.toThrow("Workspace wks_other does not belong to caller restricted-agent");
+  });
 
   it("renames the caller workspace when workspaceId is omitted", async () => {
     const { agentManager, agentStorage, spies } = createTestDeps();

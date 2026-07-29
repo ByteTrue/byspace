@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Adds bounded high-water-mark handling, binary E2EE Relay frames, and backpressured large-file transfer with preserved image formats.
+- Updates Claude, OMP, and child-agent lifecycle behavior, including Opus 5 context variants and parent retention while child agents run.
+- Adds workspace script management to the daemon, CLI, and MCP, and preserves public service-proxy ports across restarts.
+- Improves Web history pagination, project search, sidebar shortcuts, terminal tab actions, file-editor focus, and Provider overlays.
+
 ## 0.2.1 - 2026-07-25
 
 - Adds conflict-safe Web file editing with BOM/CRLF preservation, live updates, attachments, and optional Vim keybindings.

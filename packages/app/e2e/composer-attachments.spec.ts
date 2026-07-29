@@ -173,6 +173,30 @@ test.describe("Composer attachments", () => {
     await expectAttachmentPill(page, "composer-image-attachment-pill");
   });
 
+  test("unsupported image selection reports an error and leaves no pending attachment", async ({
+    page,
+    withWorkspace,
+  }) => {
+    test.setTimeout(60_000);
+    const workspace = await withWorkspace({ prefix: "attach-unsupported-image-" });
+    await workspace.navigateTo();
+    await clickNewChat(page);
+    await expectComposerVisible(page);
+
+    const dialogPromise = page.waitForEvent("dialog", { timeout: 10_000 });
+    const attaching = attachImageFromMenu(page, {
+      name: "vector.svg",
+      mimeType: "image/svg+xml",
+      buffer: Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"/>'),
+    });
+    const dialog = await dialogPromise;
+    expect(dialog.message()).toBe("Failed to select image");
+    await dialog.dismiss();
+    await attaching;
+
+    await expect(page.getByTestId("composer-image-attachment-pill")).toHaveCount(0);
+  });
+
   test("dropped JSON file renders as a file attachment in active chat", async ({
     page,
     withWorkspace,
