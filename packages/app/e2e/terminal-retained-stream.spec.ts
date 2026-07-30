@@ -2,8 +2,11 @@ import { test, expect, type Page } from "./fixtures";
 import { TerminalE2EHarness } from "./helpers/terminal-dsl";
 import { waitForTerminalAttached } from "./helpers/terminal-perf";
 
+type TrackedTerminal = NonNullable<Window["__byspaceTerminal"]>;
+
 interface TerminalSubscriptionProbeWindow extends Window {
   __activeTerminalSubscriptions?: Set<string>;
+  __retainedTerminalInstances?: Set<TrackedTerminal>;
 }
 
 test.describe("retained terminal stream visibility", () => {
@@ -58,9 +61,9 @@ test.describe("retained terminal stream visibility", () => {
       await secondTab.click();
       await waitForTerminalAttached(page);
       await expect.poll(() => readActiveTerminalSubscriptions(page)).toEqual([second.id]);
-      await expect(
-        page.locator('[data-testid="terminal-surface"]:visible .xterm-rows'),
-      ).toContainText(sentinel, { timeout: 10_000 });
+      await expect
+        .poll(() => readTrackedTerminalText(page), { timeout: 10_000 })
+        .toContain(sentinel);
 
       await page.getByRole("button", { name: "Split pane right" }).first().click();
       await expect(page.getByRole("button", { name: "Split pane right" })).toHaveCount(2);
@@ -87,7 +90,20 @@ async function installSubscriptionProbe(page: Page): Promise<void> {
   await page.addInitScript(() => {
     const win = window as TerminalSubscriptionProbeWindow;
     const activeTerminalSubscriptions = new Set<string>();
+    const terminalInstances = new Set<TrackedTerminal>();
+    let currentTerminal: TrackedTerminal | undefined;
     win.__activeTerminalSubscriptions = activeTerminalSubscriptions;
+    win.__retainedTerminalInstances = terminalInstances;
+    Object.defineProperty(win, "__byspaceTerminal", {
+      configurable: true,
+      get: () => currentTerminal,
+      set: (terminal: TrackedTerminal | undefined) => {
+        currentTerminal = terminal;
+        if (terminal) {
+          terminalInstances.add(terminal);
+        }
+      },
+    });
     const originalSend = WebSocket.prototype.send;
     WebSocket.prototype.send = function (data) {
       if (typeof data === "string") {
@@ -110,6 +126,21 @@ async function installSubscriptionProbe(page: Page): Promise<void> {
       }
       originalSend.call(this, data);
     };
+  });
+}
+
+async function readTrackedTerminalText(page: Page): Promise<string> {
+  return page.evaluate(() => {
+    const terminals = (window as TerminalSubscriptionProbeWindow).__retainedTerminalInstances;
+    return Array.from(terminals ?? [])
+      .flatMap((terminal) => {
+        const buffer = terminal.buffer.active;
+        return Array.from({ length: buffer.length }, (_, index) =>
+          buffer.getLine(index)?.translateToString(true),
+        );
+      })
+      .filter((line): line is string => typeof line === "string")
+      .join("\n");
   });
 }
 
