@@ -50,6 +50,11 @@ An idle parent also stays resident while current in-memory state shows a running
 
 Active schedules targeting an existing agent protect that agent from collection. Paused, completed, and new-agent schedules do not. A pane may remain open after collection; its next prompt resumes the durable provider session through `ensureAgentLoaded()` with the same BySpace agent ID.
 
+A Timeline read does not itself make a collected agent resident again. It uses the retained canonical
+history; the next mutation resumes the durable provider session. See
+[Timeline sync: Runtime-independent retained history](timeline-sync.md#runtime-independent-retained-history)
+for the replica boundary and daemon-restart fallback.
+
 ## Archive
 
 Archive is a **soft delete**: the agent record stays on disk with `archivedAt` set, the runtime is closed, and the agent disappears from active lists. Archive is **global** — it lives on the server and propagates to every connected client.

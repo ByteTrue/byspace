@@ -938,6 +938,10 @@ test("reload leaves a closed durable snapshot when shutdown starts during the sw
     );
     const reload = manager.reloadAgentSession(agentId).catch((error: unknown) => error);
     await client.waitForCloseToStart();
+    const reloadBarrier = manager.waitForAgentClose(agentId);
+    expect(
+      await Promise.race([reloadBarrier.then(() => "resolved"), Promise.resolve("pending")]),
+    ).toBe("pending");
 
     manager.prepareForShutdown();
     const closing = Promise.all(manager.listAgents().map((agent) => manager.closeAgent(agent.id)));
@@ -945,6 +949,7 @@ test("reload leaves a closed durable snapshot when shutdown starts during the sw
 
     await closing;
     expect(await reload).toBeInstanceOf(AgentManagerShuttingDownError);
+    await reloadBarrier;
     await manager.flush();
     await storage.flush();
     expect({
@@ -7428,6 +7433,86 @@ test("closeAgent persists one final closed snapshot", async () => {
     expect(applySnapshotSpy).toHaveBeenCalledTimes(persistCountBeforeClose + 1);
   } finally {
     applySnapshotSpy.mockRestore();
+    await manager.flush().catch(() => undefined);
+    await storage.flush().catch(() => undefined);
+    rmSync(workdir, { recursive: true, force: true });
+  }
+});
+
+test("failed closed-snapshot persistence does not expose retained timeline reads", async () => {
+  const workdir = mkdtempSync(join(tmpdir(), "agent-manager-retained-persist-failure-"));
+  const storagePath = join(workdir, "agents");
+  const storage = new AgentStorage(storagePath, logger);
+  const agentId = "00000000-0000-4000-8000-000000000224";
+  const manager = new AgentManager({
+    clients: { codex: new TestAgentClient() },
+    registry: storage,
+    logger,
+    idFactory: () => agentId,
+  });
+
+  try {
+    await manager.createAgent({ provider: "codex", cwd: workdir }, undefined, {
+      workspaceId: undefined,
+    });
+    await manager.appendTimelineItem(agentId, {
+      type: "assistant_message",
+      text: "must not leak through a failed close",
+    });
+    await storage.flush();
+    rmSync(storagePath, { recursive: true, force: true });
+    writeFileSync(storagePath, "blocks the storage directory");
+
+    await expect(manager.closeAgent(agentId)).rejects.toBeInstanceOf(Error);
+
+    expect(manager.getAgent(agentId)).toBeNull();
+    expect(manager.hasTimeline(agentId)).toBe(true);
+    expect(manager.hasRetainedTimeline(agentId)).toBe(false);
+    expect(() => manager.fetchTimeline(agentId, { direction: "tail" })).toThrow(
+      `Unknown agent '${agentId}'`,
+    );
+  } finally {
+    await manager.flush().catch(() => undefined);
+    await storage.flush().catch(() => undefined);
+    rmSync(workdir, { recursive: true, force: true });
+  }
+});
+
+test("delete fence rejects a runtime whose registration already started", async () => {
+  const workdir = mkdtempSync(join(tmpdir(), "agent-manager-delete-registration-fence-"));
+  const storage = new AgentStorage(join(workdir, "agents"), logger);
+  const agentId = "00000000-0000-4000-8000-000000000225";
+  const getStarted = deferred<void>();
+  const getAllowed = deferred<void>();
+  const originalGet = storage.get.bind(storage);
+  let holdNextGet = true;
+  vi.spyOn(storage, "get").mockImplementation(async (id) => {
+    if (holdNextGet) {
+      holdNextGet = false;
+      getStarted.resolve();
+      await getAllowed.promise;
+    }
+    return await originalGet(id);
+  });
+  const manager = new AgentManager({
+    clients: { codex: new TestAgentClient() },
+    registry: storage,
+    logger,
+    idFactory: () => agentId,
+  });
+
+  try {
+    const creation = manager.createAgent({ provider: "codex", cwd: workdir }, agentId, {
+      workspaceId: undefined,
+    });
+    await getStarted.promise;
+    manager.beginAgentDelete(agentId);
+    getAllowed.resolve();
+
+    await expect(creation).rejects.toThrow(`Agent is being deleted: ${agentId}`);
+    expect(manager.getAgent(agentId)).toBeNull();
+  } finally {
+    getAllowed.resolve();
     await manager.flush().catch(() => undefined);
     await storage.flush().catch(() => undefined);
     rmSync(workdir, { recursive: true, force: true });

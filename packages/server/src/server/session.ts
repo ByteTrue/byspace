@@ -2278,7 +2278,8 @@ export class Session {
       (await this.agentStorage.get(agentId))?.workspaceId ??
       null;
 
-    // File-backed storage still needs an early delete fence before closeAgent().
+    // Fence both runtime registration and file-backed storage before closeAgent().
+    this.agentManager.beginAgentDelete(agentId);
     beginAgentDeleteIfSupported(this.agentStorage, agentId);
 
     try {
@@ -6109,12 +6110,22 @@ export class Session {
       : undefined;
 
     try {
-      const snapshot = await ensureAgentLoaded(msg.agentId, {
-        agentManager: this.agentManager,
-        agentStorage: this.agentStorage,
-        logger: this.sessionLogger,
-      });
-      const agentPayload = await this.buildAgentPayload(snapshot);
+      let agentPayload: AgentSnapshotPayload | null = null;
+      if (!this.agentManager.getAgent(msg.agentId) && this.agentManager.hasTimeline(msg.agentId)) {
+        await this.agentManager.waitForAgentClose(msg.agentId);
+        const record = await this.agentStorage.get(msg.agentId);
+        if (record?.lastStatus === "closed" && this.agentManager.hasRetainedTimeline(msg.agentId)) {
+          agentPayload = this.buildStoredAgentPayload(record);
+        }
+      }
+      if (!agentPayload) {
+        const snapshot = await ensureAgentLoaded(msg.agentId, {
+          agentManager: this.agentManager,
+          agentStorage: this.agentStorage,
+          logger: this.sessionLogger,
+        });
+        agentPayload = await this.buildAgentPayload(snapshot);
+      }
 
       const controlTimeline = this.agentManager.fetchTimeline(msg.agentId, {
         direction,
@@ -6156,7 +6167,7 @@ export class Session {
           hasOlder: selectedTimeline.hasOlder,
           hasNewer: selectedTimeline.hasNewer,
           entries: selectedTimeline.entries.map((entry) => ({
-            provider: snapshot.provider,
+            provider: agentPayload.provider,
             item: entry.item,
             timestamp: entry.timestamp,
             seqStart: entry.seqStart,

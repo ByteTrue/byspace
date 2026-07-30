@@ -104,11 +104,14 @@ export class AgentStorage {
 
   async list(): Promise<StoredAgentRecord[]> {
     await this.load();
-    return Array.from(this.cache.values());
+    return Array.from(this.cache.values()).filter((record) => !this.deleting.has(record.id));
   }
 
   async get(agentId: string): Promise<StoredAgentRecord | null> {
     await this.load();
+    if (this.deleting.has(agentId)) {
+      return null;
+    }
     return this.cache.get(agentId) ?? null;
   }
 

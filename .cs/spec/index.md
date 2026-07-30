@@ -14,6 +14,10 @@ BySpace 是一个 Web + CLI 环境，用于从浏览器或命令行监控和控�
 
 Terminal Tab 可以在切换后保留本地 renderer 状态，但保留挂载不等于继续消费输出：只有当前可见的 retained Terminal 持有 daemon stream；隐藏 Tab 立即停止订阅，重新显示时通过 daemon 的权威 snapshot/revision 恢复隐藏期间的最终状态。同屏 split pane 中未聚焦但仍可见的 Terminal 继续持有 stream。
 
+## Agent Timeline
+
+空闲 Provider runtime 回收不阻塞已有 Timeline 首屏：浏览历史不唤醒 Provider，继续执行时才恢复。
+
 ## 身份与发布
 
 - 产品：BySpace

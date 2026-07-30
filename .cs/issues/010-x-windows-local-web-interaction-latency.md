@@ -2,7 +2,7 @@
 kind: issue
 title: "Windows Local Direct 页面与 Terminal 间歇性高延迟"
 type: bug
-status: open
+status: closed
 created: 2026-07-30
 epic: ""
 ---
@@ -70,7 +70,7 @@ Sidebar 点击先通过 Expo Router 更新 active Workspace；Workspace deck 以
 ## 根因定位
 
 - **已确认的主因：Git 后台任务风暴。** 每个被观察 Workspace 的 60s Git self-heal 同相触发；每个 repo 的 180s fetch 也同相触发，并在 fetch 后通过 `Promise.all` 并发刷新该 repo 下所有 Workspace。客户端 retained Changes/Commit Diff 还会在隐藏时保有 commits/file-diff 查询，checkout status push 又会因纯 dirty-state 更新无条件 invalidate commits。正式版日志中的 Git 密度、慢 diff/commits RPC 与 event-loop 延迟形成同窗证据。
-- **已确认的独立慢路径：Agent 冷恢复。** 空闲 Agent runtime 被回收后，重新进入 Workspace 的 Timeline 获取会等待 Provider 从持久化恢复，产生 3.6–10.95s 延迟；这不应由 Git 或 Terminal PR 顺带修复。
+- **已确认并修复的独立慢路径：Agent 冷恢复。** 空闲 Agent runtime 被回收后，历史读取过去会无条件恢复 Provider，产生 3.6–10.95s 延迟；现在 daemon 进程内保留的 canonical Timeline replica 与 stored agent snapshot 直接满足只读 fetch，只有缺少 replica 或发生 Provider mutation 时才恢复 runtime。
 - **已确认的次因：隐藏 Terminal stream。** 同一激活 Workspace 内，隐藏 retained Terminal Tab 仍持有 daemon stream、接收二进制帧并持续写入隐藏 xterm；PR #12 已单独修复。
 - 已排除：warm 活跃长 Timeline 的服务端投影本身。真实 576KB projected tail 连续请求仅 6.5–10.6ms。
 - 影响面：Windows Local Direct 最明显，但 Git 后台风暴和冷恢复等待均为跨平台结构性问题。
@@ -97,7 +97,9 @@ Sidebar 点击先通过 Expo Router 更新 active Workspace；Workspace deck 以
 
 ### Slice C：Timeline 冷恢复
 
-- 历史 Timeline 的首屏展示不得等待 Provider runtime 恢复；持久化 replica 先满足读取，Provider runtime 在需要继续执行/实时订阅时恢复。
+- 历史 Timeline 的首屏展示不得等待已回收 Provider runtime 恢复；daemon-retained canonical Timeline replica 与 stored agent snapshot 先满足读取，Provider runtime 在缺少 replica 或需要继续执行时恢复。
+- fast path 只在候选 retained state 上等待正在进行的 runtime close，且只有 `closed` snapshot 持久化成功后才允许无 runtime 读取；reload 共享同一 Agent lifecycle gate，删除则同时 fence storage 与 runtime registration，避免 fallback 竞态复活 Provider。随后只读 projection 不 touch Agent activity，也不阻止后续 idle collection。
+- daemon 重启后没有内存 replica 时保持原有 Provider resume + hydration；本 slice 不新增第二套持久化 Timeline。
 - 不改 Timeline wire schema，不用 loading 掩盖 3–11s 等待，也不与 Git 修复耦合。
 
 ## 实现设计
@@ -120,6 +122,7 @@ Sidebar 点击先通过 Expo Router 更新 active Workspace；Workspace deck 以
 ## 验证
 
 - Desktop Chrome E2E：同 pane 两个 retained Terminal 始终只有可见 Tab 持有 stream；切换时前一个 unsubscribe、后一个 subscribe；隐藏期间产生的 PTY 输出在重新显示后由 authoritative snapshot 恢复；split 后失焦但仍可见的 Terminal 保持订阅。`terminal-retained-stream.spec.ts` 1/1 通过（3.6–4.1s）。
+- Timeline daemon E2E：idle collection 与 fetch 并发时会等待 close flush；完成后 Agent runtime 保持不存在，`fetch_agent_timeline_request` 仍返回 retained history 与 stored `closed` snapshot；delete fence 与 fetch 并发不会复活 Agent；13/13 通过。AgentManager 149/149、AgentStorage 17/17、wire compatibility 7/7 通过。
 - `npm run typecheck`、目标 lint、目标 format、`git diff --check` 与真实 Web export 均通过。
 - 两轮独立 correctness review 无 blocker/high/medium；ponytail review 后将 visibility hook 收回唯一调用方并精简测试 probe。
 - Windows Local Direct 用户场景未复测，不能用 macOS/伪装 UA 代替；用户在原设备不可用时知情接受该证据缺口并授权关闭。
@@ -129,6 +132,7 @@ Sidebar 点击先通过 Expo Router 更新 active Workspace；Workspace deck 以
 - 2026-07-30：完成代码路径审阅、macOS Local Direct 对照与 daemon metrics 初筛；macOS 未复现秒级卡顿，确认至少需要区分隐藏 Terminal 负载与长 Timeline 两条路径。
 - 2026-07-30：直接 SDK 复测 warm 长 Timeline 为 6.5–10.6ms；实现隐藏 retained Terminal 停流与显示时权威恢复，E2E、静态检查、Web export 和独立 review 通过，等待 Windows 实机验收。
 - 2026-07-31：完成 Slice B 实现。隐藏 retained Git panels 停止 commits/file-diff 查询；daemon-issued `commitsVersion` 对 dirty-only 更新保持稳定，对 HEAD/比较输入、refs watcher、repo fetch 与显式 refresh 保守推进，且旧 daemon 缺字段时保留原始 invalidation；60s/180s timer 使用稳定 per-target phase，repo fetch 的 in-flight 背压覆盖完整 sibling sequential refresh cycle。99 个相关单测、server/client build、全仓 typecheck/lint/format 与 Web export 通过。
+- 2026-07-31：完成 Slice C 最小实现。timeline fetch 在 idle runtime close flush 完成后直接读取 daemon-retained canonical replica 与 stored snapshot，不调用 Provider resume；close snapshot 持久化失败时不开放 retained read。并补齐同一边界暴露的 reload lifecycle gate 与 delete registration/storage fence，防止 fallback 并发启动第二个或已删除 runtime。Provider mutation 与 daemon-restart fallback 保持原行为。Timeline E2E 13/13、AgentManager 149/149、AgentStorage 17/17、wire compatibility 7/7 通过。
 
 ## 历史关闭结论（2026-07-30，已撤销）
 
@@ -141,6 +145,14 @@ Sidebar 点击先通过 Expo Router 更新 active Workspace；Workspace deck 以
 
 - 2026-07-31：用户补充问题设备正式版 daemon 日志。日志证明即使没有 Agent/Terminal 活动，Git 后台任务仍可令 event loop 卡住 2.75s，并同时揭示 Provider runtime 冷恢复慢路径；此前“Windows 设备不可用、接受残余风险”的关闭前提不再成立，Issue 010 重开。
 - 后续按三个单一职责 PR 处理：Terminal stream（#12）、Git 后台负载、Timeline 冷恢复。三条路径全部完成并验证前不再次关闭。
+
+## 最终关闭结论（2026-07-31）
+
+- 三条独立根因均已完成单一职责修复：隐藏 Terminal stream（PR #12）、Git 后台负载（PR #13）、idle-collected Timeline runtime-free read（本 PR）。
+- Timeline slice 不新增持久层或 wire schema：daemon 进程内 retained canonical replica 直接满足历史读取；继续执行或 daemon 重启后缺少 replica 时仍按原路径恢复 Provider。
+- 并发边界一并收紧：close snapshot 未持久化不开放 retained read；reload 共享 Agent lifecycle gate；delete 同时 fence runtime registration 与 storage，不能由 Timeline fallback 复活。
+- 验证：Timeline E2E 13/13、AgentManager 149/149、AgentStorage 17/17、daemon restart persistence 2/2、wire compatibility 7/7；server build、全仓 typecheck/lint/format 与 `git diff --check` 全绿；最终独立 review 无 blocker/high/medium。
+- 原 Windows 设备仍不可用于发布后 A/B，因此不声称获得 Windows 端量化改善值；但正式版日志证明的三个结构性原因均已有对应修复和机器可判定回归。用户已授权按该证据链完成修复。
 
 ## 关闭回写
 
