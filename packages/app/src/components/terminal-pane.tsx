@@ -1,4 +1,5 @@
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
+import { useRetainedPanelActive } from "@/components/retained-panel";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, Text, View, type PressableStateCallbackType } from "react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
@@ -192,6 +193,8 @@ export function TerminalPane({
 
   const scopeKey = useMemo(() => terminalScopeKey({ serverId, cwd }), [serverId, cwd]);
   const terminalStreamKey = useMemo(() => `${scopeKey}:${terminalId}`, [scopeKey, terminalId]);
+  const isPaneVisible = useRetainedPanelActive();
+  const isTerminalStreamActive = isWorkspaceFocused && isPaneVisible;
   // Keep the latest measured size for whichever client currently owns the pane,
   // but only dedupe resizes that this specific client has already pushed.
   const measuredTerminalSizeRef = useRef<{ rows: number; cols: number } | null>(null);
@@ -365,21 +368,21 @@ export function TerminalPane({
       client,
       getPreferredSize: () => lastSentTerminalSizeRef.current,
       onOutput: ({ terminalId: outputTerminalId, data }) => {
-        if (!isWorkspaceFocused || terminalIdRef.current !== outputTerminalId) {
+        if (!isTerminalStreamActive || terminalIdRef.current !== outputTerminalId) {
           return;
         }
         emulatorRef.current?.writeOutput(data);
       },
       onRestore: ({ terminalId: restoreTerminalId, data }) => {
         workspaceTerminalSession.snapshots.clear({ terminalId: restoreTerminalId });
-        if (!isWorkspaceFocused || terminalIdRef.current !== restoreTerminalId) {
+        if (!isTerminalStreamActive || terminalIdRef.current !== restoreTerminalId) {
           return;
         }
         emulatorRef.current?.restoreOutput(data);
       },
       onSnapshot: ({ terminalId: snapshotTerminalId, state }) => {
         workspaceTerminalSession.snapshots.set({ terminalId: snapshotTerminalId, state });
-        if (!isWorkspaceFocused || terminalIdRef.current !== snapshotTerminalId) {
+        if (!isTerminalStreamActive || terminalIdRef.current !== snapshotTerminalId) {
           return;
         }
         emulatorRef.current?.renderSnapshot(state);
@@ -395,7 +398,7 @@ export function TerminalPane({
 
     streamControllerRef.current = controller;
     controller.setTerminal({
-      terminalId: isWorkspaceFocused ? terminalIdRef.current : null,
+      terminalId: isTerminalStreamActive ? terminalIdRef.current : null,
     });
 
     return () => {
@@ -408,18 +411,18 @@ export function TerminalPane({
     client,
     handleStreamControllerStatus,
     isConnected,
-    isWorkspaceFocused,
+    isTerminalStreamActive,
     supportsTerminalRestoreModes,
     workspaceTerminalSession.snapshots,
   ]);
 
   useEffect(() => {
     pendingTerminalInputRef.current = [];
-    const nextTerminalId = isWorkspaceFocused ? terminalId : null;
+    const nextTerminalId = isTerminalStreamActive ? terminalId : null;
     streamControllerRef.current?.setTerminal({
       terminalId: nextTerminalId,
     });
-  }, [isWorkspaceFocused, terminalId]);
+  }, [isTerminalStreamActive, terminalId]);
 
   const enqueuePendingTerminalInput = useCallback((entry: PendingTerminalInput) => {
     const queue = pendingTerminalInputRef.current;
