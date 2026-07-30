@@ -103,7 +103,7 @@ Retained Terminal Tab 只在真实可见时持有 daemon stream。隐藏 Tab 保
 - [x] `.cs/issues/2026/07/21/closed-pi-terminal-agents.md`：Terminal hooks 使用 provider 独立开关；Pi 通过全局 extension 上报 activity，并进入默认 Terminal profiles。
 - [x] `.cs/issues/2026/07/22/closed-terminal-presentation-defaults.md`：Terminal/编辑器呈现改为极简。用户 headed 验收通过后经四轮减法收敛为：字体全用各平台系统默认（UI=system-ui、代码/终端=ui-monospace 领头栈），字号仅「界面」+「代码」两项、代码/diff/终端统一 14；语法高亮固定 GitHub（自带亮/暗）；主题仅保留 浅色/深色/跟随系统（删 zinc/midnight/claude/ghostty 变体）。字体族、终端专属字号、语法主题、深色变体的自定义 UI 全部移除。
 - [ ] `.cs/issues/006-o-terminal-retained-panel-layout.md`：修复 retained Terminal 恢复可见时首次 fit 落在零尺寸布局窗口，导致字符横向拉伸或右侧空白直至点击/输入的问题。
-- [x] `.cs/issues/010-x-windows-local-web-interaction-latency.md`：隐藏 retained Terminal 不再持续订阅和渲染输出；重显通过权威 snapshot/revision 恢复。原 Windows 设备不可用，用户接受未做实机前后 A/B 的残余风险。
+- [ ] `.cs/issues/010-x-windows-local-web-interaction-latency.md`：正式版 Windows 日志确认隐藏 Terminal 之外还有 Git 后台任务风暴和 Provider runtime 冷恢复两条慢路径；Terminal stream 已由 PR #12 修复，Git 与 Timeline slice 仍在实施。
 
 ### 剩余阻碍
 
@@ -122,7 +122,7 @@ Retained Terminal Tab 只在真实可见时持有 daemon stream。隐藏 Tab 保
 - raw Direct 性能不落后已经确认；文本 paste、图片 clipboard 与 PixPin 双格式事件的已知缺口均有自动化覆盖，用户已在 macOS Chrome + PixPin + Direct headed 验收通过；仍待真实 Windows + ConPTY + Pi CLI 验收，视觉呈现仍待 headed A/B。
 - 默认字号目前复用全局 code font size；是否需要 Terminal 专属字号，要由 A/B 收益与设置复杂度共同决定。
 - 独立 Terminal transport 和 renderer scheduler 只有在新的真实负载证据出现时才升级为实现方向。
-- Windows Local Direct 的间歇性整页卡顿尚无实机修复前后 A/B；已关闭的隐藏 stream 缺陷不能单独证明覆盖全部症状。若问题再次出现，应以当时 trace 和 daemon metrics 重新归因。
+- Windows Local Direct 正式版日志已建立修复前基线：Git 后台命令风暴可在无 Agent/Terminal 活动时造成 2.75s event-loop stall，Provider runtime 冷恢复可令 Timeline 等待 3.6–10.95s；两条路径分别验证后才能关闭 Issue 010。
 
 ## 关闭条件
 

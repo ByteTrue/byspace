@@ -10,7 +10,11 @@ import type {
   PullRequestStatusResult,
 } from "../utils/checkout-git.js";
 import {
+  BACKGROUND_GIT_FETCH_INTERVAL_MS,
+  WORKSPACE_GIT_SELF_HEAL_INTERVAL_MS,
   WorkspaceGitServiceImpl,
+  workspaceGitFetchInitialDelayMs,
+  workspaceGitSelfHealInitialDelayMs,
   type WorkspaceGitRuntimeSnapshot,
 } from "./workspace-git-service.js";
 import { isPlatform } from "../test-utils/platform.js";
@@ -562,6 +566,125 @@ describe("WorkspaceGitServiceImpl", () => {
     service.dispose();
   });
 
+  test("spreads recurring git work across stable target phases", () => {
+    const targets = [REPO_CWD, join(REPO_CWD, "worktree-a"), join(REPO_CWD, "worktree-b")];
+    const selfHealDelays = targets.map(workspaceGitSelfHealInitialDelayMs);
+    const fetchDelays = targets.map(workspaceGitFetchInitialDelayMs);
+
+    expect(workspaceGitSelfHealInitialDelayMs(REPO_CWD)).toBe(selfHealDelays[0]);
+    expect(workspaceGitFetchInitialDelayMs(REPO_CWD)).toBe(fetchDelays[0]);
+    expect(new Set(selfHealDelays).size).toBeGreaterThan(1);
+    expect(new Set(fetchDelays).size).toBeGreaterThan(1);
+    expect(
+      selfHealDelays.every((delay) => delay > 0 && delay <= WORKSPACE_GIT_SELF_HEAL_INTERVAL_MS),
+    ).toBe(true);
+    expect(
+      fetchDelays.every(
+        (delay) =>
+          delay >= BACKGROUND_GIT_FETCH_INTERVAL_MS / 2 &&
+          delay <= BACKGROUND_GIT_FETCH_INTERVAL_MS,
+      ),
+    ).toBe(true);
+  });
+
+  test("repo fetch refreshes sibling workspaces sequentially", async () => {
+    let nowMs = 0;
+    const firstRepoRefresh = createDeferred<CheckoutStatusGit>();
+    const fetch = createDeferred<void>();
+    const runGitFetch = vi.fn(async () => fetch.promise);
+    const getCheckoutStatus = vi
+      .fn<(cwd: string) => Promise<CheckoutStatusGit>>()
+      .mockImplementationOnce(async (cwd) => createCheckoutStatus(cwd))
+      .mockImplementationOnce(async (cwd) => createCheckoutStatus(cwd))
+      .mockImplementationOnce(async () => firstRepoRefresh.promise)
+      .mockImplementation(async (cwd) => createCheckoutStatus(cwd));
+    const getCheckoutSnapshotFacts = vi.fn(async (cwd: string) => ({
+      ...createCheckoutSnapshotFacts(cwd),
+      gitCommonDir: join(REPO_CWD, ".git"),
+      absoluteGitDir: join(REPO_CWD, ".git"),
+    }));
+    const service = createService({
+      getCheckoutStatus,
+      getCheckoutSnapshotFacts,
+      runGitFetch,
+      now: () => new Date(nowMs),
+    });
+
+    const first = service.registerWorkspace({ cwd: REPO_CWD }, vi.fn());
+    const secondCwd = join(REPO_CWD, "packages", "server");
+    const second = service.registerWorkspace({ cwd: secondCwd }, vi.fn());
+    await vi.waitFor(() => {
+      expect(getCheckoutStatus).toHaveBeenCalledTimes(2);
+      expect(service.getMetrics().repositoryWorkspaceLinkCount).toBe(2);
+    });
+
+    nowMs = 1_000;
+    fetch.resolve();
+    await flushPromises();
+
+    expect(getCheckoutStatus).toHaveBeenCalledTimes(3);
+
+    await vi.advanceTimersByTimeAsync(workspaceGitFetchInitialDelayMs(join(REPO_CWD, ".git")));
+    expect(runGitFetch).toHaveBeenCalledTimes(1);
+
+    firstRepoRefresh.resolve(createCheckoutStatus(REPO_CWD));
+    await vi.waitFor(() => {
+      expect(getCheckoutStatus.mock.calls.length).toBeGreaterThanOrEqual(4);
+    });
+
+    first.unsubscribe();
+    second.unsubscribe();
+    service.dispose();
+  });
+
+  test("repo fetch invalidation trails an in-flight forced refresh", async () => {
+    let nowMs = 0;
+    const fetch = createDeferred<void>();
+    const workingTreeRefresh = createDeferred<CheckoutStatusGit>();
+    const getCheckoutStatus = vi
+      .fn<() => Promise<CheckoutStatusGit>>()
+      .mockResolvedValueOnce(createCheckoutStatus(REPO_CWD, { isDirty: false }))
+      .mockImplementationOnce(async () => workingTreeRefresh.promise)
+      .mockResolvedValue(createCheckoutStatus(REPO_CWD, { isDirty: true }));
+    const getCheckoutSnapshotFacts = vi.fn(async (cwd: string) => ({
+      ...createCheckoutSnapshotFacts(cwd),
+      pullRequestLookupTarget: { headRef: "main", headSha: "a".repeat(40) },
+    }));
+    const service = createService({
+      getCheckoutStatus,
+      getCheckoutSnapshotFacts,
+      runGitFetch: vi.fn(async () => fetch.promise),
+      now: () => new Date(nowMs),
+    });
+
+    const subscription = service.registerWorkspace({ cwd: REPO_CWD }, vi.fn());
+    await vi.waitFor(() => {
+      expect(getCheckoutStatus).toHaveBeenCalledTimes(1);
+      expect(service.getMetrics().repositoryTargetCount).toBe(1);
+    });
+    const initialVersion = service.peekSnapshot(REPO_CWD)?.git.commitsVersion;
+
+    nowMs = 1_000;
+    const refresh = service.getSnapshot(REPO_CWD, {
+      force: true,
+      reason: "manual-refresh",
+    });
+    await vi.waitFor(() => expect(getCheckoutStatus).toHaveBeenCalledTimes(2));
+
+    fetch.resolve();
+    await flushPromises();
+    expect(getCheckoutStatus).toHaveBeenCalledTimes(2);
+
+    workingTreeRefresh.resolve(createCheckoutStatus(REPO_CWD, { isDirty: true }));
+    await refresh;
+    await vi.waitFor(() => expect(getCheckoutStatus).toHaveBeenCalledTimes(3));
+
+    expect(service.peekSnapshot(REPO_CWD)?.git.commitsVersion).not.toBe(initialVersion);
+
+    subscription.unsubscribe();
+    service.dispose();
+  });
+
   test("repo-level fetch intervals are shared for workspaces in the same repo", async () => {
     const runGitFetch = vi.fn(async () => {});
     const hasOriginRemote = vi.fn(async () => true);
@@ -600,6 +723,49 @@ describe("WorkspaceGitServiceImpl", () => {
 
     first.unsubscribe();
     second.unsubscribe();
+    service.dispose();
+  });
+
+  test("commits version tracks commit inputs but ignores dirty-only refreshes", async () => {
+    let headSha = "a".repeat(40);
+    const getCheckoutSnapshotFacts = vi.fn(async (cwd: string) => ({
+      ...createCheckoutSnapshotFacts(cwd),
+      pullRequestLookupTarget: { headRef: "main", headSha },
+    }));
+    const getCheckoutStatus = vi
+      .fn<() => Promise<CheckoutStatusGit>>()
+      .mockResolvedValueOnce(createCheckoutStatus(REPO_CWD, { isDirty: false }))
+      .mockResolvedValueOnce(createCheckoutStatus(REPO_CWD, { isDirty: true }))
+      .mockResolvedValueOnce(createCheckoutStatus(REPO_CWD, { isDirty: true }))
+      .mockResolvedValueOnce(createCheckoutStatus(REPO_CWD, { isDirty: true, baseRef: "release" }))
+      .mockResolvedValueOnce(createCheckoutStatus(REPO_CWD, { isDirty: true, baseRef: "release" }));
+    const service = createService({ getCheckoutSnapshotFacts, getCheckoutStatus });
+
+    const initial = await service.getSnapshot(REPO_CWD);
+    const dirty = await service.getSnapshot(REPO_CWD, {
+      force: true,
+      reason: "working-tree-watch",
+    });
+    headSha = "b".repeat(40);
+    const headChanged = await service.getSnapshot(REPO_CWD, {
+      force: true,
+      reason: "working-tree-watch",
+    });
+    const comparisonChanged = await service.getSnapshot(REPO_CWD, {
+      force: true,
+      reason: "working-tree-watch",
+    });
+    const manual = await service.getSnapshot(REPO_CWD, {
+      force: true,
+      reason: "manual-refresh",
+    });
+
+    expect(initial.git.commitsVersion).toBeTruthy();
+    expect(dirty.git.commitsVersion).toBe(initial.git.commitsVersion);
+    expect(headChanged.git.commitsVersion).not.toBe(dirty.git.commitsVersion);
+    expect(comparisonChanged.git.commitsVersion).not.toBe(headChanged.git.commitsVersion);
+    expect(manual.git.commitsVersion).not.toBe(comparisonChanged.git.commitsVersion);
+
     service.dispose();
   });
 
