@@ -14,11 +14,13 @@ export interface DirectoryRequestStartCounts {
 
 interface ClientRequest {
   type?: unknown;
+  requestId?: unknown;
   subscribe?: unknown;
   page?: { cursor?: unknown };
+  payload?: { requestId?: unknown };
 }
 
-function readClientRequest(message: string | Buffer): ClientRequest | null {
+function readSessionMessage(message: string | Buffer): ClientRequest | null {
   if (typeof message !== "string") return null;
   try {
     const envelope = JSON.parse(message) as {
@@ -29,6 +31,11 @@ function readClientRequest(message: string | Buffer): ClientRequest | null {
   } catch {
     return null;
   }
+}
+
+function getRequestId(message: ClientRequest | null): string | null {
+  const requestId = message?.requestId ?? message?.payload?.requestId;
+  return typeof requestId === "string" ? requestId : null;
 }
 
 function directoryForRequest(request: ClientRequest): keyof DirectoryBootstrapCounts | null {
@@ -47,6 +54,14 @@ export async function installDaemonWebSocketGate(page: Page) {
     total: { agents: 0, workspaces: 0 },
   };
   const clientRequestCounts = new Map<string, number>();
+  const serverMessageCounts = new Map<string, number>();
+  const blockedServerMessageTypes = new Set<string>();
+  const responseTypeForNextClientRequest = new Map<string, string>();
+  const heldResponseRequestIds = new Map<string, Set<string>>();
+  const heldServerMessages = new Map<
+    string,
+    Array<{ socket: WebSocketRoute; message: string | Buffer }>
+  >();
 
   await page.routeWebSocket(daemonWsRoutePattern(), (ws) => {
     if (!acceptingConnections) {
@@ -59,9 +74,17 @@ export async function installDaemonWebSocketGate(page: Page) {
 
     ws.onMessage((message) => {
       if (!acceptingConnections) return;
-      const request = readClientRequest(message);
+      const request = readSessionMessage(message);
       if (typeof request?.type === "string") {
         clientRequestCounts.set(request.type, (clientRequestCounts.get(request.type) ?? 0) + 1);
+        const responseType = responseTypeForNextClientRequest.get(request.type);
+        const requestId = getRequestId(request);
+        if (responseType && requestId) {
+          responseTypeForNextClientRequest.delete(request.type);
+          const requestIds = heldResponseRequestIds.get(responseType) ?? new Set<string>();
+          requestIds.add(requestId);
+          heldResponseRequestIds.set(responseType, requestIds);
+        }
         const directory = directoryForRequest(request);
         if (directory) {
           const subscription = request.subscribe === undefined ? "unsubscribed" : "subscribed";
@@ -78,6 +101,20 @@ export async function installDaemonWebSocketGate(page: Page) {
 
     server.onMessage((message) => {
       if (!acceptingConnections) return;
+      const response = readSessionMessage(message);
+      if (typeof response?.type === "string") {
+        serverMessageCounts.set(response.type, (serverMessageCounts.get(response.type) ?? 0) + 1);
+        const requestId = getRequestId(response);
+        const heldRequestIds = heldResponseRequestIds.get(response.type);
+        if (requestId && heldRequestIds?.delete(requestId)) {
+          if (heldRequestIds.size === 0) heldResponseRequestIds.delete(response.type);
+          const held = heldServerMessages.get(response.type) ?? [];
+          held.push({ socket: ws, message });
+          heldServerMessages.set(response.type, held);
+          return;
+        }
+        if (blockedServerMessageTypes.has(response.type)) return;
+      }
       try {
         ws.send(message);
       } catch {
@@ -109,6 +146,26 @@ export async function installDaemonWebSocketGate(page: Page) {
     },
     getClientRequestCount(type: string): number {
       return clientRequestCounts.get(type) ?? 0;
+    },
+    getServerMessageCount(type: string): number {
+      return serverMessageCounts.get(type) ?? 0;
+    },
+    blockServerMessageType(type: string): void {
+      blockedServerMessageTypes.add(type);
+    },
+    holdResponseForNextClientRequest(requestType: string, responseType: string): void {
+      responseTypeForNextClientRequest.set(requestType, responseType);
+    },
+    releaseHeldServerMessages(type: string): void {
+      const held = heldServerMessages.get(type) ?? [];
+      heldServerMessages.delete(type);
+      for (const { socket, message } of held) {
+        try {
+          socket.send(message);
+        } catch {
+          activeSockets.delete(socket);
+        }
+      }
     },
   };
 }

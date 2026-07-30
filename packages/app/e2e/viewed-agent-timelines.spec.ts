@@ -94,6 +94,7 @@ test.describe("Viewed agent timelines", () => {
       ).toBeVisible();
       await expect(page.getByText("(end of synthetic stream)", { exact: true })).toBeVisible();
     } finally {
+      await page.close();
       await scenario.cleanup();
     }
   });
@@ -120,6 +121,7 @@ test.describe("Viewed agent timelines", () => {
       ).toBeVisible();
       await expect(page.getByText("(end of synthetic stream)", { exact: true })).toBeVisible();
     } finally {
+      await page.close();
       await scenario.cleanup();
     }
   });
@@ -145,6 +147,100 @@ test.describe("Viewed agent timelines", () => {
         page.getByRole("button", { name: "Second viewed chat", exact: true }),
       ).toBeVisible();
     } finally {
+      await page.close();
+      await scenario.cleanup();
+    }
+  });
+
+  test("refocusing a visible chat performs authoritative catch-up", async ({ page }) => {
+    const gate = await installDaemonWebSocketGate(page);
+    const scenario = await seedViewedTimelineScenario();
+    try {
+      await openAgent(page, scenario, scenario.firstAgentId);
+      await expect
+        .poll(() => gate.getClientRequestCount("fetch_agent_timeline_request"))
+        .toBeGreaterThan(0);
+      await expect
+        .poll(
+          () =>
+            gate.getClientRequestCount("fetch_agent_timeline_request") -
+            gate.getServerMessageCount("fetch_agent_timeline_response"),
+        )
+        .toBe(0);
+
+      gate.holdResponseForNextClientRequest(
+        "fetch_agent_timeline_request",
+        "fetch_agent_timeline_response",
+      );
+      const beforeStaleRequest = gate.getClientRequestCount("fetch_agent_timeline_request");
+      const beforeStaleResponse = gate.getServerMessageCount("fetch_agent_timeline_response");
+      await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+      await expect
+        .poll(() => gate.getClientRequestCount("fetch_agent_timeline_request"))
+        .toBeGreaterThan(beforeStaleRequest);
+      await expect
+        .poll(() => gate.getServerMessageCount("fetch_agent_timeline_response"))
+        .toBeGreaterThan(beforeStaleResponse);
+
+      gate.blockServerMessageType("agent_stream");
+      await commitMessage(
+        scenario,
+        scenario.firstAgentId,
+        "Committed while live timeline delivery was suspended.",
+      );
+      const missedMessage = page.getByText(
+        "Committed while live timeline delivery was suspended.",
+        { exact: true },
+      );
+      await expect(missedMessage).toHaveCount(0);
+      const beforeFocus = gate.getClientRequestCount("fetch_agent_timeline_request");
+
+      await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+
+      await expect
+        .poll(() => gate.getClientRequestCount("fetch_agent_timeline_request"), { timeout: 1_000 })
+        .toBeGreaterThan(beforeFocus);
+      await expect(missedMessage).toBeVisible({ timeout: 2_000 });
+
+      gate.releaseHeldServerMessages("fetch_agent_timeline_response");
+      await page.evaluate(() => new Promise((resolve) => setTimeout(resolve, 100)));
+      await expect(missedMessage).toBeVisible();
+    } finally {
+      await page.close();
+      await scenario.cleanup();
+    }
+  });
+
+  test("returning to a retained chat immediately catches up missed delivery", async ({ page }) => {
+    test.setTimeout(60_000);
+    const gate = await installDaemonWebSocketGate(page);
+    const subscriptions = observeTimelineSubscriptions(page);
+    const scenario = await seedViewedTimelineScenario();
+    try {
+      await openAgent(page, scenario, scenario.firstAgentId);
+      await selectAgent(page, "Second viewed chat");
+      await subscriptions.waitForSubscribedAgents([scenario.firstAgentId, scenario.secondAgentId]);
+      gate.blockServerMessageType("agent_stream");
+      await commitMessage(
+        scenario,
+        scenario.firstAgentId,
+        "Committed while the retained chat missed live delivery.",
+      );
+      const missedMessage = page.getByText(
+        "Committed while the retained chat missed live delivery.",
+        { exact: true },
+      );
+      await expect(missedMessage).toHaveCount(0);
+      const beforeReturn = gate.getClientRequestCount("fetch_agent_timeline_request");
+
+      await selectAgent(page, "First viewed chat");
+
+      await expect
+        .poll(() => gate.getClientRequestCount("fetch_agent_timeline_request"), { timeout: 1_000 })
+        .toBeGreaterThan(beforeReturn);
+      await expect(missedMessage).toBeVisible({ timeout: 2_000 });
+    } finally {
+      await page.close();
       await scenario.cleanup();
     }
   });
@@ -173,6 +269,7 @@ test.describe("Viewed agent timelines", () => {
       await expect(recoveredMessage).toBeVisible();
     } finally {
       gate.restore();
+      await page.close();
       await scenario.cleanup();
     }
   });

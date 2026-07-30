@@ -3,7 +3,6 @@ import {
   memo,
   useCallback,
   useEffect,
-  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -72,6 +71,7 @@ import { useToast } from "@/contexts/toast-context";
 import { selectIsFileExplorerOpen, usePanelStore } from "@/stores/panel-store";
 import { type ExplorerCheckoutContext } from "@/stores/explorer-checkout-context";
 import { useSessionStore, type WorkspaceDescriptor } from "@/stores/session-store";
+import { useViewedTimelineSource } from "@/timeline/use-viewed-timeline-source";
 import {
   collectAllTabs,
   useWorkspaceLayoutStore,
@@ -1992,18 +1992,7 @@ function WorkspaceScreenContent({
       }),
     [isFocusModeEnabled, isMobile, isRouteFocused, uiTabs, workspaceLayout],
   );
-  useLayoutEffect(() => {
-    if (!persistenceKey || !viewedTimelineSync) {
-      return;
-    }
-    viewedTimelineSync.replaceVisibleAgentIds(persistenceKey, visibleAgentIds);
-  }, [persistenceKey, viewedTimelineSync, visibleAgentIds]);
-  useEffect(() => {
-    if (!persistenceKey || !viewedTimelineSync) {
-      return;
-    }
-    return () => viewedTimelineSync.replaceVisibleAgentIds(persistenceKey, []);
-  }, [persistenceKey, viewedTimelineSync]);
+  useViewedTimelineSource(viewedTimelineSync, persistenceKey, visibleAgentIds);
   const setFocusedAgentId = useSessionStore((state) => state.setFocusedAgentId);
   const setFocusedTerminalId = useSessionStore((state) => state.setFocusedTerminalId);
   const focusedPaneAgentId = useMemo(() => {
@@ -2743,19 +2732,7 @@ function WorkspaceScreenContent({
       toast.show(t("workspace.tabs.toasts.reloadingAgent"), { durationMs: null });
       try {
         await client.refreshAgent(agentId);
-        // Send the existing cursor so the server detects the new epoch and
-        // returns reset:true. Without a cursor, the server returns reset:false
-        // and the client takes the incremental path, where new-epoch rows are
-        // dropped against the stale cursor.
-        const sessionState = useSessionStore.getState().sessions[normalizedServerId];
-        const currentCursor = sessionState?.agentTimelineCursor.get(agentId);
-        await getHostRuntimeStore().fetchAgentTimeline(normalizedServerId, agentId, {
-          direction: "tail",
-          projection: "projected",
-          ...(currentCursor
-            ? { cursor: { epoch: currentCursor.epoch, seq: currentCursor.endSeq } }
-            : {}),
-        });
+        await getHostRuntimeStore().refreshAgentTimeline(normalizedServerId, agentId);
         toast.show(t("workspace.tabs.toasts.reloadedAgent"), { variant: "success" });
       } catch (error) {
         toast.error(

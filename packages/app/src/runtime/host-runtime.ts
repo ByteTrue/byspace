@@ -51,6 +51,7 @@ import {
 } from "@/composer/attachments/submit";
 import { encodeImages } from "@/utils/encode-images";
 import { DirectorySync, type RefreshAgentDirectoryResult } from "@/runtime/directory-sync";
+import type { ProjectedTimelineFetchPlan } from "@/timeline/timeline-sync-plan";
 import { ReplicaCache } from "@/runtime/replica-cache";
 
 export type HostRuntimeConnectionStatus = "idle" | "connecting" | "online" | "offline" | "error";
@@ -1881,6 +1882,8 @@ export class HostRuntimeStore {
     const sessionStore = useSessionStore.getState();
     sessionStore.initializeSession(serverId, snapshot.client, snapshot.clientGeneration);
     sessionStore.updateSessionClient(serverId, snapshot.client, snapshot.clientGeneration);
+    const timeline = this.directorySyncByServer.get(serverId)?.timelineUiBridge ?? null;
+    sessionStore.setViewedTimelineSync(serverId, timeline);
   }
 
   private clearHostReplica(serverId: string): void {
@@ -2098,11 +2101,34 @@ export class HostRuntimeStore {
   fetchAgentTimeline(
     serverId: string,
     agentId: string,
-    request: Parameters<DaemonClient["fetchAgentTimeline"]>[1],
+    request: ProjectedTimelineFetchPlan,
   ): Promise<Awaited<ReturnType<DaemonClient["fetchAgentTimeline"]>>> {
     const directory = this.directorySyncByServer.get(serverId);
     if (!directory) throw new Error(`Unknown host runtime for serverId ${serverId}`);
     return directory.fetchTimeline(agentId, request);
+  }
+
+  ensureAgentTimelineCurrent(serverId: string, agentId: string): Promise<void> {
+    const directory = this.directorySyncByServer.get(serverId);
+    if (!directory) throw new Error(`Unknown host runtime for serverId ${serverId}`);
+    return directory.ensureTimelineCurrent(agentId);
+  }
+
+  refreshAgentTimeline(
+    serverId: string,
+    agentId: string,
+  ): Promise<Awaited<ReturnType<DaemonClient["fetchAgentTimeline"]>>> {
+    const directory = this.directorySyncByServer.get(serverId);
+    if (!directory) throw new Error(`Unknown host runtime for serverId ${serverId}`);
+    return directory.refreshTimeline(agentId);
+  }
+
+  setAgentTimelineActive(serverId: string, active: boolean): void {
+    this.directorySyncByServer.get(serverId)?.setTimelineActive(active);
+  }
+
+  refreshVisibleAgentTimelines(serverId: string): void {
+    this.directorySyncByServer.get(serverId)?.refreshVisibleTimelines();
   }
 
   refreshAllAgentDirectories(input?: { serverIds?: string[] }): void {
