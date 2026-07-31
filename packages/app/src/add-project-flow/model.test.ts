@@ -91,7 +91,6 @@ describe("Add Project navigation", () => {
       nameWithOwner: "ByteTrue/byspace",
       cloneUrl: "git@github.com:ByteTrue/byspace.git",
       description: null,
-      visibility: "public",
       updatedAt: null,
     };
     let state = openAddProjectFlow({ hosts: [HOST] });

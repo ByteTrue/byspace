@@ -96,7 +96,6 @@ export function buildManualGithubRepositoryChoices(query: string): GithubReposit
         nameWithOwner: identity?.repo ?? remoteName,
         cloneUrl: repo,
         description: "Clone this repository URL",
-        visibility: null,
         updatedAt: null,
       },
     ];
@@ -111,7 +110,6 @@ export function buildManualGithubRepositoryChoices(query: string): GithubReposit
     cloneUrl: nameWithOwner,
     cloneProtocol,
     description: `Clone owner/repo via ${cloneProtocol.toUpperCase()}`,
-    visibility: null,
     updatedAt: null,
   }));
 }
