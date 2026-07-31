@@ -362,6 +362,50 @@ describe("shared sidebar workspace model", () => {
     expect(model.projectNamesByKey).toEqual(new Map([["ByteTrue/byspace", "ByteTrue/byspace"]]));
   });
 
+  it("propagates a duplicate clone's resolved placement key into the hydrated row", () => {
+    const sharedProjectKey = "remote:https://github.com/acme/repo";
+    const resolvedProjectKey = "host:host-a:project-a";
+    const rawWorkspace = workspaceWithForge(undefined, "https://github.com/acme/repo/pull/42");
+    rawWorkspace.projectId = "project-a";
+    rawWorkspace.project = {
+      projectKey: sharedProjectKey,
+      projectName: "repo",
+      checkout: {
+        cwd: "/repo",
+        isGit: true,
+        currentBranch: "feature",
+        remoteUrl: "https://github.com/acme/repo",
+        worktreeRoot: "/repo",
+        isBySpaceOwnedWorktree: false,
+        mainRepoRoot: "/repo",
+      },
+    };
+
+    const entries = buildSidebarWorkspaceEntries({
+      placements: [
+        {
+          workspaceKey: "host-a:ws-1",
+          serverId: "host-a",
+          workspaceId: "ws-1",
+          projectKey: resolvedProjectKey,
+          projectName: "repo",
+          projectKind: "git",
+          workspaceKind: "worktree",
+          name: "feature",
+        },
+      ],
+      sessions: [
+        {
+          serverId: "host-a",
+          workspaces: new Map([["ws-1", rawWorkspace]]),
+          workspaceAgentActivity: new Map(),
+        },
+      ],
+    });
+
+    expect(entries.get("host-a:ws-1")?.projectKey).toBe(resolvedProjectKey);
+  });
+
   it("preserves unchanged row identities when another workspace updates", () => {
     const model = buildSidebarWorkspacePlacementModel({
       projects: [project({ projectKey: "project", workspaceKeys: ["srv:one", "srv:two"] })],

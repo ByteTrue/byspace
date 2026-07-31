@@ -1,6 +1,6 @@
 import { expect, type Page } from "@playwright/test";
 
-export async function expectOpenedProject(page: Page, projectName: string): Promise<string> {
+export async function expectOpenedProjectKey(page: Page, projectName: string): Promise<string> {
   const projectRow = page
     .locator('[data-testid^="sidebar-project-row-"]')
     .filter({ hasText: projectName })

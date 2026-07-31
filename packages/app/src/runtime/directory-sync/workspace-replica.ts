@@ -84,14 +84,22 @@ export class WorkspaceDirectoryReplica {
       } else {
         workspaces.set(workspace.id, workspace);
         emptyProjects.delete(workspace.projectId);
-        const existingProject = projects.get(workspace.projectId);
-        projects.set(workspace.projectId, {
-          projectId: workspace.projectId,
-          projectKey: workspace.project?.projectKey ?? existingProject?.projectKey ?? null,
-          projectDisplayName: workspace.projectDisplayName,
-          projectCustomName: workspace.projectCustomName ?? null,
-          projectRootPath: workspace.projectRootPath,
-          projectKind: workspace.projectKind,
+        projects.set(
+          workspace.projectId,
+          projectDescriptorFromWorkspace(workspace, projects.get(workspace.projectId)),
+        );
+      }
+    }
+    for (const workspace of workspaces.values()) {
+      if (!projects.has(workspace.projectId)) {
+        projects.set(workspace.projectId, projectDescriptorFromWorkspace(workspace));
+      }
+    }
+    for (const emptyProject of emptyProjects.values()) {
+      if (!projects.has(emptyProject.projectId)) {
+        projects.set(emptyProject.projectId, {
+          ...emptyProject,
+          projectKey: emptyProject.projectKey ?? null,
         });
       }
     }
@@ -109,4 +117,18 @@ export class WorkspaceDirectoryReplica {
       useWorkspaceSetupStore.getState().removeWorkspace({ serverId: this.serverId, workspaceId });
     }
   }
+}
+
+function projectDescriptorFromWorkspace(
+  workspace: WorkspaceDescriptor,
+  existingProject?: ProjectDescriptor,
+): ProjectDescriptor {
+  return {
+    projectId: workspace.projectId,
+    projectKey: workspace.project?.projectKey ?? existingProject?.projectKey ?? null,
+    projectDisplayName: workspace.projectDisplayName,
+    projectCustomName: workspace.projectCustomName ?? null,
+    projectRootPath: workspace.projectRootPath,
+    projectKind: workspace.projectKind,
+  };
 }

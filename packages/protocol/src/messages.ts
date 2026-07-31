@@ -2971,9 +2971,13 @@ export const ProjectCheckoutLitePayloadSchema = z.union([
 
 export const ProjectPlacementPayloadSchema = z.object({
   // COMPAT(projectPlacementProjectId): added in v0.2.5; review legacy fallback after 2027-01-31.
-  // This additive wire field remains optional; projectKey is display grouping only.
   projectId: z.string().optional(),
+  // `projectKey` retains its legacy host-local identity semantics so older clients
+  // keep resolving workspaces and mutations against the daemon's project ID.
   projectKey: z.string(),
+  // COMPAT(projectGroupingKey): added in v0.2.5; remove the projectKey fallback after 2027-01-31.
+  // Shared cross-host identity is additive; old clients ignore it.
+  projectGroupingKey: z.string().optional(),
   projectName: z.string(),
   workspaceName: z.string().nullable().optional(),
   checkout: ProjectCheckoutLitePayloadSchema,
@@ -3204,7 +3208,10 @@ export const FetchRecentProviderSessionsResponseMessageSchema = z.object({
 export const WorkspaceProjectDescriptorPayloadSchema = z.object({
   projectId: z.string(),
   // COMPAT(projectKey): added in v0.2.5, remove optional after 2027-01-31.
+  // Keep the legacy field host-local; grouping identity is separately additive.
   projectKey: z.string().optional(),
+  // COMPAT(projectGroupingKey): added in v0.2.5; remove the projectKey fallback after 2027-01-31.
+  projectGroupingKey: z.string().optional(),
   projectDisplayName: z.string(),
   projectCustomName: z.string().nullable().optional(),
   projectRootPath: z.string(),

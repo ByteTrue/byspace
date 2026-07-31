@@ -46,8 +46,8 @@ test.describe("cross-host project identity", () => {
       const secondaryProject = (await secondaryClient.listProjects()).projects.find(
         (project) => project.projectId === secondaryProjectId,
       );
-      expect(primaryProject?.projectKey).toBe(secondaryProject?.projectKey);
-      const projectKey = primaryProject?.projectKey;
+      expect(primaryProject?.projectGroupingKey).toBe(secondaryProject?.projectGroupingKey);
+      const projectKey = primaryProject?.projectGroupingKey;
       if (!projectKey) throw new Error("Expected a shared project key");
 
       await primaryClient.renameProject(primaryProjectId, "Primary shared app");
@@ -105,8 +105,12 @@ test.describe("cross-host project identity", () => {
       await page.getByTestId(`sidebar-project-kebab-${projectKey}`).click();
       page.once("dialog", (dialog) => void dialog.accept());
       await page.getByTestId(`sidebar-project-menu-remove-${projectKey}`).click();
-      await expect.poll(async () => (await primaryClient.listProjects()).projects).toEqual([]);
-      await expect.poll(async () => (await secondaryClient.listProjects()).projects).toEqual([]);
+      await expect
+        .poll(async () => (await primaryClient.listProjects()).projects, { timeout: 30_000 })
+        .toEqual([]);
+      await expect
+        .poll(async () => (await secondaryClient.listProjects()).projects, { timeout: 30_000 })
+        .toEqual([]);
     } finally {
       if (primaryProjectId)
         await primaryClient.removeProject(primaryProjectId).catch(() => undefined);

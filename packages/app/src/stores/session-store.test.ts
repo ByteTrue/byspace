@@ -218,10 +218,10 @@ describe("normalizeWorkspaceDescriptor", () => {
     expect(missing.statusEnteredAt).toBeNull();
   });
 
-  it("preserves project placement from workspace descriptor payloads", () => {
+  it("normalizes additive grouping identity without changing legacy wire semantics", () => {
     const workspace = normalizeWorkspaceDescriptor({
       id: "1",
-      projectId: "remote:github.com/acme/app",
+      projectId: "prj_a",
       projectDisplayName: "acme/app",
       projectRootPath: "/repo/app",
       workspaceDirectory: "/repo/app",
@@ -235,7 +235,9 @@ describe("normalizeWorkspaceDescriptor", () => {
       diffStat: null,
       scripts: [],
       project: {
-        projectKey: "remote:github.com/acme/app",
+        projectId: "prj_a",
+        projectKey: "prj_a",
+        projectGroupingKey: "remote:github.com/acme/app",
         projectName: "acme/app",
         checkout: {
           cwd: "/repo/app",
@@ -250,7 +252,9 @@ describe("normalizeWorkspaceDescriptor", () => {
     });
 
     expect(workspace.project).toEqual({
+      projectId: "prj_a",
       projectKey: "remote:github.com/acme/app",
+      projectGroupingKey: "remote:github.com/acme/app",
       projectName: "acme/app",
       checkout: {
         cwd: "/repo/app",

@@ -64,6 +64,13 @@ async function seedBySpaceWorkspaceWithOpenCodeSession(): Promise<OpenCodeImport
     if (!createdWorkspace.workspace) {
       throw new Error(createdWorkspace.error ?? `Failed to create workspace ${BYSPACE_REPO_PATH}`);
     }
+    const listedProject = (await client.listProjects()).projects.find(
+      (candidate) => candidate.projectId === createdWorkspace.workspace?.projectId,
+    );
+    const projectKey = listedProject?.projectGroupingKey ?? listedProject?.projectKey;
+    if (!projectKey) {
+      throw new Error(`Missing projectKey for ${createdWorkspace.workspace.projectId}`);
+    }
     return {
       prompt,
       promptPreview,
@@ -75,6 +82,7 @@ async function seedBySpaceWorkspaceWithOpenCodeSession(): Promise<OpenCodeImport
         workspaceName: createdWorkspace.workspace.name,
         workspaceDirectory: createdWorkspace.workspace.workspaceDirectory,
         projectId: createdWorkspace.workspace.projectId,
+        projectKey,
         projectDisplayName: createdWorkspace.workspace.projectDisplayName,
         cleanup: async () => {
           await client.close().catch(() => undefined);

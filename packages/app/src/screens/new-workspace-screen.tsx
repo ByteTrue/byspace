@@ -1583,6 +1583,14 @@ export function NewWorkspaceScreen({
   const isPending = isNewWorkspacePending({ pendingAction, isDraftHandoffActive });
   const client = useHostRuntimeClient(selectedServerId);
   const isConnected = useHostRuntimeIsConnected(selectedServerId);
+  const draftKey = buildNewWorkspaceDraftKey(draftId);
+  const preserveMissingProject = useDraftStore((state) => {
+    const record = state.drafts[draftKey];
+    return Boolean(
+      record?.lifecycle === "active" &&
+      (record.input.text.length > 0 || record.input.attachments.length > 0),
+    );
+  });
   const {
     selectedProject,
     selectedSourceDirectory,
@@ -1597,6 +1605,7 @@ export function NewWorkspaceScreen({
     routeProject,
     lastActiveProject,
     allowAllProjects: supportsWorkspaceMultiplicity,
+    preserveMissingProject,
   });
   const activePickerTargetId = resolveActivePickerTargetId(
     selectedServerId,
@@ -1618,7 +1627,6 @@ export function NewWorkspaceScreen({
   const projectIconDataByProjectKey = useProjectIconDataByProjectKey({
     projects: projectIconTargets,
   });
-  const draftKey = buildNewWorkspaceDraftKey(draftId);
   const forkDraftSetup = usePendingWorkspaceDraftSetup(draftId);
   const draftContextScopeKey = useDraftWorkspaceAttachmentScopeKey(draftId);
   const visibleDraftContextScopeKeys = useMemo(

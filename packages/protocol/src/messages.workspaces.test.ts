@@ -12,7 +12,7 @@ import {
 
 describe("project placement compatibility", () => {
   const placement = {
-    projectKey: "remote:https://example.com/acme/repo",
+    projectKey: "prj_legacy",
     projectName: "repo",
     checkout: {
       cwd: "/repo",
@@ -29,13 +29,19 @@ describe("project placement compatibility", () => {
     expect(ProjectPlacementPayloadSchema.parse(placement)).not.toHaveProperty("projectId");
   });
 
-  test("preserves an opaque host-local project id separately from the grouping key", () => {
-    expect(ProjectPlacementPayloadSchema.parse({ ...placement, projectId: "prj_a" })).toMatchObject(
-      {
+  test("preserves legacy host-local identity while adding shared grouping identity", () => {
+    expect(
+      ProjectPlacementPayloadSchema.parse({
+        ...placement,
         projectId: "prj_a",
-        projectKey: "remote:https://example.com/acme/repo",
-      },
-    );
+        projectKey: "prj_a",
+        projectGroupingKey: "remote:https://example.com/acme/repo",
+      }),
+    ).toMatchObject({
+      projectId: "prj_a",
+      projectKey: "prj_a",
+      projectGroupingKey: "remote:https://example.com/acme/repo",
+    });
   });
 });
 

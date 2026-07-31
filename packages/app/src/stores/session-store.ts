@@ -28,6 +28,7 @@ import type {
   WorkspaceDescriptorPayload,
   WorkspaceProjectDescriptorPayload,
 } from "@bytetrue/byspace-protocol/messages";
+import { normalizeProjectPlacement } from "@/utils/project-placement";
 import {
   normalizeWorkspaceOpaqueId,
   normalizeWorkspacePath,
@@ -178,28 +179,27 @@ export function normalizeWorkspaceDescriptor(
     gitRuntime: payload.gitRuntime,
     githubRuntime: payload.githubRuntime,
     forge: payload.forge,
-    project: payload.project,
+    project: payload.project ? normalizeProjectPlacement(payload.project) : undefined,
   };
 }
 
 export interface EmptyProjectDescriptor {
   projectId: string;
+  projectKey?: string | null;
   projectDisplayName: string;
   projectCustomName: string | null;
   projectRootPath: string;
   projectKind: WorkspaceDescriptorPayload["projectKind"];
 }
 
-export interface ProjectDescriptor extends EmptyProjectDescriptor {
-  projectKey?: string | null;
-}
+export type ProjectDescriptor = EmptyProjectDescriptor;
 
 export function normalizeProjectDescriptor(
   payload: WorkspaceProjectDescriptorPayload,
 ): ProjectDescriptor {
   return {
     projectId: payload.projectId,
-    projectKey: payload.projectKey ?? null,
+    projectKey: payload.projectGroupingKey ?? payload.projectKey ?? null,
     projectDisplayName: payload.projectDisplayName,
     projectCustomName: payload.projectCustomName ?? null,
     projectRootPath: payload.projectRootPath,
@@ -212,6 +212,7 @@ export function normalizeEmptyProjectDescriptor(
 ): EmptyProjectDescriptor {
   return {
     projectId: payload.projectId,
+    projectKey: payload.projectGroupingKey ?? payload.projectKey ?? null,
     projectDisplayName: payload.projectDisplayName,
     projectCustomName: payload.projectCustomName ?? null,
     projectRootPath: payload.projectRootPath,

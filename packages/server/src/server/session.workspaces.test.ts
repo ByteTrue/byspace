@@ -941,7 +941,8 @@ test("create_agent_request keeps requested child cwd with an opaque selected-roo
     await expect(
       session.buildProjectPlacementForWorkspaceId(createdAgent!.workspaceId!),
     ).resolves.toMatchObject({
-      projectKey: expect.stringContaining(path.join(path.basename(parent), "child")),
+      projectKey: expect.stringMatching(/^prj_/),
+      projectGroupingKey: expect.stringContaining(path.join(path.basename(parent), "child")),
       checkout: { cwd: child },
     });
     expect(findByType(emitted, "status")?.payload).toMatchObject({
@@ -3550,6 +3551,7 @@ test("archiving the last workspace emits a remove carrying the now-empty project
 
   const project = createPersistedProjectRecord({
     projectId: "proj-empty-after-archive",
+    projectKey: `host:srv_test:${REPO_CWD}`,
     rootPath: REPO_CWD,
     kind: "git",
     displayName: "repo",
@@ -3595,6 +3597,8 @@ test("archiving the last workspace emits a remove carrying the now-empty project
     id: archivedWorkspace.workspaceId,
     emptyProject: {
       projectId: project.projectId,
+      projectKey: project.projectId,
+      projectGroupingKey: `host:srv_test:${REPO_CWD}`,
       projectDisplayName: "repo",
       projectCustomName: null,
       projectRootPath: REPO_CWD,

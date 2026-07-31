@@ -57,6 +57,7 @@ epic: ""
 - New Workspace shortcut Chromium E2E：最终 1/1 通过；本机 macOS 首轮固定 `Control+P` 未触发 macOS binding，helper 改为跨平台 `ControlOrMeta+P` 后通过。
 - 全 workspace `npm run typecheck` 通过；`npm run lint` 0 warnings / 0 errors；`npm run format` 与最终 targeted formatter 通过。
 - Web export：`npm run build:web --workspace=@bytetrue/byspace-app` 通过并输出 `packages/app/dist`。根 workspace 没有 `build:web` script，首次根命令按预期报 missing script，随后使用 App workspace script 验证。
+- Cross-version Project compatibility hardening：协议保留 legacy `projectKey` 并新增 optional `projectId` / `projectGroupingKey`；daemon 的 Project list、Workspace placement、empty-project delta 均分离 Host-local mutation authority 与 grouped view identity；App 在 store/view boundary 归一化。最终 focused compatibility 10 files、352 passed / 4 skipped；空 Project Chromium 5/5、双 Host grouping 1/1、Add Project Host-local route 3/3 通过；三方向独立 review 最终 **CLEAR**。
 - 独立 review：Forge/Markdown/shortcut **CLEAR**；file-tree 首轮两个 medium 可靠性问题（cache key/path identity、transient listing expansion 保留）已修复并复审 **CLEAR**；older-gh compatibility **CLEAR**；build/test efficiency **CLEAR**；final completeness 首轮发现 routed hydration、Schedule labels 与 fork Host-local authority 遗漏，均已修复并复审 **CLEAR**；HTML sanitizer 经三轮 attribute-breakout hardening 后最终 **CLEAR**；Windows-safe setup 首轮发现 config symlink 与 reset alias 风险，修复后复审 **CLEAR**。
 
 ## 执行记录
@@ -70,6 +71,7 @@ epic: ""
 - Build/test efficiency 切片已移植：根构建只并行互相独立的 highlight/relay，随后复用 BySpace client workspace build 保持 protocol declarations 先于 client 且移除重复 protocol build；server unit test 显式启用 Vitest file parallelism，daemon integration/E2E 继续串行；Windows stderr-timeout test 改用 parent-owned in-memory child streams，在计时请求前确定性写入 stderr。上游 selective-CI/path-filtering 提案（`76e336a1b`）由 BySpace 的全量 PR/push/release CI 策略明确 supersede，未移植且未改任何 release workflow。
 - Windows-safe worktree setup 补齐：`byspace.json` setup 仅调用跨 shell 的 Node script；`scripts/seed-worktree-dev-state.mjs` 从 lifecycle env 读取 source/target，复制 durable agents/projects/config JSON 与可选 server `.env`，排除 pid/log/socket 与 tree/config/env symlink，以 realpath fence 防止 reset 经 checkout alias 删除 source，已有 target 默认不覆盖且支持显式 reset。6/6 Node tests 通过，并在 `docs/development.md` 固化 PowerShell/POSIX setup 约束；安全复审 CLEAR。
 - Final completeness/security findings 已按 TDD 修复：PR comment HTML table 仅产出 sanitized Markdown list，active/unknown content 与 href/src Markdown breakout 不可穿透；New Workspace selection 按 `(serverId, Host-local projectId)` 接管 hydrated grouping key 并保留 opaque key；Schedule Host target label 与 late hydration 已修复；`ProjectPlacementPayload.projectId` 以 optional structural wire field 发布，fork-to-new-workspace 优先读取当前 Workspace 的 Host-local id、再兼容新 placement field，绝不回退 grouping `projectKey`。focused 242/242，sanitizer hardening 34/34，`build:client`、全 workspace typecheck/lint/format 全绿；三方向复审最终 CLEAR。
+- Cross-version Project compatibility follow-up 已完成：旧 wire 字段语义保持可解析，新 grouped identity 仅通过 optional 字段传播；duplicate clone 的 resolved row/callout key、last-workspace empty project、Add Project route Host-local ID 均有独立回归覆盖；单次 grouped removal 对所有 Host-local placement 并发 fan-out，E2E 只断言最终态而不依赖完成顺序。
 
 ## 关闭回写
 

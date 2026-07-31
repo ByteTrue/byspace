@@ -46,12 +46,12 @@ test.describe("Worktree restore", () => {
 
   async function createArchivedMissingWorktree(prefix: string) {
     const project = await openProjectViaDaemon(worktreeClient, tempRepo.path);
-    createdProjectIds.add(project.projectKey);
+    createdProjectIds.add(project.projectId);
     const worktree = await createWorktreeViaDaemon(worktreeClient, {
       cwd: tempRepo.path,
       slug: `${prefix}-${randomUUID().slice(0, 8)}`,
     });
-    createdProjectIds.add(worktree.projectKey);
+    createdProjectIds.add(worktree.projectId);
     createdWorktreeDirectories.add(worktree.workspaceDirectory);
     const agent = await createIdleAgent(client, {
       cwd: worktree.workspaceDirectory,
@@ -120,12 +120,12 @@ test.describe("Worktree restore", () => {
   }) => {
     const serverId = getServerId();
     const project = await openProjectViaDaemon(worktreeClient, tempRepo.path);
-    createdProjectIds.add(project.projectKey);
+    createdProjectIds.add(project.projectId);
     const worktree = await createWorktreeViaDaemon(worktreeClient, {
       cwd: tempRepo.path,
       slug: `restore-inplace-${randomUUID().slice(0, 8)}`,
     });
-    createdProjectIds.add(worktree.projectKey);
+    createdProjectIds.add(worktree.projectId);
     createdWorktreeDirectories.add(worktree.workspaceDirectory);
 
     const agent = await createIdleAgent(client, {
@@ -274,7 +274,7 @@ test.describe("Worktree restore", () => {
     page,
   }) => {
     const project = await openProjectViaDaemon(worktreeClient, tempRepo.path);
-    createdProjectIds.add(project.projectKey);
+    createdProjectIds.add(project.projectId);
     const agent = await createIdleAgent(client, {
       cwd: project.workspaceDirectory,
       workspaceId: project.workspaceId,

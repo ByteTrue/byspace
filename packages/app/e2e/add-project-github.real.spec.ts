@@ -10,10 +10,11 @@ import {
   expectAddProjectPage,
   expectNewWorkspaceForAddedProject,
   openAddProjectFlow,
+  resolveAddedProjectId,
 } from "./helpers/add-project-flow";
 import { gotoAppShell } from "./helpers/app";
 import { createTempGithubRepo, hasGithubAuth, type GhRepoFixture } from "./helpers/github-fixtures";
-import { expectOpenedProject } from "./helpers/project-picker-ui";
+import { expectOpenedProjectKey } from "./helpers/project-picker-ui";
 import { connectSeedClient } from "./helpers/seed-client";
 import { getServerId } from "./helpers/server-id";
 
@@ -68,7 +69,8 @@ test.describe("Add Project GitHub flow", () => {
 
       await rm(checkoutPath, { recursive: true });
       await page.keyboard.press("Enter");
-      projectId = await expectOpenedProject(page, repository.name);
+      await expectOpenedProjectKey(page, repository.name);
+      projectId = await resolveAddedProjectId({ projectPath: checkoutPath });
       await expectNewWorkspaceForAddedProject(page, {
         serverId: getServerId(),
         projectId,

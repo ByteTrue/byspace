@@ -1,4 +1,5 @@
 import { expect, type Locator, type Page } from "@playwright/test";
+import { connectSeedClient } from "./seed-client";
 
 export type AddProjectFlowPage =
   | "host"
@@ -73,6 +74,28 @@ export async function chooseAddProjectMethod(page: Page, method: AddProjectMetho
   }
 }
 
+export async function resolveAddedProjectId(input: {
+  projectPath: string;
+  port?: number;
+}): Promise<string> {
+  const client = await connectSeedClient({ port: input.port });
+  try {
+    let projectId: string | null = null;
+    await expect
+      .poll(async () => {
+        projectId =
+          (await client.listProjects()).projects.find(
+            (project) => project.projectRootPath === input.projectPath,
+          )?.projectId ?? null;
+        return projectId;
+      })
+      .not.toBeNull();
+    return projectId!;
+  } finally {
+    await client.close();
+  }
+}
+
 export async function expectNewWorkspaceForAddedProject(
   page: Page,
   input: {
@@ -86,7 +109,8 @@ export async function expectNewWorkspaceForAddedProject(
   const url = new URL(page.url());
   expect(url.pathname).toBe("/new");
   expect(url.searchParams.get("serverId")).toBe(input.serverId);
-  expect(url.searchParams.get("projectId")).toBe(input.projectId);
+  const projectId = url.searchParams.get("projectId");
+  expect(projectId).toBe(input.projectId);
   expect(url.searchParams.get("dir")).toBe(input.projectPath);
   await expect(page.getByRole("button", { name: "Workspace project" })).toContainText(
     input.projectName,

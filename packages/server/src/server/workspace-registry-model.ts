@@ -6,7 +6,7 @@ import type {
   ProjectPlacementPayload,
 } from "@bytetrue/byspace-protocol/messages";
 import { parseGitRevParsePath } from "../utils/git-rev-parse-path.js";
-import { createRealpathAwarePathMatcher, getRealpathAwareRelativePath } from "../utils/path.js";
+import { getRealpathAwareRelativePath } from "../utils/path.js";
 import { deriveProjectGroupingDisplayName, deriveProjectKey } from "./project-key.js";
 import type { PersistedWorkspaceRecord } from "./workspace-registry.js";
 
@@ -51,7 +51,7 @@ export function deriveWorkspaceDirectoryKey(
 ): string {
   const worktreeRoot = checkout.worktreeRoot ? parseGitRevParsePath(checkout.worktreeRoot) : null;
   const selectedRoot = resolve(cwd);
-  return worktreeRoot && createRealpathAwarePathMatcher(worktreeRoot)(selectedRoot)
+  return worktreeRoot && getRealpathAwareRelativePath(worktreeRoot, selectedRoot) !== null
     ? worktreeRoot
     : selectedRoot;
 }
@@ -390,7 +390,9 @@ export function buildProjectPlacementForCwd(input: {
 }): ProjectPlacementPayload {
   const membership = classifyDirectoryForProjectMembership(input);
   return {
-    projectKey: membership.projectKey,
+    projectId: membership.projectId,
+    projectKey: membership.projectId,
+    projectGroupingKey: membership.projectKey,
     projectName: membership.projectName,
     checkout: membership.checkout,
   };

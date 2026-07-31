@@ -578,6 +578,7 @@ describe("project command-center RPCs", () => {
             directoryPath,
             project: {
               projectId: "prj_new_project",
+              projectKey: "prj_new_project",
               projectDisplayName: "new-project",
               projectCustomName: null,
               projectRootPath: directoryPath,
@@ -3334,7 +3335,7 @@ describe("session checkout status handling", () => {
 });
 
 describe("session workspace descriptors", () => {
-  test("fetch_workspaces_request includes project placement for a GitHub-backed workspace", async () => {
+  test("fetch_workspaces_request keeps the legacy local key and adds shared grouping identity", async () => {
     const messages: unknown[] = [];
     const workspace = {
       workspaceId: "ws-gh",
@@ -3389,7 +3390,8 @@ describe("session workspace descriptors", () => {
             id: "ws-gh",
             project: expect.objectContaining({
               projectId: "prj_a",
-              projectKey: "remote:github.com/acme/app",
+              projectKey: "prj_a",
+              projectGroupingKey: "remote:github.com/acme/app",
               projectName: "acme/app",
               workspaceName: "app",
               checkout: expect.objectContaining({

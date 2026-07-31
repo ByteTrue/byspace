@@ -6,6 +6,10 @@
 - Updates Claude, OMP, and child-agent lifecycle behavior, including Opus 5 context variants and parent retention while child agents run.
 - Adds workspace script management to the daemon, CLI, and MCP, and preserves public service-proxy ports across restarts.
 - Improves Web history pagination, project search, sidebar shortcuts, terminal tab actions, file-editor focus, and Provider overlays.
+- Groups the same remote-backed project across Hosts while keeping Host-local project IDs as the sole mutation authority.
+- Supports large structured diffs through a 64 MiB transport backstop and an explicit oversized-diff state instead of disconnecting.
+- Hardens PR comment Markdown conversion, self-hosted Forge ports, file-tree restoration, older GitHub CLI search, and Provider interruption/model behavior.
+- Makes BySpace-created worktree setup portable across PowerShell and POSIX shells without copying runtime state or symlinks.
 
 ## 0.2.1 - 2026-07-25
 

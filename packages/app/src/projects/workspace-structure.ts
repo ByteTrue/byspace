@@ -116,7 +116,10 @@ function buildLegacyProjects(
 ): ProjectDescriptor[] {
   const projects = new Map<string, ProjectDescriptor>();
   for (const project of emptyProjects) {
-    projects.set(project.projectId, { ...project, projectKey: project.projectId });
+    projects.set(project.projectId, {
+      ...project,
+      projectKey: project.projectKey ?? project.projectId,
+    });
   }
   for (const workspace of workspaces) {
     if (projects.has(workspace.projectId)) continue;

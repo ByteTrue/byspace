@@ -87,6 +87,7 @@ import type { StreamItem } from "@/types/stream";
 import { getInitDeferred, getInitKey } from "@/utils/agent-initialization";
 import { derivePendingPermissionKey, normalizeAgentSnapshot } from "@/utils/agent-snapshots";
 import { applyLegacyDaemonWorkspaceOwnership } from "@/workspace/legacy-daemon-workspaces";
+import { normalizeProjectPlacement } from "@/utils/project-placement";
 import type { WorkspaceFileOpenRequest } from "@/workspace/file-open";
 import { navigateToAgent } from "@/utils/navigate-to-agent";
 import { deriveSidebarStateBucket } from "@/utils/sidebar-agent-state";
@@ -264,7 +265,9 @@ function storeFetchedAgentDetail(input: {
     serverId: input.serverId,
     agent: {
       ...normalized,
-      projectPlacement: input.result.project,
+      projectPlacement: input.result.project
+        ? normalizeProjectPlacement(input.result.project)
+        : input.result.project,
     },
   });
   const store = useSessionStore.getState();

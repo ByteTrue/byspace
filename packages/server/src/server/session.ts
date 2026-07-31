@@ -1682,7 +1682,8 @@ export class Session {
     const checkout = buildWorkspaceCheckout(workspace, project, liveBranch);
     return {
       projectId: project.projectId,
-      projectKey: project.projectKey ?? project.projectId,
+      projectKey: project.projectId,
+      ...(project.projectKey ? { projectGroupingKey: project.projectKey } : {}),
       projectName: resolveProjectDisplayName(project),
       workspaceName: resolveWorkspaceDisplayName(workspace),
       checkout,
@@ -4447,7 +4448,8 @@ export class Session {
   ): WorkspaceProjectDescriptorPayload {
     return {
       projectId: project.projectId,
-      ...(project.projectKey ? { projectKey: project.projectKey } : {}),
+      projectKey: project.projectId,
+      ...(project.projectKey ? { projectGroupingKey: project.projectKey } : {}),
       projectDisplayName: resolveProjectDisplayName(project),
       projectCustomName: project.customName ?? null,
       projectRootPath: project.rootPath,

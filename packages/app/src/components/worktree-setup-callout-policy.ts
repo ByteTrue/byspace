@@ -7,6 +7,7 @@ export interface WorktreeSetupWorkspaceInput {
   projectKind: string;
   projectRootPath: string;
   project?: {
+    projectKey?: string | null;
     checkout?: {
       mainRepoRoot?: string | null;
     } | null;
@@ -38,12 +39,17 @@ export interface WorktreeSetupCalloutPolicy {
 export function selectActiveGitWorkspaceProject(
   serverId: string,
   workspace: WorktreeSetupWorkspaceInput,
+  resolvedProjectKey?: string,
 ): ActiveGitWorkspaceProject | null {
   if (workspace.projectKind !== "git") {
     return null;
   }
 
-  const projectKey = workspace.projectId.trim();
+  const projectKey = (
+    resolvedProjectKey ??
+    workspace.project?.projectKey ??
+    workspace.projectId
+  ).trim();
   const repoRoot = (workspace.project?.checkout?.mainRepoRoot ?? workspace.projectRootPath).trim();
   if (!projectKey || !repoRoot) {
     return null;

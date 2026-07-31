@@ -17,6 +17,7 @@ type NewWorkspaceDaemonClient = Pick<
   | "fetchWorkspaces"
   | "getBySpaceWorktreeList"
   | "getDaemonConfig"
+  | "listProjects"
   | "inspectWorkspaceRecovery"
   | "on"
   | "patchDaemonConfig"
@@ -29,6 +30,7 @@ type WorkspaceDescriptor = NonNullable<CreateWorkspacePayload["workspace"]>;
 
 export interface OpenedProject {
   workspaceId: string;
+  projectId: string;
   projectKey: string;
   projectDisplayName: string;
   workspaceName: string;
@@ -45,10 +47,28 @@ function requireWorkspace(payload: WorkspacePayload) {
   return payload.workspace;
 }
 
-function openedProjectFromWorkspace(workspace: WorkspaceDescriptor): OpenedProject {
+async function projectKeyForWorkspace(
+  client: NewWorkspaceDaemonClient,
+  workspace: WorkspaceDescriptor,
+): Promise<string> {
+  const project = (await client.listProjects()).projects.find(
+    (candidate) => candidate.projectId === workspace.projectId,
+  );
+  const projectKey = project?.projectGroupingKey ?? project?.projectKey;
+  if (!projectKey) {
+    throw new Error(`Missing projectKey for ${workspace.projectId}`);
+  }
+  return projectKey;
+}
+
+async function openedProjectFromWorkspace(
+  client: NewWorkspaceDaemonClient,
+  workspace: WorkspaceDescriptor,
+): Promise<OpenedProject> {
   return {
     workspaceId: workspace.id,
-    projectKey: workspace.projectId,
+    projectId: workspace.projectId,
+    projectKey: await projectKeyForWorkspace(client, workspace),
     projectDisplayName: workspace.projectDisplayName,
     workspaceName: workspace.name,
     workspaceDirectory: workspace.workspaceDirectory,
@@ -104,7 +124,7 @@ export async function openProjectViaDaemon(
       source: { kind: "directory", path: repoPath },
     }),
   );
-  return openedProjectFromWorkspace(workspace);
+  return openedProjectFromWorkspace(client, workspace);
 }
 
 export async function archiveWorkspaceFromDaemon(
@@ -146,7 +166,7 @@ export async function createWorktreeViaDaemon(
     worktreeSlug: input.slug,
   });
   const workspace = requireWorkspace(payload);
-  return openedProjectFromWorkspace(workspace);
+  return openedProjectFromWorkspace(client, workspace);
 }
 
 export async function openNewWorkspaceComposer(
@@ -385,6 +405,7 @@ export async function assertNewWorkspaceSidebarAndHeader(
   },
 ): Promise<{
   workspaceId: string;
+  projectId: string;
   projectKey: string;
   workspaceName: string;
   workspaceDirectory: string;
@@ -423,7 +444,8 @@ export async function assertNewWorkspaceSidebarAndHeader(
 
   return {
     workspaceId: workspace.id,
-    projectKey: workspace.projectId,
+    projectId: workspace.projectId,
+    projectKey: await projectKeyForWorkspace(input.client, workspace),
     workspaceName: workspace.name,
     workspaceDirectory: workspace.workspaceDirectory,
   };

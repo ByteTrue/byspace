@@ -7,7 +7,7 @@ import {
   chooseAddProjectMethod,
   openAddProjectFlow,
 } from "./helpers/add-project-flow";
-import { expectOpenedProject } from "./helpers/project-picker-ui";
+import { expectOpenedProjectKey } from "./helpers/project-picker-ui";
 import { connectSeedClient, seedWorkspace } from "./helpers/seed-client";
 import { getServerId } from "./helpers/server-id";
 import { createTempGitRepo } from "./helpers/workspace";
@@ -32,12 +32,12 @@ async function archiveWorkspaceFromSidebar(page: Page, workspaceId: string): Pro
   await archiveItem.click();
 }
 
-async function removeProjectFromSidebar(page: Page, projectId: string): Promise<void> {
-  const projectRow = page.getByTestId(`sidebar-project-row-${projectId}`);
+async function removeProjectFromSidebar(page: Page, projectKey: string): Promise<void> {
+  const projectRow = page.getByTestId(`sidebar-project-row-${projectKey}`);
   await expect(projectRow).toBeVisible({ timeout: 30_000 });
   await projectRow.hover();
 
-  const kebab = page.getByTestId(`sidebar-project-kebab-${projectId}`);
+  const kebab = page.getByTestId(`sidebar-project-kebab-${projectKey}`);
   await expect(kebab).toBeVisible({ timeout: 10_000 });
   await kebab.click();
 
@@ -45,7 +45,7 @@ async function removeProjectFromSidebar(page: Page, projectId: string): Promise<
   // user-confirmed removal proceeds deterministically.
   page.once("dialog", (dialog) => void dialog.accept());
 
-  const removeItem = page.getByTestId(`sidebar-project-menu-remove-${projectId}`);
+  const removeItem = page.getByTestId(`sidebar-project-menu-remove-${projectKey}`);
   await expect(removeItem).toBeVisible({ timeout: 10_000 });
   await removeItem.click();
 }
@@ -93,8 +93,7 @@ test.describe("Project picker search", () => {
     await expect(suggestion).toBeVisible({ timeout: 30_000 });
     await suggestion.click();
 
-    const projectId = await expectOpenedProject(page, projectPickerFixture.projectName);
-    projectPickerFixture.rememberProjectId(projectId);
+    await expectOpenedProjectKey(page, projectPickerFixture.projectName);
   });
 
   test("shows a loading state after typing while directory suggestions are pending", async ({
@@ -125,13 +124,20 @@ test.describe("Project with no workspaces persists", () => {
       await gotoAppShell(page);
       await waitForSidebarProjectListReady(page);
 
-      projectId = await addProjectFromPicker(page, repo.path);
-      const projectRow = page.getByTestId(`sidebar-project-row-${projectId}`);
+      const projectKey = await addProjectFromPicker(page, repo.path);
+      const listedProject = (await client.listProjects()).projects.find(
+        (project) => project.projectRootPath === repo.path,
+      );
+      if (!listedProject) {
+        throw new Error(`Missing listed project for ${repo.path}`);
+      }
+      projectId = listedProject.projectId;
+      const projectRow = page.getByTestId(`sidebar-project-row-${projectKey}`);
       await expect(projectRow).toBeVisible({ timeout: 30_000 });
       await expect(projectRow).toContainText(path.basename(repo.path));
-      await expect(page.getByTestId(`sidebar-workspace-list-${projectId}`)).toHaveCount(0);
+      await expect(page.getByTestId(`sidebar-workspace-list-${projectKey}`)).toHaveCount(0);
 
-      const newWorkspaceRow = page.getByTestId(`sidebar-project-new-workspace-row-${projectId}`);
+      const newWorkspaceRow = page.getByTestId(`sidebar-project-new-workspace-row-${projectKey}`);
       await expect(newWorkspaceRow).toBeVisible({ timeout: 30_000 });
       await expect(newWorkspaceRow).toContainText("New workspace");
 
@@ -152,9 +158,9 @@ test.describe("Project with no workspaces persists", () => {
     const workspace = await seedWorkspace({ repoPrefix: "empty-project-persists-" });
 
     try {
-      const projectRow = page.getByTestId(`sidebar-project-row-${workspace.projectId}`);
+      const projectRow = page.getByTestId(`sidebar-project-row-${workspace.projectKey}`);
       const newWorkspaceRow = page.getByTestId(
-        `sidebar-project-new-workspace-row-${workspace.projectId}`,
+        `sidebar-project-new-workspace-row-${workspace.projectKey}`,
       );
       const globalNewWorkspace = page.getByTestId("sidebar-global-new-workspace");
 
@@ -196,9 +202,10 @@ test.describe("Project remove", () => {
   test("removing a project from project actions removes it from the sidebar", async ({ page }) => {
     const workspace = await seedWorkspace({ repoPrefix: "project-remove-sidebar-" });
     let readdedProjectId: string | null = null;
+    let readdedProjectKey: string | null = null;
 
     try {
-      const projectRow = page.getByTestId(`sidebar-project-row-${workspace.projectId}`);
+      const projectRow = page.getByTestId(`sidebar-project-row-${workspace.projectKey}`);
 
       await gotoAppShell(page);
       await waitForSidebarHydration(page);
@@ -207,7 +214,7 @@ test.describe("Project remove", () => {
         timeout: 30_000,
       });
 
-      await removeProjectFromSidebar(page, workspace.projectId);
+      await removeProjectFromSidebar(page, workspace.projectKey);
 
       await expect(page.getByTestId(workspaceRowTestId(workspace.workspaceId))).toHaveCount(0, {
         timeout: 30_000,
@@ -223,15 +230,20 @@ test.describe("Project remove", () => {
       expect(readded.project?.projectDisplayName).toBe(workspace.projectDisplayName);
       readdedProjectId = readded.project?.projectId ?? null;
       expect(readdedProjectId).not.toBeNull();
+      const readdedProject = (await workspace.client.listProjects()).projects.find(
+        (project) => project.projectId === readdedProjectId,
+      );
+      readdedProjectKey = readdedProject?.projectGroupingKey ?? readdedProject?.projectKey ?? null;
+      expect(readdedProjectKey).not.toBeNull();
 
       await page.reload();
       await waitForSidebarHydration(page);
-      const readdedProjectRow = page.getByTestId(`sidebar-project-row-${readdedProjectId}`);
+      const readdedProjectRow = page.getByTestId(`sidebar-project-row-${readdedProjectKey}`);
       await expect(readdedProjectRow).toBeVisible({ timeout: 30_000 });
       await expect(readdedProjectRow).toContainText(workspace.projectDisplayName);
       await expect(readdedProjectRow).not.toContainText(workspace.repoPath);
       await expect(
-        page.getByTestId(`sidebar-project-new-workspace-row-${readdedProjectId}`),
+        page.getByTestId(`sidebar-project-new-workspace-row-${readdedProjectKey}`),
       ).toBeVisible({ timeout: 30_000 });
     } finally {
       if (readdedProjectId) {

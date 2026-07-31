@@ -26,6 +26,7 @@ interface NewWorkspaceProjectPickerInput {
   routeProject: HostProjectListItem | null;
   lastActiveProject: HostProjectListItem | null;
   allowAllProjects: boolean;
+  preserveMissingProject: boolean;
 }
 
 interface NewWorkspaceProjectPickerState {
@@ -86,6 +87,7 @@ export function useNewWorkspaceProjectPicker({
   routeProject,
   lastActiveProject,
   allowAllProjects,
+  preserveMissingProject,
 }: NewWorkspaceProjectPickerInput): NewWorkspaceProjectPickerState {
   const selectableProjects = useMemo(
     () =>
@@ -116,11 +118,12 @@ export function useNewWorkspaceProjectPicker({
   });
   const shouldPreserveMissingProject = useCallback(
     (project: HostProjectListItem) =>
+      preserveMissingProject ||
       hasPendingArchiveForProject({
         selectedServerId,
         project,
       }),
-    [selectedServerId],
+    [preserveMissingProject, selectedServerId],
   );
   const selectionContext = useMemo<ProjectSelectionContext>(
     () => ({
