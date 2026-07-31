@@ -35,6 +35,7 @@ export function serializeOmpHostTools(catalog: BySpaceToolCatalog): OmpRpcHostTo
     const definition: OmpRpcHostToolDefinition = {
       name: tool.name,
       description: tool.description,
+      loadMode: "essential",
       parameters: serializeBySpaceToolInputParameters(tool),
     };
     if (tool.title) {

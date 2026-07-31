@@ -705,6 +705,57 @@ describe("PiRpcAgentSession", () => {
     );
   });
 
+  test("reports a delayed aborted terminal when the interrupt request fails", async () => {
+    const { pi, session, events } = await createSession();
+    const fakeSession = pi.latestSession();
+    fakeSession.abort = async () => {
+      throw new Error("abort failed");
+    };
+
+    const turn = await session.startTurn("keep this turn active");
+    await expect(session.interrupt()).rejects.toThrow("abort failed");
+    fakeSession.finishTurn({
+      role: "assistant",
+      provider: "openai-responses",
+      model: "gpt-5.6-terra",
+      responseId: "resp-abort-failed",
+      stopReason: "aborted",
+      errorMessage: "OpenAI Responses stream ended before a terminal response event",
+      content: [],
+    });
+
+    await expect(events.nextTurnFailure()).resolves.toMatchObject({ turnId: turn.turnId });
+    await expect(session.startTurn("next request")).resolves.toBeDefined();
+  });
+
+  test("suppresses an old aborted terminal after the next turn starts", async () => {
+    const { pi, session, events } = await createSession();
+    const fakeSession = pi.latestSession();
+    fakeSession.abort = async () => {};
+
+    const first = await session.startTurn("stop this turn");
+    await session.interrupt();
+    await expect(events.nextTurnCancellation()).resolves.toMatchObject({ turnId: first.turnId });
+
+    const second = await session.startTurn("new turn");
+    fakeSession.finishTurn({
+      role: "assistant",
+      provider: "openai-responses",
+      model: "gpt-5.6-terra",
+      responseId: "resp-old-aborted",
+      stopReason: "aborted",
+      errorMessage: "OpenAI Responses stream ended before a terminal response event",
+      content: [],
+    });
+
+    await session.interrupt();
+    const recorded = (events as unknown as { events: AgentStreamEvent[] }).events;
+    expect(recorded).toContainEqual(
+      expect.objectContaining({ type: "turn_canceled", turnId: second.turnId }),
+    );
+    expect(recorded.map((event) => event.type)).not.toContain("turn_failed");
+  });
+
   test("adds Pi assistant context to generic provider finish errors", async () => {
     const { pi, session, events } = await createSession();
 

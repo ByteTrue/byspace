@@ -886,6 +886,11 @@ function latestPiErrorMessage(messages: PiAgentMessage[]): string | null {
   return formatPiErrorMessage(latestAssistant);
 }
 
+function isPiAbortedTerminalResponse(messages: PiAgentMessage[]): boolean {
+  const latestAssistant = messages.findLast((message) => message.role === "assistant");
+  return latestAssistant?.stopReason?.toLowerCase() === "aborted";
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -1285,6 +1290,11 @@ export class PiRpcAgentSession implements AgentSession {
   private state: PiSessionState;
   private readonly currentModeId: string | null;
   private closed = false;
+  // Pi can deliver the interrupted turn's aborted terminal after abort resolves,
+  // including after the next turn has started.
+  private interruptingTurnId: string | null = null;
+  private lastInterruptedTurnId: string | null = null;
+  private interruptedTerminalError: { turnId: string; error: string } | null = null;
 
   constructor(options: PiRpcAgentSessionOptions) {
     this.runtimeSession = options.runtimeSession;
@@ -1478,7 +1488,32 @@ export class PiRpcAgentSession implements AgentSession {
 
   async interrupt(): Promise<void> {
     const turnId = this.activeTurnId;
-    await this.runtimeSession.abort();
+    if (turnId) {
+      this.interruptingTurnId = turnId;
+      this.lastInterruptedTurnId = turnId;
+    }
+    try {
+      await this.runtimeSession.abort();
+    } catch (error) {
+      if (this.interruptingTurnId === turnId) this.interruptingTurnId = null;
+      if (this.lastInterruptedTurnId === turnId) this.lastInterruptedTurnId = null;
+      if (this.interruptedTerminalError?.turnId === turnId) {
+        const terminalError = this.interruptedTerminalError;
+        this.interruptedTerminalError = null;
+        this.activeTurnId = null;
+        this.activeClientMessageId = null;
+        this.activeTurnStarted = false;
+        this.activeAssistantMessageId = null;
+        this.clearNoTurnBuffers();
+        this.emit({
+          type: "turn_failed",
+          provider: this.provider,
+          turnId,
+          error: terminalError.error,
+        });
+      }
+      throw error;
+    }
     if (turnId && this.activeTurnId === turnId) {
       this.activeTurnId = null;
       this.activeClientMessageId = null;
@@ -1492,6 +1527,8 @@ export class PiRpcAgentSession implements AgentSession {
         turnId,
       });
     }
+    if (this.interruptingTurnId === turnId) this.interruptingTurnId = null;
+    if (this.interruptedTerminalError?.turnId === turnId) this.interruptedTerminalError = null;
   }
 
   async revertConversation(input: { messageId: string }): Promise<void> {
@@ -2347,6 +2384,23 @@ export class PiRpcAgentSession implements AgentSession {
   }
 
   private completeTurn(turnId: string | undefined, messages: PiAgentMessage[]): void {
+    if (turnId && this.interruptingTurnId === turnId && isPiAbortedTerminalResponse(messages)) {
+      this.interruptedTerminalError = {
+        turnId,
+        error: latestPiErrorMessage(messages) ?? "Pi turn failed",
+      };
+      return;
+    }
+    if (isPiAbortedTerminalResponse(messages) && this.lastInterruptedTurnId !== null) {
+      // The runtime event has no provider turn id, so an old terminal may be
+      // attributed to a newer active turn. Consume only the first aborted
+      // terminal after an acknowledged interrupt and leave that turn intact.
+      this.lastInterruptedTurnId = null;
+      return;
+    }
+    if (turnId && turnId !== this.lastInterruptedTurnId) {
+      this.lastInterruptedTurnId = null;
+    }
     this.activeTurnId = null;
     this.activeClientMessageId = null;
     this.activeAssistantMessageId = null;
