@@ -23,13 +23,15 @@ current BySpace main
 
 The current BySpace tree is the product source of truth. The upstream release diff is input to review, not a replacement tree and not a commit queue.
 
+A sync is a controlled source transfer, not a design or hardening project. Once the user approves which upstream behaviors to take, copy those behaviors as faithfully as possible. Discovery of a possible upstream bug or a non-obvious compatibility choice transfers decision authority back to the user; it does not authorize the synchronizing agent to invent a fix.
+
 A sync must preserve these established BySpace contracts:
 
 1. Browser Web/PWA + CLI + SDK client + daemon + Relay are the supported surfaces.
 2. Electron, native iOS/Android, `expo-two-way-audio`, marketing website, and Electron Browser automation stay absent.
 3. BySpace identity remains complete: `BySpace`, `byspace`, `BYSPACE_*`, `@bytetrue/byspace*`, `~/.byspace`, `byspace.json`, and port `6777`.
 4. The single-package npm distribution and isolated Stable/Beta Web and Relay channels remain intact.
-5. Current BySpace behavior, hardening, and product decisions are preserved unless the approved upstream delta intentionally improves them.
+5. Current BySpace behavior and documented product decisions remain fixed. If approved upstream behavior conflicts with them, stop and ask rather than combining or improving either design.
 
 Do not repeat existing client deletion, identity migration, packaging, or release setup during a routine sync. Audit them as invariants instead.
 
@@ -43,6 +45,7 @@ Do not repeat existing client deletion, identity migration, packaging, or releas
 - Start the candidate from the recorded current BySpace `main` SHA.
 - Do not merge, rebase, or cherry-pick upstream history. Create normal BySpace-authored sync commits.
 - Use one writer for the candidate and independent read-only reviewers.
+- Freeze dispositions before implementation. The user, not the synchronizing agent, decides whether questionable upstream behavior is copied, excluded, or handled as separate work.
 - Do not tag, publish, deploy, or restart production as part of source synchronization.
 
 ## Workflow
@@ -85,23 +88,28 @@ Summarize impact by retained subsystem:
 
 For each relevant behavior, record one disposition:
 
-- **Port**
+- **Port** — copy the approved upstream behavior with only mechanical BySpace adaptations
 - **Already present**
 - **Excluded surface**
-- **Superseded by BySpace**
-- **Deferred with approval** — blocks baseline advancement until resolved
+- **Superseded by a previously documented BySpace decision**
+- **Needs user decision** — stop before implementation; unresolved decisions block baseline advancement
 
-This is release-level accounting, not a per-commit ledger.
+This is release-level accounting, not a per-commit ledger. An explicit user decision to copy upstream as-is, exclude the behavior, or move a fix into separate work resolves the decision.
 
-### 4. Build from current BySpace main
+### 4. Copy approved upstream code
 
 1. Create a persistent isolated worktree from the recorded current BySpace `main` SHA.
-2. Port approved changes in small vertical slices, including protocol/client/server/Web tests when a behavior crosses layers.
-3. Preserve BySpace behavior when upstream and downstream both changed the same area; import the upstream fix rather than replacing the downstream subsystem wholesale.
-4. Skip code used only by excluded surfaces. If a shared module changed, port only the retained shared behavior.
-5. Add only required dependency and lockfile changes. Preserve unrelated resolved versions.
-6. Build workspace declarations before interpreting cross-package type errors.
-7. Commit slices as ordinary BySpace commits; never import upstream ancestry.
+2. For each approved Port, copy the upstream implementation and its tests as directly as the retained BySpace tree permits.
+3. Without further approval, make only deterministic mechanical adaptations:
+   - BySpace product/package/import/path names;
+   - omission of wiring used only by excluded surfaces;
+   - direct compile and test adjustments caused by those edits;
+   - dependency and lockfile changes strictly required by the copied code.
+4. Mechanical means there is one obvious result and no product choice. It must not add state, schemas, RPCs, fallbacks, policies, UX, architecture, generalized compatibility layers, bug fixes, or hardening.
+5. If copying reveals an apparent upstream defect, a conflict with BySpace, more than one reasonable adaptation, or any additional responsibility, stop that slice before implementing a solution. Report the upstream code, impact, and choices to the user.
+6. Do not improve upstream code during sync. If the user wants a fix, record whether to copy upstream first, exclude it, or perform separately scoped follow-up work.
+7. Build workspace declarations before interpreting cross-package type errors.
+8. Commit copied slices as ordinary BySpace commits; never import upstream ancestry.
 
 ### 5. Verify the candidate
 
@@ -121,36 +129,39 @@ npm run release:check
 Also prove:
 
 - every relevant upstream behavior has a disposition;
+- every approved Port matches upstream except recorded mechanical adaptations;
+- no unapproved redesign, bug fix, hardening, or generalized compatibility layer was added;
 - no Electron/native/website/Browser-automation or unsupported authority was resurrected;
 - no old product namespace, home path, config name, port, or deployment target was introduced;
-- protocol and persisted-state compatibility remain valid at changed boundaries;
 - the global tarball and native modules still work;
 - Stable/Beta endpoint selection remains correct;
 - the production daemon and deployed resources were not changed.
 
-Use targeted Playwright and Provider tests for changed behavior. Broad platform coverage belongs to remote CI, not a local full-suite run.
+Use upstream tests for copied behavior and focused tests for mechanical adaptations. Do not broaden a sync into an exploratory E2E campaign. If testing reveals behavior that requires a product decision, stop and ask. Broad platform coverage belongs to remote CI, not a local full-suite run.
 
 ### 6. Review and integrate normally
 
-Ask independent read-only reviewers to inspect:
+Ask independent read-only reviewers to inspect only:
 
-- release-delta completeness and dispositions;
-- retained versus excluded product boundaries;
-- persistence, path, ref, host, and protocol trust boundaries;
-- package graph and lockfile scope;
-- release-channel and deployment non-regression.
+- whether every approved upstream behavior was copied completely and faithfully;
+- whether adaptations are mechanical and explicitly recorded;
+- whether excluded surfaces or old identity leaked back in;
+- whether package and release-channel boundaries regressed.
 
-Resolve blockers and deferred retained behavior first. When none remain, update the baseline marker and report the candidate SHA, tests, reviews, and residual risks. Integrate through normal commits and a normal push after user approval.
+A reviewer finding is a sync blocker only when code was omitted, copied incorrectly, adapted beyond approval, or crossed a fixed BySpace boundary. A possible upstream bug, security improvement, architecture improvement, or desirable hardening is reported to the user and is not implemented automatically.
+
+Fix transfer mistakes and resolve all **Needs user decision** items through explicit user choices. Then update the baseline marker and report the candidate SHA, tests, reviews, decisions, and residual upstream concerns. Integrate through normal commits and a normal push after user approval.
 
 Shipping is separate. Invoke `release-beta` or `release-stable` only when explicitly requested.
 
 ## Failure rules
 
 - A timeout is evidence, not permission to restart production.
-- A patch conflict is a request for semantic reconciliation, not a reason to take the upstream file wholesale.
+- A patch conflict permits only an obvious mechanical reconciliation. If it requires semantic or product judgment, stop and ask.
 - Missing generated declarations require rebuilding the owning workspace, not adding duplicate local types.
 - Never delete the lockfile to make dependency conflicts disappear.
-- Report scope expansion before adding hardening or architecture work outside the approved release delta.
+- Never treat a discovered upstream defect or review suggestion as authorization to fix or harden it.
+- Never expand test-driven debugging into new sync functionality; report the decision point instead.
 - If the baseline marker cannot be proven, repair it before continuing.
 
 ## Required report
@@ -160,6 +171,7 @@ Shipping is separate. Invoke `release-beta` or `release-stable` only when explic
 - unmodified target build result;
 - release-delta summary and dispositions;
 - candidate commits and changed subsystems;
-- focused tests, full gates, independent reviews, and CI if pushed;
-- deferred items, whether they block baseline advancement, and residual risks;
+- focused tests, full gates, fidelity review, and CI if pushed;
+- all **Needs user decision** items and the user's explicit choices;
+- residual upstream concerns that were observed but not changed;
 - explicit list of remote or production mutations.

@@ -73,7 +73,7 @@ See [docs/development.md](docs/development.md) for full setup, build sync requir
 - **NEVER restart the main BySpace daemon on port 6777 without permission** — it manages all running agents. If you're an agent, restarting it kills your own process.
 - **NEVER assume a timeout means the service needs restarting** — timeouts can be transient.
 - **NEVER add auth checks to tests** — agent providers handle their own auth.
-- **For any Paseo/upstream check or update, use `.agents/skills/upstream-sync/SKILL.md`.** Freeze the old and new upstream releases, then port their aggregate release delta onto the current BySpace `main`; never merge, rebase, cherry-pick, replace history, or revive per-commit sync ledgers.
+- **For any Paseo/upstream check or update, use `.agents/skills/upstream-sync/SKILL.md`.** Freeze the old and new upstream releases, agree on what to take, then copy the approved aggregate release delta onto current BySpace `main`; never merge, rebase, cherry-pick, replace history, or revive per-commit sync ledgers. Sync is source transfer, not upstream review or product development: only deterministic mechanical BySpace adaptations are autonomous. If upstream appears wrong or adaptation requires a product/architecture choice, stop before coding and ask the user.
 - **For any release, use the matching `release-beta` or `release-stable` skill.** Main runs CI only; never create a release tag before exact-SHA push CI succeeds.
 - **Before changing app routes, startup routing, remembered workspace restore, or active workspace selection, read [docs/expo-router.md](docs/expo-router.md).**
 - **NEVER run the full test suite locally.** The test suites are heavy and will freeze the machine, especially if multiple agents run them in parallel. Rules:

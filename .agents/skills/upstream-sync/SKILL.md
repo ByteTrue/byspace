@@ -1,11 +1,13 @@
 ---
 name: upstream-sync
-description: Synchronize the current BySpace main branch with a newer frozen getpaseo/paseo release by reviewing and porting the release-level delta while preserving BySpace behavior, Web-only boundaries, identity, distribution, and Stable/Beta channels. Use for any upstream/Paseo check, comparison, review, update, pull, merge, sync, or adoption request.
+description: Synchronize current BySpace main with a newer frozen getpaseo/paseo release by selecting the release-level delta with the user, then faithfully copying approved upstream code with only mechanical BySpace adaptations. Use for any upstream/Paseo check, comparison, review, update, pull, merge, sync, or adoption request.
 ---
 
 # Sync BySpace with upstream
 
 Port one upstream release delta onto the current BySpace tree. The current BySpace `main` is always the implementation base.
+
+This skill transfers approved upstream code; it does not redesign, harden, or improve upstream behavior. The user owns every product or architecture decision discovered during the transfer.
 
 ## Read first
 
@@ -27,21 +29,26 @@ Treat `docs/upstream-sync.md` as the process source of truth.
 - Prove the exact unmodified upstream target builds before porting its changes.
 - Create the candidate from the current, clean BySpace `main`, never from the upstream target tree.
 - Review the aggregate upstream `BASE..TARGET` release delta. Commit history is navigation evidence, not a queue to replay.
-- Do not merge, rebase, or cherry-pick upstream. Port applicable behavior as BySpace-authored commits so public ancestry and contributor identity stay BySpace-owned.
+- Do not merge, rebase, or cherry-pick upstream. Copy approved behavior as BySpace-authored commits so public ancestry and contributor identity stay BySpace-owned.
 - Do not redo BySpace identity migration, client deletion, packaging, or release infrastructure. They are existing product invariants; only stop new upstream changes from violating them.
 - Keep current `main`, npm, Cloudflare, `~/.byspace`, and port `6777` untouched during candidate work.
 - Keep one writer. Use independent reviewers read-only.
+- Freeze the approved disposition before implementation. After approval, do not silently change a behavior from Port to Superseded, Needs user decision, or a downstream redesign.
+- For an approved Port, preserve upstream behavior and code structure as closely as the retained BySpace tree permits.
+- Only deterministic mechanical adaptations may be made without asking: BySpace names/imports/package paths, removal of wiring used only by excluded surfaces, and direct compile/test adjustments caused by those edits.
+- Stop and ask before any non-mechanical change: new state, schema, RPC, fallback, policy, UX, architecture, broader compatibility layer, bug fix, hardening, or behavior that has more than one reasonable implementation.
+- If upstream code appears buggy or unsafe, report the exact upstream behavior and options. Do not repair it during sync unless the user explicitly chooses that work.
 - Syncing source does not publish a release. Never tag, publish, deploy, or restart production as part of this skill.
 
 ## Delta dispositions
 
 Account for every relevant part of the upstream release delta with one of these outcomes:
 
-- **Port** — needed by a retained BySpace subsystem.
-- **Already present** — BySpace independently has equivalent or stronger behavior; add nothing.
+- **Port** — copy the approved upstream behavior with only mechanical BySpace adaptations.
+- **Already present** — BySpace independently has equivalent behavior; add nothing.
 - **Excluded surface** — belongs only to Electron, native iOS/Android, marketing website, Browser automation, or another unsupported authority; skip it and any wiring used only by it.
-- **Superseded by BySpace** — conflicts with a deliberate BySpace product, protocol, security, packaging, or release decision; preserve BySpace and port only compatible fixes.
-- **Deferred** — valuable but unsafe or too broad for this sync; require explicit user approval, record the reason, and do not advance the integrated upstream baseline while it remains unresolved.
+- **Superseded by BySpace** — conflicts with a previously documented BySpace decision. Do not invent a new superseding design during sync.
+- **Needs user decision** — copying is not mechanical, upstream appears defective, or behavior conflicts with BySpace. Stop before implementation, present the evidence and choices, and wait. An unresolved decision blocks baseline advancement; an explicit user choice to Port, Exclude, or handle separately resolves it.
 
 Do not create a per-commit ledger. Dispositions are by behavior and retained subsystem, using the release diff as evidence.
 
@@ -52,25 +59,28 @@ Do not create a per-commit ledger. Dispositions are by behavior and retained sub
 3. Discover the newest candidate release, then freeze `TARGET_TAG`, `TARGET_COMMIT`, and `TARGET_TREE`.
 4. Compare `BASE..TARGET` by retained subsystem: protocol, persistence, lifecycle, Providers/Pi, terminal, Git/worktrees, Web, Relay, packaging, dependencies, and security.
 5. Identify changes tied to excluded surfaces and cross-layer dependencies that must not be resurrected.
-6. Present the frozen target, impact, risks, and proposed dispositions; wait for target approval.
+6. Present the frozen target, impact, risks, and proposed dispositions; wait for explicit target and disposition approval.
 7. Prove the unmodified target with its own clean install, server build, typecheck, and Web build.
 8. Create an isolated persistent worktree from the recorded current BySpace `main` SHA.
-9. Port the approved release delta in small vertical slices. Preserve current BySpace behavior unless the upstream change intentionally fixes or replaces it.
-10. Import only dependency and lockfile changes required by ported behavior. Rebuild workspace declarations before diagnosing cross-package type errors.
-11. Run focused tests after each slice, then the complete gates in `docs/upstream-sync.md`.
-12. Audit that no excluded client, old identity, upstream package namespace, port, home path, deployment target, or release-channel regression was introduced.
-13. Obtain independent reviews for delta completeness, product boundary, persistence/protocol trust, package graph, and release-channel non-regression.
-14. Resolve every review blocker and every deferred retained behavior. Only then update the recorded upstream baseline.
-15. Present the candidate SHA, normal commit/push plan, validation, dispositions, and residual risks. Push or merge only with user approval.
-16. Stop after source convergence. Use `release-beta` or `release-stable` only for a separate explicit shipping request.
+9. Copy each approved Port from upstream as directly as possible. Apply only the mechanical BySpace adaptations listed above.
+10. If direct copying exposes an upstream defect, architecture conflict, unclear compatibility choice, or additional responsibility, stop that slice and ask the user before writing a solution.
+11. Import only dependency and lockfile changes required by copied behavior. Rebuild workspace declarations before diagnosing cross-package type errors.
+12. Run the upstream tests that cover copied behavior plus focused adaptation tests; then run the complete gates in `docs/upstream-sync.md`.
+13. Audit only transfer fidelity and fixed BySpace boundaries: no omitted approved code, accidental redesign, excluded client, old identity, upstream package namespace, port, home path, deployment target, or release-channel regression.
+14. Obtain independent reviews limited to: copied-versus-upstream fidelity, approved dispositions, mechanical adaptation scope, excluded-surface leakage, and fixed release boundaries. Reviewers must not propose upstream improvements or new hardening as sync blockers.
+15. Fix transfer mistakes. Classify a discovered upstream defect or desirable improvement as **Needs user decision**; do not implement it automatically. Only then update the recorded upstream baseline.
+16. Present the candidate SHA, normal commit/push plan, validation, dispositions, user decisions, and residual upstream concerns. Push or merge only with user approval.
+17. Stop after source convergence. Use `release-beta` or `release-stable` only for a separate explicit shipping request.
 
 ## Failure discipline
 
 - Treat a timeout as evidence, not restart permission.
 - Never patch inferred types merely because generated workspace declarations are stale; rebuild the owning stack first.
 - Never delete or regenerate the lockfile to escape conflicts. Preserve unrelated resolved dependency versions.
-- If a port requires architecture or data-safety hardening outside the approved delta, report the scope expansion before implementing it.
-- If upstream changed an excluded surface and a retained shared module together, port the shared fix without restoring the excluded authority.
+- If direct copying requires anything beyond deterministic mechanical adaptation, stop before implementing and ask the user.
+- Treat possible upstream bugs, security concerns, architecture weaknesses, and desirable hardening as observations, not permission to change code.
+- A review finding blocks the sync only when the approved upstream code was copied incorrectly, omitted, or leaked across a fixed BySpace boundary. All other findings go to the user for disposition.
+- If upstream changed an excluded surface and a retained shared module together, copy only the clearly separable retained code; if separation requires design judgment, stop and ask.
 - If the baseline marker is wrong or incomplete, stop and repair the evidence before applying code.
 
 ## Required result
@@ -82,6 +92,6 @@ Report:
 - unmodified-target baseline result;
 - release-delta summary and dispositions;
 - candidate commits and changed retained subsystems;
-- focused tests, full gates, and independent reviews;
-- deferred items, whether they block baseline advancement, and residual risks;
+- focused tests, full gates, and fidelity/boundary reviews;
+- every **Needs user decision** item, the user's recorded choice, and unresolved upstream concerns;
 - exact statement of any remote or production mutation.

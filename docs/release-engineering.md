@@ -54,12 +54,14 @@ A release is incomplete until every element in its tuple is verified and the oth
 | Windows kept stopped smoke directories locked.                                                              | Make daemon stop a hard gate; make final temporary-directory deletion bounded and non-fatal only for known Windows lock errors.                                                                     |
 | Local Node pins split global npm installs across Node versions.                                             | Do not pin Node in the repo; verify CLI and daemon paths both use the user's global mise Node.                                                                                                      |
 | Building a sync candidate from the upstream tree risked losing accumulated BySpace work.                    | Start every sync candidate from the current BySpace `main` and port only the approved upstream release delta; integrate with ordinary commits and a normal push.                                    |
-| Reviews found concurrency and trust-boundary bugs after broad green tests.                                  | Use independent read-only reviews focused on persistence transactions, client-to-daemon trust, protocol epochs, release trust, and full-diff residuals.                                             |
-| Review hardening silently expanded a “sync” into weeks of work.                                             | Report scope expansion immediately, separate source import from hardening, and require approval for the added responsibility.                                                                       |
+| Reviews found concurrency and trust-boundary concerns while copying upstream.                               | During sync, reviewers check transfer fidelity and fixed BySpace boundaries only. Report possible upstream defects to the user; do not turn them into unapproved sync work.                         |
+| Review hardening silently expanded a “sync” into hours or weeks of work.                                    | Hard stop: sync copies approved upstream behavior. Any non-mechanical compatibility choice, bug fix, redesign, or hardening requires an explicit user decision before implementation.               |
 
 ## Proof ladder
 
-Stop only after each rung passes; a higher rung does not replace a lower one.
+For an upstream source sync, use only the proof and review scopes in `docs/upstream-sync.md`; the remaining release proof ladder and review boundaries below apply only to separately requested release or product work.
+
+Stop only after each applicable rung passes; a higher rung does not replace a lower one.
 
 1. **Source proof** — frozen baseline and target tag/commit/tree, green target baseline, explicit release-delta dispositions.
 2. **Static proof** — generated declarations, typecheck, lint, format, branding, residual search.
