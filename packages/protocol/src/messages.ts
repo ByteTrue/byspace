@@ -4049,6 +4049,8 @@ const CheckoutDiffSubscriptionPayloadSchema = z.object({
   cwd: z.string(),
   files: z.array(ParsedDiffFileSchema),
   error: CheckoutErrorSchema.nullable(),
+  // COMPAT(diffTooLarge): added in v0.2.4 on 2026-07-30; remove after 2027-01-30.
+  diffTooLarge: z.boolean().optional(),
 });
 
 export const SubscribeCheckoutDiffResponseSchema = z.object({

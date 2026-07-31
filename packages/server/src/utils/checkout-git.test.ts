@@ -13,10 +13,12 @@ import { join } from "path";
 import { win32 } from "node:path";
 import { tmpdir } from "os";
 import pino from "pino";
+import { base64EncryptedWireByteLength } from "@bytetrue/byspace-relay";
 import {
   __resetCheckoutShortstatCacheForTests,
   __resetPullRequestStatusCacheForTests,
   __setPullRequestStatusCacheTtlForTests,
+  CHECKOUT_DIFF_MAX_STRUCTURED_BYTES,
   commitAll,
   createPullRequest,
   getCachedCheckoutShortstat,
@@ -1299,6 +1301,19 @@ const x = 1;
     expect(diff.structured?.some((f) => f.path === "file.txt" && f.status === "too_large")).toBe(
       true,
     );
+  });
+
+  it("keeps the structured diff cap below the Relay frame limit", () => {
+    const relayFrameBytes = 32 * 1024 * 1024;
+    const frameEnvelopeHeadroomBytes = 1024 * 1024;
+    const diffWireBytes = base64EncryptedWireByteLength(CHECKOUT_DIFF_MAX_STRUCTURED_BYTES);
+    const maximumFrameWireBytes = base64EncryptedWireByteLength(
+      CHECKOUT_DIFF_MAX_STRUCTURED_BYTES + frameEnvelopeHeadroomBytes,
+    );
+
+    expect(CHECKOUT_DIFF_MAX_STRUCTURED_BYTES).toBe(24_117_208);
+    expect(diffWireBytes).toBeLessThan(relayFrameBytes);
+    expect(maximumFrameWireBytes).toBe(relayFrameBytes);
   });
 
   it("marks tracked generated one-line diffs as too_large by content size", async () => {

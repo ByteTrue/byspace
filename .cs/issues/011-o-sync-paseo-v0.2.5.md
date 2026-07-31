@@ -55,6 +55,7 @@ epic: ""
 
 - 已冻结端点、完成四方向 aggregate-delta review，并验证未修改 v0.2.5 基线全绿。
 - Provider/Agent/CLI 切片已移植：usage/CWD、Codex skills 与 plan approval race、OMP/Pi/Claude/Grok、CLI thinking、zsh runtime 隔离；focused tests 与静态检查见候选验证记录。
+- Large-diff/Relay 切片已移植：64 MiB physical socket OOM backstop、精确 E2EE base64 尺寸反算、约 23 MiB structured diff 增量上限、optional `diffTooLarge` 跨协议/客户端与保留 Web Changes 状态；focused unit/daemon E2E/app 验证全绿，`build:server`、全 workspace typecheck/lint/format check 全绿。
 
 ## 关闭回写
 
