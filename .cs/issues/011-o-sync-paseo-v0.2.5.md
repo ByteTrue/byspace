@@ -49,7 +49,11 @@ epic: ""
 
 ## 验证
 
-- 待执行。
+- Retained Web correctness focused Vitest：6 files、224/224 tests 通过；review 修复后 file-tree focused rerun 10/10 通过。
+- New Workspace shortcut Chromium E2E：最终 1/1 通过；本机 macOS 首轮固定 `Control+P` 未触发 macOS binding，helper 改为跨平台 `ControlOrMeta+P` 后通过。
+- 全 workspace `npm run typecheck` 通过；`npm run lint` 0 warnings / 0 errors；`npm run format` 与最终 targeted formatter 通过。
+- Web export：`npm run build:web --workspace=@bytetrue/byspace-app` 通过并输出 `packages/app/dist`。根 workspace 没有 `build:web` script，首次根命令按预期报 missing script，随后使用 App workspace script 验证。
+- 独立 review：Forge/Markdown/shortcut **CLEAR**；file-tree 首轮两个 medium 可靠性问题（cache key/path identity、transient listing expansion 保留）已修复并复审 **CLEAR**。
 
 ## 执行记录
 
@@ -57,6 +61,7 @@ epic: ""
 - Provider/Agent/CLI 切片已移植：usage/CWD、Codex skills 与 plan approval race、OMP/Pi/Claude/Grok、CLI thinking、zsh runtime 隔离；focused tests 与静态检查见候选验证记录。
 - Large-diff/Relay 切片已移植：64 MiB physical socket OOM backstop、精确 E2EE base64 尺寸反算、约 23 MiB structured diff 增量上限、optional `diffTooLarge` 跨协议/客户端与保留 Web Changes 状态；focused unit/daemon E2E/app 验证全绿，`build:server`、全 workspace typecheck/lint/format check 全绿。
 - Cross-host Project identity/grouping 切片 review blockers 已修复：bootstrap 以 Host-local root 分配 opaque `projectId`、remote identity 仅保留在 protocol-bearing `projectKey`；workspace snapshot/delta authoritatively reconcile project descriptors；route hydration、Project Settings host switch、GitHub port URL 与跨 Host local-ID flows 已补 focused tests 和双 Host browser E2E。最终验证：139 个 focused tests、额外 reconciliation/bootstrap 21 tests、双 Host Chromium E2E 1/1、`build:client`、全 workspace typecheck、targeted lint/format 全绿。
+- Retained Web correctness 切片已移植：self-hosted HTTP(S) Forge Web URL 保留非默认端口且 SSH/cloud alias 不携带端口；PR comment 的 emphasis/strikethrough HTML 安全降级为 sanitized Markdown token；全局 `/new` 保持 BySpace route ownership 并通过 dispatcher 接管 Cmd/Ctrl+P Project picker；file explorer 改用防递归纯 tree model，恢复过程只遍历可达 parent，过滤 malformed/duplicate/cycle cache，保留 hidden/expanded 并用 functional panel updates 避免恢复竞态。focused Vitest 224/224、review fix 10/10、shortcut Chromium E2E 1/1、全 workspace typecheck/lint、format、Web export 全绿；双方向独立 review 最终 CLEAR。
 
 ## 关闭回写
 

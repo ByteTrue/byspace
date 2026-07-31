@@ -1552,6 +1552,7 @@ export const ja: TranslationResources = {
       help: {
         openProject: "プロジェクトを開く",
         newWorkspace: "新しいワークスペース",
+        switchProject: "プロジェクトを切り替え",
         newWorktree: "新しいワークツリー",
         archiveWorkspace: "ワークスペースをアーカイブ",
         newTab: "新しいタブ",

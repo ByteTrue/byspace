@@ -1549,6 +1549,7 @@ export const en = {
       help: {
         openProject: "Open project",
         newWorkspace: "New workspace",
+        switchProject: "Switch project",
         newWorktree: "New worktree",
         archiveWorkspace: "Archive workspace",
         newTab: "New tab",

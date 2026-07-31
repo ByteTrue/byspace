@@ -1524,6 +1524,7 @@ export const zhCN: TranslationResources = {
       help: {
         openProject: "打开项目",
         newWorkspace: "新建 workspace",
+        switchProject: "切换项目",
         newWorktree: "新建 worktree",
         archiveWorkspace: "归档工作区",
         newTab: "新建标签",

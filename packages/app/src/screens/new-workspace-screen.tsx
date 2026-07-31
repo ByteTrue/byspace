@@ -54,6 +54,8 @@ import {
   type PendingWorkspaceDraftSetup,
 } from "@/stores/workspace-draft-submission-store";
 import { useFormPreferences } from "@/hooks/use-form-preferences";
+import { useKeyboardActionHandler } from "@/hooks/use-keyboard-action-handler";
+import type { KeyboardActionId } from "@/keyboard/keyboard-action-dispatcher";
 import { useShortcutKeys } from "@/hooks/use-shortcut-keys";
 import { getForgePresentation } from "@/git/forge";
 import type { CreateAgentInitialValues } from "@/hooks/use-agent-form-state";
@@ -183,6 +185,7 @@ interface PickerOptionData {
 const BRANCH_OPTION_PREFIX = "branch:";
 const PR_OPTION_PREFIX = "github-pr:";
 const PROJECT_ICON_FALLBACK_FONT_SIZE = 10;
+const PROJECT_PICK_ACTIONS: readonly KeyboardActionId[] = ["workspace.project.pick"];
 // Height of a single picker-trigger badge. The Base-row spacer reserves exactly
 // this so toggling Isolation to Local hides the row without shifting the form.
 const BADGE_HEIGHT = 28;
@@ -1844,6 +1847,18 @@ export function NewWorkspaceScreen({
   const openProjectPicker = useCallback(() => {
     setProjectPickerOpen(true);
   }, []);
+
+  const handleProjectPick = useCallback(() => {
+    openProjectPicker();
+    return true;
+  }, [openProjectPicker]);
+  useKeyboardActionHandler({
+    handlerId: "new-workspace-project-pick",
+    actions: PROJECT_PICK_ACTIONS,
+    enabled: projectPickerOptions.length > 0,
+    priority: 0,
+    handle: handleProjectPick,
+  });
 
   const openIsolationPicker = useCallback(() => {
     setIsolationPickerOpen(true);

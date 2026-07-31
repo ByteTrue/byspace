@@ -1565,6 +1565,7 @@ export const ptBR: TranslationResources = {
       help: {
         openProject: "Abrir projeto",
         newWorkspace: "Novo workspace",
+        switchProject: "Trocar projeto",
         newWorktree: "Novo worktree",
         archiveWorkspace: "Arquivar workspace",
         newTab: "Nova aba",

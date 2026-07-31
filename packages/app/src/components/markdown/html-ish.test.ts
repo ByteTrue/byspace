@@ -296,6 +296,14 @@ describe("splitHtmlishMarkdown", () => {
     );
   });
 
+  it("converts safe HTML emphasis and strikethrough tags into markdown", () => {
+    expect(
+      normalizeHtmlishMarkdown(
+        "<b>bold</b> <strong>strong <em>nested</em></strong> <i>italic</i> <del>deleted</del> <s>removed</s> <strike>struck</strike>",
+      ),
+    ).toBe("**bold** **strong *nested*** *italic* ~~deleted~~ ~~removed~~ ~~struck~~");
+  });
+
   it("leaves complex code tags inert instead of parsing HTML", () => {
     expect(normalizeHtmlishMarkdown('<code onclick="evil()"><script>x</script></code>')).toBe(
       '<code onclick="evil()"><script>x</script></code>',

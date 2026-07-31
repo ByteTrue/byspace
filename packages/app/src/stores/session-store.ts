@@ -304,7 +304,7 @@ export interface ExplorerFile {
   revision?: string;
 }
 
-interface ExplorerDirectory {
+export interface ExplorerDirectory {
   path: string;
   entries: ExplorerEntry[];
 }

@@ -1567,6 +1567,7 @@ export const ru: TranslationResources = {
       help: {
         openProject: "Открыть проект",
         newWorkspace: "Новое рабочее пространство",
+        switchProject: "Сменить проект",
         newWorktree: "Новое рабочее дерево",
         archiveWorkspace: "Архивировать рабочее пространство",
         newTab: "Новая вкладка",

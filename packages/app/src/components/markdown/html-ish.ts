@@ -30,6 +30,15 @@ const BACKTICK_RUN_RE = /`+/g;
 const SAFE_IMAGE_SRC_RE = /^(https?:\/\/|data:image\/(?:png|gif|jpe?g);base64,)/i;
 const SAFE_LINK_HREF_RE = /^(https?:\/\/|#(?:$|[\w-]))/i;
 const VOID_HTML_TAGS = new Set(["br", "img"]);
+const MARKDOWN_TAG_WRAPPERS: Readonly<Record<string, readonly [string, string]>> = {
+  b: ["**", "**"],
+  del: ["~~", "~~"],
+  em: ["*", "*"],
+  i: ["*", "*"],
+  s: ["~~", "~~"],
+  strike: ["~~", "~~"],
+  strong: ["**", "**"],
+};
 
 interface ProtectedMarkdownRange {
   start: number;
@@ -325,6 +334,12 @@ function renderInlineTokens(tokens: HtmlToken[]): string {
     }
     if (token.name === "code" && children.every((child) => child.kind === "text")) {
       output += `\`${renderInlineTokens(children)}\``;
+      index = closeIndex;
+      continue;
+    }
+    const wrapper = MARKDOWN_TAG_WRAPPERS[token.name];
+    if (wrapper) {
+      output += `${wrapper[0]}${renderInlineTokens(children)}${wrapper[1]}`;
       index = closeIndex;
       continue;
     }

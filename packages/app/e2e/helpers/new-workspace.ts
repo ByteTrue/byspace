@@ -174,6 +174,17 @@ export async function openGlobalNewWorkspaceComposer(page: Page): Promise<void> 
   });
 }
 
+export async function openNewWorkspaceProjectPickerWithShortcut(page: Page): Promise<void> {
+  await expect(page.getByTestId("new-workspace-project-picker-trigger")).toBeVisible({
+    timeout: 30_000,
+  });
+  await page.keyboard.press("ControlOrMeta+P");
+
+  const searchInput = page.getByPlaceholder("Search projects");
+  await expect(searchInput).toBeVisible({ timeout: 30_000 });
+  await expect(searchInput).toBeFocused();
+}
+
 export async function expectNewWorkspaceProjectSelected(
   page: Page,
   projectDisplayName: string,

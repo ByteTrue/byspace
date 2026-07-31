@@ -1575,6 +1575,7 @@ export const es: TranslationResources = {
       help: {
         openProject: "Abrir proyecto",
         newWorkspace: "Nuevo espacio de trabajo",
+        switchProject: "Cambiar proyecto",
         newWorktree: "Nuevo árbol de trabajo",
         archiveWorkspace: "Archivar espacio de trabajo",
         newTab: "Nueva pestaña",

@@ -44,6 +44,42 @@ describe("buildForgeBranchTreeUrl", () => {
     ).toBe("https://codeberg.org/acme/repo/src/branch/main");
   });
 
+  it("preserves a non-default port for a self-hosted http(s) remote", () => {
+    expect(
+      buildForgeBranchTreeUrl("forgejo", {
+        remoteUrl: "https://home-git.example.com:60443/team/repo.git",
+        branch: "master",
+      }),
+    ).toBe("https://home-git.example.com:60443/team/repo/src/branch/master");
+    expect(
+      buildForgeBranchTreeUrl("forgejo", {
+        remoteUrl: "http://home-git.example.com:8080/team/repo.git",
+        branch: "master",
+      }),
+    ).toBe("https://home-git.example.com:8080/team/repo/src/branch/master");
+  });
+
+  it("omits default, SSH, and cloud-host ports", () => {
+    expect(
+      buildForgeBranchTreeUrl("forgejo", {
+        remoteUrl: "https://home-git.example.com:443/team/repo.git",
+        branch: "master",
+      }),
+    ).toBe("https://home-git.example.com/team/repo/src/branch/master");
+    expect(
+      buildForgeBranchTreeUrl("forgejo", {
+        remoteUrl: "ssh://git@home-git.example.com:2222/team/repo.git",
+        branch: "master",
+      }),
+    ).toBe("https://home-git.example.com/team/repo/src/branch/master");
+    expect(
+      buildForgeBranchTreeUrl("github", {
+        remoteUrl: "https://github.com:8443/acme/repo.git",
+        branch: "main",
+      }),
+    ).toBe("https://github.com/acme/repo/tree/main");
+  });
+
   it("returns null when the current branch is unavailable", () => {
     expect(
       buildForgeBranchTreeUrl("github", {
@@ -129,6 +165,18 @@ describe("buildForgeBlobUrl", () => {
         path: "src/index.ts",
       }),
     ).toBe("https://github.acme.internal/team/repo/blob/main/src/index.ts");
+  });
+
+  it("preserves a non-default port for a self-hosted https remote", () => {
+    expect(
+      buildForgeBlobUrl("forgejo", {
+        remoteUrl: "https://home-git.example.com:60443/team/repo.git",
+        branch: "master",
+        path: "src/index.ts",
+        lineStart: 12,
+        lineEnd: 20,
+      }),
+    ).toBe("https://home-git.example.com:60443/team/repo/src/branch/master/src/index.ts#L12-L20");
   });
 
   it("canonicalizes the github.com SSH-alias host to the web host", () => {
