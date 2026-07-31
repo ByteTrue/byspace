@@ -3338,7 +3338,7 @@ describe("session workspace descriptors", () => {
     const messages: unknown[] = [];
     const workspace = {
       workspaceId: "ws-gh",
-      projectId: "remote:github.com/acme/app",
+      projectId: "prj_a",
       cwd: "/repo/app",
       kind: "local_checkout" as const,
       displayName: "app",
@@ -3346,7 +3346,8 @@ describe("session workspace descriptors", () => {
       archivedAt: null,
     };
     const project = {
-      projectId: "remote:github.com/acme/app",
+      projectId: "prj_a",
+      projectKey: "remote:github.com/acme/app",
       rootPath: "/repo/app",
       kind: "git" as const,
       displayName: "acme/app",
@@ -3387,6 +3388,7 @@ describe("session workspace descriptors", () => {
           expect.objectContaining({
             id: "ws-gh",
             project: expect.objectContaining({
+              projectId: "prj_a",
               projectKey: "remote:github.com/acme/app",
               projectName: "acme/app",
               workspaceName: "app",

@@ -2970,6 +2970,9 @@ export const ProjectCheckoutLitePayloadSchema = z.union([
 ]);
 
 export const ProjectPlacementPayloadSchema = z.object({
+  // COMPAT(projectPlacementProjectId): added in v0.2.5; review legacy fallback after 2027-01-31.
+  // This additive wire field remains optional; projectKey is display grouping only.
+  projectId: z.string().optional(),
   projectKey: z.string(),
   projectName: z.string(),
   workspaceName: z.string().nullable().optional(),

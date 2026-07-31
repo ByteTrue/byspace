@@ -24,6 +24,7 @@ export interface AgentScreenAgent {
   features?: readonly AgentFeature[];
   lastError?: string | null;
   projectPlacement?: {
+    projectId?: string;
     projectKey?: string;
     projectName?: string;
     checkout?: {

@@ -1681,6 +1681,7 @@ export class Session {
       this.workspaceGitService.peekSnapshot(workspace.cwd)?.git.currentBranch ?? null;
     const checkout = buildWorkspaceCheckout(workspace, project, liveBranch);
     return {
+      projectId: project.projectId,
       projectKey: project.projectKey ?? project.projectId,
       projectName: resolveProjectDisplayName(project),
       workspaceName: resolveWorkspaceDisplayName(workspace),

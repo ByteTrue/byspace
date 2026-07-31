@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { describe, expect, test } from "vitest";
 import {
+  ProjectPlacementPayloadSchema,
   RecentProviderSessionDescriptorPayloadSchema,
   SessionInboundMessageSchema,
   SessionOutboundMessageSchema,
@@ -8,6 +9,35 @@ import {
   WorkspaceDescriptorPayloadSchema,
   WorkspaceScriptPayloadSchema,
 } from "./messages.js";
+
+describe("project placement compatibility", () => {
+  const placement = {
+    projectKey: "remote:https://example.com/acme/repo",
+    projectName: "repo",
+    checkout: {
+      cwd: "/repo",
+      isGit: false as const,
+      currentBranch: null,
+      remoteUrl: null,
+      worktreeRoot: null,
+      isBySpaceOwnedWorktree: false,
+      mainRepoRoot: null,
+    },
+  };
+
+  test("accepts old placements without a local project id", () => {
+    expect(ProjectPlacementPayloadSchema.parse(placement)).not.toHaveProperty("projectId");
+  });
+
+  test("preserves an opaque host-local project id separately from the grouping key", () => {
+    expect(ProjectPlacementPayloadSchema.parse({ ...placement, projectId: "prj_a" })).toMatchObject(
+      {
+        projectId: "prj_a",
+        projectKey: "remote:https://example.com/acme/repo",
+      },
+    );
+  });
+});
 
 describe("workspace message schemas", () => {
   test("parses fetch_workspaces_request", () => {
