@@ -51,10 +51,11 @@ epic: ""
 
 - Retained Web correctness focused Vitest：6 files、224/224 tests 通过；review 修复后 file-tree focused rerun 10/10 通过。
 - Older GitHub CLI repository-search slice：TDD 首轮按预期以缺少 `visibility` 的 ZodError 失败；实现后 server repository search 2/2、App add-project model 9/9 通过；`npm run typecheck` 通过，`npm run lint` 为 0 warnings / 0 errors，`npm run format` 通过。
+- Build/test efficiency slice：`jsonl-rpc-process.test.ts` 1 file、8/8 tests 通过；最终 `npm run build:server` 证明仅 `highlight`/`relay` 并行，随后由 BySpace client workspace script 保持 `protocol -> client` declarations 顺序；`npm run typecheck` 通过，`npm run lint` 为 0 warnings / 0 errors，`npm run format` 通过。
 - New Workspace shortcut Chromium E2E：最终 1/1 通过；本机 macOS 首轮固定 `Control+P` 未触发 macOS binding，helper 改为跨平台 `ControlOrMeta+P` 后通过。
 - 全 workspace `npm run typecheck` 通过；`npm run lint` 0 warnings / 0 errors；`npm run format` 与最终 targeted formatter 通过。
 - Web export：`npm run build:web --workspace=@bytetrue/byspace-app` 通过并输出 `packages/app/dist`。根 workspace 没有 `build:web` script，首次根命令按预期报 missing script，随后使用 App workspace script 验证。
-- 独立 review：Forge/Markdown/shortcut **CLEAR**；file-tree 首轮两个 medium 可靠性问题（cache key/path identity、transient listing expansion 保留）已修复并复审 **CLEAR**；older-gh compatibility **CLEAR**。
+- 独立 review：Forge/Markdown/shortcut **CLEAR**；file-tree 首轮两个 medium 可靠性问题（cache key/path identity、transient listing expansion 保留）已修复并复审 **CLEAR**；older-gh compatibility **CLEAR**；build/test efficiency **CLEAR**。
 
 ## 执行记录
 
@@ -64,6 +65,7 @@ epic: ""
 - Cross-host Project identity/grouping 切片 review blockers 已修复：bootstrap 以 Host-local root 分配 opaque `projectId`、remote identity 仅保留在 protocol-bearing `projectKey`；workspace snapshot/delta authoritatively reconcile project descriptors；route hydration、Project Settings host switch、GitHub port URL 与跨 Host local-ID flows 已补 focused tests 和双 Host browser E2E。最终验证：139 个 focused tests、额外 reconciliation/bootstrap 21 tests、双 Host Chromium E2E 1/1、`build:client`、全 workspace typecheck、targeted lint/format 全绿。
 - Retained Web correctness 切片已移植：self-hosted HTTP(S) Forge Web URL 保留非默认端口且 SSH/cloud alias 不携带端口；PR comment 的 emphasis/strikethrough HTML 安全降级为 sanitized Markdown token；全局 `/new` 保持 BySpace route ownership 并通过 dispatcher 接管 Cmd/Ctrl+P Project picker；file explorer 改用防递归纯 tree model，恢复过程只遍历可达 parent，过滤 malformed/duplicate/cycle cache，保留 hidden/expanded 并用 functional panel updates 避免恢复竞态。focused Vitest 224/224、review fix 10/10、shortcut Chromium E2E 1/1、全 workspace typecheck/lint、format、Web export 全绿；双方向独立 review 最终 CLEAR。
 - Older GitHub CLI repository-search compatibility 切片已移植：`gh repo list`/`gh search repos` 仅请求旧版本支持的 `isPrivate`，daemon 映射回旧 client 必需的 `public`/`private` wire enum；Add Project UI 不再把 repository visibility 当作展示 fallback。保留现有 Forge runner 的 timeout/error/auth 边界与命令参数结构。focused Vitest server 2/2、App 9/9、全 workspace typecheck/lint、format 全绿。
+- Build/test efficiency 切片已移植：根构建只并行互相独立的 highlight/relay，随后复用 BySpace client workspace build 保持 protocol declarations 先于 client 且移除重复 protocol build；server unit test 显式启用 Vitest file parallelism，daemon integration/E2E 继续串行；Windows stderr-timeout test 改用 parent-owned in-memory child streams，在计时请求前确定性写入 stderr。上游 selective-CI/path-filtering 提案（`76e336a1b`）由 BySpace 的全量 PR/push/release CI 策略明确 supersede，未移植且未改任何 release workflow。
 
 ## 关闭回写
 

@@ -225,7 +225,7 @@ Use the named root build targets instead of remembering workspace dependency cha
 
 ```bash
 npm run build:client       # protocol -> client
-npm run build:server-deps  # highlight -> relay -> protocol -> client
+npm run build:server-deps  # (highlight || relay) -> protocol -> client
 npm run build:app-deps     # highlight -> protocol -> client
 ```
 
