@@ -1863,6 +1863,7 @@ describe("WorkspaceGitServiceImpl D2 read methods", () => {
       workspaceDisplayName: "feature/service-metadata",
       gitRemote: "https://github.com/ByteTrue/byspace.git",
       isWorktree: false,
+      mainRepoRoot: null,
       projectSlug: "byspace",
       repoRoot: REPO_CWD,
       currentBranch: "feature/service-metadata",
