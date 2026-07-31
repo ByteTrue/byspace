@@ -4,10 +4,40 @@ import { CheckoutPrStatusSchema } from "@bytetrue/byspace-protocol/messages";
 import type { WorkspaceGitRuntimeSnapshot } from "../workspace-git-service.js";
 import {
   buildCheckoutPrStatusPayloadFromSnapshot,
+  buildCheckoutStatusPayloadFromSnapshot,
   normalizeCheckoutPrStatusPayload,
 } from "./status-projection.js";
 
 describe("checkout status projection", () => {
+  test("projects the opaque commits version for precise client cache invalidation", () => {
+    const commitsVersion = "startup-1:7";
+    const snapshot = {
+      git: {
+        isGit: true,
+        repoRoot: "/repo",
+        mainRepoRoot: null,
+        currentBranch: "main",
+        commitsVersion,
+        remoteUrl: "https://github.com/ByteTrue/byspace.git",
+        isBySpaceOwnedWorktree: false,
+        isDirty: false,
+        baseRef: "origin/main",
+        aheadBehind: { ahead: 0, behind: 0 },
+        aheadOfOrigin: 0,
+        behindOfOrigin: 0,
+        hasRemote: true,
+      },
+    } as WorkspaceGitRuntimeSnapshot;
+
+    expect(
+      buildCheckoutStatusPayloadFromSnapshot({
+        cwd: "/repo",
+        requestId: "req-head",
+        snapshot,
+      }).commitsVersion,
+    ).toBe(commitsVersion);
+  });
+
   test("includes repository identity fields on the PR status wire payload", () => {
     const payload = normalizeCheckoutPrStatusPayload(
       {
