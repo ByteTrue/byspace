@@ -14,6 +14,7 @@ import {
 } from "../../workspace-registry.js";
 import type { WorkspaceGitService } from "../../workspace-git-service.js";
 import type { CreateBySpaceWorktreeWorkflowResult } from "../../worktree-session.js";
+import { deriveProjectKey } from "../../project-key.js";
 import { areEquivalentPaths, createRealpathAwarePathMatcher } from "../../../utils/path.js";
 import {
   type WorkspaceLifecycleCoordinator,
@@ -98,6 +99,7 @@ export class WorkspaceProvisioningError extends Error {
 }
 
 export function createWorkspaceProvisioningService(deps: {
+  serverId?: string;
   workspaceRegistry: WorkspaceRegistry;
   projectRegistry: ProjectRegistry;
   workspaceGitService: Pick<WorkspaceGitService, "getCheckout" | "peekSnapshot">;
@@ -105,7 +107,8 @@ export function createWorkspaceProvisioningService(deps: {
   logger: Logger;
   lifecycleCoordinator?: WorkspaceLifecycleCoordinator;
 }): WorkspaceProvisioningService {
-  const { workspaceRegistry, projectRegistry, workspaceGitService, isDirectory, logger } = deps;
+  const { serverId, workspaceRegistry, projectRegistry, workspaceGitService, isDirectory, logger } =
+    deps;
   const lifecycle = deps.lifecycleCoordinator ?? workspaceLifecycleCoordinator;
 
   async function runForDirectory<T>(
@@ -199,6 +202,13 @@ export function createWorkspaceProvisioningService(deps: {
       rootPath,
       kind: checkout.isGit ? "git" : "non_git",
       displayName: basename(rootPath) || rootPath,
+      projectKey: deriveProjectKey({
+        rootPath,
+        remoteUrl: checkout.remoteUrl,
+        worktreeRoot: checkout.worktreeRoot,
+        mainRepoRoot: checkout.mainRepoRoot,
+        serverId,
+      }),
       timestamp,
     });
   }
@@ -293,10 +303,18 @@ export function createWorkspaceProvisioningService(deps: {
       // Orphaned legacy workspace FKs fall through to exact-root allocation.
     }
 
+    const checkout = await workspaceGitService.getCheckout(input.repoRoot);
     const project = await projectRegistry.getOrCreateActiveByRoot({
       rootPath: input.repoRoot,
       kind: "git",
       displayName: basename(input.repoRoot) || input.repoRoot,
+      projectKey: deriveProjectKey({
+        rootPath: input.repoRoot,
+        remoteUrl: checkout.remoteUrl,
+        worktreeRoot: checkout.worktreeRoot,
+        mainRepoRoot: checkout.mainRepoRoot,
+        serverId,
+      }),
       timestamp: new Date().toISOString(),
     });
     return refreshProjectKind(project);
@@ -376,8 +394,21 @@ export function createWorkspaceProvisioningService(deps: {
         ? checkout
         : await workspaceGitService.getCheckout(project.rootPath);
       const kind = projectCheckout.isGit ? "git" : "non_git";
-      if (project.archivedAt || project.kind !== kind) {
-        await projectRegistry.upsert({ ...project, kind, archivedAt: null, updatedAt: timestamp });
+      const projectKey = deriveProjectKey({
+        rootPath: project.rootPath,
+        remoteUrl: projectCheckout.remoteUrl,
+        worktreeRoot: projectCheckout.worktreeRoot,
+        mainRepoRoot: projectCheckout.mainRepoRoot,
+        serverId,
+      });
+      if (project.archivedAt || project.kind !== kind || project.projectKey !== projectKey) {
+        await projectRegistry.upsert({
+          ...project,
+          kind,
+          projectKey,
+          archivedAt: null,
+          updatedAt: timestamp,
+        });
         projectWasUpdated = true;
       }
     }
@@ -428,8 +459,15 @@ export function createWorkspaceProvisioningService(deps: {
         ? workspaceCheckout
         : await workspaceGitService.getCheckout(project.rootPath);
     const kind: PersistedProjectRecord["kind"] = projectCheckout.isGit ? "git" : "non_git";
-    if (project.kind === kind) return project;
-    const refreshed = { ...project, kind, updatedAt: new Date().toISOString() };
+    const projectKey = deriveProjectKey({
+      rootPath: project.rootPath,
+      remoteUrl: projectCheckout.remoteUrl,
+      worktreeRoot: projectCheckout.worktreeRoot,
+      mainRepoRoot: projectCheckout.mainRepoRoot,
+      serverId,
+    });
+    if (project.kind === kind && project.projectKey === projectKey) return project;
+    const refreshed = { ...project, kind, projectKey, updatedAt: new Date().toISOString() };
     await projectRegistry.upsert(refreshed);
     return refreshed;
   }

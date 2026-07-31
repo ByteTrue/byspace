@@ -31,6 +31,17 @@ export interface SeedDaemonClient {
     error: string | null;
   }>;
   removeProject(projectId: string): Promise<{ removedWorkspaceIds: string[] }>;
+  renameProject(projectId: string, customName: string | null): Promise<void>;
+  listProjects(): Promise<{
+    projects: Array<{
+      projectId: string;
+      projectKey?: string | null;
+      projectDisplayName: string;
+      projectCustomName?: string | null;
+      projectRootPath: string;
+      projectKind: "git" | "directory";
+    }>;
+  }>;
   fetchWorkspaces(options?: { filter?: { projectId?: string } }): Promise<{
     entries: SeedWorkspaceDescriptor[];
   }>;
@@ -158,10 +169,11 @@ export interface SeedDaemonClient {
   killTerminal(terminalId: string): Promise<{ error: string | null }>;
 }
 
-export async function connectSeedClient(): Promise<SeedDaemonClient> {
+export async function connectSeedClient(options?: { port?: number }): Promise<SeedDaemonClient> {
   return connectDaemonClient<SeedDaemonClient>({
     clientIdPrefix: "seed",
     appVersion: loadAppVersion(),
+    port: options?.port,
   });
 }
 

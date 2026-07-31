@@ -120,7 +120,7 @@ describe("buildProjects", () => {
               id: "main",
               repoRoot: "/repo/app",
               project: placement({
-                projectKey: "remote:github.com/acme/app",
+                projectKey: "remote:https://github.com/acme/app",
                 projectName: "acme/app",
                 cwd: "/repo/app",
                 remoteUrl: "https://github.com/acme/app.git",
@@ -130,7 +130,7 @@ describe("buildProjects", () => {
               id: "feature-a",
               repoRoot: "/repo/app",
               project: placement({
-                projectKey: "remote:github.com/acme/app",
+                projectKey: "remote:https://github.com/acme/app",
                 projectName: "acme/app",
                 cwd: "/repo/app/feature-a",
                 remoteUrl: "https://github.com/acme/app.git",
@@ -140,7 +140,7 @@ describe("buildProjects", () => {
               id: "feature-b",
               repoRoot: "/repo/app",
               project: placement({
-                projectKey: "remote:github.com/acme/app",
+                projectKey: "remote:https://github.com/acme/app",
                 projectName: "acme/app",
                 cwd: "/repo/app/feature-b",
                 remoteUrl: "https://github.com/acme/app.git",
@@ -157,7 +157,7 @@ describe("buildProjects", () => {
               id: "main",
               repoRoot: "/work/app",
               project: placement({
-                projectKey: "remote:github.com/acme/app",
+                projectKey: "remote:https://github.com/acme/app",
                 projectName: "acme/app",
                 cwd: "/work/app",
                 remoteUrl: "git@github.com:acme/app.git",
@@ -167,7 +167,7 @@ describe("buildProjects", () => {
               id: "feature",
               repoRoot: "/work/app",
               project: placement({
-                projectKey: "remote:github.com/acme/app",
+                projectKey: "remote:https://github.com/acme/app",
                 projectName: "acme/app",
                 cwd: "/work/app/feature",
                 remoteUrl: "git@github.com:acme/app.git",
@@ -180,7 +180,7 @@ describe("buildProjects", () => {
 
     expect(result.projects).toHaveLength(1);
     const summary = result.projects[0];
-    expect(summary?.projectKey).toBe("remote:github.com/acme/app");
+    expect(summary?.projectKey).toBe("remote:https://github.com/acme/app");
     expect(summary?.projectName).toBe("acme/app");
     expect(summary?.hostCount).toBe(2);
     expect(summary?.onlineHostCount).toBe(2);
@@ -207,7 +207,7 @@ describe("buildProjects", () => {
               id: `ws-${index}`,
               repoRoot: "/repo/app",
               project: placement({
-                projectKey: "remote:github.com/acme/app",
+                projectKey: "remote:https://github.com/acme/app",
                 projectName: "acme/app",
                 cwd: `/repo/app/ws-${index}`,
                 remoteUrl: "https://github.com/acme/app.git",
@@ -237,7 +237,7 @@ describe("buildProjects", () => {
               id: "main",
               repoRoot: "/worktrees/app/main",
               project: placement({
-                projectKey: "remote:github.com/acme/app",
+                projectKey: "remote:https://github.com/acme/app",
                 projectName: "acme/app",
                 cwd: "/worktrees/app/main",
                 remoteUrl: "https://github.com/acme/app.git",
@@ -263,7 +263,7 @@ describe("buildProjects", () => {
     });
 
     const acme = result.projects.find(
-      (project) => project.projectKey === "remote:github.com/acme/app",
+      (project) => project.projectKey === "remote:https://github.com/acme/app",
     );
     const legacy = result.projects.find((project) => project.projectKey === "legacy-project");
 
@@ -271,7 +271,7 @@ describe("buildProjects", () => {
     expect(legacy?.hosts[0]?.repoRoot).toBe("/repo/legacy");
   });
 
-  it("derives githubUrl only when projectKey matches remote:github.com/{owner}/{repo}", () => {
+  it("derives githubUrl only when projectKey matches remote:https://github.com/{owner}/{repo}", () => {
     const result = buildProjects({
       hosts: [
         {
@@ -283,10 +283,10 @@ describe("buildProjects", () => {
               id: "github",
               repoRoot: "/repo/app",
               project: placement({
-                projectKey: "remote:github.com/acme/app",
+                projectKey: "remote:https://github.com:8443/acme/app",
                 projectName: "acme/app",
                 cwd: "/repo/app",
-                remoteUrl: "https://github.com/acme/app.git",
+                remoteUrl: "https://github.com:8443/acme/app.git",
               }),
             }),
             workspace({
@@ -305,11 +305,11 @@ describe("buildProjects", () => {
     });
 
     const github = result.projects.find(
-      (project) => project.projectKey === "remote:github.com/acme/app",
+      (project) => project.projectKey === "remote:https://github.com:8443/acme/app",
     );
     const local = result.projects.find((project) => project.projectKey === "/repo/local");
 
-    expect(github?.githubUrl).toBe("https://github.com/acme/app");
+    expect(github?.githubUrl).toBe("https://github.com:8443/acme/app");
     expect(local?.githubUrl).toBeUndefined();
   });
 
@@ -325,7 +325,7 @@ describe("buildProjects", () => {
               id: "ws",
               repoRoot: "/repo/app",
               project: placement({
-                projectKey: "remote:github.com/acme/app",
+                projectKey: "remote:https://github.com/acme/app",
                 projectName: "acme/app",
                 cwd: "/repo/app",
                 remoteUrl: "https://github.com/acme/app.git",
@@ -342,7 +342,7 @@ describe("buildProjects", () => {
               id: "ws",
               repoRoot: "/repo/app",
               project: placement({
-                projectKey: "remote:github.com/acme/app",
+                projectKey: "remote:https://github.com/acme/app",
                 projectName: "acme/app",
                 cwd: "/repo/app",
                 remoteUrl: "https://github.com/acme/app.git",
@@ -415,7 +415,7 @@ describe("buildProjects", () => {
               id: "github",
               repoRoot: "/repo/github",
               project: placement({
-                projectKey: "remote:github.com/acme/web",
+                projectKey: "remote:https://github.com/acme/web",
                 projectName: "acme/web",
                 cwd: "/repo/github",
                 remoteUrl: "https://github.com/acme/web.git",
@@ -459,7 +459,7 @@ describe("buildProjects", () => {
     expect(result.projects.map((project) => project.projectKey)).toEqual([
       "remote:gitlab.com/acme/api",
       "remote:bitbucket.org/acme/cli",
-      "remote:github.com/acme/web",
+      "remote:https://github.com/acme/web",
       "/repo/local",
     ]);
   });

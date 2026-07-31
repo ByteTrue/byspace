@@ -6,6 +6,7 @@ import type {
 import { fetchAgentTimelineOnce } from "@/timeline/fetch-agent-timeline-once";
 import {
   normalizeEmptyProjectDescriptor,
+  normalizeProjectDescriptor,
   normalizeWorkspaceDescriptor,
   useSessionStore,
   type Agent,
@@ -224,6 +225,7 @@ export class DirectorySync {
     const transaction = this.workspaceTransactions.begin(source, () => ({
       workspaces: new Map(),
       emptyProjects: new Map(),
+      projects: new Map(),
     }));
     try {
       await this.waitForSessionMetadata(client, source);
@@ -234,6 +236,15 @@ export class DirectorySync {
         return;
       }
       await this.fetchWorkspaceSnapshot(client, source, transaction, input?.subscribe === true);
+      if (serverInfo.features?.projectList === true) {
+        const payload = await client.listProjects();
+        this.assertWorkspaceTransactionCurrent(client, source, transaction);
+        transaction.snapshot.projects.clear();
+        for (const entry of payload.projects) {
+          const project = normalizeProjectDescriptor(entry);
+          transaction.snapshot.projects.set(project.projectId, project);
+        }
+      }
       if (!this.isCurrent(client, source) || !this.hasMatchingSession(client, source)) {
         throw new DirectoryRefreshSupersededError("workspace completion no longer current");
       }
@@ -267,10 +278,20 @@ export class DirectorySync {
       for (const entry of payload.entries) {
         const workspace = normalizeWorkspaceDescriptor(entry);
         transaction.snapshot.workspaces.set(workspace.id, workspace);
+        const existingProject = transaction.snapshot.projects.get(workspace.projectId);
+        transaction.snapshot.projects.set(workspace.projectId, {
+          projectId: workspace.projectId,
+          projectKey: workspace.project?.projectKey ?? existingProject?.projectKey ?? null,
+          projectDisplayName: workspace.projectDisplayName,
+          projectCustomName: workspace.projectCustomName ?? null,
+          projectRootPath: workspace.projectRootPath,
+          projectKind: workspace.projectKind,
+        });
       }
       for (const entry of payload.emptyProjects ?? []) {
         const project = normalizeEmptyProjectDescriptor(entry);
         transaction.snapshot.emptyProjects.set(project.projectId, project);
+        transaction.snapshot.projects.set(project.projectId, normalizeProjectDescriptor(entry));
       }
       if (!payload.pageInfo.hasMore || !payload.pageInfo.nextCursor) return;
       cursor = payload.pageInfo.nextCursor;

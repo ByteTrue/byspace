@@ -642,6 +642,7 @@ export class Session {
   private readonly daemonSession: DaemonSession;
   private readonly workspaceScripts: WorkspaceScriptsService;
   private readonly createAgentLifecycleDispatch: CreateAgentLifecycleDispatch;
+  private readonly serverId: string;
 
   constructor(options: SessionOptions) {
     const {
@@ -697,6 +698,7 @@ export class Session {
       getWebSocketRuntimeMetrics,
     } = options;
     this.clientId = clientId;
+    this.serverId = serverId ?? "unknown";
     this.appVersion = appVersion ?? null;
     this.clientCapabilities = parseClientCapabilities(clientCapabilities);
     this.sessionId = uuidv4();
@@ -739,6 +741,7 @@ export class Session {
     });
     this.workspaceAutoName = workspaceAutoName;
     this.workspaceProvisioning = createWorkspaceProvisioningService({
+      serverId,
       workspaceRegistry: this.workspaceRegistry,
       projectRegistry: this.projectRegistry,
       workspaceGitService: this.workspaceGitService,
@@ -1445,7 +1448,11 @@ export class Session {
         .filter((workspace) => workspace.projectId === mutation.projectId)
         .map((workspace) => workspace.workspaceId);
 
-      if (mutation.kind === "remove") {
+      if (
+        mutation.kind === "remove" ||
+        mutation.kind === "archive" ||
+        mutation.project?.archivedAt
+      ) {
         const visibleWorkspaceIds = projectWorkspaceIds.filter((workspaceId) => {
           const lastEmitted = subscription.lastEmittedByWorkspaceId.get(workspaceId);
           return (
@@ -1472,11 +1479,18 @@ export class Session {
         return;
       }
 
-      if (mutation.kind === "archive" || mutation.project?.archivedAt) {
-        for (const workspaceId of projectWorkspaceIds) {
-          this.workspaceGitObserver.removeForWorkspaceId(workspaceId);
+      if (projectWorkspaceIds.length === 0 && mutation.project) {
+        const update: WorkspaceUpdatePayload = {
+          kind: "remove",
+          id: `project:${mutation.projectId}`,
+          emptyProject: this.buildProjectDescriptor(mutation.project),
+        };
+        if (!equal(subscription.lastEmittedByWorkspaceId.get(update.id), update)) {
+          this.bufferOrEmitWorkspaceUpdate(subscription, update);
         }
+        return;
       }
+
       await this.emitWorkspaceUpdatesForWorkspaceIds(projectWorkspaceIds, {
         skipReconcile: true,
       });
@@ -1667,7 +1681,7 @@ export class Session {
       this.workspaceGitService.peekSnapshot(workspace.cwd)?.git.currentBranch ?? null;
     const checkout = buildWorkspaceCheckout(workspace, project, liveBranch);
     return {
-      projectKey: project.projectId,
+      projectKey: project.projectKey ?? project.projectId,
       projectName: resolveProjectDisplayName(project),
       workspaceName: resolveWorkspaceDisplayName(workspace),
       checkout,
@@ -2022,6 +2036,8 @@ export class Session {
     switch (msg.type) {
       case "fetch_workspaces_request":
         return this.handleFetchWorkspacesRequest(msg);
+      case "project.list.request":
+        return this.handleProjectListRequest(msg.requestId);
       case "byspace_worktree_list_request":
         return this.handleBySpaceWorktreeListRequest(msg);
       case "byspace_worktree_archive_request":
@@ -2586,13 +2602,16 @@ export class Session {
           skipReconcile: true,
         });
       } else if (this.workspaceUpdatesSubscription) {
-        // The existing workspace delta carries empty-project state too. Reuse it
-        // instead of adding another project event to the wire protocol.
-        this.bufferOrEmitWorkspaceUpdate(this.workspaceUpdatesSubscription, {
+        const update: WorkspaceUpdatePayload = {
           kind: "remove",
           id: `project:${projectId}`,
           emptyProject: this.buildProjectDescriptor(updated),
-        });
+        };
+        if (
+          !equal(this.workspaceUpdatesSubscription.lastEmittedByWorkspaceId.get(update.id), update)
+        ) {
+          this.bufferOrEmitWorkspaceUpdate(this.workspaceUpdatesSubscription, update);
+        }
       }
     } catch (error) {
       this.sessionLogger.error(
@@ -4427,11 +4446,32 @@ export class Session {
   ): WorkspaceProjectDescriptorPayload {
     return {
       projectId: project.projectId,
+      ...(project.projectKey ? { projectKey: project.projectKey } : {}),
       projectDisplayName: resolveProjectDisplayName(project),
       projectCustomName: project.customName ?? null,
       projectRootPath: project.rootPath,
       projectKind: project.kind,
     };
+  }
+
+  private async handleProjectListRequest(requestId: string): Promise<void> {
+    try {
+      const projects = (await this.projectRegistry.list())
+        .filter((project) => !project.archivedAt)
+        .map((project) => this.buildProjectDescriptor(project));
+      this.emit({ type: "project.list.response", payload: { requestId, projects } });
+    } catch (error) {
+      this.sessionLogger.error({ err: error }, "Failed to handle project.list.request");
+      this.emit({
+        type: "rpc_error",
+        payload: {
+          requestId,
+          requestType: "project.list.request",
+          error: error instanceof Error ? error.message : "Failed to list projects",
+          code: "project_list_failed",
+        },
+      });
+    }
   }
 
   private async restoreWorkspaceAndEmit(workspaceId: string): Promise<void> {
@@ -4575,6 +4615,7 @@ export class Session {
 
   private async reconcileActiveWorkspaceRecords(): Promise<Set<string>> {
     const service = new WorkspaceReconciliationService({
+      serverId: this.serverId,
       projectRegistry: this.projectRegistry,
       workspaceRegistry: this.workspaceRegistry,
       logger: this.sessionLogger,

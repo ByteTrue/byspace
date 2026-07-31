@@ -941,7 +941,7 @@ test("create_agent_request keeps requested child cwd with an opaque selected-roo
     await expect(
       session.buildProjectPlacementForWorkspaceId(createdAgent!.workspaceId!),
     ).resolves.toMatchObject({
-      projectKey: expect.stringMatching(/^prj_[0-9a-f]{16}$/),
+      projectKey: expect.stringContaining(path.join(path.basename(parent), "child")),
       checkout: { cwd: child },
     });
     expect(findByType(emitted, "status")?.payload).toMatchObject({

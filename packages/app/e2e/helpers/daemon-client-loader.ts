@@ -26,13 +26,18 @@ interface E2EDaemonClientConfig {
   webSocketFactory?: NodeWebSocketFactory;
 }
 
-function resolveDaemonWsUrl(): string {
-  return `ws://127.0.0.1:${getE2EDaemonPort()}/ws`;
+function resolveDaemonWsUrl(port?: number): string {
+  const resolvedPort = port ?? Number(getE2EDaemonPort());
+  if (resolvedPort === 6777) {
+    throw new Error("E2E daemon clients must not point at the developer daemon (6777).");
+  }
+  return `ws://127.0.0.1:${resolvedPort}/ws`;
 }
 
 export interface ConnectDaemonClientOptions {
   clientIdPrefix: string;
   appVersion?: string;
+  port?: number;
 }
 
 /**
@@ -45,7 +50,7 @@ export async function connectDaemonClient<ClientInstance extends { connect(): Pr
 ): Promise<ClientInstance> {
   const DaemonClient = await loadDaemonClientConstructor<E2EDaemonClientConfig, ClientInstance>();
   const client = new DaemonClient({
-    url: resolveDaemonWsUrl(),
+    url: resolveDaemonWsUrl(options.port),
     clientId: `${options.clientIdPrefix}-${randomUUID()}`,
     clientType: "cli",
     appVersion: options.appVersion ?? loadAppVersion(),

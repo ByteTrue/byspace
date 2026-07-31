@@ -12,6 +12,7 @@ import {
   workspaceLifecycleCoordinator,
 } from "./workspace-lifecycle-coordinator.js";
 import type { WorkspaceGitService } from "./workspace-git-service.js";
+import { deriveProjectKey } from "./project-key.js";
 
 const DEFAULT_RECONCILE_INTERVAL_MS = 60_000;
 
@@ -32,7 +33,10 @@ export type ReconciliationChange =
       projectId: string;
       directory: string;
       fields: Partial<
-        Pick<PersistedProjectRecord, "kind" | "displayName" | "rootPath" | "customName">
+        Pick<
+          PersistedProjectRecord,
+          "kind" | "displayName" | "rootPath" | "customName" | "projectKey"
+        >
       >;
     }
   | {
@@ -48,6 +52,7 @@ export interface ReconciliationResult {
 }
 
 export interface WorkspaceReconciliationServiceOptions {
+  serverId?: string;
   projectRegistry: ProjectRegistry;
   workspaceRegistry: WorkspaceRegistry;
   logger: pino.Logger;
@@ -58,6 +63,7 @@ export interface WorkspaceReconciliationServiceOptions {
 }
 
 export class WorkspaceReconciliationService {
+  private readonly serverId: string | undefined;
   private readonly projectRegistry: ProjectRegistry;
   private readonly workspaceRegistry: WorkspaceRegistry;
   private readonly logger: pino.Logger;
@@ -69,6 +75,7 @@ export class WorkspaceReconciliationService {
   private running = false;
 
   constructor(options: WorkspaceReconciliationServiceOptions) {
+    this.serverId = options.serverId;
     this.projectRegistry = options.projectRegistry;
     this.workspaceRegistry = options.workspaceRegistry;
     this.logger = options.logger.child({ module: "workspace-reconciliation" });
@@ -190,10 +197,17 @@ export class WorkspaceReconciliationService {
     const currentGit = await this.readWorkspaceGitMetadata(project.rootPath, directoryName);
 
     const projectUpdates: Partial<
-      Pick<PersistedProjectRecord, "kind" | "displayName" | "rootPath">
+      Pick<PersistedProjectRecord, "kind" | "displayName" | "rootPath" | "projectKey">
     > = {};
 
     const mappedKind = currentGit.projectKind === "git" ? "git" : "non_git";
+    const projectKey = deriveProjectKey({
+      rootPath: project.rootPath,
+      remoteUrl: currentGit.remoteUrl,
+      worktreeRoot: currentGit.repoRoot,
+      mainRepoRoot: currentGit.mainRepoRoot ?? null,
+      serverId: this.serverId,
+    });
     // Opaque projects represent the selected root; a shared Git remote must not rename that boundary.
     const hasOpaqueIdentity = project.projectId.startsWith("prj_");
 
@@ -211,6 +225,10 @@ export class WorkspaceReconciliationService {
       project.displayName !== currentGit.projectDisplayName
     ) {
       projectUpdates.displayName = currentGit.projectDisplayName;
+    }
+
+    if (project.projectKey !== projectKey) {
+      projectUpdates.projectKey = projectKey;
     }
 
     if (Object.keys(projectUpdates).length > 0) {
@@ -286,6 +304,7 @@ export class WorkspaceReconciliationService {
         isWorktree: false,
         projectSlug: "untitled",
         repoRoot: null,
+        mainRepoRoot: null,
         currentBranch: null,
         remoteUrl: null,
       };

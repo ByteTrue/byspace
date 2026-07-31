@@ -12,6 +12,7 @@ export interface WorkspaceGitMetadata {
   isWorktree: boolean;
   projectSlug: string;
   repoRoot: string | null;
+  mainRepoRoot?: string | null;
   currentBranch: string | null;
   remoteUrl: string | null;
 }
@@ -58,6 +59,7 @@ export function buildWorkspaceGitMetadataFromSnapshot(input: {
       isWorktree: false,
       projectSlug: deriveProjectSlug(input.cwd),
       repoRoot: null,
+      mainRepoRoot: null,
       currentBranch: null,
       remoteUrl: null,
     };
@@ -82,6 +84,7 @@ export function buildWorkspaceGitMetadataFromSnapshot(input: {
     isWorktree,
     projectSlug: deriveProjectSlug(input.cwd, input.remoteUrl),
     repoRoot: input.repoRoot,
+    mainRepoRoot: input.mainRepoRoot,
     currentBranch: input.currentBranch,
     remoteUrl: input.remoteUrl,
   };

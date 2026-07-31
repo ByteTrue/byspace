@@ -6,6 +6,8 @@ import type {
   ProjectPlacementPayload,
 } from "@bytetrue/byspace-protocol/messages";
 import { parseGitRevParsePath } from "../utils/git-rev-parse-path.js";
+import { createRealpathAwarePathMatcher, getRealpathAwareRelativePath } from "../utils/path.js";
+import { deriveProjectGroupingDisplayName, deriveProjectKey } from "./project-key.js";
 import type { PersistedWorkspaceRecord } from "./workspace-registry.js";
 
 export type PersistedProjectKind = "git" | "non_git";
@@ -17,6 +19,7 @@ export interface DirectoryProjectMembership {
   workspaceDirectoryKey: string;
   workspaceKind: PersistedWorkspaceKind;
   workspaceDisplayName: string;
+  projectId: string;
   projectKey: string;
   projectName: string;
   projectRootPath: string;
@@ -47,7 +50,10 @@ export function deriveWorkspaceDirectoryKey(
   checkout: ProjectCheckoutLitePayload,
 ): string {
   const worktreeRoot = checkout.worktreeRoot ? parseGitRevParsePath(checkout.worktreeRoot) : null;
-  return worktreeRoot ?? resolve(cwd);
+  const selectedRoot = resolve(cwd);
+  return worktreeRoot && createRealpathAwarePathMatcher(worktreeRoot)(selectedRoot)
+    ? worktreeRoot
+    : selectedRoot;
 }
 
 function deriveRemoteProjectKey(remoteUrl: string | null): string | null {
@@ -153,10 +159,15 @@ export function deriveProjectRootPath(input: {
   cwd: string;
   checkout: ProjectCheckoutLitePayload;
 }): string {
-  if (input.checkout.isGit && input.checkout.mainRepoRoot) {
-    return input.checkout.mainRepoRoot;
-  }
-  return input.cwd;
+  if (!input.checkout.isGit || !input.checkout.mainRepoRoot) return input.cwd;
+  const worktreeRoot = input.checkout.worktreeRoot
+    ? parseGitRevParsePath(input.checkout.worktreeRoot)
+    : null;
+  if (!worktreeRoot) return input.checkout.mainRepoRoot;
+  const selectedPath = getRealpathAwareRelativePath(worktreeRoot, input.cwd);
+  return selectedPath
+    ? resolve(input.checkout.mainRepoRoot, selectedPath)
+    : input.checkout.mainRepoRoot;
 }
 
 export function deriveProjectKind(checkout: ProjectCheckoutLitePayload): PersistedProjectKind {
@@ -375,6 +386,7 @@ export async function detectStaleWorkspaces(
 export function buildProjectPlacementForCwd(input: {
   cwd: string;
   checkout: ProjectCheckoutLitePayload;
+  serverId?: string;
 }): ProjectPlacementPayload {
   const membership = classifyDirectoryForProjectMembership(input);
   return {
@@ -387,6 +399,7 @@ export function buildProjectPlacementForCwd(input: {
 export function classifyDirectoryForProjectMembership(input: {
   cwd: string;
   checkout: ProjectCheckoutLitePayload;
+  serverId?: string;
 }): DirectoryProjectMembership {
   const normalizedCwd = resolve(input.cwd);
   const checkout: ProjectCheckoutLitePayload = {
@@ -394,11 +407,14 @@ export function classifyDirectoryForProjectMembership(input: {
     cwd: normalizedCwd,
   };
 
-  const projectKey = deriveProjectGroupingKey({
-    cwd: checkout.worktreeRoot ?? normalizedCwd,
+  const projectKey = deriveProjectKey({
+    rootPath: normalizedCwd,
     remoteUrl: checkout.remoteUrl,
+    worktreeRoot: checkout.worktreeRoot,
     mainRepoRoot: checkout.mainRepoRoot,
+    serverId: input.serverId,
   });
+  const projectRootPath = deriveProjectRootPath({ cwd: normalizedCwd, checkout });
 
   return {
     cwd: normalizedCwd,
@@ -409,12 +425,16 @@ export function classifyDirectoryForProjectMembership(input: {
       cwd: normalizedCwd,
       checkout,
     }),
+    // Legacy bootstrap used grouping identity as the local ID. Keep that shape
+    // while persisting the cross-host identity separately.
+    projectId: projectKey.startsWith("remote:") ? projectKey : projectRootPath,
     projectKey,
-    projectName: deriveProjectGroupingName(projectKey),
-    projectRootPath: deriveProjectRootPath({
-      cwd: normalizedCwd,
-      checkout,
+    projectName: deriveProjectGroupingDisplayName({
+      rootPath: normalizedCwd,
+      remoteUrl: checkout.remoteUrl,
+      worktreeRoot: checkout.worktreeRoot,
     }),
+    projectRootPath,
     projectKind: deriveProjectKind(checkout),
   };
 }

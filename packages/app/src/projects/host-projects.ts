@@ -7,6 +7,7 @@ export {
   canCreateWorkspaceForHostProject,
   canCreateWorktreeForProjectKind,
   filterWorkspaceProjectsForHost,
+  getHostProjectId,
   getHostProjectSourceDirectory,
   hostProjectFromRoute,
   hostProjectFromWorkspace,

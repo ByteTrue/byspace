@@ -11,7 +11,6 @@ import {
 import { backfillWorkspaceIdForLegacyAgents } from "./migrations/backfill-workspace-id.migration.js";
 import type { WorkspaceGitService } from "./workspace-git-service.js";
 import {
-  createPersistedProjectRecord,
   createPersistedWorkspaceRecord,
   type ProjectRegistry,
   type WorkspaceRegistry,
@@ -46,6 +45,7 @@ function resolveAgentUpdatedAt(record: StoredAgentRecord): string {
 }
 
 export async function bootstrapWorkspaceRegistries(options: {
+  serverId?: string;
   byspaceHome: string;
   agentStorage: AgentStorage;
   projectRegistry: ProjectRegistry;
@@ -87,6 +87,7 @@ export async function bootstrapWorkspaceRegistries(options: {
       const membership = classifyDirectoryForProjectMembership({
         cwd: normalizedCwd,
         checkout,
+        serverId: options.serverId,
       });
       return { record, membership, directoryKey: membership.workspaceDirectoryKey };
     }),
@@ -97,9 +98,17 @@ export async function bootstrapWorkspaceRegistries(options: {
     recordsByDirectoryKey.set(directoryKey, existing);
   }
 
-  const projectRanges = new Map<string, { createdAt: string | null; updatedAt: string | null }>();
+  const projectRanges = new Map<
+    string,
+    {
+      membership: ReturnType<typeof classifyDirectoryForProjectMembership>;
+      createdAt: string | null;
+      updatedAt: string | null;
+    }
+  >();
   const workspaceUpsertInputs: {
     workspaceId: string;
+    projectId: string;
     membership: ReturnType<typeof classifyDirectoryForProjectMembership>;
     workspaceCwd: string;
     createdAt: string;
@@ -118,17 +127,26 @@ export async function bootstrapWorkspaceRegistries(options: {
 
     const createdAt = workspaceCreatedAt ?? new Date().toISOString();
     const updatedAt = workspaceUpdatedAt ?? createdAt;
+    const project = await options.projectRegistry.getOrCreateActiveByRoot({
+      rootPath: membership.projectRootPath,
+      kind: membership.projectKind,
+      displayName: membership.projectName,
+      projectKey: membership.projectKey,
+      timestamp: createdAt,
+    });
 
-    const existingProjectRange = projectRanges.get(membership.projectKey) ?? {
+    const existingProjectRange = projectRanges.get(project.projectId) ?? {
+      membership,
       createdAt: null,
       updatedAt: null,
     };
     existingProjectRange.createdAt = minIsoDate(existingProjectRange.createdAt, createdAt);
     existingProjectRange.updatedAt = maxIsoDate(existingProjectRange.updatedAt, updatedAt);
-    projectRanges.set(membership.projectKey, existingProjectRange);
+    projectRanges.set(project.projectId, existingProjectRange);
 
     workspaceUpsertInputs.push({
       workspaceId: existingWorkspaceIdsByCwd.get(workspaceCwd) ?? generateWorkspaceId(),
+      projectId: project.projectId,
       membership,
       workspaceCwd,
       createdAt,
@@ -136,39 +154,33 @@ export async function bootstrapWorkspaceRegistries(options: {
     });
   }
 
-  await Promise.all(
-    workspaceUpsertInputs.flatMap(
-      ({ workspaceId, membership, workspaceCwd, createdAt, updatedAt }) => {
-        const projectRange = projectRanges.get(membership.projectKey) ?? {
-          createdAt: null,
-          updatedAt: null,
-        };
-        return [
-          options.workspaceRegistry.upsert(
-            createPersistedWorkspaceRecord({
-              workspaceId,
-              projectId: membership.projectKey,
-              cwd: workspaceCwd,
-              kind: membership.workspaceKind,
-              displayName: membership.workspaceDisplayName,
-              createdAt,
-              updatedAt,
-            }),
-          ),
-          options.projectRegistry.upsert(
-            createPersistedProjectRecord({
-              projectId: membership.projectKey,
-              rootPath: membership.projectRootPath,
-              kind: membership.projectKind,
-              displayName: membership.projectName,
-              createdAt: projectRange.createdAt ?? createdAt,
-              updatedAt: projectRange.updatedAt ?? updatedAt,
-            }),
-          ),
-        ];
-      },
+  await Promise.all([
+    ...workspaceUpsertInputs.map(
+      ({ workspaceId, projectId, membership, workspaceCwd, createdAt, updatedAt }) =>
+        options.workspaceRegistry.upsert(
+          createPersistedWorkspaceRecord({
+            workspaceId,
+            projectId,
+            cwd: workspaceCwd,
+            kind: membership.workspaceKind,
+            displayName: membership.workspaceDisplayName,
+            createdAt,
+            updatedAt,
+          }),
+        ),
     ),
-  );
+    ...[...projectRanges.entries()].map(([projectId, range]) =>
+      options.projectRegistry.update(projectId, (project) => ({
+        ...project,
+        rootPath: range.membership.projectRootPath,
+        kind: range.membership.projectKind,
+        displayName: range.membership.projectName,
+        projectKey: range.membership.projectKey,
+        createdAt: range.createdAt ?? project.createdAt,
+        updatedAt: range.updatedAt ?? range.createdAt ?? project.updatedAt,
+      })),
+    ),
+  ]);
 
   await backfillWorkspaceIdForLegacyAgents(options);
 

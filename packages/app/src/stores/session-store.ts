@@ -190,6 +190,23 @@ export interface EmptyProjectDescriptor {
   projectKind: WorkspaceDescriptorPayload["projectKind"];
 }
 
+export interface ProjectDescriptor extends EmptyProjectDescriptor {
+  projectKey?: string | null;
+}
+
+export function normalizeProjectDescriptor(
+  payload: WorkspaceProjectDescriptorPayload,
+): ProjectDescriptor {
+  return {
+    projectId: payload.projectId,
+    projectKey: payload.projectKey ?? null,
+    projectDisplayName: payload.projectDisplayName,
+    projectCustomName: payload.projectCustomName ?? null,
+    projectRootPath: payload.projectRootPath,
+    projectKind: payload.projectKind,
+  };
+}
+
 export function normalizeEmptyProjectDescriptor(
   payload: WorkspaceProjectDescriptorPayload,
 ): EmptyProjectDescriptor {
@@ -334,6 +351,7 @@ export interface SessionReplica {
   agents: Map<string, Agent>;
   workspaces: Map<string, WorkspaceDescriptor>;
   emptyProjects: Map<string, EmptyProjectDescriptor>;
+  projects?: Map<string, ProjectDescriptor>;
   timeline: SessionReplicaTimeline | null;
 }
 
@@ -385,6 +403,8 @@ export interface SessionState {
   // Project parents with no active workspaces, keyed by projectId. The
   // `emptyProjects` name is the existing protocol/store projection.
   emptyProjects: Map<string, EmptyProjectDescriptor>;
+  // Complete active project records from project.list, keyed by host-local projectId.
+  projects: Map<string, ProjectDescriptor>;
 
   // Permissions
   pendingPermissions: Map<string, PendingPermission>;
@@ -511,6 +531,9 @@ interface SessionStoreActions {
   setEmptyProjects: (serverId: string, emptyProjects: Iterable<EmptyProjectDescriptor>) => void;
   addEmptyProject: (serverId: string, emptyProject: EmptyProjectDescriptor) => void;
   removeEmptyProject: (serverId: string, projectId: string) => void;
+  setProjects: (serverId: string, projects: Iterable<ProjectDescriptor>) => void;
+  upsertProject: (serverId: string, project: ProjectDescriptor) => void;
+  removeProject: (serverId: string, projectId: string) => void;
   // Agent activity timestamps
   setAgentLastActivity: (agentId: string, timestamp: Date) => void;
   setAgentLastActivityBatch: (
@@ -589,6 +612,7 @@ function createInitialSessionState(
     agentDetails: new Map(),
     workspaces: new Map(),
     emptyProjects: new Map(),
+    projects: new Map(),
     pendingPermissions: new Map(),
     fileExplorer: new Map(),
     queuedMessages: new Map(),
@@ -702,6 +726,7 @@ export const useSessionStore = create<SessionStore>()(
                 workspaceAgentActivity: buildWorkspaceAgentActivityIndex(replica.agents),
                 workspaces: replica.workspaces,
                 emptyProjects: replica.emptyProjects,
+                projects: replica.projects ?? session.projects,
                 agentStreamTail,
               },
             },
@@ -1386,6 +1411,51 @@ export const useSessionStore = create<SessionStore>()(
               ...prev.sessions,
               [serverId]: { ...session, emptyProjects: next },
             },
+          };
+        });
+      },
+
+      setProjects: (serverId, projects) => {
+        const next = new Map<string, ProjectDescriptor>();
+        for (const project of projects) next.set(project.projectId, project);
+        set((prev) => {
+          const session = prev.sessions[serverId];
+          if (!session) return prev;
+          if (
+            session.projects.size === next.size &&
+            Array.from(next).every(([id, project]) => equal(session.projects.get(id), project))
+          ) {
+            return prev;
+          }
+          return {
+            ...prev,
+            sessions: { ...prev.sessions, [serverId]: { ...session, projects: next } },
+          };
+        });
+      },
+
+      upsertProject: (serverId, project) => {
+        set((prev) => {
+          const session = prev.sessions[serverId];
+          if (!session || equal(session.projects.get(project.projectId), project)) return prev;
+          const projects = new Map(session.projects);
+          projects.set(project.projectId, project);
+          return {
+            ...prev,
+            sessions: { ...prev.sessions, [serverId]: { ...session, projects } },
+          };
+        });
+      },
+
+      removeProject: (serverId, projectId) => {
+        set((prev) => {
+          const session = prev.sessions[serverId];
+          if (!session?.projects.has(projectId)) return prev;
+          const projects = new Map(session.projects);
+          projects.delete(projectId);
+          return {
+            ...prev,
+            sessions: { ...prev.sessions, [serverId]: { ...session, projects } },
           };
         });
       },

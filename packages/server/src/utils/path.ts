@@ -58,6 +58,11 @@ export function createRealpathAwarePathMatcher(target: string): (candidate: stri
   };
 }
 
+export function normalizePathForIdentity(value: string): string {
+  const canonicalPath = resolveRealpathVariants(value)[0] ?? value;
+  return normalizePathForComparison(canonicalPath, looksLikeDefiniteWindowsPath(canonicalPath));
+}
+
 export function isPathInsideRoot(root: string, candidate: string): boolean {
   return getRelativePathInsideRoot(root, candidate) !== null;
 }

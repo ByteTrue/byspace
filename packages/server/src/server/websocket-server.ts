@@ -1387,6 +1387,8 @@ export class VoiceAssistantWebSocketServer {
         projectRemove: true,
         // COMPAT(projectAdd): added in v0.1.97, drop the gate when floor >= v0.1.97.
         projectAdd: true,
+        // COMPAT(projectList): added in v0.2.5, remove gate after 2027-01-31.
+        projectList: true,
         // COMPAT(stableProjectIdentity): added in v0.2.0, remove gate after 2027-01-23.
         stableProjectIdentity: true,
         // COMPAT(workspaceScriptManagement): added in v0.2.2, remove after 2027-01-29.

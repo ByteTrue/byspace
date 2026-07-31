@@ -94,7 +94,7 @@ describe("deriveProjectsFromReplica", () => {
         workspaces: [
           workspace({
             id: "z-main",
-            projectKey: "remote:github.com/acme/zeta",
+            projectKey: "remote:https://github.com/acme/zeta",
             projectName: "acme/zeta",
             cwd: "/repo/zeta",
             remoteUrl: "https://github.com/acme/zeta.git",
@@ -108,7 +108,7 @@ describe("deriveProjectsFromReplica", () => {
         workspaces: [],
         emptyProjects: [
           emptyProject({
-            projectKey: "remote:github.com/acme/alpha",
+            projectKey: "remote:https://github.com/acme/alpha",
             projectName: "acme/alpha",
             cwd: "/repo/alpha",
           }),
@@ -147,7 +147,7 @@ describe("deriveProjectsFromReplica", () => {
         workspaces: [
           workspace({
             id: "main",
-            projectKey: "remote:github.com/acme/app",
+            projectKey: "remote:https://github.com/acme/app",
             projectName: "acme/app",
             cwd: "/repo/app",
             remoteUrl: "https://github.com/acme/app.git",
@@ -177,7 +177,7 @@ describe("deriveProjectsFromReplica", () => {
     });
 
     expect(result.projects).toEqual([
-      expect.objectContaining({ projectKey: "remote:github.com/acme/app" }),
+      expect.objectContaining({ projectKey: "remote:https://github.com/acme/app" }),
     ]);
     expect(result.hostErrors).toEqual([
       {
@@ -199,7 +199,7 @@ describe("deriveProjectsFromReplica", () => {
           workspaces: [
             workspace({
               id: "main",
-              projectKey: "remote:github.com/acme/app",
+              projectKey: "remote:https://github.com/acme/app",
               projectName: "acme/app",
               cwd: "/repo/app",
               remoteUrl: "https://github.com/acme/app.git",

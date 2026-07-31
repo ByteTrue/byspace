@@ -46,6 +46,7 @@ it("commits workspace and project-parent state with filtered removals", () => {
         ["filtered", normalizeWorkspaceDescriptor(workspace("filtered", "filtered-project"))],
       ]),
       emptyProjects: new Map([[empty.projectId, empty]]),
+      projects: new Map(),
     },
     [{ kind: "remove", id: "filtered", removedProjectId: "filtered-project" }],
   );

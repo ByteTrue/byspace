@@ -58,6 +58,7 @@ export function hostProjectFromRoute(route: HostProjectRouteContext): HostProjec
     hosts: [
       {
         serverId: route.serverId,
+        projectId: projectKey,
         iconWorkingDir,
         canCreateWorktree: true,
       },
@@ -87,6 +88,7 @@ export function hostProjectFromWorkspace(input: {
     hosts: [
       {
         serverId: input.serverId,
+        projectId: input.workspace.projectId,
         iconWorkingDir,
         canCreateWorktree: canCreate,
       },
@@ -104,6 +106,10 @@ export function getHostProjectSourceDirectory(
   serverId: string,
 ): string | null {
   return project.hosts.find((host) => host.serverId === serverId)?.iconWorkingDir ?? null;
+}
+
+export function getHostProjectId(project: HostProjectListItem, serverId: string): string | null {
+  return project.hosts.find((host) => host.serverId === serverId)?.projectId ?? null;
 }
 
 export function canCreateWorkspaceForHostProject(input: {
@@ -132,6 +138,26 @@ export function filterWorkspaceProjectsForHost(input: {
   );
 }
 
+function hydrateHostLocalProject(
+  candidate: HostProjectListItem,
+  projects: readonly HostProjectListItem[],
+  serverId?: string,
+): HostProjectListItem {
+  const candidateHosts = serverId
+    ? candidate.hosts.filter((host) => host.serverId === serverId)
+    : candidate.hosts;
+  return (
+    projects.find((project) =>
+      candidateHosts.some((candidateHost) =>
+        project.hosts.some(
+          (host) =>
+            host.serverId === candidateHost.serverId && host.projectId === candidateHost.projectId,
+        ),
+      ),
+    ) ?? candidate
+  );
+}
+
 export function resolveInitialWorkspaceProject(input: {
   routeProject: HostProjectListItem | null;
   lastActiveProject: HostProjectListItem | null;
@@ -144,8 +170,7 @@ export function resolveInitialWorkspaceProject(input: {
     if (!candidate) {
       continue;
     }
-    const hydratedProject =
-      input.projects.find((project) => project.projectKey === candidate.projectKey) ?? candidate;
+    const hydratedProject = hydrateHostLocalProject(candidate, input.projects, input.serverId);
     if (
       canCreateWorkspaceForHostProject({
         project: hydratedProject,
@@ -185,9 +210,13 @@ export function resolveSelectedHostProject(input: {
     return null;
   }
 
-  return (
-    input.projects.find((project) => project.projectKey === selectedProjectKey) ??
-    (input.routeProject?.projectKey === selectedProjectKey ? input.routeProject : null) ??
-    (input.lastActiveProject?.projectKey === selectedProjectKey ? input.lastActiveProject : null)
-  );
+  const selected = input.projects.find((project) => project.projectKey === selectedProjectKey);
+  if (selected) return selected;
+  if (input.routeProject?.projectKey === selectedProjectKey) {
+    return hydrateHostLocalProject(input.routeProject, input.projects);
+  }
+  if (input.lastActiveProject?.projectKey === selectedProjectKey) {
+    return hydrateHostLocalProject(input.lastActiveProject, input.projects);
+  }
+  return null;
 }

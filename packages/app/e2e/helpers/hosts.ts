@@ -57,6 +57,43 @@ export async function addOfflineHostAndReload(
   await page.reload();
 }
 
+export async function addConnectedHostAndReload(
+  page: Page,
+  input: { serverId: string; label: string; port: number; primaryLabel?: string },
+): Promise<void> {
+  const host = buildSeededHost({
+    serverId: input.serverId,
+    label: input.label,
+    endpoint: `127.0.0.1:${input.port}`,
+    nowIso: new Date().toISOString(),
+  });
+  await page.evaluate(
+    ({ connectedHost, keys, primaryLabel }) => {
+      const nonce = localStorage.getItem(keys.nonce);
+      if (!nonce)
+        throw new Error("Expected the e2e seed nonce before overriding the host registry.");
+      const registry: Array<{ serverId: string; label?: string }> = JSON.parse(
+        localStorage.getItem(keys.registry) ?? "[]",
+      );
+      if (primaryLabel && registry[0]) registry[0].label = primaryLabel;
+      if (!registry.some((entry) => entry.serverId === connectedHost.serverId))
+        registry.push(connectedHost);
+      localStorage.setItem(keys.registry, JSON.stringify(registry));
+      localStorage.setItem(keys.disableSeedOnce, nonce);
+    },
+    {
+      connectedHost: host,
+      keys: {
+        registry: REGISTRY_KEY,
+        nonce: SEED_NONCE_KEY,
+        disableSeedOnce: DISABLE_DEFAULT_SEED_ONCE_KEY,
+      },
+      primaryLabel: input.primaryLabel,
+    },
+  );
+  await page.reload();
+}
+
 export async function openSidebarDisplayPreferences(page: Page): Promise<void> {
   await page.getByTestId("sidebar-display-preferences-menu").click();
   await expect(page.getByTestId("sidebar-display-preferences-content")).toBeVisible({

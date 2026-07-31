@@ -780,6 +780,7 @@ export async function createBySpaceDaemon(
   await agentStorage.initialize();
   logger.info({ elapsed: elapsed() }, "Agent storage initialized");
   await bootstrapWorkspaceRegistries({
+    serverId,
     byspaceHome: config.byspaceHome,
     agentStorage,
     projectRegistry,
@@ -789,6 +790,7 @@ export async function createBySpaceDaemon(
   });
   logger.info({ elapsed: elapsed() }, "Workspace registries bootstrapped");
   const workspaceReconciliation = new WorkspaceReconciliationService({
+    serverId,
     projectRegistry,
     workspaceRegistry,
     logger,

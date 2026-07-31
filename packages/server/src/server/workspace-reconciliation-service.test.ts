@@ -647,7 +647,10 @@ describe("WorkspaceReconciliationService", () => {
           kind: "project_updated",
           projectId: repoDir,
           directory: repoDir,
-          fields: { displayName: "blank-dot-page/editor" },
+          fields: {
+            displayName: "blank-dot-page/editor",
+            projectKey: "remote:ssh://github.com/blank-dot-page/editor",
+          },
         },
         expect.objectContaining({
           kind: "workspace_updated",
@@ -661,7 +664,7 @@ describe("WorkspaceReconciliationService", () => {
         }),
       ]),
     );
-    expect(result.changesApplied).toHaveLength(3);
+    expect(result.changesApplied).toHaveLength(4);
     expect(projects.get("remote:github.com/blank-dot-page/editor")).toMatchObject({
       projectId: "remote:github.com/blank-dot-page/editor",
       rootPath: repoDir,
