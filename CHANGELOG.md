@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.3.0-beta.1 - 2026-08-01
 
 - Adds bounded high-water-mark handling, binary E2EE Relay frames, and backpressured large-file transfer with preserved image formats.
 - Updates Claude, OMP, and child-agent lifecycle behavior, including Opus 5 context variants and parent retention while child agents run.
@@ -10,6 +10,7 @@
 - Supports large structured diffs through a 64 MiB transport backstop and an explicit oversized-diff state instead of disconnecting.
 - Hardens PR comment Markdown conversion, self-hosted Forge ports, file-tree restoration, older GitHub CLI search, and Provider interruption/model behavior.
 - Makes BySpace-created worktree setup portable across PowerShell and POSIX shells without copying runtime state or symlinks.
+- Moves the hosted Web and relay endpoints of both channels to dedicated domains and stops serving the relay over `*.workers.dev`.
 
 ## 0.2.1 - 2026-07-25
 
