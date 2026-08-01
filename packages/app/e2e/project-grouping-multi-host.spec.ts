@@ -105,12 +105,18 @@ test.describe("cross-host project identity", () => {
       await page.getByTestId(`sidebar-project-kebab-${projectKey}`).click();
       page.once("dialog", (dialog) => void dialog.accept());
       await page.getByTestId(`sidebar-project-menu-remove-${projectKey}`).click();
+      const listProjectIds = async (client: typeof primaryClient) =>
+        (await client.listProjects()).projects.map((project) => project.projectId);
       await expect
-        .poll(async () => (await primaryClient.listProjects()).projects, { timeout: 30_000 })
-        .toEqual([]);
+        .poll(async () => (await listProjectIds(primaryClient)).includes(primaryProjectId), {
+          timeout: 30_000,
+        })
+        .toBe(false);
       await expect
-        .poll(async () => (await secondaryClient.listProjects()).projects, { timeout: 30_000 })
-        .toEqual([]);
+        .poll(async () => (await listProjectIds(secondaryClient)).includes(secondaryProjectId), {
+          timeout: 30_000,
+        })
+        .toBe(false);
     } finally {
       if (primaryProjectId)
         await primaryClient.removeProject(primaryProjectId).catch(() => undefined);

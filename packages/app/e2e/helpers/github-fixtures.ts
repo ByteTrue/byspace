@@ -293,6 +293,8 @@ export async function createLocalGithubPrFixture(): Promise<LocalGhPrFixture> {
   const basePath = path.join(fixtureRoot, "base");
   const remotePath = path.join(fixtureRoot, "remote.git");
   const checkoutPath = path.join(fixtureRoot, "main-only");
+  // This exact URL pairs with the fake `gh` stub installed by global-setup.ts;
+  // the stub only simulates GitHub for origins equal to this fixture remote.
   const githubUrl = "https://github.com/byspace-e2e/local-fixture.git";
   await mkdir(basePath);
 

@@ -197,6 +197,9 @@ test.describe("New workspace flow", () => {
   const localWorkspaceIds = new Set<string>();
   const createdWorktreeDirectories = new Set<string>();
   const localGithubFixtures = new Set<LocalGhPrFixture>();
+  // Fixture projects share one remote; leftover projects from earlier tests
+  // would regroup later fixtures under duplicate-clone host-local keys.
+  const localFixtureProjectIds = new Set<string>();
 
   test.describe.configure({ timeout: 240_000 });
 
@@ -212,9 +215,13 @@ test.describe("New workspace flow", () => {
       for (const workspaceId of localWorkspaceIds) {
         await archiveLocalWorkspaceFromDaemon(client, workspaceId).catch(() => undefined);
       }
+      for (const projectId of localFixtureProjectIds) {
+        await client.removeProject(projectId).catch(() => undefined);
+      }
     }
     createdWorktreeDirectories.clear();
     localWorkspaceIds.clear();
+    localFixtureProjectIds.clear();
     await client?.close().catch(() => undefined);
   });
 
@@ -827,6 +834,7 @@ test.describe("New workspace flow", () => {
 
     const openedProject = await openProjectViaDaemon(client, mainCheckout.path);
     localWorkspaceIds.add(openedProject.workspaceId);
+    localFixtureProjectIds.add(openedProject.projectId);
 
     await gotoAppShell(page);
     await waitForSidebarHydration(page);
@@ -878,6 +886,7 @@ test.describe("New workspace flow", () => {
 
     const openedProject = await openProjectViaDaemon(client, mainCheckout.path);
     localWorkspaceIds.add(openedProject.workspaceId);
+    localFixtureProjectIds.add(openedProject.projectId);
 
     await gotoAppShell(page);
     await waitForSidebarHydration(page);

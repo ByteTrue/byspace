@@ -86,6 +86,26 @@ function buildFakeProviderEntries(nowIso: string) {
   ];
 }
 
+function buildFakeProjectListPayload(workspacePayload: Record<string, unknown>) {
+  const workspace = workspacePayload as {
+    projectId?: string;
+    projectDisplayName?: string;
+    projectRootPath?: string;
+    projectKind?: string;
+  };
+  return [
+    {
+      projectId: workspace.projectId ?? "fake-project",
+      projectKey: workspace.projectId ?? "fake-project",
+      projectGroupingKey: workspace.projectId ?? "fake-project",
+      projectDisplayName: workspace.projectDisplayName ?? "Fake host project",
+      projectCustomName: null,
+      projectRootPath: workspace.projectRootPath ?? "/tmp/fake-host-project",
+      projectKind: workspace.projectKind ?? "git",
+    },
+  ];
+}
+
 function readSessionRequest(message: WebSocketMessage): SessionRequest | null {
   const parsed = parseJson(message);
   if (!parsed || typeof parsed !== "object") {
@@ -156,6 +176,7 @@ export async function installFakeScheduleHost(input: {
               workspaceMultiplicity: true,
               projectAdd: true,
               projectRemove: true,
+              projectList: true,
               workspaceRecovery: true,
             },
           }),
@@ -184,6 +205,14 @@ export async function installFakeScheduleHost(input: {
               clientSentAt: typeof request.clientSentAt === "number" ? request.clientSentAt : now,
               serverReceivedAt: now,
               serverSentAt: now,
+            }),
+          );
+          return;
+        case "project.list.request":
+          ws.send(
+            buildSessionMessage("project.list.response", {
+              requestId,
+              projects: buildFakeProjectListPayload(input.workspace),
             }),
           );
           return;
