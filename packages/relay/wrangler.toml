@@ -5,6 +5,11 @@ compatibility_date = "2024-12-01"
 
 workers_dev = false
 
+# Routing is release-controlled, not dashboard-controlled: *.workers.dev is blocked in
+# some regions, so each channel is reachable only through its own custom domain and a
+# deploy must (re)assert that binding rather than inherit whatever the dashboard holds.
+routes = [{ pattern = "relay.byspace.zijieapi.de5.net", custom_domain = true }]
+
 [observability]
 enabled = true
 
@@ -14,5 +19,23 @@ name = "RELAY"
 class_name = "RelayDurableObject"
 
 [[migrations]]
+tag = "v1"
+new_sqlite_classes = ["RelayDurableObject"]
+
+# Beta channel. Every field below is repeated rather than inherited, because Wrangler does
+# not inherit bindings or migrations into named environments.
+[env.beta]
+name = "byspace-relay-beta"
+workers_dev = false
+routes = [{ pattern = "relay-beta.byspace.zijieapi.de5.net", custom_domain = true }]
+
+[env.beta.observability]
+enabled = true
+
+[[env.beta.durable_objects.bindings]]
+name = "RELAY"
+class_name = "RelayDurableObject"
+
+[[env.beta.migrations]]
 tag = "v1"
 new_sqlite_classes = ["RelayDurableObject"]
