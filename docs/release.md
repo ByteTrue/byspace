@@ -32,6 +32,20 @@ Future upstream updates port the aggregate delta between this baseline and an ap
 - Deployment workflows accept only successful same-repository tag runs, peel annotated tags, and deploy the immutable tagged SHA. They do not require `main` to remain frozen after npm publication.
 - Prerelease daemons default to the Beta Web/Relay and self-update from npm `beta`; stable daemons default to Stable and self-update from npm `latest`. Custom endpoints and environment overrides remain supported.
 
+## Version classification
+
+Classify from the product, not from the diff. Commit count, changed-line count, and new RPC count are not inputs.
+
+- **patch** — the user would say "good, that was broken", or would not notice at all: fixes, refactors, performance, docs, internal rework, and upstream syncs that carry no new capability.
+- **minor** — the user would say "there is something new": any capability they can see, reach, or configure. A new `server_info.features.*` gate always means minor, because a client had to grow a capability check for it. Changing a product default users depend on, such as a hosted endpoint, is also minor.
+- **major** — reserved, and never selected by an agent. It means the upgrade contract broke: the user must migrate state, edit config, or change how they invoke BySpace. Size of work is irrelevant; an invisible internal rewrite is not major, and a five-line config rename is.
+
+While the version is `0.x`, major stays parked and minor carries everything user-visible. Minor numbers therefore grow quickly, which is expected and is not a reason to downgrade a release to patch.
+
+Precedent: `0.2.1` shipped browser file editing as a patch. Under this rule that was a minor.
+
+A future `1.0` would freeze five contracts: the WebSocket protocol, the `config.json` shape, the CLI surface, on-disk `$BYSPACE_HOME` state, and the hosted endpoints. Two are already held to that standard, because the protocol never breaks parsing and the data model has no migrations. Do not propose `1.0` while BySpace still absorbs deltas from a pre-`1.0` upstream, or while a release can still retire a shipped endpoint without compatibility work.
+
 ## Required checks
 
 ```bash

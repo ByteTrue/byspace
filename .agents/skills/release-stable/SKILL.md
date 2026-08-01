@@ -21,7 +21,7 @@ Use `harden-byspace-release` for an independent pre-tag review when available.
 ## Prepare
 
 1. Require a clean working tree and current `origin/main`.
-2. For a fresh release, classify the previous-Stable-to-`HEAD` diff as patch or minor and explain the target. Never choose major autonomously.
+2. For a fresh release, classify the previous-Stable-to-`HEAD` diff as patch or minor using the version classification rules in `docs/release.md` and explain the target from what the user can see, never from diff size. Never choose major autonomously.
 3. Select the version command:
    - promote the current beta: `npm run version:all:promote`;
    - fresh patch/minor: `npm run version:all:patch` or `npm run version:all:minor`.
