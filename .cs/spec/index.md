@@ -25,8 +25,8 @@ Terminal Tab 可以在切换后保留本地 renderer 状态，但保留挂载不
 - 环境变量：`BYSPACE_*`
 - daemon home：`~/.byspace`
 - 默认端口：`6777`
-- Web：`https://byspace.pages.dev`
-- Relay：`wss://byspace-relay.bytetrue.workers.dev:443`
+- Web：`https://app.byspace.zijieapi.de5.net`
+- Relay：`wss://relay.byspace.zijieapi.de5.net:443`
 
 ## 来源与维护
 

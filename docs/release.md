@@ -7,10 +7,10 @@ Related process docs:
 - `docs/release-engineering.md` — incident-derived controls and proof ladder.
 - `docs/upstream-sync.md` — release-level delta synchronization workflow.
 
-| Channel | npm dist-tag | Web                              | Relay                                               |
-| ------- | ------------ | -------------------------------- | --------------------------------------------------- |
-| Stable  | `latest`     | `https://byspace.pages.dev`      | `wss://byspace-relay.bytetrue.workers.dev:443`      |
-| Beta    | `beta`       | `https://byspace-beta.pages.dev` | `wss://byspace-relay-beta.bytetrue.workers.dev:443` |
+| Channel | npm dist-tag | Web                                         | Relay                                           |
+| ------- | ------------ | ------------------------------------------- | ----------------------------------------------- |
+| Stable  | `latest`     | `https://app.byspace.zijieapi.de5.net`      | `wss://relay.byspace.zijieapi.de5.net:443`      |
+| Beta    | `beta`       | `https://app-beta.byspace.zijieapi.de5.net` | `wss://relay-beta.byspace.zijieapi.de5.net:443` |
 
 Electron, native iOS/Android, app-store builds, Browser automation, and a marketing website are not release surfaces.
 
@@ -57,7 +57,7 @@ npm run release:check
 6. Create and push annotated tag `vX.Y.Z-beta.N` once. Do not move it.
 7. `Publish npm` publishes npm dist-tag `beta` and creates a GitHub prerelease.
 8. Successful publication deploys `byspace-beta` Pages and `byspace-relay-beta` Worker from the tagged SHA.
-9. Verify npm `beta`, `https://byspace-beta.pages.dev`, the Beta Worker deployment, a real Beta daemon pairing URL, and relay connection. Confirm npm `latest` and Stable deployment IDs did not move.
+9. Verify npm `beta`, `https://app-beta.byspace.zijieapi.de5.net`, the Beta Worker deployment, a real Beta daemon pairing URL, and relay connection. Confirm npm `latest` and Stable deployment IDs did not move.
 
 ## Stable release or beta promotion
 

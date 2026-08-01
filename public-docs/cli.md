@@ -134,7 +134,7 @@ Use `BYSPACE_HOME` to run multiple isolated daemon instances.
 
 ## Connecting to a remote daemon
 
-`--host` accepts either a local target (`host:port`, a unix socket, or a Windows pipe) or a pairing offer URL, the same `https://byspace.pages.dev/#offer=...` link used by browser pairing. With an offer URL the CLI connects through the BySpace relay with end-to-end encryption, so you can drive a daemon on another machine without exposing it to the network.
+`--host` accepts either a local target (`host:port`, a unix socket, or a Windows pipe) or a pairing offer URL, the same `https://app.byspace.zijieapi.de5.net/#offer=...` link used by browser pairing. With an offer URL the CLI connects through the BySpace relay with end-to-end encryption, so you can drive a daemon on another machine without exposing it to the network.
 
 Get an offer URL from the daemon you want to control:
 
@@ -145,7 +145,7 @@ byspace daemon pair --json   # prints { url, qr, ... }
 Use it from anywhere:
 
 ```bash
-byspace ls --host 'https://byspace.pages.dev/#offer=eyJ2IjoyLC...'
+byspace ls --host 'https://app.byspace.zijieapi.de5.net/#offer=eyJ2IjoyLC...'
 byspace run --host "$OFFER_URL" "fix the failing tests"
 ```
 
@@ -191,7 +191,7 @@ byspace ls -q                    # IDs only (quiet)
 
 ## Global options
 
-- `--host <target>`, connect to a different daemon (`host:port`, unix socket, or `https://byspace.pages.dev/#offer=...` for relay). See [Connecting to a remote daemon](#connecting-to-a-remote-daemon).
+- `--host <target>`, connect to a different daemon (`host:port`, unix socket, or `https://app.byspace.zijieapi.de5.net/#offer=...` for relay). See [Connecting to a remote daemon](#connecting-to-a-remote-daemon).
 - `--json`, JSON output
 - `-q, --quiet`, minimal output
 - `--no-color`, disable colors

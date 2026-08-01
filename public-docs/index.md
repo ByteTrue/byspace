@@ -19,7 +19,7 @@ npm install -g @bytetrue/byspace
 byspace
 ```
 
-BySpace prints a pairing link. Open it in a browser to connect the hosted Web app at [byspace.pages.dev](https://byspace.pages.dev). The daemon can also serve the same browser UI itself; see [Self-hosting the web UI](/docs/web-ui).
+BySpace prints a pairing link. Open it in a browser to connect the hosted Web app at [app.byspace.zijieapi.de5.net](https://app.byspace.zijieapi.de5.net). The daemon can also serve the same browser UI itself; see [Self-hosting the web UI](/docs/web-ui).
 
 Configuration and local state live under `BYSPACE_HOME` (defaults to `~/.byspace`).
 

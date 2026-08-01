@@ -8,7 +8,7 @@ category: Getting started
 
 # Self-hosting the web UI
 
-BySpace's daemon can serve the browser web app itself, from the same address it already uses for the API. You don't need the hosted app at [byspace.pages.dev](https://byspace.pages.dev): point a browser at your own daemon and you get the full UI, connected to your own agents, on infrastructure you control.
+BySpace's daemon can serve the browser web app itself, from the same address it already uses for the API. You don't need the hosted app at [app.byspace.zijieapi.de5.net](https://app.byspace.zijieapi.de5.net): point a browser at your own daemon and you get the full UI, connected to your own agents, on infrastructure you control.
 
 This is useful when you want to:
 

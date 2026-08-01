@@ -13,8 +13,8 @@ commit → CI → package artifact → npm dist-tag → Web → Relay → real d
 Stable and Beta are separate tuples:
 
 ```text
-Stable = npm latest + byspace.pages.dev + byspace-relay
-Beta   = npm beta   + byspace-beta.pages.dev + byspace-relay-beta
+Stable = npm latest + app.byspace.zijieapi.de5.net + byspace-relay
+Beta   = npm beta   + app-beta.byspace.zijieapi.de5.net + byspace-relay-beta
 ```
 
 A release is incomplete until every element in its tuple is verified and the other tuple is proven unchanged.

@@ -59,7 +59,7 @@ Prove all of the following before announcing completion:
 - Beta Pages reports the tagged SHA/version;
 - Beta Worker reports the tagged version;
 - a clean global `@bytetrue/byspace@beta` install starts an isolated daemon;
-- pairing uses `https://byspace-beta.pages.dev` and the Beta relay;
+- pairing uses `https://app-beta.byspace.zijieapi.de5.net` and the Beta relay;
 - real relay connection succeeds;
 - Stable Pages deployment ID and Stable Worker version ID are unchanged;
 - repository working tree is clean and `main == origin/main`.

@@ -30,7 +30,7 @@ export function HostStatusDotSlot({ serverId }: { serverId: string }): ReactElem
 }
 
 // Standard secure/plain web ports carry no information in the host display, so
-// "byspace-relay.bytetrue.workers.dev:443" renders without the standard port while "127.0.0.1:6777" is kept.
+// "relay.byspace.zijieapi.de5.net:443" renders without the standard port while "127.0.0.1:6777" is kept.
 function formatConnectionEndpoint(endpoint: string): string {
   return endpoint.replace(/:(?:443|80)$/, "");
 }
