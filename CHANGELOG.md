@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.3.0-beta.1 - 2026-08-01
+## 0.3.0 - 2026-08-01
 
 - Adds bounded high-water-mark handling, binary E2EE Relay frames, and backpressured large-file transfer with preserved image formats.
 - Updates Claude, OMP, and child-agent lifecycle behavior, including Opus 5 context variants and parent retention while child agents run.
