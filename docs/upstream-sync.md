@@ -150,7 +150,9 @@ Ask independent read-only reviewers to inspect only:
 
 A reviewer finding is a sync blocker only when code was omitted, copied incorrectly, adapted beyond approval, or crossed a fixed BySpace boundary. A possible upstream bug, security improvement, architecture improvement, or desirable hardening is reported to the user and is not implemented automatically.
 
-Fix transfer mistakes and resolve all **Needs user decision** items through explicit user choices. Then update the baseline marker and report the candidate SHA, tests, reviews, decisions, and residual upstream concerns. Integrate through normal commits and a normal push after user approval.
+Fix transfer mistakes and resolve all **Needs user decision** items through explicit user choices. Then update the baseline marker inside the sync branch and report the candidate SHA, tests, reviews, decisions, and residual upstream concerns.
+
+Integration is branch-first: push the sync branch, run the full `CI` workflow on its exact SHA (PR to `main` or `workflow_dispatch`), and only after it is green and the user approves, fast-forward `main` to that same SHA. The baseline marker therefore lands on `main` only together with green exact-SHA CI evidence; never merge a red or unverified candidate into `main`.
 
 Shipping is separate. Invoke `release-beta` or `release-stable` only when explicitly requested.
 

@@ -69,8 +69,9 @@ Do not create a per-commit ledger. Dispositions are by behavior and retained sub
 13. Audit only transfer fidelity and fixed BySpace boundaries: no omitted approved code, accidental redesign, excluded client, old identity, upstream package namespace, port, home path, deployment target, or release-channel regression.
 14. Obtain independent reviews limited to: copied-versus-upstream fidelity, approved dispositions, mechanical adaptation scope, excluded-surface leakage, and fixed release boundaries. Reviewers must not propose upstream improvements or new hardening as sync blockers.
 15. Fix transfer mistakes. Classify a discovered upstream defect or desirable improvement as **Needs user decision**; do not implement it automatically. Only then update the recorded upstream baseline.
-16. Present the candidate SHA, normal commit/push plan, validation, dispositions, user decisions, and residual upstream concerns. Push or merge only with user approval.
-17. Stop after source convergence. Use `release-beta` or `release-stable` only for a separate explicit shipping request.
+16. Push the sync branch and run the full `CI` workflow on its exact SHA (PR to `main` or `workflow_dispatch`). The baseline marker rides in the sync branch, so it can only reach `main` together with green CI evidence.
+17. Present the candidate SHA, CI result, validation, dispositions, user decisions, and residual upstream concerns. With user approval, fast-forward `main` to the exact CI-green SHA and push. Never merge a red or unverified candidate into `main`.
+18. Stop after source convergence. Use `release-beta` or `release-stable` only for a separate explicit shipping request.
 
 ## Failure discipline
 
