@@ -338,6 +338,12 @@ export const ptBR: TranslationResources = {
     row: {
       importing: "Importando...",
     },
+    manual: {
+      sectionTitle: "Importar por ID da sessão",
+      providerPlaceholder: "Selecionar provedor",
+      idPlaceholder: "ID da sessão ou thread",
+      submit: "Importar",
+    },
   },
   workspace: {
     route: {

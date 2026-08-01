@@ -335,6 +335,12 @@ export const zhCN: TranslationResources = {
     row: {
       importing: "正在导入...",
     },
+    manual: {
+      sectionTitle: "按会话 ID 导入",
+      providerPlaceholder: "选择 Provider",
+      idPlaceholder: "会话或线程 ID",
+      submit: "导入",
+    },
   },
   workspace: {
     route: {

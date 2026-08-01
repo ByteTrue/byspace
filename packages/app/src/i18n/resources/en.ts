@@ -334,6 +334,12 @@ export const en = {
     row: {
       importing: "Importing...",
     },
+    manual: {
+      sectionTitle: "Import by session ID",
+      providerPlaceholder: "Select provider",
+      idPlaceholder: "Session or thread ID",
+      submit: "Import",
+    },
   },
   workspace: {
     route: {
