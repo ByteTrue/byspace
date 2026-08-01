@@ -335,6 +335,12 @@ export const ar: TranslationResources = {
     row: {
       importing: "جارٍ الاستيراد...",
     },
+    manual: {
+      sectionTitle: "الاستيراد باستخدام معرف الجلسة",
+      providerPlaceholder: "اختر المزوّد",
+      idPlaceholder: "معرف الجلسة أو الموضوع",
+      submit: "استيراد",
+    },
   },
   workspace: {
     route: {

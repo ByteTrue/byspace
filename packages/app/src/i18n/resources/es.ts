@@ -338,6 +338,12 @@ export const es: TranslationResources = {
     row: {
       importing: "Importador...",
     },
+    manual: {
+      sectionTitle: "Importar por ID de sesión",
+      providerPlaceholder: "Seleccionar proveedor",
+      idPlaceholder: "ID de sesión o hilo",
+      submit: "Importar",
+    },
   },
   workspace: {
     route: {

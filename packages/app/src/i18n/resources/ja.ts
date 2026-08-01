@@ -338,6 +338,12 @@ export const ja: TranslationResources = {
     row: {
       importing: "インポート中...",
     },
+    manual: {
+      sectionTitle: "セッションIDでインポート",
+      providerPlaceholder: "プロバイダーを選択",
+      idPlaceholder: "セッションまたはスレッドID",
+      submit: "インポート",
+    },
   },
   workspace: {
     route: {

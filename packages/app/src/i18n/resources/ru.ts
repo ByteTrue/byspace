@@ -337,6 +337,12 @@ export const ru: TranslationResources = {
     row: {
       importing: "Импорт...",
     },
+    manual: {
+      sectionTitle: "Импорт по ID сессии",
+      providerPlaceholder: "Выбрать провайдера",
+      idPlaceholder: "ID сессии или треда",
+      submit: "Импортировать",
+    },
   },
   workspace: {
     route: {

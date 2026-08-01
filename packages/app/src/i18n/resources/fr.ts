@@ -339,6 +339,12 @@ export const fr: TranslationResources = {
     row: {
       importing: "Importation...",
     },
+    manual: {
+      sectionTitle: "Importer par ID de session",
+      providerPlaceholder: "Sélectionner un fournisseur",
+      idPlaceholder: "ID de session ou de fil",
+      submit: "Importer",
+    },
   },
   workspace: {
     route: {
