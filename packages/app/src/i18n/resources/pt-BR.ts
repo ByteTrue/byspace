@@ -191,6 +191,7 @@ export const ptBR: TranslationResources = {
       failedToLoad: "Falha ao carregar agente",
       reconnecting: "Reconectando...",
       timelineSyncFailed: "Não foi possível atualizar o histórico do agente. Tentando novamente…",
+      timelineSyncing: "Sincronizando o progresso mais recente...",
       archivingTitle: "Arquivando agente...",
       archivingSubtitle: "Aguarde enquanto arquivamos este agente.",
     },

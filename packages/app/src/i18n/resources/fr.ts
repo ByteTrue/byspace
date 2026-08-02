@@ -193,6 +193,7 @@ export const fr: TranslationResources = {
       failedToLoad: "Échec du chargement de l'agent",
       reconnecting: "Reconnexion...",
       timelineSyncFailed: "Impossible d’actualiser l’historique de l’agent. Nouvelle tentative…",
+      timelineSyncing: "Synchronisation de la progression récente...",
       archivingTitle: "Agent d'archivage...",
       archivingSubtitle: "Veuillez patienter pendant que nous archivons cet agent.",
     },
