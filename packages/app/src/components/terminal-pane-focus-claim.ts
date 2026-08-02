@@ -31,6 +31,23 @@ export function canRequestFocusClaim(input: FocusClaimReadiness): boolean {
   );
 }
 
+/**
+ * Whether a measured size has to reach the PTY.
+ *
+ * A passive refit (the post-mount fit ladder, font metrics settling, the WebGL renderer swap
+ * with its own cell dimensions, a window visibility restore) must not take the PTY away from
+ * another client, so it arrives with `shouldClaim: false`. But once this client has claimed a
+ * size, those refits are the only thing that knows our columns moved: dropping them leaves the
+ * PTY — and therefore everything the app paints — narrower or wider than what we render, until
+ * some input re-claims.
+ */
+export function shouldSendTerminalResize(input: {
+  shouldClaim: boolean;
+  hasClaimedSize: boolean;
+}): boolean {
+  return input.shouldClaim || input.hasClaimedSize;
+}
+
 export function reconcileFocusClaim(
   state: FocusClaimState,
   input: { key: string | null; canRequest: boolean },

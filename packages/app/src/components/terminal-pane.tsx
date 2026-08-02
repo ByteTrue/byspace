@@ -21,6 +21,7 @@ import {
   canRequestFocusClaim,
   reconcileFocusClaim,
   settleFocusClaim,
+  shouldSendTerminalResize,
 } from "./terminal-pane-focus-claim";
 import {
   TerminalStreamController,
@@ -103,6 +104,10 @@ type PendingTerminalInput =
         meta?: boolean;
       };
     };
+
+// Trailing window that collapses one burst of passive refits into a single PTY resize.
+// ponytail: fixed delay, not adaptive — shorten only if drift correction ever feels late.
+const PASSIVE_TERMINAL_RESIZE_COALESCE_MS = 250;
 
 const EMPTY_MODIFIERS: ModifierState = {
   ctrl: false,
@@ -199,6 +204,7 @@ export function TerminalPane({
   // but only dedupe resizes that this specific client has already pushed.
   const measuredTerminalSizeRef = useRef<{ rows: number; cols: number } | null>(null);
   const lastSentTerminalSizeRef = useRef<{ rows: number; cols: number } | null>(null);
+  const passiveResizeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const streamControllerRef = useRef<TerminalStreamController | null>(null);
   const workspaceTerminalSession = useMemo(
     () => getWorkspaceTerminalSession({ scopeKey }),
@@ -344,10 +350,20 @@ export function TerminalPane({
     });
   }, [client, isConnected, isWorkspaceFocused, workspaceTerminalSession.snapshots]);
 
+  const clearPassiveResizeTimer = useCallback(() => {
+    if (passiveResizeTimerRef.current) {
+      clearTimeout(passiveResizeTimerRef.current);
+      passiveResizeTimerRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => clearPassiveResizeTimer, [clearPassiveResizeTimer]);
+
   useEffect(() => {
     measuredTerminalSizeRef.current = null;
     lastSentTerminalSizeRef.current = null;
-  }, [scopeKey]);
+    clearPassiveResizeTimer();
+  }, [scopeKey, clearPassiveResizeTimer]);
 
   const handleStreamControllerStatus = useCallback((status: TerminalStreamControllerStatus) => {
     setIsAttaching(status.isAttaching);
@@ -366,7 +382,15 @@ export function TerminalPane({
 
     const controller = new TerminalStreamController({
       client,
-      getPreferredSize: () => lastSentTerminalSizeRef.current,
+      // Attach re-asserts geometry, but only for a pane that already claimed this PTY: a client
+      // that never claimed (a terminal created while the window was blurred) must not take the
+      // size here. When it does re-assert, it has to carry what the renderer currently shows —
+      // the subscribe response lands after the post-mount refit ladder and the WebGL renderer
+      // swap have moved the column count, and this send is the one the daemon acts on last.
+      getPreferredSize: () =>
+        lastSentTerminalSizeRef.current
+          ? (measuredTerminalSizeRef.current ?? lastSentTerminalSizeRef.current)
+          : null,
       onOutput: ({ terminalId: outputTerminalId, data }) => {
         if (!isTerminalStreamActive || terminalIdRef.current !== outputTerminalId) {
           return;
@@ -596,50 +620,70 @@ export function TerminalPane({
     ],
   );
 
+  const sendTerminalResize = useStableEvent((size: { rows: number; cols: number }) => {
+    let sent = false;
+    const canSend = canRequestFocusClaim({
+      isWorkspaceFocused,
+      isAppVisible,
+      isClientReady: client !== null,
+      isConnected,
+      isRendererReady: true,
+    });
+    if (client && terminalId && canSend) {
+      const previousSent = lastSentTerminalSizeRef.current;
+      if (!previousSent || previousSent.rows !== size.rows || previousSent.cols !== size.cols) {
+        lastSentTerminalSizeRef.current = size;
+        client.sendTerminalInput(terminalId, {
+          type: "resize",
+          rows: size.rows,
+          cols: size.cols,
+        });
+      }
+      sent = true;
+    }
+    const requestedKey = paneFocusResizeClaimRef.current.requestedKey;
+    if (requestedKey) {
+      paneFocusResizeClaimRef.current = settleFocusClaim(paneFocusResizeClaimRef.current, {
+        key: requestedKey,
+        sent,
+      });
+    }
+  });
+
   const handleTerminalResize = useStableEvent(
     (input: { rows: number; cols: number; shouldClaim: boolean }) => {
       const { rows, cols } = input;
       if (rows <= 0 || cols <= 0) {
         return;
       }
-      const normalizedRows = Math.floor(rows);
-      const normalizedCols = Math.floor(cols);
-      const nextSize = { rows: normalizedRows, cols: normalizedCols };
+      const nextSize = { rows: Math.floor(rows), cols: Math.floor(cols) };
       measuredTerminalSizeRef.current = nextSize;
-      if (!input.shouldClaim) {
+      if (
+        !shouldSendTerminalResize({
+          shouldClaim: input.shouldClaim,
+          hasClaimedSize: lastSentTerminalSizeRef.current !== null,
+        })
+      ) {
         return;
       }
-      let sent = false;
-      const canSend = canRequestFocusClaim({
-        isWorkspaceFocused,
-        isAppVisible,
-        isClientReady: client !== null,
-        isConnected,
-        isRendererReady: true,
-      });
-      if (client && terminalId && canSend) {
-        const previousSent = lastSentTerminalSizeRef.current;
-        if (
-          !previousSent ||
-          previousSent.rows !== normalizedRows ||
-          previousSent.cols !== normalizedCols
-        ) {
-          lastSentTerminalSizeRef.current = nextSize;
-          client.sendTerminalInput(terminalId, {
-            type: "resize",
-            rows: normalizedRows,
-            cols: normalizedCols,
-          });
+      if (input.shouldClaim) {
+        clearPassiveResizeTimer();
+        sendTerminalResize(nextSize);
+        return;
+      }
+      // Passive refits arrive as a burst: the post-mount fit ladder, font metrics settling and
+      // the WebGL renderer swap each land within a few hundred ms of a remount, and every
+      // distinct size would resize the PTY and make the app repaint its whole screen — costly
+      // over Relay. Correcting drift is not latency-critical, so only the last one goes out.
+      // Explicit claims (focus, click, reflow token, drag) still send immediately.
+      clearPassiveResizeTimer();
+      passiveResizeTimerRef.current = setTimeout(() => {
+        passiveResizeTimerRef.current = null;
+        const settledSize = measuredTerminalSizeRef.current;
+        if (settledSize) {
+          sendTerminalResize(settledSize);
         }
-        sent = true;
-      }
-      const requestedKey = paneFocusResizeClaimRef.current.requestedKey;
-      if (requestedKey) {
-        paneFocusResizeClaimRef.current = settleFocusClaim(paneFocusResizeClaimRef.current, {
-          key: requestedKey,
-          sent,
-        });
-      }
+      }, PASSIVE_TERMINAL_RESIZE_COALESCE_MS);
     },
   );
 
