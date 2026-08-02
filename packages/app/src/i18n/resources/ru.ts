@@ -191,6 +191,7 @@ export const ru: TranslationResources = {
       failedToLoad: "Не удалось загрузить агент",
       reconnecting: "Повторное подключение...",
       timelineSyncFailed: "Не удалось обновить историю агента. Повторная попытка…",
+      timelineSyncing: "Синхронизация последнего прогресса...",
       archivingTitle: "Архивный агент...",
       archivingSubtitle: "Пожалуйста, подождите, пока мы архивируем этого агента.",
     },

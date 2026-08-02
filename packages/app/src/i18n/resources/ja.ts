@@ -191,6 +191,7 @@ export const ja: TranslationResources = {
       failedToLoad: "エージェントの読み込みに失敗しました",
       reconnecting: "再接続中...",
       timelineSyncFailed: "エージェントの履歴を更新できませんでした。再試行しています…",
+      timelineSyncing: "最新の進捗を同期中...",
       archivingTitle: "エージェントをアーカイブ中...",
       archivingSubtitle: "このエージェントをアーカイブするまでお待ちください。",
     },
