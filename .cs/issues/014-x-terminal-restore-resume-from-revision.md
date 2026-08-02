@@ -79,6 +79,7 @@ epic: ".cs/epics/2026/07/21/terminal-experience/spec.md"
 - e2e `terminal-clipboard.spec.ts`（reload 后恢复 bracketed paste）先失败后通过，是它暴露了锚点缺失。
 - e2e `terminal-restore-window.spec.ts` 改成续传口径：**实测 91ms、oldestRestored = line-1**（1500 行全保留），对比 013 的快照回放 195ms / 约 1043 行。
 - 协议 + 服务端终端单测 94/94；typecheck / lint / format 全绿。
+- 远端 CI（PR #18）抳出一条写错的断言：我把 `restoreMs < 150` 当成了回归门，runner 上实测 427ms（本地 91ms）。性能阈值不该做跨机器的 CI 门；真正的回归信号是 `oldestRestored === 1`——一旦退回快照回放，历史就会被截到约 line-500，它会先失败。时间改为只打日志。
 
 ## 待确认问题（已定）
 
