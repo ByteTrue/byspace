@@ -49,12 +49,7 @@ export function PairDeviceSection({ serverId }: { serverId: string }) {
 
   const pairingQuery = useFetchQuery({
     queryKey: ["daemon-pairing", serverId],
-    queryFn: async () => {
-      if (!daemonClient) {
-        throw new Error("Daemon client not available");
-      }
-      return daemonClient.getDaemonPairingOffer();
-    },
+    queryFn: () => daemonClient!.getDaemonPairingOffer(),
     enabled: !!daemonClient && isConnected,
     dataShape: "value",
     staleTimeMs: 5 * 60 * 1000,
