@@ -5,13 +5,14 @@ import { selectWorkspaceInSidebar } from "./helpers/sidebar";
 import { createTempGitRepo } from "./helpers/workspace";
 
 /**
- * How much scrollback survives a workspace switch, and what replaying it costs.
+ * How much scrollback survives a workspace switch, and what catching up costs.
  *
- * Coming back to a terminal resets the renderer and replays the daemon's snapshot, so the
- * restore window is the only history the user keeps. The window has to stay in step with what
- * the daemon actually retains (its headless xterm keeps 1000 lines), and the replay has to stay
- * cheap enough that the switch still feels instant — the spec logs the measured cost so a later
- * change to the window is a decision with a number attached.
+ * A returning client is resumed: the daemon sends the output produced while the pane was
+ * unsubscribed and the renderer is never reset, so the history the user keeps is their own
+ * renderer's, not a replay window. The snapshot replay is still the fallback when the gap is
+ * too large to serve, and the daemon's own scrollback still bounds that path — hence both
+ * assertions here: nothing older is lost, and the catch-up stays cheap. The spec logs the
+ * measured cost so a later change is a decision with a number attached.
  */
 
 type TrackedTerminal = NonNullable<Window["__byspaceTerminal"]>;
@@ -76,7 +77,7 @@ test.describe("terminal restore window", () => {
     await harness.cleanup();
   });
 
-  test("keeps the daemon's retained scrollback after a workspace switch", async ({ page }) => {
+  test("keeps every line the client already had after a workspace switch", async ({ page }) => {
     test.setTimeout(120_000);
     await installTerminalProbe(page);
     await page.setViewportSize({ width: 1280, height: 900 });
@@ -95,8 +96,9 @@ test.describe("terminal restore window", () => {
       await harness.openTerminal(page, { terminalId: terminal.id });
       await waitForTerminalAttached(page);
 
-      // 1500 lines overflow the daemon's own 1000-line scrollback, so the oldest line it can
-      // still replay is around line-500.
+      // 1500 lines overflow the daemon's own 1000-line scrollback: a snapshot replay could only
+      // bring back around line-500, so anything older surviving the switch proves the client's
+      // own buffer was kept instead of being reset.
       harness.client.sendTerminalInput(terminal.id, {
         type: "input",
         data: "seq 1 1500 | sed -e 's/^/line-/'\n",
@@ -135,8 +137,12 @@ test.describe("terminal restore window", () => {
         JSON.stringify({ restoreMs, oldestRestored, restoredChars: restored.length }),
       );
 
-      // The window has to reach what the daemon retains, not a small slice of it.
-      expect(oldestRestored).toBeLessThan(700);
+      // Resuming keeps the client's own scrollback, so the oldest line is the oldest the client
+      // ever had — not the oldest the daemon still retains.
+      expect(oldestRestored).toBe(1);
+      // Only the gap crosses the wire, so coming back cannot get more expensive as the terminal
+      // accumulates history. The snapshot replay of this same terminal measured 195ms.
+      expect(restoreMs).toBeLessThan(150);
     } finally {
       await harness.killTerminal(terminal.id);
       await otherRepo.cleanup().catch(() => {});

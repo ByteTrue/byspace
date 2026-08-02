@@ -8,6 +8,12 @@ export const TERMINAL_VISIBLE_RESTORE_SCROLLBACK_LINES = 1_000;
 export interface ResolveTerminalRestoreOptionsInput {
   supportsTerminalRestoreModes: boolean;
   size: { rows: number; cols: number } | null;
+  /**
+   * Whether this renderer still holds this terminal's stream. Only the client
+   * can know: the daemon session outlives a page reload, so "I already sent you
+   * this" is not the same question as "you still have it".
+   */
+  canResume: boolean;
 }
 
 export function resolveTerminalRestoreOptions(
@@ -18,6 +24,11 @@ export function resolveTerminalRestoreOptions(
   }
 
   return {
+    // The renderer outlives a hidden Terminal, so ask for the gap first: a
+    // snapshot replay resets it and throws away scrollback the client still
+    // has. `mode` stays as the fallback for a daemon that cannot resume (too
+    // much output missed, or a daemon that predates resuming).
+    ...(input.canResume ? { resume: true } : {}),
     mode: "visible-snapshot",
     scrollbackLines: TERMINAL_VISIBLE_RESTORE_SCROLLBACK_LINES,
     ...(input.size ? { size: input.size } : {}),

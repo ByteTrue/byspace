@@ -17,6 +17,7 @@ import type {
   TerminalSession,
   TerminalStateSnapshot,
 } from "./terminal.js";
+import { TerminalOutputBacklog } from "./terminal-output-backlog.js";
 import type { CaptureTerminalLinesResult } from "./terminal-capture.js";
 import type {
   TerminalActivityListener,
@@ -73,6 +74,9 @@ interface WorkerTerminalRecord {
   // in the worker process). Refreshed on every getTerminalState response and on
   // the snapshotReady event that precedes a live-restore replay.
   replayPreamble: string;
+  // The worker streams output here whether or not a client is listening, so this
+  // side can serve the gap a hidden client missed.
+  outputBacklog: TerminalOutputBacklog;
   exitInfo: TerminalExitInfo | null;
   messageListeners: Set<(msg: ServerMessage) => void>;
   exitListeners: Set<(info: TerminalExitInfo) => void>;
@@ -237,6 +241,7 @@ export function createWorkerTerminalManager(
       state: input.state,
       activity: input.info.activity,
       replayPreamble: "",
+      outputBacklog: new TerminalOutputBacklog(),
       exitInfo: null,
       messageListeners: new Set(),
       exitListeners: new Set(),
@@ -355,6 +360,9 @@ export function createWorkerTerminalManager(
           revision: 0,
         };
       },
+      getOutputSince(revision: number) {
+        return record.outputBacklog.since(revision);
+      },
       drainHeadlessXterm(): Promise<void> {
         return Promise.resolve();
       },
@@ -434,6 +442,9 @@ export function createWorkerTerminalManager(
     }
     if (message.message.type === "snapshotReady" && message.message.replayPreamble !== undefined) {
       record.replayPreamble = message.message.replayPreamble;
+    }
+    if (message.message.type === "output") {
+      record.outputBacklog.append(message.message.revision, message.message.data);
     }
     for (const listener of Array.from(record.messageListeners)) {
       listener(message.message);

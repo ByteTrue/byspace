@@ -10,6 +10,7 @@ import {
 import type { TerminalCell, TerminalState } from "@bytetrue/byspace-protocol/messages";
 import type { ServerMessage, TerminalSession, TerminalStateSnapshot } from "./terminal.js";
 import { TerminalSessionController } from "./terminal-session-controller.js";
+import { TerminalOutputBacklog } from "./terminal-output-backlog.js";
 import type { TerminalManager, TerminalsChangedEvent } from "./terminal-manager.js";
 import { isSameOrDescendantPath } from "../server/path-utils.js";
 
@@ -147,6 +148,177 @@ describe("terminal-session-controller restore", () => {
     ]);
     expect(new TextDecoder().decode(binaryFrames[0]?.payload)).toContain("restore-before");
     expect(new TextDecoder().decode(binaryFrames[1]?.payload)).toBe("restore-after\n");
+  });
+});
+
+/**
+ * A Terminal that keeps a real backlog, so resuming is exercised against the
+ * same bookkeeping the daemon uses rather than a hand-written stub answer.
+ */
+function createResumableTerminal(input: { backlogChars?: number }): {
+  terminal: TerminalSession;
+  emit: (data: string) => void;
+  listenerCount: () => number;
+} {
+  const backlog = new TerminalOutputBacklog({ maxChars: input.backlogChars ?? 1_000 });
+  const listeners = new Set<(message: ServerMessage) => void>();
+  let revision = 0;
+  const terminal: TerminalSession = {
+    id: "term-1",
+    name: "Terminal",
+    cwd: "/tmp",
+    workspaceId: "ws-test",
+    send: vi.fn(),
+    subscribe: (listener) => {
+      listeners.add(listener);
+      queueMicrotask(() => {
+        if (listeners.has(listener)) {
+          listener({ type: "snapshotReady", revision });
+        }
+      });
+      return () => listeners.delete(listener);
+    },
+    onExit: () => vi.fn(),
+    onCommandFinished: () => vi.fn(),
+    onTitleChange: () => vi.fn(),
+    onActivityChange: () => vi.fn(),
+    getSize: () => ({ rows: 1, cols: 80 }),
+    getState: () => terminalState(""),
+    getStateSnapshot: () => ({ state: terminalState("snapshot"), revision }),
+    getOutputSince: (from: number) => backlog.since(from),
+    getReplayPreamble: () => "",
+    getTitle: () => undefined,
+    getActivity: () => null,
+    setActivity: vi.fn(),
+    setTitle: vi.fn(),
+    getExitInfo: () => null,
+    kill: vi.fn(),
+    killAndWait: vi.fn(),
+  } as unknown as TerminalSession;
+  return {
+    terminal,
+    emit: (data: string) => {
+      revision += 1;
+      backlog.append(revision, data);
+      for (const listener of Array.from(listeners)) {
+        listener({ type: "output", data, revision });
+      }
+    },
+    listenerCount: () => listeners.size,
+  };
+}
+
+function createResumeController(input: {
+  terminal: TerminalSession;
+  binaryFrames: TerminalStreamFrame[];
+}): TerminalSessionController {
+  const terminalManager: TerminalManager = {
+    getTerminals: vi.fn(),
+    createTerminal: vi.fn(),
+    registerCwdEnv: vi.fn(),
+    validateTerminalActivityToken: vi.fn(() => "unknown"),
+    getTerminal: vi.fn(() => input.terminal),
+    getTerminalState: vi.fn(async () => input.terminal.getStateSnapshot()),
+    setTerminalTitle: vi.fn(),
+    setTerminalActivity: vi.fn(),
+    killTerminal: vi.fn(),
+    killTerminalAndWait: vi.fn(),
+    captureTerminal: vi.fn(),
+    listDirectories: vi.fn(() => []),
+    killAll: vi.fn(),
+    subscribeTerminalsChanged: vi.fn(() => vi.fn()),
+    subscribeTerminalActivity: vi.fn(() => vi.fn()),
+    subscribeTerminalWorkspaceContributionChanged: vi.fn(() => vi.fn()),
+  } as unknown as TerminalManager;
+  return new TerminalSessionController({
+    terminalManager,
+    emit: vi.fn(),
+    emitBinary: (bytes) => {
+      const frame = decodeTerminalStreamFrame(bytes);
+      if (frame) {
+        input.binaryFrames.push(frame);
+      }
+    },
+    hasBinaryChannel: () => true,
+    isPathWithinRoot: () => false,
+    sessionLogger: createLogger(),
+  });
+}
+
+async function subscribeWithResume(
+  controller: TerminalSessionController,
+  requestId: string,
+): Promise<void> {
+  await controller.dispatch({
+    type: "subscribe_terminal_request",
+    terminalId: "term-1",
+    requestId,
+    restore: { mode: "visible-snapshot", scrollbackLines: 1_000, resume: true },
+  });
+  await new Promise((resolve) => setTimeout(resolve, 20));
+}
+
+function frameText(frame: TerminalStreamFrame | undefined): string {
+  return frame ? new TextDecoder().decode(frame.payload) : "";
+}
+
+describe("terminal-session-controller resume", () => {
+  test("sends only what a hidden client missed, with no restore frame", async () => {
+    const binaryFrames: TerminalStreamFrame[] = [];
+    const { terminal, emit } = createResumableTerminal({});
+    const controller = createResumeController({ terminal, binaryFrames });
+
+    // First subscribe: nothing has been delivered yet, so this client gets the
+    // authoritative snapshot.
+    await subscribeWithResume(controller, "req-1");
+    emit("visible-output\n");
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(binaryFrames.map((frame) => frame.opcode)).toEqual([
+      TerminalStreamOpcode.Restore,
+      TerminalStreamOpcode.Output,
+    ]);
+
+    await controller.dispatch({ type: "unsubscribe_terminal_request", terminalId: "term-1" });
+    emit("missed-one\n");
+    emit("missed-two\n");
+
+    binaryFrames.length = 0;
+    await subscribeWithResume(controller, "req-2");
+
+    expect(binaryFrames.map((frame) => frame.opcode)).toEqual([TerminalStreamOpcode.Output]);
+    expect(frameText(binaryFrames[0])).toBe("missed-one\nmissed-two\n");
+  });
+
+  test("falls back to the snapshot when the missed output is no longer retained", async () => {
+    const binaryFrames: TerminalStreamFrame[] = [];
+    const { terminal, emit } = createResumableTerminal({ backlogChars: 12 });
+    const controller = createResumeController({ terminal, binaryFrames });
+
+    await subscribeWithResume(controller, "req-1");
+    emit("delivered\n");
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    await controller.dispatch({ type: "unsubscribe_terminal_request", terminalId: "term-1" });
+    emit("aaaaaaaaaa\n");
+    emit("bbbbbbbbbb\n");
+
+    binaryFrames.length = 0;
+    await subscribeWithResume(controller, "req-2");
+
+    // The gap cannot be served in full, so the client is reset from the
+    // snapshot instead of being handed a hole.
+    expect(binaryFrames.map((frame) => frame.opcode)).toEqual([TerminalStreamOpcode.Restore]);
+  });
+
+  test("does not resume a terminal this client has never received output for", async () => {
+    const binaryFrames: TerminalStreamFrame[] = [];
+    const { terminal, emit } = createResumableTerminal({});
+    emit("produced-before-anyone-subscribed\n");
+    const controller = createResumeController({ terminal, binaryFrames });
+
+    await subscribeWithResume(controller, "req-1");
+
+    expect(binaryFrames.map((frame) => frame.opcode)).toEqual([TerminalStreamOpcode.Restore]);
   });
 });
 

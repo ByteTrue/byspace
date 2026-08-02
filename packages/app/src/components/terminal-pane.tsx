@@ -218,6 +218,17 @@ export function TerminalPane({
   const [resizeRequestToken, setResizeRequestToken] = useState(0);
   const emulatorRef = useRef<TerminalEmulatorHandle>(null);
   const terminalIdRef = useRef<string>(terminalId);
+  // Which renderer instance holds which terminal's stream. Resuming is only
+  // safe while both still match — see getRestoreOptions below.
+  const resumeAnchorRef = useRef<{ emulator: TerminalEmulatorHandle; terminalId: string } | null>(
+    null,
+  );
+  const markResumeAnchor = useStableEvent((anchorTerminalId: string) => {
+    const emulator = emulatorRef.current;
+    if (emulator) {
+      resumeAnchorRef.current = { emulator, terminalId: anchorTerminalId };
+    }
+  });
   const inputModeRef = useRef<TerminalInputModeState>({
     kittyKeyboardFlags: 0,
     bracketedPasteMode: false,
@@ -392,10 +403,14 @@ export function TerminalPane({
           ? (measuredTerminalSizeRef.current ?? lastSentTerminalSizeRef.current)
           : null,
       onOutput: ({ terminalId: outputTerminalId, data }) => {
-        if (!isTerminalStreamActive || terminalIdRef.current !== outputTerminalId) {
+        // Deliberately not gated on stream activity: frames the daemon had
+        // already flushed when we unsubscribed still count as delivered on its
+        // side, so dropping them here would put a hole in what it resumes from.
+        if (terminalIdRef.current !== outputTerminalId) {
           return;
         }
         emulatorRef.current?.writeOutput(data);
+        markResumeAnchor(outputTerminalId);
       },
       onRestore: ({ terminalId: restoreTerminalId, data }) => {
         workspaceTerminalSession.snapshots.clear({ terminalId: restoreTerminalId });
@@ -403,6 +418,7 @@ export function TerminalPane({
           return;
         }
         emulatorRef.current?.restoreOutput(data);
+        markResumeAnchor(restoreTerminalId);
       },
       onSnapshot: ({ terminalId: snapshotTerminalId, state }) => {
         workspaceTerminalSession.snapshots.set({ terminalId: snapshotTerminalId, state });
@@ -410,11 +426,21 @@ export function TerminalPane({
           return;
         }
         emulatorRef.current?.renderSnapshot(state);
+        markResumeAnchor(snapshotTerminalId);
       },
       getRestoreOptions: () => {
+        const anchor = resumeAnchorRef.current;
         return resolveTerminalRestoreOptions({
           supportsTerminalRestoreModes,
           size: measuredTerminalSizeRef.current,
+          // Only this renderer, still holding this terminal's stream, can be
+          // resumed. A reload builds a new one while the daemon session (and
+          // its record of what it sent) survives, and that renderer needs the
+          // snapshot.
+          canResume:
+            anchor !== null &&
+            anchor.emulator === emulatorRef.current &&
+            anchor.terminalId === terminalIdRef.current,
         });
       },
       onStatusChange: handleStreamControllerStatus,
@@ -436,6 +462,7 @@ export function TerminalPane({
     handleStreamControllerStatus,
     isConnected,
     isTerminalStreamActive,
+    markResumeAnchor,
     supportsTerminalRestoreModes,
     workspaceTerminalSession.snapshots,
   ]);

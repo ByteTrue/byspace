@@ -29,6 +29,8 @@ Relay 复用同一套正确的 Terminal 基础，但允许公网 RTT、端到端
 
 Terminal agent integration now treats hook installation as a provider-scoped external side effect: Claude Code, Codex, OpenCode, and Pi are independently opt-in, while the legacy global setting remains a compatibility aggregate. Pi uses its documented global extension lifecycle and also appears in the built-in Terminal profiles.
 
+隐藏后重新可见的 Terminal 是**续传**：daemon 记得自己给过每个客户端的最后一个 revision，重新订阅时只把缺口当普通输出发回去；缺口无法完整服务时才回落到权威快照，绝不发残缺区间。因此用户能留住的历史是自己渲染器的容量，不再是回放窗口。
+
 Terminal renderer 跟随所在 workspace 的 RetainedPanel 存活，不再在 workspace 失焦时卸载（这是对上游行为的有意偏离，理由：重建 xterm/WebGL 会在每次切换重跑 fit 阶梯并抖动列数）；活跃 renderer 数量由 deck 的挂载上限约束。隐藏时仍不持有 stream。快照回放必须跳过双宽字符的零宽占位格，否则每个 CJK 字符会把本行剩余内容右移一列；回放窗口就是用户能留住的全部历史，应与 daemon 的实际保有量对齐。
 
 Terminal 尺寸同步的归属已分开：`shouldClaim` 只决定“是否从其他客户端接管 PTY 所有权”，不决定“是否告知 daemon 当前几何”。本 pane 一旦 claim 过尺寸，后续任何被动 refit（mount fit 阶梯、字体度量落定、WebGL renderer 换装、可见性恢复）测到的新尺寸都必须到达 PTY，否则渲染宽度与应用绘制宽度会长期不一致；尚未 claim 的 pane 则保持静默。被动发送经一个 250ms 尾部窗口合并，用户驱动的 resize 不进定时器。
@@ -107,7 +109,7 @@ Retained Terminal Tab 只在真实可见时持有 daemon stream。隐藏 Tab 保
 - [x] `.cs/issues/2026/07/21/closed-pi-terminal-agents.md`：Terminal hooks 使用 provider 独立开关；Pi 通过全局 extension 上报 activity，并进入默认 Terminal profiles。
 - [x] `.cs/issues/2026/07/22/closed-terminal-presentation-defaults.md`：Terminal/编辑器呈现改为极简。用户 headed 验收通过后经四轮减法收敛为：字体全用各平台系统默认（UI=system-ui、代码/终端=ui-monospace 领头栈），字号仅「界面」+「代码」两项、代码/diff/终端统一 14；语法高亮固定 GitHub（自带亮/暗）；主题仅保留 浅色/深色/跟随系统（删 zinc/midnight/claude/ghostty 变体）。字体族、终端专属字号、语法主题、深色变体的自定义 UI 全部移除。
 - [x] `.cs/issues/006-x-terminal-retained-panel-layout.md`：切换回 Terminal 后右侧留白。真实根因是被动 refit（`shouldClaim: false`）只更新本地测量不发给 daemon，xterm 宽到 112 列而 PTY 停在 106 列；已改为“已 claim 就必须同步”+ attach 补发 measured + 250ms 合并，用户 dev server 验收通过。
-- [ ] `.cs/issues/014-o-terminal-restore-resume-from-revision.md`：重新订阅时按 revision 续传，不再重置回放，广义上取消“切回只剩最近 N 行”的截断。
+- [x] `.cs/issues/014-x-terminal-restore-resume-from-revision.md`：重新订阅时只补发客户端错过的那段输出，不再重置渲染器，“切回只剩最近 N 行”的截断随之消失（实测 91ms、1500 行全保留）。
 - [x] `.cs/issues/013-x-terminal-emulator-remount-on-workspace-switch.md`：取消了上游在 workspace 失焦时卸载 Terminal emulator 的两道渲染门控，切换不再重建 xterm/WebGL、不再重跑 fit 阶梯；顺带修掉被它掩盖的宽字符快照回放缺陷与全局滚动锁竞态，并把回放窗口对齐到 daemon 实际保有的 1000 行。
 - [ ] `.cs/issues/010-x-windows-local-web-interaction-latency.md`：正式版 Windows 日志确认隐藏 Terminal 之外还有 Git 后台任务风暴和 Provider runtime 冷恢复两条慢路径；Terminal stream 已由 PR #12 修复，Git 与 Timeline slice 仍在实施。
 

@@ -37,6 +37,11 @@ export function resolveRestoreAfterOutputOverflow(
   if (restore?.mode === "live") {
     return { mode: "visible-snapshot" };
   }
+  // Overflow means this client is too far behind to be worth replaying to.
+  // Resuming would send it the whole gap, which is what we are escaping.
+  if (restore?.resume) {
+    return { ...restore, resume: false };
+  }
   return restore;
 }
 

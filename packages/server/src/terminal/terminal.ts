@@ -12,6 +12,10 @@ import { findExecutable } from "../executable-resolution/executable-resolution.j
 import type { TerminalCell, TerminalState } from "@bytetrue/byspace-protocol/messages";
 import { TerminalInputModeTracker } from "@bytetrue/byspace-protocol/terminal-input-mode";
 import { TerminalActivityTracker } from "./activity/terminal-activity-tracker.js";
+import {
+  TerminalOutputBacklog,
+  type TerminalBacklogResumption,
+} from "./terminal-output-backlog.js";
 import type {
   TerminalActivity,
   TerminalActivityState,
@@ -90,6 +94,12 @@ export interface TerminalSession {
   getSize(): { rows: number; cols: number };
   getState(): TerminalState;
   getStateSnapshot(options?: TerminalStateSnapshotOptions): TerminalStateSnapshot;
+  /**
+   * The output produced after `revision`, or null when it can no longer be
+   * served in full. A client that kept its own renderer contents takes this
+   * instead of a snapshot; null means it has to be reset from a snapshot.
+   */
+  getOutputSince(revision: number): TerminalBacklogResumption | null;
   drainHeadlessXterm(): Promise<void>;
   getReplayPreamble(): string;
   getTitle(): string | undefined;
@@ -820,6 +830,9 @@ export async function createTerminal(options: CreateTerminalOptions): Promise<Te
   // drainHeadlessXterm() bridges the gap before on-demand snapshots.
   let emitRevision = 0;
   let snapshotRevision = 0;
+  // Lets a client that kept its renderer contents pick up where it stopped
+  // listening instead of being reset to a snapshot.
+  const outputBacklog = new TerminalOutputBacklog();
   const inputModeTracker = new TerminalInputModeTracker();
   const activityTracker = new TerminalActivityTracker();
   const activityChangeListeners = new Set<(transition: TerminalActivityTransition) => void>();
@@ -1062,6 +1075,7 @@ export async function createTerminal(options: CreateTerminalOptions): Promise<Te
   function writeOutputToHeadless(data: string): void {
     emitRevision += 1;
     const currentRevision = emitRevision;
+    outputBacklog.append(currentRevision, data);
     // Write to headless xterm for snapshot fidelity. The callback updates
     // snapshotRevision so getStateSnapshot() stays consistent with the buffer.
     terminal.write(data, () => {
@@ -1457,6 +1471,7 @@ export async function createTerminal(options: CreateTerminalOptions): Promise<Te
     getSize,
     getState,
     getStateSnapshot,
+    getOutputSince: (revision: number) => outputBacklog.since(revision),
     drainHeadlessXterm,
     getReplayPreamble,
     getTitle,
