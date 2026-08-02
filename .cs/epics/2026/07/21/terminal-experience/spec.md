@@ -105,6 +105,7 @@ Retained Terminal Tab 只在真实可见时持有 daemon stream。隐藏 Tab 保
 - [x] `.cs/issues/2026/07/21/closed-pi-terminal-agents.md`：Terminal hooks 使用 provider 独立开关；Pi 通过全局 extension 上报 activity，并进入默认 Terminal profiles。
 - [x] `.cs/issues/2026/07/22/closed-terminal-presentation-defaults.md`：Terminal/编辑器呈现改为极简。用户 headed 验收通过后经四轮减法收敛为：字体全用各平台系统默认（UI=system-ui、代码/终端=ui-monospace 领头栈），字号仅「界面」+「代码」两项、代码/diff/终端统一 14；语法高亮固定 GitHub（自带亮/暗）；主题仅保留 浅色/深色/跟随系统（删 zinc/midnight/claude/ghostty 变体）。字体族、终端专属字号、语法主题、深色变体的自定义 UI 全部移除。
 - [x] `.cs/issues/006-x-terminal-retained-panel-layout.md`：切换回 Terminal 后右侧留白。真实根因是被动 refit（`shouldClaim: false`）只更新本地测量不发给 daemon，xterm 宽到 112 列而 PTY 停在 106 列；已改为“已 claim 就必须同步”+ attach 补发 measured + 250ms 合并，用户 dev server 验收通过。
+- [ ] `.cs/issues/013-o-terminal-emulator-remount-on-workspace-switch.md`：取消 workspace 失焦时卸载 Terminal emulator（上游行为），消除重建 xterm/WebGL、重跑 fit 阶梯与首帧尺寸抖动的切换代价。
 - [ ] `.cs/issues/010-x-windows-local-web-interaction-latency.md`：正式版 Windows 日志确认隐藏 Terminal 之外还有 Git 后台任务风暴和 Provider runtime 冷恢复两条慢路径；Terminal stream 已由 PR #12 修复，Git 与 Timeline slice 仍在实施。
 
 ### 剩余阻碍
