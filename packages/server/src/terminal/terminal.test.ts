@@ -1,4 +1,5 @@
 import { describe, it, expect, afterEach, vi } from "vitest";
+import { renderTerminalSnapshotToAnsi } from "@bytetrue/byspace-protocol/terminal-snapshot";
 import { isPlatform } from "../test-utils/platform.js";
 import {
   createTerminal,
@@ -497,6 +498,45 @@ describe.skipIf(isPlatform("win32"))("send input", () => {
     const snapshot = session.getStateSnapshot();
     expect(snapshot.revision).toBe(lastEmitted);
     expect(getLines(snapshot.state).join("\n")).toContain("rev-marker");
+  });
+
+  it("replays double-width characters without a padding space", async () => {
+    const session = trackSession(
+      await createTerminal({
+        workspaceId: "ws-test",
+        cwd: "/tmp",
+        shell: "/bin/sh",
+        env: { PS1: "$ " },
+      }),
+    );
+
+    await waitForLines(session, ["$"]);
+
+    session.send({ type: "input", data: "printf '\u4e2d\u6587ab\\n'\r" });
+    const hasWideLine = (state: ReturnType<TerminalSession["getState"]>): boolean =>
+      getLines(state).some((line) => line === "\u4e2d\u6587ab");
+    await waitForState(session, hasWideLine);
+    await session.drainHeadlessXterm();
+
+    // xterm parks a zero-width placeholder in the column each wide character spills into.
+    // Replaying it as a space used to push the rest of the row right by one column per CJK
+    // character, which is what a restored screen full of Chinese text looked like.
+    expect(renderTerminalSnapshotToAnsi(session.getStateSnapshot().state)).toContain(
+      "\u4e2d\u6587ab",
+    );
+
+    // The same row has to survive scrolling out of the viewport: scrollback used to run its
+    // own copy of the cell extraction, so it kept padding wide characters after the grid was
+    // fixed — the restored screen looked right until the user scrolled up.
+    session.send({ type: "input", data: "for i in $(seq 40); do echo pad-$i; done\r" });
+    const hasScrolledOut = (state: ReturnType<TerminalSession["getState"]>): boolean =>
+      !getLines(state).some((line) => line === "\u4e2d\u6587ab");
+    await waitForState(session, hasScrolledOut);
+    await session.drainHeadlessXterm();
+
+    expect(renderTerminalSnapshotToAnsi(session.getStateSnapshot().state)).toContain(
+      "\u4e2d\u6587ab",
+    );
   });
 
   it("captures output from pwd in specified cwd", async () => {

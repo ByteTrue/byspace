@@ -478,6 +478,14 @@ function extractCell(terminal: TerminalType, row: number, col: number): Terminal
     return { char: " ", fg: undefined, bg: undefined };
   }
 
+  // xterm keeps a zero-width placeholder in the column a double-width character spills into.
+  // It must stay in the grid so cells and columns line up, but its char has to be empty: the
+  // wide character already advances the cursor across it, and replaying a space here pushed
+  // the rest of the row one column right for every CJK character on screen.
+  if (cell.getWidth() === 0) {
+    return { char: "", fg: undefined, bg: undefined };
+  }
+
   // Color modes from xterm.js: 0=DEFAULT, 1=16 colors (ANSI), 2=256 colors, 3=RGB
   // getFgColorMode() returns packed value with mode in upper byte (e.g. 0x01000000 for mode 1)
   const fgModeRaw = cell.getFgColorMode();
@@ -537,36 +545,8 @@ function extractScrollback(
 
   for (let row = startRow; row < scrollbackLines; row++) {
     const rowCells: TerminalCell[] = [];
-    const line = buffer.getLine(row);
     for (let col = 0; col < terminal.cols; col++) {
-      if (line) {
-        const cell = line.getCell(col);
-        if (cell) {
-          const fgModeRaw = cell.getFgColorMode();
-          const bgModeRaw = cell.getBgColorMode();
-          const fgMode = fgModeRaw >> 24;
-          const bgMode = bgModeRaw >> 24;
-          const fg = fgMode !== 0 ? cell.getFgColor() : undefined;
-          const bg = bgMode !== 0 ? cell.getBgColor() : undefined;
-          rowCells.push({
-            char: cell.getChars() || " ",
-            fg,
-            bg,
-            fgMode: fgMode !== 0 ? fgMode : undefined,
-            bgMode: bgMode !== 0 ? bgMode : undefined,
-            bold: cell.isBold() !== 0,
-            italic: cell.isItalic() !== 0,
-            underline: cell.isUnderline() !== 0,
-            dim: cell.isDim() !== 0,
-            inverse: cell.isInverse() !== 0,
-            strikethrough: cell.isStrikethrough() !== 0,
-          });
-        } else {
-          rowCells.push({ char: " ", fg: undefined, bg: undefined });
-        }
-      } else {
-        rowCells.push({ char: " ", fg: undefined, bg: undefined });
-      }
+      rowCells.push(extractCell(terminal, row, col));
     }
     scrollback.push(rowCells);
   }

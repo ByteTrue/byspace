@@ -841,39 +841,43 @@ export function TerminalPane({
   return (
     <View style={styles.container}>
       <View style={styles.outputContainer}>
-        {isWorkspaceFocused ? (
-          <View style={styles.terminalGestureContainer}>
-            <TerminalEmulator
-              ref={emulatorRef}
-              dom={TERMINAL_EMULATOR_DOM_PROPS}
-              streamKey={terminalStreamKey}
-              testId="terminal-surface"
-              xtermTheme={xtermTheme}
-              scrollbackLines={settings.terminalScrollbackLines}
-              fontSize={settings.codeFontSize}
-              swipeGesturesEnabled={swipeGesturesEnabled}
-              initialSnapshot={initialSnapshot}
-              onRendererReadyChange={handleRendererReadyChange}
-              onSwipeRight={handleSwipeRight}
-              onSwipeLeft={handleSwipeLeft}
-              onInput={handleTerminalData}
-              onFocus={handleTerminalFocus}
-              onResize={handleTerminalResize}
-              onTerminalKey={handleTerminalKey}
-              onInputModeChange={handleInputModeChange}
-              onPasteImage={handleTerminalPasteImage}
-              onPasteError={handleTerminalPasteError}
-              onResolveLocalFileLink={handleResolveLocalFileLink}
-              onOpenLocalFileLink={handleOpenLocalFileLink}
-              onPendingModifiersConsumed={handlePendingModifiersConsumed}
-              pendingModifiers={modifiers}
-              focusRequestToken={focusRequestToken}
-              resizeRequestToken={resizeRequestToken}
-            />
-          </View>
-        ) : (
-          <View style={styles.terminalGestureContainer} />
-        )}
+        {/*
+         * The emulator stays mounted while the workspace is unfocused. Unmounting it there (the
+         * upstream behavior) threw away xterm and its WebGL renderer on every workspace switch,
+         * so coming back replayed the whole mount fit ladder and the renderer swap — the source
+         * of the first-frame size churn. Retention is bounded by the deck's mounted-workspace
+         * cap, and a hidden pane still owns no daemon stream because that follows
+         * `isTerminalStreamActive`, not this render.
+         */}
+        <View style={styles.terminalGestureContainer}>
+          <TerminalEmulator
+            ref={emulatorRef}
+            dom={TERMINAL_EMULATOR_DOM_PROPS}
+            streamKey={terminalStreamKey}
+            testId="terminal-surface"
+            xtermTheme={xtermTheme}
+            scrollbackLines={settings.terminalScrollbackLines}
+            fontSize={settings.codeFontSize}
+            swipeGesturesEnabled={swipeGesturesEnabled}
+            initialSnapshot={initialSnapshot}
+            onRendererReadyChange={handleRendererReadyChange}
+            onSwipeRight={handleSwipeRight}
+            onSwipeLeft={handleSwipeLeft}
+            onInput={handleTerminalData}
+            onFocus={handleTerminalFocus}
+            onResize={handleTerminalResize}
+            onTerminalKey={handleTerminalKey}
+            onInputModeChange={handleInputModeChange}
+            onPasteImage={handleTerminalPasteImage}
+            onPasteError={handleTerminalPasteError}
+            onResolveLocalFileLink={handleResolveLocalFileLink}
+            onOpenLocalFileLink={handleOpenLocalFileLink}
+            onPendingModifiersConsumed={handlePendingModifiersConsumed}
+            pendingModifiers={modifiers}
+            focusRequestToken={focusRequestToken}
+            resizeRequestToken={resizeRequestToken}
+          />
+        </View>
 
         {showLoadingOverlay ? (
           <View style={styles.attachOverlay} pointerEvents="none" testID="terminal-attach-loading">
