@@ -1,10 +1,19 @@
-import { ArrowUpToLine, Globe, Monitor, Pencil, RotateCw, Trash2 } from "lucide-react-native";
+import {
+  ArrowUpToLine,
+  ChevronRight,
+  Globe,
+  Monitor,
+  Pencil,
+  RotateCw,
+  Trash2,
+} from "lucide-react-native";
 import type { TFunction } from "i18next";
 import type { OrchestrationSkillsState } from "@bytetrue/byspace-protocol/messages";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Alert, Pressable, Text, View } from "react-native";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { StyleSheet, useUnistyles, withUnistyles } from "react-native-unistyles";
+import type { Theme } from "@/styles/theme";
 import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
 import { AdaptiveRenameModal } from "@/components/rename-modal";
 import { SettingsTextAreaCard } from "@/components/settings-textarea";
@@ -34,6 +43,13 @@ import { resolveAppVersion } from "@/utils/app-version";
 import { formatConnectionStatus, getConnectionStatusTone } from "@/utils/daemons";
 import { formatLatency } from "@/utils/latency";
 import { hasDaemonReconnectedAfter, type DaemonConnectionMarker } from "./daemon-reconnect";
+import { PairDeviceModal } from "@/components/pair-device-modal";
+
+const ThemedChevronRight = withUnistyles(ChevronRight);
+const chevronProps = (theme: Theme) => ({
+  size: theme.iconSize.sm,
+  color: theme.colors.foregroundMuted,
+});
 
 function formatHostConnectionLabel(connection: HostConnection, t: TFunction): string {
   if (connection.type === "relay") {
@@ -162,12 +178,16 @@ function HostConnectionError({ serverId }: { serverId: string }) {
 }
 
 export function HostConnectionsPage({ serverId }: { serverId: string }) {
+  const { t } = useTranslation();
   const host = useHostProfile(serverId);
   if (!host) return <HostNotFound />;
   return (
     <View>
       <HostConnectionError serverId={serverId} />
       <ConnectionsSection host={host} />
+      <SettingsSection title={t("settings.host.pairDevices.title")}>
+        <PairDeviceRow serverId={serverId} />
+      </SettingsSection>
     </View>
   );
 }
@@ -499,6 +519,38 @@ function ConnectionRow({
       >
         {t("settings.host.connections.removeAction")}
       </Button>
+    </View>
+  );
+}
+
+function PairDeviceRow({ serverId }: { serverId: string }) {
+  const { t } = useTranslation();
+  const [isModalOpen, setIsModalOpen] = useState(false);
+
+  const handleOpen = useCallback(() => setIsModalOpen(true), []);
+  const handleClose = useCallback(() => setIsModalOpen(false), []);
+
+  return (
+    <View style={settingsStyles.card}>
+      <Pressable
+        style={settingsStyles.row}
+        onPress={handleOpen}
+        accessibilityRole="button"
+        testID="host-page-pair-device-row"
+      >
+        <View style={settingsStyles.rowContent}>
+          <Text style={settingsStyles.rowTitle}>{t("settings.host.pairDevices.rowTitle")}</Text>
+          <Text style={settingsStyles.rowHint}>{t("settings.host.pairDevices.rowHint")}</Text>
+        </View>
+        <ThemedChevronRight uniProps={chevronProps} />
+      </Pressable>
+
+      <PairDeviceModal
+        serverId={serverId}
+        visible={isModalOpen}
+        onClose={handleClose}
+        testID="host-page-pair-device-card"
+      />
     </View>
   );
 }

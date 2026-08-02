@@ -89,6 +89,24 @@ test.describe("Settings host page", () => {
     await expectHostConnectionsCard(page, port);
   });
 
+  test("connections section shows the pair device row and opens the pairing modal", async ({
+    page,
+  }) => {
+    const serverId = getServerId();
+
+    await gotoAppShell(page);
+    await openSettings(page);
+    await openSettingsHost(page, serverId);
+
+    await expectSettingsHeader(page, "Connections");
+    await expect(page.getByTestId("host-page-pair-device-row")).toBeVisible();
+
+    await page.getByTestId("host-page-pair-device-row").click();
+    await expect(
+      page.getByText("Scan this QR code with BySpace on your phone, or copy the link below."),
+    ).toBeVisible();
+  });
+
   test("agents section shows the inject MCP toggle", async ({ page }) => {
     const serverId = getServerId();
 
