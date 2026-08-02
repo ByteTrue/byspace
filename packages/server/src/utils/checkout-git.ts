@@ -1546,7 +1546,13 @@ async function getOriginAheadBehind(
   if (!currentBranch) {
     return null;
   }
-  const upstreamRef = await getConfiguredUpstreamRef(cwd, currentBranch, context);
+  // branch.<name>.remote/.merge is unset when a branch was pushed without `-u` (e.g. `git
+  // push origin <branch>` from a terminal) or lost its tracking config. Fall back to a
+  // same-named remote branch so an already-in-sync branch is not reported as permanently
+  // pushable just because git never recorded a tracking relationship.
+  const upstreamRef =
+    (await getConfiguredUpstreamRef(cwd, currentBranch, context)) ??
+    (await getSameNameOriginRef(cwd, currentBranch, context));
   if (!upstreamRef) {
     return null;
   }
@@ -1562,6 +1568,15 @@ async function getOriginAheadBehind(
   } catch {
     return null;
   }
+}
+
+async function getSameNameOriginRef(
+  cwd: string,
+  currentBranch: string,
+  context?: CheckoutContext,
+): Promise<string | null> {
+  const exists = await doesGitRefExist(cwd, `refs/remotes/origin/${currentBranch}`, context);
+  return exists ? `origin/${currentBranch}` : null;
 }
 
 interface CheckoutInspectionContext {

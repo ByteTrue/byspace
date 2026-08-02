@@ -874,6 +874,34 @@ const x = 1;
     });
   });
 
+  it("reports up to date when a branch was pushed without setting an upstream", async () => {
+    setupRemoteTrackingMain(repoDir, tempDir);
+    commitFile(repoDir, "second.txt", "second\n", "second commit");
+    execFileSync("git", ["push"], { cwd: repoDir });
+
+    const worktree = await createLegacyWorktreeForTest({
+      branchName: "fresh-feature",
+      cwd: repoDir,
+      baseBranch: "main",
+      worktreeSlug: "fresh-feature",
+      byspaceHome,
+    });
+    commitFile(worktree.worktreePath, "feature.txt", "feature\n", "feature commit");
+    // Push without `-u`/`--set-upstream`: git.<branch>.remote/.merge stay unset even though
+    // origin now has an identically named branch matching local HEAD exactly.
+    execFileSync("git", ["push", "origin", "fresh-feature"], { cwd: worktree.worktreePath });
+    expect(getBranchUpstream(worktree.worktreePath)).toBeNull();
+
+    const status = await getCheckoutStatus(worktree.worktreePath, { byspaceHome });
+    expect(status).toMatchObject({
+      isGit: true,
+      isBySpaceOwnedWorktree: true,
+      baseRef: "main",
+      aheadOfOrigin: 0,
+      behindOfOrigin: 0,
+    });
+  });
+
   it("does not report incoming additions when the base branch is behind its remote", async () => {
     const { cloneDir } = setupRemoteTrackingMain(repoDir, tempDir);
     commitFile(cloneDir, "file.txt", "remote one\nremote two\n", "remote update");
