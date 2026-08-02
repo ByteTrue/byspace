@@ -137,5 +137,5 @@ workspace 失焦 → `isWorkspaceFocused` 变 false → emulator 卸载（runtim
 ## 顺手发现（用户要求一并修复）
 
 - **已修：全局 `html`/`body` 滚动锁的所有权竞态。** `applyDocumentBoundsStyles` 原来每个 emulator 自己快照、自己还原，只在 LIFO 卸载下成立：两个终端共存时，先卸载的会把锁掤掉（另一个还需要），后卸载的又把“已含锁的快照”写回去，页面永久停在 `overflow: hidden`。现在改为引用计数的共享锁（第一个挂载时上锁、最后一个卸载时还原），并且 root 容器路径不再接管 `html`/`body`，避免同一批样式两个生命期不同的主人。本改动把共存上限从 1 个 workspace 扩到 3 个，不先修它就会把这个竞态放大。
-- **未处理（范围外，待用户决定是否开 issue）：服务代理下的 dev server 整页重载循环。** 用户经 `app--….localhost:6777` 访问 Expo dev server 时页面每 ~400ms 重载一次。只读复现对比：直连 Metro（`localhost:50876`）12s 内 4 次导航、无异常；走代理 28 次导航，并反复报 `ws://…/hot`、`ws://…/message` 握手 400 —— Metro 的 HMR 与消息通道升级失败，Expo dev client 以整页重载重试。daemon 以 `passthroughUnknown: true` 注册了 upgrade handler，所以 WS 升级总体支持，最可能是 upgrade 路径与 HTTP 路径的 header 组装（尤其 `Host`）不一致。与本 issue 无关。
+- **已单独修复（`.cs/issues/015-x-service-proxy-websocket-upgrade-stolen-by-daemon-socket.md`，根因不是 header 而是 `ws` 抢答 400）：服务代理下的 dev server 整页重载循环。** 用户经 `app--….localhost:6777` 访问 Expo dev server 时页面每 ~400ms 重载一次。只读复现对比：直连 Metro（`localhost:50876`）12s 内 4 次导航、无异常；走代理 28 次导航，并反复报 `ws://…/hot`、`ws://…/message` 握手 400 —— Metro 的 HMR 与消息通道升级失败，Expo dev client 以整页重载重试。daemon 以 `passthroughUnknown: true` 注册了 upgrade handler，所以 WS 升级总体支持，最可能是 upgrade 路径与 HTTP 路径的 header 组装（尤其 `Host`）不一致。与本 issue 无关。
 - **已消失：启动阶段的一次性 xterm 实例。** 那 1–2 个实例同样是两道门控造成的；两道删除后回归测试里启动只构造 1 个实例，无需单独处理。

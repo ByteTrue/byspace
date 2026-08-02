@@ -133,6 +133,12 @@ server {
 
 Nginx's `$host` drops the port. If you terminate on a non-default port, use `$http_host` instead so the port survives — that is what "forwards the `Host` header unchanged" means here.
 
+## WebSockets
+
+A proxied service keeps its own WebSockets, including the HMR sockets a dev server opens on paths it picks itself (Metro uses `/hot` and `/message`, Vite uses `/ws`). The daemon serves its own protocol socket on `/ws` from the same listener, so ownership is decided before the path: an upgrade addressed to a registered service hostname always goes to that service, and only what no service claimed can reach the daemon socket. An upgrade nobody owns is answered with `400 Bad Request`.
+
+This matters because a rejected HMR handshake is not a degraded experience — dev clients reload the page and try again, so the page reload-loops and never becomes usable.
+
 ## Forwarded headers
 
 BySpace sets these when it forwards a request to a workspace service:

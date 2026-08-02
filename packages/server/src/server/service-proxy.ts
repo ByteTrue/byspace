@@ -5,6 +5,7 @@ import { existsSync, unlinkSync } from "node:fs";
 import type { IncomingMessage } from "node:http";
 import express, { type RequestHandler } from "express";
 import type { Logger } from "pino";
+import { markUpgradeClaimed } from "./upgrade-routing.js";
 
 export type ServiceProxyListenTarget =
   | { type: "tcp"; host: string; port: number }
@@ -792,6 +793,10 @@ export function createScriptProxyUpgradeHandler({
       }
       return;
     }
+    // The daemon runs its own "upgrade" listener on the same port and Node runs
+    // both; without this the daemon socket answers 400 for the service's own
+    // WebSockets, which is a reload loop for any dev server with HMR.
+    markUpgradeClaimed(req);
     proxyUpgradeRequest({ req, socket, head, route: classification.route, logger });
   };
 }
