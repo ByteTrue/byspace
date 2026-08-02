@@ -257,6 +257,108 @@ function resolveTerminalFontSize(fontSize: number | undefined): number {
     : DEFAULT_TERMINAL_FONT_SIZE;
 }
 
+function applyRootContainerBoundsStyles(container: HTMLElement | null): () => void {
+  // `html` and `body` belong to the shared document lock below. If a terminal is mounted
+  // directly under one of them, letting this per-instance path snapshot and restore it too
+  // would hand the same styles two owners with different lifetimes.
+  if (!container || container === document.body || container === document.documentElement) {
+    return () => {};
+  }
+  const previousOverflow = container.style.overflow;
+  const previousWidth = container.style.width;
+  const previousHeight = container.style.height;
+  container.style.overflow = "hidden";
+  container.style.width = "100%";
+  container.style.height = "100%";
+  return () => {
+    container.style.overflow = previousOverflow;
+    container.style.width = previousWidth;
+    container.style.height = previousHeight;
+  };
+}
+
+function lockDocumentBoundsStyles(): () => void {
+  const documentElement = document.documentElement;
+  const body = document.body;
+
+  const previousDocumentElementOverflow = documentElement.style.overflow;
+  const previousDocumentElementWidth = documentElement.style.width;
+  const previousDocumentElementHeight = documentElement.style.height;
+  const previousDocumentElementTextSizeAdjust =
+    documentElement.style.getPropertyValue("text-size-adjust");
+  const previousDocumentElementWebkitTextSizeAdjust = documentElement.style.getPropertyValue(
+    "-webkit-text-size-adjust",
+  );
+
+  const previousBodyOverflow = body.style.overflow;
+  const previousBodyWidth = body.style.width;
+  const previousBodyHeight = body.style.height;
+  const previousBodyMargin = body.style.margin;
+  const previousBodyPadding = body.style.padding;
+  const previousBodyTextSizeAdjust = body.style.getPropertyValue("text-size-adjust");
+  const previousBodyWebkitTextSizeAdjust = body.style.getPropertyValue("-webkit-text-size-adjust");
+
+  documentElement.style.overflow = "hidden";
+  documentElement.style.width = "100%";
+  documentElement.style.height = "100%";
+  documentElement.style.setProperty("text-size-adjust", "100%");
+  documentElement.style.setProperty("-webkit-text-size-adjust", "100%");
+
+  body.style.overflow = "hidden";
+  body.style.width = "100%";
+  body.style.height = "100%";
+  body.style.margin = "0";
+  body.style.padding = "0";
+  body.style.setProperty("text-size-adjust", "100%");
+  body.style.setProperty("-webkit-text-size-adjust", "100%");
+
+  return () => {
+    documentElement.style.overflow = previousDocumentElementOverflow;
+    documentElement.style.width = previousDocumentElementWidth;
+    documentElement.style.height = previousDocumentElementHeight;
+    documentElement.style.setProperty("text-size-adjust", previousDocumentElementTextSizeAdjust);
+    documentElement.style.setProperty(
+      "-webkit-text-size-adjust",
+      previousDocumentElementWebkitTextSizeAdjust,
+    );
+
+    body.style.overflow = previousBodyOverflow;
+    body.style.width = previousBodyWidth;
+    body.style.height = previousBodyHeight;
+    body.style.margin = previousBodyMargin;
+    body.style.padding = previousBodyPadding;
+    body.style.setProperty("text-size-adjust", previousBodyTextSizeAdjust);
+    body.style.setProperty("-webkit-text-size-adjust", previousBodyWebkitTextSizeAdjust);
+  };
+}
+
+// `html`/`body` bounds are global, so mounted terminals share one lock instead of each taking
+// its own snapshot. Per-instance snapshots only survive LIFO unmounts: with two terminals
+// mounted, the first to unmount restored a snapshot taken before the lock existed (unlocking
+// the document under the terminal still using it) and the last one restored a snapshot that
+// already contained the lock, leaving the page scroll-locked for good.
+let documentBoundsHolderCount = 0;
+let unlockDocumentBoundsStyles: (() => void) | null = null;
+
+function acquireDocumentBoundsStyles(): () => void {
+  documentBoundsHolderCount += 1;
+  if (!unlockDocumentBoundsStyles) {
+    unlockDocumentBoundsStyles = lockDocumentBoundsStyles();
+  }
+  let released = false;
+  return () => {
+    if (released) {
+      return;
+    }
+    released = true;
+    documentBoundsHolderCount -= 1;
+    if (documentBoundsHolderCount === 0) {
+      unlockDocumentBoundsStyles?.();
+      unlockDocumentBoundsStyles = null;
+    }
+  };
+}
+
 function withOverviewRulerBorderHidden(theme: ITheme): ITheme {
   return {
     ...theme,
@@ -1195,76 +1297,11 @@ export class TerminalEmulatorRuntime {
   }
 
   private applyDocumentBoundsStyles(input: { root: HTMLDivElement }): () => void {
-    const documentElement = document.documentElement;
-    const body = document.body;
-    const rootContainer = input.root.parentElement;
-
-    const previousDocumentElementOverflow = documentElement.style.overflow;
-    const previousDocumentElementWidth = documentElement.style.width;
-    const previousDocumentElementHeight = documentElement.style.height;
-    const previousDocumentElementTextSizeAdjust =
-      documentElement.style.getPropertyValue("text-size-adjust");
-    const previousDocumentElementWebkitTextSizeAdjust = documentElement.style.getPropertyValue(
-      "-webkit-text-size-adjust",
-    );
-
-    const previousBodyOverflow = body.style.overflow;
-    const previousBodyWidth = body.style.width;
-    const previousBodyHeight = body.style.height;
-    const previousBodyMargin = body.style.margin;
-    const previousBodyPadding = body.style.padding;
-    const previousBodyTextSizeAdjust = body.style.getPropertyValue("text-size-adjust");
-    const previousBodyWebkitTextSizeAdjust = body.style.getPropertyValue(
-      "-webkit-text-size-adjust",
-    );
-
-    const previousRootOverflow = rootContainer?.style.overflow ?? "";
-    const previousRootWidth = rootContainer?.style.width ?? "";
-    const previousRootHeight = rootContainer?.style.height ?? "";
-
-    documentElement.style.overflow = "hidden";
-    documentElement.style.width = "100%";
-    documentElement.style.height = "100%";
-    documentElement.style.setProperty("text-size-adjust", "100%");
-    documentElement.style.setProperty("-webkit-text-size-adjust", "100%");
-
-    body.style.overflow = "hidden";
-    body.style.width = "100%";
-    body.style.height = "100%";
-    body.style.margin = "0";
-    body.style.padding = "0";
-    body.style.setProperty("text-size-adjust", "100%");
-    body.style.setProperty("-webkit-text-size-adjust", "100%");
-
-    if (rootContainer) {
-      rootContainer.style.overflow = "hidden";
-      rootContainer.style.width = "100%";
-      rootContainer.style.height = "100%";
-    }
-
+    const restoreRootContainer = applyRootContainerBoundsStyles(input.root.parentElement);
+    const releaseDocumentBounds = acquireDocumentBoundsStyles();
     return () => {
-      documentElement.style.overflow = previousDocumentElementOverflow;
-      documentElement.style.width = previousDocumentElementWidth;
-      documentElement.style.height = previousDocumentElementHeight;
-      documentElement.style.setProperty("text-size-adjust", previousDocumentElementTextSizeAdjust);
-      documentElement.style.setProperty(
-        "-webkit-text-size-adjust",
-        previousDocumentElementWebkitTextSizeAdjust,
-      );
-
-      body.style.overflow = previousBodyOverflow;
-      body.style.width = previousBodyWidth;
-      body.style.height = previousBodyHeight;
-      body.style.margin = previousBodyMargin;
-      body.style.padding = previousBodyPadding;
-      body.style.setProperty("text-size-adjust", previousBodyTextSizeAdjust);
-      body.style.setProperty("-webkit-text-size-adjust", previousBodyWebkitTextSizeAdjust);
-
-      if (rootContainer) {
-        rootContainer.style.overflow = previousRootOverflow;
-        rootContainer.style.width = previousRootWidth;
-        rootContainer.style.height = previousRootHeight;
-      }
+      releaseDocumentBounds();
+      restoreRootContainer();
     };
   }
 

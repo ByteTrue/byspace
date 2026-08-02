@@ -262,6 +262,27 @@ afterEach(() => {
 });
 
 describe("terminal emulator runtime in a real browser", () => {
+  it("keeps the document scroll lock until the last terminal unmounts", async () => {
+    await page.viewport(900, 600);
+    const originalBodyOverflow = document.body.style.overflow;
+
+    const first = createTerminalHost({ width: 720, height: 360 });
+    const second = createTerminalHost({ width: 720, height: 360 });
+    expect(document.body.style.overflow).toBe("hidden");
+
+    // Non-LIFO teardown: the terminal that locked the document first goes away while the
+    // second one is still mounted and still needs the lock.
+    first.runtime.unmount();
+    first.root.remove();
+    expect(document.body.style.overflow).toBe("hidden");
+
+    second.runtime.unmount();
+    second.root.remove();
+    expect(document.body.style.overflow).toBe(originalBodyOverflow);
+
+    mountedTerminals.splice(0);
+  });
+
   it("passes configured scrollback to xterm", async () => {
     await page.viewport(900, 600);
     createTerminalHost({ width: 720, height: 360, scrollback: 42_000 });

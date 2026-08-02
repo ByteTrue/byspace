@@ -2352,6 +2352,12 @@ export const SubscribeTerminalRequestSchema = z.object({
   restore: z
     .object({
       mode: z.enum(["live", "visible-snapshot", "full-snapshot"]),
+      // "I kept my renderer contents; send me what I missed if you still have
+      // it." The daemon falls back to `mode` when it cannot, and a daemon that
+      // predates this ignores the field and restores the way it always did —
+      // which is why this is a sibling flag rather than a new `mode` value that
+      // an older daemon could not parse.
+      resume: z.boolean().optional(),
       scrollbackLines: z.number().int().nonnegative().optional(),
       size: z
         .object({

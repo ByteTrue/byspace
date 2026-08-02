@@ -4,6 +4,7 @@ import {
   canRequestFocusClaim,
   reconcileFocusClaim,
   settleFocusClaim,
+  shouldSendTerminalResize,
   type FocusClaimState,
 } from "./terminal-pane-focus-claim";
 
@@ -130,5 +131,16 @@ describe("terminal pane focus claim", () => {
 
     expect(refocused.shouldRequest).toBe(true);
     expect(changed.shouldRequest).toBe(true);
+  });
+
+  it("never lets a passive refit claim a PTY this client has not claimed yet", () => {
+    expect(shouldSendTerminalResize({ shouldClaim: false, hasClaimedSize: false })).toBe(false);
+  });
+
+  it("keeps the PTY in sync with a passive refit once this client owns the size", () => {
+    // The WebGL renderer swap and the post-mount fit ladder land after the claim and can move
+    // our column count; dropping them left the PTY narrower than the renderer until a click.
+    expect(shouldSendTerminalResize({ shouldClaim: false, hasClaimedSize: true })).toBe(true);
+    expect(shouldSendTerminalResize({ shouldClaim: true, hasClaimedSize: false })).toBe(true);
   });
 });

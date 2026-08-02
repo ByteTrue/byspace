@@ -4,6 +4,7 @@ import { basename, join } from "path";
 import { hostname as getHostname } from "node:os";
 import { randomUUID } from "node:crypto";
 import { monitorEventLoopDelay } from "node:perf_hooks";
+import { attachDaemonUpgradeRouting } from "./upgrade-routing.js";
 import type { AgentManager, AgentMetricsSnapshot } from "./agent/agent-manager.js";
 import type { AgentStorage } from "./agent/agent-storage.js";
 import type { DownloadTokenStore } from "./file-download/token-store.js";
@@ -674,12 +675,23 @@ export class VoiceAssistantWebSocketServer {
   ): WebSocketServer {
     const { allowedOrigins, hostnames } = wsConfig;
     const password = auth?.password;
+    // `noServer` instead of letting `ws` own the port: the service proxy serves
+    // workspace services on this same listener, and a path-bound `ws` answers
+    // 400 for every upgrade that is not ours — including their HMR sockets.
     const wss = new WebSocketServer({
-      server,
-      path: "/ws",
+      noServer: true,
       handleProtocols: (protocols) => selectWebSocketProtocol(protocols, password),
       verifyClient: ({ req }, callback) => {
         this.verifyWsUpgrade(req, allowedOrigins, hostnames, callback);
+      },
+    });
+    attachDaemonUpgradeRouting({
+      server,
+      path: "/ws",
+      handleUpgrade: (req, socket, head) => {
+        wss.handleUpgrade(req, socket, head, (ws) => {
+          wss.emit("connection", ws, req);
+        });
       },
     });
     wss.on("connection", (ws, request) => {
