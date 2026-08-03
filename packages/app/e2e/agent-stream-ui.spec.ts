@@ -272,7 +272,7 @@ test.describe("Agent stream UI", () => {
       });
 
       const composer = page.getByTestId("message-input-root");
-      const controls = page.getByTestId("agent-stream-controls");
+      const controls = page.getByTestId("agent-stream-controls").filter({ visible: true });
       const scrollToBottomButton = page.getByRole("button", { name: "Scroll to bottom" });
       await expect(controls).toBeVisible();
       await expect(scrollToBottomButton).toBeVisible();
