@@ -197,7 +197,7 @@ describe("git worktree grouping", () => {
       workspaceDirectoryKey: "/tmp/repo-feature",
       workspaceKind: "worktree",
       workspaceDisplayName: "feature/plain",
-      projectKey: "remote:github.com/acme/repo",
+      projectKey: "remote:https://github.com/acme/repo",
       projectName: "acme/repo",
       projectRootPath: "/tmp/repo",
       projectKind: "git",

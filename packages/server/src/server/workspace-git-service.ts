@@ -1,3 +1,4 @@
+import { createHash, randomUUID } from "node:crypto";
 import { watch, type FSWatcher } from "node:fs";
 import { readFile, readdir } from "node:fs/promises";
 import { basename, join, resolve } from "node:path";
@@ -48,7 +49,7 @@ import {
 import { checkoutLiteFromGitSnapshot } from "./workspace-registry-model.js";
 
 const WORKSPACE_GIT_WATCH_DEBOUNCE_MS = 1_000;
-const BACKGROUND_GIT_FETCH_INTERVAL_MS = 180_000;
+export const BACKGROUND_GIT_FETCH_INTERVAL_MS = 180_000;
 export const WORKSPACE_GIT_SELF_HEAL_INTERVAL_MS = 60_000;
 const FORGE_PR_STATUS_POLL_FAST_INTERVAL_MS = 20_000;
 const FORGE_PR_STATUS_POLL_SLOW_INTERVAL_MS = 120_000;
@@ -67,6 +68,22 @@ const LINUX_WATCH_MAX_DIRS = 5_000;
 const LINUX_WATCH_REFRESH_COOLDOWN_MS = 2_000;
 const LINUX_WATCH_IGNORE_TTL_MS = 5 * 60 * 1_000;
 
+function stableTimerPhase(key: string, spanMs: number): number {
+  return createHash("sha256").update(key).digest().readUInt32BE(0) % spanMs;
+}
+
+export function workspaceGitSelfHealInitialDelayMs(cwd: string): number {
+  const spanMs = WORKSPACE_GIT_SELF_HEAL_INTERVAL_MS - WORKSPACE_GIT_INTERNAL_MIN_GAP_MS + 1;
+  return WORKSPACE_GIT_INTERNAL_MIN_GAP_MS + stableTimerPhase(cwd, spanMs);
+}
+
+export function workspaceGitFetchInitialDelayMs(repoGitRoot: string): number {
+  const minimumMs = BACKGROUND_GIT_FETCH_INTERVAL_MS / 2;
+  return (
+    minimumMs + stableTimerPhase(repoGitRoot, BACKGROUND_GIT_FETCH_INTERVAL_MS - minimumMs + 1)
+  );
+}
+
 const linuxWatchReaddirConcurrency =
   parseInt(process.env.BYSPACE_LINUX_WATCH_READDIR_CONCURRENCY ?? "16", 10) || 16;
 const linuxWatchReaddirLimit = pLimit(linuxWatchReaddirConcurrency);
@@ -78,6 +95,8 @@ export interface WorkspaceGitRuntimeSnapshot {
     repoRoot: string | null;
     mainRepoRoot: string | null;
     currentBranch: string | null;
+    /** Opaque identity for the inputs used by checkout.commits.list. */
+    commitsVersion?: string;
     remoteUrl: string | null;
     isBySpaceOwnedWorktree: boolean;
     isDirty: boolean | null;
@@ -251,8 +270,17 @@ export type WorkspaceGitSnapshotOptions =
 interface WorkspaceGitRefreshRequest {
   force: boolean;
   includeForge: boolean;
+  invalidateCommits: boolean;
   reason: string;
   notify: boolean;
+}
+
+function shouldInvalidateCheckoutCommits(input: { force: boolean; reason: string }): boolean {
+  return (
+    input.reason === "watch" ||
+    input.reason === "repo-fetch" ||
+    (input.force && !input.reason.startsWith("working-tree-watch"))
+  );
 }
 
 interface ScheduledWorkspaceGitRefreshOptions {
@@ -270,6 +298,7 @@ type WorkspaceGitRefreshState =
       promise: Promise<WorkspaceGitRuntimeSnapshot>;
       force: boolean;
       includeForge: boolean;
+      invalidateCommits: boolean;
       queued: WorkspaceGitRefreshRequest | null;
     };
 
@@ -324,6 +353,8 @@ interface WorkspaceGitTarget {
   latestFacts: CheckoutSnapshotFacts | null;
   latestFactsLoadedAtMs: number | null;
   factsPromise: Promise<CheckoutSnapshotFacts> | null;
+  commitsVersion: string | null;
+  commitsIdentity: string | null;
   latestFingerprint: string | null;
   lastShellOutAtMs: number | null;
   repoGitRoot: string | null;
@@ -756,6 +787,7 @@ export class WorkspaceGitServiceImpl implements WorkspaceGitService {
     await this.refreshWorkspaceTarget(target, {
       force: false,
       includeForge: false,
+      invalidateCommits: false,
       reason: "refresh",
       notify: true,
     });
@@ -936,6 +968,8 @@ export class WorkspaceGitServiceImpl implements WorkspaceGitService {
       latestFacts: null,
       latestFactsLoadedAtMs: null,
       factsPromise: null,
+      commitsVersion: null,
+      commitsIdentity: null,
       latestFingerprint: null,
       lastShellOutAtMs: null,
       repoGitRoot: null,
@@ -956,6 +990,7 @@ export class WorkspaceGitServiceImpl implements WorkspaceGitService {
       void this.refreshWorkspaceTarget(target, {
         force: false,
         includeForge: true,
+        invalidateCommits: false,
         reason: "initial",
         notify: true,
       });
@@ -1212,11 +1247,20 @@ export class WorkspaceGitServiceImpl implements WorkspaceGitService {
       repoGitRoot,
       cwd: workspaceTarget.cwd,
       workspaceKeys: new Set([workspaceTarget.cwd]),
-      intervalId: setInterval(() => {
-        void this.runRepoFetch(repoTarget);
-      }, BACKGROUND_GIT_FETCH_INTERVAL_MS),
+      intervalId: null,
       fetchInFlight: false,
     };
+    const runRecurringFetch = () => {
+      if (this.repoTargets.get(repoTarget.repoGitRoot) === repoTarget) {
+        void this.runRepoFetch(repoTarget);
+      }
+    };
+    repoTarget.intervalId = setTimeout(() => {
+      runRecurringFetch();
+      if (this.repoTargets.get(repoTarget.repoGitRoot) === repoTarget) {
+        repoTarget.intervalId = setInterval(runRecurringFetch, BACKGROUND_GIT_FETCH_INTERVAL_MS);
+      }
+    }, workspaceGitFetchInitialDelayMs(repoGitRoot));
     this.repoTargets.set(repoGitRoot, repoTarget);
     void this.runRepoFetch(repoTarget);
   }
@@ -1258,11 +1302,15 @@ export class WorkspaceGitServiceImpl implements WorkspaceGitService {
 
   private startWorkspaceSubscriptionTimers(target: WorkspaceGitTarget): void {
     if (!target.selfHealTimer) {
-      target.selfHealTimer = setInterval(() => {
+      const runSelfHeal = () => {
+        if (!this.isActiveObservedWorkspaceTarget(target)) {
+          return;
+        }
         this.scheduleWorkspaceObservationSetup(target);
         this.refreshWorkspaceTarget(target, {
           force: false,
           includeForge: false,
+          invalidateCommits: false,
           reason: "self-heal-git",
           notify: true,
         }).catch((error) => {
@@ -1271,7 +1319,13 @@ export class WorkspaceGitServiceImpl implements WorkspaceGitService {
             "Failed to run workspace git self-heal refresh",
           );
         });
-      }, WORKSPACE_GIT_SELF_HEAL_INTERVAL_MS);
+      };
+      target.selfHealTimer = setTimeout(() => {
+        runSelfHeal();
+        if (this.isActiveObservedWorkspaceTarget(target)) {
+          target.selfHealTimer = setInterval(runSelfHeal, WORKSPACE_GIT_SELF_HEAL_INTERVAL_MS);
+        }
+      }, workspaceGitSelfHealInitialDelayMs(target.cwd));
     }
 
     this.updateForgePrStatusPollForTarget(target);
@@ -1700,13 +1754,20 @@ export class WorkspaceGitServiceImpl implements WorkspaceGitService {
       const needsForcedRefresh = request.force && !target.refreshState.force;
       const needsGitHubRefresh =
         request.force && request.includeForge && !target.refreshState.includeForge;
-      if (needsForcedRefresh || needsGitHubRefresh) {
+      const needsCommitInvalidation =
+        request.invalidateCommits &&
+        (!target.refreshState.invalidateCommits || request.reason === "repo-fetch");
+      if (needsForcedRefresh || needsGitHubRefresh || needsCommitInvalidation) {
         target.refreshState.queued = this.mergeRefreshRequests(target.refreshState.queued, request);
       }
       return target.refreshState.promise;
     }
 
-    if (!request.force && this.shouldThrottleNonForcedRefresh(target)) {
+    if (
+      !request.force &&
+      !request.invalidateCommits &&
+      this.shouldThrottleNonForcedRefresh(target)
+    ) {
       return Promise.resolve(target.latestSnapshot);
     }
 
@@ -1721,6 +1782,7 @@ export class WorkspaceGitServiceImpl implements WorkspaceGitService {
       promise,
       force: request.force,
       includeForge: request.includeForge,
+      invalidateCommits: request.invalidateCommits,
       queued: null,
     };
 
@@ -1737,10 +1799,12 @@ export class WorkspaceGitServiceImpl implements WorkspaceGitService {
     }
 
     const force = options?.force === true;
+    const reason = options?.reason ?? defaultReason;
     return {
       force,
       includeForge: options?.includeForge ?? true,
-      reason: options?.reason ?? defaultReason,
+      invalidateCommits: shouldInvalidateCheckoutCommits({ force, reason }),
+      reason,
       notify,
     };
   }
@@ -1760,10 +1824,13 @@ export class WorkspaceGitServiceImpl implements WorkspaceGitService {
   private buildScheduledRefreshRequest(
     options: ScheduledWorkspaceGitRefreshOptions | undefined,
   ): WorkspaceGitRefreshRequest {
+    const force = options?.force === true;
+    const reason = options?.reason ?? "watch";
     return {
-      force: options?.force === true,
+      force,
       includeForge: options?.includeForge ?? false,
-      reason: options?.reason ?? "watch",
+      invalidateCommits: shouldInvalidateCheckoutCommits({ force, reason }),
+      reason,
       notify: true,
     };
   }
@@ -1779,10 +1846,12 @@ export class WorkspaceGitServiceImpl implements WorkspaceGitService {
     const force = pending.force || request.force;
     const upgradesForce = request.force && !pending.force;
     const upgradesForge = request.includeForge && !pending.includeForge;
+    const upgradesCommits = request.invalidateCommits && !pending.invalidateCommits;
     return {
       force,
       includeForge: pending.includeForge || request.includeForge,
-      reason: upgradesForce || upgradesForge ? request.reason : pending.reason,
+      invalidateCommits: pending.invalidateCommits || request.invalidateCommits,
+      reason: upgradesForce || upgradesForge || upgradesCommits ? request.reason : pending.reason,
       notify: pending.notify || request.notify,
     };
   }
@@ -1810,6 +1879,7 @@ export class WorkspaceGitServiceImpl implements WorkspaceGitService {
       state.queued = null;
       state.force = request.force;
       state.includeForge = request.includeForge;
+      state.invalidateCommits = request.invalidateCommits;
     }
 
     return snapshot;
@@ -1861,11 +1931,35 @@ export class WorkspaceGitServiceImpl implements WorkspaceGitService {
       .getCheckoutShortstat(cwd, context, { force: request.force })
       .catch(() => null);
 
+    const headSha = facts.isGit ? facts.pullRequestLookupTarget?.headSha : undefined;
+    const commitsIdentity = headSha
+      ? JSON.stringify([
+          headSha,
+          checkoutStatus.repoRoot,
+          checkoutStatus.currentBranch,
+          checkoutStatus.baseRef,
+          checkoutStatus.aheadBehind,
+          checkoutStatus.aheadOfOrigin,
+          checkoutStatus.behindOfOrigin,
+          checkoutStatus.remoteUrl,
+        ])
+      : null;
+    if (
+      commitsIdentity &&
+      (commitsIdentity !== target.commitsIdentity || request.invalidateCommits)
+    ) {
+      target.commitsVersion = randomUUID();
+    }
+    target.commitsIdentity = commitsIdentity;
+    if (!commitsIdentity) {
+      target.commitsVersion = null;
+    }
     target.latestGit = {
       isGit: true,
       repoRoot: checkoutStatus.repoRoot,
       mainRepoRoot: checkoutStatus.mainRepoRoot,
       currentBranch: checkoutStatus.currentBranch,
+      ...(target.commitsVersion ? { commitsVersion: target.commitsVersion } : {}),
       remoteUrl: checkoutStatus.remoteUrl,
       isBySpaceOwnedWorktree: checkoutStatus.isBySpaceOwnedWorktree,
       isDirty: checkoutStatus.isDirty,
@@ -2026,21 +2120,20 @@ export class WorkspaceGitServiceImpl implements WorkspaceGitService {
         "Background git fetch failed",
       );
     } finally {
+      for (const workspaceKey of target.workspaceKeys) {
+        const workspaceTarget = this.workspaceTargets.get(workspaceKey);
+        if (!workspaceTarget) {
+          continue;
+        }
+        await this.refreshWorkspaceTarget(workspaceTarget, {
+          force: false,
+          includeForge: false,
+          invalidateCommits: true,
+          reason: "repo-fetch",
+          notify: true,
+        });
+      }
       target.fetchInFlight = false;
-      await Promise.all(
-        Array.from(target.workspaceKeys, async (workspaceKey) => {
-          const workspaceTarget = this.workspaceTargets.get(workspaceKey);
-          if (!workspaceTarget) {
-            return;
-          }
-          await this.refreshWorkspaceTarget(workspaceTarget, {
-            force: false,
-            includeForge: false,
-            reason: "repo-fetch",
-            notify: true,
-          });
-        }),
-      );
     }
   }
 

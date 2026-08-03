@@ -259,6 +259,50 @@ describe("host project list", () => {
     expect(getHostProjectSourceDirectory(project, "host-c")).toBeNull();
   });
 
+  it("hydrates host-local route and last-workspace keys to the grouped project", () => {
+    const grouped = hostProject({
+      projectKey: "remote:https://github.com/acme/app",
+      hosts: [
+        {
+          serverId: "host-a",
+          projectId: "prj_local_a",
+          iconWorkingDir: "/repo/a",
+          canCreateWorktree: true,
+        },
+        {
+          serverId: "host-b",
+          projectId: "prj_local_b",
+          iconWorkingDir: "/repo/b",
+          canCreateWorktree: true,
+        },
+      ],
+    });
+    const localRoute = hostProjectFromRoute({
+      serverId: "host-b",
+      projectId: "prj_local_b",
+      displayName: "App on B",
+      sourceDirectory: "/repo/b",
+    });
+
+    expect(
+      resolveInitialWorkspaceProject({
+        routeProject: localRoute,
+        lastActiveProject: null,
+        projects: [grouped],
+        serverId: "host-b",
+        allowAllProjects: true,
+      }),
+    ).toBe(grouped);
+    expect(
+      resolveSelectedHostProject({
+        selectedProjectKey: "prj_local_b",
+        projects: [grouped],
+        routeProject: localRoute,
+        lastActiveProject: null,
+      }),
+    ).toBe(grouped);
+  });
+
   it("keeps a selected route project available before project hydration", () => {
     expect(
       resolveSelectedHostProject({
@@ -283,7 +327,14 @@ describe("host project list", () => {
       projectName: "Project A",
       projectKind: "git",
       iconWorkingDir: "/repo/a",
-      hosts: [{ serverId: "host-a", iconWorkingDir: "/repo/a", canCreateWorktree: true }],
+      hosts: [
+        {
+          serverId: "host-a",
+          projectId: "project-a",
+          iconWorkingDir: "/repo/a",
+          canCreateWorktree: true,
+        },
+      ],
       workspaceKeys: [],
     });
     expect(hostProjectFromRoute({ serverId: "host-a", projectId: "project-a" })).toBeNull();
@@ -295,7 +346,14 @@ describe("host project list", () => {
       projectName: "Project A",
       projectKind: "git",
       iconWorkingDir: "/repo/a",
-      hosts: [{ serverId: "host-a", iconWorkingDir: "/repo/a", canCreateWorktree: true }],
+      hosts: [
+        {
+          serverId: "host-a",
+          projectId: "project-a",
+          iconWorkingDir: "/repo/a",
+          canCreateWorktree: true,
+        },
+      ],
       workspaceKeys: ["host-a:workspace-a"],
     });
 

@@ -27,9 +27,11 @@ describe("bootstrapWorkspaceRegistries", () => {
     tmpDir = mkdtempSync(path.join(os.tmpdir(), "workspace-bootstrap-"));
     byspaceHome = path.join(tmpDir, ".byspace");
     agentStorage = new AgentStorage(path.join(byspaceHome, "agents"), logger);
+    let nextProjectId = 1;
     projectRegistry = new FileBackedProjectRegistry(
       path.join(byspaceHome, "projects", "projects.json"),
       logger,
+      { projectIdFactory: () => `prj_bootstrap_${nextProjectId++}` },
     );
     workspaceRegistry = new FileBackedWorkspaceRegistry(
       path.join(byspaceHome, "projects", "workspaces.json"),
@@ -114,9 +116,75 @@ describe("bootstrapWorkspaceRegistries", () => {
 
     const projects = await projectRegistry.list();
     expect(projects).toHaveLength(1);
-    expect(projects[0]?.projectId).toBe(NON_GIT_PROJECT);
+    expect(projects[0]?.projectId).toBe("prj_bootstrap_1");
     expect(projects[0]?.createdAt).toBe("2026-03-01T00:00:00.000Z");
     expect(projects[0]?.updatedAt).toBe("2026-03-03T00:00:00.000Z");
+  });
+
+  test("keeps same-host clones distinct while sharing their remote project key", async () => {
+    const cloneOne = path.resolve("/tmp/clone-one");
+    const cloneTwo = path.resolve("/tmp/clone-two");
+    await agentStorage.initialize();
+    for (const [id, cwd] of [
+      ["agent-clone-one", cloneOne],
+      ["agent-clone-two", cloneTwo],
+    ] as const) {
+      await agentStorage.upsert({
+        id,
+        provider: "codex",
+        cwd,
+        createdAt: "2026-03-01T00:00:00.000Z",
+        updatedAt: "2026-03-01T00:00:00.000Z",
+        lastActivityAt: "2026-03-01T00:00:00.000Z",
+        lastUserMessageAt: null,
+        title: null,
+        labels: {},
+        lastStatus: "idle",
+        lastModeId: null,
+        config: null,
+        runtimeInfo: { provider: "codex", sessionId: null },
+        persistence: null,
+        archivedAt: null,
+      });
+    }
+    workspaceGitService = {
+      ...workspaceGitService,
+      getCheckout: async (cwd) => ({
+        cwd,
+        isGit: true,
+        currentBranch: "main",
+        remoteUrl: "https://github.com/acme/shared.git",
+        worktreeRoot: cwd,
+        isBySpaceOwnedWorktree: false,
+        mainRepoRoot: null,
+      }),
+    };
+
+    await bootstrapWorkspaceRegistries({
+      serverId: "host-a",
+      byspaceHome,
+      agentStorage,
+      projectRegistry,
+      workspaceRegistry,
+      workspaceGitService,
+      logger,
+    });
+
+    const cloneProjects = (await projectRegistry.list()).sort((left, right) =>
+      left.rootPath.localeCompare(right.rootPath),
+    );
+    expect(cloneProjects).toHaveLength(2);
+    expect(cloneProjects.map((project) => project.rootPath)).toEqual([cloneOne, cloneTwo]);
+    expect(cloneProjects.map((project) => project.projectId)).toEqual([
+      "prj_bootstrap_1",
+      "prj_bootstrap_2",
+    ]);
+    expect(new Set(cloneProjects.map((project) => project.projectKey))).toEqual(
+      new Set(["remote:https://github.com/acme/shared"]),
+    );
+    expect(
+      new Set((await workspaceRegistry.list()).map((workspace) => workspace.projectId)),
+    ).toEqual(new Set(["prj_bootstrap_1", "prj_bootstrap_2"]));
   });
 
   test("does not rematerialize when registry files already exist", async () => {
@@ -363,6 +431,6 @@ describe("bootstrapWorkspaceRegistries", () => {
 
     const projects = await projectRegistry.list();
     expect(projects).toHaveLength(1);
-    expect(projects[0]?.projectId).toBe(NON_GIT_PROJECT);
+    expect(projects[0]?.projectId).toBe("prj_bootstrap_1");
   });
 });

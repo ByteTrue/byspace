@@ -191,6 +191,7 @@ export const ja: TranslationResources = {
       failedToLoad: "エージェントの読み込みに失敗しました",
       reconnecting: "再接続中...",
       timelineSyncFailed: "エージェントの履歴を更新できませんでした。再試行しています…",
+      timelineSyncing: "最新の進捗を同期中...",
       archivingTitle: "エージェントをアーカイブ中...",
       archivingSubtitle: "このエージェントをアーカイブするまでお待ちください。",
     },
@@ -337,6 +338,12 @@ export const ja: TranslationResources = {
     },
     row: {
       importing: "インポート中...",
+    },
+    manual: {
+      sectionTitle: "セッションIDでインポート",
+      providerPlaceholder: "プロバイダーを選択",
+      idPlaceholder: "セッションまたはスレッドID",
+      submit: "インポート",
     },
   },
   workspace: {
@@ -739,6 +746,8 @@ export const ja: TranslationResources = {
         closeChangesTab: "変更タブを閉じる",
         binaryFile: "バイナリファイル",
         tooLarge: "差分が大きすぎて表示できません",
+        previewTooLargeTitle: "この差分は大きすぎるためプレビューできません",
+        previewTooLargeDescription: "比較範囲を狭めると、ここでプレビューできます",
         unified: "ユニファイド差分",
         split: "左右比較",
         switchToUnified: "ユニファイド差分に切り替え",
@@ -1550,6 +1559,7 @@ export const ja: TranslationResources = {
       help: {
         openProject: "プロジェクトを開く",
         newWorkspace: "新しいワークスペース",
+        switchProject: "プロジェクトを切り替え",
         newWorktree: "新しいワークツリー",
         archiveWorkspace: "ワークスペースをアーカイブ",
         newTab: "新しいタブ",

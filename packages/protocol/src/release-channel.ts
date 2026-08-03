@@ -11,15 +11,15 @@ export interface BySpaceHostedRelease {
 export const STABLE_HOSTED_RELEASE: BySpaceHostedRelease = {
   channel: "stable",
   npmDistTag: "latest",
-  appBaseUrl: "https://byspace.pages.dev",
-  relayEndpoint: "byspace-relay.bytetrue.workers.dev:443",
+  appBaseUrl: "https://app.byspace.zijieapi.de5.net",
+  relayEndpoint: "relay.byspace.zijieapi.de5.net:443",
 };
 
 export const BETA_HOSTED_RELEASE: BySpaceHostedRelease = {
   channel: "beta",
   npmDistTag: "beta",
-  appBaseUrl: "https://byspace-beta.pages.dev",
-  relayEndpoint: "byspace-relay-beta.bytetrue.workers.dev:443",
+  appBaseUrl: "https://app-beta.byspace.zijieapi.de5.net",
+  relayEndpoint: "relay-beta.byspace.zijieapi.de5.net:443",
 };
 
 const VERSION_PATTERN =

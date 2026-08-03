@@ -21,7 +21,7 @@ Use `harden-byspace-release` for an independent pre-tag review when available.
 ## Prepare
 
 1. Require a clean working tree and current `origin/main`.
-2. Classify the change as patch or minor from the previous Stable release to `HEAD`; explain the target. Never choose major autonomously.
+2. Classify the change as patch or minor from the previous Stable release to `HEAD` using the version classification rules in `docs/release.md`; explain the target from what the user can see, never from diff size. Never choose major autonomously.
 3. Select the version command:
    - next beta on the same base: `npm run version:all:beta:next`;
    - beta for the next patch/minor: `npm run version:all:beta:patch` or `npm run version:all:beta:minor`.
@@ -59,7 +59,7 @@ Prove all of the following before announcing completion:
 - Beta Pages reports the tagged SHA/version;
 - Beta Worker reports the tagged version;
 - a clean global `@bytetrue/byspace@beta` install starts an isolated daemon;
-- pairing uses `https://byspace-beta.pages.dev` and the Beta relay;
+- pairing uses `https://app-beta.byspace.zijieapi.de5.net` and the Beta relay;
 - real relay connection succeeds;
 - Stable Pages deployment ID and Stable Worker version ID are unchanged;
 - repository working tree is clean and `main == origin/main`.

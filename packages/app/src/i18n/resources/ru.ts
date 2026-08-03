@@ -191,6 +191,7 @@ export const ru: TranslationResources = {
       failedToLoad: "Не удалось загрузить агент",
       reconnecting: "Повторное подключение...",
       timelineSyncFailed: "Не удалось обновить историю агента. Повторная попытка…",
+      timelineSyncing: "Синхронизация последнего прогресса...",
       archivingTitle: "Архивный агент...",
       archivingSubtitle: "Пожалуйста, подождите, пока мы архивируем этого агента.",
     },
@@ -336,6 +337,12 @@ export const ru: TranslationResources = {
     },
     row: {
       importing: "Импорт...",
+    },
+    manual: {
+      sectionTitle: "Импорт по ID сессии",
+      providerPlaceholder: "Выбрать провайдера",
+      idPlaceholder: "ID сессии или треда",
+      submit: "Импортировать",
     },
   },
   workspace: {
@@ -749,6 +756,8 @@ export const ru: TranslationResources = {
         closeChangesTab: "Закрыть вкладку «Изменения»",
         binaryFile: "Бинарный файл",
         tooLarge: "Разница слишком велика для отображения",
+        previewTooLargeTitle: "Этот diff слишком велик для предпросмотра",
+        previewTooLargeDescription: "Сузьте сравнение, чтобы просмотреть его здесь",
         unified: "Единый дифференциал",
         split: "Параллельная разница",
         switchToUnified: "Переключить на объединенный diff",
@@ -1565,6 +1574,7 @@ export const ru: TranslationResources = {
       help: {
         openProject: "Открыть проект",
         newWorkspace: "Новое рабочее пространство",
+        switchProject: "Сменить проект",
         newWorktree: "Новое рабочее дерево",
         archiveWorkspace: "Архивировать рабочее пространство",
         newTab: "Новая вкладка",

@@ -62,6 +62,7 @@ import {
   type DiffLine,
   type HighlightToken,
 } from "@/git/use-diff-query";
+import { DiffTooLargeState } from "@/git/diff-too-large-state";
 import { buildDiffFlatItems, sumHeightsBefore, type DiffFlatItem } from "@/git/diff-flat-items";
 import { buildDiffTree, collectDirPaths, compressSingleChildChains } from "@/git/diff-tree";
 import { DiffFolderRow } from "@/git/diff-folder-row";
@@ -1720,6 +1721,7 @@ interface DiffBodyContentProps {
   notGit: boolean;
   isDiffLoading: boolean;
   diffErrorMessage: string | null;
+  diffTooLarge: boolean;
   hasChanges: boolean;
   emptyMessage: string;
   children: ReactElement;
@@ -1733,6 +1735,7 @@ function DiffBodyContent({
   notGit,
   isDiffLoading,
   diffErrorMessage,
+  diffTooLarge,
   hasChanges,
   emptyMessage,
   children,
@@ -1767,6 +1770,9 @@ function DiffBodyContent({
         <ThemedLoadingSpinner size="large" uniProps={foregroundMutedIconColorMapping} />
       </View>
     );
+  }
+  if (diffTooLarge) {
+    return <DiffTooLargeState />;
   }
   if (diffErrorMessage) {
     return (
@@ -2502,6 +2508,7 @@ export function GitDiffPane({
   const {
     files,
     payloadError: diffPayloadError,
+    diffTooLarge,
     isLoading: isDiffLoading,
   } = useCheckoutDiffQuery({
     serverId,
@@ -2764,6 +2771,7 @@ export function GitDiffPane({
       notGit={notGit}
       isDiffLoading={isDiffLoading}
       diffErrorMessage={diffErrorMessage}
+      diffTooLarge={diffTooLarge}
       hasChanges={hasChanges}
       emptyMessage={emptyMessage}
       checkingRepositoryLabel={t("workspace.git.diff.checkingRepository")}

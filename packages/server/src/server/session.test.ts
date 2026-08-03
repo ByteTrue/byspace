@@ -578,6 +578,7 @@ describe("project command-center RPCs", () => {
             directoryPath,
             project: {
               projectId: "prj_new_project",
+              projectKey: "prj_new_project",
               projectDisplayName: "new-project",
               projectCustomName: null,
               projectRootPath: directoryPath,
@@ -3334,11 +3335,11 @@ describe("session checkout status handling", () => {
 });
 
 describe("session workspace descriptors", () => {
-  test("fetch_workspaces_request includes project placement for a GitHub-backed workspace", async () => {
+  test("fetch_workspaces_request keeps the legacy local key and adds shared grouping identity", async () => {
     const messages: unknown[] = [];
     const workspace = {
       workspaceId: "ws-gh",
-      projectId: "remote:github.com/acme/app",
+      projectId: "prj_a",
       cwd: "/repo/app",
       kind: "local_checkout" as const,
       displayName: "app",
@@ -3346,7 +3347,8 @@ describe("session workspace descriptors", () => {
       archivedAt: null,
     };
     const project = {
-      projectId: "remote:github.com/acme/app",
+      projectId: "prj_a",
+      projectKey: "remote:github.com/acme/app",
       rootPath: "/repo/app",
       kind: "git" as const,
       displayName: "acme/app",
@@ -3387,7 +3389,9 @@ describe("session workspace descriptors", () => {
           expect.objectContaining({
             id: "ws-gh",
             project: expect.objectContaining({
-              projectKey: "remote:github.com/acme/app",
+              projectId: "prj_a",
+              projectKey: "prj_a",
+              projectGroupingKey: "remote:github.com/acme/app",
               projectName: "acme/app",
               workspaceName: "app",
               checkout: expect.objectContaining({

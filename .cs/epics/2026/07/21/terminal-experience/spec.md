@@ -29,6 +29,14 @@ Relay 复用同一套正确的 Terminal 基础，但允许公网 RTT、端到端
 
 Terminal agent integration now treats hook installation as a provider-scoped external side effect: Claude Code, Codex, OpenCode, and Pi are independently opt-in, while the legacy global setting remains a compatibility aggregate. Pi uses its documented global extension lifecycle and also appears in the built-in Terminal profiles.
 
+隐藏后重新可见的 Terminal 是**续传**：daemon 记得自己给过每个客户端的最后一个 revision，重新订阅时只把缺口当普通输出发回去；缺口无法完整服务时才回落到权威快照，绝不发残缺区间。因此用户能留住的历史是自己渲染器的容量，不再是回放窗口。
+
+Terminal renderer 跟随所在 workspace 的 RetainedPanel 存活，不再在 workspace 失焦时卸载（这是对上游行为的有意偏离，理由：重建 xterm/WebGL 会在每次切换重跑 fit 阶梯并抖动列数）；活跃 renderer 数量由 deck 的挂载上限约束。隐藏时仍不持有 stream。快照回放必须跳过双宽字符的零宽占位格，否则每个 CJK 字符会把本行剩余内容右移一列；回放窗口就是用户能留住的全部历史，应与 daemon 的实际保有量对齐。
+
+Terminal 尺寸同步的归属已分开：`shouldClaim` 只决定“是否从其他客户端接管 PTY 所有权”，不决定“是否告知 daemon 当前几何”。本 pane 一旦 claim 过尺寸，后续任何被动 refit（mount fit 阶梯、字体度量落定、WebGL renderer 换装、可见性恢复）测到的新尺寸都必须到达 PTY，否则渲染宽度与应用绘制宽度会长期不一致；尚未 claim 的 pane 则保持静默。被动发送经一个 250ms 尾部窗口合并，用户驱动的 resize 不进定时器。
+
+Retained Terminal Tab 只在真实可见时持有 daemon stream。隐藏 Tab 保留 renderer 状态但停止订阅，重显后复用既有 authoritative snapshot/revision recovery；同屏 split pane 中未聚焦但仍可见的 Terminal 继续订阅。
+
 ## 需求变化
 
 - Direct Terminal 从“功能可用”提升为有明确参照对象和性能证据的完整体验。
@@ -40,6 +48,7 @@ Terminal agent integration now treats hook installation as a provider-scoped ext
 
 - Orca Electron-local 与 Orca Web 是不同传输路径；本 Epic 的主要参照是 Orca Web Direct，共享 renderer 代码可以参考，Electron 原生 producer 控制不能原样复制。
 - BySpace 已有权威 headless snapshot、output revision 和恢复路径。新增流控或序号时应扩展这些能力，不建立第二套恢复系统。
+- Retained renderer 生命周期与 stream 所有权分离：保留挂载不能让 `display: none` 的 Terminal 持续解码输出；stream 跟随组合后的可见状态，不跟随 pane focus，重显缺口由权威恢复路径补齐。
 - BySpace 当前 leading-edge 输出与即时输入优于 Orca Web 的 trailing-only 输出批处理和普通输入 debounce；不能为对齐实现而倒退。
 - 独立 Terminal WebSocket 可以隔离传输排队，但不能单独消除浏览器主线程上的大型 agent JSON parse/render；是否采用必须由阶段化基准决定。
 - renderer scheduler 若成为首要方向，只移植能被 profile 证明需要的 chunk、time budget、visibility 与 yield 行为，不整套复制 Orca 的大型状态机。
@@ -52,7 +61,7 @@ Terminal agent integration now treats hook installation as a provider-scoped ext
 ## 质量约束与取舍
 
 - 性能效率 / 时间特性：
-  - 约束：Direct 在同条件对照中不得明显落后于 Orca Web Direct；首轮数据已证明当前 raw Direct 更快，后续 Issue 必须保护该基线，跨机器 CI 预算取得 CI 样本后再固化。
+  - 约束：Direct 在同条件对照中不得明显落后于 Orca Web Direct；首轮数据已证明当前 raw Direct 更快，后续 Issue 必须保护该基线，跨机器 CI 预算取得 CI 样本后再固化。隐藏 retained Terminal 不得持续持有输出 stream 或消耗不可见 xterm 渲染；恢复可见时仍必须补齐最终状态。
   - 取舍：Relay 可以因公网和加密成本降低响应与吞吐，不要求达到 Direct 的数值。
   - 继承：所有 Direct renderer、transport 和 daemon 优化 Issue。
 - 可靠性 / 可恢复性：
@@ -99,12 +108,16 @@ Terminal agent integration now treats hook installation as a provider-scoped ext
 - [x] `.cs/issues/2026/07/21/closed-terminal-windows-bracketed-paste-fallback/index.md`：Windows 多行文本不依赖 ConPTY 是否转发 DECSET 2004；生成的图片路径始终强制 framing。
 - [x] `.cs/issues/2026/07/21/closed-pi-terminal-agents.md`：Terminal hooks 使用 provider 独立开关；Pi 通过全局 extension 上报 activity，并进入默认 Terminal profiles。
 - [x] `.cs/issues/2026/07/22/closed-terminal-presentation-defaults.md`：Terminal/编辑器呈现改为极简。用户 headed 验收通过后经四轮减法收敛为：字体全用各平台系统默认（UI=system-ui、代码/终端=ui-monospace 领头栈），字号仅「界面」+「代码」两项、代码/diff/终端统一 14；语法高亮固定 GitHub（自带亮/暗）；主题仅保留 浅色/深色/跟随系统（删 zinc/midnight/claude/ghostty 变体）。字体族、终端专属字号、语法主题、深色变体的自定义 UI 全部移除。
-- [ ] `.cs/issues/006-o-terminal-retained-panel-layout.md`：修复 retained Terminal 恢复可见时首次 fit 落在零尺寸布局窗口，导致字符横向拉伸或右侧空白直至点击/输入的问题。
+- [x] `.cs/issues/006-x-terminal-retained-panel-layout.md`：切换回 Terminal 后右侧留白。真实根因是被动 refit（`shouldClaim: false`）只更新本地测量不发给 daemon，xterm 宽到 112 列而 PTY 停在 106 列；已改为“已 claim 就必须同步”+ attach 补发 measured + 250ms 合并，用户 dev server 验收通过。
+- [x] `.cs/issues/014-x-terminal-restore-resume-from-revision.md`：重新订阅时只补发客户端错过的那段输出，不再重置渲染器，“切回只剩最近 N 行”的截断随之消失（实测 91ms、1500 行全保留）。
+- [x] `.cs/issues/013-x-terminal-emulator-remount-on-workspace-switch.md`：取消了上游在 workspace 失焦时卸载 Terminal emulator 的两道渲染门控，切换不再重建 xterm/WebGL、不再重跑 fit 阶梯；顺带修掉被它掩盖的宽字符快照回放缺陷与全局滚动锁竞态，并把回放窗口对齐到 daemon 实际保有的 1000 行。
+- [ ] `.cs/issues/010-x-windows-local-web-interaction-latency.md`：正式版 Windows 日志确认隐藏 Terminal 之外还有 Git 后台任务风暴和 Provider runtime 冷恢复两条慢路径；Terminal stream 已由 PR #12 修复，Git 与 Timeline slice 仍在实施。
 
 ### 剩余阻碍
 
 - 已关闭 snapshot restore、Windows ConPTY mode 缺失兜底和浏览器图片上传三个输入语义边界；用户已在 macOS Chrome + PixPin + Direct headed 验收同一事件同时含文本 path 与图片时统一走 daemon upload；仍等待真实 Windows 浏览器 + ConPTY + Pi CLI 验收多行文本、图片粘贴和 Alt+V。
 - headed 主观渲染差距仍未分解；跨机器绝对 CI gate 也还没有 CI 样本。
+- 上游在 workspace 失焦时卸载整个 Terminal emulator（`terminal-pane.tsx` 的 `isWorkspaceFocused ? <TerminalEmulator/> : <View/>`），每次切回都重建 xterm/WebGL、重跑 fit 阶梯并重新订阅；尺寸漂移已被上述不变量兵束，但切换成本本身未解决。
 
 ## 暂不推进范围
 
@@ -118,6 +131,7 @@ Terminal agent integration now treats hook installation as a provider-scoped ext
 - raw Direct 性能不落后已经确认；文本 paste、图片 clipboard 与 PixPin 双格式事件的已知缺口均有自动化覆盖，用户已在 macOS Chrome + PixPin + Direct headed 验收通过；仍待真实 Windows + ConPTY + Pi CLI 验收，视觉呈现仍待 headed A/B。
 - 默认字号目前复用全局 code font size；是否需要 Terminal 专属字号，要由 A/B 收益与设置复杂度共同决定。
 - 独立 Terminal transport 和 renderer scheduler 只有在新的真实负载证据出现时才升级为实现方向。
+- Windows Local Direct 正式版日志已建立修复前基线：Git 后台命令风暴可在无 Agent/Terminal 活动时造成 2.75s event-loop stall，Provider runtime 冷恢复可令 Timeline 等待 3.6–10.95s；两条路径分别验证后才能关闭 Issue 010。
 
 ## 关闭条件
 

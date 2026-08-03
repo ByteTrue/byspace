@@ -191,6 +191,7 @@ export const es: TranslationResources = {
       failedToLoad: "No se pudo cargar el agente",
       reconnecting: "Reconectando...",
       timelineSyncFailed: "No se pudo actualizar el historial del agente. Reintentando…",
+      timelineSyncing: "Sincronizando el progreso más reciente...",
       archivingTitle: "Agente de archivo...",
       archivingSubtitle: "Espere mientras archivamos este agente.",
     },
@@ -337,6 +338,12 @@ export const es: TranslationResources = {
     },
     row: {
       importing: "Importador...",
+    },
+    manual: {
+      sectionTitle: "Importar por ID de sesión",
+      providerPlaceholder: "Seleccionar proveedor",
+      idPlaceholder: "ID de sesión o hilo",
+      submit: "Importar",
     },
   },
   workspace: {
@@ -759,6 +766,8 @@ export const es: TranslationResources = {
         closeChangesTab: "Cerrar la pestaña Cambios",
         binaryFile: "archivo binario",
         tooLarge: "La diferencia es demasiado grande para mostrarse",
+        previewTooLargeTitle: "Este diff es demasiado grande para previsualizarlo",
+        previewTooLargeDescription: "Reduce la comparación para previsualizarla aquí",
         unified: "Diferencia unificada",
         split: "Diferencia de lado a lado",
         switchToUnified: "Cambiar a diferencia unificada",
@@ -1573,6 +1582,7 @@ export const es: TranslationResources = {
       help: {
         openProject: "Abrir proyecto",
         newWorkspace: "Nuevo espacio de trabajo",
+        switchProject: "Cambiar proyecto",
         newWorktree: "Nuevo árbol de trabajo",
         archiveWorkspace: "Archivar espacio de trabajo",
         newTab: "Nueva pestaña",

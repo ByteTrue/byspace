@@ -25,4 +25,4 @@ Either way, **you install the underlying CLI**. BySpace runs it.
 
 - [Supported providers](/docs/supported-providers), the full list with install links.
 - [Custom providers](/docs/custom-providers), add your own provider, point an existing one at a different endpoint, run multiple profiles, or override the binary in `~/.byspace/config.json`.
-- [byspace.pages.dev/agents](/agents), per-agent landing page for each supported provider.
+- [app.byspace.zijieapi.de5.net/agents](/agents), per-agent landing page for each supported provider.

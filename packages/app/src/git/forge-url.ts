@@ -29,6 +29,7 @@ export interface ForgeBranchTreeUrlInput {
 
 interface ForgeWebLocation {
   host: string;
+  port?: string;
   repo: string;
 }
 
@@ -58,12 +59,20 @@ function resolveForgeWebLocation(
   if (!location || !isValidRepoPath(location.path)) {
     return null;
   }
-  const cloudHosts = getForgeDefinition(forge)?.cloudHosts;
-  const webHost =
-    cloudHosts && cloudHosts.length > 0 && cloudHosts.map(normalizeHost).includes(location.host)
-      ? normalizeHost(cloudHosts[0])
-      : location.host;
-  return { host: webHost, repo: location.path };
+  const cloudHosts = (getForgeDefinition(forge)?.cloudHosts ?? []).map(normalizeHost);
+  const isCloudHost = cloudHosts.includes(location.host);
+  return {
+    host: isCloudHost ? cloudHosts[0] : location.host,
+    port:
+      !isCloudHost && (location.transport === "http" || location.transport === "https")
+        ? location.port
+        : undefined,
+    repo: location.path,
+  };
+}
+
+function forgeAuthority(location: ForgeWebLocation): string {
+  return location.port ? `${location.host}:${location.port}` : location.host;
 }
 
 function encodeBranch(branch: string): string {
@@ -102,7 +111,7 @@ export function buildForgeBranchTreeUrl(
   if (!grammar || !location || !branch || branch === "HEAD") {
     return null;
   }
-  return `https://${location.host}/${location.repo}${grammar.treeInfix}${encodeBranch(branch)}`;
+  return `https://${forgeAuthority(location)}/${location.repo}${grammar.treeInfix}${encodeBranch(branch)}`;
 }
 
 export function buildForgeBlobUrl(forge: string, input: ForgeBlobUrlInput): string | null {
@@ -114,7 +123,7 @@ export function buildForgeBlobUrl(forge: string, input: ForgeBlobUrlInput): stri
     return null;
   }
   const encodedPath = filePath.split("/").map(encodeURIComponent).join("/");
-  let url = `https://${location.host}/${location.repo}${grammar.blobInfix}${encodeBranch(branch)}/${encodedPath}`;
+  let url = `https://${forgeAuthority(location)}/${location.repo}${grammar.blobInfix}${encodeBranch(branch)}/${encodedPath}`;
   if (input.lineStart && input.lineStart > 0) {
     url += grammar.lineAnchor(input.lineStart, input.lineEnd);
   }

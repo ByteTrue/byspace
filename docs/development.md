@@ -153,11 +153,17 @@ commands use the same non-login Bash behavior on macOS/Linux, but preserve their
 existing `cmd.exe /c` string semantics on Windows. Service scripts are separate:
 they launch in a terminal and receive the service environment described below.
 
+A setup entry intended for every platform must not rely on inline `VAR=value`,
+POSIX `$VAR` expansion, `cp`, or `./script.sh`; PowerShell interprets those
+strings differently. Put environment-sensitive setup in a Node script that
+reads `process.env`, as the repository's `scripts/seed-worktree-dev-state.mjs`
+does for metadata seeding and optional `.env` copying.
+
 ```json
 {
   "worktree": {
-    "setup": "npm ci\ncp \"$BYSPACE_SOURCE_CHECKOUT_PATH/.env\" .env\nnpm run db:migrate",
-    "teardown": "npm run db:drop || true"
+    "setup": ["npm ci", "node ./scripts/setup-worktree.mjs"],
+    "teardown": "node ./scripts/teardown-worktree.mjs"
   }
 }
 ```
@@ -225,7 +231,7 @@ Use the named root build targets instead of remembering workspace dependency cha
 
 ```bash
 npm run build:client       # protocol -> client
-npm run build:server-deps  # highlight -> relay -> protocol -> client
+npm run build:server-deps  # (highlight || relay) -> protocol -> client
 npm run build:app-deps     # highlight -> protocol -> client
 ```
 

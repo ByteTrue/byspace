@@ -242,7 +242,13 @@ function ProjectSettingsBody({
             projectName={project.projectName}
             projectKey={project.projectKey}
           />
-          <ProjectNameEditor project={project} client={client} />
+          <ProjectNameEditor
+            key={`${selectedHost.serverId}:${selectedHost.projectId}`}
+            projectId={selectedHost.projectId ?? ""}
+            projectName={selectedHost.projectName ?? project.projectName}
+            projectCustomName={selectedHost.projectCustomName ?? null}
+            client={client}
+          />
         </View>
         <HostContext hosts={hosts} selectedHost={selectedHost} onSelectHost={onSelectHost} />
       </View>
@@ -790,19 +796,29 @@ function ResolveSpinnerColor(): string {
 }
 
 interface ProjectNameEditorProps {
-  project: ProjectSummary;
+  projectId: string;
+  projectName: string;
+  projectCustomName: string | null;
   client: DaemonClient;
 }
 
-function ProjectNameEditor({ project, client }: ProjectNameEditorProps) {
+function ProjectNameEditor({
+  projectId,
+  projectName,
+  projectCustomName,
+  client,
+}: ProjectNameEditorProps) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const toast = useToast();
   const [isEditing, setIsEditing] = useState(false);
-  const [value, setValue] = useState(project.projectCustomName ?? "");
+  const [value, setValue] = useState(projectCustomName ?? "");
 
   const renameMutation = useMutation({
-    mutationFn: (customName: string | null) => client.renameProject(project.projectKey, customName),
+    mutationFn: (customName: string | null) => {
+      if (!projectId) throw new Error("Project is not available on this host");
+      return client.renameProject(projectId, customName);
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["projects"] });
       setIsEditing(false);
@@ -816,24 +832,24 @@ function ProjectNameEditor({ project, client }: ProjectNameEditorProps) {
   });
 
   const handleStartEdit = useCallback(() => {
-    setValue(project.projectCustomName ?? "");
+    setValue(projectCustomName ?? "");
     setIsEditing(true);
-  }, [project.projectCustomName]);
+  }, [projectCustomName]);
 
   const handleCancel = useCallback(() => {
     setIsEditing(false);
-    setValue(project.projectCustomName ?? "");
-  }, [project.projectCustomName]);
+    setValue(projectCustomName ?? "");
+  }, [projectCustomName]);
 
   const handleSave = useCallback(() => {
     const trimmed = value.trim();
     const next = trimmed.length === 0 ? null : trimmed;
-    if (next === (project.projectCustomName ?? null)) {
+    if (next === (projectCustomName ?? null)) {
       setIsEditing(false);
       return;
     }
     renameMutation.mutate(next);
-  }, [value, project.projectCustomName, renameMutation]);
+  }, [value, projectCustomName, renameMutation]);
 
   const handleReset = useCallback(() => {
     renameMutation.mutate(null);
@@ -843,7 +859,7 @@ function ProjectNameEditor({ project, client }: ProjectNameEditorProps) {
     return (
       <View style={styles.nameEditorRow}>
         <Text style={styles.projectTitle} numberOfLines={1}>
-          {project.projectName}
+          {projectName}
         </Text>
         <Pressable
           testID="project-name-edit-button"
@@ -854,7 +870,7 @@ function ProjectNameEditor({ project, client }: ProjectNameEditorProps) {
         >
           <Pencil size={ICON_SIZE} color={styles.iconColor.color} />
         </Pressable>
-        {project.projectCustomName ? (
+        {projectCustomName ? (
           <Pressable
             testID="project-name-reset-button"
             accessibilityLabel={t("settings.project.rename.resetLabel")}
@@ -877,7 +893,7 @@ function ProjectNameEditor({ project, client }: ProjectNameEditorProps) {
         accessibilityLabel={t("settings.project.rename.projectNameLabel")}
         value={value}
         onChangeText={setValue}
-        placeholder={project.projectName}
+        placeholder={projectName}
         placeholderTextColor={styles.placeholderColor.color}
         autoFocus
         style={styles.nameEditorInput}

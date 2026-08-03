@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { describe, expect, test } from "vitest";
 import {
+  ProjectPlacementPayloadSchema,
   RecentProviderSessionDescriptorPayloadSchema,
   SessionInboundMessageSchema,
   SessionOutboundMessageSchema,
@@ -8,6 +9,41 @@ import {
   WorkspaceDescriptorPayloadSchema,
   WorkspaceScriptPayloadSchema,
 } from "./messages.js";
+
+describe("project placement compatibility", () => {
+  const placement = {
+    projectKey: "prj_legacy",
+    projectName: "repo",
+    checkout: {
+      cwd: "/repo",
+      isGit: false as const,
+      currentBranch: null,
+      remoteUrl: null,
+      worktreeRoot: null,
+      isBySpaceOwnedWorktree: false,
+      mainRepoRoot: null,
+    },
+  };
+
+  test("accepts old placements without a local project id", () => {
+    expect(ProjectPlacementPayloadSchema.parse(placement)).not.toHaveProperty("projectId");
+  });
+
+  test("preserves legacy host-local identity while adding shared grouping identity", () => {
+    expect(
+      ProjectPlacementPayloadSchema.parse({
+        ...placement,
+        projectId: "prj_a",
+        projectKey: "prj_a",
+        projectGroupingKey: "remote:https://example.com/acme/repo",
+      }),
+    ).toMatchObject({
+      projectId: "prj_a",
+      projectKey: "prj_a",
+      projectGroupingKey: "remote:https://example.com/acme/repo",
+    });
+  });
+});
 
 describe("workspace message schemas", () => {
   test("parses fetch_workspaces_request", () => {

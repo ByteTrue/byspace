@@ -35,6 +35,7 @@ it("commits workspace and project-parent state with filtered removals", () => {
   const replica = new WorkspaceDirectoryReplica(serverId);
   const empty = normalizeEmptyProjectDescriptor({
     projectId: "empty",
+    projectKey: "remote:https://github.com/acme/empty",
     projectDisplayName: "Empty",
     projectRootPath: "/repo/empty",
     projectKind: "git",
@@ -46,6 +47,7 @@ it("commits workspace and project-parent state with filtered removals", () => {
         ["filtered", normalizeWorkspaceDescriptor(workspace("filtered", "filtered-project"))],
       ]),
       emptyProjects: new Map([[empty.projectId, empty]]),
+      projects: new Map(),
     },
     [{ kind: "remove", id: "filtered", removedProjectId: "filtered-project" }],
   );
@@ -53,5 +55,12 @@ it("commits workspace and project-parent state with filtered removals", () => {
   const session = useSessionStore.getState().sessions[serverId];
   expect(Array.from(session?.workspaces.keys() ?? [])).toEqual(["kept"]);
   expect(Array.from(session?.emptyProjects.keys() ?? [])).toEqual(["empty"]);
+  expect(Array.from(session?.projects.keys() ?? [])).toEqual(["project", "empty"]);
+  expect(session?.projects.get("project")).toMatchObject({
+    projectId: "project",
+    projectRootPath: "/repo/project",
+    projectKey: null,
+  });
+  expect(session?.projects.get("empty")?.projectKey).toBe("remote:https://github.com/acme/empty");
   store.clearSession(serverId);
 });

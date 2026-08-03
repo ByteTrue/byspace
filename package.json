@@ -1,6 +1,6 @@
 {
   "name": "byspace",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "private": true,
   "description": "BySpace: voice-controlled development environment for local AI coding agents",
   "keywords": [
@@ -10,7 +10,7 @@
     "voice",
     "voice-assistant"
   ],
-  "homepage": "https://byspace.pages.dev",
+  "homepage": "https://app.byspace.zijieapi.de5.net",
   "license": "AGPL-3.0-or-later",
   "author": {
     "name": "ByteTrue"
@@ -44,9 +44,9 @@
     "build:relay:clean": "npm run build:clean --workspace=@bytetrue/byspace-relay",
     "build:protocol": "npm run build --workspace=@bytetrue/byspace-protocol",
     "build:protocol:clean": "npm run build:clean --workspace=@bytetrue/byspace-protocol",
-    "build:client": "npm run build:protocol && npm run build --workspace=@bytetrue/byspace-client",
+    "build:client": "npm run build --workspace=@bytetrue/byspace-client",
     "build:client:clean": "npm run build:protocol:clean && npm run build:clean --workspace=@bytetrue/byspace-client",
-    "build:server-deps": "npm run build:highlight && npm run build:relay && npm run build:client",
+    "build:server-deps": "concurrently --kill-others-on-fail --names highlight,relay --prefix-colors yellow,blue \"npm run build:highlight\" \"npm run build:relay\" && npm run build:client",
     "build:server-deps:clean": "npm run build:highlight:clean && npm run build:relay:clean && npm run build:client:clean",
     "build:server": "npm run build:server-deps && npm run build --workspace=@bytetrue/byspace-server && npm run build --workspace=@bytetrue/byspace",
     "build:server:clean": "npm run build:server-deps:clean && npm run build:clean --workspace=@bytetrue/byspace-server && npm run build:clean --workspace=@bytetrue/byspace",

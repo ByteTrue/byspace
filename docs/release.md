@@ -7,16 +7,16 @@ Related process docs:
 - `docs/release-engineering.md` — incident-derived controls and proof ladder.
 - `docs/upstream-sync.md` — release-level delta synchronization workflow.
 
-| Channel | npm dist-tag | Web                              | Relay                                               |
-| ------- | ------------ | -------------------------------- | --------------------------------------------------- |
-| Stable  | `latest`     | `https://byspace.pages.dev`      | `wss://byspace-relay.bytetrue.workers.dev:443`      |
-| Beta    | `beta`       | `https://byspace-beta.pages.dev` | `wss://byspace-relay-beta.bytetrue.workers.dev:443` |
+| Channel | npm dist-tag | Web                                         | Relay                                           |
+| ------- | ------------ | ------------------------------------------- | ----------------------------------------------- |
+| Stable  | `latest`     | `https://app.byspace.zijieapi.de5.net`      | `wss://relay.byspace.zijieapi.de5.net:443`      |
+| Beta    | `beta`       | `https://app-beta.byspace.zijieapi.de5.net` | `wss://relay-beta.byspace.zijieapi.de5.net:443` |
 
 Electron, native iOS/Android, app-store builds, Browser automation, and a marketing website are not release surfaces.
 
 ## Source baseline
 
-The currently integrated upstream baseline is `v0.2.3`, commit `43cf858c3760679ec9be805ba8b903cdf20f7103`, tree `54f51bd995bccf77d77ea3e33df4c39d37c033b2`. The default branch keeps BySpace-owned ancestry; README and the root commit retain public source attribution.
+The currently integrated upstream baseline is `v0.2.5`, commit `6fc491e6220fba6543bbbe4bf1b1f58cfe59228b`, tree `99ab03dfde2a54fa6c18749df0324250b5dfe4e6`. The default branch keeps BySpace-owned ancestry; README and the root commit retain public source attribution.
 
 Future upstream updates port the aggregate delta between this baseline and an approved newer stable release onto the current BySpace `main`. They do not replace the current tree, replay upstream commits, repeat identity/client-surface work, or rewrite public history. Follow `docs/upstream-sync.md`.
 
@@ -31,6 +31,20 @@ Future upstream updates port the aggregate delta between this baseline and an ap
 - Successful `Publish npm` is the sole trigger for the channel-specific Pages and Relay workflows.
 - Deployment workflows accept only successful same-repository tag runs, peel annotated tags, and deploy the immutable tagged SHA. They do not require `main` to remain frozen after npm publication.
 - Prerelease daemons default to the Beta Web/Relay and self-update from npm `beta`; stable daemons default to Stable and self-update from npm `latest`. Custom endpoints and environment overrides remain supported.
+
+## Version classification
+
+Classify from the product, not from the diff. Commit count, changed-line count, and new RPC count are not inputs.
+
+- **patch** — the user would say "good, that was broken", or would not notice at all: fixes, refactors, performance, docs, internal rework, and upstream syncs that carry no new capability.
+- **minor** — the user would say "there is something new": any capability they can see, reach, or configure. A new `server_info.features.*` gate always means minor, because a client had to grow a capability check for it. Changing a product default users depend on, such as a hosted endpoint, is also minor.
+- **major** — reserved, and never selected by an agent. It means the upgrade contract broke: the user must migrate state, edit config, or change how they invoke BySpace. Size of work is irrelevant; an invisible internal rewrite is not major, and a five-line config rename is.
+
+While the version is `0.x`, major stays parked and minor carries everything user-visible. Minor numbers therefore grow quickly, which is expected and is not a reason to downgrade a release to patch.
+
+Precedent: `0.2.1` shipped browser file editing as a patch. Under this rule that was a minor.
+
+A future `1.0` would freeze five contracts: the WebSocket protocol, the `config.json` shape, the CLI surface, on-disk `$BYSPACE_HOME` state, and the hosted endpoints. Two are already held to that standard, because the protocol never breaks parsing and the data model has no migrations. Do not propose `1.0` while BySpace still absorbs deltas from a pre-`1.0` upstream, or while a release can still retire a shipped endpoint without compatibility work.
 
 ## Required checks
 
@@ -57,7 +71,7 @@ npm run release:check
 6. Create and push annotated tag `vX.Y.Z-beta.N` once. Do not move it.
 7. `Publish npm` publishes npm dist-tag `beta` and creates a GitHub prerelease.
 8. Successful publication deploys `byspace-beta` Pages and `byspace-relay-beta` Worker from the tagged SHA.
-9. Verify npm `beta`, `https://byspace-beta.pages.dev`, the Beta Worker deployment, a real Beta daemon pairing URL, and relay connection. Confirm npm `latest` and Stable deployment IDs did not move.
+9. Verify npm `beta`, `https://app-beta.byspace.zijieapi.de5.net`, the Beta Worker deployment, a real Beta daemon pairing URL, and relay connection. Confirm npm `latest` and Stable deployment IDs did not move.
 
 ## Stable release or beta promotion
 

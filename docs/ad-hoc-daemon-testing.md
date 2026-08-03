@@ -34,8 +34,8 @@ const daemon = await createBySpaceDaemon(
     agentClients: {},
     agentStoragePath: path.join(byspaceHome, "agents"),
     relayEnabled: false,
-    relayEndpoint: "byspace-relay.bytetrue.workers.dev:443",
-    appBaseUrl: "https://byspace.pages.dev",
+    relayEndpoint: "relay.byspace.zijieapi.de5.net:443",
+    appBaseUrl: "https://app.byspace.zijieapi.de5.net",
     // Add custom config here, e.g.:
     // providerOverrides: { ... },
   },

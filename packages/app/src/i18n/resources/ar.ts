@@ -191,6 +191,7 @@ export const ar: TranslationResources = {
       failedToLoad: "فشل تحميل الوكيل",
       reconnecting: "جارٍ إعادة الاتصال...",
       timelineSyncFailed: "تعذر تحديث سجل الوكيل. جارٍ إعادة المحاولة…",
+      timelineSyncing: "جارٍ مزامنة أحدث تقدم...",
       archivingTitle: "وكيل الارشيف...",
       archivingSubtitle: "الرجاء الانتظار بينما نقوم بأرشفة هذا الوكيل.",
     },
@@ -334,6 +335,12 @@ export const ar: TranslationResources = {
     },
     row: {
       importing: "جارٍ الاستيراد...",
+    },
+    manual: {
+      sectionTitle: "الاستيراد باستخدام معرف الجلسة",
+      providerPlaceholder: "اختر المزوّد",
+      idPlaceholder: "معرف الجلسة أو الموضوع",
+      submit: "استيراد",
     },
   },
   workspace: {
@@ -728,6 +735,8 @@ export const ar: TranslationResources = {
         closeChangesTab: "إغلاق علامة تبويب التغييرات",
         binaryFile: "ملف ثنائي",
         tooLarge: "الفرق كبير جدًا بحيث لا يمكن عرضه",
+        previewTooLargeTitle: "هذا الفرق كبير جدًا بحيث لا يمكن معاينته",
+        previewTooLargeDescription: "ضيّق نطاق المقارنة لمعاينتها هنا",
         unified: "الفرق الموحدة",
         split: "فرق جنبًا إلى جنب",
         switchToUnified: "التبديل إلى الفرق الموحد",
@@ -1537,6 +1546,7 @@ export const ar: TranslationResources = {
       help: {
         openProject: "مشروع مفتوح",
         newWorkspace: "مساحة عمل جديدة",
+        switchProject: "تبديل المشروع",
         newWorktree: "شجرة عمل جديدة",
         archiveWorkspace: "أرشفة مساحة العمل",
         newTab: "علامة تبويب جديدة",

@@ -191,6 +191,7 @@ export const zhCN: TranslationResources = {
       failedToLoad: "加载 Agent 失败",
       reconnecting: "正在重连...",
       timelineSyncFailed: "无法刷新代理历史记录。正在重试…",
+      timelineSyncing: "正在同步最新进度...",
       archivingTitle: "正在归档 Agent...",
       archivingSubtitle: "请稍候，我们正在归档这个 Agent。",
     },
@@ -334,6 +335,12 @@ export const zhCN: TranslationResources = {
     },
     row: {
       importing: "正在导入...",
+    },
+    manual: {
+      sectionTitle: "按会话 ID 导入",
+      providerPlaceholder: "选择 Provider",
+      idPlaceholder: "会话或线程 ID",
+      submit: "导入",
     },
   },
   workspace: {
@@ -720,6 +727,8 @@ export const zhCN: TranslationResources = {
         closeChangesTab: "关闭“更改”标签页",
         binaryFile: "二进制文件",
         tooLarge: "Diff 过大，无法显示",
+        previewTooLargeTitle: "此 diff 过大，无法预览",
+        previewTooLargeDescription: "缩小比较范围即可在此预览",
         unified: "Unified diff",
         split: "Side-by-side diff",
         switchToUnified: "切换到统一差异视图",
@@ -1522,6 +1531,7 @@ export const zhCN: TranslationResources = {
       help: {
         openProject: "打开项目",
         newWorkspace: "新建 workspace",
+        switchProject: "切换项目",
         newWorktree: "新建 worktree",
         archiveWorkspace: "归档工作区",
         newTab: "新建标签",

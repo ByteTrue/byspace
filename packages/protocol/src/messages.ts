@@ -1073,6 +1073,11 @@ export const FetchWorkspacesRequestMessageSchema = z.object({
     .optional(),
 });
 
+export const ProjectListRequestMessageSchema = z.object({
+  type: z.literal("project.list.request"),
+  requestId: z.string(),
+});
+
 export const FetchAgentHistoryRequestMessageSchema = z.object({
   type: z.literal("fetch_agent_history_request"),
   requestId: z.string(),
@@ -2347,6 +2352,12 @@ export const SubscribeTerminalRequestSchema = z.object({
   restore: z
     .object({
       mode: z.enum(["live", "visible-snapshot", "full-snapshot"]),
+      // "I kept my renderer contents; send me what I missed if you still have
+      // it." The daemon falls back to `mode` when it cannot, and a daemon that
+      // predates this ignores the field and restores the way it always did —
+      // which is why this is a sibling flag rather than a new `mode` value that
+      // an older daemon could not parse.
+      resume: z.boolean().optional(),
       scrollbackLines: z.number().int().nonnegative().optional(),
       size: z
         .object({
@@ -2404,6 +2415,7 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   FetchAgentHistoryRequestMessageSchema,
   FetchRecentProviderSessionsRequestMessageSchema,
   FetchWorkspacesRequestMessageSchema,
+  ProjectListRequestMessageSchema,
   FetchAgentRequestMessageSchema,
   DeleteAgentRequestMessageSchema,
   ArchiveAgentRequestMessageSchema,
@@ -2754,6 +2766,8 @@ export const ServerInfoStatusPayloadSchema = z
         providerUsageList: z.boolean().optional(),
         // COMPAT(agentDetach): added in v0.1.98, remove gate after 2026-12-19 once daemon floor >= v0.1.98.
         agentDetach: z.boolean().optional(),
+        // COMPAT(agentThinkingUpdate): added in v0.2.5, remove gate after 2027-01-31 once daemon floor >= v0.2.5.
+        agentThinkingUpdate: z.boolean().optional(),
         // COMPAT(daemonDiagnostics): added in v0.1.100, remove gate after 2026-12-25 once daemon floor >= v0.1.100.
         daemonDiagnostics: z.boolean().optional(),
         // COMPAT(daemonSelfUpdate): added in v0.1.93, remove gate after 2026-12-13.
@@ -2772,6 +2786,8 @@ export const ServerInfoStatusPayloadSchema = z
         workspaceGithubRepositorySearch: z.boolean().optional(),
         // COMPAT(projectCreateDirectory): added in v0.1.108, remove gate after 2027-01-15.
         projectCreateDirectory: z.boolean().optional(),
+        // COMPAT(projectList): added in v0.2.5, remove gate after 2027-01-31.
+        projectList: z.boolean().optional(),
         // COMPAT(commitsList): added in v0.1.110, remove gate after 2027-01-16.
         commitsList: z.boolean().optional(),
         // COMPAT(commitBaseClassification): added in v0.2.0, remove gate after 2027-01-23.
@@ -2960,7 +2976,14 @@ export const ProjectCheckoutLitePayloadSchema = z.union([
 ]);
 
 export const ProjectPlacementPayloadSchema = z.object({
+  // COMPAT(projectPlacementProjectId): added in v0.2.5; review legacy fallback after 2027-01-31.
+  projectId: z.string().optional(),
+  // `projectKey` retains its legacy host-local identity semantics so older clients
+  // keep resolving workspaces and mutations against the daemon's project ID.
   projectKey: z.string(),
+  // COMPAT(projectGroupingKey): added in v0.2.5; remove the projectKey fallback after 2027-01-31.
+  // Shared cross-host identity is additive; old clients ignore it.
+  projectGroupingKey: z.string().optional(),
   projectName: z.string(),
   workspaceName: z.string().nullable().optional(),
   checkout: ProjectCheckoutLitePayloadSchema,
@@ -3190,6 +3213,11 @@ export const FetchRecentProviderSessionsResponseMessageSchema = z.object({
 // workspace is archived.
 export const WorkspaceProjectDescriptorPayloadSchema = z.object({
   projectId: z.string(),
+  // COMPAT(projectKey): added in v0.2.5, remove optional after 2027-01-31.
+  // Keep the legacy field host-local; grouping identity is separately additive.
+  projectKey: z.string().optional(),
+  // COMPAT(projectGroupingKey): added in v0.2.5; remove the projectKey fallback after 2027-01-31.
+  projectGroupingKey: z.string().optional(),
   projectDisplayName: z.string(),
   projectCustomName: z.string().nullable().optional(),
   projectRootPath: z.string(),
@@ -3236,6 +3264,14 @@ export const WorkspaceUpdateMessageSchema = z.object({
       removedProjectId: z.string().optional(),
     }),
   ]),
+});
+
+export const ProjectListResponseMessageSchema = z.object({
+  type: z.literal("project.list.response"),
+  payload: z.object({
+    requestId: z.string(),
+    projects: z.array(WorkspaceProjectDescriptorPayloadSchema),
+  }),
 });
 
 export const ScriptStatusUpdateMessageSchema = z.object({
@@ -3852,6 +3888,7 @@ const CheckoutStatusCommonSchema = z.object({
   cwd: z.string(),
   error: CheckoutErrorSchema.nullable(),
   requestId: z.string(),
+  commitsVersion: z.string().optional(),
 });
 
 const CheckoutStatusNotGitSchema = CheckoutStatusCommonSchema.extend({
@@ -4046,6 +4083,8 @@ const CheckoutDiffSubscriptionPayloadSchema = z.object({
   cwd: z.string(),
   files: z.array(ParsedDiffFileSchema),
   error: CheckoutErrorSchema.nullable(),
+  // COMPAT(diffTooLarge): added in v0.2.4 on 2026-07-30; remove after 2027-01-30.
+  diffTooLarge: z.boolean().optional(),
 });
 
 export const SubscribeCheckoutDiffResponseSchema = z.object({
@@ -5043,6 +5082,7 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   ArtifactMessageSchema,
   AgentUpdateMessageSchema,
   WorkspaceUpdateMessageSchema,
+  ProjectListResponseMessageSchema,
   ScriptStatusUpdateMessageSchema,
   WorkspaceSetupProgressMessageSchema,
   WorkspaceSetupStatusResponseMessageSchema,
@@ -5220,6 +5260,7 @@ export type WorkspaceDescriptorPayload = z.infer<typeof WorkspaceDescriptorPaylo
 export type WorkspaceProjectDescriptorPayload = z.infer<
   typeof WorkspaceProjectDescriptorPayloadSchema
 >;
+export type ProjectListResponseMessage = z.infer<typeof ProjectListResponseMessageSchema>;
 export type WorkspaceScriptLifecycle = z.infer<typeof WorkspaceScriptLifecycleSchema>;
 export type WorkspaceScriptHealth = z.infer<typeof WorkspaceScriptHealthSchema>;
 export type WorkspaceScriptPayload = z.infer<typeof WorkspaceScriptPayloadSchema>;
@@ -5365,6 +5406,7 @@ export type FetchRecentProviderSessionsRequestMessage = z.infer<
   typeof FetchRecentProviderSessionsRequestMessageSchema
 >;
 export type FetchWorkspacesRequestMessage = z.infer<typeof FetchWorkspacesRequestMessageSchema>;
+export type ProjectListRequestMessage = z.infer<typeof ProjectListRequestMessageSchema>;
 export type FetchAgentRequestMessage = z.infer<typeof FetchAgentRequestMessageSchema>;
 export type AgentForkContextRequestMessage = z.infer<typeof AgentForkContextRequestMessageSchema>;
 export type SendAgentMessageRequest = z.infer<typeof SendAgentMessageRequestSchema>;

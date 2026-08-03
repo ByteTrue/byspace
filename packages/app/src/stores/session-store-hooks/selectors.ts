@@ -5,7 +5,11 @@ import {
   type WorkspaceStructureProject,
 } from "@/projects/workspace-structure";
 import { resolveWorkspaceMapKeyByIdentity } from "@/utils/workspace-identity";
-import type { EmptyProjectDescriptor, WorkspaceDescriptor } from "../session-store";
+import type {
+  EmptyProjectDescriptor,
+  ProjectDescriptor,
+  WorkspaceDescriptor,
+} from "../session-store";
 
 export type { WorkspaceStructure, WorkspaceStructureProject } from "@/projects/workspace-structure";
 
@@ -16,6 +20,7 @@ export interface SessionsSnapshot {
       hasHydratedWorkspaces?: boolean;
       workspaces: Map<string, WorkspaceDescriptor>;
       emptyProjects?: Map<string, EmptyProjectDescriptor>;
+      projects?: Map<string, ProjectDescriptor>;
     }
   >;
 }
@@ -144,19 +149,26 @@ export function selectWorkspaceStructureProjects(
     serverId: string;
     workspaces: Iterable<WorkspaceDescriptor>;
     emptyProjects: Iterable<EmptyProjectDescriptor>;
+    projects: Iterable<ProjectDescriptor>;
   }> = [];
 
   for (const serverId of serverIds) {
     const session = state.sessions[serverId];
     const workspaces = session?.workspaces;
     const emptyProjects = session?.emptyProjects;
-    if ((!workspaces || workspaces.size === 0) && (!emptyProjects || emptyProjects.size === 0)) {
+    const projects = session?.projects;
+    if (
+      (!workspaces || workspaces.size === 0) &&
+      (!emptyProjects || emptyProjects.size === 0) &&
+      (!projects || projects.size === 0)
+    ) {
       continue;
     }
     sessions.push({
       serverId,
       workspaces: workspaces?.values() ?? [],
       emptyProjects: emptyProjects?.values() ?? [],
+      projects: projects?.values() ?? [],
     });
   }
 
@@ -165,6 +177,28 @@ export function selectWorkspaceStructureProjects(
   }
 
   return buildWorkspaceStructureProjects({ sessions });
+}
+
+export function selectProject(
+  state: SessionsSnapshot,
+  serverId: string | null,
+  projectId: string | null,
+): ProjectDescriptor | null {
+  if (!serverId || !projectId) return null;
+  return state.sessions[serverId]?.projects?.get(projectId) ?? null;
+}
+
+export function selectProjectIdForServer(
+  state: SessionsSnapshot,
+  input: { sourceServerId: string; projectId: string; targetServerId: string },
+): string | null {
+  if (input.sourceServerId === input.targetServerId) return input.projectId;
+  const source = selectProject(state, input.sourceServerId, input.projectId);
+  if (!source?.projectKey) return null;
+  for (const project of state.sessions[input.targetServerId]?.projects?.values() ?? []) {
+    if (project.projectKey === source.projectKey) return project.projectId;
+  }
+  return null;
 }
 
 export function selectProjectOrder(state: SidebarOrderSnapshot): string[] {

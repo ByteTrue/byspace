@@ -36,13 +36,19 @@ export async function removeProjectPickerFixture(
   fixture: ProjectPickerFixture,
   knownProjectId: string | null = null,
 ): Promise<void> {
-  let projectId = knownProjectId;
-  if (!projectId) {
+  const listedProject = (await client.listProjects()).projects.find(
+    (project) => project.projectRootPath === fixture.projectPath,
+  );
+  let projectId = listedProject?.projectId ?? knownProjectId;
+  if (!listedProject && !projectId) {
     const lookup = await client.addProject(fixture.projectPath);
     projectId = lookup.project?.projectId ?? null;
     if (!projectId) {
       throw new Error(lookup.error ?? "Could not resolve project picker fixture for cleanup");
     }
+  }
+  if (!projectId) {
+    throw new Error("Could not resolve project picker fixture for cleanup");
   }
   await client.removeProject(projectId);
 }

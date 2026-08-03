@@ -193,6 +193,7 @@ export const fr: TranslationResources = {
       failedToLoad: "Échec du chargement de l'agent",
       reconnecting: "Reconnexion...",
       timelineSyncFailed: "Impossible d’actualiser l’historique de l’agent. Nouvelle tentative…",
+      timelineSyncing: "Synchronisation de la progression récente...",
       archivingTitle: "Agent d'archivage...",
       archivingSubtitle: "Veuillez patienter pendant que nous archivons cet agent.",
     },
@@ -338,6 +339,12 @@ export const fr: TranslationResources = {
     },
     row: {
       importing: "Importation...",
+    },
+    manual: {
+      sectionTitle: "Importer par ID de session",
+      providerPlaceholder: "Sélectionner un fournisseur",
+      idPlaceholder: "ID de session ou de fil",
+      submit: "Importer",
     },
   },
   workspace: {
@@ -758,6 +765,8 @@ export const fr: TranslationResources = {
         closeChangesTab: "Fermer l'onglet Modifications",
         binaryFile: "Fichier binaire",
         tooLarge: "Diff trop grand pour être affiché",
+        previewTooLargeTitle: "Ce diff est trop volumineux pour être prévisualisé",
+        previewTooLargeDescription: "Réduisez la comparaison pour la prévisualiser ici",
         unified: "Différentiel unifié",
         split: "Différent côte à côte",
         switchToUnified: "Passer au diff unifié",
@@ -1572,6 +1581,7 @@ export const fr: TranslationResources = {
       help: {
         openProject: "Projet ouvert",
         newWorkspace: "Nouvel espace de travail",
+        switchProject: "Changer de projet",
         newWorktree: "Nouvel arbre de travail",
         archiveWorkspace: "Archiver l’espace de travail",
         newTab: "Nouvel onglet",

@@ -8,6 +8,7 @@ import { SegmentedControl } from "@/components/ui/segmented-control";
 import { useIsCompactFormFactor, WORKSPACE_SECONDARY_HEADER_HEIGHT } from "@/constants/layout";
 import { isWeb } from "@/constants/platform";
 import { useChangesPreferences } from "@/hooks/use-changes-preferences";
+import { useRetainedPanelActive } from "@/components/retained-panel";
 import { useAppSettings } from "@/hooks/use-settings";
 import { SharedDiffView } from "@/git/diff-pane";
 import { useCommitDiffFiles } from "@/git/use-diff-files";
@@ -23,6 +24,7 @@ function CommitDiffPanel() {
   const { t } = useTranslation();
   const { serverId, workspaceId, target } = usePaneContext();
   const cwd = useWorkspaceDirectory(serverId, workspaceId);
+  const isPanelActive = useRetainedPanelActive();
   const { settings } = useAppSettings();
   const { preferences, updatePreferences } = useChangesPreferences();
   const isCompact = useIsCompactFormFactor();
@@ -32,7 +34,7 @@ function CommitDiffPanel() {
     serverId,
     cwd: cwd ?? "",
     sha: target.sha,
-    enabled: Boolean(cwd),
+    enabled: Boolean(cwd) && isPanelActive,
   });
   const canUseSplitLayout = isWeb && !isCompact;
   const effectiveLayout = canUseSplitLayout ? preferences.layout : "unified";

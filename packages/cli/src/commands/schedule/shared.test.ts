@@ -280,3 +280,19 @@ describe("compileEveryPresetToCron", () => {
     expect(() => compileEveryPresetToCron(value)).toThrow("Invalid duration format");
   });
 });
+
+describe("schedule thinking", () => {
+  test("includes a trimmed thinking option for new-agent runs", () => {
+    expect(
+      parseScheduleCreateInput({
+        prompt: "Continue",
+        every: "5m",
+        provider: "claude",
+        thinking: " high ",
+      }).target,
+    ).toMatchObject({
+      type: "new-agent",
+      config: { provider: "claude", thinkingOptionId: "high" },
+    });
+  });
+});

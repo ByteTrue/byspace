@@ -17,7 +17,6 @@ import { useWorkspaceDirectory, useWorkspaceFields } from "@/stores/session-stor
 
 type ListTerminalsPayload = ListTerminalsResponse["payload"];
 
-const FLEX_FILL_STYLE = { flex: 1 } as const;
 const CENTERED_PADDED_STYLE = {
   flex: 1,
   alignItems: "center",
@@ -95,10 +94,12 @@ function TerminalPanel() {
   }, [isGitCheckout, openFileExplorerForCheckout, serverId, workspaceDirectory]);
   invariant(target.kind === "terminal", "TerminalPanel requires terminal target");
 
-  if (!isWorkspaceFocused) {
-    return <View style={FLEX_FILL_STYLE} />;
-  }
-
+  // An unfocused workspace keeps its Terminal mounted. Replacing it with a placeholder (the
+  // upstream behavior) tore down xterm, its WebGL renderer and the pane's claim state on every
+  // workspace switch, so coming back rebuilt all of it and churned the column count before
+  // settling. Retention is bounded by the deck's mounted-workspace cap, and an unfocused pane
+  // still owns no daemon stream: that follows `isWorkspaceFocused && isPaneVisible` inside the
+  // pane, not this render.
   if (!workspaceDirectory) {
     return (
       <View style={CENTERED_PADDED_STYLE}>

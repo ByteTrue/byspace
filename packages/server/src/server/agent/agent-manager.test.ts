@@ -36,6 +36,7 @@ import type {
   AgentStreamEvent,
   AgentTimelineItem,
   ImportProviderSessionInput,
+  ImportProviderSessionContext,
   ResolveAgentDefaultModeInput,
 } from "./agent-sdk-types.js";
 import type { BySpaceToolCatalog } from "./tools/types.js";
@@ -938,6 +939,10 @@ test("reload leaves a closed durable snapshot when shutdown starts during the sw
     );
     const reload = manager.reloadAgentSession(agentId).catch((error: unknown) => error);
     await client.waitForCloseToStart();
+    const reloadBarrier = manager.waitForAgentClose(agentId);
+    expect(
+      await Promise.race([reloadBarrier.then(() => "resolved"), Promise.resolve("pending")]),
+    ).toBe("pending");
 
     manager.prepareForShutdown();
     const closing = Promise.all(manager.listAgents().map((agent) => manager.closeAgent(agent.id)));
@@ -945,6 +950,7 @@ test("reload leaves a closed durable snapshot when shutdown starts during the sw
 
     await closing;
     expect(await reload).toBeInstanceOf(AgentManagerShuttingDownError);
+    await reloadBarrier;
     await manager.flush();
     await storage.flush();
     expect({
@@ -1777,6 +1783,7 @@ test("createAgent passes daemon launch env through the provider launch context",
     agentId: snapshot.id,
     env: {
       BYSPACE_AGENT_ID: snapshot.id,
+      BYSPACE_AGENT_CWD: workdir,
     },
   });
 });
@@ -2582,6 +2589,7 @@ test("resumeAgentFromPersistence keeps metadata config, applies overrides, and p
     agentId: resumed.id,
     env: {
       BYSPACE_AGENT_ID: resumed.id,
+      BYSPACE_AGENT_CWD: workdir,
     },
   });
 });
@@ -2596,14 +2604,16 @@ test("importProviderSession imports the selected session without listing and pub
   class ImportClient extends TestAgentClient {
     listCalls = 0;
     importInput: unknown = null;
+    importLaunchContext: AgentLaunchContext | undefined;
 
     async listImportableSessions() {
       this.listCalls += 1;
       return [];
     }
 
-    async importSession(input: ImportProviderSessionInput) {
+    async importSession(input: ImportProviderSessionInput, context: ImportProviderSessionContext) {
       this.importInput = input;
+      this.importLaunchContext = context.launchContext;
       return {
         session,
         config: { provider: "codex" as const, cwd: workdir },
@@ -2683,6 +2693,13 @@ test("importProviderSession imports the selected session without listing and pub
 
   expect(client.listCalls).toBe(0);
   expect(client.importInput).toEqual({ providerHandleId: "thread-selected", cwd: workdir });
+  expect(client.importLaunchContext).toEqual({
+    agentId: imported.id,
+    env: {
+      BYSPACE_AGENT_ID: imported.id,
+      BYSPACE_AGENT_CWD: workdir,
+    },
+  });
   expect(imported.lifecycle).toBe("idle");
   expect(imported.historyPrimed).toBe(true);
   expect(manager.getTimeline(imported.id)).toEqual([
@@ -2783,6 +2800,7 @@ test("reloadAgentSession passes daemon launch env through the provider launch co
     agentId: snapshot.id,
     env: {
       BYSPACE_AGENT_ID: snapshot.id,
+      BYSPACE_AGENT_CWD: workdir,
     },
   });
 
@@ -2794,6 +2812,7 @@ test("reloadAgentSession passes daemon launch env through the provider launch co
     agentId: snapshot.id,
     env: {
       BYSPACE_AGENT_ID: snapshot.id,
+      BYSPACE_AGENT_CWD: workdir,
     },
   });
 });
@@ -4839,7 +4858,7 @@ test("replaceAgentRun stays running when a stale old terminal arrives before the
   unsubscribe();
 });
 
-test("applies live autonomous events while no foreground run is active", async () => {
+test("applies live autonomous events and preserves usage omitted from completion", async () => {
   const workdir = mkdtempSync(join(tmpdir(), "agent-manager-live-events-"));
   const storagePath = join(workdir, "agents");
   const storage = new AgentStorage(storagePath, logger);
@@ -4899,6 +4918,16 @@ test("applies live autonomous events while no foreground run is active", async (
     turnId: autonomousTurnId,
   });
   capturedSession!.pushEvent({
+    type: "usage_updated",
+    provider: "codex",
+    usage: {
+      inputTokens: 10,
+      contextWindowMaxTokens: 200_000,
+      contextWindowUsedTokens: 175,
+    },
+    turnId: autonomousTurnId,
+  });
+  capturedSession!.pushEvent({
     type: "timeline",
     provider: "codex",
     item: { type: "assistant_message", text: "AUTONOMOUS_PUMP_MESSAGE" },
@@ -4913,6 +4942,11 @@ test("applies live autonomous events while no foreground run is active", async (
 
   const updated = manager.getAgent(snapshot.id);
   expect(updated?.lifecycle).toBe("idle");
+  expect(updated?.lastUsage).toEqual({
+    inputTokens: 10,
+    contextWindowMaxTokens: 200_000,
+    contextWindowUsedTokens: 175,
+  });
   expect(manager.getTimeline(snapshot.id)).toContainEqual({
     type: "assistant_message",
     text: "AUTONOMOUS_PUMP_MESSAGE",
@@ -7428,6 +7462,86 @@ test("closeAgent persists one final closed snapshot", async () => {
     expect(applySnapshotSpy).toHaveBeenCalledTimes(persistCountBeforeClose + 1);
   } finally {
     applySnapshotSpy.mockRestore();
+    await manager.flush().catch(() => undefined);
+    await storage.flush().catch(() => undefined);
+    rmSync(workdir, { recursive: true, force: true });
+  }
+});
+
+test("failed closed-snapshot persistence does not expose retained timeline reads", async () => {
+  const workdir = mkdtempSync(join(tmpdir(), "agent-manager-retained-persist-failure-"));
+  const storagePath = join(workdir, "agents");
+  const storage = new AgentStorage(storagePath, logger);
+  const agentId = "00000000-0000-4000-8000-000000000224";
+  const manager = new AgentManager({
+    clients: { codex: new TestAgentClient() },
+    registry: storage,
+    logger,
+    idFactory: () => agentId,
+  });
+
+  try {
+    await manager.createAgent({ provider: "codex", cwd: workdir }, undefined, {
+      workspaceId: undefined,
+    });
+    await manager.appendTimelineItem(agentId, {
+      type: "assistant_message",
+      text: "must not leak through a failed close",
+    });
+    await storage.flush();
+    rmSync(storagePath, { recursive: true, force: true });
+    writeFileSync(storagePath, "blocks the storage directory");
+
+    await expect(manager.closeAgent(agentId)).rejects.toBeInstanceOf(Error);
+
+    expect(manager.getAgent(agentId)).toBeNull();
+    expect(manager.hasTimeline(agentId)).toBe(true);
+    expect(manager.hasRetainedTimeline(agentId)).toBe(false);
+    expect(() => manager.fetchTimeline(agentId, { direction: "tail" })).toThrow(
+      `Unknown agent '${agentId}'`,
+    );
+  } finally {
+    await manager.flush().catch(() => undefined);
+    await storage.flush().catch(() => undefined);
+    rmSync(workdir, { recursive: true, force: true });
+  }
+});
+
+test("delete fence rejects a runtime whose registration already started", async () => {
+  const workdir = mkdtempSync(join(tmpdir(), "agent-manager-delete-registration-fence-"));
+  const storage = new AgentStorage(join(workdir, "agents"), logger);
+  const agentId = "00000000-0000-4000-8000-000000000225";
+  const getStarted = deferred<void>();
+  const getAllowed = deferred<void>();
+  const originalGet = storage.get.bind(storage);
+  let holdNextGet = true;
+  vi.spyOn(storage, "get").mockImplementation(async (id) => {
+    if (holdNextGet) {
+      holdNextGet = false;
+      getStarted.resolve();
+      await getAllowed.promise;
+    }
+    return await originalGet(id);
+  });
+  const manager = new AgentManager({
+    clients: { codex: new TestAgentClient() },
+    registry: storage,
+    logger,
+    idFactory: () => agentId,
+  });
+
+  try {
+    const creation = manager.createAgent({ provider: "codex", cwd: workdir }, agentId, {
+      workspaceId: undefined,
+    });
+    await getStarted.promise;
+    manager.beginAgentDelete(agentId);
+    getAllowed.resolve();
+
+    await expect(creation).rejects.toThrow(`Agent is being deleted: ${agentId}`);
+    expect(manager.getAgent(agentId)).toBeNull();
+  } finally {
+    getAllowed.resolve();
     await manager.flush().catch(() => undefined);
     await storage.flush().catch(() => undefined);
     rmSync(workdir, { recursive: true, force: true });

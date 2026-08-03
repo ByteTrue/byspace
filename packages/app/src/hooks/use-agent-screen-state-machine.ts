@@ -24,6 +24,7 @@ export interface AgentScreenAgent {
   features?: readonly AgentFeature[];
   lastError?: string | null;
   projectPlacement?: {
+    projectId?: string;
     projectKey?: string;
     projectName?: string;
     checkout?: {
@@ -80,7 +81,7 @@ export type AgentScreenReadySyncState =
   | { status: "reconnecting" }
   | {
       status: "catching_up";
-      ui: "overlay" | "silent";
+      ui: "overlay" | "indicator" | "silent";
     }
   | { status: "sync_error" };
 
@@ -153,9 +154,9 @@ function resolveCatchingUpUi(args: {
   isVisibilityCatchUpPending: boolean;
   hasHydratedHistoryBefore: boolean;
   hadInitialSyncFailure: boolean;
-}): "overlay" | "silent" {
+}): "overlay" | "indicator" | "silent" {
   if (args.hasOptimisticCreateContinuity) return "silent";
-  if (args.hasHydratedHistoryBefore) return "silent";
+  if (args.hasHydratedHistoryBefore) return "indicator";
   if (args.isVisibilityCatchUpPending) return "overlay";
   if (args.hadInitialSyncFailure) return "silent";
   return "overlay";

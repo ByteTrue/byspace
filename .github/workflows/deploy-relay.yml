@@ -47,11 +47,11 @@ jobs:
           version="$(node -p 'require("./package.json").version')"
           test "$RELEASE_TAG" = "v$version"
           if [[ "$version" == *-* ]]; then
-            echo "RELAY_WORKER=byspace-relay-beta" >> "$GITHUB_ENV"
+            echo "RELAY_ENV_ARGS=--env beta" >> "$GITHUB_ENV"
             echo "RELEASE_CHANNEL=beta" >> "$GITHUB_ENV"
             echo "NPM_DIST_TAG=beta" >> "$GITHUB_ENV"
           else
-            echo "RELAY_WORKER=byspace-relay" >> "$GITHUB_ENV"
+            echo "RELAY_ENV_ARGS=" >> "$GITHUB_ENV"
             echo "RELEASE_CHANNEL=stable" >> "$GITHUB_ENV"
             echo "NPM_DIST_TAG=latest" >> "$GITHUB_ENV"
           fi
@@ -74,10 +74,13 @@ jobs:
           version="$(node -p 'require("./package.json").version')"
           test "$(npm view "@bytetrue/byspace@$NPM_DIST_TAG" version)" = "$version"
 
+      # The Worker name and its custom domain both come from wrangler.toml, so the channel
+      # only selects the environment. $RELAY_ENV_ARGS is intentionally unquoted: it is
+      # either "--env beta" or empty.
       - name: Deploy release channel Worker
         run: >-
           cd packages/relay && npx wrangler deploy
-          --name "$RELAY_WORKER"
+          $RELAY_ENV_ARGS
           --tag "$RELEASE_TAG"
           --message "$RELEASE_TAG ($RELEASE_CHANNEL)"
         env:

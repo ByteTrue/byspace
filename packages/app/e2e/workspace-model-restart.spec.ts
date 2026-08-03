@@ -34,6 +34,13 @@ interface RestartDaemonClient {
       workspaceDirectory: string;
     }>;
   }>;
+  listProjects(): Promise<{
+    projects: Array<{
+      projectId: string;
+      projectKey?: string | null;
+      projectGroupingKey?: string | null;
+    }>;
+  }>;
   fetchAgents(options?: { scope?: "active" }): Promise<{
     entries: Array<{
       agent: {
@@ -462,8 +469,15 @@ test.describe("Workspace model restart regressions", () => {
         .toContain(`workspace-tab-agent_${LEGACY_AGENT_ID}`);
 
       await openGlobalNewWorkspaceComposer(page);
+      const listedProject = (await client.listProjects()).projects.find(
+        (project) => project.projectId === seeded.projectId,
+      );
+      const projectKey = listedProject?.projectGroupingKey ?? listedProject?.projectKey;
+      if (!projectKey) {
+        throw new Error(`Missing projectKey for ${seeded.projectId}`);
+      }
       await selectNewWorkspaceProject(page, {
-        projectKey: seeded.projectId,
+        projectKey,
         projectDisplayName: seeded.projectDisplayName,
       });
       await expectNewWorkspaceProjectSelected(page, seeded.projectDisplayName);

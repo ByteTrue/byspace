@@ -468,6 +468,17 @@ describe("AgentStorage", () => {
     expect(dirs[0]).toBe("D-Users-dev-MyProject");
   });
 
+  test("beginDelete hides the cached record before asynchronous removal", async () => {
+    const agentId = "agent-delete-fence";
+    await storage.applySnapshot(createManagedAgent({ id: agentId }));
+    expect(await storage.get(agentId)).not.toBeNull();
+
+    storage.beginDelete(agentId);
+
+    expect(await storage.get(agentId)).toBeNull();
+    expect((await storage.list()).some((record) => record.id === agentId)).toBe(false);
+  });
+
   test("remove deletes all duplicate record files across project directories", async () => {
     const agentId = "agent-duplicate";
 

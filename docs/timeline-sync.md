@@ -51,6 +51,17 @@ When a client resumes with a known cursor, it catches up after that cursor to co
 
 When a client resumes without a cursor, it fetches the latest tail page.
 
+## Runtime-independent retained history
+
+Idle runtime collection and Timeline ownership are separate. Collecting a Provider runtime keeps the
+daemon's canonical in-memory Timeline replica. A later `fetch_agent_timeline_request` reads that replica
+and combines it with the stored agent snapshot without starting the Provider; sending a prompt or any
+other Provider mutation still resumes the durable Provider session normally.
+
+This fast path deliberately ends at daemon process lifetime. After daemon restart, no in-memory replica
+exists, so the first history read falls back to Provider resume and hydration. Persisting a second
+server-side Timeline replica is not part of this optimization.
+
 ## Client replica lifetime
 
 The host runtime owns each session replica and its timeline sync owner for as long as the host remains

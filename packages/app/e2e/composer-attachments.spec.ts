@@ -226,7 +226,7 @@ test.describe("Composer attachments", () => {
       });
 
       await openNewWorkspaceComposer(page, {
-        projectKey: workspace.projectId,
+        projectKey: workspace.projectKey,
         projectDisplayName: workspace.projectDisplayName,
       });
 
@@ -312,7 +312,7 @@ test.describe("Composer attachments", () => {
       });
 
       await openNewWorkspaceComposer(page, {
-        projectKey: workspace.projectId,
+        projectKey: workspace.projectKey,
         projectDisplayName: workspace.projectDisplayName,
       });
       await fillComposerDraft(page, "lock test prompt");

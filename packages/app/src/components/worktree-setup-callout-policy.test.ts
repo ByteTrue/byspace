@@ -13,7 +13,10 @@ function gitWorkspace(
     projectId: "project-1",
     projectKind: "git",
     projectRootPath: "/repo/project-1",
-    project: { checkout: { mainRepoRoot: "/repo/main-project-1" } },
+    project: {
+      projectKey: "remote:https://github.com/acme/project-1",
+      checkout: { mainRepoRoot: "/repo/main-project-1" },
+    },
     ...overrides,
   };
 }
@@ -22,7 +25,17 @@ describe("selectActiveGitWorkspaceProject", () => {
   it("selects the active git workspace project from checkout metadata", () => {
     expect(selectActiveGitWorkspaceProject("server-1", gitWorkspace())).toEqual({
       serverId: "server-1",
-      projectKey: "project-1",
+      projectKey: "remote:https://github.com/acme/project-1",
+      repoRoot: "/repo/main-project-1",
+    });
+  });
+
+  it("uses a resolved view key for duplicate-clone routes", () => {
+    expect(
+      selectActiveGitWorkspaceProject("server-1", gitWorkspace(), "host:server-1:project-1"),
+    ).toEqual({
+      serverId: "server-1",
+      projectKey: "host:server-1:project-1",
       repoRoot: "/repo/main-project-1",
     });
   });
@@ -44,9 +57,9 @@ describe("selectActiveGitWorkspaceProject", () => {
     expect(
       selectActiveGitWorkspaceProject("server-1", gitWorkspace({ projectKind: "local" })),
     ).toBe(null);
-    expect(selectActiveGitWorkspaceProject("server-1", gitWorkspace({ projectId: " " }))).toBe(
-      null,
-    );
+    expect(
+      selectActiveGitWorkspaceProject("server-1", gitWorkspace({ projectId: " ", project: null })),
+    ).toBe(null);
     expect(
       selectActiveGitWorkspaceProject(
         "server-1",

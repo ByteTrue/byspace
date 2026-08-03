@@ -191,6 +191,7 @@ export const ptBR: TranslationResources = {
       failedToLoad: "Falha ao carregar agente",
       reconnecting: "Reconectando...",
       timelineSyncFailed: "Não foi possível atualizar o histórico do agente. Tentando novamente…",
+      timelineSyncing: "Sincronizando o progresso mais recente...",
       archivingTitle: "Arquivando agente...",
       archivingSubtitle: "Aguarde enquanto arquivamos este agente.",
     },
@@ -337,6 +338,12 @@ export const ptBR: TranslationResources = {
     },
     row: {
       importing: "Importando...",
+    },
+    manual: {
+      sectionTitle: "Importar por ID da sessão",
+      providerPlaceholder: "Selecionar provedor",
+      idPlaceholder: "ID da sessão ou thread",
+      submit: "Importar",
     },
   },
   workspace: {
@@ -750,6 +757,8 @@ export const ptBR: TranslationResources = {
         closeChangesTab: "Fechar a aba Alterações",
         binaryFile: "Arquivo binário",
         tooLarge: "Diff grande demais para exibir",
+        previewTooLargeTitle: "Este diff é grande demais para visualizar",
+        previewTooLargeDescription: "Reduza a comparação para visualizá-la aqui",
         unified: "Diff unificado",
         split: "Diff lado a lado",
         switchToUnified: "Alternar para diff unificado",
@@ -1563,6 +1572,7 @@ export const ptBR: TranslationResources = {
       help: {
         openProject: "Abrir projeto",
         newWorkspace: "Novo workspace",
+        switchProject: "Trocar projeto",
         newWorktree: "Novo worktree",
         archiveWorkspace: "Arquivar workspace",
         newTab: "Nova aba",

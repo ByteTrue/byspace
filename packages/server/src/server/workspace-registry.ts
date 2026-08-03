@@ -17,6 +17,12 @@ const PersistedProjectRecordSchema = z.object({
   rootPath: z.string(),
   kind: z.enum(["git", "non_git"]),
   displayName: z.string(),
+  // COMPAT(projectKey): added in v0.2.5, remove optional after 2027-01-31.
+  projectKey: z
+    .string()
+    .nullable()
+    .optional()
+    .transform((value) => value ?? null),
   // User-set override layered over the derived displayName. Reconciliation
   // never touches this. Null means "use the derived name". Added for #987.
   customName: z
@@ -111,6 +117,7 @@ export interface ProjectRegistry {
     rootPath: string;
     kind: PersistedProjectKind;
     displayName: string;
+    projectKey?: string;
     timestamp: string;
   }): Promise<PersistedProjectRecord>;
   update(
@@ -314,6 +321,7 @@ export class FileBackedProjectRegistry
     rootPath: string;
     kind: PersistedProjectKind;
     displayName: string;
+    projectKey?: string;
     timestamp: string;
   }): Promise<PersistedProjectRecord> {
     return this.allocationCoordinator.runExclusive(async () => {
@@ -327,8 +335,15 @@ export class FileBackedProjectRegistry
             left.projectId.localeCompare(right.projectId),
         )[0];
       if (active) {
-        if (active.kind === input.kind) return active;
-        const refreshed = { ...active, kind: input.kind, updatedAt: input.timestamp };
+        if (active.kind === input.kind && active.projectKey === (input.projectKey ?? null)) {
+          return active;
+        }
+        const refreshed = {
+          ...active,
+          kind: input.kind,
+          projectKey: input.projectKey ?? null,
+          updatedAt: input.timestamp,
+        };
         await this.upsert(refreshed);
         return refreshed;
       }
@@ -341,6 +356,7 @@ export class FileBackedProjectRegistry
           rootPath: input.rootPath,
           kind: input.kind,
           displayName: input.displayName,
+          projectKey: input.projectKey ?? null,
           createdAt: input.timestamp,
           updatedAt: input.timestamp,
         });
@@ -460,6 +476,7 @@ export function createPersistedProjectRecord(input: {
   kind: PersistedProjectKind;
   displayName: string;
   customName?: string | null;
+  projectKey?: string | null;
   createdAt: string;
   updatedAt: string;
   archivedAt?: string | null;
@@ -467,6 +484,7 @@ export function createPersistedProjectRecord(input: {
   return PersistedProjectRecordSchema.parse({
     ...input,
     customName: input.customName ?? null,
+    projectKey: input.projectKey ?? null,
     archivedAt: input.archivedAt ?? null,
   });
 }

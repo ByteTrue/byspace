@@ -39,6 +39,7 @@ function checkoutStatus(overrides: Partial<CheckoutStatusPayload> = {}): Checkou
     isBySpaceOwnedWorktree: false,
     repoRoot: cwd,
     currentBranch: "main",
+    commitsVersion: "version-1",
     isDirty: false,
     baseRef: "origin/main",
     aheadBehind: { ahead: 0, behind: 0 },
@@ -136,15 +137,19 @@ describe("applyCheckoutStatusUpdateFromEvent", () => {
     expect(queryClient.getQueryData(checkoutStatusQueryKey(serverId, cwd))).toEqual(pushed);
   });
 
-  it("invalidates recent commits when checkout status is pushed", () => {
+  it("invalidates recent commits when commit identity changes", () => {
     const queryClient = createQueryClient();
+    queryClient.setQueryData(
+      checkoutStatusQueryKey(serverId, cwd),
+      checkoutStatus({ aheadBehind: { ahead: 0, behind: 0 } }),
+    );
     queryClient.setQueryData(checkoutCommitsQueryKey(serverId, cwd), { commits: [] });
     queryClient.setQueryData(checkoutCommitsQueryKey(serverId, "/repo2"), { commits: [] });
 
     applyCheckoutStatusUpdateFromEvent({
       queryClient,
       serverId,
-      message: checkoutStatusUpdate(checkoutStatus()),
+      message: checkoutStatusUpdate(checkoutStatus({ commitsVersion: "version-2" })),
     });
 
     expect(queryClient.getQueryState(checkoutCommitsQueryKey(serverId, cwd))?.isInvalidated).toBe(
@@ -153,6 +158,43 @@ describe("applyCheckoutStatusUpdateFromEvent", () => {
     expect(
       queryClient.getQueryState(checkoutCommitsQueryKey(serverId, "/repo2"))?.isInvalidated,
     ).toBe(false);
+  });
+
+  it("keeps recent commits cached for dirty-only status updates", () => {
+    const queryClient = createQueryClient();
+    queryClient.setQueryData(
+      checkoutStatusQueryKey(serverId, cwd),
+      checkoutStatus({ isDirty: false }),
+    );
+    queryClient.setQueryData(checkoutCommitsQueryKey(serverId, cwd), { commits: [] });
+
+    applyCheckoutStatusUpdateFromEvent({
+      queryClient,
+      serverId,
+      message: checkoutStatusUpdate(checkoutStatus({ isDirty: true })),
+    });
+
+    expect(queryClient.getQueryState(checkoutCommitsQueryKey(serverId, cwd))?.isInvalidated).toBe(
+      false,
+    );
+  });
+
+  it("keeps conservative commit invalidation for old daemons without commitsVersion", () => {
+    const queryClient = createQueryClient();
+    const { commitsVersion: _previousVersion, ...previous } = checkoutStatus({ isDirty: false });
+    const { commitsVersion: _nextVersion, ...next } = checkoutStatus({ isDirty: true });
+    queryClient.setQueryData(checkoutStatusQueryKey(serverId, cwd), previous);
+    queryClient.setQueryData(checkoutCommitsQueryKey(serverId, cwd), { commits: [] });
+
+    applyCheckoutStatusUpdateFromEvent({
+      queryClient,
+      serverId,
+      message: checkoutStatusUpdate(next as CheckoutStatusPayload),
+    });
+
+    expect(queryClient.getQueryState(checkoutCommitsQueryKey(serverId, cwd))?.isInvalidated).toBe(
+      true,
+    );
   });
 
   it("writes the PR status cache when prStatus is present, and skips it otherwise", () => {

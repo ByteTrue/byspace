@@ -31,6 +31,18 @@ export interface SeedDaemonClient {
     error: string | null;
   }>;
   removeProject(projectId: string): Promise<{ removedWorkspaceIds: string[] }>;
+  renameProject(projectId: string, customName: string | null): Promise<void>;
+  listProjects(): Promise<{
+    projects: Array<{
+      projectId: string;
+      projectKey?: string | null;
+      projectGroupingKey?: string | null;
+      projectDisplayName: string;
+      projectCustomName?: string | null;
+      projectRootPath: string;
+      projectKind: "git" | "directory";
+    }>;
+  }>;
   fetchWorkspaces(options?: { filter?: { projectId?: string } }): Promise<{
     entries: SeedWorkspaceDescriptor[];
   }>;
@@ -158,10 +170,11 @@ export interface SeedDaemonClient {
   killTerminal(terminalId: string): Promise<{ error: string | null }>;
 }
 
-export async function connectSeedClient(): Promise<SeedDaemonClient> {
+export async function connectSeedClient(options?: { port?: number }): Promise<SeedDaemonClient> {
   return connectDaemonClient<SeedDaemonClient>({
     clientIdPrefix: "seed",
     appVersion: loadAppVersion(),
+    port: options?.port,
   });
 }
 
@@ -178,8 +191,10 @@ export interface SeededWorkspace {
   workspaceId: string;
   workspaceName: string;
   workspaceDirectory: string;
-  /** Stable project identity the daemon groups workspaces under. */
+  /** Stable Host-local mutation authority. */
   projectId: string;
+  /** Current daemon display/grouping identity used by project-row UI surfaces. */
+  projectKey: string;
   /** Project label the UI shows for the selected folder. */
   projectDisplayName: string;
   cleanup(): Promise<void>;
@@ -207,6 +222,12 @@ export async function seedWorkspace(options: {
       throw new Error(created.error ?? `Failed to create workspace ${project.path}`);
     }
     const workspace = created.workspace;
+    const listedProject = (await client.listProjects()).projects.find(
+      (candidate) => candidate.projectId === workspace.projectId,
+    );
+    if (!listedProject?.projectKey) {
+      throw new Error(`Missing projectKey for seeded project ${workspace.projectId}`);
+    }
     return {
       client,
       repoPath: project.path,
@@ -214,6 +235,7 @@ export async function seedWorkspace(options: {
       workspaceName: workspace.name,
       workspaceDirectory: workspace.workspaceDirectory,
       projectId: workspace.projectId,
+      projectKey: listedProject.projectGroupingKey ?? listedProject.projectKey,
       projectDisplayName: workspace.projectDisplayName,
       cleanup: async () => {
         await client.removeProject(workspace.projectId).catch(() => undefined);

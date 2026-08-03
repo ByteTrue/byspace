@@ -489,13 +489,18 @@ export class WorkspaceDirectory {
       .filter(
         (project) => !project.archivedAt && !projectIdsWithActiveWorkspaces.has(project.projectId),
       )
-      .map((project) => ({
-        projectId: project.projectId,
-        projectDisplayName: resolveProjectDisplayName(project),
-        projectCustomName: project.customName ?? null,
-        projectRootPath: project.rootPath,
-        projectKind: project.kind,
-      }));
+      .map((project) => {
+        const descriptor: WorkspaceProjectDescriptor = {
+          projectId: project.projectId,
+          projectKey: project.projectId,
+          projectDisplayName: resolveProjectDisplayName(project),
+          projectCustomName: project.customName ?? null,
+          projectRootPath: project.rootPath,
+          projectKind: project.kind,
+        };
+        if (project.projectKey) descriptor.projectGroupingKey = project.projectKey;
+        return descriptor;
+      });
   }
 
   async listDescriptors(): Promise<WorkspaceDescriptorPayload[]> {

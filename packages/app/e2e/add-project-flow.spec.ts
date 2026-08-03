@@ -13,13 +13,14 @@ import {
   expectAddProjectPage,
   expectNewWorkspaceForAddedProject,
   openAddProjectFlow,
+  resolveAddedProjectId,
   waitForConnectedHost,
 } from "./helpers/add-project-flow";
 import { gotoAppShell } from "./helpers/app";
 import { buildSeededHost } from "./helpers/daemon-registry";
 import { addOfflineHostAndReload } from "./helpers/hosts";
 import { type IsolatedHostDaemon, startIsolatedHostDaemon } from "./helpers/isolated-host-daemon";
-import { expectOpenedProject } from "./helpers/project-picker-ui";
+import { expectOpenedProjectKey } from "./helpers/project-picker-ui";
 import { connectSeedClient } from "./helpers/seed-client";
 import { getServerId } from "./helpers/server-id";
 
@@ -230,7 +231,11 @@ test.describe("Add Project command-center flow", () => {
         await page.keyboard.type(directoryName);
         await page.keyboard.press("Enter");
 
-        const projectId = await expectOpenedProject(page, directoryName);
+        await expectOpenedProjectKey(page, directoryName);
+        const projectId = await resolveAddedProjectId({
+          projectPath: directoryPath,
+          port: secondaryHost.port,
+        });
         await expectNewWorkspaceForAddedProject(page, {
           serverId: SECONDARY_HOST_ID,
           projectId,
@@ -260,14 +265,17 @@ test.describe("Add Project command-center flow", () => {
     });
     await page.keyboard.press("Enter");
 
-    const projectId = await expectOpenedProject(page, projectPickerFixture.projectName);
-    projectPickerFixture.rememberProjectId(projectId);
+    await expectOpenedProjectKey(page, projectPickerFixture.projectName);
+    const projectId = await resolveAddedProjectId({
+      projectPath: projectPickerFixture.projectPath,
+    });
     await expectNewWorkspaceForAddedProject(page, {
       serverId: getServerId(),
       projectId,
       projectName: projectPickerFixture.projectName,
       projectPath: projectPickerFixture.projectPath,
     });
+    projectPickerFixture.rememberProjectId(projectId);
     await expectProjectHasNoWorkspaces(projectId);
   });
 
@@ -333,7 +341,8 @@ test.describe("Add Project command-center flow", () => {
       await expect(addProjectFlowInput(page)).toHaveValue(directoryName);
       await page.keyboard.press("Enter");
 
-      projectId = await expectOpenedProject(page, directoryName);
+      await expectOpenedProjectKey(page, directoryName);
+      projectId = await resolveAddedProjectId({ projectPath: directoryPath });
       await expectNewWorkspaceForAddedProject(page, {
         serverId: getServerId(),
         projectId,

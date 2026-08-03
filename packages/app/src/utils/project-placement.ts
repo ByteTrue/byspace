@@ -26,9 +26,20 @@ export function deriveProjectPlacementFromCwd(cwd: string): ProjectPlacementPayl
   };
 }
 
+export function normalizeProjectPlacement(
+  projectPlacement: ProjectPlacementPayload,
+): ProjectPlacementPayload {
+  const projectKey = projectPlacement.projectGroupingKey ?? projectPlacement.projectKey;
+  return projectKey === projectPlacement.projectKey
+    ? projectPlacement
+    : { ...projectPlacement, projectKey };
+}
+
 export function resolveProjectPlacement(input: {
   projectPlacement: ProjectPlacementPayload | null | undefined;
   cwd: string;
 }): ProjectPlacementPayload {
-  return input.projectPlacement ?? deriveProjectPlacementFromCwd(input.cwd);
+  return input.projectPlacement
+    ? normalizeProjectPlacement(input.projectPlacement)
+    : deriveProjectPlacementFromCwd(input.cwd);
 }

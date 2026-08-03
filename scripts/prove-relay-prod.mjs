@@ -26,8 +26,9 @@ const daemonPublicKeyB64 =
 const relayEndpoint =
   args["relay-endpoint"] ??
   process.env.BYSPACE_RELAY_ENDPOINT ??
-  "byspace-relay.bytetrue.workers.dev:443";
-const baseUrl = args["base-url"] ?? process.env.BYSPACE_APP_URL ?? "https://byspace.pages.dev";
+  "relay.byspace.zijieapi.de5.net:443";
+const baseUrl =
+  args["base-url"] ?? process.env.BYSPACE_APP_URL ?? "https://app.byspace.zijieapi.de5.net";
 const timeoutMs = Number(args["timeout-ms"] ?? process.env.BYSPACE_PROVE_TIMEOUT_MS ?? 60_000);
 const stabilityMs = Number(
   args["stability-ms"] ?? process.env.BYSPACE_PROVE_STABILITY_MS ?? 30_000,

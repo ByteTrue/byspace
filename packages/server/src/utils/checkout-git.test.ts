@@ -13,10 +13,12 @@ import { join } from "path";
 import { win32 } from "node:path";
 import { tmpdir } from "os";
 import pino from "pino";
+import { base64EncryptedWireByteLength } from "@bytetrue/byspace-relay";
 import {
   __resetCheckoutShortstatCacheForTests,
   __resetPullRequestStatusCacheForTests,
   __setPullRequestStatusCacheTtlForTests,
+  CHECKOUT_DIFF_MAX_STRUCTURED_BYTES,
   commitAll,
   createPullRequest,
   getCachedCheckoutShortstat,
@@ -872,6 +874,34 @@ const x = 1;
     });
   });
 
+  it("reports up to date when a branch was pushed without setting an upstream", async () => {
+    setupRemoteTrackingMain(repoDir, tempDir);
+    commitFile(repoDir, "second.txt", "second\n", "second commit");
+    execFileSync("git", ["push"], { cwd: repoDir });
+
+    const worktree = await createLegacyWorktreeForTest({
+      branchName: "fresh-feature",
+      cwd: repoDir,
+      baseBranch: "main",
+      worktreeSlug: "fresh-feature",
+      byspaceHome,
+    });
+    commitFile(worktree.worktreePath, "feature.txt", "feature\n", "feature commit");
+    // Push without `-u`/`--set-upstream`: git.<branch>.remote/.merge stay unset even though
+    // origin now has an identically named branch matching local HEAD exactly.
+    execFileSync("git", ["push", "origin", "fresh-feature"], { cwd: worktree.worktreePath });
+    expect(getBranchUpstream(worktree.worktreePath)).toBeNull();
+
+    const status = await getCheckoutStatus(worktree.worktreePath, { byspaceHome });
+    expect(status).toMatchObject({
+      isGit: true,
+      isBySpaceOwnedWorktree: true,
+      baseRef: "main",
+      aheadOfOrigin: 0,
+      behindOfOrigin: 0,
+    });
+  });
+
   it("does not report incoming additions when the base branch is behind its remote", async () => {
     const { cloneDir } = setupRemoteTrackingMain(repoDir, tempDir);
     commitFile(cloneDir, "file.txt", "remote one\nremote two\n", "remote update");
@@ -1299,6 +1329,19 @@ const x = 1;
     expect(diff.structured?.some((f) => f.path === "file.txt" && f.status === "too_large")).toBe(
       true,
     );
+  });
+
+  it("keeps the structured diff cap below the Relay frame limit", () => {
+    const relayFrameBytes = 32 * 1024 * 1024;
+    const frameEnvelopeHeadroomBytes = 1024 * 1024;
+    const diffWireBytes = base64EncryptedWireByteLength(CHECKOUT_DIFF_MAX_STRUCTURED_BYTES);
+    const maximumFrameWireBytes = base64EncryptedWireByteLength(
+      CHECKOUT_DIFF_MAX_STRUCTURED_BYTES + frameEnvelopeHeadroomBytes,
+    );
+
+    expect(CHECKOUT_DIFF_MAX_STRUCTURED_BYTES).toBe(24_117_208);
+    expect(diffWireBytes).toBeLessThan(relayFrameBytes);
+    expect(maximumFrameWireBytes).toBe(relayFrameBytes);
   });
 
   it("marks tracked generated one-line diffs as too_large by content size", async () => {

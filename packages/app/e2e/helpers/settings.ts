@@ -349,7 +349,6 @@ export async function expectProviderInstalledInSettings(
 }
 
 export async function expectHostNoLocalOnlyRows(page: Page): Promise<void> {
-  await expect(page.getByTestId("host-page-pair-device-row")).toHaveCount(0);
   await expect(page.getByTestId("host-page-daemon-lifecycle-card")).toHaveCount(0);
 }
 

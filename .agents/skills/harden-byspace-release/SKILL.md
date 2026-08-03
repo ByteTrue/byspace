@@ -48,8 +48,8 @@ Read only additional files implicated by the failure or proposed change.
 
 ### Channel isolation
 
-- Stable maps to npm `latest`, `byspace.pages.dev`, and `byspace-relay`.
-- Beta maps to npm `beta`, `byspace-beta.pages.dev`, and `byspace-relay-beta`.
+- Stable maps to npm `latest`, `app.byspace.zijieapi.de5.net`, and `byspace-relay`.
+- Beta maps to npm `beta`, `app-beta.byspace.zijieapi.de5.net`, and `byspace-relay-beta`.
 - Runtime version selects app URL, relay, CORS, pairing/help links, and self-update dist-tag.
 - Custom and environment endpoints remain authoritative.
 - Deploying one channel leaves the other channel's Pages deployment and Worker version unchanged.

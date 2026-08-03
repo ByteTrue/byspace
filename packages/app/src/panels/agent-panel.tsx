@@ -87,6 +87,7 @@ import type { StreamItem } from "@/types/stream";
 import { getInitDeferred, getInitKey } from "@/utils/agent-initialization";
 import { derivePendingPermissionKey, normalizeAgentSnapshot } from "@/utils/agent-snapshots";
 import { applyLegacyDaemonWorkspaceOwnership } from "@/workspace/legacy-daemon-workspaces";
+import { normalizeProjectPlacement } from "@/utils/project-placement";
 import type { WorkspaceFileOpenRequest } from "@/workspace/file-open";
 import { navigateToAgent } from "@/utils/navigate-to-agent";
 import { deriveSidebarStateBucket } from "@/utils/sidebar-agent-state";
@@ -264,7 +265,9 @@ function storeFetchedAgentDetail(input: {
     serverId: input.serverId,
     agent: {
       ...normalized,
-      projectPlacement: input.result.project,
+      projectPlacement: input.result.project
+        ? normalizeProjectPlacement(input.result.project)
+        : input.result.project,
     },
   });
   const store = useSessionStore.getState();
@@ -1067,6 +1070,10 @@ function ChatAgentContent({
     viewState.tag === "ready" &&
     viewState.sync.status === "catching_up" &&
     viewState.sync.ui === "overlay";
+  const showHistorySyncIndicator =
+    viewState.tag === "ready" &&
+    viewState.sync.status === "catching_up" &&
+    viewState.sync.ui === "indicator";
   const showHistorySyncError = viewState.tag === "ready" && viewState.sync.status === "sync_error";
 
   return (
@@ -1086,6 +1093,7 @@ function ChatAgentContent({
       handleComposerHeightChange={handleComposerHeightChange}
       handleMessageSent={handleMessageSent}
       showHistorySyncOverlay={showHistorySyncOverlay}
+      showHistorySyncIndicator={showHistorySyncIndicator}
       showHistorySyncError={showHistorySyncError}
       cwd={agentCwd}
       onAttentionInputFocus={attentionController.clearOnInputFocus}
@@ -1111,6 +1119,7 @@ const ChatAgentReadyContent = memo(function ChatAgentReadyContent({
   handleComposerHeightChange,
   handleMessageSent,
   showHistorySyncOverlay,
+  showHistorySyncIndicator,
   showHistorySyncError,
   cwd,
   onAttentionInputFocus,
@@ -1132,6 +1141,7 @@ const ChatAgentReadyContent = memo(function ChatAgentReadyContent({
   handleComposerHeightChange: (height: number) => void;
   handleMessageSent: () => void;
   showHistorySyncOverlay: boolean;
+  showHistorySyncIndicator: boolean;
   showHistorySyncError: boolean;
   cwd: string;
   onAttentionInputFocus: () => void;
@@ -1241,6 +1251,19 @@ const ChatAgentReadyContent = memo(function ChatAgentReadyContent({
     <RewindComposerRestoreProvider text={agentInputDraft.text} setText={agentInputDraft.setText}>
       <View style={styles.root}>
         <FileDropZone style={styles.container} disabled={isArchivingCurrentAgent}>
+          {showHistorySyncIndicator ? (
+            <View
+              style={styles.historySyncIndicator}
+              testID="agent-history-syncing"
+              accessibilityLiveRegion="polite"
+            >
+              <ThemedLoadingSpinner size={14} uniProps={foregroundMutedColorMapping} />
+              <Text style={styles.historySyncIndicatorText}>
+                {t("agentPanel.states.timelineSyncing")}
+              </Text>
+            </View>
+          ) : null}
+
           {contentContainer}
 
           {showHistorySyncError ? (
@@ -1738,6 +1761,24 @@ const styles = StyleSheet.create((theme) => ({
   inputAreaWrapper: {
     width: "100%",
     backgroundColor: theme.colors.surface0,
+  },
+  historySyncIndicator: {
+    minHeight: theme.spacing[8],
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: theme.spacing[2],
+    paddingHorizontal: theme.spacing[4],
+    paddingVertical: theme.spacing[2],
+    backgroundColor: theme.colors.surface1,
+    borderBottomWidth: theme.borderWidth[1],
+    borderBottomColor: theme.colors.border,
+  },
+  historySyncIndicatorText: {
+    flexShrink: 1,
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.xs,
+    textAlign: "center",
   },
   historySyncOverlay: {
     position: "absolute",

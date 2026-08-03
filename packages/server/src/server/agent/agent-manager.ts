@@ -576,6 +576,7 @@ export class AgentManager {
   private readonly providerEnabled = new Map<AgentProvider, boolean>();
   private readonly agents = new Map<string, LiveManagedAgent>();
   private readonly timelineStore = new InMemoryAgentTimelineStore();
+  private readonly retainedTimelineAgents = new Set<string>();
   private readonly providerSubagents = new ProviderSubagentStore();
   private readonly agentsAwaitingInitialSnapshotPersist = new Set<string>();
   private readonly sessionEventTails = new Map<string, Promise<void>>();
@@ -588,6 +589,7 @@ export class AgentManager {
   private readonly backgroundTasks = new Set<Promise<void>>();
   private readonly agentRegistrationTasks = new Set<Promise<void>>();
   private readonly agentLifecycleMutations = new Map<string, Promise<unknown>>();
+  private readonly deletingAgents = new Set<string>();
   private readonly agentStreamCoalescer: AgentStreamCoalescer;
   private mcpBaseUrl: string | null;
   private readonly mcpAuthToken: string | null;
@@ -974,6 +976,10 @@ export class AgentManager {
     return { ...agent };
   }
 
+  beginAgentDelete(agentId: string): void {
+    this.deletingAgents.add(agentId);
+  }
+
   async waitForAgentClose(agentId: string): Promise<void> {
     await this.agentLifecycleMutations.get(agentId)?.catch(() => undefined);
   }
@@ -999,6 +1005,16 @@ export class AgentManager {
     return this.timelineStore.getItems(id);
   }
 
+  hasTimeline(id: string): boolean {
+    return this.timelineStore.has(id);
+  }
+
+  hasRetainedTimeline(id: string): boolean {
+    return (
+      !this.agents.has(id) && this.retainedTimelineAgents.has(id) && this.timelineStore.has(id)
+    );
+  }
+
   async getTimelineRows(id: string): Promise<AgentTimelineRow[]> {
     this.requireAgent(id);
     if (this.durableTimelineStore) {
@@ -1008,7 +1024,9 @@ export class AgentManager {
   }
 
   fetchTimeline(id: string, options?: AgentTimelineFetchOptions): AgentTimelineFetchResult {
-    this.requireAgent(id);
+    if (!this.agents.has(id) && !this.retainedTimelineAgents.has(id)) {
+      this.requireAgent(id);
+    }
     return this.timelineStore.fetch(id, options);
   }
 
@@ -1061,7 +1079,12 @@ export class AgentManager {
     const client = await this.requireAvailableClient({
       provider: storedConfig.provider,
     });
-    const launchContext = await this.buildLaunchContext(resolvedAgentId, client, options?.env);
+    const launchContext = await this.buildLaunchContext(
+      resolvedAgentId,
+      client,
+      storedConfig.cwd,
+      options?.env,
+    );
     const providerLaunchConfig = this.resolveProviderLaunchConfig(launchConfig, launchContext);
     const createOptions = this.buildCreateSessionOptions(options);
     const session = await client.createSession(providerLaunchConfig, launchContext, createOptions);
@@ -1136,7 +1159,7 @@ export class AgentManager {
         `Provider '${handle.provider}' is not available. Please ensure the CLI is installed.`,
       );
     }
-    const launchContext = await this.buildLaunchContext(resolvedAgentId, client);
+    const launchContext = await this.buildLaunchContext(resolvedAgentId, client, storedConfig.cwd);
     const providerLaunchConfig = this.resolveProviderLaunchConfig(launchConfig, launchContext);
     const session = await client.resumeSession(
       handle,
@@ -1183,7 +1206,7 @@ export class AgentManager {
       },
       resolvedAgentId,
     );
-    const launchContext = await this.buildLaunchContext(resolvedAgentId, client);
+    const launchContext = await this.buildLaunchContext(resolvedAgentId, client, storedConfig.cwd);
     const providerLaunchConfig = this.resolveProviderLaunchConfig(launchConfig, launchContext);
     const imported = await client.importSession(
       {
@@ -1235,7 +1258,9 @@ export class AgentManager {
     options?: { rehydrateFromDisk?: boolean },
   ): Promise<ManagedAgent> {
     return this.trackAgentRegistrationOperation(
-      this.reloadAgentSessionInternal(agentId, overrides, options),
+      this.runAgentLifecycleMutation(agentId, () =>
+        this.reloadAgentSessionInternal(agentId, overrides, options),
+      ),
     );
   }
 
@@ -1264,7 +1289,7 @@ export class AgentManager {
       provider,
     } as AgentSessionConfig;
     const { storedConfig, launchConfig } = await this.prepareSessionConfig(refreshConfig, agentId);
-    const launchContext = await this.buildLaunchContext(agentId, client);
+    const launchContext = await this.buildLaunchContext(agentId, client, storedConfig.cwd);
     const providerLaunchConfig = this.resolveProviderLaunchConfig(launchConfig, launchContext);
 
     const session = handle
@@ -1406,6 +1431,10 @@ export class AgentManager {
       await this.persistSnapshot(closedAgent);
     } catch (error) {
       persistError = error;
+    }
+    // Authorize runtime-free reads only after the matching closed snapshot is durable.
+    if (persistError === undefined) {
+      this.retainedTimelineAgents.add(agentId);
     }
     this.emitClosedAgent(closedAgent, { persist: false });
     this.logger.trace(
@@ -2840,6 +2869,9 @@ export class AgentManager {
     try {
       this.assertAcceptingAgentRegistrations();
       const resolvedAgentId = validateAgentId(agentId, "registerSession");
+      if (this.deletingAgents.has(resolvedAgentId)) {
+        throw new Error(`Agent is being deleted: ${resolvedAgentId}`);
+      }
       if (this.agents.has(resolvedAgentId)) {
         throw new Error(`Agent with id ${resolvedAgentId} already exists`);
       }
@@ -2866,6 +2898,10 @@ export class AgentManager {
       });
 
       this.assertAcceptingAgentRegistrations();
+      if (this.deletingAgents.has(resolvedAgentId)) {
+        throw new Error(`Agent is being deleted: ${resolvedAgentId}`);
+      }
+      this.retainedTimelineAgents.delete(resolvedAgentId);
       this.agents.set(resolvedAgentId, managed);
       registered = true;
       // Initialize previousStatus to track transitions
@@ -3060,6 +3096,7 @@ export class AgentManager {
   }
 
   private discardRetainedAgentState(agentId: string): void {
+    this.retainedTimelineAgents.delete(agentId);
     this.timelineStore.delete(agentId);
     for (const event of this.providerSubagents.deleteParent(agentId)) {
       this.dispatch({ type: "provider_subagent", event });
@@ -3704,7 +3741,10 @@ export class AgentManager {
       },
       "agent.manager.turn.completed",
     );
-    agent.lastUsage = event.usage;
+    if (event.usage) {
+      agent.lastUsage = { ...agent.lastUsage, ...event.usage };
+    }
+    // Preserve streaming usage when a provider omits it from turn_completed.
     agent.lastError = undefined;
     if (!isForegroundEvent && agent.lifecycle !== "idle" && !agent.pendingReplacement) {
       (agent as ActiveManagedAgent).lifecycle = "idle";
@@ -4321,6 +4361,7 @@ export class AgentManager {
   private async buildLaunchContext(
     agentId: string,
     client: AgentClient,
+    cwd: string,
     env?: Record<string, string>,
   ): Promise<AgentLaunchContext> {
     const context: AgentLaunchContext = {
@@ -4328,6 +4369,7 @@ export class AgentManager {
       env: {
         ...env,
         BYSPACE_AGENT_ID: agentId,
+        BYSPACE_AGENT_CWD: cwd,
       },
     };
     if (

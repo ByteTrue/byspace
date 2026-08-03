@@ -296,6 +296,72 @@ describe("splitHtmlishMarkdown", () => {
     );
   });
 
+  it("converts safe HTML emphasis and strikethrough tags into markdown", () => {
+    expect(
+      normalizeHtmlishMarkdown(
+        "<b>bold</b> <strong>strong <em>nested</em></strong> <i>italic</i> <del>deleted</del> <s>removed</s> <strike>struck</strike>",
+      ),
+    ).toBe("**bold** **strong *nested*** *italic* ~~deleted~~ ~~removed~~ ~~struck~~");
+  });
+
+  it("normalizes HTML table cells and inline formatting into markdown without raw HTML", () => {
+    expect(
+      normalizeHtmlishMarkdown(
+        "<table><tr><td><strong>Score</strong>: 78</td></tr><tr><td><strong>No security concerns identified</strong></td></tr><tr><td><strong>Recommended focus areas for review</strong></td><td>Bearer authentication</td></tr></table>",
+      ),
+    ).toBe(
+      "\n- **Score**: 78\n- **No security concerns identified**\n- **Recommended focus areas for review**: Bearer authentication\n",
+    );
+  });
+
+  it("strips active and unknown HTML from table cells while preserving safe text", () => {
+    expect(
+      normalizeHtmlishMarkdown(
+        '<table><tr><td><script>alert(1)</script><iframe onclick="evil()">discard me</iframe><span>Visible <strong>safe</strong></span><img alt="bad" src="javascript:alert(1)"></td></tr></table>',
+      ),
+    ).toBe("\n- Visible **safe**\n");
+  });
+
+  it("renders nested and malformed table content without leaking structural HTML", () => {
+    const nested = normalizeHtmlishMarkdown(
+      "<table><tr><td>Outer<table><tr><td>Inner</td></tr></table></td></tr></table>",
+    );
+    const malformed = normalizeHtmlishMarkdown(
+      "<table><tr><td>One<style>bad</style></tr><tr><td><strong>Two</table>",
+    );
+
+    expect(nested).toBe("\n- Outer\n- Inner\n");
+    expect(nested).not.toMatch(/<\/?(?:table|tr|td)>/);
+    expect(malformed).not.toMatch(/<\/?(?:table|tr|td|style|strong)>/);
+    expect(malformed).not.toContain("bad");
+  });
+
+  it("rejects table-cell URL attributes that could escape Markdown destinations", () => {
+    const result = normalizeHtmlishMarkdown(
+      '<table><tr><td><a href="https://safe.example/)\n<img src=x onerror=alert(1)>">click</a><img alt="bad" src="https://safe.example/x.png)\n<script>alert(1)</script>"></td></tr></table>',
+    );
+
+    expect(result).toBe("\n- click\n");
+    expect(result).not.toMatch(/<(?:img|script)\b/);
+  });
+
+  it("encodes balanced Markdown delimiters in safe destinations", () => {
+    expect(
+      normalizeHtmlishMarkdown(
+        '<table><tr><td><a href="https://example.com/a_(b)">link</a><img alt="shot" src="https://example.com/a_(b).png"></td></tr></table>',
+      ),
+    ).toBe("\n- [link](https://example.com/a_%28b%29)![shot](https://example.com/a_%28b%29.png)\n");
+  });
+
+  it("rejects URL attributes that could escape ordinary Markdown links", () => {
+    const result = normalizeHtmlishMarkdown(
+      '<a href="https://safe.example/)\n![pixel](https://attacker.example/pixel.png)">click</a>',
+    );
+
+    expect(result).toBe("click");
+    expect(result).not.toContain("attacker.example");
+  });
+
   it("leaves complex code tags inert instead of parsing HTML", () => {
     expect(normalizeHtmlishMarkdown('<code onclick="evil()"><script>x</script></code>')).toBe(
       '<code onclick="evil()"><script>x</script></code>',

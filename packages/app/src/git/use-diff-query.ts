@@ -86,6 +86,7 @@ export function useCheckoutDiffQuery({
   return {
     files: payload?.files ?? [],
     payloadError,
+    diffTooLarge: payload?.diffTooLarge === true,
     isLoading: payload === null && enabled && isConnected,
     isFetching: false,
     isError: Boolean(payloadError),

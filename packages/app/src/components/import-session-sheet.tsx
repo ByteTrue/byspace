@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Pressable, type PressableStateCallbackType, Text, View } from "react-native";
+import { Pressable, type PressableStateCallbackType, Text, TextInput, View } from "react-native";
 import { useMutation, useQueries, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import type {
@@ -258,6 +258,213 @@ function ImportSessionSheetRow({
   );
 }
 
+interface ManualImportMutationLike {
+  isPending: boolean;
+  variables: { providerId: string; providerHandleId: string; cwd: string } | undefined;
+  mutate: (target: { providerId: string; providerHandleId: string; cwd: string }) => void;
+}
+
+interface ManualImportState {
+  show: boolean;
+  provider: string;
+  providerLabel: string | undefined;
+  sessionId: string;
+  isSubmitting: boolean;
+  onProviderSelect: (id: string) => void;
+  onSessionIdChange: (text: string) => void;
+  onSubmit: () => void;
+}
+
+function useManualImportState(input: {
+  visible: boolean;
+  cwd: string | null | undefined;
+  filterProviders: string[];
+  manualProviderOptions: ComboboxOption[];
+  importMutation: ManualImportMutationLike;
+}): ManualImportState {
+  const { visible, cwd, filterProviders, manualProviderOptions, importMutation } = input;
+  const [manualProvider, setManualProvider] = useState("");
+  const [sessionId, setSessionId] = useState("");
+
+  useEffect(() => {
+    if (!visible) {
+      setManualProvider("");
+      setSessionId("");
+    }
+  }, [visible]);
+
+  const provider = manualProvider || filterProviders[0] || "";
+  const providerLabel = manualProviderOptions.find((option) => option.id === provider)?.label;
+  const trimmedSessionId = sessionId.trim();
+  const isSubmitting =
+    importMutation.isPending &&
+    importMutation.variables?.providerId === provider &&
+    importMutation.variables?.providerHandleId === trimmedSessionId;
+
+  const onSubmit = useCallback(() => {
+    if (!cwd || !provider || !trimmedSessionId) {
+      return;
+    }
+    importMutation.mutate({ providerId: provider, providerHandleId: trimmedSessionId, cwd });
+  }, [cwd, provider, trimmedSessionId, importMutation]);
+
+  return {
+    show: Boolean(cwd) && filterProviders.length > 0,
+    provider,
+    providerLabel,
+    sessionId,
+    isSubmitting,
+    onProviderSelect: setManualProvider,
+    onSessionIdChange: setSessionId,
+    onSubmit,
+  };
+}
+
+function ManualImportSection({
+  providerOptions,
+  providerIcons,
+  selectedProvider,
+  selectedProviderLabel,
+  onProviderSelect,
+  sessionId,
+  onSessionIdChange,
+  onSubmit,
+  disabled,
+  submitting,
+}: {
+  providerOptions: ComboboxOption[];
+  providerIcons: ReadonlyMap<string, React.ReactNode>;
+  selectedProvider: string;
+  selectedProviderLabel: string | undefined;
+  onProviderSelect: (id: string) => void;
+  sessionId: string;
+  onSessionIdChange: (text: string) => void;
+  onSubmit: () => void;
+  disabled: boolean;
+  submitting: boolean;
+}) {
+  const { theme } = useUnistyles();
+  const { t } = useTranslation();
+  const [isProviderOpen, setIsProviderOpen] = useState(false);
+  const providerAnchorRef = useRef<View>(null);
+  const canSubmit = !disabled && Boolean(selectedProvider) && sessionId.trim().length > 0;
+
+  const handleProviderOpen = useCallback(() => setIsProviderOpen(true), []);
+  const handleProviderSelect = useCallback(
+    (id: string) => {
+      onProviderSelect(id);
+      setIsProviderOpen(false);
+    },
+    [onProviderSelect],
+  );
+  const renderManualProviderOption = useCallback(
+    ({
+      option,
+      selected,
+      active,
+      onPress,
+    }: {
+      option: ComboboxOption;
+      selected: boolean;
+      active: boolean;
+      onPress: () => void;
+    }) => (
+      <ComboboxItem
+        testID={`import-session-manual-provider-option-${option.id}`}
+        label={option.label}
+        selected={selected}
+        active={active}
+        onPress={onPress}
+        leadingSlot={providerIcons.get(option.id)}
+      />
+    ),
+    [providerIcons],
+  );
+  const providerTriggerStyle = useCallback(
+    ({ pressed, hovered = false }: PressableStateCallbackType & { hovered?: boolean }) => [
+      styles.filterTrigger,
+      Boolean(hovered) && styles.filterTriggerHovered,
+      pressed && styles.filterTriggerPressed,
+    ],
+    [],
+  );
+  const submitButtonStyle = useCallback(
+    ({ pressed, hovered = false }: PressableStateCallbackType & { hovered?: boolean }) => [
+      styles.manualSubmit,
+      Boolean(hovered) && canSubmit && styles.manualSubmitHovered,
+      pressed && canSubmit && styles.manualSubmitPressed,
+      !canSubmit && styles.manualSubmitDisabled,
+    ],
+    [canSubmit],
+  );
+
+  return (
+    <View style={styles.manualSection} testID="import-session-manual">
+      <Text style={styles.manualCaption}>{t("importSession.manual.sectionTitle")}</Text>
+      <View style={styles.manualRow}>
+        <View ref={providerAnchorRef} collapsable={false}>
+          <Pressable
+            onPress={handleProviderOpen}
+            disabled={disabled}
+            style={providerTriggerStyle}
+            testID="import-session-manual-provider-trigger"
+            accessibilityRole="button"
+            accessibilityLabel={
+              selectedProviderLabel ?? t("importSession.manual.providerPlaceholder")
+            }
+          >
+            {providerIcons.get(selectedProvider)}
+            <Text style={styles.filterTriggerText} numberOfLines={1}>
+              {selectedProviderLabel ?? t("importSession.manual.providerPlaceholder")}
+            </Text>
+            <ChevronDown size={14} color={theme.colors.foregroundMuted} />
+          </Pressable>
+        </View>
+        <Combobox
+          options={providerOptions}
+          value={selectedProvider}
+          onSelect={handleProviderSelect}
+          renderOption={renderManualProviderOption}
+          searchable={false}
+          title={t("importSession.manual.providerPlaceholder")}
+          open={isProviderOpen}
+          onOpenChange={setIsProviderOpen}
+          anchorRef={providerAnchorRef}
+          desktopPlacement="bottom-start"
+          desktopPreventInitialFlash
+        />
+        <TextInput
+          value={sessionId}
+          onChangeText={onSessionIdChange}
+          onSubmitEditing={onSubmit}
+          returnKeyType="go"
+          editable={!disabled}
+          placeholder={t("importSession.manual.idPlaceholder")}
+          placeholderTextColor={theme.colors.foregroundMuted}
+          autoCapitalize="none"
+          autoCorrect={false}
+          style={styles.manualInput}
+          testID="import-session-manual-id-input"
+        />
+        <Pressable
+          onPress={onSubmit}
+          disabled={!canSubmit}
+          style={submitButtonStyle}
+          testID="import-session-manual-submit"
+          accessibilityRole="button"
+          accessibilityLabel={t("importSession.manual.submit")}
+        >
+          {submitting ? (
+            <LoadingSpinner color={theme.colors.foregroundMuted} />
+          ) : (
+            <Text style={styles.manualSubmitText}>{t("importSession.manual.submit")}</Text>
+          )}
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+
 export function ImportSessionSheet({
   visible,
   client,
@@ -350,6 +557,11 @@ export function ImportSessionSheet({
     [filterProviders, providerLabelById, t],
   );
 
+  const manualProviderOptions = useMemo<ComboboxOption[]>(
+    () => filterComboboxOptions.filter((option) => option.id !== ALL_FILTER_VALUE),
+    [filterComboboxOptions],
+  );
+
   const selectedProviderLabel = useMemo(
     () =>
       filterComboboxOptions.find((opt) => opt.id === selectedProvider)?.label ??
@@ -407,17 +619,17 @@ export function ImportSessionSheet({
   );
 
   const importMutation = useMutation({
-    mutationFn: async (entry: FetchRecentProviderSessionEntry) => {
+    mutationFn: async (target: { providerId: string; providerHandleId: string; cwd: string }) => {
       if (!client) {
         throw new Error(t("workspace.terminal.hostDisconnected"));
       }
-      if (!entry.cwd) {
+      if (!target.cwd) {
         throw new Error("Session is missing a working directory");
       }
       const agent = await client.importAgent({
-        providerId: entry.providerId,
-        providerHandleId: entry.providerHandleId,
-        cwd: entry.cwd,
+        providerId: target.providerId,
+        providerHandleId: target.providerHandleId,
+        cwd: target.cwd,
         ...(workspaceId ? { workspaceId } : {}),
       });
       return agent;
@@ -437,10 +649,22 @@ export function ImportSessionSheet({
 
   const handleImportSession = useCallback(
     (entry: FetchRecentProviderSessionEntry) => {
-      importMutation.mutate(entry);
+      importMutation.mutate({
+        providerId: entry.providerId,
+        providerHandleId: entry.providerHandleId,
+        cwd: entry.cwd ?? "",
+      });
     },
     [importMutation],
   );
+
+  const manualImport = useManualImportState({
+    visible,
+    cwd,
+    filterProviders,
+    manualProviderOptions,
+    importMutation,
+  });
 
   const erroredProviderLabels = useMemo(
     () => collectErroredProviderLabels(providersToFetch, queries, providerLabelById),
@@ -493,6 +717,20 @@ export function ImportSessionSheet({
       desktopMaxWidth={560}
       snapPoints={IMPORT_SHEET_SNAP_POINTS}
     >
+      {manualImport.show ? (
+        <ManualImportSection
+          providerOptions={manualProviderOptions}
+          providerIcons={filterOptionIcons}
+          selectedProvider={manualImport.provider}
+          selectedProviderLabel={manualImport.providerLabel}
+          onProviderSelect={manualImport.onProviderSelect}
+          sessionId={manualImport.sessionId}
+          onSessionIdChange={manualImport.onSessionIdChange}
+          onSubmit={manualImport.onSubmit}
+          disabled={importMutation.isPending}
+          submitting={manualImport.isSubmitting}
+        />
+      ) : null}
       {showFilter ? (
         <View ref={filterAnchorRef} collapsable={false} style={styles.filterTriggerWrap}>
           <Pressable
@@ -582,6 +820,57 @@ const styles = StyleSheet.create((theme) => ({
     backgroundColor: theme.colors.surface3,
   },
   filterTriggerText: {
+    color: theme.colors.foreground,
+    fontSize: theme.fontSize.sm,
+    fontWeight: theme.fontWeight.medium,
+  },
+  manualSection: {
+    gap: theme.spacing[1.5],
+    paddingBottom: theme.spacing[3],
+    marginBottom: theme.spacing[1],
+    borderBottomWidth: theme.borderWidth[1],
+    borderBottomColor: theme.colors.border,
+  },
+  manualCaption: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.xs,
+    fontWeight: theme.fontWeight.medium,
+  },
+  manualRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[1.5],
+  },
+  manualInput: {
+    flex: 1,
+    minWidth: 0,
+    color: theme.colors.foreground,
+    fontSize: theme.fontSize.sm,
+    paddingVertical: theme.spacing[1.5],
+    paddingHorizontal: theme.spacing[3],
+    borderRadius: theme.borderRadius.md,
+    backgroundColor: theme.colors.surface1,
+    borderWidth: theme.borderWidth[1],
+    borderColor: theme.colors.border,
+  },
+  manualSubmit: {
+    paddingVertical: theme.spacing[1.5],
+    paddingHorizontal: theme.spacing[3],
+    borderRadius: theme.borderRadius.md,
+    backgroundColor: theme.colors.surface2,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  manualSubmitHovered: {
+    backgroundColor: theme.colors.surface3,
+  },
+  manualSubmitPressed: {
+    opacity: theme.opacity[50],
+  },
+  manualSubmitDisabled: {
+    opacity: 0.5,
+  },
+  manualSubmitText: {
     color: theme.colors.foreground,
     fontSize: theme.fontSize.sm,
     fontWeight: theme.fontWeight.medium,

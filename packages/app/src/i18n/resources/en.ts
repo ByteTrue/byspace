@@ -189,6 +189,7 @@ export const en = {
       failedToLoad: "Failed to load agent",
       reconnecting: "Reconnecting...",
       timelineSyncFailed: "Couldn't refresh agent history. Retrying…",
+      timelineSyncing: "Syncing latest progress...",
       archivingTitle: "Archiving agent...",
       archivingSubtitle: "Please wait while we archive this agent.",
     },
@@ -333,6 +334,12 @@ export const en = {
     },
     row: {
       importing: "Importing...",
+    },
+    manual: {
+      sectionTitle: "Import by session ID",
+      providerPlaceholder: "Select provider",
+      idPlaceholder: "Session or thread ID",
+      submit: "Import",
     },
   },
   workspace: {
@@ -738,6 +745,8 @@ export const en = {
         closeChangesTab: "Close Changes tab",
         binaryFile: "Binary file",
         tooLarge: "Diff too large to display",
+        previewTooLargeTitle: "This diff is too large to preview",
+        previewTooLargeDescription: "Narrow the comparison to preview it here",
         unified: "Unified diff",
         split: "Side-by-side diff",
         switchToUnified: "Switch to unified diff",
@@ -1547,6 +1556,7 @@ export const en = {
       help: {
         openProject: "Open project",
         newWorkspace: "New workspace",
+        switchProject: "Switch project",
         newWorktree: "New worktree",
         archiveWorkspace: "Archive workspace",
         newTab: "New tab",

@@ -96,7 +96,7 @@ export function CommitsSection({ serverId, cwd, onCommitPress }: CommitsSectionP
   const query = useCheckoutCommitsQuery({
     serverId,
     cwd,
-    enabled: !collapsed,
+    enabled: !collapsed && isPanelActive,
   });
 
   const handleToggleSection = useCallback(() => {

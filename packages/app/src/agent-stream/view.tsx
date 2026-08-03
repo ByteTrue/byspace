@@ -47,7 +47,7 @@ import type {
   AgentPermissionResponse,
 } from "@bytetrue/byspace-protocol/agent-types";
 import type { AgentScreenAgent } from "@/hooks/use-agent-screen-state-machine";
-import { useSessionStore } from "@/stores/session-store";
+import { useSessionStore, type WorkspaceDescriptor } from "@/stores/session-store";
 import { useFileExplorerActions } from "@/hooks/use-file-explorer-actions";
 import { useLoadOlderAgentHistory } from "@/hooks/use-load-older-agent-history";
 import { useSettings } from "@/hooks/use-settings";
@@ -86,7 +86,7 @@ import {
   type WorkspaceFileOpenRequest,
 } from "@/workspace/file-open";
 import { navigateToWorkspace } from "@/stores/navigation-active-workspace-store";
-import { buildNewWorkspaceRoute } from "@/utils/host-routes";
+import { useWorkspaceFields } from "@/stores/session-store-hooks";
 import { useStableEvent } from "@/hooks/use-stable-event";
 import type { Theme } from "@/styles/theme";
 import { recordRenderProfileReasons } from "@/utils/render-profiler";
@@ -100,6 +100,11 @@ import type { WorkspaceComposerAttachment } from "@/attachments/types";
 import type { WorkspaceDraftTabSetup, WorkspaceTabTarget } from "@/stores/workspace-tabs-store";
 import { toErrorMessage } from "@/utils/error-messages";
 import { useWorkspaceDraftSubmissionStore } from "@/stores/workspace-draft-submission-store";
+import { buildForkNewWorkspaceRoute } from "./fork-new-workspace-route";
+
+function selectWorkspaceProjectId(workspace: WorkspaceDescriptor): string {
+  return workspace.projectId;
+}
 
 function renderLiveAuxiliaryNode(input: {
   pendingPermissions: ReactNode;
@@ -368,6 +373,11 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
 
     // Get serverId (fallback to agent's serverId if not provided)
     const resolvedServerId = serverId ?? context.serverId ?? "";
+    const workspaceProjectId = useWorkspaceFields(
+      resolvedServerId,
+      context.workspaceId ?? null,
+      selectWorkspaceProjectId,
+    );
 
     const client = useSessionStore((state) => state.sessions[resolvedServerId]?.client ?? null);
     const sessionStreamHead = useSessionStore((state) =>
@@ -532,11 +542,12 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
             });
           }
           router.push(
-            buildNewWorkspaceRoute({
+            buildForkNewWorkspaceRoute({
               serverId: resolvedServerId,
               sourceDirectory,
               displayName: context.projectPlacement?.projectName,
-              projectId: context.projectPlacement?.projectKey,
+              workspaceProjectId,
+              projectPlacement: context.projectPlacement,
               draftId,
             }),
           );
@@ -1098,6 +1109,9 @@ function collectAgentProjectPlacementDiffs(
   }
   if (left?.projectName !== right?.projectName) {
     reasons.push("agent.projectPlacement.projectName");
+  }
+  if (left?.projectId !== right?.projectId) {
+    reasons.push("agent.projectPlacement.projectId");
   }
   if (left?.projectKey !== right?.projectKey) {
     reasons.push("agent.projectPlacement.projectKey");

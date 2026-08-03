@@ -128,6 +128,98 @@ describe("daemon E2E - timeline window", () => {
     }
   }, 30_000);
 
+  test("idle-collected agents serve retained timeline without resuming the provider runtime", async () => {
+    const cwd = tmpCwd();
+    let releaseClose: (() => void) | undefined;
+    try {
+      const agent = await ctx.client.createAgent({
+        provider: "codex",
+        cwd,
+        title: "Retained Timeline Test",
+        modeId: "full-access",
+      });
+      await ctx.daemon.daemon.agentManager.appendTimelineItem(agent.id, {
+        type: "assistant_message",
+        text: "retained history",
+      });
+      const live = ctx.daemon.daemon.agentManager.getAgent(agent.id);
+      if (!live?.session) throw new Error("expected live agent session");
+      const closeGate = new Promise<void>((resolve) => {
+        releaseClose = resolve;
+      });
+      vi.spyOn(live.session, "close").mockImplementation(async () => await closeGate);
+      const waitSpy = vi.spyOn(ctx.daemon.daemon.agentManager, "waitForAgentClose");
+
+      const collectionPromise = ctx.daemon.daemon.agentManager.collectIdleAgents({
+        cutoff: new Date(Date.now() + 1_000),
+        protectedAgentIds: new Set(),
+      });
+      await vi.waitFor(() => {
+        expect(ctx.daemon.daemon.agentManager.getAgent(agent.id)).toBeNull();
+      });
+      const timelinePromise = ctx.client.fetchAgentTimeline(agent.id, {
+        direction: "tail",
+        limit: 100,
+      });
+      await vi.waitFor(() => {
+        expect(waitSpy).toHaveBeenCalledWith(agent.id);
+      });
+      releaseClose?.();
+
+      const [collection, timeline] = await Promise.all([collectionPromise, timelinePromise]);
+      expect(collection.collected.map((entry) => entry.agentId)).toContain(agent.id);
+      expect(timeline.entries.map((entry) => entry.item)).toEqual([
+        { type: "assistant_message", text: "retained history" },
+      ]);
+      expect(timeline.agent?.status).toBe("closed");
+      expect(ctx.daemon.daemon.agentManager.getAgent(agent.id)).toBeNull();
+    } finally {
+      releaseClose?.();
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
+  test("timeline fetch cannot resurrect an agent after its delete fence", async () => {
+    const cwd = tmpCwd();
+    let releaseClose: (() => void) | undefined;
+    try {
+      const agent = await ctx.client.createAgent({
+        provider: "codex",
+        cwd,
+        title: "Timeline Delete Fence Test",
+        modeId: "full-access",
+      });
+      await ctx.daemon.daemon.agentManager.appendTimelineItem(agent.id, {
+        type: "assistant_message",
+        text: "deleted history",
+      });
+      const live = ctx.daemon.daemon.agentManager.getAgent(agent.id);
+      if (!live?.session) throw new Error("expected live agent session");
+      const closeGate = new Promise<void>((resolve) => {
+        releaseClose = resolve;
+      });
+      vi.spyOn(live.session, "close").mockImplementation(async () => await closeGate);
+      const waitSpy = vi.spyOn(ctx.daemon.daemon.agentManager, "waitForAgentClose");
+
+      const deletionPromise = ctx.client.deleteAgent(agent.id);
+      await vi.waitFor(() => {
+        expect(ctx.daemon.daemon.agentManager.getAgent(agent.id)).toBeNull();
+      });
+      const timelinePromise = ctx.client.fetchAgentTimeline(agent.id);
+      await vi.waitFor(() => {
+        expect(waitSpy).toHaveBeenCalledWith(agent.id);
+      });
+      releaseClose?.();
+
+      await deletionPromise;
+      await expect(timelinePromise).rejects.toThrow(`Agent not found: ${agent.id}`);
+      expect(ctx.daemon.daemon.agentManager.getAgent(agent.id)).toBeNull();
+    } finally {
+      releaseClose?.();
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
   test("timeline fetch returns one projected in-progress tool call instead of lifecycle deltas", async () => {
     const cwd = tmpCwd();
     try {

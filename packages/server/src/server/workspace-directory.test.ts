@@ -569,6 +569,7 @@ describe("WorkspaceDirectory empty projects", () => {
     expect(result.emptyProjects).toEqual([
       {
         projectId: "empty",
+        projectKey: "empty",
         projectDisplayName: "Renamed",
         projectCustomName: "Renamed",
         projectRootPath: "/workspace/empty",

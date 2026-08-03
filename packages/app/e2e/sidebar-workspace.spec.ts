@@ -58,7 +58,7 @@ test.describe("Sidebar workspace list", () => {
       await waitForSidebarProject(page, projectName);
       await waitForSidebarWorkspace(page, workspace.workspaceId);
 
-      const projectRow = page.getByTestId(`sidebar-project-row-${workspace.projectId}`);
+      const projectRow = page.getByTestId(`sidebar-project-row-${workspace.projectKey}`);
       await expect(projectRow).toBeVisible({ timeout: 30_000 });
       await expect(projectRow).toContainText(projectName);
       await expect(projectRow).not.toContainText("test-owner/test-repo");
@@ -213,7 +213,7 @@ test.describe("Half-screen desktop layout", () => {
       }
 
       await gotoAppShell(page);
-      await page.getByTestId(`sidebar-project-show-more-${workspace.projectId}`).click();
+      await page.getByTestId(`sidebar-project-show-more-${workspace.projectKey}`).click();
       await waitForSidebarWorkspace(page, lastWorkspaceId);
 
       const sidebarScroll = page.getByTestId("sidebar-project-workspace-list-scroll");
