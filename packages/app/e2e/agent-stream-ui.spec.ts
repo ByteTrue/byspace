@@ -26,6 +26,7 @@ import { selectModel } from "./helpers/app";
 import { clickNewChat } from "./helpers/launcher";
 import { expectComposerVisible, startRunningMockAgent } from "./helpers/composer";
 import { openAgentRoute, seedMockAgentWorkspace } from "./helpers/mock-agent";
+import { waitForSidebarHydration } from "./helpers/workspace-ui";
 
 const SCROLL_AWAY_MIN_SCROLLABLE_DISTANCE = 360;
 
@@ -237,6 +238,19 @@ test.describe("Agent stream UI", () => {
       initialPrompt: "Stream enough content to exercise the stream controls.",
     });
     try {
+      const workspaceAnchor = await agent.client.createAgent({
+        provider: "mock",
+        cwd: agent.cwd,
+        workspaceId: agent.workspaceId,
+        title: "Workspace archive anchor",
+        modeId: "load-test",
+        model: "ten-second-stream",
+      });
+      await agent.client.waitForAgentUpsert(
+        workspaceAnchor.id,
+        (snapshot) => snapshot.status === "idle",
+        30_000,
+      );
       await agent.client.waitForFinish(agent.agentId, 30_000);
       for (let turn = 0; turn < 3; turn += 1) {
         await agent.client.sendAgentMessage(
@@ -348,6 +362,15 @@ test.describe("Agent stream UI", () => {
 
       await page.setViewportSize({ width: 1280, height: 720 });
       await agent.client.archiveAgent(agent.agentId);
+      await expect
+        .poll(
+          async () =>
+            (await agent.client.fetchAgent({ agentId: agent.agentId }))?.agent.archivedAt ?? null,
+          { timeout: 30_000 },
+        )
+        .not.toBeNull();
+      await page.reload();
+      await waitForSidebarHydration(page);
       await openSessions(page);
       await expectSessionRowArchived(page, "Stream side controls");
       await clickSessionRow(page, "Stream side controls");
