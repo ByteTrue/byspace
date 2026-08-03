@@ -446,6 +446,215 @@ describe("PiRpcAgentSession", () => {
     expect(session.getPendingPermissions()).toEqual([]);
   });
 
+  test("bridges Pi ask_user_question as one multi-question permission", async () => {
+    const { pi, session, events } = await createSession();
+    const fakeSession = pi.latestSession();
+
+    fakeSession.emit({
+      type: "tool_execution_start",
+      toolCallId: "questionnaire-1",
+      toolName: "ask_user_question",
+      args: {
+        questions: [
+          {
+            question: "Choose a plan?",
+            header: "Plan",
+            options: [
+              { label: "A", description: "first" },
+              { label: "B", description: "second" },
+            ],
+          },
+          {
+            question: "Which checks?",
+            header: "Checks",
+            options: [
+              { label: "Lint", description: "static checks" },
+              { label: "Unit", description: "tests" },
+            ],
+            multiSelect: true,
+          },
+        ],
+      },
+    });
+
+    const permission = await events.nextPermissionRequest();
+    expect(permission.request).toMatchObject({
+      id: "pi-questionnaire:questionnaire-1",
+      name: "Pi ask_user_question",
+      kind: "question",
+      input: {
+        questions: [
+          {
+            question: "Choose a plan?",
+            header: "Plan",
+            options: [
+              { label: "A", description: "first" },
+              { label: "B", description: "second" },
+            ],
+            multiSelect: false,
+            allowOther: true,
+          },
+          {
+            question: "Which checks?",
+            header: "Checks",
+            options: [
+              { label: "Lint", description: "static checks" },
+              { label: "Unit", description: "tests" },
+            ],
+            multiSelect: true,
+            allowOther: true,
+            placeholder: "1,3",
+          },
+        ],
+      },
+      metadata: { piQuestionnaire: "pi_ask_user_question" },
+    });
+
+    fakeSession.emit({
+      type: "extension_ui_request",
+      id: "questionnaire-select-1",
+      method: "select",
+      title: "[Plan] Choose a plan?",
+      options: ["1. A — first", "2. B — second", "3. Type something."],
+    });
+    await session.respondToPermission(permission.request.id, {
+      behavior: "allow",
+      updatedInput: { answers: { Plan: "custom plan", Checks: "Lint" } },
+    });
+
+    expect(fakeSession.extensionUiResponses).toEqual([
+      { id: "questionnaire-select-1", response: { value: "3. Type something." } },
+    ]);
+    expect(session.getPendingPermissions()).toEqual([]);
+
+    fakeSession.emit({
+      type: "extension_ui_request",
+      id: "questionnaire-input-1",
+      method: "input",
+      title: "Type your answer:",
+      placeholder: "",
+    });
+    fakeSession.emit({
+      type: "extension_ui_request",
+      id: "questionnaire-input-2",
+      method: "input",
+      title: "Which checks?",
+      placeholder: "1,3",
+    });
+
+    expect(fakeSession.extensionUiResponses).toEqual([
+      { id: "questionnaire-select-1", response: { value: "3. Type something." } },
+      { id: "questionnaire-input-1", response: { value: "custom plan" } },
+      { id: "questionnaire-input-2", response: { value: "1" } },
+    ]);
+  });
+
+  test("cancels the aggregated Pi questionnaire when the form is dismissed", async () => {
+    const { pi, session, events } = await createSession();
+    const fakeSession = pi.latestSession();
+
+    fakeSession.emit({
+      type: "tool_execution_start",
+      toolCallId: "questionnaire-cancel-1",
+      toolName: "ask_user_question",
+      args: {
+        questions: [
+          {
+            question: "Choose one?",
+            header: "Choice",
+            options: [
+              { label: "A", description: "first" },
+              { label: "B", description: "second" },
+            ],
+          },
+        ],
+      },
+    });
+
+    const permission = await events.nextPermissionRequest();
+    await session.respondToPermission(permission.request.id, {
+      behavior: "deny",
+      message: "Dismissed by user",
+    });
+    fakeSession.emit({
+      type: "extension_ui_request",
+      id: "questionnaire-cancel-ui-1",
+      method: "select",
+      title: "Choose one?",
+      options: ["1. A — first", "2. B — second", "3. Type something."],
+    });
+
+    expect(fakeSession.extensionUiResponses).toEqual([
+      { id: "questionnaire-cancel-ui-1", response: { cancelled: true } },
+    ]);
+  });
+
+  test("bridges Pi ask_user freeform responses without losing typed text", async () => {
+    const { pi, session, events } = await createSession();
+    const fakeSession = pi.latestSession();
+
+    fakeSession.emit({
+      type: "tool_execution_start",
+      toolCallId: "ask-user-1",
+      toolName: "ask_user",
+      args: {
+        question: "Pick one",
+        options: ["A"],
+        allowFreeform: true,
+      },
+    });
+    fakeSession.emit({
+      type: "extension_ui_request",
+      id: "ask-user-select-1",
+      method: "select",
+      title: "Pick one",
+      options: ["A", "✏️ Type custom response..."],
+    });
+
+    const permission = await events.nextPermissionRequest();
+    expect(permission.request).toMatchObject({
+      input: {
+        questions: [
+          {
+            options: [{ label: "A" }],
+            allowOther: true,
+          },
+        ],
+      },
+      metadata: {
+        freeformAskUser: true,
+        freeformSentinel: "✏️ Type custom response...",
+      },
+    });
+
+    await session.respondToPermission(permission.request.id, {
+      behavior: "allow",
+      updatedInput: { answers: { Response: "typed answer" } },
+    });
+    expect(fakeSession.extensionUiResponses).toEqual([
+      {
+        id: "ask-user-select-1",
+        response: { value: "✏️ Type custom response..." },
+      },
+    ]);
+
+    fakeSession.emit({
+      type: "extension_ui_request",
+      id: "ask-user-input-1",
+      method: "input",
+      title: "Type your answer:",
+      placeholder: "",
+    });
+
+    expect(fakeSession.extensionUiResponses).toEqual([
+      {
+        id: "ask-user-select-1",
+        response: { value: "✏️ Type custom response..." },
+      },
+      { id: "ask-user-input-1", response: { value: "typed answer" } },
+    ]);
+  });
+
   test("cancels Pi RPC extension UI dialogs when question permission is denied", async () => {
     const { pi, session, events } = await createSession();
     const fakeSession = pi.latestSession();

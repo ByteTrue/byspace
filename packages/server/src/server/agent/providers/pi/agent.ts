@@ -98,6 +98,8 @@ const DEFAULT_PI_EXTENSION_RESULT_TIMEOUT_MS = 30_000;
 const QUESTION_RESPONSE_HEADER = "Response";
 const QUESTION_COMMENT_HEADER = "Comment";
 const PI_ASK_USER_FREEFORM_SENTINEL = "✏️ Type custom response...";
+const PI_QUESTIONNAIRE_FREEFORM_LABEL = "Type something.";
+const PI_QUESTIONNAIRE_METADATA = "pi_ask_user_question";
 const COMBINED_ASK_USER_METADATA = "ask_user_select_optional_comment";
 
 export const PiProviderParamsSchema = z
@@ -272,6 +274,23 @@ interface ActiveAskUserDialog {
   allowComment: boolean;
   allowFreeform: boolean;
   allowMultiple: boolean;
+}
+
+interface PiQuestionnaireQuestion {
+  question: string;
+  header: string;
+  options: Array<{ label: string; description?: string }>;
+  multiSelect: boolean;
+}
+
+interface ActivePiQuestionnaire {
+  permissionId: string;
+  questions: PiQuestionnaireQuestion[];
+  questionIndex: number;
+  answers: Record<string, string> | null;
+  pendingCustom: string | null;
+  uiRequest: Extract<PiRuntimeEvent, { type: "extension_ui_request" }> | null;
+  cancelled: boolean;
 }
 
 interface PendingCombinedAskUserResponse {
@@ -954,6 +973,86 @@ function readActiveAskUserDialog(toolName: string, args: unknown): ActiveAskUser
   };
 }
 
+function readPiQuestionnaireQuestions(
+  toolName: string,
+  args: unknown,
+): PiQuestionnaireQuestion[] | null {
+  if (toolName !== "ask_user_question" || !isRecord(args) || !Array.isArray(args.questions)) {
+    return null;
+  }
+
+  const usedHeaders = new Set<string>();
+  const questions: PiQuestionnaireQuestion[] = [];
+  for (const [index, rawQuestion] of args.questions.entries()) {
+    if (!isRecord(rawQuestion) || typeof rawQuestion.question !== "string") {
+      return null;
+    }
+    const rawOptions = rawQuestion.options;
+    if (!Array.isArray(rawOptions)) {
+      return null;
+    }
+
+    const options: Array<{ label: string; description?: string }> = [];
+    for (const rawOption of rawOptions) {
+      if (!isRecord(rawOption) || typeof rawOption.label !== "string") {
+        return null;
+      }
+      options.push({
+        label: rawOption.label,
+        ...(typeof rawOption.description === "string"
+          ? { description: rawOption.description }
+          : {}),
+      });
+    }
+
+    const baseHeader =
+      typeof rawQuestion.header === "string" && rawQuestion.header.length > 0
+        ? rawQuestion.header
+        : `Question ${index + 1}`;
+    let header = baseHeader;
+    let suffix = 2;
+    while (usedHeaders.has(header)) {
+      header = `${baseHeader} ${suffix}`;
+      suffix += 1;
+    }
+    usedHeaders.add(header);
+    questions.push({
+      question: rawQuestion.question,
+      header,
+      options,
+      multiSelect: rawQuestion.multiSelect === true,
+    });
+  }
+
+  return questions.length > 0 ? questions : null;
+}
+
+function buildPiQuestionnairePermission(
+  toolCallId: string,
+  questions: PiQuestionnaireQuestion[],
+): AgentPermissionRequest {
+  return {
+    id: `pi-questionnaire:${toolCallId}`,
+    provider: PI_PROVIDER,
+    name: "Pi ask_user_question",
+    kind: "question",
+    title: questions[0]?.question,
+    input: {
+      questions: questions.map((question) => ({
+        question: question.question,
+        header: question.header,
+        options: question.options,
+        multiSelect: question.multiSelect,
+        allowOther: true,
+        ...(question.multiSelect ? { placeholder: "1,3" } : {}),
+      })),
+    },
+    metadata: {
+      piQuestionnaire: PI_QUESTIONNAIRE_METADATA,
+    },
+  };
+}
+
 function isOptionalInputPlaceholder(placeholder: string | undefined): boolean {
   return /\boptional\b|\bskip\b/i.test(placeholder ?? "");
 }
@@ -975,7 +1074,10 @@ function readStringArray(value: unknown): string[] {
 }
 
 function isPiAskUserFreeformOption(option: string): boolean {
-  return option === PI_ASK_USER_FREEFORM_SENTINEL;
+  const normalized = option.replace(/^\d+\.\s*/, "");
+  return (
+    normalized === PI_ASK_USER_FREEFORM_SENTINEL || normalized === PI_QUESTIONNAIRE_FREEFORM_LABEL
+  );
 }
 
 function mapExtensionUiRequestToPermission(
@@ -994,6 +1096,16 @@ function mapExtensionUiRequestToPermission(
           question: optionalString(event.title) ?? "Select an option",
           options: selectOptions,
           allowFreeform: options.allowFreeform === true,
+        });
+      }
+      const freeformSentinel = selectOptions.find(isPiAskUserFreeformOption);
+      if (options.allowFreeform === true || freeformSentinel) {
+        return buildFreeformAskUserQuestionPermission(event, {
+          provider,
+          label,
+          question: optionalString(event.title) ?? "Select an option",
+          options: selectOptions,
+          freeformSentinel: freeformSentinel ?? PI_ASK_USER_FREEFORM_SENTINEL,
         });
       }
       return buildExtensionUiQuestionPermission(event, {
@@ -1121,8 +1233,9 @@ function buildCombinedAskUserQuestionPermission(
     allowFreeform: boolean;
   },
 ): AgentPermissionRequest {
+  const freeformSentinel = input.options.find(isPiAskUserFreeformOption);
   const visibleOptions = input.options.filter((option) => !isPiAskUserFreeformOption(option));
-  const allowOther = input.allowFreeform || visibleOptions.length !== input.options.length;
+  const allowOther = input.allowFreeform || freeformSentinel !== undefined;
   return {
     id: event.id,
     provider: input.provider,
@@ -1154,7 +1267,47 @@ function buildCombinedAskUserQuestionPermission(
       commentHeader: QUESTION_COMMENT_HEADER,
       combinedAskUser: COMBINED_ASK_USER_METADATA,
       selectOptions: visibleOptions,
-      ...(allowOther ? { freeformSentinel: PI_ASK_USER_FREEFORM_SENTINEL } : {}),
+      ...(allowOther
+        ? { freeformSentinel: freeformSentinel ?? PI_ASK_USER_FREEFORM_SENTINEL }
+        : {}),
+    },
+  };
+}
+
+function buildFreeformAskUserQuestionPermission(
+  event: Extract<PiRuntimeEvent, { type: "extension_ui_request" }>,
+  input: {
+    provider: AgentProvider;
+    label: string;
+    question: string;
+    options: string[];
+    freeformSentinel: string;
+  },
+): AgentPermissionRequest {
+  const visibleOptions = input.options.filter((option) => option !== input.freeformSentinel);
+  return {
+    id: event.id,
+    provider: input.provider,
+    name: `${input.label} ${event.method}`,
+    kind: "question",
+    title: input.question,
+    input: {
+      questions: [
+        {
+          question: input.question,
+          header: QUESTION_RESPONSE_HEADER,
+          options: visibleOptions.map((label) => ({ label })),
+          multiSelect: false,
+          allowOther: true,
+        },
+      ],
+    },
+    metadata: {
+      extensionUiMethod: event.method,
+      answerHeader: QUESTION_RESPONSE_HEADER,
+      freeformAskUser: true,
+      selectOptions: visibleOptions,
+      freeformSentinel: input.freeformSentinel,
     },
   };
 }
@@ -1179,6 +1332,45 @@ function firstPermissionAnswer(input: AgentMetadata | undefined): string | null 
 
 function isCombinedAskUserPermission(request: AgentPermissionRequest): boolean {
   return request.metadata?.combinedAskUser === COMBINED_ASK_USER_METADATA;
+}
+
+function isFreeformAskUserPermission(request: AgentPermissionRequest): boolean {
+  return request.metadata?.freeformAskUser === true;
+}
+
+function isPiQuestionnairePermission(request: AgentPermissionRequest): boolean {
+  return request.metadata?.piQuestionnaire === PI_QUESTIONNAIRE_METADATA;
+}
+
+function serializePiQuestionnaireMultiSelection(
+  answer: string,
+  question: PiQuestionnaireQuestion,
+): string {
+  const labels = answer
+    .split(",")
+    .map((label) => label.trim())
+    .filter((label) => label.length > 0);
+  const indices = labels.map((label) =>
+    question.options.findIndex((option) => option.label === label),
+  );
+  if (indices.every((index) => index >= 0)) {
+    return indices.map((index) => String(index + 1)).join(",");
+  }
+  return answer;
+}
+
+function readPermissionAnswers(input: AgentMetadata | undefined): Record<string, string> | null {
+  const answers = isRecord(input?.answers) ? input.answers : null;
+  if (!answers) {
+    return null;
+  }
+  const result: Record<string, string> = {};
+  for (const [key, value] of Object.entries(answers)) {
+    if (typeof value === "string") {
+      result[key] = value;
+    }
+  }
+  return result;
 }
 
 function buildCombinedAskUserSelectionResponse(
@@ -1207,6 +1399,31 @@ function buildCombinedAskUserSelectionResponse(
       comment,
       freeform: isFreeform ? answer : null,
     },
+  };
+}
+
+function buildFreeformAskUserSelectionResponse(
+  request: AgentPermissionRequest,
+  response: AgentPermissionResponse,
+): {
+  uiResponse: { value?: string; cancelled?: boolean };
+  pendingResponse: PendingCombinedAskUserResponse | null;
+} {
+  if (response.behavior === "deny") {
+    return { uiResponse: { cancelled: true }, pendingResponse: null };
+  }
+
+  const answer = permissionAnswer(response.updatedInput, QUESTION_RESPONSE_HEADER);
+  if (answer === null) {
+    return { uiResponse: { cancelled: true }, pendingResponse: null };
+  }
+
+  const selectOptions = readStringArray(request.metadata?.selectOptions);
+  const freeformSentinel = optionalString(request.metadata?.freeformSentinel);
+  const isFreeform = Boolean(freeformSentinel) && !selectOptions.includes(answer);
+  return {
+    uiResponse: { value: isFreeform ? freeformSentinel : answer },
+    pendingResponse: isFreeform ? { comment: "", freeform: answer } : null,
   };
 }
 
@@ -1267,6 +1484,7 @@ export class PiRpcAgentSession implements AgentSession {
   private readonly activeToolCalls = new Map<string, PiTrackedToolCall>();
   private readonly pendingExtensionUiRequests = new Map<string, AgentPermissionRequest>();
   private activeAskUserDialog: ActiveAskUserDialog | null = null;
+  private activePiQuestionnaire: ActivePiQuestionnaire | null = null;
   private pendingCombinedAskUserResponse: PendingCombinedAskUserResponse | null = null;
   private activeTurnId: string | null = null;
   private activeClientMessageId: string | null = null;
@@ -1453,10 +1671,16 @@ export class PiRpcAgentSession implements AgentSession {
     }
     this.pendingExtensionUiRequests.delete(requestId);
 
-    if (isCombinedAskUserPermission(request)) {
+    if (isPiQuestionnairePermission(request)) {
+      this.acceptPiQuestionnaireResponse(request, response);
+    } else if (isCombinedAskUserPermission(request)) {
       const combined = buildCombinedAskUserSelectionResponse(request, response);
       this.pendingCombinedAskUserResponse = combined.pendingResponse;
       this.runtimeSession.respondToExtensionUiRequest(requestId, combined.uiResponse);
+    } else if (isFreeformAskUserPermission(request)) {
+      const freeform = buildFreeformAskUserSelectionResponse(request, response);
+      this.pendingCombinedAskUserResponse = freeform.pendingResponse;
+      this.runtimeSession.respondToExtensionUiRequest(requestId, freeform.uiResponse);
     } else {
       this.runtimeSession.respondToExtensionUiRequest(
         requestId,
@@ -1995,6 +2219,122 @@ export class PiRpcAgentSession implements AgentSession {
     return true;
   }
 
+  private acceptPiQuestionnaireResponse(
+    request: AgentPermissionRequest,
+    response: AgentPermissionResponse,
+  ): void {
+    const active = this.activePiQuestionnaire;
+    if (!active || active.permissionId !== request.id) {
+      return;
+    }
+
+    if (response.behavior === "deny") {
+      active.cancelled = true;
+      active.answers = null;
+      active.pendingCustom = null;
+    } else {
+      const answers = readPermissionAnswers(response.updatedInput);
+      if (!answers) {
+        active.cancelled = true;
+        active.answers = null;
+      } else {
+        active.answers = answers;
+      }
+    }
+    this.flushPiQuestionnaireResponse();
+  }
+
+  private handlePiQuestionnaireUiRequest(
+    event: Extract<PiRuntimeEvent, { type: "extension_ui_request" }>,
+  ): boolean {
+    const active = this.activePiQuestionnaire;
+    if (!active || (event.method !== "select" && event.method !== "input")) {
+      return false;
+    }
+    active.uiRequest = event;
+    this.flushPiQuestionnaireResponse();
+    return true;
+  }
+
+  private flushPiQuestionnaireResponse(): void {
+    const active = this.activePiQuestionnaire;
+    const event = active?.uiRequest;
+    if (!active || !event) {
+      return;
+    }
+
+    if (active.cancelled) {
+      this.runtimeSession.respondToExtensionUiRequest(event.id, { cancelled: true });
+      active.uiRequest = null;
+      return;
+    }
+
+    if (active.pendingCustom !== null) {
+      if (event.method !== "input") {
+        active.cancelled = true;
+        this.runtimeSession.respondToExtensionUiRequest(event.id, { cancelled: true });
+      } else {
+        this.runtimeSession.respondToExtensionUiRequest(event.id, {
+          value: active.pendingCustom,
+        });
+        active.pendingCustom = null;
+        active.questionIndex += 1;
+      }
+      active.uiRequest = null;
+      return;
+    }
+
+    const answers = active.answers;
+    const question = active.questions[active.questionIndex];
+    if (!answers || !question) {
+      return;
+    }
+
+    const answer = answers[question.header];
+    if (typeof answer !== "string") {
+      active.cancelled = true;
+      this.runtimeSession.respondToExtensionUiRequest(event.id, { cancelled: true });
+      active.uiRequest = null;
+      return;
+    }
+
+    if (event.method === "select") {
+      if (question.multiSelect) {
+        active.cancelled = true;
+        this.runtimeSession.respondToExtensionUiRequest(event.id, { cancelled: true });
+        active.uiRequest = null;
+        return;
+      }
+
+      const optionIndex = question.options.findIndex((option) => option.label === answer);
+      if (optionIndex >= 0) {
+        const eventOptions = readStringArray(event.options);
+        this.runtimeSession.respondToExtensionUiRequest(event.id, {
+          value: eventOptions[optionIndex] ?? answer,
+        });
+        active.questionIndex += 1;
+      } else {
+        const freeformSentinel = readStringArray(event.options).find(isPiAskUserFreeformOption);
+        if (!freeformSentinel) {
+          active.cancelled = true;
+          this.runtimeSession.respondToExtensionUiRequest(event.id, { cancelled: true });
+          active.uiRequest = null;
+          return;
+        }
+        active.pendingCustom = answer;
+        this.runtimeSession.respondToExtensionUiRequest(event.id, { value: freeformSentinel });
+      }
+    } else {
+      this.runtimeSession.respondToExtensionUiRequest(event.id, {
+        value: question.multiSelect
+          ? serializePiQuestionnaireMultiSelection(answer, question)
+          : answer,
+      });
+      active.questionIndex += 1;
+    }
+    active.uiRequest = null;
+  }
+
   private handleExtensionUiRequest(
     event: Extract<PiRuntimeEvent, { type: "extension_ui_request" }>,
   ): void {
@@ -2008,6 +2348,10 @@ export class PiRpcAgentSession implements AgentSession {
         return;
       }
       this.bufferNoTurnOutput(message);
+    }
+
+    if (this.handlePiQuestionnaireUiRequest(event)) {
+      return;
     }
 
     if (this.respondToCombinedAskUserFollowUp(event)) {
@@ -2175,7 +2519,29 @@ export class PiRpcAgentSession implements AgentSession {
         const toolCall = parseToolArgs(event.toolName, event.args);
         this.activeToolCalls.set(event.toolCallId, toolCall);
         this.activeAskUserDialog = readActiveAskUserDialog(event.toolName, event.args);
+        this.activePiQuestionnaire = null;
         this.emitToolCallEvent(event.toolCallId, toolCall, "running", null, null);
+
+        const questionnaireQuestions = readPiQuestionnaireQuestions(event.toolName, event.args);
+        if (questionnaireQuestions) {
+          const request = buildPiQuestionnairePermission(event.toolCallId, questionnaireQuestions);
+          this.activePiQuestionnaire = {
+            permissionId: request.id,
+            questions: questionnaireQuestions,
+            questionIndex: 0,
+            answers: null,
+            pendingCustom: null,
+            uiRequest: null,
+            cancelled: false,
+          };
+          this.pendingExtensionUiRequests.set(request.id, request);
+          this.emit({
+            type: "permission_requested",
+            provider: this.provider,
+            request,
+            turnId: this.currentTurnIdForEvent(),
+          });
+        }
         return;
       }
       case "tool_execution_update": {
@@ -2230,6 +2596,12 @@ export class PiRpcAgentSession implements AgentSession {
     if (event.toolName === "ask_user") {
       this.activeAskUserDialog = null;
       this.pendingCombinedAskUserResponse = null;
+    }
+    if (event.toolName === "ask_user_question") {
+      if (this.activePiQuestionnaire) {
+        this.pendingExtensionUiRequests.delete(this.activePiQuestionnaire.permissionId);
+      }
+      this.activePiQuestionnaire = null;
     }
 
     const result = parseToolResult(event.result);

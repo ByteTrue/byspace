@@ -1,6 +1,13 @@
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { useState, useCallback, useMemo } from "react";
-import { View, Text, TextInput, Pressable, type PressableStateCallbackType } from "react-native";
+import {
+  View,
+  Text,
+  TextInput,
+  Pressable,
+  type PressableStateCallbackType,
+  type TextInputSubmitEditingEvent,
+} from "react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { Check, X } from "lucide-react-native";
@@ -259,7 +266,7 @@ interface QuestionOtherInputProps {
   placeholder: string;
   isResponding: boolean;
   onChange: (qIndex: number, text: string) => void;
-  onSubmit: () => void;
+  onSubmit: (text: string) => void;
 }
 
 function QuestionOtherInput({
@@ -277,6 +284,12 @@ function QuestionOtherInput({
       onChange(qIndex, text);
     },
     [onChange, qIndex],
+  );
+  const handleSubmitEditing = useCallback(
+    (event: TextInputSubmitEditingEvent) => {
+      onSubmit(event.nativeEvent.text);
+    },
+    [onSubmit],
   );
   const otherInputStyle = useMemo(
     () =>
@@ -306,7 +319,7 @@ function QuestionOtherInput({
       placeholderTextColor={theme.colors.foregroundMuted}
       value={value}
       onChangeText={handleChange}
-      onSubmitEditing={onSubmit}
+      onSubmitEditing={handleSubmitEditing}
       editable={!isResponding}
       blurOnSubmit={false}
     />
@@ -379,25 +392,26 @@ export function QuestionFormCard({ permission, onRespond, isResponding }: Questi
     : false;
   const isLastQuestion = questions ? resolvedActiveQuestionIndex === questions.length - 1 : true;
 
-  const handleSubmit = useCallback(() => {
-    if (!questions || !allAnswered || isResponding) return;
-    setRespondingAction("submit");
-    onRespond({
-      behavior: "allow",
-      updatedInput: {
-        ...permission.request.input,
-        answers: buildQuestionFormAnswers(questions, selections, otherTexts),
-      },
-    });
-  }, [
-    questions,
-    allAnswered,
-    isResponding,
-    selections,
-    otherTexts,
-    onRespond,
-    permission.request.input,
-  ]);
+  const handleSubmit = useCallback(
+    (submittedOtherTexts = otherTexts) => {
+      if (
+        !questions ||
+        !areQuestionsAnswered(questions, selections, submittedOtherTexts) ||
+        isResponding
+      ) {
+        return;
+      }
+      setRespondingAction("submit");
+      onRespond({
+        behavior: "allow",
+        updatedInput: {
+          ...permission.request.input,
+          answers: buildQuestionFormAnswers(questions, selections, submittedOtherTexts),
+        },
+      });
+    },
+    [questions, isResponding, selections, otherTexts, onRespond, permission.request.input],
+  );
 
   const handleDeny = useCallback(() => {
     if (!questions) return;
@@ -428,14 +442,53 @@ export function QuestionFormCard({ permission, onRespond, isResponding }: Questi
     [questions, selections, otherTexts],
   );
 
-  const handlePrimaryAction = useCallback(() => {
-    if (!isLastQuestion) {
-      if (!activeQuestionAnswered || isResponding) return;
-      setActiveQuestionIndex((index) => Math.min(index + 1, (questions?.length ?? 1) - 1));
-      return;
-    }
-    handleSubmit();
-  }, [activeQuestionAnswered, handleSubmit, isLastQuestion, isResponding, questions?.length]);
+  const handlePrimaryAction = useCallback(
+    (submittedText?: string) => {
+      const submittedOtherTexts =
+        submittedText === undefined
+          ? otherTexts
+          : { ...otherTexts, [resolvedActiveQuestionIndex]: submittedText };
+
+      if (submittedText !== undefined) {
+        setOtherTexts(submittedOtherTexts);
+        if (submittedText.length > 0) {
+          setSelections((prev) => {
+            if (!prev[resolvedActiveQuestionIndex]?.size) return prev;
+            return { ...prev, [resolvedActiveQuestionIndex]: new Set<number>() };
+          });
+        }
+      }
+
+      const submittedQuestionAnswered = activeQuestion
+        ? isQuestionAnswered(
+            activeQuestion,
+            resolvedActiveQuestionIndex,
+            selections,
+            submittedOtherTexts,
+          )
+        : false;
+      if (!isLastQuestion) {
+        if (!submittedQuestionAnswered || isResponding) return;
+        setActiveQuestionIndex((index) => Math.min(index + 1, (questions?.length ?? 1) - 1));
+        return;
+      }
+      handleSubmit(submittedOtherTexts);
+    },
+    [
+      activeQuestion,
+      handleSubmit,
+      isLastQuestion,
+      isResponding,
+      otherTexts,
+      questions?.length,
+      resolvedActiveQuestionIndex,
+      selections,
+    ],
+  );
+
+  const handlePressPrimaryAction = useCallback(() => {
+    handlePrimaryAction();
+  }, [handlePrimaryAction]);
 
   const dismissButtonStyle = useCallback(
     ({ pressed, hovered }: PressableStateCallbackType & { hovered?: boolean }) => [
@@ -586,7 +639,7 @@ export function QuestionFormCard({ permission, onRespond, isResponding }: Questi
 
         <Pressable
           style={submitButtonStyle}
-          onPress={handlePrimaryAction}
+          onPress={handlePressPrimaryAction}
           disabled={primaryDisabled}
           accessibilityRole="button"
           accessibilityLabel={primaryActionLabel}
