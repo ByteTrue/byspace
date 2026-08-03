@@ -199,7 +199,16 @@ export async function closeWorkspaceAgentTab(page: Page, agentId: string): Promi
 }
 
 export async function expectArchivedAgentFocused(page: Page, agentId: string): Promise<void> {
-  await expectWorkspaceTabVisible(page, agentId);
+  // History navigation can return to a retained workspace panel before its route intent
+  // focuses the archived tab; focus the already-open canonical tab before asserting its UI.
+  const archivedTab = page
+    .getByTestId(`workspace-tab-agent_${agentId}`)
+    .filter({ visible: true })
+    .first();
+  await expect(archivedTab).toBeVisible();
+  if ((await archivedTab.getAttribute("aria-selected")) !== "true") {
+    await archivedTab.click();
+  }
   await expect(
     page.getByText("This agent is archived").filter({ visible: true }).first(),
   ).toBeVisible({

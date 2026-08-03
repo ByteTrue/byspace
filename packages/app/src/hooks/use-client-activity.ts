@@ -11,6 +11,7 @@ interface ClientActivityOptions {
   focusedAgentId: string | null;
   focusedTerminalId: string | null;
   onAppResumed?: (awayMs: number) => void;
+  onWindowFocused?: () => void;
 }
 
 export function useClientActivity({
@@ -18,9 +19,12 @@ export function useClientActivity({
   focusedAgentId,
   focusedTerminalId,
   onAppResumed,
+  onWindowFocused,
 }: ClientActivityOptions): void {
   const onAppResumedRef = useRef(onAppResumed);
   onAppResumedRef.current = onAppResumed;
+  const onWindowFocusedRef = useRef(onWindowFocused);
+  onWindowFocusedRef.current = onWindowFocused;
   const trackerRef = useRef<ClientActivityTracker | null>(null);
   if (!trackerRef.current) {
     trackerRef.current = createClientActivityTracker({
@@ -40,20 +44,24 @@ export function useClientActivity({
       tracker.recordUserActivity();
       tracker.maybeSendImmediateHeartbeat();
     };
+    const handleWindowFocus = () => {
+      handleUserActivity();
+      onWindowFocusedRef.current?.();
+    };
     const handleVisibilityChange = () => {
       const visible = document.visibilityState === "visible";
       const { changed } = tracker.notifyAppVisibility(visible);
       if (changed && visible) tracker.maybeSendImmediateHeartbeat();
     };
     document.addEventListener("visibilitychange", handleVisibilityChange);
-    window.addEventListener("focus", handleUserActivity);
+    window.addEventListener("focus", handleWindowFocus);
     window.addEventListener("pointerdown", handleUserActivity, { passive: true });
     window.addEventListener("keydown", handleUserActivity);
     window.addEventListener("wheel", handleUserActivity, { passive: true });
     window.addEventListener("touchstart", handleUserActivity, { passive: true });
     return () => {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
-      window.removeEventListener("focus", handleUserActivity);
+      window.removeEventListener("focus", handleWindowFocus);
       window.removeEventListener("pointerdown", handleUserActivity);
       window.removeEventListener("keydown", handleUserActivity);
       window.removeEventListener("wheel", handleUserActivity);

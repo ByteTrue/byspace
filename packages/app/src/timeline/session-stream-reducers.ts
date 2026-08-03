@@ -472,7 +472,9 @@ function acceptIncrementalTimelineUnits(args: {
   }
 
   return {
-    acceptedUnits: timelineUnits,
+    acceptedUnits: timelineUnits.filter((unit) =>
+      unit.sourceSeqRanges.some((range) => range.endSeq > currentCursor.endSeq),
+    ),
     cursor: { ...currentCursor, endSeq: responseEndSeq },
     gapCursor: null,
   };
@@ -1184,12 +1186,26 @@ function processTimelineSequencingGate(input: {
         : [],
     };
   }
-  if (decision === "drop_epoch" && seq === 1) {
+  if (decision === "drop_epoch") {
+    if (seq === 1) {
+      return {
+        ...base,
+        nextTimelineCursor: { epoch, startSeq: seq, endSeq: seq },
+        cursorChanged: true,
+        resetLiveTimeline: true,
+      };
+    }
     return {
       ...base,
-      nextTimelineCursor: { epoch, startSeq: seq, endSeq: seq },
-      cursorChanged: true,
-      resetLiveTimeline: true,
+      shouldApplyStreamEvent: false,
+      sideEffects: currentCursor
+        ? [
+            {
+              type: "catch_up",
+              cursor: { epoch: currentCursor.epoch, endSeq: currentCursor.endSeq },
+            },
+          ]
+        : [],
     };
   }
   return {

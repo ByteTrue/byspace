@@ -43,17 +43,8 @@ export function useRewindAgentMutation(input: UseRewindAgentMutationInput): {
             head: clearOptimisticUserMessages(session?.agentStreamHead.get(input.agentId) ?? []),
           });
         }
-        const cursor = input.serverId
-          ? useSessionStore
-              .getState()
-              .sessions[input.serverId]?.agentTimelineCursor.get(input.agentId)
-          : undefined;
         if (!input.serverId) throw new Error(t("common.errors.daemonClientUnavailable"));
-        await getHostRuntimeStore().fetchAgentTimeline(input.serverId, input.agentId, {
-          direction: "tail",
-          projection: "projected",
-          ...(cursor ? { cursor: { epoch: cursor.epoch, seq: cursor.endSeq } } : {}),
-        });
+        await getHostRuntimeStore().refreshAgentTimeline(input.serverId, input.agentId);
       }
     },
     onSuccess: (_data, variables) => {

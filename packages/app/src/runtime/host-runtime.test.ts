@@ -44,6 +44,12 @@ class FakeDaemonClient {
   private agentListenerWaiters = new Set<() => void>();
   private sentMessageWaiters = new Set<() => void>();
 
+  getLastServerInfoMessage(): null {
+    return null;
+  }
+
+  async setAgentTimelineSubscription(): Promise<void> {}
+
   on(
     type: "agent_update",
     listener: (message: Extract<SessionOutboundMessage, { type: "agent_update" }>) => void,

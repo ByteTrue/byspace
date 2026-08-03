@@ -64,13 +64,15 @@ server-side Timeline replica is not part of this optimization.
 
 ## Client replica lifetime
 
-The host runtime owns each session replica for as long as the host remains registered. React
-providers attach message handlers and UI integrations to that replica, but mounting or unmounting a
-provider must not create or clear it. A provider can remount during Fast Refresh or ordinary UI
-recomposition while the runtime still owns the same directory snapshot and timeline cursors.
+The host runtime owns each session replica and its timeline sync owner for as long as the host remains
+registered. React providers only report browser activation and UI integrations to that owner;
+mounting or unmounting a provider must not create the owner, arbitrate responses, or clear the
+replica. A provider can remount during Fast Refresh or ordinary UI recomposition while the runtime
+still owns the same directory snapshot, timeline cursors, and in-flight request metadata.
 
-Removing the host from the registry is the destructive boundary: it stops the runtime and clears the
-session and host-scoped setup state together.
+Removing the host from the registry is the destructive boundary: it stops the runtime, rejects and
+clears that owner's pending initialization watchdogs, and clears the session and host-scoped setup
+state together.
 
 ## Selective and legacy delivery
 
@@ -79,15 +81,53 @@ The app chooses one delivery policy from `server_info.features.selectiveAgentTim
 - Selective daemons receive the union of agents visible in every pane. Additions subscribe and
   catch up immediately. Every visibility-driven removal, including app backgrounding, stays
   subscribed for a 30-second grace period so brief tab, pane, route, and app switches do not repeatedly
-  unsubscribe and catch up. Losing window keyboard focus does not make a selected pane invisible.
-  Disconnecting and disposal clear pending grace because the subscription itself no longer exists.
+  unsubscribe. Re-showing a retained timeline still starts an immediate authoritative catch-up; it
+  bypasses identical in-flight request deduplication so an older request cannot delay the visible
+  view. Losing window keyboard focus does not make a selected pane invisible, but returning to the
+  foreground or refocusing the window triggers the same authoritative catch-up even when the
+  subscription survived the grace period; retained membership is not proof that a suspended browser
+  or transport delivered every live event. Disconnecting and disposal clear pending grace because
+  the subscription itself no longer exists.
   After grace has expired, revisiting a retained timeline displays its cached state immediately and
   authoritative catch-up advances it to the current tail.
 - Legacy daemons keep globally streaming agent timelines. Visibility still triggers the existing
   authoritative catch-up, but the app does not issue selective-subscription RPCs.
 
-This policy is owned by `viewed-timeline-sync.ts`; downstream reducers do not branch on daemon
-version.
+`agent-timeline-sync-owner.ts` owns request issuance and response application. It reuses
+`viewed-timeline-sync.ts` for visibility membership and forward catch-up policy; downstream reducers
+do not branch on daemon version.
+
+## Response arbitration
+
+Each host has one timeline sync owner. Initialization, resume/focus repair, gap recovery, explicit
+refreshes, rewind/reload repair, and older pagination all pass through it. `requestId` only correlates
+a response with its request; request issuance order does not define snapshot freshness because a
+request that started earlier may take its daemon snapshot later. A response carrying a protocol
+`error` is a failed request: it applies no replica or pagination state, cannot mark readiness, and
+enters the same retry path as a transport failure.
+
+The owner keeps independent `forward` and `older` lanes. Every forward control intent has one stable
+identity across all of its `after` pages; a later focus/resume intent can supersede it without making
+an older continuation current again. Explicit visibility repair bypasses equivalent-request
+deduplication on every page, not only the first page. A current forward response alone may complete
+initialization or visibility readiness. An earlier response from the same connection may still
+contribute canonical rows when the reducer proves they extend the current epoch and sequence range,
+but it cannot complete a newer control intent or overwrite pagination metadata. Fully covered units
+in an overlapping same-epoch page are not replayed, while boundary-spanning projected units remain
+eligible for canonical reconciliation. Older pages may extend `startSeq` and `hasOlder`; they never
+complete forward readiness or move `endSeq` backward. Once an accepted response changes the daemon
+timeline epoch, responses issued before that rollover cannot replace it; a current rejected control
+response is retried rather than treated as ready. Same-epoch gap resets remain authoritative while
+their request cursor is still the active replica boundary, and become ordinary overlap repair after
+that boundary advances. Responses from a previous host connection epoch are ignored.
+
+Before applying an authoritative page, the owner flushes queued live events for that agent and then
+uses the existing canonical reducer. A live row from a different daemon timeline epoch can switch
+the visible replica directly only when it is sequence 1. If the first observed row is later than
+sequence 1, the owner holds the current replica and requests authoritative repair; an old-epoch page
+already in flight cannot overwrite that observation. This keeps low-latency live presentation and
+authoritative repair on one serialized replica boundary without treating either path as globally
+newer by arrival time.
 
 ## Projected pages reconcile with live presentation
 
@@ -111,6 +151,8 @@ limited to the dated compatibility path for daemon timelines created before that
 
 - Server live stream forwarding: `packages/server/src/server/session.ts`
 - App sync planning: `packages/app/src/timeline/timeline-sync-plan.ts`
-- App viewed-agent synchronization: `packages/app/src/timeline/viewed-timeline-sync.ts`
+- App timeline owner: `packages/app/src/timeline/agent-timeline-sync-owner.ts`
+- App visibility membership/catch-up policy: `packages/app/src/timeline/viewed-timeline-sync.ts`
 - App stream/timeline reducer: `packages/app/src/timeline/session-stream-reducers.ts`
-- Session wiring: `packages/app/src/contexts/session-context.tsx`
+- Host runtime integration: `packages/app/src/runtime/directory-sync/index.ts`
+- React activation wiring: `packages/app/src/contexts/session-context.tsx`

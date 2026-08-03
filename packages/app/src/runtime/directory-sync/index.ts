@@ -3,7 +3,13 @@ import type {
   FetchAgentsEntry,
   FetchAgentsOptions,
 } from "@bytetrue/byspace-client/internal/daemon-client";
-import { fetchAgentTimelineOnce } from "@/timeline/fetch-agent-timeline-once";
+import { parseServerInfoStatusPayload } from "@bytetrue/byspace-protocol/messages";
+import {
+  AgentTimelineSyncOwner,
+  type AgentTimelineRequest,
+} from "@/timeline/agent-timeline-sync-owner";
+import type { TimelineDeliveryMode, ViewedTimelineUiBridge } from "@/timeline/viewed-timeline-sync";
+import type { ProjectedTimelineFetchPlan } from "@/timeline/timeline-sync-plan";
 import {
   normalizeEmptyProjectDescriptor,
   normalizeProjectDescriptor,
@@ -58,6 +64,11 @@ export interface RefreshAgentDirectoryResult {
   subscriptionId: string | null;
 }
 
+// COMPAT(selectiveAgentTimeline): added in v0.1.106, remove after 2027-01-12.
+function getTimelineDeliveryMode(selectiveAgentTimeline?: boolean): TimelineDeliveryMode {
+  return selectiveAgentTimeline ? "selective" : "legacy";
+}
+
 export class DirectorySync {
   private readonly agentTransactions = new DirectoryTransactionOwner<
     AgentSnapshot,
@@ -69,6 +80,7 @@ export class DirectorySync {
   >();
   private readonly agents: AgentDirectoryReplica;
   private readonly workspaces: WorkspaceDirectoryReplica;
+  private readonly timeline: AgentTimelineSyncOwner;
   private connection: DirectoryConnection = {
     client: null,
     status: "offline",
@@ -88,6 +100,19 @@ export class DirectorySync {
   ) {
     this.agents = new AgentDirectoryReplica(serverId, callbacks.drainQueuedAgentMessage);
     this.workspaces = new WorkspaceDirectoryReplica(serverId);
+    this.timeline = new AgentTimelineSyncOwner({
+      serverId,
+      requestPage: (agentId, request) => this.requestTimelinePage(agentId, request),
+      setSubscription: (agentIds) =>
+        this.requireOnline().client.setAgentTimelineSubscription(agentIds),
+      drainQueuedAgentMessage: callbacks.drainQueuedAgentMessage,
+      reportError: (error) =>
+        console.warn("[Timeline] synchronization failed", { serverId, error }),
+      schedule: (task, delayMs) => {
+        const timeout = setTimeout(task, delayMs);
+        return () => clearTimeout(timeout);
+      },
+    });
   }
 
   connectionChanged(connection: DirectoryConnection): boolean {
@@ -103,12 +128,31 @@ export class DirectorySync {
     this.flushAbortedTransactions();
     this.unsubscribe?.();
     this.unsubscribe = null;
+    this.timeline.setConnected(false);
     this.connection = connection;
     this.abortPendingSessionWaits();
     if (!connection.client || connection.status !== "online") return true;
     const client = connection.client;
     const source = connection.source;
+    const serverInfo = client.getLastServerInfoMessage();
+    this.timeline.setDeliveryMode(
+      getTimelineDeliveryMode(serverInfo?.features?.selectiveAgentTimeline),
+    );
     const subscriptions = [
+      client.on("agent_stream", (message) => {
+        if (message.type === "agent_stream" && this.isCurrent(client, source)) {
+          this.timeline.enqueueLive(message.payload);
+        }
+      }),
+      client.on("status", (message) => {
+        if (message.type !== "status" || !this.isCurrent(client, source)) return;
+        const info = parseServerInfoStatusPayload(message.payload);
+        if (info) {
+          this.timeline.setDeliveryMode(
+            getTimelineDeliveryMode(info.features?.selectiveAgentTimeline),
+          );
+        }
+      }),
       client.on("agent_update", (message) => {
         if (message.type !== "agent_update" || !this.isCurrent(client, source)) return;
         if (!this.agentTransactions.record(source, message.payload))
@@ -134,6 +178,7 @@ export class DirectorySync {
     this.unsubscribe = () => {
       for (const unsubscribe of subscriptions) unsubscribe();
     };
+    this.timeline.setConnected(true, `${source.clientGeneration}:${source.connectionEpoch}`);
     return true;
   }
 
@@ -142,16 +187,48 @@ export class DirectorySync {
     this.abortPendingSessionWaits();
     this.unsubscribe?.();
     this.unsubscribe = null;
+    this.timeline.dispose();
   }
 
-  async fetchTimeline(
+  get timelineUiBridge(): ViewedTimelineUiBridge {
+    return this.timeline.uiBridge;
+  }
+
+  setTimelineActive(active: boolean): void {
+    this.timeline.setActive(active);
+  }
+
+  refreshVisibleTimelines(): void {
+    this.timeline.refreshVisibleTimelines();
+  }
+
+  ensureTimelineCurrent(agentId: string): Promise<void> {
+    return this.timeline.ensureCurrent(agentId);
+  }
+
+  refreshTimeline(
     agentId: string,
-    request: Parameters<DaemonClient["fetchAgentTimeline"]>[1],
   ): Promise<Awaited<ReturnType<DaemonClient["fetchAgentTimeline"]>>> {
-    const { client } = this.requireOnline();
+    return this.timeline.refreshAgent(agentId);
+  }
+
+  fetchTimeline(
+    agentId: string,
+    request: ProjectedTimelineFetchPlan,
+  ): Promise<Awaited<ReturnType<DaemonClient["fetchAgentTimeline"]>>> {
+    return this.timeline.fetchTimeline(agentId, request);
+  }
+
+  private async requestTimelinePage(
+    agentId: string,
+    request: AgentTimelineRequest,
+  ): Promise<Awaited<ReturnType<DaemonClient["fetchAgentTimeline"]>>> {
+    const { client, source } = this.requireOnline();
     const token = this.agents.captureTimeline(agentId);
-    const page = await fetchAgentTimelineOnce(client, agentId, request);
-    if (page.agent) this.agents.submitTimelineAgent(token, page.agent);
+    const page = await client.fetchAgentTimeline(agentId, request);
+    if (page.agent && this.isCurrent(client, source)) {
+      this.agents.submitTimelineAgent(token, page.agent);
+    }
     return page;
   }
 
