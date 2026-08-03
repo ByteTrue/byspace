@@ -287,7 +287,7 @@ test.describe("Agent stream UI", () => {
       expect(controlsBounds!.y).toBeLessThan(composerBounds!.y + composerBounds!.height);
       expect(controlsBounds!.y + controlsBounds!.height).toBeGreaterThan(composerBounds!.y);
 
-      const chatScroll = page.getByTestId("agent-chat-scroll");
+      const chatScroll = page.locator('[data-testid="agent-chat-scroll"]:visible').first();
       await chatScroll.evaluate((scroll) => {
         scroll.scrollTop = 0;
       });
