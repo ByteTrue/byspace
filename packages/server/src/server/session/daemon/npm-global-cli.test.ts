@@ -79,8 +79,8 @@ describe("DefaultNpmGlobalBySpaceCli", () => {
     expect(calls).toEqual([
       {
         command: "npm",
-        args: ["install", "-g", packageSpec],
-        timeout: 300_000,
+        args: ["install", "-g", "--no-audit", "--no-fund", packageSpec],
+        timeout: 10 * 60 * 1_000,
         maxBuffer: 10 * 1024 * 1024,
       },
     ]);

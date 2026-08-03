@@ -6,7 +6,9 @@ import { execCommand } from "../../../utils/spawn.js";
 export const BYSPACE_CLI_PACKAGE = "@bytetrue/byspace";
 
 const NPM_PROBE_TIMEOUT_MS = 10_000;
-const NPM_INSTALL_TIMEOUT_MS = 300_000;
+// npm may spend several minutes retrying registry fetches before it reifies the global tree.
+// Killing it at the old five-minute limit can leave npm with a partially replaced install.
+const NPM_INSTALL_TIMEOUT_MS = 10 * 60 * 1_000;
 const NPM_MAX_BUFFER_BYTES = 10 * 1024 * 1024;
 
 const NpmGlobalListSchema = z
@@ -138,10 +140,14 @@ export class DefaultNpmGlobalBySpaceCli implements NpmGlobalBySpaceCli {
   }
 
   install(distTag: BySpaceNpmDistTag): Promise<CommandResult> {
-    return this.runCommand("npm", ["install", "-g", `${BYSPACE_CLI_PACKAGE}@${distTag}`], {
-      timeout: NPM_INSTALL_TIMEOUT_MS,
-      maxBuffer: NPM_MAX_BUFFER_BYTES,
-    });
+    return this.runCommand(
+      "npm",
+      ["install", "-g", "--no-audit", "--no-fund", `${BYSPACE_CLI_PACKAGE}@${distTag}`],
+      {
+        timeout: NPM_INSTALL_TIMEOUT_MS,
+        maxBuffer: NPM_MAX_BUFFER_BYTES,
+      },
+    );
   }
 }
 
