@@ -73,6 +73,17 @@ Do not create a per-commit ledger. Dispositions are by behavior and retained sub
 17. Present the candidate SHA, CI result, validation, dispositions, user decisions, and residual upstream concerns. With user approval, fast-forward `main` to the exact CI-green SHA and push. Never merge a red or unverified candidate into `main`.
 18. Stop after source convergence. Use `release-beta` or `release-stable` only for a separate explicit shipping request.
 
+## Worktree lifecycle
+
+- Treat every sync worktree and disposable upstream checkout as temporary process resources, not durable project directories.
+- Before creating one, record its absolute path, purpose, owning branch, base SHA, and whether it is a candidate or a read-only worker.
+- Use persistent sibling worktrees when a long-lived candidate needs them, but do not leave them as the default final state. Parallel worker worktrees must have one writer and an explicit owner.
+- Before integration, inventory every sync worktree and checkout with its path, branch/HEAD, clean or dirty state, and uncommitted file summary.
+- After the exact-SHA CI-green candidate is integrated, remove every clean worktree whose commits are integrated or explicitly archived with `git worktree remove`. Remove clean disposable upstream checkouts as well.
+- Never delete a dirty worktree, force-remove it, commit its changes, or silently discard its untracked files. Preserve it and present the changed-file/stat summary for an explicit user decision.
+- Do not delete local sync branches automatically; branch retention is separate from bulky worktree cleanup.
+- Run `git worktree prune` after removals, then verify `git worktree list` and the repository's sibling directory inventory. The sync is not operationally closed while stale worktrees or disposable checkouts remain unexplained.
+
 ## Failure discipline
 
 - Treat a timeout as evidence, not restart permission.

@@ -154,6 +154,17 @@ Fix transfer mistakes and resolve all **Needs user decision** items through expl
 
 Integration is branch-first: push the sync branch, run the full `CI` workflow on its exact SHA (PR to `main` or `workflow_dispatch`), and only after it is green and the user approves, fast-forward `main` to that same SHA. The baseline marker therefore lands on `main` only together with green exact-SHA CI evidence; never merge a red or unverified candidate into `main`.
 
+### 7. Tear down temporary sync trees
+
+A sync worktree is a temporary process resource, not a second BySpace checkout to keep indefinitely.
+
+1. Before creating a candidate or worker, record its absolute path, purpose, branch, base SHA, and owner.
+2. Before integration, inventory every sync worktree and disposable upstream checkout. Record `HEAD`, branch, clean/dirty state, and uncommitted file/stat summaries.
+3. After the candidate reaches exact-SHA CI green and is integrated, remove every clean worktree whose commits are integrated or explicitly archived with `git worktree remove`. Remove clean disposable upstream baseline/target checkouts too.
+4. Never force-remove a dirty worktree, auto-commit its changes, or silently discard untracked files. Preserve it and ask the user what to do after reporting its contents.
+5. Do not delete local sync branches automatically; branch retention is separate from worktree directory cleanup.
+6. Run `git worktree prune`, then verify `git worktree list` and the sibling directory inventory. Any remaining sync directory must have a documented reason.
+
 Shipping is separate. Invoke `release-beta` or `release-stable` only when explicitly requested.
 
 ## Failure rules

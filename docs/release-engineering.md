@@ -58,6 +58,10 @@ A release is incomplete until every element in its tuple is verified and the oth
 | Review hardening silently expanded a “sync” into hours or weeks of work.                                                                   | Hard stop: sync copies approved upstream behavior. Any non-mechanical compatibility choice, bug fix, redesign, or hardening requires an explicit user decision before implementation.               |
 | A sync candidate advanced the baseline marker on `main` before exact-SHA CI finished, so `main` briefly claimed an unverified integration. | Sync integration is branch-first: run full CI on the sync branch's exact SHA, then fast-forward `main` to that same green SHA; the baseline marker rides in the sync branch.                        |
 
+### Sync worktree teardown
+
+Persistent sync worktrees and disposable upstream checkouts are temporary resources. Inventory them in the final report, remove clean integrated trees, preserve dirty trees for explicit user disposition, and verify that no stale paths remain.
+
 ## Proof ladder
 
 For an upstream source sync, use only the proof and review scopes in `docs/upstream-sync.md`; the remaining release proof ladder and review boundaries below apply only to separately requested release or product work.
