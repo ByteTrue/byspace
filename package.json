@@ -1,6 +1,6 @@
 {
   "name": "byspace",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "private": true,
   "description": "BySpace: voice-controlled development environment for local AI coding agents",
   "keywords": [

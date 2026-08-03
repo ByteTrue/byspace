@@ -1,6 +1,6 @@
 {
   "name": "@bytetrue/byspace-relay",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "private": true,
   "description": "BySpace relay for bridging daemon and client connections",
   "files": [

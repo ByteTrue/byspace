@@ -1,6 +1,6 @@
 {
   "name": "@bytetrue/byspace-protocol",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "private": true,
   "description": "BySpace shared protocol schemas and wire types",
   "files": [

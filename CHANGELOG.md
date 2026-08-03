@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.4.0 - 2026-08-04
+
+- Adds QR-code device pairing to Host settings.
+- Reworks Agent Timeline synchronization and recovery to avoid stale views and expose sync progress.
+- Retains terminal sessions across workspace switches and improves restore, resize, backlog, and PTY sizing behavior.
+- Adds visible remote-session loading state and bridges Pi questionnaire answers in the Web UI.
+- Hardens service-proxy WebSocket upgrade routing and Git upstream status reporting.
+
 ## 0.3.0 - 2026-08-01
 
 - Adds bounded high-water-mark handling, binary E2EE Relay frames, and backpressured large-file transfer with preserved image formats.
