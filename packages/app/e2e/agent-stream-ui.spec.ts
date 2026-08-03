@@ -26,7 +26,6 @@ import { selectModel } from "./helpers/app";
 import { clickNewChat } from "./helpers/launcher";
 import { expectComposerVisible, startRunningMockAgent } from "./helpers/composer";
 import { openAgentRoute, seedMockAgentWorkspace } from "./helpers/mock-agent";
-import { waitForSidebarHydration } from "./helpers/workspace-ui";
 
 const SCROLL_AWAY_MIN_SCROLLABLE_DISTANCE = 360;
 
@@ -369,8 +368,6 @@ test.describe("Agent stream UI", () => {
           { timeout: 30_000 },
         )
         .not.toBeNull();
-      await page.reload();
-      await waitForSidebarHydration(page);
       await openSessions(page);
       await expectSessionRowArchived(page, "Stream side controls");
       await clickSessionRow(page, "Stream side controls");
