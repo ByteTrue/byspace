@@ -76,7 +76,7 @@ function createWorkspaceAutoNameStub(): WorkspaceAutoName {
   });
 }
 
-function createTerminalManager() {
+function createTerminalManager(captureLines: string[] = []) {
   let listener: TerminalActivityListener | null = null;
 
   const manager = createStub<TerminalManager>({
@@ -86,6 +86,10 @@ function createTerminalManager() {
         listener = null;
       };
     }),
+    captureTerminal: vi.fn(async () => ({
+      lines: captureLines,
+      totalLines: captureLines.length,
+    })),
   });
 
   function emit(event: TerminalActivityTransitionEvent): void {
@@ -302,6 +306,31 @@ describe("VoiceAssistantWebSocketServer terminal attention notifications", () =>
     expect(payload.body).toBe("bash");
     // Client has no recent activity so it is not the in-app recipient.
     expect(payload.shouldNotify).toBe(false);
+  });
+
+  it("uses the latest terminal output as notification body", async () => {
+    const { manager, emit } = createTerminalManager([
+      "",
+      "Completed the requested change.",
+      "All checks passed.",
+    ]);
+    const { server } = createServer(manager);
+    const ws = connectClient(server);
+
+    emit(
+      transition({
+        previousState: "working",
+        previousChangedAt: 1000,
+        state: "idle",
+        changedAt: 11001,
+      }),
+    );
+
+    await flushAsync();
+
+    expect(readTerminalAttentionMessage(ws).body).toBe(
+      "Completed the requested change. All checks passed.",
+    );
   });
 
   it("forwards the terminal event workspaceId into the payload", async () => {
