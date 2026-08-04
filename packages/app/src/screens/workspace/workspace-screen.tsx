@@ -12,6 +12,7 @@ import {
 } from "react";
 import { useStoreWithEqualityFn } from "zustand/traditional";
 import { useIsFocused } from "@react-navigation/native";
+import { PortalHost } from "@gorhom/portal";
 import { Keyboard, Pressable, Text, View } from "react-native";
 import { useQueryClient } from "@tanstack/react-query";
 import { useRouter, type Href } from "expo-router";
@@ -62,6 +63,7 @@ import {
 import { ExplorerSidebar } from "@/components/explorer-sidebar";
 import { SplitContainer } from "@/components/split-container";
 import { RetainedPanel } from "@/components/retained-panel";
+import { buildPaneHeaderActionsPortalName } from "@/panels/pane-header-actions-portal";
 import { SourceControlPanelIcon } from "@/components/icons/source-control-panel-icon";
 import { WorkspaceActions } from "@/git/workspace-actions";
 import { WorkspaceOpenInEditorButton } from "@/screens/workspace/workspace-open-in-editor-button";
@@ -730,6 +732,10 @@ const MobileWorkspaceTabSwitcher = memo(function MobileWorkspaceTabSwitcher({
   const { t } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
   const anchorRef = useRef<View>(null);
+  const paneHeaderActionsPortalName =
+    activeTab?.target.kind === "agent"
+      ? buildPaneHeaderActionsPortalName(normalizedServerId, normalizedWorkspaceId, activeTab.tabId)
+      : null;
   const tabIndexByKey = useMemo(() => {
     const map = new Map<string, number>();
     tabs.forEach((tab, index) => {
@@ -827,6 +833,12 @@ const MobileWorkspaceTabSwitcher = memo(function MobileWorkspaceTabSwitcher({
         </View>
         <ThemedChevronDown size={14} uniProps={mutedColorMapping} />
       </Pressable>
+
+      {paneHeaderActionsPortalName ? (
+        <View style={styles.mobilePaneHeaderActions} testID="pane-header-actions">
+          <PortalHost name={paneHeaderActionsPortalName} />
+        </View>
+      ) : null}
 
       <Combobox
         options={tabSwitcherOptions}
@@ -3928,11 +3940,20 @@ const styles = StyleSheet.create((theme) => ({
   },
   explorerTooltipShortcut: {},
   mobileTabsRow: {
+    flexDirection: "row",
+    alignItems: "center",
     backgroundColor: theme.colors.surface0,
     borderBottomWidth: theme.borderWidth[1],
     borderBottomColor: theme.colors.border,
   },
+  mobilePaneHeaderActions: {
+    marginLeft: "auto",
+    flexDirection: "row",
+    alignItems: "center",
+    paddingRight: theme.spacing[3],
+  },
   switcherTrigger: {
+    flexShrink: 1,
     flexDirection: "row",
     alignItems: "center",
     gap: theme.spacing[2],

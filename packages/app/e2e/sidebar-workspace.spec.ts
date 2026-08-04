@@ -163,7 +163,9 @@ test.describe("Mobile sidebar panelState transition", () => {
     await expectMobileAgentSidebarHidden(page);
   });
 
-  test("shows the workspace menu trigger without hover in compact layout", async ({ page }) => {
+  test("shows the workspace menu trigger in compact project and status layouts", async ({
+    page,
+  }) => {
     const workspace = await seedWorkspace({ repoPrefix: "sidebar-mobile-workspace-menu-" });
     const workspaceKey = `${getServerId()}:${workspace.workspaceId}`;
 
@@ -183,6 +185,19 @@ test.describe("Mobile sidebar panelState transition", () => {
       ).toBeVisible({
         timeout: 30_000,
       });
+
+      await page.keyboard.press("Escape");
+      await page.getByTestId("sidebar-display-preferences-menu").click();
+      await page.getByTestId("sidebar-grouping-status").click();
+      await expect(page.getByTestId("sidebar-status-list-scroll")).toBeVisible({
+        timeout: 10_000,
+      });
+
+      await expect(kebab).toBeVisible();
+      await kebab.click();
+      await expect(
+        page.getByTestId(`sidebar-workspace-menu-copy-path-${workspaceKey}`),
+      ).toBeVisible();
     } finally {
       await workspace.cleanup();
     }

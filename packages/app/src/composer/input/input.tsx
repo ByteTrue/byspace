@@ -1743,7 +1743,7 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
               autoFocus={isWeb && autoFocus}
             />
             <FocusHint
-              visible={isWeb && isPaneFocused && !isInputFocused && !value}
+              visible={!isCompact && isWeb && isPaneFocused && !isInputFocused && !value}
               focusInputKeys={focusInputKeys}
               label={t("composer.input.focusHint", {
                 shortcut: focusInputKeys ? formatShortcut(focusInputKeys[0], getShortcutOs()) : "",

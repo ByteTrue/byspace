@@ -38,7 +38,9 @@ test.describe("New workspace entry points", () => {
     await client?.close().catch(() => undefined);
   });
 
-  test("the global new-workspace button opens the New Workspace screen", async ({ page }) => {
+  test("the global button opens New Workspace and keeps its focus shortcut desktop-only", async ({
+    page,
+  }) => {
     const seeded: SeededWorkspace = await seedWorkspace({ repoPrefix: "entry-global-button-" });
 
     try {
@@ -71,6 +73,14 @@ test.describe("New workspace entry points", () => {
         timeout: 30_000,
       });
       await expect(page.getByTestId("host-picker-trigger")).toBeVisible({ timeout: 30_000 });
+
+      const composerRoot = page.getByTestId("message-input-root");
+      const composerInput = page.getByRole("textbox", { name: "Message agent..." });
+      await composerInput.blur();
+      await expect(composerRoot.getByText(/to focus$/)).toBeVisible();
+
+      await page.setViewportSize({ width: 390, height: 844 });
+      await expect(composerRoot.getByText(/to focus$/)).toHaveCount(0);
     } finally {
       await seeded.cleanup();
     }

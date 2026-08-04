@@ -1,8 +1,9 @@
 import { Button } from "@/components/ui/button";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import type { DaemonClient } from "@bytetrue/byspace-client/internal/daemon-client";
+import { Portal } from "@gorhom/portal";
 import type { TFunction } from "i18next";
-import { ChevronDown, ListChevronsDownUp, SquarePen } from "lucide-react-native";
+import { ArrowDownToLine, ListChevronsDownUp, SquarePen } from "lucide-react-native";
 import React, {
   memo,
   useCallback,
@@ -52,6 +53,7 @@ import {
 import { useArchiveAgent } from "@/hooks/use-archive-agent";
 import { useContainerWidthBelow } from "@/hooks/use-container-width";
 import { reconcileMissingAgentStateWithPresentAgent } from "@/panels/agent-panel-load-state";
+import { buildPaneHeaderActionsPortalName } from "@/panels/pane-header-actions-portal";
 import { usePaneContext, usePaneFocus } from "@/panels/pane-context";
 import type { PanelDescriptor, PanelRegistration } from "@/panels/panel-registry";
 import { RenderProfile } from "@/utils/render-profiler";
@@ -1150,6 +1152,13 @@ const ChatAgentReadyContent = memo(function ChatAgentReadyContent({
   onOpenWorkspaceFile?: (request: WorkspaceFileOpenRequest) => void;
 }) {
   const { t } = useTranslation();
+  const isPaneVisible = useRetainedPanelActive();
+  const { workspaceId, tabId } = usePaneContext();
+  const paneHeaderActionsPortalName = buildPaneHeaderActionsPortalName(
+    serverId,
+    workspaceId,
+    tabId,
+  );
   const hasActiveComposer = agentState.archivedAt === null && !isArchivingCurrentAgent;
   const [isNearBottom, setIsNearBottom] = useState(true);
   const handleCollapseAll = useCallback(
@@ -1160,15 +1169,25 @@ const ChatAgentReadyContent = memo(function ChatAgentReadyContent({
     () => streamViewRef.current?.scrollToBottom(),
     [streamViewRef],
   );
-  const streamSideControls = useMemo(
-    () => (
-      <AgentStreamSideControls
-        showScrollToBottom={!isNearBottom}
-        onCollapseAll={handleCollapseAll}
-        onScrollToBottom={handleScrollToBottom}
-      />
-    ),
-    [handleCollapseAll, handleScrollToBottom, isNearBottom],
+  const streamHeaderActions = useMemo(
+    () =>
+      hasActiveComposer && isPaneVisible ? (
+        <Portal hostName={paneHeaderActionsPortalName}>
+          <AgentStreamHeaderControls
+            showScrollToBottom={!isNearBottom}
+            onCollapseAll={handleCollapseAll}
+            onScrollToBottom={handleScrollToBottom}
+          />
+        </Portal>
+      ) : null,
+    [
+      handleCollapseAll,
+      handleScrollToBottom,
+      hasActiveComposer,
+      isNearBottom,
+      isPaneVisible,
+      paneHeaderActionsPortalName,
+    ],
   );
   const rawAgentInputDraft = useAgentInputDraft({
     draftKey: buildDraftStoreKey({
@@ -1241,7 +1260,6 @@ const ChatAgentReadyContent = memo(function ChatAgentReadyContent({
         onAttentionPromptSend={onAttentionPromptSend}
         onComposerHeightChange={handleComposerHeightChange}
         onMessageSent={handleMessageSent}
-        sideControls={hasActiveComposer ? streamSideControls : undefined}
       />
     </RenderProfile>
   );
@@ -1251,6 +1269,7 @@ const ChatAgentReadyContent = memo(function ChatAgentReadyContent({
   return (
     <RewindComposerRestoreProvider text={agentInputDraft.text} setText={agentInputDraft.setText}>
       <View style={styles.root}>
+        {streamHeaderActions}
         <FileDropZone style={styles.container} disabled={isArchivingCurrentAgent}>
           {showHistorySyncIndicator ? (
             <View
@@ -1383,7 +1402,6 @@ const AgentComposerSection = memo(function AgentComposerSection({
   onAttentionPromptSend,
   onComposerHeightChange,
   onMessageSent,
-  sideControls,
 }: {
   agentId?: string;
   serverId: string;
@@ -1397,7 +1415,6 @@ const AgentComposerSection = memo(function AgentComposerSection({
   onAttentionPromptSend: () => void;
   onComposerHeightChange: (height: number) => void;
   onMessageSent: () => void;
-  sideControls?: React.ReactNode;
 }) {
   if (!agentId) {
     return null;
@@ -1421,12 +1438,11 @@ const AgentComposerSection = memo(function AgentComposerSection({
       onAttentionPromptSend={onAttentionPromptSend}
       onComposerHeightChange={onComposerHeightChange}
       onMessageSent={onMessageSent}
-      sideControls={sideControls}
     />
   );
 });
 
-const AgentStreamSideControls = memo(function AgentStreamSideControls({
+const AgentStreamHeaderControls = memo(function AgentStreamHeaderControls({
   showScrollToBottom,
   onCollapseAll,
   onScrollToBottom,
@@ -1441,6 +1457,24 @@ const AgentStreamSideControls = memo(function AgentStreamSideControls({
 
   return (
     <View style={styles.streamControls} testID="agent-stream-controls">
+      {showScrollToBottom ? (
+        <Tooltip delayDuration={300} enabledOnDesktop>
+          <TooltipTrigger asChild triggerRefProp="ref">
+            <Button
+              variant="ghost"
+              size="sm"
+              style={styles.streamControlButton}
+              leftIcon={ArrowDownToLine}
+              onPress={onScrollToBottom}
+              accessibilityLabel={scrollToBottomLabel}
+              testID="scroll-to-bottom-button"
+            />
+          </TooltipTrigger>
+          <TooltipContent side="bottom" align="center" offset={8}>
+            <Text style={styles.streamControlTooltipText}>{scrollToBottomLabel}</Text>
+          </TooltipContent>
+        </Tooltip>
+      ) : null}
       <Tooltip delayDuration={300} enabledOnDesktop>
         <TooltipTrigger asChild triggerRefProp="ref">
           <Button
@@ -1453,28 +1487,10 @@ const AgentStreamSideControls = memo(function AgentStreamSideControls({
             testID="collapse-all-tool-calls-button"
           />
         </TooltipTrigger>
-        <TooltipContent side="top" align="center" offset={8}>
+        <TooltipContent side="bottom" align="center" offset={8}>
           <Text style={styles.streamControlTooltipText}>{collapseAllLabel}</Text>
         </TooltipContent>
       </Tooltip>
-      {showScrollToBottom ? (
-        <Tooltip delayDuration={300} enabledOnDesktop>
-          <TooltipTrigger asChild triggerRefProp="ref">
-            <Button
-              variant="ghost"
-              size="sm"
-              style={styles.streamControlButton}
-              leftIcon={ChevronDown}
-              onPress={onScrollToBottom}
-              accessibilityLabel={scrollToBottomLabel}
-              testID="scroll-to-bottom-button"
-            />
-          </TooltipTrigger>
-          <TooltipContent side="top" align="center" offset={8}>
-            <Text style={styles.streamControlTooltipText}>{scrollToBottomLabel}</Text>
-          </TooltipContent>
-        </Tooltip>
-      ) : null}
     </View>
   );
 });
@@ -1490,7 +1506,6 @@ function ActiveAgentComposer({
   onAttentionPromptSend,
   onComposerHeightChange,
   onMessageSent,
-  sideControls,
 }: {
   agentId: string;
   serverId: string;
@@ -1502,7 +1517,6 @@ function ActiveAgentComposer({
   onAttentionPromptSend: () => void;
   onComposerHeightChange: (height: number) => void;
   onMessageSent: () => void;
-  sideControls?: React.ReactNode;
 }) {
   const insets = useSafeAreaInsets();
   const isCompactFormFactor = useIsCompactFormFactor();
@@ -1662,7 +1676,6 @@ function ActiveAgentComposer({
         onMessageSent={onMessageSent}
         onClientSlashCommand={handleClientSlashCommand}
         footer={composerFooter}
-        sideControls={sideControls}
         isCompactLayout={isCompactComposerLayout}
       />
     </View>
@@ -1815,14 +1828,11 @@ const styles = StyleSheet.create((theme) => ({
     textAlign: "center",
   },
   streamControls: {
+    width: 60,
     flexDirection: "row",
     alignItems: "center",
-    alignSelf: "flex-end",
-    padding: theme.spacing[1],
-    borderWidth: theme.borderWidth[1],
-    borderColor: theme.colors.border,
-    borderRadius: theme.borderRadius.lg,
-    backgroundColor: theme.colors.surface1,
+    justifyContent: "flex-end",
+    gap: theme.spacing[1],
   },
   streamControlButton: {
     width: 28,

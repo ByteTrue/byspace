@@ -831,8 +831,6 @@ interface ComposerProps {
   inputWrapperStyle?: import("react-native").ViewStyle;
   /** Rendered below the input. */
   footer?: ReactNode;
-  /** Rendered beside the message input area. */
-  sideControls?: ReactNode;
   /** Optional panel/container layout breakpoint. Defaults to the screen breakpoint. */
   isCompactLayout?: boolean;
 }
@@ -1042,7 +1040,6 @@ export function Composer({
   agentControls,
   inputWrapperStyle,
   footer,
-  sideControls,
   isCompactLayout: isCompactLayoutOverride,
 }: ComposerProps) {
   const { t } = useTranslation();
@@ -2110,7 +2107,6 @@ export function Composer({
                 renderOption={renderGithubPickerOption}
               />
             </View>
-            {sideControls ? <View style={styles.sideControls}>{sideControls}</View> : null}
           </View>
         </View>
         {renderComposerFooter(footer)}
@@ -2146,12 +2142,6 @@ const styles = StyleSheet.create((theme: Theme) => ({
     width: "100%",
     maxWidth: MAX_CONTENT_WIDTH,
     gap: theme.spacing[3],
-  },
-  sideControls: {
-    position: "absolute",
-    right: theme.spacing[2],
-    bottom: "100%",
-    marginBottom: theme.spacing[2],
   },
   footer: {
     width: "100%",

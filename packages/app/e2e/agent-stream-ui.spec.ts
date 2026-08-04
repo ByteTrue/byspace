@@ -217,7 +217,7 @@ test.describe("Agent stream UI", () => {
     await expectScrollStaysFixed(page, baseline);
   });
 
-  test("places stream controls beside the composer and collapses expanded tool calls", async ({
+  test("places stream controls in the pane header and collapses expanded tool calls", async ({
     page,
   }) => {
     test.setTimeout(90_000);
@@ -273,19 +273,28 @@ test.describe("Agent stream UI", () => {
 
       const composer = page.getByTestId("message-input-root");
       const controls = page.getByTestId("agent-stream-controls").filter({ visible: true });
+      const headerRow = page.getByTestId("workspace-tabs-row").filter({ visible: true }).first();
       const scrollToBottomButton = page.getByRole("button", { name: "Scroll to bottom" });
       await expect(controls).toBeVisible();
       await expect(scrollToBottomButton).toBeVisible();
 
-      const [composerBounds, controlsBounds] = await Promise.all([
+      const [composerBounds, controlsBounds, headerRowBounds] = await Promise.all([
         composer.boundingBox(),
         controls.boundingBox(),
+        headerRow.boundingBox(),
       ]);
       expect(composerBounds).not.toBeNull();
       expect(controlsBounds).not.toBeNull();
-      expect(controlsBounds!.x).toBeGreaterThanOrEqual(composerBounds!.x + composerBounds!.width);
-      expect(controlsBounds!.y).toBeLessThan(composerBounds!.y + composerBounds!.height);
-      expect(controlsBounds!.y + controlsBounds!.height).toBeGreaterThan(composerBounds!.y);
+      expect(headerRowBounds).not.toBeNull();
+      expect(controlsBounds!.y).toBeGreaterThanOrEqual(headerRowBounds!.y);
+      expect(controlsBounds!.y + controlsBounds!.height).toBeLessThanOrEqual(
+        headerRowBounds!.y + headerRowBounds!.height,
+      );
+      expect(controlsBounds!.x + controlsBounds!.width).toBeLessThanOrEqual(
+        headerRowBounds!.x + headerRowBounds!.width,
+      );
+      expect(controlsBounds!.width).toBeGreaterThan(controlsBounds!.height);
+      expect(controlsBounds!.y + controlsBounds!.height).toBeLessThan(composerBounds!.y);
 
       const chatScroll = page.locator('[data-testid="agent-chat-scroll"]:visible').first();
       await chatScroll.evaluate((scroll) => {
@@ -343,17 +352,45 @@ test.describe("Agent stream UI", () => {
         deltaY: -500,
         minDistanceFromBottom: 200,
       });
-      const [compactComposerBounds, compactControlsBounds] = await Promise.all([
+      const compactHeaderRow = page
+        .getByTestId("workspace-tabs-row")
+        .filter({ visible: true })
+        .first();
+      const compactTabTrigger = page.getByTestId("workspace-tab-switcher-trigger");
+      const compactHeaderActions = page
+        .getByTestId("pane-header-actions")
+        .filter({ visible: true });
+      const [
+        compactComposerBounds,
+        compactControlsBounds,
+        compactHeaderRowBounds,
+        compactTabTriggerBounds,
+        compactHeaderActionsBounds,
+      ] = await Promise.all([
         composer.boundingBox(),
         controls.boundingBox(),
+        compactHeaderRow.boundingBox(),
+        compactTabTrigger.boundingBox(),
+        compactHeaderActions.boundingBox(),
       ]);
       expect(compactComposerBounds).not.toBeNull();
       expect(compactControlsBounds).not.toBeNull();
-      expect(compactControlsBounds!.x).toBeGreaterThanOrEqual(
-        compactComposerBounds!.x + compactComposerBounds!.width,
+      expect(compactHeaderRowBounds).not.toBeNull();
+      expect(compactTabTriggerBounds).not.toBeNull();
+      expect(compactHeaderActionsBounds).not.toBeNull();
+      expect(
+        compactHeaderActionsBounds!.x -
+          (compactTabTriggerBounds!.x + compactTabTriggerBounds!.width),
+      ).toBeGreaterThan(40);
+      expect(compactControlsBounds!.y).toBeGreaterThanOrEqual(compactHeaderRowBounds!.y);
+      expect(compactControlsBounds!.y + compactControlsBounds!.height).toBeLessThanOrEqual(
+        compactHeaderRowBounds!.y + compactHeaderRowBounds!.height,
       );
       expect(compactControlsBounds!.x + compactControlsBounds!.width).toBeLessThanOrEqual(390);
-      expect(compactComposerBounds!.width).toBeGreaterThan(240);
+      expect(compactControlsBounds!.y + compactControlsBounds!.height).toBeLessThan(
+        compactComposerBounds!.y,
+      );
+      expect(compactComposerBounds!.width).toBeGreaterThan(330);
 
       await scrollToBottomButton.click();
       await expectNearBottom(page);
@@ -381,6 +418,31 @@ test.describe("Agent stream UI", () => {
       });
       await expect(controls).toHaveCount(0);
       await expect(page.getByRole("button", { name: "Scroll to bottom" })).toBeVisible();
+    } finally {
+      await agent.cleanup();
+    }
+  });
+
+  test("keeps stream header controls in a visible unfocused split pane", async ({ page }) => {
+    const agent = await seedMockAgentWorkspace({
+      repoPrefix: "stream-header-split-",
+      title: "Stream header split",
+    });
+    try {
+      await openAgentRoute(page, {
+        workspaceId: agent.workspaceId,
+        agentId: agent.agentId,
+      });
+      await expectComposerVisible(page);
+      await expect(page.getByTestId("agent-stream-controls").filter({ visible: true })).toHaveCount(
+        1,
+      );
+
+      await page.getByRole("button", { name: "Split pane right" }).first().click();
+      await expect(page.getByRole("button", { name: "Split pane right" })).toHaveCount(2);
+      await expect(page.getByTestId("agent-stream-controls").filter({ visible: true })).toHaveCount(
+        1,
+      );
     } finally {
       await agent.cleanup();
     }
