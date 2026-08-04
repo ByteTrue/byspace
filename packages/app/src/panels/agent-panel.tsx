@@ -1,3 +1,4 @@
+import { Button } from "@/components/ui/button";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import type { DaemonClient } from "@bytetrue/byspace-client/internal/daemon-client";
 import type { TFunction } from "i18next";
@@ -12,7 +13,7 @@ import React, {
   useSyncExternalStore,
 } from "react";
 import { useTranslation } from "react-i18next";
-import { Pressable, Text, View } from "react-native";
+import { Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import invariant from "tiny-invariant";
@@ -74,7 +75,7 @@ import { usePanelStore } from "@/stores/panel-store";
 import { type Agent, useSessionStore } from "@/stores/session-store";
 import { useWorkspaceLayoutStore } from "@/stores/workspace-layout-store";
 import { buildWorkspaceTabPersistenceKey } from "@/stores/workspace-tabs-store";
-import { ICON_SIZE, type Theme } from "@/styles/theme";
+import type { Theme } from "@/styles/theme";
 import {
   useHideFinishedProviderSubagents,
   useArchiveSubagent,
@@ -1442,40 +1443,38 @@ const AgentStreamSideControls = memo(function AgentStreamSideControls({
     <View style={styles.streamControls} testID="agent-stream-controls">
       <Tooltip delayDuration={300} enabledOnDesktop>
         <TooltipTrigger asChild triggerRefProp="ref">
-          <Pressable
+          <Button
+            variant="ghost"
+            size="sm"
             style={styles.streamControlButton}
+            leftIcon={ListChevronsDownUp}
             onPress={onCollapseAll}
-            accessibilityRole="button"
             accessibilityLabel={collapseAllLabel}
             testID="collapse-all-tool-calls-button"
-          >
-            <ThemedListChevronsDownUp size={ICON_SIZE.lg} uniProps={foregroundColorMapping} />
-          </Pressable>
+          />
         </TooltipTrigger>
-        <TooltipContent side="left" align="center" offset={8}>
+        <TooltipContent side="top" align="center" offset={8}>
           <Text style={styles.streamControlTooltipText}>{collapseAllLabel}</Text>
         </TooltipContent>
       </Tooltip>
-      <View style={styles.streamControlSlot}>
-        {showScrollToBottom ? (
-          <Tooltip delayDuration={300} enabledOnDesktop>
-            <TooltipTrigger asChild triggerRefProp="ref">
-              <Pressable
-                style={styles.streamControlButton}
-                onPress={onScrollToBottom}
-                accessibilityRole="button"
-                accessibilityLabel={scrollToBottomLabel}
-                testID="scroll-to-bottom-button"
-              >
-                <ThemedChevronDown size={ICON_SIZE.lg} uniProps={foregroundColorMapping} />
-              </Pressable>
-            </TooltipTrigger>
-            <TooltipContent side="left" align="center" offset={8}>
-              <Text style={styles.streamControlTooltipText}>{scrollToBottomLabel}</Text>
-            </TooltipContent>
-          </Tooltip>
-        ) : null}
-      </View>
+      {showScrollToBottom ? (
+        <Tooltip delayDuration={300} enabledOnDesktop>
+          <TooltipTrigger asChild triggerRefProp="ref">
+            <Button
+              variant="ghost"
+              size="sm"
+              style={styles.streamControlButton}
+              leftIcon={ChevronDown}
+              onPress={onScrollToBottom}
+              accessibilityLabel={scrollToBottomLabel}
+              testID="scroll-to-bottom-button"
+            />
+          </TooltipTrigger>
+          <TooltipContent side="top" align="center" offset={8}>
+            <Text style={styles.streamControlTooltipText}>{scrollToBottomLabel}</Text>
+          </TooltipContent>
+        </Tooltip>
+      ) : null}
     </View>
   );
 });
@@ -1816,22 +1815,21 @@ const styles = StyleSheet.create((theme) => ({
     textAlign: "center",
   },
   streamControls: {
-    width: theme.spacing[8] + theme.spacing[2],
-    gap: theme.spacing[2],
+    flexDirection: "row",
+    alignItems: "center",
     alignSelf: "flex-end",
-  },
-  streamControlSlot: {
-    width: theme.spacing[8] + theme.spacing[2],
-    height: theme.spacing[8] + theme.spacing[2],
+    padding: theme.spacing[1],
+    borderWidth: theme.borderWidth[1],
+    borderColor: theme.colors.border,
+    borderRadius: theme.borderRadius.lg,
+    backgroundColor: theme.colors.surface1,
   },
   streamControlButton: {
-    width: theme.spacing[8] + theme.spacing[2],
-    height: theme.spacing[8] + theme.spacing[2],
-    borderRadius: theme.borderRadius.full,
-    backgroundColor: theme.colors.surface2,
-    alignItems: "center",
-    justifyContent: "center",
-    ...theme.shadow.sm,
+    width: 28,
+    minHeight: 28,
+    height: 28,
+    paddingHorizontal: 0,
+    borderRadius: theme.borderRadius.md,
   },
   streamControlTooltipText: {
     color: theme.colors.popoverForeground,
@@ -1881,6 +1879,3 @@ const styles = StyleSheet.create((theme) => ({
     textAlign: "center",
   },
 }));
-
-const ThemedChevronDown = withUnistyles(ChevronDown);
-const ThemedListChevronsDownUp = withUnistyles(ListChevronsDownUp);

@@ -239,19 +239,6 @@ function renderContextWindowMeter(
   );
 }
 
-function resolveContextWindowPlacement(
-  meter: ReactElement | null,
-  isMobile: boolean,
-): { beforeVoiceContent: ReactNode; footerInlineContent: ReactNode } {
-  if (isMobile) {
-    return { beforeVoiceContent: null, footerInlineContent: meter };
-  }
-  return {
-    beforeVoiceContent: <View style={styles.contextWindowMeterSlot}>{meter}</View>,
-    footerInlineContent: null,
-  };
-}
-
 interface RenderLeftContentArgs {
   agentControls: DraftAgentControlsProps | undefined;
   agentId: string;
@@ -291,18 +278,12 @@ interface RenderAttachmentTrayArgs {
   };
 }
 
-function renderComposerFooter(
-  footer: ReactNode,
-  footerInlineContent: ReactNode,
-): ReactElement | null {
-  if (!footer && !footerInlineContent) return null;
+function renderComposerFooter(footer: ReactNode): ReactElement | null {
+  if (!footer) return null;
   return (
     <View style={styles.footer}>
       <View style={styles.footerContent}>
-        <View style={styles.footerLeft}>
-          {footer}
-          {footerInlineContent}
-        </View>
+        <View style={styles.footerLeft}>{footer}</View>
       </View>
     </View>
   );
@@ -1804,10 +1785,7 @@ export function Composer({
       contextWindowPending,
     ],
   );
-  const { beforeVoiceContent, footerInlineContent } = useMemo(
-    () => resolveContextWindowPlacement(contextWindowMeter, isCompactLayout),
-    [contextWindowMeter, isCompactLayout],
-  );
+  const beforeVoiceContent = contextWindowMeter;
 
   const hasGithubAttachment = useMemo(
     () =>
@@ -1981,13 +1959,7 @@ export function Composer({
     () => [styles.inputAreaContainer, isComposerLocked && styles.inputAreaLocked],
     [isComposerLocked],
   );
-  const inputAreaContentStyle = useMemo(
-    () =>
-      sideControls
-        ? [styles.inputAreaContent, styles.inputAreaContentWithSideControls]
-        : styles.inputAreaContent,
-    [sideControls],
-  );
+  const inputAreaContentStyle = styles.inputAreaContent;
 
   const attachmentTray = useMemo(
     () =>
@@ -2141,7 +2113,7 @@ export function Composer({
             {sideControls ? <View style={styles.sideControls}>{sideControls}</View> : null}
           </View>
         </View>
-        {renderComposerFooter(footer, footerInlineContent)}
+        {renderComposerFooter(footer)}
       </Animated.View>
     </ComposerKeyboardScopeProvider>
   );
@@ -2175,14 +2147,11 @@ const styles = StyleSheet.create((theme: Theme) => ({
     maxWidth: MAX_CONTENT_WIDTH,
     gap: theme.spacing[3],
   },
-  inputAreaContentWithSideControls: {
-    maxWidth: MAX_CONTENT_WIDTH + theme.spacing[8] + theme.spacing[2] * 2,
-    paddingRight: theme.spacing[8] + theme.spacing[2] * 2,
-  },
   sideControls: {
     position: "absolute",
-    right: 0,
-    bottom: 0,
+    right: theme.spacing[2],
+    bottom: "100%",
+    marginBottom: theme.spacing[2],
   },
   footer: {
     width: "100%",
@@ -2246,12 +2215,6 @@ const styles = StyleSheet.create((theme: Theme) => ({
     flexDirection: "row",
     alignItems: "center",
     gap: theme.spacing[1],
-  },
-  contextWindowMeterSlot: {
-    width: 28,
-    height: 28,
-    alignItems: "center",
-    justifyContent: "center",
   },
   realtimeVoiceButton: {
     width: 28,
