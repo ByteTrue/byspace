@@ -74,6 +74,40 @@ describe("connection offer", () => {
       relay: { endpoint: "relay.example.com:443", useTls: true },
     });
   });
+  it("round-trips the daemon hostname in offers", () => {
+    const offer = ConnectionOfferSchema.parse({
+      v: 2,
+      serverId: "server-123",
+      daemonPublicKeyB64: "pubkey",
+      hostname: "mbp",
+      relay: { endpoint: "relay.example.com:443" },
+    });
+    const encoded = encodeBase64UrlNoPadUtf8(JSON.stringify(offer));
+
+    expect(parseConnectionOfferFromUrl(`https://byspace.pages.dev/#offer=${encoded}`)).toEqual({
+      v: 2,
+      serverId: "server-123",
+      daemonPublicKeyB64: "pubkey",
+      hostname: "mbp",
+      relay: { endpoint: "relay.example.com:443" },
+    });
+  });
+
+  it("still parses offers without a hostname", () => {
+    expect(
+      ConnectionOfferSchema.parse({
+        v: 2,
+        serverId: "server-123",
+        daemonPublicKeyB64: "pubkey",
+        relay: { endpoint: "relay.example.com:443" },
+      }),
+    ).toEqual({
+      v: 2,
+      serverId: "server-123",
+      daemonPublicKeyB64: "pubkey",
+      relay: { endpoint: "relay.example.com:443" },
+    });
+  });
 
   it("returns null when the URL has no offer fragment", () => {
     expect(parseConnectionOfferFromUrl("https://byspace.pages.dev/pair")).toBeNull();
