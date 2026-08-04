@@ -973,11 +973,15 @@ function readActiveAskUserDialog(toolName: string, args: unknown): ActiveAskUser
   };
 }
 
+function isPiQuestionnaireTool(toolName: string): boolean {
+  return toolName === "ask_user_question" || toolName === "question";
+}
+
 function readPiQuestionnaireQuestions(
   toolName: string,
   args: unknown,
 ): PiQuestionnaireQuestion[] | null {
-  if (toolName !== "ask_user_question" || !isRecord(args) || !Array.isArray(args.questions)) {
+  if (!isPiQuestionnaireTool(toolName) || !isRecord(args) || !Array.isArray(args.questions)) {
     return null;
   }
 
@@ -1020,7 +1024,7 @@ function readPiQuestionnaireQuestions(
       question: rawQuestion.question,
       header,
       options,
-      multiSelect: rawQuestion.multiSelect === true,
+      multiSelect: rawQuestion.multiSelect === true || rawQuestion.multiple === true,
     });
   }
 
@@ -2597,7 +2601,7 @@ export class PiRpcAgentSession implements AgentSession {
       this.activeAskUserDialog = null;
       this.pendingCombinedAskUserResponse = null;
     }
-    if (event.toolName === "ask_user_question") {
+    if (isPiQuestionnaireTool(event.toolName)) {
       if (this.activePiQuestionnaire) {
         this.pendingExtensionUiRequests.delete(this.activePiQuestionnaire.permissionId);
       }

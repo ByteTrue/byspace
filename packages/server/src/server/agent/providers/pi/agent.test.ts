@@ -549,6 +549,69 @@ describe("PiRpcAgentSession", () => {
     ]);
   });
 
+  test("bridges pi-ask-user question as a native multi-select permission", async () => {
+    const { pi, session, events } = await createSession();
+    const fakeSession = pi.latestSession();
+
+    fakeSession.emit({
+      type: "tool_execution_start",
+      toolCallId: "pi-ask-user-1",
+      toolName: "question",
+      args: {
+        questions: [
+          {
+            question: "Which checks?",
+            header: "Checks",
+            options: [
+              { label: "Lint", description: "static checks" },
+              { label: "Unit", description: "tests" },
+            ],
+            multiple: true,
+          },
+        ],
+      },
+    });
+
+    const permission = await events.nextPermissionRequest();
+    expect(permission.request).toMatchObject({
+      id: "pi-questionnaire:pi-ask-user-1",
+      kind: "question",
+      input: {
+        questions: [
+          {
+            question: "Which checks?",
+            header: "Checks",
+            options: [
+              { label: "Lint", description: "static checks" },
+              { label: "Unit", description: "tests" },
+            ],
+            multiSelect: true,
+            allowOther: true,
+            placeholder: "1,3",
+          },
+        ],
+      },
+      metadata: { piQuestionnaire: "pi_ask_user_question" },
+    });
+
+    fakeSession.emit({
+      type: "extension_ui_request",
+      id: "pi-ask-user-input-1",
+      method: "input",
+      title: "Which checks?",
+      placeholder: "1,3",
+    });
+    await session.respondToPermission(permission.request.id, {
+      behavior: "allow",
+      updatedInput: { answers: { Checks: "Lint, Unit" } },
+    });
+
+    expect(fakeSession.extensionUiResponses).toEqual([
+      { id: "pi-ask-user-input-1", response: { value: "1,2" } },
+    ]);
+    expect(session.getPendingPermissions()).toEqual([]);
+  });
+
   test("cancels the aggregated Pi questionnaire when the form is dismissed", async () => {
     const { pi, session, events } = await createSession();
     const fakeSession = pi.latestSession();
