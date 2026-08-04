@@ -10,6 +10,7 @@ import { useHostRuntimeClient, useHostRuntimeIsConnected } from "@/runtime/host-
 import { useAppActivelyVisible } from "@/hooks/use-app-visible";
 import { useStableEvent } from "@/hooks/use-stable-event";
 import { useToast } from "@/contexts/toast-context";
+import { copyToClipboard } from "@/utils/copy-to-clipboard";
 import {
   hasPendingTerminalModifiers,
   normalizeTerminalTransportKey,
@@ -216,6 +217,7 @@ export function TerminalPane({
   const [modifiers, setModifiers] = useState<ModifierState>(EMPTY_MODIFIERS);
   const [focusRequestToken, setFocusRequestToken] = useState(0);
   const [resizeRequestToken, setResizeRequestToken] = useState(0);
+  const [hasTerminalSelection, setHasTerminalSelection] = useState(false);
   const emulatorRef = useRef<TerminalEmulatorHandle>(null);
   const terminalIdRef = useRef<string>(terminalId);
   // Which renderer instance holds which terminal's stream. Resuming is only
@@ -246,6 +248,7 @@ export function TerminalPane({
       bracketedPasteMode: false,
       win32InputMode: false,
     };
+    setHasTerminalSelection(false);
   }, [terminalId]);
 
   const requestTerminalFocus = useCallback(() => {
@@ -771,6 +774,24 @@ export function TerminalPane({
     },
     [t, toast],
   );
+  const handleTerminalSelectionChange = useCallback((hasSelection: boolean) => {
+    setHasTerminalSelection(hasSelection);
+  }, []);
+  const handleCopyTerminalSelection = useCallback(async () => {
+    const selection = emulatorRef.current?.getSelection() ?? "";
+    if (!selection) {
+      setHasTerminalSelection(false);
+      return;
+    }
+    try {
+      await copyToClipboard(selection);
+      emulatorRef.current?.clearSelection();
+      setHasTerminalSelection(false);
+      toast.copied();
+    } catch {
+      toast.error(t("workspace.tabs.toasts.copyFailed"));
+    }
+  }, [t, toast]);
   const handleResolveLocalFileLink = useCallback(
     async (source: TerminalLocalFileLinkSource): Promise<TerminalLocalFileLinkTarget | null> => {
       const resolution = classifyForResolution(
@@ -900,11 +921,23 @@ export function TerminalPane({
             onResolveLocalFileLink={handleResolveLocalFileLink}
             onOpenLocalFileLink={handleOpenLocalFileLink}
             onPendingModifiersConsumed={handlePendingModifiersConsumed}
+            onSelectionChange={handleTerminalSelectionChange}
             pendingModifiers={modifiers}
             focusRequestToken={focusRequestToken}
             resizeRequestToken={resizeRequestToken}
           />
         </View>
+
+        {isMobile && hasTerminalSelection ? (
+          <Pressable
+            accessibilityRole="button"
+            testID="terminal-copy-selection"
+            onPress={handleCopyTerminalSelection}
+            style={styles.selectionCopyButton}
+          >
+            <Text style={styles.selectionCopyButtonText}>{t("common.actions.copy")}</Text>
+          </Pressable>
+        ) : null}
 
         {showLoadingOverlay ? (
           <View style={styles.attachOverlay} pointerEvents="none" testID="terminal-attach-loading">
@@ -995,6 +1028,25 @@ const styles = StyleSheet.create((theme) => ({
   terminalGestureContainer: {
     flex: 1,
     minHeight: 0,
+  },
+  selectionCopyButton: {
+    position: "absolute",
+    right: theme.spacing[3],
+    bottom: theme.spacing[3],
+    zIndex: 2,
+    minHeight: 36,
+    paddingHorizontal: theme.spacing[3],
+    borderRadius: theme.borderRadius.md,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: theme.colors.surface1,
+  },
+  selectionCopyButtonText: {
+    color: theme.colors.foreground,
+    fontSize: theme.fontSize.sm,
+    fontWeight: theme.fontWeight.medium,
   },
   attachOverlay: {
     ...StyleSheet.absoluteFillObject,

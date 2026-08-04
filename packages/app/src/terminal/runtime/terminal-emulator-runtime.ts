@@ -71,6 +71,7 @@ export interface TerminalEmulatorRuntimeCallbacks {
   onInputModeChange?: (state: TerminalInputModeState) => Promise<void> | void;
   onPasteImage?: (image: TerminalClipboardImage) => Promise<string | null>;
   onPasteError?: (reason: TerminalPasteErrorReason) => Promise<void> | void;
+  onSelectionChange?: (hasSelection: boolean) => Promise<void> | void;
 }
 
 interface TerminalEmulatorRuntimeDisposables {
@@ -119,6 +120,7 @@ const isAppleHandheld =
   });
 
 const DEFAULT_TOUCH_SCROLL_LINE_HEIGHT_PX = 18;
+const TOUCH_SELECTION_LONG_PRESS_MS = 500;
 const DEFAULT_TERMINAL_FONT_SIZE = 14;
 const FIT_TIMEOUT_DELAYS_MS = [0, 16, 48, 120, 250, 500, 1_000, 2_000];
 const OUTPUT_OPERATION_TIMEOUT_MS = 5_000;
@@ -695,6 +697,9 @@ export class TerminalEmulatorRuntime {
       }
       this.callbacks.onInput?.(data);
     });
+    const selectionDisposable = terminal.onSelectionChange(() => {
+      this.callbacks.onSelectionChange?.(terminal.hasSelection());
+    });
 
     const pasteEventHandler = (event: ClipboardEvent): void => {
       const image = event.clipboardData
@@ -846,6 +851,7 @@ export class TerminalEmulatorRuntime {
     const disposables: TerminalEmulatorRuntimeDisposables = {
       disposeInput: () => {
         inputDisposable.dispose();
+        selectionDisposable.dispose();
         input.host.removeEventListener("paste", pasteEventHandler, true);
       },
       disconnectResizeObserver: () => {
@@ -1047,6 +1053,14 @@ export class TerminalEmulatorRuntime {
 
   blur(): void {
     this.terminal?.blur();
+  }
+
+  getSelection(): string {
+    return this.terminal?.getSelection() ?? "";
+  }
+
+  clearSelection(): void {
+    this.terminal?.clearSelection();
   }
 
   private refreshVisibleRows(): void {
@@ -1345,6 +1359,8 @@ export class TerminalEmulatorRuntime {
     terminal: Terminal;
   }): () => void {
     let touchScrollRemainderPx = 0;
+    let longPressTimer: ReturnType<typeof setTimeout> | null = null;
+    let selectionAnchor: { startIndex: number; endIndex: number } | null = null;
     const measuredLineHeight =
       input.host.querySelector<HTMLElement>(".xterm-rows > div")?.getBoundingClientRect().height ??
       0;
@@ -1357,22 +1373,96 @@ export class TerminalEmulatorRuntime {
       startY: 0,
       lastX: 0,
       lastY: 0,
-      mode: null as "vertical" | "horizontal" | null,
+      mode: null as "vertical" | "horizontal" | "selection" | null,
+    };
+
+    const clearLongPressTimer = (): void => {
+      if (longPressTimer !== null) {
+        window.clearTimeout(longPressTimer);
+        longPressTimer = null;
+      }
+    };
+
+    const dispatchSelectionMouseEvent = (
+      type: "mousedown" | "mouseup",
+      x: number,
+      y: number,
+    ): boolean => {
+      const terminalElement = input.terminal.element;
+      if (!terminalElement) {
+        return false;
+      }
+      const ownerDocument = terminalElement.ownerDocument;
+      const MouseEventConstructor = ownerDocument.defaultView?.MouseEvent ?? MouseEvent;
+      const forceSelection = input.terminal.modes.mouseTrackingMode !== "none";
+      const event = new MouseEventConstructor(type, {
+        bubbles: true,
+        cancelable: true,
+        clientX: x,
+        clientY: y,
+        button: 0,
+        buttons: type === "mousedown" ? 1 : 0,
+        detail: type === "mousedown" ? 2 : 0,
+        altKey: forceSelection,
+        shiftKey: forceSelection,
+      });
+      (type === "mousedown" ? terminalElement : ownerDocument).dispatchEvent(event);
+      return true;
+    };
+
+    const getTouchBufferRange = (
+      x: number,
+      y: number,
+    ): { startIndex: number; endIndex: number } | null => {
+      const screen = input.host.querySelector<HTMLElement>(".xterm-screen");
+      const cell = input.terminal.dimensions?.css.cell;
+      if (!screen || !cell || cell.width <= 0 || cell.height <= 0) {
+        return null;
+      }
+      const bounds = screen.getBoundingClientRect();
+      const column = Math.max(
+        0,
+        Math.min(input.terminal.cols - 1, Math.floor((x - bounds.left) / cell.width)),
+      );
+      const viewportRow = Math.max(
+        0,
+        Math.min(input.terminal.rows - 1, Math.floor((y - bounds.top) / cell.height)),
+      );
+      const buffer = input.terminal.buffer.active;
+      const absoluteRow = buffer.viewportY + viewportRow;
+      const line = buffer.getLine(absoluteRow);
+      let startColumn = column;
+      let width = line?.getCell(startColumn)?.getWidth() ?? 1;
+      while (width === 0 && startColumn > 0) {
+        startColumn -= 1;
+        width = line?.getCell(startColumn)?.getWidth() ?? 1;
+      }
+      const rowStartIndex = absoluteRow * input.terminal.cols;
+      return {
+        startIndex: rowStartIndex + startColumn,
+        endIndex: rowStartIndex + Math.min(input.terminal.cols, startColumn + Math.max(1, width)),
+      };
+    };
+
+    const finishActiveTouch = (): void => {
+      clearLongPressTimer();
+      if (activeTouch.mode === "selection") {
+        delete input.root.dataset.terminalTouchSelection;
+      }
+      selectionAnchor = null;
+      touchScrollRemainderPx = 0;
+      activeTouch.identifier = -1;
+      activeTouch.mode = null;
     };
 
     const touchStartHandler = (event: TouchEvent) => {
+      finishActiveTouch();
       if (event.touches.length !== 1) {
-        touchScrollRemainderPx = 0;
-        activeTouch.identifier = -1;
-        activeTouch.mode = null;
         return;
       }
 
       const touch = event.touches[0];
       if (!touch) {
-        touchScrollRemainderPx = 0;
-        activeTouch.identifier = -1;
-        activeTouch.mode = null;
         return;
       }
 
@@ -1381,8 +1471,35 @@ export class TerminalEmulatorRuntime {
       activeTouch.startY = touch.clientY;
       activeTouch.lastX = touch.clientX;
       activeTouch.lastY = touch.clientY;
-      activeTouch.mode = null;
-      touchScrollRemainderPx = 0;
+      longPressTimer = window.setTimeout(() => {
+        longPressTimer = null;
+        if (activeTouch.identifier !== touch.identifier || activeTouch.mode !== null) {
+          return;
+        }
+        const previousMacOptionClickForcesSelection =
+          input.terminal.options.macOptionClickForcesSelection;
+        input.terminal.options.macOptionClickForcesSelection = true;
+        try {
+          if (dispatchSelectionMouseEvent("mousedown", touch.clientX, touch.clientY)) {
+            dispatchSelectionMouseEvent("mouseup", touch.clientX, touch.clientY);
+            const range = input.terminal.getSelectionPosition();
+            const touchRange = getTouchBufferRange(touch.clientX, touch.clientY);
+            if (range) {
+              selectionAnchor = {
+                startIndex: range.start.y * input.terminal.cols + range.start.x,
+                endIndex: range.end.y * input.terminal.cols + range.end.x,
+              };
+            } else {
+              selectionAnchor = touchRange;
+            }
+            activeTouch.mode = "selection";
+            input.root.dataset.terminalTouchSelection = "true";
+          }
+        } finally {
+          input.terminal.options.macOptionClickForcesSelection =
+            previousMacOptionClickForcesSelection;
+        }
+      }, TOUCH_SELECTION_LONG_PRESS_MS);
     };
 
     const touchMoveHandler = (event: TouchEvent) => {
@@ -1397,12 +1514,30 @@ export class TerminalEmulatorRuntime {
         return;
       }
 
+      if (activeTouch.mode === "selection") {
+        activeTouch.lastX = touch.clientX;
+        activeTouch.lastY = touch.clientY;
+        const touchRange = getTouchBufferRange(touch.clientX, touch.clientY);
+        if (selectionAnchor && touchRange) {
+          const startIndex = Math.min(selectionAnchor.startIndex, touchRange.startIndex);
+          const endIndex = Math.max(selectionAnchor.endIndex, touchRange.endIndex);
+          input.terminal.select(
+            startIndex % input.terminal.cols,
+            Math.floor(startIndex / input.terminal.cols),
+            endIndex - startIndex,
+          );
+        }
+        event.preventDefault();
+        return;
+      }
+
       const totalDeltaX = touch.clientX - activeTouch.startX;
       const totalDeltaY = touch.clientY - activeTouch.startY;
       if (activeTouch.mode === null) {
         const absX = Math.abs(totalDeltaX);
         const absY = Math.abs(totalDeltaY);
         if (absX > 8 || absY > 8) {
+          clearLongPressTimer();
           activeTouch.mode = absY >= absX ? "vertical" : "horizontal";
         }
       }
@@ -1430,24 +1565,25 @@ export class TerminalEmulatorRuntime {
         (touch) => touch.identifier === activeTouch.identifier,
       );
       if (activeTouchEnded || event.touches.length === 0) {
-        touchScrollRemainderPx = 0;
-        activeTouch.identifier = -1;
-        activeTouch.mode = null;
+        const wasSelecting = activeTouch.mode === "selection";
+        finishActiveTouch();
+        if (wasSelecting) {
+          event.preventDefault();
+        }
       }
     };
 
     const touchCancelHandler = () => {
-      touchScrollRemainderPx = 0;
-      activeTouch.identifier = -1;
-      activeTouch.mode = null;
+      finishActiveTouch();
     };
 
     input.root.addEventListener("touchstart", touchStartHandler, { passive: true });
     input.root.addEventListener("touchmove", touchMoveHandler, { passive: false });
-    input.root.addEventListener("touchend", touchEndHandler, { passive: true });
+    input.root.addEventListener("touchend", touchEndHandler, { passive: false });
     input.root.addEventListener("touchcancel", touchCancelHandler, { passive: true });
 
     return () => {
+      finishActiveTouch();
       input.root.removeEventListener("touchstart", touchStartHandler);
       input.root.removeEventListener("touchmove", touchMoveHandler);
       input.root.removeEventListener("touchend", touchEndHandler);

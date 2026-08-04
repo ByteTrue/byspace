@@ -1,9 +1,9 @@
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import type { Locator } from "@playwright/test";
+import type { Locator, Page } from "@playwright/test";
 import { test, expect } from "./fixtures";
 import { TerminalE2EHarness } from "./helpers/terminal-dsl";
-import { waitForTerminalContent } from "./helpers/terminal-perf";
+import { buildTerminalWorkspaceUrl, waitForTerminalContent } from "./helpers/terminal-perf";
 
 const CAPTURE_SCRIPT = `
 const fs = require("node:fs");
@@ -58,6 +58,10 @@ async function dispatchTerminalPaste(
       new ClipboardEvent("paste", { bubbles: true, cancelable: true, clipboardData }),
     );
   }, clipboard);
+}
+
+function readClipboard(page: Page): Promise<string> {
+  return page.evaluate(() => navigator.clipboard.readText());
 }
 
 test.describe("Terminal clipboard", () => {
@@ -299,6 +303,102 @@ test.describe("Terminal clipboard", () => {
       expect(Buffer.from(capture.captured, "base64").toString("utf8")).toBe(
         "\x1b[200~first line\rsecond line\x1b[201~",
       );
+    } finally {
+      await harness.killTerminal(terminalInstance.id);
+    }
+  });
+
+  test("copies text selected by long-press on a compact terminal", async ({ context, page }) => {
+    const target = "MOBILE COPY TARGET";
+    await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+    await page.addInitScript(() => {
+      Object.defineProperty(navigator, "platform", { configurable: true, value: "MacIntel" });
+    });
+    const terminalInstance = await harness.createTerminal({ name: "clipboard-mobile-copy" });
+
+    try {
+      await page.setViewportSize({ width: 390, height: 844 });
+      await page.goto(buildTerminalWorkspaceUrl(harness.workspaceId, terminalInstance.id));
+
+      const terminal = harness.terminalSurface(page);
+      await terminal.waitFor({ state: "visible", timeout: 30_000 });
+      await page
+        .getByTestId("terminal-attach-loading")
+        .waitFor({ state: "hidden", timeout: 10_000 })
+        .catch(() => {});
+      await terminal.click();
+      await harness.setupPrompt(page);
+      await terminal.pressSequentially(`printf '\\033[?1000h${target}\\n'\n`, { delay: 0 });
+      await waitForTerminalContent(page, (text) => text.includes(target), 10_000);
+
+      const coordinates = await terminal
+        .locator(".xterm-screen")
+        .evaluate((screen, selectedText) => {
+          const browserTerminal = (
+            window as Window & {
+              __byspaceTerminal?: {
+                dimensions?: { css: { cell: { width: number; height: number } } };
+                buffer: {
+                  active: {
+                    length: number;
+                    viewportY: number;
+                    getLine: (
+                      row: number,
+                    ) => { translateToString: (trimRight: boolean) => string } | undefined;
+                  };
+                };
+              };
+            }
+          ).__byspaceTerminal;
+          const cell = browserTerminal?.dimensions?.css.cell;
+          if (!browserTerminal || !cell) {
+            throw new Error("Terminal dimensions are unavailable");
+          }
+
+          const buffer = browserTerminal.buffer.active;
+          let targetRow = -1;
+          let targetColumn = -1;
+          for (let row = buffer.viewportY; row < buffer.length; row += 1) {
+            const column = buffer.getLine(row)?.translateToString(true).indexOf(selectedText) ?? -1;
+            if (column >= 0) {
+              targetRow = row;
+              targetColumn = column;
+            }
+          }
+          if (targetRow < buffer.viewportY || targetColumn < 0) {
+            throw new Error("Expected copy target to be visible in terminal buffer");
+          }
+
+          const bounds = screen.getBoundingClientRect();
+          return {
+            startX: bounds.left + (targetColumn + 0.5) * cell.width,
+            endX: bounds.left + (targetColumn + selectedText.length - 0.5) * cell.width,
+            y: bounds.top + (targetRow - buffer.viewportY + 0.5) * cell.height,
+          };
+        }, target);
+
+      const terminalUrl = page.url();
+      const cdp = await context.newCDPSession(page);
+      await cdp.send("Emulation.setTouchEmulationEnabled", { enabled: true, maxTouchPoints: 1 });
+      await cdp.send("Input.dispatchTouchEvent", {
+        type: "touchStart",
+        touchPoints: [{ x: coordinates.startX, y: coordinates.y }],
+      });
+      await page.waitForTimeout(600);
+      await cdp.send("Input.dispatchTouchEvent", {
+        type: "touchMove",
+        touchPoints: [{ x: coordinates.endX, y: coordinates.y }],
+      });
+      await page.waitForTimeout(50);
+      await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+      await cdp.detach();
+
+      const copyButton = page.getByTestId("terminal-copy-selection");
+      await expect(copyButton).toBeVisible();
+      await expect(terminal).toBeVisible();
+      expect(page.url()).toBe(terminalUrl);
+      await copyButton.click();
+      await expect.poll(() => readClipboard(page)).toBe(target);
     } finally {
       await harness.killTerminal(terminalInstance.id);
     }

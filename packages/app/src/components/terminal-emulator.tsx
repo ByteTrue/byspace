@@ -36,6 +36,8 @@ export interface TerminalEmulatorHandle {
   renderSnapshot: (state: TerminalState | null) => void;
   clear: () => void;
   blur: () => void;
+  getSelection: () => string;
+  clearSelection: () => void;
 }
 
 const HOST_DIV_STYLE: CSSProperties = {
@@ -116,6 +118,7 @@ interface TerminalEmulatorProps {
     disposition: "main" | "side",
   ) => Promise<void> | void;
   onRendererReadyChange?: (change: TerminalRendererReadyChange) => void;
+  onSelectionChange?: (hasSelection: boolean) => void;
   pendingModifiers?: PendingTerminalModifiers;
   focusRequestToken?: number;
   resizeRequestToken?: number;
@@ -162,6 +165,7 @@ export default function TerminalEmulator({
   onResolveLocalFileLink,
   onOpenLocalFileLink,
   onRendererReadyChange,
+  onSelectionChange,
   pendingModifiers = { ctrl: false, shift: false, alt: false },
   focusRequestToken = 0,
   resizeRequestToken = 0,
@@ -191,6 +195,7 @@ export default function TerminalEmulator({
     onPasteError,
     onResolveLocalFileLink,
     onOpenLocalFileLink,
+    onSelectionChange,
   });
   mountCallbacksRef.current = {
     onInput,
@@ -202,6 +207,7 @@ export default function TerminalEmulator({
     onPasteError,
     onResolveLocalFileLink,
     onOpenLocalFileLink,
+    onSelectionChange,
   };
   const initialSnapshotRef = useRef(initialSnapshot);
   initialSnapshotRef.current = initialSnapshot;
@@ -234,6 +240,10 @@ export default function TerminalEmulator({
       blur: () => {
         runtimeRef.current?.blur();
       },
+      getSelection: () => runtimeRef.current?.getSelection() ?? "",
+      clearSelection: () => {
+        runtimeRef.current?.clearSelection();
+      },
     }),
     [],
   );
@@ -254,6 +264,10 @@ export default function TerminalEmulator({
       },
       blur: () => {
         runtimeRef.current?.blur();
+      },
+      getSelection: () => runtimeRef.current?.getSelection() ?? "",
+      clearSelection: () => {
+        runtimeRef.current?.clearSelection();
       },
     }),
     [],
@@ -327,6 +341,10 @@ export default function TerminalEmulator({
 
     const onPointerMove = (event: PointerEvent) => {
       if (!tracking || fired) {
+        return;
+      }
+      if (root.dataset.terminalTouchSelection === "true") {
+        reset();
         return;
       }
       if (activePointerId !== null && event.pointerId !== activePointerId) {
@@ -433,6 +451,7 @@ export default function TerminalEmulator({
         onPasteError,
         onResolveLocalFileLink,
         onOpenLocalFileLink,
+        onSelectionChange,
         onOpenExternalUrl: openExternalUrl,
       },
     });
@@ -444,6 +463,7 @@ export default function TerminalEmulator({
     onOpenLocalFileLink,
     onPendingModifiersConsumed,
     onResolveLocalFileLink,
+    onSelectionChange,
     onResize,
     onTerminalKey,
   ]);

@@ -36,6 +36,7 @@ type BrowserTerminal = TerminalSize & {
   refresh: (start: number, end: number) => void;
   reset: () => void;
   paste: (text: string) => void;
+  getSelection: () => string;
 };
 
 interface MountedTerminal {
@@ -241,6 +242,28 @@ function dispatchTerminalPaste(input: {
   return event;
 }
 
+function dispatchTerminalTouch(input: {
+  target: HTMLElement;
+  type: "touchstart" | "touchmove" | "touchend";
+  x: number;
+  y: number;
+}): void {
+  const touch = new Touch({
+    identifier: 1,
+    target: input.target,
+    clientX: input.x,
+    clientY: input.y,
+  });
+  input.target.dispatchEvent(
+    new TouchEvent(input.type, {
+      bubbles: true,
+      cancelable: true,
+      touches: input.type === "touchend" ? [] : [touch],
+      changedTouches: [touch],
+    }),
+  );
+}
+
 function setNavigatorPlatform(platform: string): () => void {
   const descriptor = Object.getOwnPropertyDescriptor(navigator, "platform");
   Object.defineProperty(navigator, "platform", { configurable: true, value: platform });
@@ -307,6 +330,98 @@ describe("terminal emulator runtime in a real browser", () => {
 
     expect(window.__byspaceTerminal).toBe(terminal);
     expect(window.__byspaceTerminal?.options.scrollback).toBe(42_000);
+  });
+
+  it("selects terminal text after a touch long-press and drag", async () => {
+    await page.viewport(390, 844);
+    const mounted = createTerminalHost({ width: 390, height: 500 });
+    const terminal = getBrowserTerminal();
+    await new Promise<void>((resolve) => {
+      mounted.runtime.write({
+        data: terminalOutput("\u001b[?1000hcopy this text"),
+        onCommitted: resolve,
+      });
+    });
+
+    const screen = mounted.host.querySelector<HTMLElement>(".xterm-screen");
+    if (!screen) {
+      throw new Error("Expected xterm screen to be mounted");
+    }
+    const bounds = screen.getBoundingClientRect();
+    const cellWidth = bounds.width / terminal.cols;
+    const cellHeight = bounds.height / terminal.rows;
+    const y = bounds.top + cellHeight / 2;
+
+    dispatchTerminalTouch({
+      target: screen,
+      type: "touchstart",
+      x: bounds.left + cellWidth * 1.5,
+      y,
+    });
+    await new Promise((resolve) => setTimeout(resolve, 700));
+    expect(terminal.getSelection()).toBe("copy");
+    expect(window.__byspaceTerminal?.options.macOptionClickForcesSelection).toBe(false);
+
+    dispatchTerminalTouch({
+      target: screen,
+      type: "touchmove",
+      x: bounds.left + cellWidth * 13.5,
+      y,
+    });
+    await nextFrame();
+    dispatchTerminalTouch({
+      target: screen,
+      type: "touchend",
+      x: bounds.left + cellWidth * 13.5,
+      y,
+    });
+
+    expect(terminal.getSelection()).toBe("copy this text");
+  });
+
+  it("selects complete double-width cells when dragging in either direction", async () => {
+    await page.viewport(390, 844);
+    const mounted = createTerminalHost({ width: 390, height: 500 });
+    const terminal = getBrowserTerminal();
+    await new Promise<void>((resolve) => {
+      mounted.runtime.write({ data: terminalOutput("x 你 y"), onCommitted: resolve });
+    });
+
+    const screen = mounted.host.querySelector<HTMLElement>(".xterm-screen");
+    if (!screen) {
+      throw new Error("Expected xterm screen to be mounted");
+    }
+    const bounds = screen.getBoundingClientRect();
+    const cellWidth = bounds.width / terminal.cols;
+    const y = bounds.top + bounds.height / terminal.rows / 2;
+    const longPressAndDrag = async (startColumn: number, endColumn: number): Promise<void> => {
+      dispatchTerminalTouch({
+        target: screen,
+        type: "touchstart",
+        x: bounds.left + cellWidth * (startColumn + 0.5),
+        y,
+      });
+      await new Promise((resolve) => setTimeout(resolve, 700));
+      dispatchTerminalTouch({
+        target: screen,
+        type: "touchmove",
+        x: bounds.left + cellWidth * (endColumn + 0.5),
+        y,
+      });
+      await nextFrame();
+      dispatchTerminalTouch({
+        target: screen,
+        type: "touchend",
+        x: bounds.left + cellWidth * (endColumn + 0.5),
+        y,
+      });
+    };
+
+    await longPressAndDrag(0, 3);
+    expect(terminal.getSelection()).toBe("x 你");
+
+    await longPressAndDrag(5, 3);
+    expect(terminal.getSelection()).toBe("你 y");
   });
 
   it("does not claim PTY ownership from passive mount refits", async () => {
