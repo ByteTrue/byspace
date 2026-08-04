@@ -57,8 +57,11 @@ import {
   type ClientPresenceState,
 } from "./agent-attention-policy.js";
 import {
+  NOTIFICATION_PREVIEW_LIMIT,
   buildAgentAttentionNotificationPayload,
   findLatestPermissionRequest,
+  normalizeNotificationText,
+  truncateNotificationText,
 } from "@bytetrue/byspace-protocol/agent-attention-notification";
 import { createGitHubService } from "../services/github-service.js";
 import type { ForgeService } from "../services/forge-service.js";
@@ -153,7 +156,6 @@ function terminalAttentionTitle(reason: TerminalAttentionReason): string {
 }
 
 const TERMINAL_NOTIFICATION_PREVIEW_LINE_LIMIT = 8;
-const TERMINAL_NOTIFICATION_PREVIEW_MAX_LENGTH = 220;
 
 async function resolveTerminalNotificationBody(
   terminalManager: TerminalManager | null,
@@ -165,17 +167,12 @@ async function resolveTerminalNotificationBody(
   try {
     const capture = await terminalManager.captureTerminal(terminalId, {
       start: -TERMINAL_NOTIFICATION_PREVIEW_LINE_LIMIT,
-      stripAnsi: true,
     });
-    const preview = capture.lines
-      .filter((line) => line.trim().length > 0)
-      .join(" ")
-      .replace(/\s+/g, " ")
-      .trim();
-
+    const preview = normalizeNotificationText(
+      capture.lines.filter((line) => line.trim().length > 0).join(" "),
+    );
     if (!preview) return fallback;
-    if (preview.length <= TERMINAL_NOTIFICATION_PREVIEW_MAX_LENGTH) return preview;
-    return `${preview.slice(0, TERMINAL_NOTIFICATION_PREVIEW_MAX_LENGTH - 3).trimEnd()}...`;
+    return truncateNotificationText(preview, NOTIFICATION_PREVIEW_LIMIT);
   } catch {
     return fallback;
   }

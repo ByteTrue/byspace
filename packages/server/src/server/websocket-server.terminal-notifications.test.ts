@@ -76,9 +76,16 @@ function createWorkspaceAutoNameStub(): WorkspaceAutoName {
   });
 }
 
-function createTerminalManager(captureLines: string[] = []) {
+function createTerminalManager(
+  captureLines: string[] = [],
+  captureImpl?: () => Promise<{ lines: string[]; totalLines: number }>,
+) {
   let listener: TerminalActivityListener | null = null;
 
+  const captureTerminal = vi.fn(async () => {
+    if (captureImpl) return captureImpl();
+    return { lines: captureLines, totalLines: captureLines.length };
+  });
   const manager = createStub<TerminalManager>({
     subscribeTerminalActivity: vi.fn((l: TerminalActivityListener) => {
       listener = l;
@@ -86,17 +93,14 @@ function createTerminalManager(captureLines: string[] = []) {
         listener = null;
       };
     }),
-    captureTerminal: vi.fn(async () => ({
-      lines: captureLines,
-      totalLines: captureLines.length,
-    })),
+    captureTerminal,
   });
 
   function emit(event: TerminalActivityTransitionEvent): void {
     listener?.(event);
   }
 
-  return { manager, emit };
+  return { manager, emit, captureTerminal };
 }
 
 function workspaceRecord(overrides?: Partial<PersistedWorkspaceRecord>): PersistedWorkspaceRecord {
@@ -331,6 +335,89 @@ describe("VoiceAssistantWebSocketServer terminal attention notifications", () =>
     expect(readTerminalAttentionMessage(ws).body).toBe(
       "Completed the requested change. All checks passed.",
     );
+  });
+  it("truncates the notification body at 220 characters", async () => {
+    const longLine = "word ".repeat(60); // 300 chars
+    const { manager, emit } = createTerminalManager([longLine]);
+    const { server } = createServer(manager);
+    const ws = connectClient(server);
+
+    emit(
+      transition({
+        previousState: "working",
+        previousChangedAt: 1000,
+        state: "idle",
+        changedAt: 11001,
+      }),
+    );
+
+    await flushAsync();
+
+    const body = readTerminalAttentionMessage(ws).body;
+    expect(body.length).toBeLessThanOrEqual(220);
+    expect(body.endsWith("...")).toBe(true);
+  });
+
+  it("falls back to the terminal name when every captured line is blank", async () => {
+    const { manager, emit } = createTerminalManager(["", "   ", ""]);
+    const { server } = createServer(manager);
+    const ws = connectClient(server);
+
+    emit(
+      transition({
+        previousState: "working",
+        previousChangedAt: 1000,
+        state: "idle",
+        changedAt: 11001,
+      }),
+    );
+
+    await flushAsync();
+
+    expect(readTerminalAttentionMessage(ws).body).toBe("bash");
+  });
+
+  it("falls back to the terminal name when capture fails", async () => {
+    const { manager, emit } = createTerminalManager([], () => {
+      throw new Error("worker died");
+    });
+    const { server } = createServer(manager);
+    const ws = connectClient(server);
+
+    emit(
+      transition({
+        previousState: "working",
+        previousChangedAt: 1000,
+        state: "idle",
+        changedAt: 11001,
+      }),
+    );
+
+    await flushAsync();
+
+    expect(readTerminalAttentionMessage(ws).body).toBe("bash");
+  });
+
+  it("captures the last eight lines", async () => {
+    const { manager, emit, captureTerminal } = createTerminalManager(["done"]);
+    const { server } = createServer(manager);
+    const ws = connectClient(server);
+
+    emit(
+      transition({
+        previousState: "working",
+        previousChangedAt: 1000,
+        state: "idle",
+        changedAt: 11001,
+      }),
+    );
+
+    await flushAsync();
+
+    expect(readTerminalAttentionMessage(ws).body).toBe("done");
+    expect(captureTerminal).toHaveBeenCalledWith("term-1", {
+      start: -8,
+    });
   });
 
   it("forwards the terminal event workspaceId into the payload", async () => {
