@@ -1675,7 +1675,7 @@ export class HostRuntimeStore {
       relayEndpoint: offer.relay.endpoint,
       useTls,
       daemonPublicKeyB64: offer.daemonPublicKeyB64,
-      label,
+      label: label ?? offer.hostname,
     });
   }
 

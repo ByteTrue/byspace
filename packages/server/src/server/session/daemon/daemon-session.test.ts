@@ -1,8 +1,9 @@
 import { mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { hostname as osHostname, tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, test } from "vitest";
 import pino from "pino";
+import { parseConnectionOfferFromUrl } from "@bytetrue/byspace-protocol/connection-offer";
 import {
   DaemonSession,
   type DaemonRuntimeConfig,
@@ -187,6 +188,7 @@ describe("DaemonSession", () => {
     expect(message.payload.relayEnabled).toBe(true);
     expect(message.payload.url.startsWith("https://app.example.test")).toBe(true);
     expect(typeof message.payload.qr).toBe("string");
+    expect(parseConnectionOfferFromUrl(message.payload.url)?.hostname).toBe(osHostname());
   });
 
   test("diagnostics includes a log tail and redacts connection secrets", async () => {

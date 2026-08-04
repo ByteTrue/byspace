@@ -365,6 +365,7 @@ function makeOffer(input?: Partial<ConnectionOffer>): ConnectionOffer {
     v: 2,
     serverId: input?.serverId ?? "srv_offer",
     daemonPublicKeyB64: input?.daemonPublicKeyB64 ?? "pk_test_offer",
+    hostname: input?.hostname,
     relay: {
       endpoint: input?.relay?.endpoint ?? "byspace-relay.bytetrue.workers.dev:443",
       useTls: input?.relay?.useTls ?? false,
@@ -2872,6 +2873,26 @@ describe("HostRuntimeStore", () => {
     });
 
     await store.upsertConnectionFromOffer(makeOffer(), "mbp");
+
+    const pairedHost = store.getHosts().find((host) => host.serverId === "srv_offer");
+    expect(pairedHost?.label).toBe("mbp");
+
+    store.syncHosts([]);
+  });
+  it("falls back to the offer hostname as the label when none is provided", async () => {
+    const store = new HostRuntimeStore({
+      deps: {
+        createClient: () => new FakeDaemonClient() as unknown as DaemonClient,
+        connectToDaemon: async ({ host }) => ({
+          client: makeConnectedProbeClient(5) as unknown as DaemonClient,
+          serverId: host.serverId,
+          hostname: host.label ?? null,
+        }),
+        getClientId: async () => "cid_test_runtime",
+      },
+    });
+
+    await store.upsertConnectionFromOffer(makeOffer({ hostname: "mbp" }));
 
     const pairedHost = store.getHosts().find((host) => host.serverId === "srv_offer");
     expect(pairedHost?.label).toBe("mbp");

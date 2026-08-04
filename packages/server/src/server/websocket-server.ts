@@ -57,8 +57,11 @@ import {
   type ClientPresenceState,
 } from "./agent-attention-policy.js";
 import {
+  NOTIFICATION_PREVIEW_LIMIT,
   buildAgentAttentionNotificationPayload,
   findLatestPermissionRequest,
+  normalizeNotificationText,
+  truncateNotificationText,
 } from "@bytetrue/byspace-protocol/agent-attention-notification";
 import { createGitHubService } from "../services/github-service.js";
 import type { ForgeService } from "../services/forge-service.js";
@@ -150,6 +153,29 @@ function resolveTerminalAttentionReason(input: {
 
 function terminalAttentionTitle(reason: TerminalAttentionReason): string {
   return reason === "needs_input" ? "Terminal needs input" : "Terminal finished";
+}
+
+const TERMINAL_NOTIFICATION_PREVIEW_LINE_LIMIT = 8;
+
+async function resolveTerminalNotificationBody(
+  terminalManager: TerminalManager | null,
+  terminalId: string,
+  fallback: string,
+): Promise<string> {
+  if (!terminalManager) return fallback;
+
+  try {
+    const capture = await terminalManager.captureTerminal(terminalId, {
+      start: -TERMINAL_NOTIFICATION_PREVIEW_LINE_LIMIT,
+    });
+    const preview = normalizeNotificationText(
+      capture.lines.filter((line) => line.trim().length > 0).join(" "),
+    );
+    if (!preview) return fallback;
+    return truncateNotificationText(preview, NOTIFICATION_PREVIEW_LIMIT);
+  } catch {
+    return fallback;
+  }
 }
 
 function createFallbackWorkspaceGitSnapshot(cwd: string): WorkspaceGitRuntimeSnapshot {
@@ -2216,7 +2242,11 @@ export class VoiceAssistantWebSocketServer {
     });
 
     const title = terminalAttentionTitle(params.reason);
-    const body = params.terminalName;
+    const body = await resolveTerminalNotificationBody(
+      this.terminalManager,
+      params.terminalId,
+      params.terminalName,
+    );
 
     if (plan.shouldPush) {
       void this.pushNotificationSender
