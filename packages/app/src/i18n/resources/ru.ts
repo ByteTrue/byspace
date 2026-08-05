@@ -987,6 +987,17 @@ export const ru: TranslationResources = {
   newWorkspace: {
     title: "Новое рабочее пространство",
     create: "Создавать",
+    project: {
+      choose: "Выбрать проект",
+      searchPlaceholder: "Поиск проектов",
+      title: "Проект",
+      empty: "Нет доступных проектов.",
+    },
+    host: {
+      choose: "Выбрать хост",
+      label: "Хост рабочего пространства",
+      title: "Хост",
+    },
     isolation: {
       local: "Локально",
       worktree: "Новый worktree",

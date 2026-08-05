@@ -977,6 +977,17 @@ export const ja: TranslationResources = {
   newWorkspace: {
     title: "新しいワークスペース",
     create: "作成",
+    project: {
+      choose: "プロジェクトを選択",
+      searchPlaceholder: "プロジェクトを検索",
+      title: "プロジェクト",
+      empty: "利用可能なプロジェクトがありません。",
+    },
+    host: {
+      choose: "ホストを選択",
+      label: "ワークスペースのホスト",
+      title: "ホスト",
+    },
     isolation: {
       local: "ローカル",
       worktree: "新しいワークツリー",

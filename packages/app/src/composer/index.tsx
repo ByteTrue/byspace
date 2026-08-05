@@ -814,6 +814,8 @@ interface ComposerProps {
   submitIcon?: "arrow" | "return";
   /** Externally controlled loading state. When true, disables the submit button. */
   isSubmitLoading?: boolean;
+  /** When true, disables submission without showing a loading state. */
+  isSubmitDisabled?: boolean;
   /** When true, waits for pasted GitHub links to resolve before enabling submit. */
   waitForGithubAutoAttachOnSubmit?: boolean;
   submitBehavior?: "clear" | "preserve-and-lock";
@@ -1036,6 +1038,7 @@ export function Composer({
   submitButtonTestID,
   submitIcon = "arrow",
   isSubmitLoading = false,
+  isSubmitDisabled = false,
   waitForGithubAutoAttachOnSubmit = false,
   submitBehavior = "clear",
   blurOnSubmit = false,
@@ -1410,6 +1413,7 @@ export function Composer({
 
   const handleSubmit = useCallback(
     (payload: MessagePayload) => {
+      if (isSubmitDisabled) return;
       const outgoingAttachments = buildOutgoingAttachments(attachments);
       const clientSlashCommand = resolveClientSlashCommand({
         text: payload.text,
@@ -1428,6 +1432,7 @@ export function Composer({
       attachments,
       blurOnSubmit,
       buildOutgoingAttachments,
+      isSubmitDisabled,
       runClientSlashCommand,
       sendMessageWithContent,
     ],
@@ -2086,7 +2091,7 @@ export function Composer({
                 submitButtonAccessibilityLabel={submitButtonAccessibilityLabel}
                 submitButtonTestID={submitButtonTestID}
                 submitIcon={submitIcon}
-                isSubmitDisabled={isSubmitBusy}
+                isSubmitDisabled={isSubmitBusy || isSubmitDisabled}
                 isSubmitLoading={isSubmitBusy}
                 preserveHeightOnSubmit={submitBehavior === "preserve-and-lock"}
                 attachments={selectedAttachments}

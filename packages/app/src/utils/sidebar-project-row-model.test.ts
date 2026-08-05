@@ -81,7 +81,7 @@ describe("buildSidebarProjectRowModel", () => {
       chevron: "expand",
       trailingAction: {
         kind: "new_workspace",
-        target: { serverId: "srv", iconWorkingDir: "/repo" },
+        target: { projectKey: "project-1" },
       },
     });
   });
@@ -95,7 +95,7 @@ describe("buildSidebarProjectRowModel", () => {
 
     expect(result.trailingAction).toEqual({
       kind: "new_workspace",
-      target: { serverId: "srv", iconWorkingDir: "/repo" },
+      target: { projectKey: "project-1" },
     });
   });
 
@@ -118,11 +118,11 @@ describe("buildSidebarProjectRowModel", () => {
 
     expect(result.trailingAction).toEqual({
       kind: "new_workspace",
-      target: { serverId: "srv", iconWorkingDir: "/repo" },
+      target: { projectKey: "project-1" },
     });
   });
 
-  it("targets the project host, not route state, for new workspace actions", () => {
+  it("keeps multi-host creation scoped to the aggregate project", () => {
     const result = buildSidebarProjectRowModel({
       project: project({
         hosts: [
@@ -133,15 +133,25 @@ describe("buildSidebarProjectRowModel", () => {
       collapsed: false,
     });
 
-    expect(result).toMatchObject({
-      trailingAction: {
-        kind: "new_workspace",
-        target: { serverId: "host-b", iconWorkingDir: "/repo/b" },
-      },
+    expect(result.trailingAction).toEqual({
+      kind: "new_workspace",
+      target: { projectKey: "project-1" },
     });
   });
 
-  it("targets the first multiplicity-capable host for a non-git project", () => {
+  it("preserves opaque aggregate project keys in creation targets", () => {
+    const result = buildSidebarProjectRowModel({
+      project: project({ projectKey: " project-1 " }),
+      collapsed: false,
+    });
+
+    expect(result.trailingAction).toEqual({
+      kind: "new_workspace",
+      target: { projectKey: " project-1 " },
+    });
+  });
+
+  it("keeps multiplicity-backed creation scoped to the aggregate project", () => {
     const result = buildSidebarProjectRowModel({
       project: project({
         projectKind: "directory",
@@ -154,11 +164,9 @@ describe("buildSidebarProjectRowModel", () => {
       supportsMultiplicityByServerId: new Map([["host-b", true]]),
     });
 
-    expect(result).toMatchObject({
-      trailingAction: {
-        kind: "new_workspace",
-        target: { serverId: "host-b", iconWorkingDir: "/repo/b" },
-      },
+    expect(result.trailingAction).toEqual({
+      kind: "new_workspace",
+      target: { projectKey: "project-1" },
     });
   });
 
@@ -179,7 +187,7 @@ describe("buildSidebarProjectRowModel", () => {
       chevron: "expand",
       trailingAction: {
         kind: "new_workspace",
-        target: { serverId: "srv", iconWorkingDir: "/repo" },
+        target: { projectKey: "project-1" },
       },
     });
   });
@@ -208,7 +216,7 @@ describe("buildSidebarProjectRowModel", () => {
       chevron: "collapse",
       trailingAction: {
         kind: "new_workspace",
-        target: { serverId: "srv", iconWorkingDir: "/repo" },
+        target: { projectKey: "project-1" },
       },
     });
   });

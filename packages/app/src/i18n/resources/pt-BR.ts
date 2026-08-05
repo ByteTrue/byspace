@@ -988,6 +988,17 @@ export const ptBR: TranslationResources = {
   newWorkspace: {
     title: "Novo workspace",
     create: "Criar",
+    project: {
+      choose: "Escolher projeto",
+      searchPlaceholder: "Buscar projetos",
+      title: "Projeto",
+      empty: "Nenhum projeto disponível.",
+    },
+    host: {
+      choose: "Escolher host",
+      label: "Host do workspace",
+      title: "Host",
+    },
     isolation: {
       local: "Local",
       worktree: "Novo worktree",

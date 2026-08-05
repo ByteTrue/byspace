@@ -955,6 +955,17 @@ export const zhCN: TranslationResources = {
   newWorkspace: {
     title: "新建 workspace",
     create: "创建",
+    project: {
+      choose: "选择项目",
+      searchPlaceholder: "搜索项目",
+      title: "项目",
+      empty: "没有可用的项目。",
+    },
+    host: {
+      choose: "选择 Host",
+      label: "Workspace Host",
+      title: "Host",
+    },
     isolation: {
       local: "本地",
       worktree: "新建 worktree",

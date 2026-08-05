@@ -187,7 +187,7 @@ test.describe("Project with no workspaces persists", () => {
       await expect(projectRow).toBeVisible({ timeout: 30_000 });
       await projectRow.hover();
       await expect(newWorkspaceButton).toBeVisible({ timeout: 30_000 });
-      await expect(page.getByTestId("sidebar-global-new-workspace")).toHaveCount(0);
+      await expect(page.getByTestId("sidebar-global-new-workspace")).toBeVisible();
 
       // The project survives a reload after its last workspace is archived.
       await page.reload();

@@ -77,7 +77,7 @@ test.describe("Model B sidebar shape", () => {
         timeout: 30_000,
       });
 
-      await expect(page.getByTestId("sidebar-global-new-workspace")).toHaveCount(0);
+      await expect(page.getByTestId("sidebar-global-new-workspace")).toBeVisible();
     } finally {
       await gitProject.cleanup();
       await nonGitProject.cleanup();

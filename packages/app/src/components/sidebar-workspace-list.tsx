@@ -111,7 +111,7 @@ import type { PrHint } from "@/git/use-pr-status-query";
 import {
   buildSidebarProjectRowModel,
   resolveSidebarProjectIconTarget,
-  type SidebarProjectHostTarget,
+  type SidebarProjectNewWorkspaceTarget,
 } from "@/utils/sidebar-project-row-model";
 import { redirectIfArchivingActiveWorkspace } from "@/utils/sidebar-workspace-archive-redirect";
 import { openExternalUrl } from "@/utils/open-external-url";
@@ -241,7 +241,7 @@ interface ProjectHeaderRowProps {
   selected?: boolean;
   chevron: "expand" | "collapse" | null;
   onPress: () => void;
-  worktreeTarget: SidebarProjectHostTarget | null;
+  newWorkspaceTarget: SidebarProjectNewWorkspaceTarget | null;
   isProjectActive?: boolean;
   onWorkspacePress?: () => void;
   onWorktreeCreated?: (workspaceId: string) => void;
@@ -470,7 +470,7 @@ function ProjectLeadingVisual({
 function ProjectRowTrailingActions({
   project,
   displayName,
-  worktreeTarget,
+  newWorkspaceTarget,
   isHovered,
   isMobileBreakpoint,
   isProjectActive,
@@ -480,7 +480,7 @@ function ProjectRowTrailingActions({
 }: {
   project: SidebarProjectEntry;
   displayName: string;
-  worktreeTarget: SidebarProjectHostTarget | null;
+  newWorkspaceTarget: SidebarProjectNewWorkspaceTarget | null;
   isHovered: boolean;
   isMobileBreakpoint: boolean;
   isProjectActive: boolean;
@@ -491,7 +491,7 @@ function ProjectRowTrailingActions({
   const actionsVisible = isHovered || platformIsNative || isMobileBreakpoint;
   return (
     <View style={styles.projectTrailingActions}>
-      {worktreeTarget ? (
+      {newWorkspaceTarget ? (
         <NewWorktreeButton
           displayName={displayName}
           onPress={onBeginWorkspaceSetup}
@@ -848,7 +848,7 @@ function ProjectHeaderRow({
   selected = false,
   chevron,
   onPress,
-  worktreeTarget,
+  newWorkspaceTarget,
   isProjectActive = false,
   onWorkspacePress,
   onWorktreeCreated: _onWorktreeCreated,
@@ -866,19 +866,12 @@ function ProjectHeaderRow({
   const [isHovered, setIsHovered] = useState(false);
   const isMobileBreakpoint = useIsCompactFormFactor();
   const handleBeginWorkspaceSetup = useCallback(() => {
-    if (!worktreeTarget?.projectId) {
+    if (!newWorkspaceTarget) {
       return;
     }
     onWorkspacePress?.();
-    router.navigate(
-      buildNewWorkspaceRoute({
-        serverId: worktreeTarget.serverId,
-        sourceDirectory: worktreeTarget.iconWorkingDir,
-        displayName,
-        projectId: worktreeTarget.projectId,
-      }) as Href,
-    );
-  }, [displayName, onWorkspacePress, worktreeTarget]);
+    router.navigate(buildNewWorkspaceRoute({ projectKey: newWorkspaceTarget.projectKey }) as Href);
+  }, [newWorkspaceTarget, onWorkspacePress]);
   const interaction = useLongPressDragInteraction({
     drag,
     menuController,
@@ -946,7 +939,7 @@ function ProjectHeaderRow({
       <ProjectRowTrailingActions
         project={project}
         displayName={displayName}
-        worktreeTarget={worktreeTarget}
+        newWorkspaceTarget={newWorkspaceTarget}
         isHovered={isHovered}
         isMobileBreakpoint={isMobileBreakpoint}
         isProjectActive={isProjectActive}
@@ -1723,7 +1716,7 @@ function ProjectBlock({
         selected={false}
         chevron={rowModel.chevron}
         onPress={handleToggleCollapsed}
-        worktreeTarget={
+        newWorkspaceTarget={
           rowModel.trailingAction.kind === "new_workspace" ? rowModel.trailingAction.target : null
         }
         isProjectActive={active}

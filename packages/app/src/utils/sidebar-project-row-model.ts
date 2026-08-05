@@ -1,3 +1,4 @@
+import { getWorkspaceCreationHosts } from "@/projects/host-projects";
 import type { SidebarProjectEntry } from "@/hooks/use-sidebar-workspaces-list";
 
 export interface SidebarProjectHostTarget {
@@ -6,8 +7,12 @@ export interface SidebarProjectHostTarget {
   iconWorkingDir: string;
 }
 
+export interface SidebarProjectNewWorkspaceTarget {
+  projectKey: string;
+}
+
 export type SidebarProjectTrailingAction =
-  | { kind: "new_workspace"; target: SidebarProjectHostTarget }
+  | { kind: "new_workspace"; target: SidebarProjectNewWorkspaceTarget }
   | { kind: "none" };
 
 export interface SidebarProjectSectionRowModel {
@@ -44,26 +49,16 @@ export function resolveSidebarProjectIconTarget(
   return null;
 }
 
-// A project can host a brand-new workspace on a host when that host can create a
-// git worktree (git projects) OR the host supports running multiple independent
-// workspaces per directory (`workspaceMultiplicity`), which is what lets non-git
-// directories add a second workspace. Mirrors the gate used by the global "New
-// workspace" affordances (use-global-new-workspace-action.ts and left-sidebar's
-// SidebarNewWorkspaceHeaderRow): `canCreateWorktree || supportsMultiplicity`.
 function resolveNewWorkspaceTarget(
   project: SidebarProjectEntry,
-  supportsMultiplicityByServerId: ReadonlyMap<string, boolean>,
-): SidebarProjectHostTarget | null {
-  for (const host of project.hosts) {
-    if (!host.canCreateWorktree && !supportsMultiplicityByServerId.get(host.serverId)) {
-      continue;
-    }
-    const target = hostTarget(host);
-    if (target) {
-      return target;
-    }
+  workspaceMultiplicityByServerId: ReadonlyMap<string, boolean>,
+): SidebarProjectNewWorkspaceTarget | null {
+  const projectKey = project.projectKey;
+  if (!projectKey.trim()) {
+    return null;
   }
-  return null;
+  const hosts = getWorkspaceCreationHosts({ project, workspaceMultiplicityByServerId });
+  return hosts.length > 0 ? { projectKey } : null;
 }
 
 function projectTrailingAction(

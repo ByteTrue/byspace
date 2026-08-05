@@ -1,6 +1,9 @@
 import type { PrHint } from "@/git/pr-hint";
 import { selectPrHintFromStatus } from "@/git/pr-hint";
-import { type HostProjectListItem } from "@/projects/host-project-model";
+import {
+  resolveHostProjectWorkspaceIdentity,
+  type HostProjectListItem,
+} from "@/projects/host-project-model";
 import type { PendingCreateAttempt } from "@/stores/create-flow-store";
 import type { WorkspaceDescriptor } from "@/stores/session-store";
 import type {
@@ -283,20 +286,9 @@ function resolveStructuralWorkspaceIdentity(input: {
   serverId: string;
   workspaceId: string;
 } {
-  const hostsByLongestPrefix = [...input.project.hosts].sort(
-    (left, right) => right.serverId.length - left.serverId.length,
-  );
-
-  for (const host of hostsByLongestPrefix) {
-    const prefix = `${host.serverId}:`;
-    if (!input.workspaceKey.startsWith(prefix)) continue;
-    const workspaceId = input.workspaceKey.slice(prefix.length);
-    if (!workspaceId) continue;
-    return {
-      workspaceKey: input.workspaceKey,
-      serverId: host.serverId,
-      workspaceId,
-    };
+  const identity = resolveHostProjectWorkspaceIdentity(input.project, input.workspaceKey);
+  if (identity) {
+    return { workspaceKey: input.workspaceKey, ...identity };
   }
 
   const separatorIndex = input.workspaceKey.indexOf(":");

@@ -4,6 +4,7 @@ import {
   FolderPlus,
   History,
   Home,
+  Plus,
   Search,
   Server,
   Settings,
@@ -33,6 +34,7 @@ import { Shortcut } from "@/components/ui/shortcut";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { HEADER_INNER_HEIGHT, useIsCompactFormFactor } from "@/constants/layout";
 import { useOpenAddProject } from "@/hooks/use-open-add-project";
+import { useOpenNewWorkspace } from "@/hooks/use-global-new-workspace-action";
 import { useShortcutKeys } from "@/hooks/use-shortcut-keys";
 import type { SidebarWorkspaceEntry } from "@/hooks/use-sidebar-workspaces-list";
 import type { SidebarProjectedProject } from "@/components/sidebar/sidebar-projection";
@@ -784,15 +786,31 @@ function DesktopSidebar({
 
 function WorkspacesSectionHeader() {
   const { theme } = useUnistyles();
+  const { t } = useTranslation();
+  const { canOpenNewWorkspace, openNewWorkspace } = useOpenNewWorkspace();
   const setCommandCenterOpen = useKeyboardShortcutsStore((state) => state.setCommandCenterOpen);
+  const newWorkspaceKeys = useShortcutKeys("new-workspace");
   const commandCenterKeys = useShortcutKeys("toggle-command-center");
   const handleSearchPress = useCallback(() => setCommandCenterOpen(true), [setCommandCenterOpen]);
-  const searchButtonStyle = useCallback(
+  const headerButtonStyle = useCallback(
     ({ hovered = false, pressed }: PressableStateCallbackType & { hovered?: boolean }) => [
       styles.workspacesHeaderIconButton,
       (hovered || pressed) && styles.workspacesHeaderIconButtonHovered,
     ],
     [],
+  );
+  const newWorkspaceButtonStyle = useCallback(
+    ({ hovered = false, pressed }: PressableStateCallbackType & { hovered?: boolean }) => [
+      styles.workspacesHeaderIconButton,
+      canOpenNewWorkspace && (hovered || pressed) && styles.workspacesHeaderIconButtonHovered,
+      !canOpenNewWorkspace && styles.workspacesHeaderIconButtonDisabled,
+    ],
+    [canOpenNewWorkspace],
+  );
+  const newWorkspaceLabel = t("sidebar.workspace.actions.newWorkspace");
+  const newWorkspaceAccessibilityState = useMemo(
+    () => ({ disabled: !canOpenNewWorkspace }),
+    [canOpenNewWorkspace],
   );
 
   return (
@@ -803,9 +821,36 @@ function WorkspacesSectionHeader() {
           <TooltipTrigger asChild>
             <Pressable
               accessibilityRole="button"
+              accessibilityLabel={newWorkspaceLabel}
+              accessibilityState={newWorkspaceAccessibilityState}
+              disabled={!canOpenNewWorkspace}
+              testID="sidebar-global-new-workspace"
+              style={newWorkspaceButtonStyle}
+              onPress={openNewWorkspace}
+            >
+              {({ hovered, pressed }) => (
+                <Plus
+                  size={14}
+                  color={
+                    canOpenNewWorkspace && (hovered || pressed)
+                      ? theme.colors.foreground
+                      : theme.colors.foregroundMuted
+                  }
+                />
+              )}
+            </Pressable>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" align="center" offset={8}>
+            <IconTooltipContent label={newWorkspaceLabel} shortcutKeys={newWorkspaceKeys} />
+          </TooltipContent>
+        </Tooltip>
+        <Tooltip delayDuration={300}>
+          <TooltipTrigger asChild>
+            <Pressable
+              accessibilityRole="button"
               accessibilityLabel="Open command center"
               testID="sidebar-command-center-search"
-              style={searchButtonStyle}
+              style={headerButtonStyle}
               onPress={handleSearchPress}
             >
               {({ hovered, pressed }) => (
@@ -896,6 +941,9 @@ const styles = StyleSheet.create((theme) => ({
   },
   workspacesHeaderIconButtonHovered: {
     backgroundColor: theme.colors.surfaceSidebarHover,
+  },
+  workspacesHeaderIconButtonDisabled: {
+    opacity: 0.45,
   },
   sidebarContent: {
     flex: 1,

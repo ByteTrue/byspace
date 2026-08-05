@@ -996,6 +996,17 @@ export const fr: TranslationResources = {
   newWorkspace: {
     title: "Nouvel espace de travail",
     create: "Créer",
+    project: {
+      choose: "Choisir un projet",
+      searchPlaceholder: "Rechercher des projets",
+      title: "Projet",
+      empty: "Aucun projet disponible.",
+    },
+    host: {
+      choose: "Choisir un hôte",
+      label: "Hôte de l’espace de travail",
+      title: "Hôte",
+    },
     isolation: {
       local: "Local",
       worktree: "Nouveau worktree",

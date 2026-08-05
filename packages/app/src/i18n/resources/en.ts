@@ -976,6 +976,17 @@ export const en = {
   newWorkspace: {
     title: "New workspace",
     create: "Create",
+    project: {
+      choose: "Choose project",
+      searchPlaceholder: "Search projects",
+      title: "Project",
+      empty: "No projects available.",
+    },
+    host: {
+      choose: "Choose host",
+      label: "Workspace host",
+      title: "Host",
+    },
     isolation: {
       local: "Local",
       worktree: "New worktree",

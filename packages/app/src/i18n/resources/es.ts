@@ -997,6 +997,17 @@ export const es: TranslationResources = {
   newWorkspace: {
     title: "Nuevo espacio de trabajo",
     create: "Crear",
+    project: {
+      choose: "Elegir proyecto",
+      searchPlaceholder: "Buscar proyectos",
+      title: "Proyecto",
+      empty: "No hay proyectos disponibles.",
+    },
+    host: {
+      choose: "Elegir host",
+      label: "Host del espacio de trabajo",
+      title: "Host",
+    },
     isolation: {
       local: "Local",
       worktree: "Nuevo worktree",

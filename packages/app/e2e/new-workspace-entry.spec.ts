@@ -14,9 +14,9 @@ import { getServerId } from "./helpers/server-id";
 import { clickArchiveWorkspaceMenuItem, expectWorkspaceAbsentFromSidebar } from "./helpers/sidebar";
 import { waitForSidebarHydration } from "./helpers/workspace-ui";
 
-// New Workspace entry points are each project's header + and the keyboard shortcut.
-// These specs prove there is no standalone sidebar row, the shortcut opens the screen,
-// the project + preselects the right project, and non-git projects never offer worktree isolation.
+// New Workspace entry points are the Workspaces header button, each project's header +,
+// and the keyboard shortcut. These specs prove the global controls open the same screen,
+// the project + preselects the right project, and non-git projects never offer isolation.
 
 function projectRow(page: import("@playwright/test").Page, projectKey: string) {
   return page.getByTestId(`sidebar-project-row-${projectKey}`);
@@ -35,9 +35,7 @@ test.describe("New workspace entry points", () => {
     await client?.close().catch(() => undefined);
   });
 
-  test("removes the standalone row while the New Workspace shortcut still opens the screen", async ({
-    page,
-  }) => {
+  test("the Workspaces header button opens the global Project-first screen", async ({ page }) => {
     const seeded: SeededWorkspace = await seedWorkspace({ repoPrefix: "entry-global-button-" });
 
     try {
@@ -60,44 +58,17 @@ test.describe("New workspace entry points", () => {
         page.getByTestId(`sidebar-workspace-row-${getServerId()}:${seeded.workspaceId}`),
       ).toBeVisible({ timeout: 30_000 });
 
-      await expect(page.getByTestId("sidebar-global-new-workspace")).toHaveCount(0);
-      await openGlobalNewWorkspaceComposer(page);
+      const newWorkspaceButton = page.getByTestId("sidebar-global-new-workspace");
+      await expect(newWorkspaceButton).toBeVisible();
+      await expect(newWorkspaceButton).toHaveAccessibleName("New workspace");
+      await newWorkspaceButton.click();
+      await expect(page).toHaveURL(/\/new(?:\?|$)/);
       await expect(page.getByTestId("host-chooser")).toHaveCount(0);
 
-      await expect(page.getByTestId("new-workspace-project-picker-trigger")).toBeVisible({
-        timeout: 30_000,
-      });
-      await expect(page.getByTestId("host-picker-trigger")).toBeVisible({ timeout: 30_000 });
-    } finally {
-      await seeded.cleanup();
-    }
-  });
-
-  test("the New Workspace screen hides the host selector when there is only one host", async ({
-    page,
-  }) => {
-    const seeded: SeededWorkspace = await seedWorkspace({ repoPrefix: "entry-single-host-" });
-
-    try {
-      await seedSavedSettingsHosts(page, [
-        {
-          serverId: getServerId(),
-          label: "localhost",
-          endpoint: `127.0.0.1:${getE2EDaemonPort()}`,
-        },
-      ]);
-
-      await gotoAppShell(page);
-      await waitForSidebarHydration(page);
-      await expect(
-        page.getByTestId(`sidebar-workspace-row-${getServerId()}:${seeded.workspaceId}`),
-      ).toBeVisible({ timeout: 30_000 });
-
-      await openGlobalNewWorkspaceComposer(page);
-
-      await expect(page.getByTestId("new-workspace-project-picker-trigger")).toBeVisible({
-        timeout: 30_000,
-      });
+      const projectOption = page.getByTestId(
+        `new-workspace-project-picker-option-${seeded.projectKey}`,
+      );
+      await expect(projectOption).toBeVisible({ timeout: 30_000 });
       await expect(page.getByTestId("host-picker-trigger")).toHaveCount(0);
     } finally {
       await seeded.cleanup();
@@ -146,7 +117,10 @@ test.describe("New workspace entry points", () => {
         .click();
       await expect(page).toHaveURL(/\/workspace\//, { timeout: 30_000 });
 
-      await page.goto(`/new?serverId=${encodeURIComponent(serverId)}`);
+      await openNewWorkspaceComposer(page, {
+        projectKey: rememberedProject.projectKey,
+        projectDisplayName: rememberedProject.projectDisplayName,
+      });
       await expectNewWorkspaceProjectSelected(page, rememberedProject.projectDisplayName);
 
       const composer = page.getByRole("textbox", { name: "Message agent..." });
@@ -212,6 +186,15 @@ test.describe("New workspace entry points", () => {
         projectDisplayName: projectB.projectDisplayName,
       });
       await expectNewWorkspaceProjectSelected(page, projectB.projectDisplayName);
+
+      // Reusing the same screen for plain /new must clear the route selection and
+      // open the project picker instead of retaining B's closed picker state.
+      await openGlobalNewWorkspaceComposer(page);
+      await expect(page).toHaveURL(/\/new$/u);
+      await expect(page.getByTestId("new-workspace-project-picker-trigger")).toContainText(
+        "Choose project",
+      );
+      await expect(page.getByPlaceholder("Search projects")).toBeFocused();
     } finally {
       await projectA.cleanup();
       await projectB.cleanup();
@@ -238,11 +221,7 @@ test.describe("New workspace entry points", () => {
         timeout: 30_000,
       });
 
-      // Open New Workspace via the keyboard shortcut, then select the non-git project.
       await openGlobalNewWorkspaceComposer(page);
-      const trigger = page.getByTestId("new-workspace-project-picker-trigger");
-      await expect(trigger).toBeVisible({ timeout: 30_000 });
-      await trigger.click();
       const nonGitOption = page.getByTestId(
         `new-workspace-project-picker-option-${nonGitProject.projectKey}`,
       );
@@ -255,6 +234,8 @@ test.describe("New workspace entry points", () => {
       await expect(page.getByTestId("workspace-create-isolation-trigger")).toHaveCount(0);
 
       // Switching to the git project on the same screen reveals the Isolation row.
+      const trigger = page.getByTestId("new-workspace-project-picker-trigger");
+      await expect(trigger).toBeVisible({ timeout: 30_000 });
       await trigger.click();
       const gitOption = page.getByTestId(
         `new-workspace-project-picker-option-${gitProject.projectKey}`,

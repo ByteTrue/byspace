@@ -966,6 +966,17 @@ export const ar: TranslationResources = {
   newWorkspace: {
     title: "مساحة عمل جديدة",
     create: "يخلق",
+    project: {
+      choose: "اختر مشروعًا",
+      searchPlaceholder: "البحث في المشاريع",
+      title: "المشروع",
+      empty: "لا توجد مشاريع متاحة.",
+    },
+    host: {
+      choose: "اختر مضيفًا",
+      label: "مضيف مساحة العمل",
+      title: "المضيف",
+    },
     isolation: {
       local: "محلي",
       worktree: "شجرة عمل جديدة",

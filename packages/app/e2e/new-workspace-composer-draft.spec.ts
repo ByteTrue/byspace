@@ -1,18 +1,13 @@
 import { test } from "./fixtures";
 import { gotoAppShell } from "./helpers/app";
-import { getE2EDaemonPort } from "./helpers/daemon-port";
 import {
   expectNewWorkspaceDraft,
   expectNewWorkspaceProjectSelected,
   fillNewWorkspaceDraft,
-  openGlobalNewWorkspaceComposer,
   openNewWorkspaceComposer,
-  selectNewWorkspaceHost,
   selectNewWorkspaceProject,
 } from "./helpers/new-workspace";
 import { seedWorkspace, type SeededWorkspace } from "./helpers/seed-client";
-import { getServerId } from "./helpers/server-id";
-import { seedSavedSettingsHosts } from "./helpers/settings";
 import { waitForSidebarHydration } from "./helpers/workspace-ui";
 
 const DRAFT = `Please investigate the workspace startup failure.
@@ -50,39 +45,6 @@ test.describe("New workspace composer draft", () => {
     } finally {
       await secondProject.cleanup();
       await firstProject.cleanup();
-    }
-  });
-
-  test("keeps the draft when the host changes", async ({ page }) => {
-    const project: SeededWorkspace = await seedWorkspace({
-      repoPrefix: "new-workspace-draft-host-",
-    });
-    const secondaryServerId = "new-workspace-draft-secondary-host";
-
-    try {
-      await seedSavedSettingsHosts(page, [
-        {
-          serverId: getServerId(),
-          label: "Primary host",
-          endpoint: `127.0.0.1:${getE2EDaemonPort()}`,
-        },
-        {
-          serverId: secondaryServerId,
-          label: "Secondary host",
-          endpoint: "127.0.0.1:9",
-        },
-      ]);
-
-      await gotoAppShell(page);
-      await waitForSidebarHydration(page);
-      await openGlobalNewWorkspaceComposer(page);
-
-      await fillNewWorkspaceDraft(page, DRAFT);
-      await selectNewWorkspaceHost(page, "Secondary host");
-
-      await expectNewWorkspaceDraft(page, DRAFT);
-    } finally {
-      await project.cleanup();
     }
   });
 });

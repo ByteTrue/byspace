@@ -11,7 +11,7 @@ import { buildNewWorkspaceRoute } from "@/utils/host-routes";
 
 const WORKSPACE_NEW_ACTIONS: readonly KeyboardActionId[] = ["workspace.new"];
 
-export function useGlobalNewWorkspaceAction() {
+export function useOpenNewWorkspace() {
   const selection = useActiveWorkspaceSelection();
   const serverId = selection?.serverId ?? null;
   const workspaceId = selection?.workspaceId ?? null;
@@ -23,7 +23,7 @@ export function useGlobalNewWorkspaceAction() {
     (supportsWorkspaceMultiplicity || canCreateWorktreeForProjectKind(activeWorkspace.projectKind)),
   );
 
-  const handle = useCallback(() => {
+  const openNewWorkspace = useCallback(() => {
     if (hosts.length === 0) {
       return false;
     }
@@ -33,6 +33,9 @@ export function useGlobalNewWorkspaceAction() {
             activeWorkspace && canUseActiveWorkspaceContext
               ? {
                   serverId,
+                  projectKey:
+                    activeWorkspace.project?.projectGroupingKey ??
+                    activeWorkspace.project?.projectKey,
                   sourceDirectory: activeWorkspace.projectRootPath,
                   projectId: activeWorkspace.projectId,
                 }
@@ -43,11 +46,20 @@ export function useGlobalNewWorkspaceAction() {
     return true;
   }, [activeWorkspace, canUseActiveWorkspaceContext, hosts.length, serverId]);
 
+  return {
+    canOpenNewWorkspace: hosts.length > 0,
+    openNewWorkspace,
+  };
+}
+
+export function useGlobalNewWorkspaceAction() {
+  const { canOpenNewWorkspace, openNewWorkspace } = useOpenNewWorkspace();
+
   useKeyboardActionHandler({
     handlerId: "workspace-new-global",
     actions: WORKSPACE_NEW_ACTIONS,
-    enabled: hosts.length > 0,
+    enabled: canOpenNewWorkspace,
     priority: 0,
-    handle,
+    handle: openNewWorkspace,
   });
 }
