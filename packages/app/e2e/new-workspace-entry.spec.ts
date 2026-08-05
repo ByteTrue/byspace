@@ -14,12 +14,9 @@ import { getServerId } from "./helpers/server-id";
 import { clickArchiveWorkspaceMenuItem, expectWorkspaceAbsentFromSidebar } from "./helpers/sidebar";
 import { waitForSidebarHydration } from "./helpers/workspace-ui";
 
-// Model B entry points into the New Workspace screen. The surviving entries are
-// the global button (universal) and each project's per-row New workspace icon
-// (preselects that project) — shown for git projects and for non-git projects on
-// a multiplicity-capable host. These specs prove the global entry opens the
-// screen, the project icon preselects the right project across the reused 'new'
-// screen, and non-git projects never offer the worktree Isolation control.
+// New Workspace entry points are each project's header + and the keyboard shortcut.
+// These specs prove there is no standalone sidebar row, the shortcut opens the screen,
+// the project + preselects the right project, and non-git projects never offer worktree isolation.
 
 function projectRow(page: import("@playwright/test").Page, projectKey: string) {
   return page.getByTestId(`sidebar-project-row-${projectKey}`);
@@ -38,7 +35,9 @@ test.describe("New workspace entry points", () => {
     await client?.close().catch(() => undefined);
   });
 
-  test("the global new-workspace button opens the New Workspace screen", async ({ page }) => {
+  test("removes the standalone row while the New Workspace shortcut still opens the screen", async ({
+    page,
+  }) => {
     const seeded: SeededWorkspace = await seedWorkspace({ repoPrefix: "entry-global-button-" });
 
     try {
@@ -61,9 +60,7 @@ test.describe("New workspace entry points", () => {
         page.getByTestId(`sidebar-workspace-row-${getServerId()}:${seeded.workspaceId}`),
       ).toBeVisible({ timeout: 30_000 });
 
-      const globalButton = page.getByTestId("sidebar-global-new-workspace");
-      await expect(globalButton).toBeVisible({ timeout: 30_000 });
-
+      await expect(page.getByTestId("sidebar-global-new-workspace")).toHaveCount(0);
       await openGlobalNewWorkspaceComposer(page);
       await expect(page.getByTestId("host-chooser")).toHaveCount(0);
 
@@ -241,8 +238,7 @@ test.describe("New workspace entry points", () => {
         timeout: 30_000,
       });
 
-      // Open New Workspace for the non-git project via the global button, then
-      // select it in the picker (the per-row icon would preselect it too).
+      // Open New Workspace via the keyboard shortcut, then select the non-git project.
       await openGlobalNewWorkspaceComposer(page);
       const trigger = page.getByTestId("new-workspace-project-picker-trigger");
       await expect(trigger).toBeVisible({ timeout: 30_000 });

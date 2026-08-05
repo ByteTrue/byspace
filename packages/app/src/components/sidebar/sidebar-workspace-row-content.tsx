@@ -145,7 +145,10 @@ export const SidebarWorkspaceRowContent = memo(function SidebarWorkspaceRowConte
               </Text>
               {scriptIconKind ? <WorkspaceScriptIcon kind={scriptIconKind} /> : null}
             </View>
-            <View style={sidebarWorkspaceRowStyles.rowRight}>{children}</View>
+            <View style={sidebarWorkspaceRowStyles.rowRight}>
+              <WorkspaceAgentSummary workspace={workspace} />
+              {children}
+            </View>
           </View>
           {subtitle ? (
             <Text style={styles.workspaceSubtitle} numberOfLines={1}>
@@ -380,6 +383,47 @@ function getStatusDotColorStyle(bucket: SidebarStateBucket) {
   }
 }
 
+function WorkspaceAgentSummary({ workspace }: { workspace: SidebarWorkspaceEntry }) {
+  const { t } = useTranslation();
+  const summary = workspace.agentSummary;
+  if (!summary) return null;
+  if (summary.needsAttentionCount > 0) {
+    return (
+      <View
+        style={sidebarWorkspaceRowStyles.agentSummary}
+        testID="workspace-agent-summary-attention"
+        accessible
+        accessibilityLabel={t("sidebar.workspace.agentSummary.needsAttention", {
+          count: summary.needsAttentionCount,
+        })}
+      >
+        <ThemedCircleAlert size={12} uniProps={amberColorMapping} />
+        <Text style={sidebarWorkspaceRowStyles.agentSummaryAttentionText}>
+          {summary.needsAttentionCount}
+        </Text>
+      </View>
+    );
+  }
+  if (summary.workingCount > 0) {
+    return (
+      <View
+        style={sidebarWorkspaceRowStyles.agentSummary}
+        testID="workspace-agent-summary-working"
+        accessible
+        accessibilityLabel={t("sidebar.workspace.agentSummary.working", {
+          count: summary.workingCount,
+        })}
+      >
+        <View style={sidebarWorkspaceRowStyles.agentSummaryWorkingDot} />
+        <Text style={sidebarWorkspaceRowStyles.agentSummaryWorkingText}>
+          {summary.workingCount}
+        </Text>
+      </View>
+    );
+  }
+  return null;
+}
+
 const prBadgeStyles = StyleSheet.create((theme) => ({
   badge: {
     flexDirection: "row",
@@ -420,6 +464,28 @@ export const sidebarWorkspaceRowStyles = StyleSheet.create((theme) => ({
     alignItems: "flex-start",
     gap: theme.spacing[2],
     flexShrink: 0,
+  },
+  agentSummary: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    minHeight: 18,
+  },
+  agentSummaryWorkingDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: theme.colors.statusSuccess,
+  },
+  agentSummaryAttentionText: {
+    color: theme.colors.statusWarning,
+    fontSize: theme.fontSize.xs,
+    fontWeight: theme.fontWeight.medium,
+  },
+  agentSummaryWorkingText: {
+    color: theme.colors.statusSuccess,
+    fontSize: theme.fontSize.xs,
+    fontWeight: theme.fontWeight.medium,
   },
   shortcutBadge: {
     minWidth: 18,

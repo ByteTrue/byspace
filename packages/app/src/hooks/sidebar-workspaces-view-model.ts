@@ -8,7 +8,7 @@ import type {
   WorkspaceStructureProject,
 } from "@/projects/workspace-structure";
 import { projectDisplayNameFromProjectId } from "@/utils/project-display-name";
-import type { WorkspaceAgentActivity } from "@/utils/workspace-agent-activity";
+import type { WorkspaceAgentSummary } from "@/utils/workspace-agent-summary";
 import { resolveWorkspaceMapKeyByIdentity } from "@/utils/workspace-identity";
 
 const EMPTY_PROJECTS: SidebarProjectEntry[] = [];
@@ -47,6 +47,7 @@ export interface SidebarWorkspaceEntry extends SidebarStatusWorkspacePlacement {
   archiveUnpushedCommitCount: number | null;
   scripts: WorkspaceDescriptor["scripts"];
   hasRunningScripts: boolean;
+  agentSummary: WorkspaceAgentSummary | null;
 }
 
 export interface SidebarProjectEntry {
@@ -67,12 +68,12 @@ export interface SidebarWorkspacePlacementModel {
 export interface SidebarWorkspaceSession {
   serverId: string;
   workspaces: Map<string, WorkspaceDescriptor>;
-  workspaceAgentActivity: Map<string, WorkspaceAgentActivity>;
+  workspaceAgentSummaries: Map<string, WorkspaceAgentSummary>;
 }
 
 interface SidebarWorkspaceSessionSource {
   workspaces: Map<string, WorkspaceDescriptor>;
-  workspaceAgentActivity: Map<string, WorkspaceAgentActivity>;
+  workspaceAgentSummaries: Map<string, WorkspaceAgentSummary>;
 }
 
 export function selectSidebarWorkspaceSessions(
@@ -88,7 +89,7 @@ export function selectSidebarWorkspaceSessions(
     selected.push({
       serverId,
       workspaces: session.workspaces,
-      workspaceAgentActivity: session.workspaceAgentActivity,
+      workspaceAgentSummaries: session.workspaceAgentSummaries,
     });
   }
   return selected;
@@ -109,7 +110,7 @@ export function areSidebarWorkspaceSessionsEqual(
       !rightSession ||
       leftSession.serverId !== rightSession.serverId ||
       leftSession.workspaces !== rightSession.workspaces ||
-      leftSession.workspaceAgentActivity !== rightSession.workspaceAgentActivity
+      leftSession.workspaceAgentSummaries !== rightSession.workspaceAgentSummaries
     ) {
       return false;
     }
@@ -121,6 +122,14 @@ interface EffectiveWorkspaceStatus {
   status: WorkspaceDescriptor["status"];
   enteredAt: Date | null;
 }
+
+const WORKSPACE_STATUS_PRIORITY: Record<WorkspaceDescriptor["status"], number> = {
+  needs_input: 0,
+  failed: 1,
+  attention: 2,
+  running: 3,
+  done: 4,
+};
 
 function projectNameForWorkspace(workspace: WorkspaceDescriptor, projectKey: string): string {
   return (
@@ -143,7 +152,7 @@ export function createSidebarWorkspaceEntry(input: {
   workspace: WorkspaceDescriptor;
   projectKey?: string;
   pendingCreateAttempts?: Record<string, PendingCreateAttempt>;
-  workspaceAgentActivity?: ReadonlyMap<string, WorkspaceAgentActivity>;
+  workspaceAgentSummaries?: ReadonlyMap<string, WorkspaceAgentSummary>;
 }): SidebarWorkspaceEntry {
   const projectKey =
     input.projectKey ?? input.workspace.project?.projectKey ?? input.workspace.projectId;
@@ -174,6 +183,7 @@ export function createSidebarWorkspaceEntry(input: {
     archiveUnpushedCommitCount: input.workspace.gitRuntime?.aheadOfOrigin ?? null,
     scripts: input.workspace.scripts,
     hasRunningScripts: input.workspace.scripts.some((script) => script.lifecycle === "running"),
+    agentSummary: input.workspaceAgentSummaries?.get(input.workspace.id) ?? null,
   };
 }
 
@@ -181,10 +191,14 @@ function deriveEffectiveWorkspaceStatus(input: {
   serverId: string;
   workspace: WorkspaceDescriptor;
   pendingCreateAttempts?: Record<string, PendingCreateAttempt>;
-  workspaceAgentActivity?: ReadonlyMap<string, WorkspaceAgentActivity>;
+  workspaceAgentSummaries?: ReadonlyMap<string, WorkspaceAgentSummary>;
 }): EffectiveWorkspaceStatus {
-  if (input.workspace.status !== "done") {
-    return { status: input.workspace.status, enteredAt: input.workspace.statusEnteredAt };
+  const candidates: EffectiveWorkspaceStatus[] = [
+    { status: input.workspace.status, enteredAt: input.workspace.statusEnteredAt },
+  ];
+  const agentSummary = input.workspaceAgentSummaries?.get(input.workspace.id);
+  if (agentSummary) {
+    candidates.push({ status: agentSummary.status, enteredAt: agentSummary.statusEnteredAt });
   }
 
   const pendingStartedAt = getPendingInitialAgentCreateStartedAt({
@@ -193,15 +207,18 @@ function deriveEffectiveWorkspaceStatus(input: {
     pendingCreateAttempts: input.pendingCreateAttempts,
   });
   if (pendingStartedAt) {
-    return { status: "running", enteredAt: pendingStartedAt };
+    candidates.push({ status: "running", enteredAt: pendingStartedAt });
   }
 
-  const rootAgentActivity = input.workspaceAgentActivity?.get(input.workspace.id);
-  if (rootAgentActivity && rootAgentActivity.status !== "done") {
-    return rootAgentActivity;
-  }
-
-  return { status: input.workspace.status, enteredAt: input.workspace.statusEnteredAt };
+  return candidates.reduce((best, candidate) => {
+    const priorityDifference =
+      WORKSPACE_STATUS_PRIORITY[candidate.status] - WORKSPACE_STATUS_PRIORITY[best.status];
+    if (priorityDifference < 0) return candidate;
+    if (priorityDifference > 0) return best;
+    if (!best.enteredAt) return candidate.enteredAt ? candidate : best;
+    if (!candidate.enteredAt) return best;
+    return candidate.enteredAt < best.enteredAt ? candidate : best;
+  });
 }
 
 function getPendingInitialAgentCreateStartedAt(input: {
@@ -327,7 +344,7 @@ export function buildSidebarWorkspaceEntries(input: {
       workspace,
       projectKey: placement.projectKey,
       pendingCreateAttempts: input.pendingCreateAttempts,
-      workspaceAgentActivity: session.workspaceAgentActivity,
+      workspaceAgentSummaries: session.workspaceAgentSummaries,
     });
     const previousEntry = input.previousEntries?.get(placement.workspaceKey);
     entries.set(

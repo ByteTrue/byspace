@@ -112,10 +112,12 @@ test.describe("Project picker search", () => {
   });
 });
 
-// Projects are parents in the sidebar. Archiving the last workspace leaves the
-// project row in place with a ghost "+ New workspace" child row.
+// Projects are parents in the sidebar. Archiving the last workspace keeps the
+// empty project at the end of Other projects; its header + remains the creation entry.
 test.describe("Project with no workspaces persists", () => {
-  test("adding a project starts with only a new-workspace child row", async ({ page }) => {
+  test("adding a project keeps an empty project with its header creation action", async ({
+    page,
+  }) => {
     const repo = await createTempGitRepo("empty-project-add-");
     const client = await connectSeedClient();
     let projectId: string | null = null;
@@ -137,9 +139,10 @@ test.describe("Project with no workspaces persists", () => {
       await expect(projectRow).toContainText(path.basename(repo.path));
       await expect(page.getByTestId(`sidebar-workspace-list-${projectKey}`)).toHaveCount(0);
 
-      const newWorkspaceRow = page.getByTestId(`sidebar-project-new-workspace-row-${projectKey}`);
-      await expect(newWorkspaceRow).toBeVisible({ timeout: 30_000 });
-      await expect(newWorkspaceRow).toContainText("New workspace");
+      await projectRow.hover();
+      await expect(page.getByTestId(`sidebar-project-new-worktree-${projectKey}`)).toBeVisible({
+        timeout: 30_000,
+      });
 
       const workspaces = await client.fetchWorkspaces({ filter: { projectId } });
       expect(workspaces.entries).toEqual([]);
@@ -159,10 +162,9 @@ test.describe("Project with no workspaces persists", () => {
 
     try {
       const projectRow = page.getByTestId(`sidebar-project-row-${workspace.projectKey}`);
-      const newWorkspaceRow = page.getByTestId(
-        `sidebar-project-new-workspace-row-${workspace.projectKey}`,
+      const newWorkspaceButton = page.getByTestId(
+        `sidebar-project-new-worktree-${workspace.projectKey}`,
       );
-      const globalNewWorkspace = page.getByTestId("sidebar-global-new-workspace");
 
       await gotoAppShell(page);
       await waitForSidebarHydration(page);
@@ -176,22 +178,23 @@ test.describe("Project with no workspaces persists", () => {
 
       await archiveWorkspaceFromSidebar(page, workspace.workspaceId);
 
-      // The workspace row goes away, but its project parent stays and exposes a
-      // child row for creating the next workspace.
+      // The workspace row goes away, but its project parent stays and keeps its
+      // header + action for creating the next workspace.
       await expect(page.getByTestId(workspaceRowTestId(workspace.workspaceId))).toHaveCount(0, {
         timeout: 30_000,
       });
       expect(existsSync(workspace.repoPath)).toBe(true);
       await expect(projectRow).toBeVisible({ timeout: 30_000 });
-      await expect(newWorkspaceRow).toBeVisible({ timeout: 30_000 });
-      await expect(newWorkspaceRow).toContainText("New workspace");
-      await expect(globalNewWorkspace).toBeVisible({ timeout: 30_000 });
+      await projectRow.hover();
+      await expect(newWorkspaceButton).toBeVisible({ timeout: 30_000 });
+      await expect(page.getByTestId("sidebar-global-new-workspace")).toHaveCount(0);
 
       // The project survives a reload after its last workspace is archived.
       await page.reload();
       await waitForSidebarHydration(page);
       await expect(projectRow).toBeVisible({ timeout: 30_000 });
-      await expect(newWorkspaceRow).toBeVisible({ timeout: 30_000 });
+      await projectRow.hover();
+      await expect(newWorkspaceButton).toBeVisible({ timeout: 30_000 });
     } finally {
       await workspace.cleanup();
     }
@@ -242,8 +245,9 @@ test.describe("Project remove", () => {
       await expect(readdedProjectRow).toBeVisible({ timeout: 30_000 });
       await expect(readdedProjectRow).toContainText(workspace.projectDisplayName);
       await expect(readdedProjectRow).not.toContainText(workspace.repoPath);
+      await readdedProjectRow.hover();
       await expect(
-        page.getByTestId(`sidebar-project-new-workspace-row-${readdedProjectKey}`),
+        page.getByTestId(`sidebar-project-new-worktree-${readdedProjectKey}`),
       ).toBeVisible({ timeout: 30_000 });
     } finally {
       if (readdedProjectId) {

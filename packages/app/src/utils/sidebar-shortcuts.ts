@@ -2,7 +2,6 @@ import type {
   SidebarProjectEntry,
   SidebarWorkspacePlacement,
 } from "@/hooks/use-sidebar-workspaces-list";
-import type { StatusGroup } from "@/hooks/sidebar-status-view-model";
 
 export interface SidebarShortcutWorkspaceTarget {
   serverId: string;
@@ -37,20 +36,6 @@ export function buildSidebarShortcutModel(input: {
     sections: input.projects.map((project) => ({
       workspaces: project.workspaces,
       collapsed: input.collapsedProjectKeys.has(project.projectKey),
-    })),
-    shortcutLimit: input.shortcutLimit,
-  });
-}
-
-export function buildStatusSidebarShortcutModel(input: {
-  groups: readonly StatusGroup[];
-  collapsedStatusGroupKeys?: ReadonlySet<string>;
-  shortcutLimit?: number;
-}): SidebarShortcutModel {
-  return buildSidebarShortcutSections({
-    sections: input.groups.map((group) => ({
-      workspaces: group.rows,
-      collapsed: input.collapsedStatusGroupKeys?.has(group.bucket),
     })),
     shortcutLimit: input.shortcutLimit,
   });

@@ -371,6 +371,16 @@ export const fr: TranslationResources = {
     },
     hoverCard: {
       scriptsAccessibility: "ScriptsWorkspace",
+      detailsAccessibility: "Détails de l’espace de travail",
+      agents: "Agents",
+      untitledAgent: "Agent sans titre",
+      agentStatus: {
+        needsInput: "Entrée requise",
+        failed: "Échec",
+        attention: "Prêt à vérifier",
+        running: "En cours",
+        done: "Terminé",
+      },
       copyPath: "Copier le chemin",
       copyBranchName: "Copier le nom de la branche",
       copied: "Copié",
@@ -899,6 +909,8 @@ export const fr: TranslationResources = {
     sections: {
       sessions: "Historique",
       schedules: "Planifications",
+      needsAttention: "À traiter",
+      otherProjects: "Autres projets",
     },
     worktreeSetup: {
       title: "Configurer les scripts d'arbre de travail",
@@ -907,6 +919,7 @@ export const fr: TranslationResources = {
       openProjectSettings: "Ouvrir les paramètres du projet",
     },
     project: {
+      needsAttentionCount: "Espaces de travail à traiter : {{count}}",
       actions: {
         menu: "Actions du projet",
         openSettings: "Ouvrir les paramètres du projet",
@@ -933,6 +946,10 @@ export const fr: TranslationResources = {
       },
     },
     workspace: {
+      agentSummary: {
+        needsAttention: "Agents à traiter : {{count}}",
+        working: "Agents en cours : {{count}}",
+      },
       status: {
         scriptsAvailable: "Scripts disponibles",
         creating: "Création...",

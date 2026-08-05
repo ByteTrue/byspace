@@ -13,10 +13,6 @@ function workspaceRow(page: Page, workspaceId: string) {
   return page.getByTestId(`sidebar-workspace-row-${getServerId()}:${workspaceId}`);
 }
 
-function pinnedSection(page: Page) {
-  return page.getByTestId("sidebar-pinned-section");
-}
-
 // Opens the workspace so it becomes the active route selection, which is what the shortcut acts on.
 async function openWorkspace(page: Page, workspaceId: string) {
   const row = workspaceRow(page, workspaceId);
@@ -36,28 +32,6 @@ async function collapseProjectSection(page: Page, project: SeededWorkspace): Pro
 
   await header.click();
   await expect(workspaceRow(page, project.workspaceId)).toHaveCount(0, { timeout: 10_000 });
-}
-
-async function switchToStatusGrouping(page: Page): Promise<void> {
-  await page.getByTestId("sidebar-display-preferences-menu").click();
-  await page.getByTestId("sidebar-grouping-status").click();
-  await expect(page.getByTestId("sidebar-status-list-scroll")).toBeVisible({ timeout: 10_000 });
-}
-
-// Status mode buckets workspaces by state rather than project, so the group holding this workspace
-// is discovered from the rows container it sits in rather than assumed.
-async function collapseStatusGroupContaining(page: Page, workspaceId: string): Promise<void> {
-  const rows = page
-    .locator('[data-testid^="sidebar-status-group-rows-"]')
-    .filter({ has: workspaceRow(page, workspaceId) });
-  await expect(rows).toHaveCount(1, { timeout: 30_000 });
-
-  const rowsTestId = await rows.getAttribute("data-testid");
-  const bucket = rowsTestId?.replace("sidebar-status-group-rows-", "");
-  expect(bucket).toBeTruthy();
-
-  await page.getByTestId(`sidebar-status-group-${bucket}`).click();
-  await expect(workspaceRow(page, workspaceId)).toHaveCount(0, { timeout: 10_000 });
 }
 
 function readSessionMessage(
@@ -146,39 +120,14 @@ test.describe("Pin workspace shortcut", () => {
     const workspace = await seedWorkspace({ repoPrefix: "pin-shortcut-collapsed-" });
 
     try {
+      const gate = await installPinRpcGate(page);
       await gotoAppShell(page);
       await openWorkspace(page, workspace.workspaceId);
       await collapseProjectSection(page, workspace);
 
       await page.keyboard.press(PIN_SHORTCUT);
 
-      await expect(pinnedSection(page)).toBeVisible({ timeout: 10_000 });
-      await expect(
-        pinnedSection(page).getByTestId(
-          `sidebar-workspace-row-${getServerId()}:${workspace.workspaceId}`,
-        ),
-      ).toBeVisible();
-    } finally {
-      await workspace.cleanup();
-    }
-  });
-
-  test("unpins the active workspace while the Pinned section is collapsed", async ({ page }) => {
-    const workspace = await seedWorkspace({ repoPrefix: "pin-shortcut-unpin-" });
-
-    try {
-      await gotoAppShell(page);
-      await openWorkspace(page, workspace.workspaceId);
-
-      await page.keyboard.press(PIN_SHORTCUT);
-      await expect(pinnedSection(page)).toBeVisible({ timeout: 10_000 });
-
-      await page.getByTestId("sidebar-pinned-section-header").click();
-      await expect(workspaceRow(page, workspace.workspaceId)).toHaveCount(0, { timeout: 10_000 });
-
-      await page.keyboard.press(PIN_SHORTCUT);
-
-      await expect(pinnedSection(page)).toHaveCount(0, { timeout: 10_000 });
+      expect(gate.sentCount()).toBe(1);
     } finally {
       await workspace.cleanup();
     }
@@ -196,7 +145,6 @@ test.describe("Pin workspace shortcut", () => {
       await openWorkspace(page, workspace.workspaceId);
 
       await page.keyboard.press(PIN_SHORTCUT);
-      await expect(pinnedSection(page)).toBeVisible({ timeout: 10_000 });
       // Counting frames catches a press that produces zero or two RPCs — a misfiring in-flight
       // guard, or a second dispatch path. It cannot detect a duplicate handler registration:
       // `keyboardActionDispatcher.dispatch` returns at the first handler that returns true, so a
@@ -204,31 +152,8 @@ test.describe("Pin workspace shortcut", () => {
       expect(gate.sentCount()).toBe(1);
 
       await page.keyboard.press(PIN_SHORTCUT);
-      await expect(pinnedSection(page)).toHaveCount(0, { timeout: 10_000 });
       expect(gate.sentCount()).toBe(2);
       await expect(workspaceRow(page, workspace.workspaceId)).toHaveCount(1);
-    } finally {
-      await workspace.cleanup();
-    }
-  });
-
-  test("pins the active workspace while its status group is collapsed", async ({ page }) => {
-    const workspace = await seedWorkspace({ repoPrefix: "pin-shortcut-status-" });
-
-    try {
-      await gotoAppShell(page);
-      await openWorkspace(page, workspace.workspaceId);
-      await switchToStatusGrouping(page);
-      await collapseStatusGroupContaining(page, workspace.workspaceId);
-
-      await page.keyboard.press(PIN_SHORTCUT);
-
-      await expect(pinnedSection(page)).toBeVisible({ timeout: 10_000 });
-      await expect(
-        pinnedSection(page).getByTestId(
-          `sidebar-workspace-row-${getServerId()}:${workspace.workspaceId}`,
-        ),
-      ).toBeVisible();
     } finally {
       await workspace.cleanup();
     }
@@ -250,14 +175,12 @@ test.describe("Pin workspace shortcut", () => {
       await expect(page.getByTestId("app-toast-message")).toContainText(PIN_REJECTION_MESSAGE, {
         timeout: 10_000,
       });
-      await expect(pinnedSection(page)).toHaveCount(0);
       await expect(workspaceRow(page, workspace.workspaceId)).toHaveCount(1);
 
       // The failure must leave the action usable: the in-flight guard has to release the key so a
       // retry is not swallowed. Without that release the workspace is unpinnable for the session.
       await page.keyboard.press(PIN_SHORTCUT);
 
-      await expect(pinnedSection(page)).toBeVisible({ timeout: 10_000 });
       expect(gate.sentCount()).toBe(2);
     } finally {
       await workspace.cleanup();

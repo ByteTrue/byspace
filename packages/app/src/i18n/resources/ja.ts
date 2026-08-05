@@ -371,6 +371,16 @@ export const ja: TranslationResources = {
     },
     hoverCard: {
       scriptsAccessibility: "ワークスペーススクリプト",
+      detailsAccessibility: "ワークスペースの詳細",
+      agents: "エージェント",
+      untitledAgent: "無題のエージェント",
+      agentStatus: {
+        needsInput: "入力待ち",
+        failed: "失敗",
+        attention: "レビュー待ち",
+        running: "作業中",
+        done: "完了",
+      },
       copyPath: "パスをコピー",
       copyBranchName: "ブランチ名をコピー",
       copied: "コピーしました",
@@ -880,6 +890,8 @@ export const ja: TranslationResources = {
     sections: {
       sessions: "履歴",
       schedules: "スケジュール",
+      needsAttention: "対応が必要",
+      otherProjects: "その他のプロジェクト",
     },
     worktreeSetup: {
       title: "ワークツリースクリプトを設定",
@@ -888,6 +900,7 @@ export const ja: TranslationResources = {
       openProjectSettings: "プロジェクト設定を開く",
     },
     project: {
+      needsAttentionCount: "対応が必要なワークスペース: {{count}}",
       actions: {
         menu: "プロジェクトアクション",
         openSettings: "プロジェクト設定を開く",
@@ -914,6 +927,10 @@ export const ja: TranslationResources = {
       },
     },
     workspace: {
+      agentSummary: {
+        needsAttention: "対応が必要なエージェント: {{count}}",
+        working: "作業中のエージェント: {{count}}",
+      },
       status: {
         scriptsAvailable: "スクリプトが利用可能",
         creating: "作成中...",

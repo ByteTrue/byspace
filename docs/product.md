@@ -25,6 +25,8 @@ Freedom and flexibility. Every design decision follows from this:
 
 Projects are grouped in the sidebar, detected automatically from your filesystem and tagged by git remote when available.
 
+The sidebar has one Project-based hierarchy with two attention regions: **Needs attention** first, then **Other projects**. Projects appear once, empty projects stay visible at the end, workspace rows show only actionable/active agent counts, and desktop hover reveals every agent status in that workspace. New workspaces are created from the `+` on a project row; there is no separate global row consuming list space.
+
 Each project opens as a workspace. For git projects, the default workspace is the main checkout. Users can create additional workspaces, which are isolated copies (git worktrees) where agents work without affecting main.
 
 ### Inside a workspace

@@ -371,6 +371,16 @@ export const es: TranslationResources = {
     },
     hoverCard: {
       scriptsAccessibility: "GuionesWorkspace",
+      detailsAccessibility: "Detalles del espacio de trabajo",
+      agents: "Agentes",
+      untitledAgent: "Agente sin título",
+      agentStatus: {
+        needsInput: "Necesita intervención",
+        failed: "Fallido",
+        attention: "Listo para revisar",
+        running: "Trabajando",
+        done: "Terminado",
+      },
       copyPath: "Copiar ruta",
       copyBranchName: "Copiar nombre de rama",
       copied: "Copiado",
@@ -900,6 +910,8 @@ export const es: TranslationResources = {
     sections: {
       sessions: "Historial",
       schedules: "Horarios",
+      needsAttention: "Requiere atención",
+      otherProjects: "Otros proyectos",
     },
     worktreeSetup: {
       title: "Configurar secuencias de comandos del árbol de trabajo",
@@ -908,6 +920,7 @@ export const es: TranslationResources = {
       openProjectSettings: "Abrir la configuración del proyecto",
     },
     project: {
+      needsAttentionCount: "Espacios de trabajo que requieren atención: {{count}}",
       actions: {
         menu: "Acciones del proyecto",
         openSettings: "Abrir la configuración del proyecto",
@@ -934,6 +947,10 @@ export const es: TranslationResources = {
       },
     },
     workspace: {
+      agentSummary: {
+        needsAttention: "Agentes que requieren atención: {{count}}",
+        working: "Agentes trabajando: {{count}}",
+      },
       status: {
         scriptsAvailable: "Guiones disponibles",
         creating: "Creando...",

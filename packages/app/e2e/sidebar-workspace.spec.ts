@@ -224,10 +224,10 @@ test.describe("Half-screen desktop layout", () => {
       expect(scrollTop).toBe(160);
 
       await page.getByTestId("menu-button").click();
-      await expect(page.getByTestId("sidebar-global-new-workspace")).not.toBeVisible();
+      await expect(page.getByTestId("sidebar-sessions")).not.toBeVisible();
 
       await page.getByTestId("menu-button").click();
-      await expect(page.getByTestId("sidebar-global-new-workspace")).toBeVisible();
+      await expect(page.getByTestId("sidebar-sessions")).toBeVisible();
       await expect(sidebarScroll).toHaveJSProperty("scrollTop", scrollTop);
     } finally {
       await workspace.cleanup();
@@ -236,7 +236,7 @@ test.describe("Half-screen desktop layout", () => {
 
   test("keeps the pinned sidebar at half of a 14-inch Mac display", async ({ page }) => {
     await gotoAppShell(page);
-    await expect(page.getByTestId("sidebar-global-new-workspace")).toBeVisible();
+    await expect(page.getByTestId("sidebar-sessions")).toBeVisible();
     await expect(page.getByTestId("agent-list-backdrop")).not.toBeVisible();
   });
 
@@ -249,7 +249,7 @@ test.describe("Half-screen desktop layout", () => {
     expect(openBounds?.x).toBeGreaterThan(12);
 
     await openToggle.click();
-    await expect(page.getByTestId("sidebar-global-new-workspace")).not.toBeVisible();
+    await expect(page.getByTestId("sidebar-sessions")).not.toBeVisible();
 
     const closedToggle = page.getByTestId("menu-button");
     const closedBounds = await closedToggle.locator("svg").first().boundingBox();
@@ -281,7 +281,7 @@ test.describe("Half-screen desktop layout", () => {
       ).toBeVisible();
       await expect(page.getByTestId("workspace-explorer-toggle").first()).toBeVisible();
       await expect(page.getByTestId("explorer-close")).toBeVisible();
-      await expect(page.getByTestId("sidebar-global-new-workspace")).not.toBeVisible();
+      await expect(page.getByTestId("sidebar-sessions")).not.toBeVisible();
 
       const centerBounds = await page.getByTestId("workspace-tabs-row").first().boundingBox();
       const headerGlyphBounds = await page

@@ -37,10 +37,7 @@ function createMemoryStorage(entries: Record<string, string | null>): MemoryStor
 
 describe("sidebar view store", () => {
   beforeEach(() => {
-    useSidebarViewStore.setState({
-      groupMode: "project",
-      hostFilters: [],
-    });
+    useSidebarViewStore.setState({ hostFilters: [] });
   });
 
   it("toggles multiple hosts into and out of the filter", () => {
@@ -79,40 +76,22 @@ describe("sidebar view store", () => {
     expect(useSidebarViewStore.getState().hostFilters).toEqual(["host-a"]);
   });
 
-  it("migrates legacy per-host group modes to the new global mode", () => {
+  it("drops removed group-mode state during migration", () => {
     expect(
       migrateSidebarViewState({
-        groupModeByServerId: {
-          "host-a": "project",
-          "host-b": "status",
-        },
+        groupModeByServerId: { "host-a": "status" },
       }),
-    ).toEqual({
-      groupMode: "status",
-      hostFilters: [],
-    });
+    ).toEqual({ hostFilters: [] });
   });
 
   it("migrates a pre-v2 single host filter to the multi-host list", () => {
-    expect(
-      migrateSidebarViewState({
-        groupMode: "status",
-        hostFilter: "host-a",
-      }),
-    ).toEqual({
-      groupMode: "status",
+    expect(migrateSidebarViewState({ hostFilter: "host-a" })).toEqual({
       hostFilters: ["host-a"],
     });
   });
 
-  it("keeps current persisted sidebar view state during version migration", () => {
-    expect(
-      migrateSidebarViewState({
-        groupMode: "status",
-        hostFilters: ["host-a", "host-b"],
-      }),
-    ).toEqual({
-      groupMode: "status",
+  it("keeps current host filters during version migration", () => {
+    expect(migrateSidebarViewState({ hostFilters: ["host-a", "host-b"] })).toEqual({
       hostFilters: ["host-a", "host-b"],
     });
   });

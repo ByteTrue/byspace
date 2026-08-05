@@ -370,6 +370,16 @@ export const ru: TranslationResources = {
     },
     hoverCard: {
       scriptsAccessibility: "Скрипты Workspace",
+      detailsAccessibility: "Сведения о рабочем пространстве",
+      agents: "Агенты",
+      untitledAgent: "Агент без названия",
+      agentStatus: {
+        needsInput: "Требуется ввод",
+        failed: "Ошибка",
+        attention: "Готово к проверке",
+        running: "В работе",
+        done: "Готово",
+      },
       copyPath: "Копировать путь",
       copyBranchName: "Копировать имя ветки",
       copied: "Скопировано",
@@ -890,6 +900,8 @@ export const ru: TranslationResources = {
     sections: {
       sessions: "История",
       schedules: "Расписания",
+      needsAttention: "Требует внимания",
+      otherProjects: "Другие проекты",
     },
     worktreeSetup: {
       title: "Настройка сценариев рабочего дерева",
@@ -898,6 +910,7 @@ export const ru: TranslationResources = {
       openProjectSettings: "Открыть настройки проекта",
     },
     project: {
+      needsAttentionCount: "Рабочие пространства, требующие внимания: {{count}}",
       actions: {
         menu: "Действия проекта",
         openSettings: "Открыть настройки проекта",
@@ -924,6 +937,10 @@ export const ru: TranslationResources = {
       },
     },
     workspace: {
+      agentSummary: {
+        needsAttention: "Агенты, требующие внимания: {{count}}",
+        working: "Агенты в работе: {{count}}",
+      },
       status: {
         scriptsAvailable: "Доступны скрипты",
         creating: "Создание...",

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { WorkspaceDescriptor } from "@/stores/session-store";
 import type { WorkspaceStructureProject } from "@/projects/workspace-structure";
+import type { WorkspaceAgentSummary } from "@/utils/workspace-agent-summary";
 import {
   appendMissingOrderKeys,
   applyStoredOrdering,
@@ -134,6 +135,68 @@ function workspace(input: {
     scripts: [],
   };
 }
+
+function agentSummary(
+  status: WorkspaceAgentSummary["status"],
+  statusEnteredAt: Date,
+): WorkspaceAgentSummary {
+  return {
+    agents: [],
+    status,
+    needsAttentionCount:
+      status === "needs_input" || status === "failed" || status === "attention" ? 1 : 0,
+    workingCount: status === "running" ? 1 : 0,
+    oldestAttentionAt: null,
+    latestActivityAt: statusEnteredAt,
+    statusEnteredAt,
+  };
+}
+
+describe("createSidebarWorkspaceEntry status rollup", () => {
+  it("preserves a higher-priority daemon status when the agent summary is done", () => {
+    const enteredAt = new Date("2026-07-01T09:00:00.000Z");
+    const descriptor = workspace({
+      id: "workspace",
+      name: "main",
+      projectId: "project",
+      projectDisplayName: "Project",
+      status: "running",
+      statusEnteredAt: enteredAt,
+    });
+
+    const entry = createSidebarWorkspaceEntry({
+      serverId: "srv",
+      workspace: descriptor,
+      workspaceAgentSummaries: new Map([
+        ["workspace", agentSummary("done", new Date("2026-07-01T08:00:00.000Z"))],
+      ]),
+    });
+
+    expect(entry.statusBucket).toBe("running");
+    expect(entry.statusEnteredAt).toBe(enteredAt);
+  });
+
+  it("lets an attention-needing agent outrank a running daemon status", () => {
+    const attentionAt = new Date("2026-07-01T08:00:00.000Z");
+    const descriptor = workspace({
+      id: "workspace",
+      name: "main",
+      projectId: "project",
+      projectDisplayName: "Project",
+      status: "running",
+      statusEnteredAt: new Date("2026-07-01T09:00:00.000Z"),
+    });
+
+    const entry = createSidebarWorkspaceEntry({
+      serverId: "srv",
+      workspace: descriptor,
+      workspaceAgentSummaries: new Map([["workspace", agentSummary("attention", attentionAt)]]),
+    });
+
+    expect(entry.statusBucket).toBe("attention");
+    expect(entry.statusEnteredAt).toBe(attentionAt);
+  });
+});
 
 describe("applyStoredOrdering", () => {
   it("keeps unknown items on the baseline while applying stored order", () => {
@@ -290,7 +353,7 @@ describe("shared sidebar workspace model", () => {
       sessions: [
         {
           serverId: "host-a",
-          workspaceAgentActivity: new Map(),
+          workspaceAgentSummaries: new Map(),
           workspaces: new Map([
             [
               "main",
@@ -306,7 +369,7 @@ describe("shared sidebar workspace model", () => {
         },
         {
           serverId: "host-b",
-          workspaceAgentActivity: new Map(),
+          workspaceAgentSummaries: new Map(),
           workspaces: new Map([
             [
               "feature",
@@ -398,7 +461,7 @@ describe("shared sidebar workspace model", () => {
         {
           serverId: "host-a",
           workspaces: new Map([["ws-1", rawWorkspace]]),
-          workspaceAgentActivity: new Map(),
+          workspaceAgentSummaries: new Map(),
         },
       ],
     });
@@ -427,7 +490,7 @@ describe("shared sidebar workspace model", () => {
       sessions: [
         {
           serverId: "srv",
-          workspaceAgentActivity: new Map(),
+          workspaceAgentSummaries: new Map(),
           workspaces: new Map([
             ["one", one],
             ["two", two],
@@ -440,7 +503,7 @@ describe("shared sidebar workspace model", () => {
       sessions: [
         {
           serverId: "srv",
-          workspaceAgentActivity: new Map(),
+          workspaceAgentSummaries: new Map(),
           workspaces: new Map([
             ["one", one],
             ["two", { ...two, status: "running" }],

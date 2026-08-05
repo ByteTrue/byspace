@@ -4,17 +4,11 @@ import {
   mergePersistedCollapsedProjects,
   serializeCollapsedProjects,
   setProjectCollapsed,
-  togglePinnedCollapsed,
   toggleProjectCollapsed,
-  toggleStatusGroupCollapsed,
 } from "@/stores/sidebar-collapsed-sections-store/state";
 
 function emptyState(): CollapsedProjectsState {
-  return {
-    collapsedProjectKeys: new Set(),
-    collapsedStatusGroupKeys: new Set(),
-    collapsedPinned: false,
-  };
+  return { collapsedProjectKeys: new Set() };
 }
 
 describe("sidebar collapsed projects transitions", () => {
@@ -24,32 +18,18 @@ describe("sidebar collapsed projects transitions", () => {
     state = setProjectCollapsed(state, "project-a", true);
     state = toggleProjectCollapsed(state, "project-b");
     state = toggleProjectCollapsed(state, "project-a");
-    state = toggleStatusGroupCollapsed(state, "running");
 
     expect(Array.from(state.collapsedProjectKeys)).toEqual(["project-b"]);
-    expect(Array.from(state.collapsedStatusGroupKeys)).toEqual(["running"]);
   });
 
   it("serializes collapsed project keys for preference storage", () => {
     const state: CollapsedProjectsState = {
       collapsedProjectKeys: new Set(["project-a", "project-b"]),
-      collapsedStatusGroupKeys: new Set(["running"]),
-      collapsedPinned: true,
     };
 
     expect(serializeCollapsedProjects(state)).toEqual({
       collapsedProjectKeys: ["project-a", "project-b"],
-      collapsedStatusGroupKeys: ["running"],
-      collapsedPinned: true,
     });
-  });
-
-  it("toggles and restores the pinned section collapse flag", () => {
-    const toggled = togglePinnedCollapsed(emptyState());
-    expect(toggled.collapsedPinned).toBe(true);
-
-    const restored = mergePersistedCollapsedProjects({ collapsedPinned: true }, emptyState());
-    expect(restored.collapsedPinned).toBe(true);
   });
 
   it("restores collapsed project keys from persisted preferences", () => {
@@ -59,10 +39,9 @@ describe("sidebar collapsed projects transitions", () => {
     );
 
     expect(Array.from(restored.collapsedProjectKeys)).toEqual(["project-a", "project-b"]);
-    expect(Array.from(restored.collapsedStatusGroupKeys)).toEqual([]);
   });
 
-  it("keeps the existing state object when persisted preferences do not change collapsed keys", () => {
+  it("keeps the existing state object when persisted preferences do not change", () => {
     const currentState = emptyState();
 
     expect(mergePersistedCollapsedProjects(undefined, currentState)).toBe(currentState);

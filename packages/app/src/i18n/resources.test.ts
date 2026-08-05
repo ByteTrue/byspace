@@ -533,6 +533,12 @@ describe("translation resources", () => {
     expect(en.message.attachments.commentsMany).toBe("{{count}} comments");
     expect(en.message.attachments.textAttachment).toBe("Text attachment");
     expect(en.workspace.hoverCard.scriptsAccessibility).toBe("Workspace scripts");
+    expect(en.workspace.hoverCard.detailsAccessibility).toBe("Workspace details");
+    expect(en.workspace.hoverCard.agentStatus.needsInput).toBe("Needs input");
+    expect(en.sidebar.sections.needsAttention).toBe("Needs attention");
+    expect(en.sidebar.workspace.agentSummary.needsAttention).toBe(
+      "Agents needing attention: {{count}}",
+    );
     expect(en.branchSwitcher.restoreStashTitle).toBe("Restore stashed changes?");
     expect(en.branchSwitcher.stashRestored).toBe("Stashed changes restored");
     expect(en.agentAutocomplete.searchingWorkspace).toBe("Searching workspace...");

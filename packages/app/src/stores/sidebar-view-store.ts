@@ -2,44 +2,24 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { create } from "zustand";
 import { createJSONStorage, persist, type StateStorage } from "zustand/middleware";
 
-export type SidebarGroupMode = "project" | "status";
-
 const SIDEBAR_VIEW_STORAGE_KEY = "sidebar-view";
 const LEGACY_SIDEBAR_GROUP_MODE_STORAGE_KEY = "sidebar-group-mode";
-const SIDEBAR_VIEW_STORE_VERSION = 2;
+const SIDEBAR_VIEW_STORE_VERSION = 3;
 
 interface SidebarViewStoreState {
-  groupMode: SidebarGroupMode;
   // Empty means "all hosts". A non-empty list pins the sidebar to those hosts.
   hostFilters: string[];
-  setGroupMode: (mode: SidebarGroupMode) => void;
   toggleHostFilter: (serverId: string) => void;
   clearHostFilters: () => void;
   reconcileHostFilters: (serverIds: readonly string[]) => void;
 }
 
 interface SidebarViewPersistedState {
-  groupMode: SidebarGroupMode;
   hostFilters: string[];
-}
-
-function isSidebarGroupMode(value: unknown): value is SidebarGroupMode {
-  return value === "project" || value === "status";
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function readLegacyGroupMode(persistedState: Record<string, unknown>): SidebarGroupMode | null {
-  const groupModeByServerId = persistedState.groupModeByServerId;
-  if (!isRecord(groupModeByServerId)) {
-    return null;
-  }
-
-  const modes = Object.values(groupModeByServerId).filter(isSidebarGroupMode);
-  if (modes.length === 0) return null;
-  return modes.includes("status") ? "status" : "project";
 }
 
 // Reads the host filter from any persisted shape: the current `hostFilters` array, or the
@@ -56,19 +36,7 @@ function readHostFilters(persistedState: Record<string, unknown>): string[] {
 }
 
 export function migrateSidebarViewState(persistedState: unknown): SidebarViewPersistedState {
-  if (!isRecord(persistedState)) {
-    return { groupMode: "project", hostFilters: [] };
-  }
-
-  const legacyGroupMode = readLegacyGroupMode(persistedState);
-  if (legacyGroupMode) {
-    return { groupMode: legacyGroupMode, hostFilters: [] };
-  }
-
-  return {
-    groupMode: isSidebarGroupMode(persistedState.groupMode) ? persistedState.groupMode : "project",
-    hostFilters: readHostFilters(persistedState),
-  };
+  return { hostFilters: isRecord(persistedState) ? readHostFilters(persistedState) : [] };
 }
 
 export function createSidebarViewStorage(
@@ -90,9 +58,7 @@ export function createSidebarViewStorage(
 export const useSidebarViewStore = create<SidebarViewStoreState>()(
   persist(
     (set) => ({
-      groupMode: "project",
       hostFilters: [],
-      setGroupMode: (mode) => set({ groupMode: mode }),
       toggleHostFilter: (serverId) =>
         set((state) => ({
           hostFilters: state.hostFilters.includes(serverId)
@@ -117,10 +83,7 @@ export const useSidebarViewStore = create<SidebarViewStoreState>()(
       name: SIDEBAR_VIEW_STORAGE_KEY,
       version: SIDEBAR_VIEW_STORE_VERSION,
       storage: createJSONStorage(createSidebarViewStorage),
-      partialize: (state) => ({
-        groupMode: state.groupMode,
-        hostFilters: state.hostFilters,
-      }),
+      partialize: (state) => ({ hostFilters: state.hostFilters }),
       migrate: migrateSidebarViewState,
     },
   ),

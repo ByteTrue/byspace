@@ -367,6 +367,16 @@ export const zhCN: TranslationResources = {
     },
     hoverCard: {
       scriptsAccessibility: "Workspace scripts",
+      detailsAccessibility: "Workspace 详情",
+      agents: "Agent",
+      untitledAgent: "未命名 Agent",
+      agentStatus: {
+        needsInput: "需要输入",
+        failed: "失败",
+        attention: "待检查",
+        running: "工作中",
+        done: "已完成",
+      },
       copyPath: "复制路径",
       copyBranchName: "复制分支名称",
       copied: "已复制",
@@ -861,6 +871,8 @@ export const zhCN: TranslationResources = {
     sections: {
       sessions: "历史",
       schedules: "计划",
+      needsAttention: "需要处理",
+      otherProjects: "其他项目",
     },
     worktreeSetup: {
       title: "设置 worktree scripts",
@@ -868,6 +880,7 @@ export const zhCN: TranslationResources = {
       openProjectSettings: "打开 project 设置",
     },
     project: {
+      needsAttentionCount: "需要处理的 Workspace：{{count}}",
       actions: {
         menu: "Project 操作",
         openSettings: "打开 project 设置",
@@ -893,6 +906,10 @@ export const zhCN: TranslationResources = {
       },
     },
     workspace: {
+      agentSummary: {
+        needsAttention: "需要处理的 Agent：{{count}}",
+        working: "工作中的 Agent：{{count}}",
+      },
       status: {
         scriptsAvailable: "有可用 scripts",
         creating: "正在创建...",

@@ -51,139 +51,6 @@ import {
   waitForWorkspaceInSidebar,
 } from "./helpers/workspace-ui";
 
-interface WorkspaceStatusGroupEvent {
-  rowTestId: string;
-  bucket: string;
-  indicatorTestId: string | null;
-  label: string;
-  at: number;
-}
-
-async function switchSidebarToStatusGrouping(page: import("@playwright/test").Page) {
-  await page.getByTestId("sidebar-display-preferences-menu").click();
-  await page.getByTestId("sidebar-grouping-status").click();
-  await expect(page.getByTestId("sidebar-status-group-done")).toBeVisible({ timeout: 30_000 });
-}
-
-async function startTrackingSidebarStatusGroups(page: import("@playwright/test").Page) {
-  await page.evaluate(() => {
-    interface StatusGroupEvent {
-      rowTestId: string;
-      bucket: string;
-      indicatorTestId: string | null;
-      label: string;
-      at: number;
-    }
-    const win = window as typeof window & {
-      __workspaceStatusGroupEvents?: StatusGroupEvent[];
-      __workspaceStatusGroupObserver?: MutationObserver;
-    };
-    win.__workspaceStatusGroupEvents = [];
-    win.__workspaceStatusGroupObserver?.disconnect();
-
-    const capture = () => {
-      const events = win.__workspaceStatusGroupEvents;
-      if (!events) return;
-      const groups = document.querySelectorAll<HTMLElement>(
-        '[data-testid^="sidebar-status-group-"]',
-      );
-      for (const group of groups) {
-        const groupTestId = group.getAttribute("data-testid") ?? "";
-        const bucket = groupTestId.replace("sidebar-status-group-", "");
-        const label = group.textContent ?? "";
-        const block = group.parentElement?.parentElement;
-        if (!block) continue;
-        const rows = block.querySelectorAll<HTMLElement>('[data-testid^="sidebar-workspace-row-"]');
-        for (const row of rows) {
-          const rowTestId = row.getAttribute("data-testid");
-          if (!rowTestId) continue;
-          const indicatorTestId =
-            row
-              .querySelector<HTMLElement>('[data-testid^="workspace-status-indicator-"]')
-              ?.getAttribute("data-testid") ?? null;
-          const last = events.at(-1);
-          if (
-            last?.rowTestId === rowTestId &&
-            last.bucket === bucket &&
-            last.indicatorTestId === indicatorTestId
-          ) {
-            continue;
-          }
-          events.push({ rowTestId, bucket, indicatorTestId, label, at: performance.now() });
-        }
-      }
-    };
-
-    capture();
-    const observer = new MutationObserver(capture);
-    observer.observe(document.body, { childList: true, subtree: true, characterData: true });
-    win.__workspaceStatusGroupObserver = observer;
-  });
-}
-
-async function getTrackedSidebarStatusGroups(
-  page: import("@playwright/test").Page,
-): Promise<WorkspaceStatusGroupEvent[]> {
-  return page.evaluate(() => {
-    const win = window as typeof window & {
-      __workspaceStatusGroupEvents?: WorkspaceStatusGroupEvent[];
-    };
-    return win.__workspaceStatusGroupEvents ?? [];
-  });
-}
-
-async function waitForWorkspaceStatusGroupEvent(input: {
-  page: import("@playwright/test").Page;
-  rowTestId: string;
-  bucket: string;
-}) {
-  await input.page.waitForFunction(
-    ({ expectedRowTestId, expectedBucket }) => {
-      const win = window as typeof window & {
-        __workspaceStatusGroupEvents?: WorkspaceStatusGroupEvent[];
-      };
-      for (const event of win.__workspaceStatusGroupEvents ?? []) {
-        if (event.rowTestId === expectedRowTestId && event.bucket === expectedBucket) {
-          return true;
-        }
-      }
-      return false;
-    },
-    { expectedRowTestId: input.rowTestId, expectedBucket: input.bucket },
-    { timeout: 30_000 },
-  );
-}
-
-async function expectWorkspaceStatusGroupEvents(input: {
-  page: import("@playwright/test").Page;
-  rowTestId: string;
-  includes: string;
-  excludes: string;
-  includesIndicator?: string;
-  excludesIndicator?: string;
-}) {
-  await waitForWorkspaceStatusGroupEvent({
-    page: input.page,
-    rowTestId: input.rowTestId,
-    bucket: input.includes,
-  });
-  const createdWorkspaceEvents = (await getTrackedSidebarStatusGroups(input.page)).filter(
-    (event) => event.rowTestId === input.rowTestId,
-  );
-  expect(createdWorkspaceEvents.map((event) => event.bucket)).toContain(input.includes);
-  expect(createdWorkspaceEvents.filter((event) => event.bucket === input.excludes)).toEqual([]);
-  if (input.includesIndicator) {
-    expect(createdWorkspaceEvents.map((event) => event.indicatorTestId)).toContain(
-      input.includesIndicator,
-    );
-  }
-  if (input.excludesIndicator) {
-    expect(
-      createdWorkspaceEvents.filter((event) => event.indicatorTestId === input.excludesIndicator),
-    ).toEqual([]);
-  }
-}
-
 async function submitNewWorkspaceWithoutPrompt(page: import("@playwright/test").Page) {
   const createButton = page
     .getByTestId("message-input-root")
@@ -412,7 +279,7 @@ test.describe("New workspace flow", () => {
     }
   });
 
-  test("global new workspace uses the last active project and creates one agent tab", async ({
+  test("new workspace shortcut uses the last active project and creates one agent tab", async ({
     page,
   }) => {
     const serverId = getServerId();
@@ -567,9 +434,7 @@ test.describe("New workspace flow", () => {
     }
   });
 
-  test("new workspace with initial agent never appears in the Done status group", async ({
-    page,
-  }) => {
+  test("new workspace with an initial agent shows a Working summary", async ({ page }) => {
     const serverId = getServerId();
 
     const tempRepo = await createTempGitRepo("new-workspace-status-optimistic-");
@@ -591,9 +456,6 @@ test.describe("New workspace flow", () => {
         subtitle: openedProject.projectDisplayName,
       });
 
-      await switchSidebarToStatusGrouping(page);
-      await startTrackingSidebarStatusGroups(page);
-
       await openGlobalNewWorkspaceComposer(page);
       await expectNewWorkspaceProjectSelected(page, openedProject.projectDisplayName);
       await submitNewWorkspacePrompt(page);
@@ -609,21 +471,17 @@ test.describe("New workspace flow", () => {
       createdWorktreeDirectories.add(createdWorkspace.workspaceDirectory);
 
       const rowTestId = `sidebar-workspace-row-${serverId}:${createdWorkspace.workspaceId}`;
-      await expectWorkspaceStatusGroupEvents({
-        page,
-        rowTestId,
-        includes: "running",
-        excludes: "done",
-        includesIndicator: "workspace-status-indicator-running",
+      const row = page.getByTestId(rowTestId);
+      await expect(row).toBeVisible({ timeout: 30_000 });
+      await expect(row.getByTestId("workspace-agent-summary-working")).toBeVisible({
+        timeout: 30_000,
       });
     } finally {
       await tempRepo.cleanup();
     }
   });
 
-  test("new workspace without an initial agent appears in the Done status group", async ({
-    page,
-  }) => {
+  test("new workspace without an initial agent shows no agent summary", async ({ page }) => {
     const serverId = getServerId();
 
     const tempRepo = await createTempGitRepo("new-workspace-status-empty-");
@@ -645,9 +503,6 @@ test.describe("New workspace flow", () => {
         subtitle: openedProject.projectDisplayName,
       });
 
-      await switchSidebarToStatusGrouping(page);
-      await startTrackingSidebarStatusGroups(page);
-
       await openGlobalNewWorkspaceComposer(page);
       await expectNewWorkspaceProjectSelected(page, openedProject.projectDisplayName);
       await submitNewWorkspaceWithoutPrompt(page);
@@ -661,20 +516,9 @@ test.describe("New workspace flow", () => {
       createdWorktreeDirectories.add(createdWorkspace.workspaceDirectory);
 
       const rowTestId = `sidebar-workspace-row-${serverId}:${createdWorkspace.workspaceId}`;
-      await expectWorkspaceStatusGroupEvents({
-        page,
-        rowTestId,
-        includes: "done",
-        excludes: "running",
-        excludesIndicator: "workspace-status-indicator-loading",
-      });
-      await expectWorkspaceStatusGroupEvents({
-        page,
-        rowTestId,
-        includes: "done",
-        excludes: "running",
-        excludesIndicator: "workspace-status-indicator-running",
-      });
+      const row = page.getByTestId(rowTestId);
+      await expect(row).toBeVisible({ timeout: 30_000 });
+      await expect(row.locator('[data-testid^="workspace-agent-summary-"]')).toHaveCount(0);
     } finally {
       await tempRepo.cleanup();
     }

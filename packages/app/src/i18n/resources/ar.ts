@@ -367,6 +367,16 @@ export const ar: TranslationResources = {
     },
     hoverCard: {
       scriptsAccessibility: "البرامج النصية Workspace",
+      detailsAccessibility: "تفاصيل مساحة العمل",
+      agents: "الوكلاء",
+      untitledAgent: "وكيل بلا عنوان",
+      agentStatus: {
+        needsInput: "بحاجة إلى إدخال",
+        failed: "فشل",
+        attention: "جاهز للمراجعة",
+        running: "قيد العمل",
+        done: "مكتمل",
+      },
       copyPath: "نسخ المسار",
       copyBranchName: "نسخ اسم الفرع",
       copied: "تم النسخ",
@@ -869,6 +879,8 @@ export const ar: TranslationResources = {
     sections: {
       sessions: "السجل",
       schedules: "الجداول",
+      needsAttention: "تحتاج إلى انتباه",
+      otherProjects: "مشاريع أخرى",
     },
     worktreeSetup: {
       title: "إعداد البرامج النصية لشجرة العمل",
@@ -877,6 +889,7 @@ export const ar: TranslationResources = {
       openProjectSettings: "افتح إعدادات المشروع",
     },
     project: {
+      needsAttentionCount: "مساحات العمل التي تحتاج إلى انتباه: {{count}}",
       actions: {
         menu: "إجراءات المشروع",
         openSettings: "افتح إعدادات المشروع",
@@ -903,6 +916,10 @@ export const ar: TranslationResources = {
       },
     },
     workspace: {
+      agentSummary: {
+        needsAttention: "الوكلاء الذين يحتاجون إلى انتباه: {{count}}",
+        working: "الوكلاء قيد العمل: {{count}}",
+      },
       status: {
         scriptsAvailable: "البرامج النصية المتاحة",
         creating: "جارٍ الإنشاء...",

@@ -366,6 +366,16 @@ export const en = {
     },
     hoverCard: {
       scriptsAccessibility: "Workspace scripts",
+      detailsAccessibility: "Workspace details",
+      agents: "Agents",
+      untitledAgent: "Untitled agent",
+      agentStatus: {
+        needsInput: "Needs input",
+        failed: "Failed",
+        attention: "Ready to review",
+        running: "Working",
+        done: "Done",
+      },
       copyPath: "Copy path",
       copyBranchName: "Copy branch name",
       copied: "Copied",
@@ -879,6 +889,8 @@ export const en = {
     sections: {
       sessions: "History",
       schedules: "Schedules",
+      needsAttention: "Needs attention",
+      otherProjects: "Other projects",
     },
     worktreeSetup: {
       title: "Set up worktree scripts",
@@ -887,6 +899,7 @@ export const en = {
       openProjectSettings: "Open project settings",
     },
     project: {
+      needsAttentionCount: "Workspaces needing attention: {{count}}",
       actions: {
         menu: "Project actions",
         openSettings: "Open project settings",
@@ -913,6 +926,10 @@ export const en = {
       },
     },
     workspace: {
+      agentSummary: {
+        needsAttention: "Agents needing attention: {{count}}",
+        working: "Agents working: {{count}}",
+      },
       status: {
         scriptsAvailable: "Scripts available",
         creating: "Creating...",

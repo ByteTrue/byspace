@@ -39,9 +39,9 @@ import {
   type AgentLastActivityCommitter,
 } from "@/runtime/activity";
 import {
-  buildWorkspaceAgentActivityIndex,
-  type WorkspaceAgentActivity,
-} from "@/utils/workspace-agent-activity";
+  buildWorkspaceAgentSummaryIndex,
+  type WorkspaceAgentSummary,
+} from "@/utils/workspace-agent-summary";
 
 // Re-export types that were in session-context
 export type MessageEntry =
@@ -398,7 +398,7 @@ export interface SessionState {
 
   // Agents
   agents: Map<string, Agent>;
-  workspaceAgentActivity: Map<string, WorkspaceAgentActivity>;
+  workspaceAgentSummaries: Map<string, WorkspaceAgentSummary>;
   agentDetails: Map<string, Agent>;
   workspaces: Map<string, WorkspaceDescriptor>;
   // Project parents with no active workspaces, keyed by projectId. The
@@ -609,7 +609,7 @@ function createInitialSessionState(
     agentAuthoritativeHistoryApplied: new Map(),
     initializingAgents: new Map(),
     agents: new Map(),
-    workspaceAgentActivity: new Map(),
+    workspaceAgentSummaries: new Map(),
     agentDetails: new Map(),
     workspaces: new Map(),
     emptyProjects: new Map(),
@@ -724,7 +724,7 @@ export const useSessionStore = create<SessionStore>()(
               [serverId]: {
                 ...session,
                 agents: replica.agents,
-                workspaceAgentActivity: buildWorkspaceAgentActivityIndex(replica.agents),
+                workspaceAgentSummaries: buildWorkspaceAgentSummaryIndex(replica.agents),
                 workspaces: replica.workspaces,
                 emptyProjects: replica.emptyProjects,
                 projects: replica.projects ?? session.projects,
@@ -1298,9 +1298,9 @@ export const useSessionStore = create<SessionStore>()(
               [serverId]: {
                 ...session,
                 agents: nextAgents,
-                workspaceAgentActivity: buildWorkspaceAgentActivityIndex(
+                workspaceAgentSummaries: buildWorkspaceAgentSummaryIndex(
                   nextAgents,
-                  session.workspaceAgentActivity,
+                  session.workspaceAgentSummaries,
                 ),
               },
             },
