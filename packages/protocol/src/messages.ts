@@ -2744,6 +2744,8 @@ export const ServerInfoStatusPayloadSchema = z
         terminalAgentHookProviders: z.boolean().optional(),
         // COMPAT(orchestrationSkills): added in v0.2.0-beta.5, remove gate after 2027-01-22.
         orchestrationSkills: z.boolean().optional(),
+        // COMPAT(projectSetupSkill): added in v0.5.0, remove gate after 2027-02-05.
+        projectSetupSkill: z.boolean().optional(),
         // COMPAT(rewind): added in v0.1.X, drop the gate when floor >= v0.1.X.
         rewind: z.boolean().optional(),
         // COMPAT(checkoutRefresh): added in v0.1.86, remove gate after 2026-11-29.

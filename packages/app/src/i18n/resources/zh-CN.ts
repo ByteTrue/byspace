@@ -1620,7 +1620,7 @@ export const zhCN: TranslationResources = {
         },
         skills: {
           title: "编排 Skills",
-          installHint: "为受支持的编程 Agent 安装 BySpace 内置的五个 Skill",
+          installHint: "为受支持的编程 Agent 安装 BySpace 内置 Skills",
           installedHint: "已安装，且与此 Host 上的版本一致",
           updateHint: "已安装的 Skill 与当前 BySpace 版本不同",
           updateHost: "更新 Host 后即可管理编排 Skills",
@@ -1630,10 +1630,10 @@ export const zhCN: TranslationResources = {
           saving: "保存中...",
           installConfirmTitle: "安装或更新编排 Skills？",
           installConfirmMessage:
-            "BySpace 将在此 Host 上同步五个内置 Skill。其他 Skill 不会更改，未由 BySpace 管理的同名冲突副本会被保留。",
+            "BySpace 将在此 Host 上同步内置 Skills。其他 Skill 不会更改，未由 BySpace 管理的同名冲突副本会被保留。",
           updateConfirmTitle: "更新编排 Skills？",
           updateConfirmMessage:
-            "BySpace 将用当前版本内置的五个 Skill 替换托管副本。其他 Skill 不会更改。",
+            "BySpace 将用当前版本内置的 Skills 替换托管副本。其他 Skill 不会更改。",
           uninstallConfirmTitle: "卸载编排 Skills？",
           uninstallConfirmMessage:
             "BySpace 将移除此 Host 上未修改的托管副本。已修改的副本会被保留。",
@@ -1847,6 +1847,16 @@ export const zhCN: TranslationResources = {
         transportFallback: "Host 没有响应。",
         failedTitle: "无法加载 byspace.json",
         failedDescription: "重新加载以重试。",
+      },
+      projectSetup: {
+        title: "Project 设置",
+        actionTitle: "通过 Agent 设置",
+        description: "让 Agent 检查此仓库，并推荐 worktree 准备、服务和常用命令",
+        configure: "通过 Agent 配置",
+        review: "通过 Agent 检查",
+        updateHost: "更新 Host 后即可使用 Agent 辅助的 Project 设置",
+        prompt:
+          "使用 byspace-project-setup Skill 检查此仓库，并提出让干净 worktree 可重复准备、高频命令易于发现、长期服务可安全并行运行的最小且有证据支持的改动。先检查并向我展示建议，不要直接修改文件。",
       },
       worktree: {
         title: "Worktree 生命周期 hooks",

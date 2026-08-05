@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -188,16 +188,50 @@ try {
     "dist",
     "skills",
   );
-  for (const skillName of [
+  const expectedBundledSkills = [
     "byspace",
     "byspace-advisor",
     "byspace-committee",
     "byspace-handoff",
     "byspace-loop",
-  ]) {
+    "byspace-project-setup",
+  ];
+  const installedBundledSkills = readdirSync(installedSkillsRoot, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => entry.name)
+    .sort();
+  if (JSON.stringify(installedBundledSkills) !== JSON.stringify(expectedBundledSkills)) {
+    throw new Error(
+      `Global install bundled unexpected orchestration skills: ${installedBundledSkills.join(", ")}`,
+    );
+  }
+  for (const skillName of expectedBundledSkills) {
     if (!existsSync(join(installedSkillsRoot, skillName, "SKILL.md"))) {
       throw new Error(`Global install is missing bundled orchestration skill: ${skillName}`);
     }
+  }
+  const forbiddenSkillDirectories = new Set([
+    ".git",
+    ".pi-subagents",
+    ".venv",
+    "evals",
+    "node_modules",
+    "target",
+  ]);
+  const pendingSkillDirectories = [installedSkillsRoot];
+  while (pendingSkillDirectories.length > 0) {
+    const directory = pendingSkillDirectories.pop();
+    if (!directory) break;
+    for (const entry of readdirSync(directory, { withFileTypes: true })) {
+      if (!entry.isDirectory()) continue;
+      if (forbiddenSkillDirectories.has(entry.name)) {
+        throw new Error(`Global install packaged development skill directory: ${entry.name}`);
+      }
+      pendingSkillDirectories.push(join(directory, entry.name));
+    }
+  }
+  if (existsSync(join(installedSkillsRoot, "byspace-project-setup-workspace"))) {
+    throw new Error("Global install packaged sibling skill evaluation workspace");
   }
   const dependencyTree = runNpmResult(
     ["ls", "--global", "--prefix", installRoot, "--all", "--json"],

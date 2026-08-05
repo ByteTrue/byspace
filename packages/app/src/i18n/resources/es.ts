@@ -1671,7 +1671,7 @@ export const es: TranslationResources = {
         },
         skills: {
           title: "Skills de orquestación",
-          installHint: "Instala los cinco skills incluidos de BySpace para los agentes compatibles",
+          installHint: "Instala los skills incluidos de BySpace para los agentes compatibles",
           installedHint: "Instalados y actualizados en este host",
           updateHint: "Los skills instalados difieren de esta versión de BySpace",
           updateHost: "Actualiza el host para gestionar los skills de orquestación",
@@ -1681,10 +1681,10 @@ export const es: TranslationResources = {
           saving: "Guardando...",
           installConfirmTitle: "¿Instalar o actualizar los skills de orquestación?",
           installConfirmMessage:
-            "BySpace sincronizará sus cinco skills incluidos en este host. Los demás skills no cambiarán y se conservarán las copias en conflicto que BySpace no gestione.",
+            "BySpace sincronizará sus skills incluidos en este host. Los demás skills no cambiarán y se conservarán las copias en conflicto que BySpace no gestione.",
           updateConfirmTitle: "¿Actualizar los skills de orquestación?",
           updateConfirmMessage:
-            "BySpace reemplazará sus copias gestionadas por los cinco skills incluidos en esta versión. Los demás skills no cambiarán.",
+            "BySpace reemplazará sus copias gestionadas por los skills incluidos en esta versión. Los demás skills no cambiarán.",
           uninstallConfirmTitle: "¿Desinstalar los skills de orquestación?",
           uninstallConfirmMessage:
             "BySpace eliminará del host sus copias gestionadas sin modificar. Las copias modificadas se conservarán.",
@@ -1904,6 +1904,17 @@ export const es: TranslationResources = {
         transportFallback: "El anfitrión no respondió.",
         failedTitle: "No se pudo cargar byspace.json",
         failedDescription: "Vuelva a cargar para intentarlo de nuevo.",
+      },
+      projectSetup: {
+        title: "Configuración del proyecto",
+        actionTitle: "Configurar con un agente",
+        description:
+          "Deja que un agente inspeccione este repositorio y recomiende la preparación de worktrees, servicios y comandos habituales",
+        configure: "Configurar con agente",
+        review: "Revisar con agente",
+        updateHost: "Actualiza el host para usar la configuración asistida por agentes",
+        prompt:
+          "Usa el skill byspace-project-setup para inspeccionar este repositorio y recomendar los cambios mínimos basados en evidencias que permitan preparar worktrees limpios de forma reproducible, descubrir comandos habituales y ejecutar servicios de larga duración en paralelo con seguridad. Inspecciona primero y muéstrame las recomendaciones antes de cambiar archivos.",
       },
       worktree: {
         title: "Ganchos del ciclo de vida del árbol de trabajo",

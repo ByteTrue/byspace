@@ -1645,7 +1645,7 @@ export const en = {
         },
         skills: {
           title: "Orchestration skills",
-          installHint: "Install the five bundled BySpace skills for supported coding agents",
+          installHint: "Install bundled BySpace skills for supported coding agents",
           installedHint: "Installed and up to date on this host",
           updateHint: "Installed skills differ from this BySpace version",
           updateHost: "Update the host to manage orchestration skills",
@@ -1655,10 +1655,10 @@ export const en = {
           saving: "Saving...",
           installConfirmTitle: "Install or update orchestration skills?",
           installConfirmMessage:
-            "BySpace will sync its five bundled skills on this host. Unrelated skills are not changed, and conflicting unowned copies are preserved.",
+            "BySpace will sync its bundled skills on this host. Unrelated skills are not changed, and conflicting unowned copies are preserved.",
           updateConfirmTitle: "Update orchestration skills?",
           updateConfirmMessage:
-            "BySpace will replace its managed copies with the five skills bundled in this version. Unrelated skills are not changed.",
+            "BySpace will replace its managed copies with the skills bundled in this version. Unrelated skills are not changed.",
           uninstallConfirmTitle: "Uninstall orchestration skills?",
           uninstallConfirmMessage:
             "BySpace will remove its unmodified managed copies from this host. Modified copies are preserved.",
@@ -1877,6 +1877,17 @@ export const en = {
         transportFallback: "The host didn't respond.",
         failedTitle: "Couldn't load byspace.json",
         failedDescription: "Reload to try again.",
+      },
+      projectSetup: {
+        title: "Project setup",
+        actionTitle: "Set up with an agent",
+        description:
+          "Let an agent inspect this repository and recommend worktree setup, services, and common commands",
+        configure: "Configure with agent",
+        review: "Review with agent",
+        updateHost: "Update the host to use agent-assisted project setup",
+        prompt:
+          "Use the byspace-project-setup skill to inspect this repository and recommend the smallest evidence-based changes that make clean worktrees repeatable, common commands discoverable, and long-running services safe to run in parallel. Inspect first and show me the recommendations before changing files.",
       },
       worktree: {
         title: "Worktree lifecycle hooks",

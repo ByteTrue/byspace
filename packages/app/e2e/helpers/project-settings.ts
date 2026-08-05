@@ -194,6 +194,148 @@ export async function unblockBySpaceConfigWrites(repoPath: string): Promise<void
 
 // --- WebSocket helpers ---
 
+export interface OrchestrationSkillsStatusControl {
+  waitForInstallRequest(): Promise<void>;
+  releaseInstallResponse(): void;
+  waitForInstallResponse(): Promise<void>;
+}
+
+export async function installOrchestrationSkillsStatus(
+  page: Page,
+  state: "not-installed" | "up-to-date" | "drift" = "up-to-date",
+  supportsProjectSetup = true,
+  failInstallOnce = false,
+  deferInstallResponse = false,
+): Promise<OrchestrationSkillsStatusControl> {
+  let shouldFailInstall = failInstallOnce;
+  let resolveInstallRequested: () => void = () => undefined;
+  const installRequested = new Promise<void>((resolve) => {
+    resolveInstallRequested = resolve;
+  });
+  let releaseDeferredInstallResponse: () => void = () => undefined;
+  const deferredInstallResponse = new Promise<void>((resolve) => {
+    releaseDeferredInstallResponse = resolve;
+  });
+  let resolveInstallResponded: () => void = () => undefined;
+  const installResponded = new Promise<void>((resolve) => {
+    resolveInstallResponded = resolve;
+  });
+  await page.routeWebSocket(daemonWsRoutePattern(), (ws) => {
+    const server = ws.connectToServer();
+
+    ws.onMessage((message) => {
+      const sessionMessage = getSessionMessage(message);
+      if (sessionMessage?.type === "daemon.orchestration_skills.get_status.request") {
+        const requestId = sessionMessage.requestId;
+        if (typeof requestId === "string") {
+          ws.send(
+            JSON.stringify({
+              type: "session",
+              message: {
+                type: "daemon.orchestration_skills.get_status.response",
+                payload: { requestId, state },
+              },
+            }),
+          );
+        }
+        return;
+      }
+      if (sessionMessage?.type === "daemon.orchestration_skills.set_installed.request") {
+        resolveInstallRequested();
+        const requestId = sessionMessage.requestId;
+        if (typeof requestId === "string" && shouldFailInstall) {
+          shouldFailInstall = false;
+          ws.send(
+            JSON.stringify({
+              type: "session",
+              message: {
+                type: "rpc_error",
+                payload: {
+                  requestId,
+                  requestType: "daemon.orchestration_skills.set_installed.request",
+                  error: "Test orchestration skill install failure.",
+                  code: "transport",
+                },
+              },
+            }),
+          );
+          resolveInstallResponded();
+          return;
+        }
+        if (typeof requestId === "string") {
+          const sendInstalled = () => {
+            ws.send(
+              JSON.stringify({
+                type: "session",
+                message: {
+                  type: "daemon.orchestration_skills.set_installed.response",
+                  payload: { requestId, state: "up-to-date" },
+                },
+              }),
+            );
+            resolveInstallResponded();
+          };
+          if (deferInstallResponse) {
+            void deferredInstallResponse.then(sendInstalled);
+          } else {
+            sendInstalled();
+          }
+        }
+        return;
+      }
+      try {
+        server.send(message);
+      } catch {
+        // server socket already closed
+      }
+    });
+
+    server.onMessage((message) => {
+      try {
+        const envelope = parseWebSocketJson(message) as {
+          type?: unknown;
+          message?: { type?: unknown; payload?: Record<string, unknown> };
+        } | null;
+        const payload = envelope?.message?.payload;
+        if (
+          envelope?.type === "session" &&
+          envelope.message?.type === "status" &&
+          payload?.status === "server_info"
+        ) {
+          const features: Record<string, unknown> = {
+            ...(typeof payload.features === "object" && payload.features !== null
+              ? payload.features
+              : {}),
+          };
+          if (supportsProjectSetup) {
+            features.projectSetupSkill = true;
+          } else {
+            delete features.projectSetupSkill;
+          }
+          ws.send(
+            JSON.stringify({
+              ...envelope,
+              message: {
+                ...envelope.message,
+                payload: { ...payload, features },
+              },
+            }),
+          );
+          return;
+        }
+        ws.send(message);
+      } catch {
+        // client socket already closed
+      }
+    });
+  });
+  return {
+    waitForInstallRequest: () => installRequested,
+    releaseInstallResponse: releaseDeferredInstallResponse,
+    waitForInstallResponse: () => installResponded,
+  };
+}
+
 // Proxies all daemon WS traffic transparently, but rejects byspace.json reads
 // until the test explicitly allows recovery. Closing the transport leaves the
 // client-side RPC pending across reconnects, so this injects the same correlated

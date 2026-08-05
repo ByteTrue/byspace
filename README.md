@@ -107,6 +107,7 @@ Then use them in any agent conversation:
 - `/byspace-loop` — loop an agent against clear acceptance criteria (aka Ralph loops), optionally with a verifier.
 - `/byspace-advisor` — spin up a single agent as an advisor for a second opinion, without delegating the work itself.
 - `/byspace-committee` — form a committee of two contrasting agents to step back, do root cause analysis, and produce a plan.
+- `/byspace-project-setup` — inspect a repository, find evidence-backed worktree and service gaps, and propose a minimal `byspace.json` setup before editing.
 
 ## Development
 

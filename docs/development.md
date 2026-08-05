@@ -139,6 +139,15 @@ tools. It defaults to the agent-scoped catalog; use
 `-- --scope=top-level` for the unaffiliated `/mcp/agents` shape and `-- --json`
 for machine-readable output.
 
+## Agent-assisted project setup
+
+Project Settings exposes **Configure with agent** when `byspace.json` is absent and
+**Review with agent** when it exists. The action ensures the host's bundled skills are
+current, then opens a project-scoped draft that invokes `byspace-project-setup`. The
+skill inspects repository evidence, recommends only the worktree setup, common commands,
+and long-running services that improve BySpace readiness, and waits for approval before
+editing files. It does not expand into CI/CD, deployment, or general project scaffolding.
+
 ## byspace.json service scripts
 
 `worktree.setup` and `worktree.teardown` accept either a multiline shell script or an array

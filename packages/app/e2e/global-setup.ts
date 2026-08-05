@@ -748,6 +748,7 @@ function startDaemon(args: DaemonSpawnArgs): ChildProcess {
     ...process.env,
     PATH: `${args.fakeEditorBinDir}${path.delimiter}${process.env.PATH ?? ""}`,
     BYSPACE_HOME: args.byspaceHome,
+    BYSPACE_ORCHESTRATION_SKILLS_HOME: args.byspaceHome,
     BYSPACE_E2E_EDITOR_RECORD_PATH: args.editorRecordPath,
     BYSPACE_SERVER_ID: "srv_e2e_test_daemon",
     BYSPACE_LISTEN: `0.0.0.0:${args.port}`,

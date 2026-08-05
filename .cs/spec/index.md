@@ -18,6 +18,14 @@ Terminal Tab 可以在切换后保留本地 renderer 状态，但保留挂载不
 
 空闲 Provider runtime 回收不阻塞已有 Timeline 首屏：浏览历史不唤醒 Provider，继续执行时才恢复。
 
+## 项目准备
+
+Project Settings 保留对 `byspace.json` 的精确手工编辑，也提供 Configure/Review with agent 入口。入口始终沿用当前 Host、项目与仓库目录，只创建一份可检查和修改的 Agent draft，不自动发送或直接修改项目。
+
+Agent 使用 bundled `byspace-project-setup` Skill 检查干净 worktree 的可重复准备、高频命令的可发现性，以及长期服务的并行运行风险。建议必须由仓库证据导出并在修改前展示；现有配置和未知字段应保留，secrets、共享资源与破坏性操作必须单独确认。
+
+只有声明支持该 Skill 的 Host 才显示可执行入口；Skill 未安装或版本漂移时先安装或更新，失败保留当前项目上下文并允许重试。旧 Host 只提示升级，不用普通 Agent prompt 模拟降级能力。
+
 ## 身份与发布
 
 - 产品：BySpace

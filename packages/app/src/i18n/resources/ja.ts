@@ -1650,7 +1650,7 @@ export const ja: TranslationResources = {
         skills: {
           title: "オーケストレーションスキル",
           installHint:
-            "対応するコーディングエージェント向けに、BySpace同梱の5つのスキルをインストールします",
+            "対応するコーディングエージェント向けに、BySpace同梱のスキルをインストールします",
           installedHint: "このホストにインストール済みで、最新です",
           updateHint: "インストール済みのスキルが現在のBySpaceバージョンと異なります",
           updateHost: "オーケストレーションスキルを管理するにはホストを更新してください",
@@ -1660,10 +1660,10 @@ export const ja: TranslationResources = {
           saving: "保存中...",
           installConfirmTitle: "オーケストレーションスキルをインストールまたは更新しますか？",
           installConfirmMessage:
-            "BySpace同梱の5つのスキルをこのホストに同期します。ほかのスキルは変更せず、BySpaceが管理していない同名の競合コピーは保持します。",
+            "BySpace同梱のスキルをこのホストに同期します。ほかのスキルは変更せず、BySpaceが管理していない同名の競合コピーは保持します。",
           updateConfirmTitle: "オーケストレーションスキルを更新しますか？",
           updateConfirmMessage:
-            "BySpaceが管理するコピーを、このバージョンに同梱された5つのスキルで置き換えます。ほかのスキルは変更しません。",
+            "BySpaceが管理するコピーを、このバージョンに同梱されたスキルで置き換えます。ほかのスキルは変更しません。",
           uninstallConfirmTitle: "オーケストレーションスキルをアンインストールしますか？",
           uninstallConfirmMessage:
             "このホストから未変更の管理対象コピーを削除します。変更されたコピーは保持します。",
@@ -1885,6 +1885,17 @@ export const ja: TranslationResources = {
         transportFallback: "ホストが応答しませんでした。",
         failedTitle: "byspace.jsonを読み込めませんでした",
         failedDescription: "再読み込みして再試行してください。",
+      },
+      projectSetup: {
+        title: "プロジェクトのセットアップ",
+        actionTitle: "エージェントでセットアップ",
+        description:
+          "エージェントがこのリポジトリを調べ、ワークツリーの準備、サービス、よく使うコマンドを提案します",
+        configure: "エージェントで設定",
+        review: "エージェントでレビュー",
+        updateHost: "エージェント支援のプロジェクト設定を使うにはホストを更新してください",
+        prompt:
+          "byspace-project-setup スキルを使ってこのリポジトリを調べ、クリーンなワークツリーを再現可能に準備でき、よく使うコマンドを見つけやすくし、長時間実行サービスを安全に並列実行できる、根拠のある最小限の変更を提案してください。まず調査し、ファイルを変更する前に提案を見せてください。",
       },
       worktree: {
         title: "ワークツリーライフサイクルフック",
