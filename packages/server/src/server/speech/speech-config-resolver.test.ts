@@ -1,203 +1,69 @@
 import path from "node:path";
-
 import { describe, expect, test } from "vitest";
-
 import { PersistedConfigSchema } from "../persisted-config.js";
 import { resolveSpeechConfig } from "./speech-config-resolver.js";
 
 describe("resolveSpeechConfig", () => {
-  test("resolves local-first defaults without env overrides", () => {
+  test("starts enabled but without selecting a model", () => {
     const byspaceHome = "/tmp/byspace-home";
-    const persisted = PersistedConfigSchema.parse({});
-    const env = {} as NodeJS.ProcessEnv;
-
     const result = resolveSpeechConfig({
       byspaceHome,
-      env,
-      persisted,
+      env: {} as NodeJS.ProcessEnv,
+      persisted: PersistedConfigSchema.parse({}),
     });
 
-    expect(result.openai).toBeUndefined();
-    expect(result.speech.providers.dictationStt).toEqual({
-      provider: "local",
-      explicit: false,
+    expect(result).toEqual({
       enabled: true,
-    });
-    expect(result.speech.providers.voiceTurnDetection).toEqual({
-      provider: "local",
-      explicit: false,
-      enabled: true,
-    });
-    expect(result.speech.providers.voiceStt).toEqual({
-      provider: "local",
-      explicit: false,
-      enabled: true,
-    });
-    expect(result.speech.providers.voiceTts).toEqual({
-      provider: "local",
-      explicit: false,
-      enabled: true,
-    });
-    expect(result.speech.local).toEqual({
-      modelsDir: path.join(byspaceHome, "models", "local-speech"),
-      models: {
-        dictationStt: "parakeet-tdt-0.6b-v2-int8",
-        voiceStt: "parakeet-tdt-0.6b-v2-int8",
-        voiceTts: "kokoro-en-v0_19",
-        voiceTtsSpeakerId: 0,
+      sttLanguage: "auto",
+      local: {
+        modelsDir: path.join(byspaceHome, "models", "local-speech"),
+        models: { dictationStt: null },
       },
-    });
-    expect(result.speech.local?.models.dictationStt).toBe("parakeet-tdt-0.6b-v2-int8");
-    expect(result.speech.local?.models.voiceStt).toBe("parakeet-tdt-0.6b-v2-int8");
-    expect(result.speech.local?.models.voiceTts).toBe("kokoro-en-v0_19");
-    expect(result.speech.local?.models.voiceTtsSpeakerId).toBe(0);
-    expect(result.speech.sttLanguages).toEqual({
-      dictation: "en",
-      voice: "en",
     });
   });
 
-  test("resolves feature-scoped local speech settings", () => {
-    const persisted = PersistedConfigSchema.parse({
-      features: {
-        voiceMode: {
-          turnDetection: { provider: "local" },
-          stt: { provider: "openai", model: "gpt-4o-transcribe" },
-        },
-      },
-      providers: {
-        openai: { apiKey: "persisted-key" },
-      },
-    });
-    const env = {
-      BYSPACE_DICTATION_LOCAL_STT_MODEL: "parakeet-tdt-0.6b-v2-int8",
-      BYSPACE_VOICE_LOCAL_STT_MODEL: "parakeet-tdt-0.6b-v2-int8",
-      BYSPACE_VOICE_LOCAL_TTS_MODEL: "kokoro-en-v0_19",
-      BYSPACE_VOICE_LOCAL_TTS_SPEAKER_ID: "5",
-      BYSPACE_VOICE_LOCAL_TTS_SPEED: "1.35",
-      BYSPACE_DICTATION_LANGUAGE: "es",
-      BYSPACE_VOICE_LANGUAGE: "pt",
-      BYSPACE_LOCAL_MODELS_DIR: "/tmp/models",
-      OPENAI_API_KEY: "env-key",
-      BYSPACE_VOICE_STT_PROVIDER: "openai",
-      BYSPACE_DICTATION_STT_PROVIDER: "local",
-      BYSPACE_VOICE_TTS_PROVIDER: "local",
-    } as NodeJS.ProcessEnv;
-
+  test("resolves the selected local model and automatic language", () => {
     const result = resolveSpeechConfig({
       byspaceHome: "/tmp/byspace-home",
-      env,
-      persisted,
+      env: { BYSPACE_LOCAL_MODELS_DIR: "/tmp/models" } as NodeJS.ProcessEnv,
+      persisted: PersistedConfigSchema.parse({
+        features: {
+          dictation: {
+            stt: { model: "fire-red-asr2-aed-int8" },
+          },
+        },
+      }),
     });
 
-    expect(result.speech.local).toEqual({
+    expect(result.local).toEqual({
       modelsDir: "/tmp/models",
-      models: {
-        dictationStt: "parakeet-tdt-0.6b-v2-int8",
-        voiceStt: "parakeet-tdt-0.6b-v2-int8",
-        voiceTts: "kokoro-en-v0_19",
-        voiceTtsSpeakerId: 5,
-        voiceTtsSpeed: 1.35,
-      },
+      models: { dictationStt: "fire-red-asr2-aed-int8" },
     });
-    expect(result.speech.providers.dictationStt).toEqual({
-      provider: "local",
-      explicit: true,
-      enabled: true,
-    });
-    expect(result.speech.providers.voiceStt).toEqual({
-      provider: "openai",
-      explicit: true,
-      enabled: true,
-    });
-    expect(result.speech.providers.voiceTurnDetection).toEqual({
-      provider: "local",
-      explicit: true,
-      enabled: true,
-    });
-    expect(result.speech.providers.voiceTts).toEqual({
-      provider: "local",
-      explicit: true,
-      enabled: true,
-    });
-    expect(result.speech.local?.models.dictationStt).toBe("parakeet-tdt-0.6b-v2-int8");
-    expect(result.speech.local?.models.voiceStt).toBe("parakeet-tdt-0.6b-v2-int8");
-    expect(result.speech.local?.models.voiceTts).toBe("kokoro-en-v0_19");
-    expect(result.speech.local?.models.voiceTtsSpeakerId).toBe(5);
-    expect(result.speech.local?.models.voiceTtsSpeed).toBe(1.35);
-    expect(result.speech.sttLanguages).toEqual({
-      dictation: "es",
-      voice: "pt",
-    });
-    expect(result.openai?.stt?.apiKey).toBe("persisted-key");
-    expect(result.openai?.tts?.apiKey).toBe("persisted-key");
-    expect(result.openai?.stt?.model).toBe("gpt-4o-transcribe");
+    expect(result.sttLanguage).toBe("auto");
   });
 
-  test("resolves STT language from env, settings, and voice-to-dictation fallback", () => {
-    const persisted = PersistedConfigSchema.parse({
-      features: {
-        dictation: {
-          stt: {
-            language: "fr",
-          },
-        },
-        voiceMode: {
-          stt: {
-            language: "de",
-          },
-        },
-      },
-    });
-
-    const result = resolveSpeechConfig({
-      byspaceHome: "/tmp/byspace-home",
-      env: {
-        BYSPACE_DICTATION_LANGUAGE: "es",
-        BYSPACE_VOICE_LANGUAGE: "  ",
-      } as NodeJS.ProcessEnv,
-      persisted,
-    });
-
-    expect(result.speech.sttLanguages).toEqual({
-      dictation: "es",
-      voice: "es",
-    });
-  });
-
-  test("respects disabled dictation and voice mode feature flags", () => {
-    const persisted = PersistedConfigSchema.parse({
-      features: {
-        dictation: { enabled: false },
-        voiceMode: { enabled: false },
-      },
-    });
-
+  test("honors disabled dictation", () => {
     const result = resolveSpeechConfig({
       byspaceHome: "/tmp/byspace-home",
       env: {} as NodeJS.ProcessEnv,
-      persisted,
+      persisted: PersistedConfigSchema.parse({
+        features: { dictation: { enabled: false } },
+      }),
     });
 
-    expect(result.speech.providers.dictationStt).toEqual({
-      provider: "local",
-      explicit: false,
-      enabled: false,
+    expect(result.enabled).toBe(false);
+    expect(result.local?.models.dictationStt).toBeNull();
+  });
+
+  test("honors the environment override", () => {
+    const result = resolveSpeechConfig({
+      byspaceHome: "/tmp/byspace-home",
+      env: { BYSPACE_DICTATION_ENABLED: "0" } as NodeJS.ProcessEnv,
+      persisted: PersistedConfigSchema.parse({
+        features: { dictation: { enabled: true } },
+      }),
     });
-    expect(result.speech.providers.voiceTurnDetection).toEqual({
-      provider: "local",
-      explicit: false,
-      enabled: false,
-    });
-    expect(result.speech.providers.voiceStt).toEqual({
-      provider: "local",
-      explicit: false,
-      enabled: false,
-    });
-    expect(result.speech.providers.voiceTts).toEqual({
-      provider: "local",
-      explicit: false,
-      enabled: false,
-    });
+
+    expect(result.enabled).toBe(false);
   });
 });

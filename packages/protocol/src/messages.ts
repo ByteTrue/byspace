@@ -149,6 +149,12 @@ export const MutableDaemonConfigSchema = z
       .passthrough(),
     providers: z.record(z.string(), MutableDaemonProviderConfigSchema).default({}),
     metadataGeneration: MutableMetadataGenerationConfigSchema.default({ providers: [] }),
+    dictation: z
+      .object({
+        refineWithAgent: z.boolean().optional(),
+      })
+      .passthrough()
+      .optional(),
     autoArchiveAfterMerge: z.boolean().default(false),
     enableTerminalAgentHooks: z.boolean().default(false),
     terminalAgentHooks: TerminalAgentHookSettingsSchema.optional(),
@@ -165,6 +171,12 @@ export const MutableDaemonConfigPatchSchema = z
       .optional(),
     removeProviders: z.array(z.string().min(1)).optional(),
     metadataGeneration: MutableMetadataGenerationConfigSchema.partial().optional(),
+    dictation: z
+      .object({
+        refineWithAgent: z.boolean().optional(),
+      })
+      .passthrough()
+      .optional(),
     autoArchiveAfterMerge: z.boolean().optional(),
     enableTerminalAgentHooks: z.boolean().optional(),
     terminalAgentHooks: TerminalAgentHookSettingsSchema.optional(),
@@ -1200,6 +1212,49 @@ export const DictationStreamFinishMessageSchema = z.object({
 export const DictationStreamCancelMessageSchema = z.object({
   type: z.literal("dictation_stream_cancel"),
   dictationId: z.string(),
+});
+
+export const SpeechModelIdSchema = z.string().min(1);
+
+export const SpeechModelStateSchema = z.string().min(1);
+
+export const SpeechModelPayloadSchema = z.object({
+  id: SpeechModelIdSchema,
+  label: z.string(),
+  description: z.string(),
+  sizeBytes: z.number().int().nonnegative(),
+  state: SpeechModelStateSchema,
+  error: z.string().optional(),
+});
+
+export const SpeechModelsListRequestSchema = z.object({
+  type: z.literal("speech.models.list.request"),
+  requestId: z.string(),
+});
+
+export const SpeechModelDownloadRequestSchema = z.object({
+  type: z.literal("speech.models.download.request"),
+  requestId: z.string(),
+  modelId: SpeechModelIdSchema,
+});
+
+export const SpeechModelSelectRequestSchema = z.object({
+  type: z.literal("speech.models.select.request"),
+  requestId: z.string(),
+  modelId: SpeechModelIdSchema,
+});
+
+export const SpeechModelDeleteRequestSchema = z.object({
+  type: z.literal("speech.models.delete.request"),
+  requestId: z.string(),
+  modelId: SpeechModelIdSchema,
+});
+
+export const DictationRefineRequestSchema = z.object({
+  type: z.literal("speech.dictation.refine.request"),
+  requestId: z.string(),
+  agentId: z.string(),
+  text: z.string(),
 });
 
 const GitSetupOptionsSchema = z.object({
@@ -2441,6 +2496,11 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   DictationStreamChunkMessageSchema,
   DictationStreamFinishMessageSchema,
   DictationStreamCancelMessageSchema,
+  SpeechModelsListRequestSchema,
+  SpeechModelDownloadRequestSchema,
+  SpeechModelSelectRequestSchema,
+  SpeechModelDeleteRequestSchema,
+  DictationRefineRequestSchema,
   CreateAgentRequestMessageSchema,
   ListProviderModelsRequestMessageSchema,
   ListProviderModesRequestMessageSchema,
@@ -2669,6 +2729,47 @@ export const DictationStreamErrorMessageSchema = z.object({
   }),
 });
 
+export const SpeechModelsListResponseSchema = z.object({
+  type: z.literal("speech.models.list.response"),
+  payload: z.object({
+    requestId: z.string(),
+    selectedModelId: SpeechModelIdSchema.nullable(),
+    models: z.array(SpeechModelPayloadSchema),
+    error: z.string().optional(),
+  }),
+});
+
+const SpeechModelMutationResponsePayloadSchema = z.object({
+  requestId: z.string(),
+  modelId: SpeechModelIdSchema,
+  accepted: z.boolean(),
+  error: z.string().optional(),
+});
+
+export const SpeechModelDownloadResponseSchema = z.object({
+  type: z.literal("speech.models.download.response"),
+  payload: SpeechModelMutationResponsePayloadSchema,
+});
+
+export const SpeechModelSelectResponseSchema = z.object({
+  type: z.literal("speech.models.select.response"),
+  payload: SpeechModelMutationResponsePayloadSchema,
+});
+
+export const SpeechModelDeleteResponseSchema = z.object({
+  type: z.literal("speech.models.delete.response"),
+  payload: SpeechModelMutationResponsePayloadSchema,
+});
+
+export const DictationRefineResponseSchema = z.object({
+  type: z.literal("speech.dictation.refine.response"),
+  payload: z.object({
+    requestId: z.string(),
+    text: z.string(),
+    refined: z.boolean(),
+  }),
+});
+
 export const ServerCapabilityStateSchema = z.object({
   enabled: z.boolean(),
   reason: z.string(),
@@ -2744,6 +2845,10 @@ export const ServerInfoStatusPayloadSchema = z
         terminalAgentHookProviders: z.boolean().optional(),
         // COMPAT(orchestrationSkills): added in v0.2.0-beta.5, remove gate after 2027-01-22.
         orchestrationSkills: z.boolean().optional(),
+        // COMPAT(speechModelSelection): added in v0.5.0, remove the gate when floor >= v0.5.0.
+        speechModelSelection: z.boolean().optional(),
+        // COMPAT(dictationRefinement): added in v0.5.0, remove the gate when floor >= v0.5.0.
+        dictationRefinement: z.boolean().optional(),
         // COMPAT(rewind): added in v0.1.X, drop the gate when floor >= v0.1.X.
         rewind: z.boolean().optional(),
         // COMPAT(checkoutRefresh): added in v0.1.86, remove gate after 2026-11-29.
@@ -5118,6 +5223,11 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   WorkspaceClearAttentionResponseSchema,
   SendAgentMessageResponseMessageSchema,
   SetVoiceModeResponseMessageSchema,
+  SpeechModelsListResponseSchema,
+  SpeechModelDownloadResponseSchema,
+  SpeechModelSelectResponseSchema,
+  SpeechModelDeleteResponseSchema,
+  DictationRefineResponseSchema,
   DaemonGetStatusResponseSchema,
   DaemonGetPairingOfferResponseSchema,
   DiagnosticsResponseSchema,
@@ -5415,6 +5525,19 @@ export type DictationStreamStartMessage = z.infer<typeof DictationStreamStartMes
 export type DictationStreamChunkMessage = z.infer<typeof DictationStreamChunkMessageSchema>;
 export type DictationStreamFinishMessage = z.infer<typeof DictationStreamFinishMessageSchema>;
 export type DictationStreamCancelMessage = z.infer<typeof DictationStreamCancelMessageSchema>;
+export type SpeechModelId = z.infer<typeof SpeechModelIdSchema>;
+export type SpeechModelState = z.infer<typeof SpeechModelStateSchema>;
+export type SpeechModelPayload = z.infer<typeof SpeechModelPayloadSchema>;
+export type SpeechModelsListRequest = z.infer<typeof SpeechModelsListRequestSchema>;
+export type SpeechModelDownloadRequest = z.infer<typeof SpeechModelDownloadRequestSchema>;
+export type SpeechModelSelectRequest = z.infer<typeof SpeechModelSelectRequestSchema>;
+export type SpeechModelDeleteRequest = z.infer<typeof SpeechModelDeleteRequestSchema>;
+export type SpeechModelsListResponse = z.infer<typeof SpeechModelsListResponseSchema>;
+export type SpeechModelDownloadResponse = z.infer<typeof SpeechModelDownloadResponseSchema>;
+export type SpeechModelSelectResponse = z.infer<typeof SpeechModelSelectResponseSchema>;
+export type SpeechModelDeleteResponse = z.infer<typeof SpeechModelDeleteResponseSchema>;
+export type DictationRefineRequest = z.infer<typeof DictationRefineRequestSchema>;
+export type DictationRefineResponse = z.infer<typeof DictationRefineResponseSchema>;
 export type CreateAgentRequestMessage = z.infer<typeof CreateAgentRequestMessageSchema>;
 export type AgentAttachment = z.infer<typeof AgentAttachmentSchema>;
 export type ForgeChangeRequestAttachment = z.infer<typeof ForgeChangeRequestAttachmentSchema>;

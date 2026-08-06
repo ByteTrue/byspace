@@ -89,16 +89,9 @@ export const es: TranslationResources = {
       interrupt: "Interrumpir",
     },
     voice: {
-      enableVoiceMode: "Habilitar el modo de voz",
-      voiceMode: "Modo de voz",
-      unmuteVoiceMode: "Activar el modo de voz",
-      muteVoiceMode: "Modo de voz silenciosa",
       stopDictation: "detener el dictado",
       startDictation: "Iniciar dictado",
-      unmuteVoice: "Activar voz",
-      muteVoice: "voz muda",
       dictation: "Dictado",
-      interruptBeforeVoice: "Interrumpir al agente antes de iniciar el modo de voz.",
     },
     attachments: {
       addImage: "Agregar imagen",
@@ -285,12 +278,15 @@ export const es: TranslationResources = {
     },
     dictation: {
       start: "Iniciar dictado de voz",
+      stop: "Detener y transcribir",
       cancel: "Cancelar dictado",
       retry: "Reintentar el dictado",
-      insert: "Insertar transcripción",
-      insertAndSend: "Insertar transcripción y enviar",
       failed: "Fallo en el dictado:{{error}}",
       failedRetry: "El dictado falló. Toca reintentar.",
+      aiRefinedTranscript: "Transcripción revisada por IA",
+      originalTranscript: "Transcripción original",
+      useOriginal: "Usar original",
+      useAiRefinement: "Usar revisión de IA",
     },
     question: {
       submit: "Entregar",
@@ -1254,13 +1250,6 @@ export const es: TranslationResources = {
       copied: "Copiado",
     },
   },
-  realtimeVoice: {
-    actions: {
-      mute: "Silenciar voz en tiempo real",
-      unmute: "Activar voz en tiempo real",
-      stop: "Detener la voz en tiempo real e interrumpir el turno.",
-    },
-  },
   rewind: {
     tooltip: "Rebobinar a este mensaje",
     warning: "Esta acción no se puede deshacer.",
@@ -1436,6 +1425,7 @@ export const es: TranslationResources = {
     },
     hostSections: {
       connections: "Conexiones",
+      dictation: "Dictado",
       agents: "Agents",
       workspaces: "Workspaces",
       providers: "Proveedores",
@@ -1615,12 +1605,10 @@ export const es: TranslationResources = {
         cycleTheme: "Tema del ciclo",
         focusMessageInput: "Entrada de mensaje de enfoque",
         cycleAgentMode: "Alternar modo del agente",
-        toggleVoiceMode: "Alternar modo de voz",
         startStopDictation: "Iniciar dictado/stop",
         interruptAgent: "agente de interrupción",
         sendMessage: "enviar mensaje",
         queueMessage: "mensaje de cola",
-        muteUnmuteVoiceMode: "Silenciar el modo de voz/unmute",
       },
       helpNotes: {
         showKeyboardShortcuts: "Disponible cuando el foco no está en un campo de texto o terminal.",
@@ -1646,6 +1634,38 @@ export const es: TranslationResources = {
       badges: {
         relay: "Relé",
         local: "Local",
+      },
+      dictation: {
+        title: "Dictado",
+        description: "El audio se transcribe localmente en este Host y no se envía a ninguna API.",
+        updateHost: "Actualiza el Host para elegir un modelo de dictado.",
+        disconnected: "Conéctate a este Host para administrar los modelos de dictado.",
+        loading: "Cargando modelos…",
+        loadError: "No se pudieron cargar los modelos de dictado",
+        operationError: "Falló la operación del modelo de dictado",
+        refinement: {
+          title: "Limpiar con IA",
+          hint: "Tras la transcripción local, envía solo el texto por la misma ruta de proveedores LLM usada para títulos y texto de Git. Usa una llamada adicional, vuelve al original si falla y mantiene la opción Usar original.",
+          accessibilityLabel: "Limpiar el dictado con IA",
+        },
+        status: {
+          inUse: "En uso",
+          downloading: "Descargando…",
+          downloaded: "Descargado",
+          failed: "Error de descarga",
+          notDownloaded: "No descargado",
+        },
+        actions: {
+          use: "Usar",
+          downloadAndUse: "Descargar y usar",
+          delete: "Eliminar {{model}}",
+        },
+        models: {
+          fireRedDescription:
+            "Prioriza el mandarín; admite inglés, mezcla mandarín-inglés y más de 20 dialectos chinos.",
+          senseVoiceDescription:
+            "Alibaba FunASR SenseVoice Small; reconocimiento rápido de mandarín, inglés, cantonés, japonés y coreano con puntuación. Usa la FunASR Model License.",
+        },
       },
       connections: {
         title: "Conexiones",

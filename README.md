@@ -27,7 +27,7 @@ Run agents in parallel on your own machines from a hosted Web interface or the C
 
 - **Self-hosted:** Agents run on your machine with your full dev environment. Use your tools, your configs, and your skills.
 - **Multi-provider:** Claude Code, Codex, Copilot, OpenCode, and Pi through the same interface. Pick the right model for each job.
-- **Voice control:** Dictate tasks or talk through problems in voice mode. Hands-free when you need it.
+- **Local dictation:** Transcribe tasks on your Host with a speech model you explicitly install and select.
 - **Web + CLI:** Use the hosted browser interface from any device, or script the same local daemon from the terminal.
 - **Privacy-first:** BySpace doesn't have any telemetry, tracking, or forced log-ins.
 

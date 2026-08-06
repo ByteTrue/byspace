@@ -89,16 +89,9 @@ export const ja: TranslationResources = {
       interrupt: "中断",
     },
     voice: {
-      enableVoiceMode: "音声モードを有効にする",
-      voiceMode: "音声モード",
-      unmuteVoiceMode: "音声モードのミュートを解除",
-      muteVoiceMode: "音声モードをミュート",
       stopDictation: "音声入力を停止",
       startDictation: "音声入力を開始",
-      unmuteVoice: "音声のミュートを解除",
-      muteVoice: "音声をミュート",
       dictation: "音声入力",
-      interruptBeforeVoice: "音声モードを開始する前にエージェントを中断してください",
     },
     attachments: {
       addImage: "画像を追加",
@@ -285,12 +278,15 @@ export const ja: TranslationResources = {
     },
     dictation: {
       start: "音声入力を開始",
+      stop: "停止して文字起こし",
       cancel: "音声入力をキャンセル",
       retry: "音声入力を再試行",
-      insert: "文字起こしを挿入",
-      insertAndSend: "文字起こしを挿入して送信",
       failed: "音声入力に失敗しました: {{error}}",
       failedRetry: "音声入力に失敗しました。再試行をタップしてください。",
+      aiRefinedTranscript: "AIで整えた文字起こし",
+      originalTranscript: "元の文字起こし",
+      useOriginal: "元の文字起こしを使う",
+      useAiRefinement: "AI整形を使う",
     },
     question: {
       submit: "送信",
@@ -1234,13 +1230,6 @@ export const ja: TranslationResources = {
       copied: "コピーしました",
     },
   },
-  realtimeVoice: {
-    actions: {
-      mute: "リアルタイム音声をミュート",
-      unmute: "リアルタイム音声のミュートを解除",
-      stop: "リアルタイム音声を停止してターンを中断",
-    },
-  },
   rewind: {
     tooltip: "このメッセージに巻き戻す",
     warning: "この操作は元に戻せません",
@@ -1416,6 +1405,7 @@ export const ja: TranslationResources = {
     },
     hostSections: {
       connections: "接続",
+      dictation: "音声入力",
       agents: "エージェント",
       workspaces: "ワークスペース",
       providers: "プロバイダー",
@@ -1592,12 +1582,10 @@ export const ja: TranslationResources = {
         cycleTheme: "テーマを順に切り替え",
         focusMessageInput: "メッセージ入力にフォーカス",
         cycleAgentMode: "エージェントモードを順に切り替え",
-        toggleVoiceMode: "音声モードを切り替え",
         startStopDictation: "音声入力を開始/停止",
         interruptAgent: "エージェントを中断",
         sendMessage: "メッセージを送信",
         queueMessage: "メッセージをキューに追加",
-        muteUnmuteVoiceMode: "音声モードのミュートを切り替え",
       },
       helpNotes: {
         showKeyboardShortcuts:
@@ -1624,6 +1612,37 @@ export const ja: TranslationResources = {
       badges: {
         relay: "リレー",
         local: "ローカル",
+      },
+      dictation: {
+        title: "音声入力",
+        description: "音声はこのホスト上でローカルに文字起こしされ、API には送信されません。",
+        updateHost: "音声入力モデルを選択するにはホストを更新してください。",
+        disconnected: "音声入力モデルを管理するにはこのホストに接続してください。",
+        loading: "モデルを読み込み中…",
+        loadError: "音声入力モデルを読み込めませんでした",
+        operationError: "音声入力モデルの操作に失敗しました",
+        refinement: {
+          title: "AI で整形",
+          hint: "ローカル文字起こし後、音声ではなくテキストのみをタイトルや Git テキストと同じ LLM プロバイダー経路へ送ります。モデル呼び出しが 1 回増え、失敗時は元の文字起こしを使用し、「元の文字起こしを使う」で切り替えられます。",
+          accessibilityLabel: "AI で音声入力を整形",
+        },
+        status: {
+          inUse: "使用中",
+          downloading: "ダウンロード中…",
+          downloaded: "ダウンロード済み",
+          failed: "ダウンロード失敗",
+          notDownloaded: "未ダウンロード",
+        },
+        actions: {
+          use: "使用",
+          downloadAndUse: "ダウンロードして使用",
+          delete: "{{model}} を削除",
+        },
+        models: {
+          fireRedDescription: "中国語を優先し、英語、中英混在、20 以上の中国語方言に対応します。",
+          senseVoiceDescription:
+            "Alibaba FunASR SenseVoice Small。中国語、英語、広東語、日本語、韓国語を高速に認識し、句読点にも対応します。FunASR Model License を使用します。",
+        },
       },
       connections: {
         title: "接続",

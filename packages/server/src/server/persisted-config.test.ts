@@ -145,30 +145,6 @@ describe("PersistedConfigSchema worktrees config", () => {
   });
 });
 
-describe("PersistedConfigSchema provider credentials", () => {
-  test("accepts separate OpenAI STT and TTS credentials", () => {
-    const parsed = PersistedConfigSchema.parse({
-      providers: {
-        openai: {
-          stt: {
-            apiKey: " stt-secret ",
-            baseUrl: " https://stt.example.com/v1 ",
-          },
-          tts: {
-            apiKey: " tts-secret ",
-            baseUrl: " https://tts.example.com/v1 ",
-          },
-        },
-      },
-    });
-
-    expect(parsed.providers?.openai?.stt?.apiKey).toBe("stt-secret");
-    expect(parsed.providers?.openai?.stt?.baseUrl).toBe("https://stt.example.com/v1");
-    expect(parsed.providers?.openai?.tts?.apiKey).toBe("tts-secret");
-    expect(parsed.providers?.openai?.tts?.baseUrl).toBe("https://tts.example.com/v1");
-  });
-});
-
 describe("PersistedConfigSchema daemon append system prompt", () => {
   test("accepts optional append system prompt", () => {
     const parsed = PersistedConfigSchema.parse({
@@ -619,42 +595,6 @@ describe("PersistedConfigSchema logging config", () => {
   });
 });
 
-describe("PersistedConfigSchema voice mode config", () => {
-  test("accepts a dedicated turn detection provider", () => {
-    const parsed = PersistedConfigSchema.parse({
-      features: {
-        voiceMode: {
-          turnDetection: {
-            provider: "local",
-          },
-        },
-      },
-    });
-
-    expect(parsed.features?.voiceMode?.turnDetection?.provider).toBe("local");
-  });
-
-  test("accepts trimmed STT language fields", () => {
-    const parsed = PersistedConfigSchema.parse({
-      features: {
-        dictation: {
-          stt: {
-            language: " fr ",
-          },
-        },
-        voiceMode: {
-          stt: {
-            language: " de ",
-          },
-        },
-      },
-    });
-
-    expect(parsed.features?.dictation?.stt?.language).toBe("fr");
-    expect(parsed.features?.voiceMode?.stt?.language).toBe("de");
-  });
-});
-
 describe("loadPersistedConfig", () => {
   test("accepts the documented config schema marker", () => {
     const home = createTempHome();
@@ -687,7 +627,7 @@ describe("loadPersistedConfig", () => {
     }
   });
 
-  test("loads a config that still uses the removed providers.openai.voice block", () => {
+  test("loads legacy speech config while discarding removed Voice mode and cloud fields", () => {
     const home = createTempHome();
     const configPath = path.join(home, "config.json");
     try {
@@ -697,10 +637,15 @@ describe("loadPersistedConfig", () => {
           {
             version: 1,
             providers: {
-              openai: {
-                apiKey: "global-key",
-                voice: { apiKey: "voice-key", baseUrl: "https://voice.example.com/v1" },
+              openai: { apiKey: "removed" },
+              local: { modelsDir: "/tmp/models", autoDownload: true },
+            },
+            features: {
+              dictation: {
+                enabled: true,
+                stt: { provider: "openai", model: "fire-red-asr2-aed-int8", language: "zh" },
               },
+              voiceMode: { enabled: true, tts: { provider: "openai" } },
             },
           },
           null,
@@ -710,10 +655,10 @@ describe("loadPersistedConfig", () => {
 
       const config = loadPersistedConfig(home);
 
-      expect(config.providers?.openai?.apiKey).toBe("global-key");
-      expect((config.providers?.openai as Record<string, unknown>)?.voice).toBeUndefined();
-      expect(config.providers?.openai?.stt).toBeUndefined();
-      expect(config.providers?.openai?.tts).toBeUndefined();
+      expect(config.providers).toEqual({ local: { modelsDir: "/tmp/models" } });
+      expect(config.features).toEqual({
+        dictation: { enabled: true, stt: { model: "fire-red-asr2-aed-int8" } },
+      });
     } finally {
       rmSync(home, { recursive: true, force: true });
     }
@@ -751,10 +696,8 @@ describe.skipIf(process.platform === "win32")("persisted config file permissions
     const home = createTempHome();
     try {
       savePersistedConfig(home, {
-        providers: {
-          openai: {
-            apiKey: "secret",
-          },
+        features: {
+          dictation: { stt: { model: "fire-red-asr2-aed-int8" } },
         },
       });
 

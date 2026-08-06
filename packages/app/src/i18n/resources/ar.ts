@@ -89,16 +89,9 @@ export const ar: TranslationResources = {
       interrupt: "مقاطعة",
     },
     voice: {
-      enableVoiceMode: "تمكين الوضع الصوتي",
-      voiceMode: "وضع الصوت",
-      unmuteVoiceMode: "إلغاء كتم وضع الصوت",
-      muteVoiceMode: "وضع كتم الصوت",
       stopDictation: "توقف عن الإملاء",
       startDictation: "بدء الإملاء",
-      unmuteVoice: "إلغاء كتم الصوت",
-      muteVoice: "كتم الصوت",
       dictation: "الإملاء",
-      interruptBeforeVoice: "قم بمقاطعة الوكيل قبل بدء الوضع الصوتي",
     },
     attachments: {
       addImage: "أضف صورة",
@@ -282,12 +275,15 @@ export const ar: TranslationResources = {
     },
     dictation: {
       start: "بدء الإملاء الصوتي",
+      stop: "إيقاف وتحويل إلى نص",
       cancel: "إلغاء الإملاء",
       retry: "أعد محاولة الإملاء",
-      insert: "إدراج النسخ",
-      insertAndSend: "أدخل النسخ وأرسل",
       failed: "فشل الإملاء:{{error}}",
       failedRetry: "فشل الإملاء. اضغط على إعادة المحاولة.",
+      aiRefinedTranscript: "نص منسق بالذكاء الاصطناعي",
+      originalTranscript: "النص الأصلي",
+      useOriginal: "استخدام النص الأصلي",
+      useAiRefinement: "استخدام تنسيق الذكاء الاصطناعي",
     },
     question: {
       submit: "يُقدِّم",
@@ -1220,13 +1216,6 @@ export const ar: TranslationResources = {
       copied: "منقول",
     },
   },
-  realtimeVoice: {
-    actions: {
-      mute: "كتم صوت الوقت الحقيقي",
-      unmute: "إلغاء كتم صوت الوقت الحقيقي",
-      stop: "إيقاف الصوت في الوقت الحقيقي ومقاطعة الدوران",
-    },
-  },
   rewind: {
     tooltip: "الترجيع إلى هذه الرسالة",
     warning: "لا يمكن التراجع عن هذا الإجراء",
@@ -1402,6 +1391,7 @@ export const ar: TranslationResources = {
     },
     hostSections: {
       connections: "اتصالات",
+      dictation: "الإملاء",
       agents: "Agents",
       workspaces: "Workspaces",
       providers: "مقدمي الخدمات",
@@ -1579,12 +1569,10 @@ export const ar: TranslationResources = {
         cycleTheme: "موضوع الدورة",
         focusMessageInput: "التركيز على إدخال الرسالة",
         cycleAgentMode: "تبديل وضع الوكيل",
-        toggleVoiceMode: "تبديل الوضع الصوتي",
         startStopDictation: "بدء إملاء /stop",
         interruptAgent: "عامل المقاطعة",
         sendMessage: "أرسل رسالة",
         queueMessage: "رسالة قائمة الانتظار",
-        muteUnmuteVoiceMode: "كتم وضع الصوت /unmute",
       },
       helpNotes: {
         showKeyboardShortcuts: "متاح عندما لا يكون التركيز في حقل نص أو محطة طرفية.",
@@ -1610,6 +1598,38 @@ export const ar: TranslationResources = {
       badges: {
         relay: "تتابع",
         local: "محلي",
+      },
+      dictation: {
+        title: "الإملاء",
+        description: "يُحوَّل الصوت إلى نص محليًا على هذا الـ Host ولا يُرسل إلى أي API.",
+        updateHost: "حدّث الـ Host لاختيار نموذج الإملاء.",
+        disconnected: "اتصل بهذا الـ Host لإدارة نماذج الإملاء.",
+        loading: "جارٍ تحميل النماذج…",
+        loadError: "تعذر تحميل نماذج الإملاء",
+        operationError: "فشلت عملية نموذج الإملاء",
+        refinement: {
+          title: "تنسيق بالذكاء الاصطناعي",
+          hint: "بعد النسخ المحلي، يرسل النص فقط عبر مسار موفري LLM نفسه المستخدم للعناوين ونصوص Git. يستخدم استدعاءً إضافيًا، ويعود إلى النص الخام عند الفشل، ويحتفظ بخيار استخدام النص الأصلي.",
+          accessibilityLabel: "تنسيق الإملاء بالذكاء الاصطناعي",
+        },
+        status: {
+          inUse: "قيد الاستخدام",
+          downloading: "جارٍ التنزيل…",
+          downloaded: "تم التنزيل",
+          failed: "فشل التنزيل",
+          notDownloaded: "غير منزّل",
+        },
+        actions: {
+          use: "استخدام",
+          downloadAndUse: "تنزيل واستخدام",
+          delete: "حذف {{model}}",
+        },
+        models: {
+          fireRedDescription:
+            "محسّن للصينية؛ يدعم الإنجليزية والمزج بين الصينية والإنجليزية وأكثر من 20 لهجة صينية.",
+          senseVoiceDescription:
+            "Alibaba FunASR SenseVoice Small؛ تعرّف سريع على الصينية والإنجليزية والكانتونية واليابانية والكورية مع علامات ترقيم. يستخدم FunASR Model License.",
+        },
       },
       connections: {
         title: "اتصالات",

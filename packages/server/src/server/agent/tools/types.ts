@@ -36,8 +36,6 @@ export interface BySpaceToolCatalog {
 
 export interface BySpaceToolRuntimeContext {
   callerAgentId?: string;
-  enableVoiceTools?: boolean;
-  voiceOnly?: boolean;
 }
 
 export type BySpaceToolCatalogFactory = (

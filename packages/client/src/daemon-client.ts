@@ -101,6 +101,12 @@ import type {
   BySpaceConfigRevision,
   WorkspaceCreateRequest,
   WorkspaceRecoveryState,
+  SpeechModelId,
+  SpeechModelsListResponse,
+  SpeechModelDownloadResponse,
+  SpeechModelSelectResponse,
+  SpeechModelDeleteResponse,
+  DictationRefineResponse,
 } from "@bytetrue/byspace-protocol/messages";
 import type {
   AgentPermissionRequest,
@@ -464,10 +470,6 @@ interface ListCommandsOptions {
   draftConfig?: ListCommandsDraftConfig;
 }
 type LegacyListCommandsOptions = Omit<ListCommandsOptions, "agentId">;
-type SetVoiceModePayload = Extract<
-  SessionOutboundMessage,
-  { type: "set_voice_mode_response" }
->["payload"];
 type DictationFinishAcceptedPayload = Extract<
   SessionOutboundMessage,
   { type: "dictation_stream_finish_accepted" }
@@ -3175,44 +3177,8 @@ export class DaemonClient {
   }
 
   // ============================================================================
-  // Audio / Voice
+  // Dictation
   // ============================================================================
-
-  async setVoiceMode(enabled: boolean, agentId?: string): Promise<SetVoiceModePayload> {
-    const requestId = this.createRequestId();
-    const message = SessionInboundMessageSchema.parse({
-      type: "set_voice_mode",
-      enabled,
-      ...(agentId ? { agentId } : {}),
-      requestId,
-    });
-    const response = await this.sendRequest({
-      requestId,
-      message,
-      select: (msg) => {
-        if (msg.type !== "set_voice_mode_response") {
-          return null;
-        }
-        if (msg.payload.requestId !== requestId) {
-          return null;
-        }
-        return msg.payload;
-      },
-    });
-    if (!response.accepted) {
-      const codeSuffix =
-        typeof response.reasonCode === "string" && response.reasonCode.trim().length > 0
-          ? ` (${response.reasonCode})`
-          : "";
-      throw new Error((response.error ?? "Failed to set voice mode") + codeSuffix);
-    }
-    return response;
-  }
-
-  async sendVoiceAudioChunk(audio: string, format: string, isLast = false): Promise<void> {
-    this.sendSessionMessage({ type: "voice_audio_chunk", audio, format, isLast });
-  }
-
   async startDictationStream(dictationId: string, format: string): Promise<void> {
     const ack = this.waitForWithCancel(
       (msg) => {
@@ -4381,6 +4347,54 @@ export class DaemonClient {
       responseType: "get_providers_snapshot_response",
     });
     return normalizeProvidersSnapshotPayload(payload);
+  }
+
+  async listSpeechModels(requestId?: string): Promise<SpeechModelsListResponse["payload"]> {
+    return this.sendNamespacedCorrelatedSessionRequest({
+      requestId,
+      message: { type: "speech.models.list.request" },
+    });
+  }
+
+  async downloadSpeechModel(
+    modelId: SpeechModelId,
+    requestId?: string,
+  ): Promise<SpeechModelDownloadResponse["payload"]> {
+    return this.sendNamespacedCorrelatedSessionRequest({
+      requestId,
+      message: { type: "speech.models.download.request", modelId },
+    });
+  }
+
+  async selectSpeechModel(
+    modelId: SpeechModelId,
+    requestId?: string,
+  ): Promise<SpeechModelSelectResponse["payload"]> {
+    return this.sendNamespacedCorrelatedSessionRequest({
+      requestId,
+      message: { type: "speech.models.select.request", modelId },
+    });
+  }
+
+  async deleteSpeechModel(
+    modelId: SpeechModelId,
+    requestId?: string,
+  ): Promise<SpeechModelDeleteResponse["payload"]> {
+    return this.sendNamespacedCorrelatedSessionRequest({
+      requestId,
+      message: { type: "speech.models.delete.request", modelId },
+    });
+  }
+
+  async refineDictationTranscript(
+    text: string,
+    agentId: string,
+    requestId?: string,
+  ): Promise<DictationRefineResponse["payload"]> {
+    return this.sendNamespacedCorrelatedSessionRequest({
+      requestId,
+      message: { type: "speech.dictation.refine.request", text, agentId },
+    });
   }
 
   async getDaemonConfig(

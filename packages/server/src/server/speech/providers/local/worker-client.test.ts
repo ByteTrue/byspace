@@ -5,17 +5,12 @@ import { fileURLToPath } from "node:url";
 import pino from "pino";
 import { describe, expect, it } from "vitest";
 
-import {
-  LocalSpeechWorkerClient,
-  WorkerBackedSpeechToTextProvider,
-  WorkerBackedTextToSpeechProvider,
-  WorkerBackedTurnDetectionProvider,
-} from "./worker-client.js";
+import { LocalSpeechWorkerClient, WorkerBackedSpeechToTextProvider } from "./worker-client.js";
 import type {
   LocalSpeechWorkerRequest,
   LocalSpeechWorkerToParentMessage,
 } from "./worker-protocol.js";
-import { bufferToWorkerBytes, workerBytesToBuffer } from "./worker-bytes.js";
+import { workerBytesToBuffer } from "./worker-bytes.js";
 
 class FakeLocalSpeechWorker extends EventEmitter {
   public connected = true;
@@ -100,20 +95,24 @@ class PausedIpcWorker {
     this.child.on(event, listener as (...args: unknown[]) => void);
     return this;
   }
+
+  once(
+    event: "close",
+    listener: (code: number | null, signal: NodeJS.Signals | null) => void,
+  ): this {
+    this.child.once(event, listener);
+    return this;
+  }
 }
 
-function createClient(options?: { idleTtlMs?: number }) {
+function createClient() {
   const workers: FakeLocalSpeechWorker[] = [];
   const client = new LocalSpeechWorkerClient({
     logger: pino({ level: "silent" }),
     config: {
       modelsDir: "/tmp/models",
-      voiceSttModel: "parakeet-tdt-0.6b-v2-int8",
-      dictationSttModel: "parakeet-tdt-0.6b-v2-int8",
-      voiceTtsModel: "kokoro-en-v0_19",
+      dictationSttModel: "fire-red-asr2-aed-int8",
     },
-    requestTimeoutMs: 1000,
-    idleTtlMs: options?.idleTtlMs ?? 1000,
     forkWorker: () => {
       const worker = new FakeLocalSpeechWorker();
       workers.push(worker);
@@ -121,19 +120,6 @@ function createClient(options?: { idleTtlMs?: number }) {
     },
   });
   return { client, workers };
-}
-
-function createCapturingLogger(): { logger: pino.Logger; records: Array<Record<string, unknown>> } {
-  const records: Array<Record<string, unknown>> = [];
-  const logger = pino(
-    { level: "trace" },
-    {
-      write(line: string) {
-        records.push(JSON.parse(line) as Record<string, unknown>);
-      },
-    },
-  );
-  return { logger, records };
 }
 
 async function waitForMicrotasks(): Promise<void> {
@@ -147,47 +133,18 @@ describe("LocalSpeechWorkerClient", () => {
     expect(workers).toHaveLength(0);
   });
 
-  it("sends TTS requests through the worker and returns the audio stream", async () => {
-    const { client, workers } = createClient();
-    const provider = new WorkerBackedTextToSpeechProvider(client);
-
-    const pending = provider.synthesizeSpeech("hello");
-    expect(workers).toHaveLength(1);
-    const request = workers[0].sent[0];
-    expect(request).toMatchObject({
-      type: "tts.synthesize",
-      text: "hello",
-      config: {
-        modelsDir: "/tmp/models",
-        voiceTtsModel: "kokoro-en-v0_19",
-      },
-    });
-
-    workers[0].respond(request, {
-      audio: bufferToWorkerBytes(Buffer.from([1, 2, 3, 4])),
-      format: "pcm;rate=24000",
-    });
-
-    const result = await pending;
-    const chunks: Buffer[] = [];
-    for await (const chunk of result.stream) {
-      chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
-    }
-    expect(result.format).toBe("pcm;rate=24000");
-    expect(Buffer.concat(chunks)).toEqual(Buffer.from([1, 2, 3, 4]));
-  });
-
   it("forwards STT session audio and transcript events through IPC", async () => {
     const { client, workers } = createClient();
-    const provider = new WorkerBackedSpeechToTextProvider(client, "voiceStt");
+    const provider = new WorkerBackedSpeechToTextProvider(client);
     const session = provider.createSession({ logger: pino({ level: "silent" }) });
 
     const transcriptPromise = once(session as EventEmitter, "transcript");
     const committedPromise = once(session as EventEmitter, "committed");
 
     const connect = session.connect();
+    expect(client.hasActiveSessions()).toBe(true);
     const createRequest = workers[0].sent[0];
-    expect(createRequest).toMatchObject({ type: "session.create", kind: "voiceStt" });
+    expect(createRequest).toMatchObject({ type: "session.create", kind: "dictationStt" });
     workers[0].respond(createRequest, { requiredSampleRate: 16000 });
     await connect;
 
@@ -228,27 +185,50 @@ describe("LocalSpeechWorkerClient", () => {
     await expect(transcriptPromise).resolves.toEqual([
       { segmentId: "seg-1", transcript: "hello", isFinal: true },
     ]);
+
+    session.close();
+    expect(client.hasActiveSessions()).toBe(false);
   });
 
-  it("does not surface real IPC backpressure when replaying native-sized dictation frames", async () => {
+  it("reserves a session before the worker confirms creation", async () => {
     const workers: PausedIpcWorker[] = [];
     const client = new LocalSpeechWorkerClient({
       logger: pino({ level: "silent" }),
-      config: {
-        modelsDir: "/tmp/models",
-        voiceSttModel: "parakeet-tdt-0.6b-v2-int8",
-        dictationSttModel: "parakeet-tdt-0.6b-v2-int8",
-        voiceTtsModel: "kokoro-en-v0_19",
-      },
-      requestTimeoutMs: 30_000,
-      idleTtlMs: 30_000,
+      config: { modelsDir: "/tmp/models", dictationSttModel: "fire-red-asr2-aed-int8" },
       forkWorker: () => {
         const worker = new PausedIpcWorker();
         workers.push(worker);
         return worker;
       },
     });
-    const provider = new WorkerBackedSpeechToTextProvider(client, "dictationStt");
+    const session = new WorkerBackedSpeechToTextProvider(client).createSession({
+      logger: pino({ level: "silent" }),
+    });
+    session.on("error", () => undefined);
+
+    const connect = session.connect();
+    await waitForMicrotasks();
+    expect(() => client.beginModelMutation()).toThrow(
+      "Stop the current dictation before changing models",
+    );
+
+    client.shutdown();
+    await expect(connect).rejects.toThrow();
+    for (const worker of workers) worker.kill();
+  });
+
+  it("does not surface real IPC backpressure when replaying native-sized dictation frames", async () => {
+    const workers: PausedIpcWorker[] = [];
+    const client = new LocalSpeechWorkerClient({
+      logger: pino({ level: "silent" }),
+      config: { modelsDir: "/tmp/models", dictationSttModel: "fire-red-asr2-aed-int8" },
+      forkWorker: () => {
+        const worker = new PausedIpcWorker();
+        workers.push(worker);
+        return worker;
+      },
+    });
+    const provider = new WorkerBackedSpeechToTextProvider(client);
     const session = provider.createSession({ logger: pino({ level: "silent" }) });
     let observedError: Error | null = null;
     (session as EventEmitter).on("error", (error: Error) => {
@@ -274,125 +254,25 @@ describe("LocalSpeechWorkerClient", () => {
     }
   });
 
-  it("logs worker exit details and includes actionable context in the surfaced error", async () => {
-    const { logger, records } = createCapturingLogger();
+  it("rejects a pending session when the worker exits", async () => {
     const workers: FakeLocalSpeechWorker[] = [];
     const client = new LocalSpeechWorkerClient({
-      logger,
-      config: {
-        modelsDir: "/tmp/models",
-        voiceSttModel: "parakeet-tdt-0.6b-v2-int8",
-        dictationSttModel: "parakeet-tdt-0.6b-v2-int8",
-        voiceTtsModel: "kokoro-en-v0_19",
-      },
+      logger: pino({ level: "silent" }),
+      config: { modelsDir: "/tmp/models", dictationSttModel: "fire-red-asr2-aed-int8" },
       forkWorker: () => {
         const worker = new FakeLocalSpeechWorker();
         workers.push(worker);
         return worker;
       },
     });
-    const provider = new WorkerBackedSpeechToTextProvider(client, "dictationStt");
-    const session = provider.createSession({ logger: pino({ level: "silent" }) });
+    const session = new WorkerBackedSpeechToTextProvider(client).createSession({
+      logger: pino({ level: "silent" }),
+    });
+    session.on("error", () => undefined);
 
     const connect = session.connect();
-    workers[0].emit("exit", null, "SIGABRT");
-    workers[0].stderr.emit("data", "dyld: Library not loaded: libsherpa-onnx-c-api.dylib");
     workers[0].emit("close", null, "SIGABRT");
 
-    await expect(connect).rejects.toThrow(
-      "Local speech worker exited (signal SIGABRT) while handling session.create (dictationStt). Last stderr: dyld: Library not loaded: libsherpa-onnx-c-api.dylib",
-    );
-    const exitRecord = records.find((record) => record.msg === "Local speech worker exited");
-    expect(exitRecord).toMatchObject({
-      workerPid: 12345,
-      signal: "SIGABRT",
-      stderrTail: "dyld: Library not loaded: libsherpa-onnx-c-api.dylib",
-      pendingRequests: [expect.objectContaining({ type: "session.create", kind: "dictationStt" })],
-    });
-  });
-
-  it("does not log intentional shutdowns as worker crashes", async () => {
-    const { logger, records } = createCapturingLogger();
-    const workers: FakeLocalSpeechWorker[] = [];
-    const client = new LocalSpeechWorkerClient({
-      logger,
-      config: {
-        modelsDir: "/tmp/models",
-        voiceSttModel: "parakeet-tdt-0.6b-v2-int8",
-        dictationSttModel: "parakeet-tdt-0.6b-v2-int8",
-        voiceTtsModel: "kokoro-en-v0_19",
-      },
-      forkWorker: () => {
-        const worker = new FakeLocalSpeechWorker();
-        workers.push(worker);
-        return worker;
-      },
-    });
-
-    const synthesize = client.synthesizeSpeech("hello");
-    workers[0].respond(workers[0].sent[0], {
-      audio: bufferToWorkerBytes(Buffer.from([1])),
-      format: "pcm;rate=24000",
-    });
-    await synthesize;
-
-    client.shutdown();
-    workers[0].emit("close", null, "SIGTERM");
-
-    expect(records.find((record) => record.msg === "Local speech worker exited")).toBeUndefined();
-    expect(
-      records.find((record) => record.msg === "Local speech worker closed after shutdown"),
-    ).toMatchObject({
-      workerPid: 12345,
-      signal: "SIGTERM",
-    });
-  });
-
-  it("forwards VAD session events through the shared worker", async () => {
-    const { client, workers } = createClient();
-    const provider = new WorkerBackedTurnDetectionProvider(client);
-    const session = provider.createSession({ logger: pino({ level: "silent" }) });
-    const startedPromise = once(session as EventEmitter, "speech_started");
-    const stoppedPromise = once(session as EventEmitter, "speech_stopped");
-
-    const connect = session.connect();
-    const createRequest = workers[0].sent[0];
-    expect(createRequest).toMatchObject({ type: "session.create", kind: "vad" });
-    workers[0].respond(createRequest, { requiredSampleRate: 16000 });
-    await connect;
-
-    workers[0].emitWorkerMessage({
-      type: "session.speech_started",
-      sessionId: createRequest.sessionId,
-    });
-    workers[0].emitWorkerMessage({
-      type: "session.speech_stopped",
-      sessionId: createRequest.sessionId,
-    });
-
-    await expect(startedPromise).resolves.toEqual([]);
-    await expect(stoppedPromise).resolves.toEqual([]);
-  });
-
-  it("kills an idle worker and respawns on later use", async () => {
-    const { client, workers } = createClient({ idleTtlMs: 5 });
-
-    const first = client.synthesizeSpeech("first");
-    workers[0].respond(workers[0].sent[0], {
-      audio: bufferToWorkerBytes(Buffer.from([1])),
-      format: "pcm;rate=24000",
-    });
-    await first;
-
-    await new Promise((resolve) => setTimeout(resolve, 20));
-    expect(workers[0].kills).toBe(1);
-
-    const second = client.synthesizeSpeech("second");
-    expect(workers).toHaveLength(2);
-    workers[1].respond(workers[1].sent[0], {
-      audio: bufferToWorkerBytes(Buffer.from([2])),
-      format: "pcm;rate=24000",
-    });
-    await second;
+    await expect(connect).rejects.toThrow("Dictation worker exited (SIGABRT)");
   });
 });

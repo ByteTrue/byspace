@@ -89,16 +89,9 @@ export const ru: TranslationResources = {
       interrupt: "Прерывать",
     },
     voice: {
-      enableVoiceMode: "Включить голосовой режим",
-      voiceMode: "Голосовой режим",
-      unmuteVoiceMode: "Включить голосовой режим",
-      muteVoiceMode: "Отключить голосовой режим",
       stopDictation: "Остановить диктовку",
       startDictation: "Начать диктовку",
-      unmuteVoice: "Включить звук",
-      muteVoice: "Отключить голос",
       dictation: "Диктант",
-      interruptBeforeVoice: "Прерывайте агента перед запуском голосового режима",
     },
     attachments: {
       addImage: "Добавить изображение",
@@ -284,12 +277,15 @@ export const ru: TranslationResources = {
     },
     dictation: {
       start: "Начать голосовой диктовку",
+      stop: "Остановить и расшифровать",
       cancel: "Отменить диктовку",
       retry: "Повторить диктовку",
-      insert: "Вставить транскрипцию",
-      insertAndSend: "Вставьте транскрипцию и отправьте",
       failed: "Диктовка не удалась:{{error}}",
       failedRetry: "Диктант не удался. Нажмите «Повторить».",
+      aiRefinedTranscript: "Текст обработан ИИ",
+      originalTranscript: "Исходный текст",
+      useOriginal: "Использовать оригинал",
+      useAiRefinement: "Использовать обработку ИИ",
     },
     question: {
       submit: "Представлять на рассмотрение",
@@ -1246,13 +1242,6 @@ export const ru: TranslationResources = {
       copied: "Скопировано",
     },
   },
-  realtimeVoice: {
-    actions: {
-      mute: "Отключить звук в реальном времени",
-      unmute: "Включить звук голоса в реальном времени",
-      stop: "Остановить голос в реальном времени и прервать поворот",
-    },
-  },
   rewind: {
     tooltip: "Перемотка назад к этому сообщению",
     warning: "Это действие нельзя отменить.",
@@ -1429,6 +1418,7 @@ export const ru: TranslationResources = {
     },
     hostSections: {
       connections: "Соединения",
+      dictation: "Диктовка",
       agents: "Agents",
       workspaces: "Workspaces",
       providers: "Провайдеры",
@@ -1607,12 +1597,10 @@ export const ru: TranslationResources = {
         cycleTheme: "Циклическая тема",
         focusMessageInput: "Фокус ввода сообщения",
         cycleAgentMode: "Переключить режим агента",
-        toggleVoiceMode: "Переключить голосовой режим",
         startStopDictation: "Начать диктовку /stop",
         interruptAgent: "Агент прерываний",
         sendMessage: "Отправить сообщение",
         queueMessage: "Сообщение в очереди",
-        muteUnmuteVoiceMode: "Отключить голосовой режим /unmute",
       },
       helpNotes: {
         showKeyboardShortcuts: "Доступно, когда фокус находится не в текстовом поле или терминале.",
@@ -1638,6 +1626,38 @@ export const ru: TranslationResources = {
       badges: {
         relay: "Реле",
         local: "Местный",
+      },
+      dictation: {
+        title: "Диктовка",
+        description: "Речь распознаётся локально на этом Host и не отправляется в API.",
+        updateHost: "Обновите Host, чтобы выбрать модель диктовки.",
+        disconnected: "Подключитесь к этому Host, чтобы управлять моделями диктовки.",
+        loading: "Загрузка моделей…",
+        loadError: "Не удалось загрузить модели диктовки",
+        operationError: "Операция с моделью диктовки не выполнена",
+        refinement: {
+          title: "Обработать с помощью ИИ",
+          hint: "После локальной расшифровки отправляет только текст через тот же путь LLM-провайдеров, что используется для заголовков и текста Git. Требует один дополнительный вызов, при ошибке использует исходный текст и сохраняет переключатель Использовать оригинал.",
+          accessibilityLabel: "Обработать диктовку с помощью ИИ",
+        },
+        status: {
+          inUse: "Используется",
+          downloading: "Скачивание…",
+          downloaded: "Скачано",
+          failed: "Ошибка скачивания",
+          notDownloaded: "Не скачано",
+        },
+        actions: {
+          use: "Использовать",
+          downloadAndUse: "Скачать и использовать",
+          delete: "Удалить {{model}}",
+        },
+        models: {
+          fireRedDescription:
+            "Ориентирована на китайский; поддерживает английский, смешанную китайско-английскую речь и более 20 китайских диалектов.",
+          senseVoiceDescription:
+            "Alibaba FunASR SenseVoice Small: быстрое распознавание китайского, английского, кантонского, японского и корейского с пунктуацией. Использует FunASR Model License.",
+        },
       },
       connections: {
         title: "Соединения",

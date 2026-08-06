@@ -87,16 +87,9 @@ export const en = {
       interrupt: "Interrupt",
     },
     voice: {
-      enableVoiceMode: "Enable Voice mode",
-      voiceMode: "Voice mode",
-      unmuteVoiceMode: "Unmute Voice mode",
-      muteVoiceMode: "Mute Voice mode",
       stopDictation: "Stop dictation",
       startDictation: "Start dictation",
-      unmuteVoice: "Unmute voice",
-      muteVoice: "Mute voice",
       dictation: "Dictation",
-      interruptBeforeVoice: "Interrupt the agent before starting voice mode",
     },
     attachments: {
       addImage: "Add image",
@@ -281,12 +274,15 @@ export const en = {
     },
     dictation: {
       start: "Start voice dictation",
+      stop: "Stop and transcribe",
       cancel: "Cancel dictation",
       retry: "Retry dictation",
-      insert: "Insert transcription",
-      insertAndSend: "Insert transcription and send",
       failed: "Dictation failed: {{error}}",
       failedRetry: "Dictation failed. Tap retry.",
+      aiRefinedTranscript: "AI-cleaned transcript",
+      originalTranscript: "Original transcript",
+      useOriginal: "Use original",
+      useAiRefinement: "Use AI cleanup",
     },
     question: {
       submit: "Submit",
@@ -1231,13 +1227,6 @@ export const en = {
       copied: "Copied",
     },
   },
-  realtimeVoice: {
-    actions: {
-      mute: "Mute realtime voice",
-      unmute: "Unmute realtime voice",
-      stop: "Stop realtime voice and interrupt turn",
-    },
-  },
   rewind: {
     tooltip: "Rewind to this message",
     warning: "This action cannot be undone",
@@ -1413,6 +1402,7 @@ export const en = {
     },
     hostSections: {
       connections: "Connections",
+      dictation: "Dictation",
       agents: "Agents",
       workspaces: "Workspaces",
       providers: "Providers",
@@ -1589,12 +1579,10 @@ export const en = {
         cycleTheme: "Cycle theme",
         focusMessageInput: "Focus message input",
         cycleAgentMode: "Cycle agent mode",
-        toggleVoiceMode: "Toggle voice mode",
         startStopDictation: "Start/stop dictation",
         interruptAgent: "Interrupt agent",
         sendMessage: "Send message",
         queueMessage: "Queue message",
-        muteUnmuteVoiceMode: "Mute/unmute voice mode",
       },
       helpNotes: {
         showKeyboardShortcuts: "Available when focus is not in a text field or terminal.",
@@ -1620,6 +1608,38 @@ export const en = {
       badges: {
         relay: "Relay",
         local: "Local",
+      },
+      dictation: {
+        title: "Dictation",
+        description: "Speech is transcribed locally on this Host. No audio is sent to an API.",
+        updateHost: "Update the Host to choose a dictation model.",
+        disconnected: "Connect to this Host to manage dictation models.",
+        loading: "Loading models…",
+        loadError: "Couldn't load dictation models",
+        operationError: "Dictation model operation failed",
+        refinement: {
+          title: "Clean up with AI",
+          hint: "After local transcription, sends text—not audio—through the same LLM provider path used for titles and Git text. Uses one extra model call, falls back to the raw transcript, and keeps a Use original toggle.",
+          accessibilityLabel: "Clean up dictation with AI",
+        },
+        status: {
+          inUse: "In use",
+          downloading: "Downloading…",
+          downloaded: "Downloaded",
+          failed: "Download failed",
+          notDownloaded: "Not downloaded",
+        },
+        actions: {
+          use: "Use",
+          downloadAndUse: "Download & use",
+          delete: "Delete {{model}}",
+        },
+        models: {
+          fireRedDescription:
+            "Mandarin-first; supports English, Mandarin-English code-switching, and 20+ Chinese dialects.",
+          senseVoiceDescription:
+            "Alibaba FunASR SenseVoice Small; fast Mandarin, English, Cantonese, Japanese, and Korean recognition with punctuation. Uses the FunASR Model License.",
+        },
       },
       connections: {
         title: "Connections",

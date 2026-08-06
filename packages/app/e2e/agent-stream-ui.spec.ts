@@ -466,6 +466,29 @@ test.describe("Agent stream UI", () => {
     }
   });
 
+  test("unconfigured microphone explains the requirement and opens Dictation settings", async ({
+    page,
+  }) => {
+    const agent = await seedMockAgentWorkspace({
+      repoPrefix: "dictation-unconfigured-",
+      title: "Dictation unconfigured",
+    });
+    try {
+      await openAgentRoute(page, { workspaceId: agent.workspaceId, agentId: agent.agentId });
+      await expectComposerVisible(page);
+
+      await page.getByRole("button", { name: "Start dictation" }).click();
+
+      await page.waitForURL(/\/settings\/hosts\/[^/]+\/dictation$/);
+      await expect(page.getByTestId("dictation-model-required-toast")).toContainText(
+        "Choose and download a dictation model",
+      );
+      await expect(page.getByTestId("host-dictation-settings")).toBeVisible();
+    } finally {
+      await agent.cleanup();
+    }
+  });
+
   test("shows elapsed timer on first app-created running turn", async ({ page, withWorkspace }) => {
     test.setTimeout(90_000);
     const workspace = await withWorkspace({ prefix: "stream-first-app-turn-timer-" });

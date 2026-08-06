@@ -36,7 +36,6 @@ export {
   listLocalSpeechModels,
   type LocalSpeechModelId,
   type LocalSttModelId,
-  type LocalTtsModelId,
 } from "./speech/providers/local/models.js";
 export {
   applySherpaLoaderEnv,

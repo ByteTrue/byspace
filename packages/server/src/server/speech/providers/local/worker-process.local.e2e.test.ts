@@ -6,9 +6,11 @@ import { homedir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, test } from "vitest";
+import pino from "pino";
 
 import { parsePcm16MonoWav, wordSimilarity } from "../../../test-utils/dictation-e2e.js";
-import { ensureSherpaOnnxModels } from "./sherpa/model-downloader.js";
+import { ensureSherpaOnnxModel, LocalSttModelIdSchema } from "./models.js";
+import { getSherpaOnnxModelSpec } from "./sherpa/model-catalog.js";
 import { applySherpaLoaderEnv } from "./sherpa/sherpa-runtime-env.js";
 import type {
   LocalSpeechWorkerConfig,
@@ -21,17 +23,28 @@ const modelsDir =
   process.env.BYSPACE_LOCAL_MODELS_DIR ??
   path.join(homedir(), ".byspace", "models", "local-speech");
 const shouldDownload = process.env.BYSPACE_SPEECH_E2E_DOWNLOAD === "1";
-const workerSpeechTest = hasParakeetModel(modelsDir) || shouldDownload ? test : test.skip;
+const testModel = LocalSttModelIdSchema.parse(
+  process.env.BYSPACE_SPEECH_E2E_MODEL ?? "fire-red-asr2-aed-int8",
+);
+const workerSpeechTest = hasModel(modelsDir, testModel) || shouldDownload ? test : test.skip;
 
-function hasParakeetModel(dir: string): boolean {
-  return (
-    existsSync(path.join(dir, "sherpa-onnx-nemo-parakeet-tdt-0.6b-v2-int8", "encoder.int8.onnx")) &&
-    existsSync(path.join(dir, "sherpa-onnx-nemo-parakeet-tdt-0.6b-v2-int8", "tokens.txt"))
-  );
+function hasModel(dir: string, modelId: typeof testModel): boolean {
+  const spec = getSherpaOnnxModelSpec(modelId);
+  return spec.requiredFiles.every((file) => existsSync(path.join(dir, spec.extractedDir, file)));
 }
 
 function fixturePath(fileName: string): string {
-  return path.resolve(process.cwd(), "..", "app", "e2e", "fixtures", fileName);
+  const repoRootFixture = path.resolve(
+    process.cwd(),
+    "packages",
+    "app",
+    "e2e",
+    "fixtures",
+    fileName,
+  );
+  return existsSync(repoRootFixture)
+    ? repoRootFixture
+    : path.resolve(process.cwd(), "..", "app", "e2e", "fixtures", fileName);
 }
 
 function resolveWorkerUrl(): URL {
@@ -75,10 +88,11 @@ function forkWorker(): ChildProcess {
 workerSpeechTest(
   "transcribes PCM through the real local speech worker process",
   async () => {
-    if (!hasParakeetModel(modelsDir)) {
-      await ensureSherpaOnnxModels({
+    if (!hasModel(modelsDir, testModel)) {
+      await ensureSherpaOnnxModel({
         modelsDir,
-        modelIds: ["parakeet-tdt-0.6b-v2-int8"],
+        modelId: testModel,
+        logger: pino({ level: "silent" }),
       });
     }
 
@@ -96,9 +110,7 @@ workerSpeechTest(
     try {
       const config: LocalSpeechWorkerConfig = {
         modelsDir,
-        voiceSttModel: "parakeet-tdt-0.6b-v2-int8",
-        dictationSttModel: "parakeet-tdt-0.6b-v2-int8",
-        voiceTtsModel: "kokoro-en-v0_19",
+        dictationSttModel: testModel,
       };
       const sessionId = randomUUID();
 
@@ -159,7 +171,7 @@ workerSpeechTest(
       }
     }
   },
-  120_000,
+  shouldDownload ? 20 * 60_000 : 120_000,
 );
 
 type RequestInput = LocalSpeechWorkerRequest extends infer Request

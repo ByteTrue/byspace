@@ -7,7 +7,6 @@ import { CLIENT_CAPS, type ClientCapability } from "@bytetrue/byspace-protocol/c
 import {
   serializeAgentStreamEvent,
   type AgentSnapshotPayload,
-  type AgentAttachment,
   type FirstAgentContext,
   type SessionInboundMessage,
   type SessionOutboundMessage,
@@ -21,6 +20,7 @@ import {
   type ProjectPlacementPayload,
   type WorkspaceSetupSnapshot,
   type WorkspaceDescriptorPayload,
+  type SpeechModelId,
 } from "./messages.js";
 import type {
   TerminalManager,
@@ -31,8 +31,7 @@ import type { TerminalActivity } from "@bytetrue/byspace-protocol/terminal-activ
 import type { BinaryFrame } from "@bytetrue/byspace-protocol/binary-frames/index";
 import { CursorError } from "./pagination/cursor.js";
 import { SortablePager, type SortSpec } from "./pagination/sortable-pager.js";
-import type { SpeechToTextProvider, TextToSpeechProvider } from "./speech/speech-provider.js";
-import type { TurnDetectionProvider } from "./speech/turn-detection-provider.js";
+import type { SpeechToTextProvider } from "./speech/speech-provider.js";
 import { isStoredAgentProviderAvailable, toAgentPersistenceHandle } from "./persistence-hooks.js";
 import { ensureAgentLoaded, ensureUnarchivedAgentLoaded } from "./agent/agent-loading.js";
 import {
@@ -46,7 +45,6 @@ import {
   resolveFirstAgentPromptTitle,
 } from "./agent/create-agent-title.js";
 import { respondToAgentPermission } from "./agent/permission-response.js";
-import type { VoiceCallerContext, VoiceSpeakHandler } from "./voice-types.js";
 import type { ScriptHealthState } from "./script-health-monitor.js";
 import { spawnWorkspaceScript } from "./worktree-bootstrap.js";
 import type { WorkspaceScriptRuntimeStore } from "./workspace-script-runtime-store.js";
@@ -105,7 +103,6 @@ import {
   getAgentStreamEventTurnId,
   type AgentPersistenceHandle,
   type AgentPermissionResponse,
-  type AgentRunOptions,
   type AgentSessionConfig,
 } from "./agent/agent-sdk-types.js";
 import type { StoredAgentRecord } from "./agent/agent-storage.js";
@@ -132,9 +129,7 @@ import {
   type WorkspaceMutation,
   type WorkspaceRegistry,
 } from "./workspace-registry.js";
-import { wrapSpokenInput } from "./voice-config.js";
-import { isVoicePermissionAllowed } from "./voice-permission-policy.js";
-import { VoiceSession } from "./session/voice/voice-session.js";
+import { DictationStreamManager } from "./dictation/dictation-stream-manager.js";
 import { CheckoutSession } from "./session/checkout/checkout-session.js";
 import {
   createWorkspaceGitObserverService,
@@ -465,9 +460,6 @@ export interface SessionOptions {
   workspaceAutoName: WorkspaceAutoName;
   daemonConfigStore: DaemonConfigStore;
   mcpBaseUrl?: string | null;
-  stt: Resolvable<SpeechToTextProvider | null>;
-  sttLanguage?: string;
-  tts: Resolvable<TextToSpeechProvider | null>;
   terminalManager: TerminalManager | null;
   providerSnapshotManager: ProviderSnapshotManager;
   providerUsageService: ProviderUsageService;
@@ -483,20 +475,30 @@ export interface SessionOptions {
   getDaemonTcpHost?: () => string | null;
   serviceProxyPublicBaseUrl?: string | null;
   resolveScriptHealth?: (hostname: string) => ScriptHealthState | null;
-  voice?: {
-    turnDetection?: Resolvable<TurnDetectionProvider | null>;
-  };
-  voiceBridge?: {
-    registerVoiceSpeakHandler?: (agentId: string, handler: VoiceSpeakHandler) => void;
-    unregisterVoiceSpeakHandler?: (agentId: string) => void;
-    registerVoiceCallerContext?: (agentId: string, context: VoiceCallerContext) => void;
-    unregisterVoiceCallerContext?: (agentId: string) => void;
-  };
   dictation?: {
     finalTimeoutMs?: number;
     stt?: Resolvable<SpeechToTextProvider | null>;
     sttLanguage?: string;
     getSpeechReadiness?: () => SpeechReadinessSnapshot;
+    listModels?: () => Promise<{
+      selectedModelId: SpeechModelId | null;
+      models: Array<{
+        id: SpeechModelId;
+        label: string;
+        description: string;
+        sizeBytes: number;
+        state: string;
+        error?: string;
+      }>;
+    }>;
+    downloadModel?: (modelId: SpeechModelId) => Promise<void>;
+    selectModel?: (modelId: SpeechModelId) => Promise<void>;
+    deleteModel?: (modelId: SpeechModelId) => Promise<void>;
+    refineTranscript?: (input: {
+      requestId: string;
+      text: string;
+      agentId: string;
+    }) => Promise<{ text: string; refined: boolean }>;
   };
   serverId?: string;
   daemonVersion?: string;
@@ -554,6 +556,14 @@ function describeRegistryTransition(record: ArchivedRecordSnapshot | null): Regi
     return "created";
   }
   return record.archivedAt ? "unarchived" : "existing";
+}
+
+function resolveDictationStreamOptions(dictation: SessionOptions["dictation"]) {
+  return {
+    stt: dictation?.stt ?? null,
+    language: dictation?.sttLanguage,
+    finalTimeoutMs: dictation?.finalTimeoutMs,
+  };
 }
 
 /**
@@ -632,7 +642,7 @@ export class Session {
   private readonly workspaceSetupSnapshots: Map<string, WorkspaceSetupSnapshot>;
   private readonly workspaceGitObserver: WorkspaceGitObserverService;
   private readonly workspaceDirectory: WorkspaceDirectory;
-  private readonly voiceSession: VoiceSession;
+  private readonly dictationStreamManager: DictationStreamManager;
   private readonly checkoutSession: CheckoutSession;
   private readonly chatScheduleLoopSession: ChatScheduleLoopSession;
   private readonly providerCatalogSession: ProviderCatalogSession;
@@ -643,6 +653,7 @@ export class Session {
   private readonly workspaceScripts: WorkspaceScriptsService;
   private readonly createAgentLifecycleDispatch: CreateAgentLifecycleDispatch;
   private readonly serverId: string;
+  private readonly dictationOptions: SessionOptions["dictation"];
 
   constructor(options: SessionOptions) {
     const {
@@ -675,9 +686,6 @@ export class Session {
       workspaceGitService,
       workspaceAutoName,
       daemonConfigStore,
-      stt,
-      sttLanguage,
-      tts,
       terminalManager,
       providerSnapshotManager,
       providerUsageService,
@@ -689,8 +697,6 @@ export class Session {
       getDaemonTcpHost,
       serviceProxyPublicBaseUrl,
       resolveScriptHealth,
-      voice,
-      voiceBridge,
       dictation,
       serverId,
       daemonVersion,
@@ -699,6 +705,7 @@ export class Session {
     } = options;
     this.clientId = clientId;
     this.serverId = serverId ?? "unknown";
+    this.dictationOptions = dictation;
     this.appVersion = appVersion ?? null;
     this.clientCapabilities = parseClientCapabilities(clientCapabilities);
     this.sessionId = uuidv4();
@@ -959,39 +966,14 @@ export class Session {
       buildWorkspaceDescriptor: (input) => this.buildWorkspaceDescriptor(input),
     });
 
-    this.voiceSession = new VoiceSession({
-      host: {
-        emit: (msg) => this.emit(msg),
-        loadAgent: (agentId) =>
-          ensureUnarchivedAgentLoaded(agentId, {
-            agentManager: this.agentManager,
-            agentStorage: this.agentStorage,
-            logger: this.sessionLogger,
-          }),
-        reloadAgentSession: (agentId, overrides) =>
-          this.agentManager.reloadAgentSession(agentId, overrides),
-        sendSpokenInput: async (agentId, text) => {
-          await this.handleSendAgentMessage(
-            agentId,
-            text,
-            undefined,
-            undefined,
-            undefined,
-            undefined,
-            { spokenInput: true },
-          );
-        },
-        interruptAgentIfRunning: (agentId) => this.interruptAgentIfRunning(agentId),
-        hasActiveAgentRun: (agentId) => this.hasActiveAgentRun(agentId),
-      },
+    const dictationStream = resolveDictationStreamOptions(dictation);
+    this.dictationStreamManager = new DictationStreamManager({
       logger: this.sessionLogger,
       sessionId: this.sessionId,
-      sttLanguage,
-      tts,
-      stt,
-      voice,
-      voiceBridge,
-      dictation,
+      emit: (msg) => this.emit(msg as SessionOutboundMessage),
+      stt: dictationStream.stt,
+      language: dictationStream.language,
+      finalTimeoutMs: dictationStream.finalTimeoutMs,
     });
 
     this.subscribeToAgentEvents();
@@ -1310,13 +1292,6 @@ export class Session {
     }
   }
 
-  private hasActiveAgentRun(agentId: string | null): boolean {
-    if (!agentId) {
-      return false;
-    }
-    return this.agentManager.hasInFlightRun(agentId);
-  }
-
   private handleAgentRunError(agentId: string, error: unknown, context: string): void {
     const message = errorToFriendlyMessage(error);
     this.sessionLogger.error({ err: error, agentId, context }, `${context} for agent ${agentId}`);
@@ -1561,28 +1536,6 @@ export class Session {
           return;
         }
 
-        if (
-          this.voiceSession.isActiveForAgent(event.agentId) &&
-          event.event.type === "permission_requested" &&
-          isVoicePermissionAllowed(event.event.request)
-        ) {
-          const requestId = event.event.request.id;
-          void this.agentManager
-            .respondToPermission(event.agentId, requestId, {
-              behavior: "allow",
-            })
-            .catch((error) => {
-              this.sessionLogger.warn(
-                {
-                  err: error,
-                  agentId: event.agentId,
-                  requestId,
-                },
-                "Failed to auto-allow speak tool permission in voice mode",
-              );
-            });
-        }
-
         const serializedEvent = serializeAgentStreamEvent(event.event);
         if (!serializedEvent) {
           return;
@@ -1758,6 +1711,7 @@ export class Session {
 
   private async dispatchInboundMessage(msg: SessionInboundMessage, source?: object): Promise<void> {
     const promise =
+      this.dispatchSpeechModelMessage(msg) ??
       this.dispatchVoiceAndControlMessage(msg) ??
       this.dispatchAgentRewindMessage(msg) ??
       this.dispatchAgentRelationshipMessage(msg) ??
@@ -1777,28 +1731,39 @@ export class Session {
 
   private dispatchVoiceAndControlMessage(msg: SessionInboundMessage): Promise<void> | undefined {
     switch (msg.type) {
+      // COMPAT(voiceModeRemoval): added in v0.5.0, remove after 2027-02-04.
+      // Old clients may still send these messages; accept them without reviving voice mode.
       case "voice_audio_chunk":
-        return this.voiceSession.handleAudioChunk(msg);
       case "abort_request":
-        return this.voiceSession.handleAbort();
       case "audio_played":
-        this.voiceSession.handleAudioPlayed(msg.id);
         return undefined;
       case "set_voice_mode":
-        return this.voiceSession.handleSetVoiceMode(msg.enabled, msg.agentId, msg.requestId);
+        if (msg.requestId) {
+          this.emit({
+            type: "set_voice_mode_response",
+            payload: {
+              requestId: msg.requestId,
+              enabled: false,
+              agentId: msg.agentId ?? null,
+              accepted: !msg.enabled,
+              error: msg.enabled ? "Voice mode has been removed" : null,
+            },
+          });
+        }
+        return undefined;
       case "dictation_stream_start":
-        return this.voiceSession.handleDictationStreamStart(msg);
+        return this.dictationStreamManager.handleStart(msg.dictationId, msg.format);
       case "dictation_stream_chunk":
-        return this.voiceSession.handleDictationChunk({
+        return this.dictationStreamManager.handleChunk({
           dictationId: msg.dictationId,
           seq: msg.seq,
           audioBase64: msg.audio,
           format: msg.format,
         });
       case "dictation_stream_finish":
-        return this.voiceSession.handleDictationFinish(msg.dictationId, msg.finalSeq);
+        return this.dictationStreamManager.handleFinish(msg.dictationId, msg.finalSeq);
       case "dictation_stream_cancel":
-        this.voiceSession.handleDictationCancel(msg.dictationId);
+        this.dictationStreamManager.handleCancel(msg.dictationId);
         return undefined;
       case "restart_server_request":
         return this.handleRestartServerRequest(msg.requestId, msg.reason);
@@ -1823,6 +1788,103 @@ export class Session {
       default:
         return undefined;
     }
+  }
+
+  private dispatchSpeechModelMessage(msg: SessionInboundMessage): Promise<void> | undefined {
+    switch (msg.type) {
+      case "speech.models.list.request":
+        return this.handleSpeechModelsList(msg.requestId);
+      case "speech.models.download.request":
+        return this.handleSpeechModelAction(
+          "speech.models.download.response",
+          msg.requestId,
+          msg.modelId,
+          this.dictationOptions?.downloadModel,
+        );
+      case "speech.models.select.request":
+        return this.handleSpeechModelAction(
+          "speech.models.select.response",
+          msg.requestId,
+          msg.modelId,
+          this.dictationOptions?.selectModel,
+        );
+      case "speech.models.delete.request":
+        return this.handleSpeechModelAction(
+          "speech.models.delete.response",
+          msg.requestId,
+          msg.modelId,
+          this.dictationOptions?.deleteModel,
+        );
+      case "speech.dictation.refine.request":
+        return this.handleDictationRefine(msg.requestId, msg.text, msg.agentId);
+      default:
+        return undefined;
+    }
+  }
+
+  private async handleSpeechModelsList(requestId: string): Promise<void> {
+    try {
+      const result = await this.dictationOptions?.listModels?.();
+      if (!result) throw new Error("Speech model selection is unavailable");
+      this.emit({
+        type: "speech.models.list.response",
+        payload: { requestId, ...result },
+      });
+    } catch (error) {
+      this.sessionLogger.warn({ err: error }, "Failed to list speech models");
+      this.emit({
+        type: "speech.models.list.response",
+        payload: {
+          requestId,
+          selectedModelId: null,
+          models: [],
+          error: error instanceof Error ? error.message : String(error),
+        },
+      });
+    }
+  }
+
+  private async handleSpeechModelAction(
+    type:
+      | "speech.models.download.response"
+      | "speech.models.select.response"
+      | "speech.models.delete.response",
+    requestId: string,
+    modelId: SpeechModelId,
+    action: ((modelId: SpeechModelId) => Promise<void>) | undefined,
+  ): Promise<void> {
+    try {
+      if (!action) throw new Error("Speech model selection is unavailable");
+      await action(modelId);
+      this.emit({ type, payload: { requestId, modelId, accepted: true } });
+    } catch (error) {
+      this.emit({
+        type,
+        payload: {
+          requestId,
+          modelId,
+          accepted: false,
+          error: error instanceof Error ? error.message : String(error),
+        },
+      });
+    }
+  }
+
+  private async handleDictationRefine(
+    requestId: string,
+    text: string,
+    agentId: string,
+  ): Promise<void> {
+    const result = await this.dictationOptions
+      ?.refineTranscript?.({ requestId, text, agentId })
+      .catch((error) => {
+        this.sessionLogger.warn({ err: error, agentId }, "Dictation transcript refinement failed");
+        return { text, refined: false };
+      });
+    this.emit({
+      type: "speech.dictation.refine.response",
+      payload: { requestId, ...(result ?? { text, refined: false }) },
+    });
   }
 
   private dispatchAgentRewindMessage(msg: SessionInboundMessage): Promise<void> | undefined {
@@ -2897,57 +2959,6 @@ export class Session {
           error: message,
         },
       });
-    }
-  }
-
-  /**
-   * Handle text message to agent (with optional image attachments)
-   */
-  private async handleSendAgentMessage(
-    agentId: string,
-    text: string,
-    messageId?: string,
-    images?: Array<{ data: string; mimeType: string }>,
-    attachments?: AgentAttachment[],
-    runOptions?: AgentRunOptions,
-    options?: { spokenInput?: boolean },
-  ): Promise<{ ok: true } | { ok: false; error: string }> {
-    this.sessionLogger.info(
-      {
-        agentId,
-        textPreview: text.substring(0, 50),
-        imageCount: images?.length ?? 0,
-        attachmentCount: attachments?.length ?? 0,
-      },
-      `Sending text to agent ${agentId}${
-        images && images.length > 0 ? ` with ${images.length} image attachment(s)` : ""
-      }${
-        attachments && attachments.length > 0
-          ? ` and ${attachments.length} structured attachment(s)`
-          : ""
-      }`,
-    );
-
-    const promptText = options?.spokenInput ? wrapSpokenInput(text) : text;
-    const prompt = buildAgentPrompt(promptText, images, attachments);
-
-    try {
-      await sendPromptToAgent({
-        agentManager: this.agentManager,
-        agentStorage: this.agentStorage,
-        agentId,
-        prompt,
-        messageId,
-        runOptions,
-        logger: this.sessionLogger,
-      });
-      return { ok: true };
-    } catch (error) {
-      this.handleAgentRunError(agentId, error, "Failed to send agent message");
-      return {
-        ok: false,
-        error: error instanceof Error ? error.message : String(error),
-      };
     }
   }
 
@@ -6704,7 +6715,7 @@ export class Session {
     }
     this.providerCatalogSession.dispose();
 
-    await this.voiceSession.cleanup();
+    this.dictationStreamManager.cleanupAll();
 
     this.terminalController.dispose();
 

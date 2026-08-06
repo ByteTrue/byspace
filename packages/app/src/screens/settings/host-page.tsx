@@ -35,6 +35,7 @@ import { OtherTerminalProfilesSection } from "@/screens/settings/provider-termin
 import { ProviderUsageSettingsSection } from "@/provider-usage/settings-section";
 import { useProviderUsage } from "@/provider-usage/use-provider-usage";
 import { SettingsSection } from "@/screens/settings/settings-section";
+import { HostDictationSettings } from "@/screens/settings/host-dictation-settings";
 import { useSessionStore } from "@/stores/session-store";
 import { settingsStyles } from "@/styles/settings";
 import type { HostConnection, HostProfile } from "@/types/host-connection";
@@ -304,6 +305,10 @@ export function HostSettingsPage({
       <RemoveHostSection host={host} onRemoved={onHostRemoved} />
     </View>
   );
+}
+
+export function HostDictationPage({ serverId }: { serverId: string }) {
+  return <HostDictationSettings serverId={serverId} />;
 }
 
 export function HostRenameButton({ host }: { host: HostProfile }) {

@@ -17,7 +17,6 @@ Session shrinks to a connection/dispatch shell: it keeps `handleMessage`, the `?
 
 The first carves shipped as **deep modules with a narrow Host seam**, not the `dispatch(msg)`-owned-set controllers sketched below: `session.ts` keeps each `dispatchXMessage` switch and delegates per case to the subsystem. Home convention that emerged: session subsystems live at **`session/<domain>/`**, with `session.ts` as the orchestrator shell.
 
-- **#1640 — VoiceSession** (`session/voice/voice-session.ts`, seam `VoiceSessionHost`): the STT/TTS/dictation/turn-detection subsystem. _(Originally landed at `server/voice/`; relocated under `session/` so all session subsystems share one home.)_
 - **#1644 — CheckoutSession, read side** (`session/checkout/checkout-session.ts`, seam `CheckoutSessionHost`, port `CheckoutDiffSubscriber`): status, branch validate/suggest, diff subscribe/unsubscribe, manual refresh. The workspace-git observer already delegates `emitStatusUpdate`/`scheduleDiffRefresh` to it.
 
 **Next carve — CheckoutSession mutation side (Slice 4 below).** The 17 checkout _write_ handlers still inline in `session.ts` (`dispatchCheckoutMessage`, ~2010) — branch switch/rename, commit, merge, merge-from-base, pull, push, PR create/merge, github set-auto-merge/get-check-details, PR status, PR timeline, github search, stash save/pop/list — move into the existing `session/checkout/checkout-session.ts` behind `CheckoutSessionHost`. The Slice-3 observer entanglement the table fears is already resolved: #1644 moved the status/diff read side into CheckoutSession, so the workspace observer delegates today and this no longer blocks on the WorkspaceController split.
@@ -26,11 +25,11 @@ The first carves shipped as **deep modules with a narrow Host seam**, not the `d
 
 `dispatchInboundMessage` builds `a() ?? b() ?? ... ?? dispatchMiscMessage()` and short-circuits on the first non-`undefined` **Promise object** (not its resolved value). Message-type spaces are **disjoint** (no duplicate `case` labels across switches), so at most one dispatcher matches any message — collapsing to delegation cannot change which handler runs. `dispatchTerminalMessage` (2150-2153) already proves this. Two quirks preserved verbatim: schedule/\* is reached via the chat dispatcher's OWN `default` arm (2183), not the top-level `??`; and `start_workspace_script_request` (a workspace type) is special-cased before terminal delegation (2150).
 
-Rejected alternatives: **feature-module** (free functions + wide context bag) cannot own the live state machines (workspaceUpdatesSubscription, agentUpdatesSubscription, ~25 voice fields) and adds a competing idiom; **mixin-composition** preserves the shared-`this` god object verbatim and requires widening ~325 private fields to protected.
+Rejected alternatives: **feature-module** (free functions + wide context bag) cannot own the live state machines (workspaceUpdatesSubscription and agentUpdatesSubscription) and adds a competing idiom; **mixin-composition** preserves the shared-`this` god object verbatim and requires widening ~325 private fields to protected.
 
 ## Slice ordering (least-coupled first)
 
-The task recommended **git/checkout as the first slice — OVERRIDDEN.** Verification: `emitCheckoutStatusUpdate` is called from exactly ONE site (session.ts:4915), inside the workspace-owned `syncWorkspaceGitObserver` callback that ALSO fires workspace effects over shared watch-target maps. Extracting checkout first forces splitting the hardest workspace/git seam before workspace is touched. The strictly safer first cuts are **chat-schedule-loop** (only knot: `handleChatPostRequest`; touches no shared observer/git/voice state) and **provider-catalog** (one shared collaborator + injected predicates).
+The task recommended **git/checkout as the first slice — OVERRIDDEN.** Verification: `emitCheckoutStatusUpdate` is called from exactly ONE site (session.ts:4915), inside the workspace-owned `syncWorkspaceGitObserver` callback that ALSO fires workspace effects over shared watch-target maps. Extracting checkout first forces splitting the hardest workspace/git seam before workspace is touched. The strictly safer first cuts are **chat-schedule-loop** (only knot: `handleChatPostRequest`; touches no shared observer/git state) and **provider-catalog** (one shared collaborator + injected predicates).
 
 | #   | Slice                                                                         | Effort | Risk   |
 | --- | ----------------------------------------------------------------------------- | ------ | ------ |
@@ -40,10 +39,8 @@ The task recommended **git/checkout as the first slice — OVERRIDDEN.** Verific
 | 3   | Split shared workspace-git observer + agent-subscribe fan-out (no controller) | M      | high   |
 | 4   | GitCheckoutController                                                         | L      | medium |
 | 5   | WorkspaceController                                                           | XL     | high   |
-| 6   | Voice prereqs: emit() purity + abortController ownership                      | M      | high   |
-| 7   | VoiceSessionController                                                        | XL     | high   |
-| 8a  | Agent-lifecycle config setters                                                | M      | medium |
-| 8b  | AgentLifecycleController                                                      | XL     | high   |
+| 6a  | Agent-lifecycle config setters                                                | M      | medium |
+| 6b  | AgentLifecycleController                                                      | XL     | high   |
 
 ---
 
@@ -90,9 +87,9 @@ Write RED-then-GREEN against the **current in-place** Session:
 In-place refactor on the shell, two named fan-outs:
 
 1. **workspace-git observer** (4910-4917): make `emitCheckoutStatusUpdate` and `onBranchChanged` injectable callbacks; keep `workspaceGitWatchTargets`/`workspaceGitSubscriptions` shared by reference.
-2. **agentManager.subscribe callback** (~1298): refactor into `{ onAgentUpdate, shouldAutoAllowVoicePermission(event), onStreamEvent }`.
+2. **agentManager.subscribe callback** (~1298): refactor into `{ onAgentUpdate, onStreamEvent }`.
 
-**Behavior note:** the single hardest seam, split exactly once before the two domains that co-own it. The observer fires BOTH workspace (`handleWorkspaceGitBranchSnapshot`, `emitWorkspaceUpdateForCwd`) and checkout (`emitCheckoutStatusUpdate`) effects; the agent-subscribe callback is invoked by agent EVENTS (not the `??` chain) and does lifecycle + voice work. Add a test asserting BOTH a `workspace_update` and a `checkout_status_update` fire from one simulated git snapshot change, and a voice-permission test for the auto-allow path. **Tests:** `session.workspace-git-watch.test.ts`, `session.workspaces.test.ts`, `voice-permission-policy.test.ts`, `session.test.ts`.
+**Behavior note:** the single hardest seam, split exactly once before the two domains that co-own it. The observer fires BOTH workspace (`handleWorkspaceGitBranchSnapshot`, `emitWorkspaceUpdateForCwd`) and checkout (`emitCheckoutStatusUpdate`) effects; the agent-subscribe callback is invoked by agent EVENTS (not the `??` chain) and does lifecycle work. Add a test asserting BOTH a `workspace_update` and a `checkout_status_update` fire from one simulated git snapshot change. **Tests:** `session.workspace-git-watch.test.ts`, `session.workspaces.test.ts`, `session.test.ts`.
 
 ---
 
@@ -114,31 +111,11 @@ In-place refactor on the shell, two named fan-outs:
 
 **Behavior note:** the workspaceUpdatesSubscription machine moves WHOLE. The eight already-public workspace methods stay a public surface re-exposed via the shell. Re-homes are atomic remove-from-old-dispatcher + add-to-new-owned-set. **Tests:** `session.workspaces.test.ts`, `session.workspace-git-watch.test.ts`, `session.workspace-resolution-invariants.test.ts`, `session.test.ts`.
 
----
-
-## Slice 6 — Voice prerequisites (emit purity + abort ownership)
-
-In-place, separately reviewable. Split the `audio_output` TTS-debug branch out of `emit()` (8421-8468, bypasses to `onMessage` at 8454) so `emit` is a pure trace+onMessage sink. Move `convertPCMToWavBuffer` (674-701) to `speech/audio.ts`. Decide abortController ownership.
-
-**Behavior note:** TTS-debug split and abortController ownership are the SAME decision (`ttsDebugStreams.clear()` is tied to `createAbortController` reassignment at 8359). Keep `emit` (with the universal trace) on the shell and inject it everywhere — no trace-less emit. Do NOT inject the AbortController by value. Add: a TTS-debug persistence test (with the debug env flag) before the move, and a barge-in→cleanup regression test asserting the NEW run's signal is aborted. **Tests:** `voice-roundtrip.e2e.test.ts`, `voice-permission-policy.test.ts`, `session.test.ts`.
-
----
-
-## Slice 7 — VoiceSessionController (XL)
-
-**Move:** voice handlers + ~25 voice fields + the TTS-debug hook (Slice 6) + `voiceModeAgentId`/`isVoiceMode` + the `shouldAutoAllowVoicePermission` predicate (Slice 3) → the existing `packages/server/src/server/session/voice/voice-session.ts` (see Progress above). Carve voice types out of `dispatchVoiceAndControlMessage`, leaving infra (restart/shutdown/heartbeat/ping/abort) on the shell.
-
-**SessionContext surface:** pure `emit`, `emitBinary`, `hasBinaryChannel`, `sessionLogger`/`sessionId`/`byspaceHome`, `getSpeechReadiness`, agent-control port `{ loadAgent, reloadWithSystemPrompt, interruptIfRunning, isRunning, sendSpokenText, buildAgentPrompt }`, `getSignal`/`abortCurrent` (Slice 6).
-
-**Behavior note:** depends on Slices 3 + 6. `cleanup()` stays the ordered orchestrator and calls `voiceController.dispose()` at the position the inlined voice teardown occupies today (8505-8525). **Tests:** `voice-roundtrip.e2e.test.ts`, `voice-local-agent.e2e.test.ts`, `session.voice-mcp-config.test.ts`, `session.test.ts`.
-
----
-
-## Slice 8a — Agent-lifecycle config setters
+## Slice 6a — Agent-lifecycle config setters
 
 Parameterize the 4 setter envelopes `handleSetAgentMode/Model/Feature/Thinking` (4209-4390) into one helper; re-home `handleListCommandsRequest` (misfiled in `dispatchMiscMessage`). Add a handleMessage-driven **failure** test per setter (force the command to reject, assert both the `*_response{accepted:false}` AND the `activity_log` error frame in order) BEFORE collapsing. **Tests:** `session.test.ts`, `session.lifecycle-boundary.test.ts`.
 
-## Slice 8b — AgentLifecycleController (XL, LAST)
+## Slice 6b — AgentLifecycleController (XL, LAST)
 
 **Move:** remaining lifecycle handlers + the `agentUpdatesSubscription` fan-out (`bufferOrEmitAgentUpdate`, `flushBootstrappedAgentUpdates`, `matchesAgentFilter`, `forwardAgentUpdate`) → `packages/server/src/server/agent/agent-lifecycle-controller.ts`. Collapse the three lifecycle dispatchers.
 

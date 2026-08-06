@@ -15,6 +15,7 @@ import {
 import { createTestBySpaceDaemon } from "./test-utils/byspace-daemon.js";
 import { getFullAccessConfig, getAskModeConfig } from "./daemon-e2e/agent-configs.js";
 import { parsePcm16MonoWav, wordSimilarity } from "./test-utils/dictation-e2e.js";
+import { getSherpaOnnxModelDir } from "./speech/providers/local/sherpa/model-downloader.js";
 import type {
   AgentClient,
   AgentPersistenceHandle,
@@ -23,8 +24,6 @@ import type {
   AgentSessionConfig,
   AgentStreamEvent,
 } from "./agent/agent-sdk-types.js";
-
-const openaiApiKey = process.env.OPENAI_API_KEY ?? null;
 
 const localModelsDir =
   process.env.BYSPACE_LOCAL_MODELS_DIR ??
@@ -40,27 +39,11 @@ async function readFixture(fileName: string): Promise<Buffer> {
   return readFile(fixturePath(fileName));
 }
 
-function hasSherpaParakeetModels(modelsDir: string): boolean {
-  return (
-    existsSync(
-      path.join(modelsDir, "sherpa-onnx-nemo-parakeet-tdt-0.6b-v2-int8", "encoder.int8.onnx"),
-    ) &&
-    existsSync(path.join(modelsDir, "sherpa-onnx-nemo-parakeet-tdt-0.6b-v2-int8", "tokens.txt"))
-  );
-}
-
-function hasSherpaKokoroModels(modelsDir: string): boolean {
-  return (
-    existsSync(path.join(modelsDir, "kokoro-en-v0_19", "model.onnx")) &&
-    existsSync(path.join(modelsDir, "kokoro-en-v0_19", "voices.bin")) &&
-    existsSync(path.join(modelsDir, "kokoro-en-v0_19", "tokens.txt"))
-  );
-}
-
-const hasLocalSpeech =
-  hasSherpaParakeetModels(localModelsDir) && hasSherpaKokoroModels(localModelsDir);
-const hasAnySpeech = hasLocalSpeech || Boolean(openaiApiKey);
-const speechTest = hasAnySpeech ? test : test.skip;
+const localSpeechModelDir = getSherpaOnnxModelDir(localModelsDir, "fire-red-asr2-aed-int8");
+const hasLocalSpeech = ["encoder.int8.onnx", "decoder.int8.onnx", "tokens.txt"].every((file) =>
+  existsSync(path.join(localSpeechModelDir, file)),
+);
+const speechTest = hasLocalSpeech ? test : test.skip;
 
 function tmpCwd(): string {
   return mkdtempSync(path.join(tmpdir(), "daemon-client-"));
@@ -578,34 +561,15 @@ class FailingResumeClient extends NonPersistentReloadClient {
 }
 
 function resolveSpeechConfig() {
-  if (hasLocalSpeech) {
-    return {
-      providers: {
-        dictationStt: { provider: "local" as const, explicit: true },
-        voiceStt: { provider: "local" as const, explicit: true },
-        voiceTts: { provider: "local" as const, explicit: true },
-      },
-      local: {
-        modelsDir: localModelsDir,
-        models: {
-          dictationStt: "parakeet-tdt-0.6b-v2-int8",
-          voiceStt: "parakeet-tdt-0.6b-v2-int8",
-          voiceTts: "kokoro-en-v0_19",
-          voiceTtsSpeakerId: 0,
-        },
-      },
-    };
-  }
-  if (openaiApiKey) {
-    return {
-      providers: {
-        dictationStt: { provider: "openai" as const, explicit: true },
-        voiceStt: { provider: "openai" as const, explicit: true },
-        voiceTts: { provider: "openai" as const, explicit: true },
-      },
-    };
-  }
-  return undefined;
+  if (!hasLocalSpeech) return undefined;
+  return {
+    enabled: true,
+    sttLanguage: "auto",
+    local: {
+      modelsDir: localModelsDir,
+      models: { dictationStt: "fire-red-asr2-aed-int8" as const },
+    },
+  };
 }
 
 let ctx: DaemonTestContext;
@@ -615,9 +579,6 @@ beforeAll(async () => {
 
   ctx = await createDaemonTestContext({
     dictationFinalTimeoutMs: 5000,
-    ...(openaiApiKey
-      ? { openai: { stt: { apiKey: openaiApiKey }, tts: { apiKey: openaiApiKey } } }
-      : {}),
     ...(speechConfig ? { speech: speechConfig } : {}),
   });
 }, 60000);
@@ -633,24 +594,11 @@ test("handles session actions", async () => {
   expect(Array.isArray(agents.entries)).toBe(true);
 
   const cwd = tmpCwd();
-  const created = await ctx.client.createAgent({
+  await ctx.client.createAgent({
     config: {
       ...getFullAccessConfig("codex"),
       cwd,
     },
-  });
-
-  await expect(ctx.client.setVoiceMode(true, created.id)).resolves.toMatchObject({
-    enabled: true,
-    agentId: created.id,
-    accepted: true,
-    error: null,
-  });
-  await expect(ctx.client.setVoiceMode(false)).resolves.toMatchObject({
-    enabled: false,
-    agentId: null,
-    accepted: true,
-    error: null,
   });
 
   await ctx.client.deleteAgent(randomUUID());
@@ -1015,15 +963,12 @@ test("receives server_info on websocket connect", async () => {
   await client.close();
 }, 15000);
 
-test("emits disabled voice capability reasons on fresh daemon startup", async () => {
+test("emits disabled dictation and removed voice capability reasons", async () => {
   const isolatedCtx = await createDaemonTestContext({
     speech: {
-      providers: {
-        dictationStt: { provider: "local", explicit: true, enabled: false },
-        voiceTurnDetection: { provider: "local", explicit: true, enabled: false },
-        voiceStt: { provider: "local", explicit: true, enabled: false },
-        voiceTts: { provider: "local", explicit: true, enabled: false },
-      },
+      enabled: false,
+      sttLanguage: "auto",
+      local: { modelsDir: "/tmp/unused", models: { dictationStt: null } },
     },
   });
 
@@ -1042,7 +987,7 @@ test("emits disabled voice capability reasons on fresh daemon startup", async ()
     expect(voice?.dictation.enabled).toBe(false);
     expect(voice?.dictation.reason).toBe("Dictation is disabled in daemon config.");
     expect(voice?.voice.enabled).toBe(false);
-    expect(voice?.voice.reason).toBe("Realtime voice is disabled in daemon config.");
+    expect(voice?.voice.reason).toBe("Voice mode has been removed.");
   } finally {
     await client.close().catch(() => undefined);
     await isolatedCtx.cleanup();
@@ -1244,10 +1189,6 @@ test("creates agent and exercises lifecycle", async () => {
   expect(sawAssistantMessage).toBe(true);
   expect(sawRawAssistantMessage).toBe(true);
 
-  await ctx.client.setVoiceMode(false);
-
-  await ctx.client.abortRequest();
-  await ctx.client.audioPlayed("audio-1");
   ctx.client.clearAgentAttention(agent.id);
   await ctx.client.cancelAgent(agent.id);
 
@@ -1430,160 +1371,6 @@ test("exposes raw session events for reachable screens", async () => {
   await ctx.client.deleteAgent(agent.id);
   rmSync(cwd, { recursive: true, force: true });
 }, 120000);
-
-speechTest(
-  "does not process non-voice audio through the voice agent path",
-  async () => {
-    await ctx.client.setVoiceMode(false);
-
-    let sawTranscriptLog = false;
-    let sawAssistantChunk = false;
-    let sawAssistantLog = false;
-
-    const transcriptSeen = waitForSignal(60000, (resolve) => {
-      const unsubscribeChunk = ctx.client.on("assistant_chunk", (message) => {
-        if (message.type !== "assistant_chunk") {
-          return;
-        }
-        if (message.payload.chunk.length > 0) {
-          sawAssistantChunk = true;
-        }
-      });
-
-      const unsubscribeActivity = ctx.client.on("activity_log", (message) => {
-        if (message.type !== "activity_log") {
-          return;
-        }
-        if (message.payload.type === "transcript") {
-          sawTranscriptLog = true;
-          resolve();
-        }
-        if (message.payload.type === "assistant") {
-          sawAssistantLog = true;
-        }
-      });
-
-      return () => {
-        unsubscribeChunk();
-        unsubscribeActivity();
-      };
-    });
-
-    const wav = await readFixture("recording.wav");
-    await ctx.client.sendVoiceAudioChunk(wav.toString("base64"), "audio/wav", true);
-    await transcriptSeen;
-    await new Promise((resolve) => setTimeout(resolve, 1500));
-
-    expect(sawTranscriptLog).toBe(true);
-    expect(sawAssistantChunk).toBe(false);
-    expect(sawAssistantLog).toBe(false);
-  },
-  90000,
-);
-
-speechTest(
-  "voice mode buffers audio until isLast and emits transcription_result",
-  async () => {
-    const voiceCwd = tmpCwd();
-    const voiceAgent = await ctx.client.createAgent({
-      config: {
-        ...getFullAccessConfig("codex"),
-        cwd: voiceCwd,
-      },
-    });
-    await ctx.client.setVoiceMode(true, voiceAgent.id);
-
-    const transcription = waitForSignal(30_000, (resolve) => {
-      const unsubscribe = ctx.client.on("transcription_result", (message) => {
-        if (message.type !== "transcription_result") {
-          return;
-        }
-        resolve(message.payload);
-      });
-      return unsubscribe;
-    });
-
-    const errorSignal = waitForSignal(30_000, (resolve) => {
-      const unsubscribeStatus = ctx.client.on("status", (message) => {
-        if (message.type !== "status") {
-          return;
-        }
-        if (message.payload.status !== "error") {
-          return;
-        }
-        resolve(`status:error ${message.payload.message}`);
-      });
-
-      const unsubscribeLog = ctx.client.on("activity_log", (message) => {
-        if (message.type !== "activity_log") {
-          return;
-        }
-        if (message.payload.type !== "error") {
-          return;
-        }
-        resolve(`activity_log:error ${message.payload.content}`);
-      });
-
-      return () => {
-        unsubscribeStatus();
-        unsubscribeLog();
-      };
-    });
-
-    try {
-      const wav = await readFixture("recording.wav");
-      const { sampleRate, pcm16 } = parsePcm16MonoWav(wav);
-      expect(sampleRate).toBe(16000);
-      const format = "audio/pcm;rate=16000;bits=16";
-
-      const earlyTranscription = waitForSignal(1000, (resolve) => {
-        const unsubscribe = ctx.client.on("transcription_result", (message) => {
-          if (message.type !== "transcription_result") {
-            return;
-          }
-          resolve(message.payload.text);
-        });
-        return unsubscribe;
-      });
-
-      const chunkBytes = 3200; // 100ms @ 16kHz mono PCM16
-      const firstChunk = pcm16.subarray(0, Math.min(chunkBytes, pcm16.length));
-      await ctx.client.sendVoiceAudioChunk(firstChunk.toString("base64"), format, false);
-      await earlyTranscription
-        .then(() => {
-          throw new Error("Expected no transcription_result before isLast=true");
-        })
-        .catch(() => {});
-
-      for (let offset = chunkBytes; offset < pcm16.length; offset += chunkBytes) {
-        const chunk = pcm16.subarray(offset, Math.min(pcm16.length, offset + chunkBytes));
-        const isLast = offset + chunkBytes >= pcm16.length;
-        await ctx.client.sendVoiceAudioChunk(chunk.toString("base64"), format, isLast);
-      }
-
-      const outcome = await Promise.race([
-        transcription.then((payload) => ({ kind: "ok" as const, payload })),
-        errorSignal.then((error) => ({ kind: "error" as const, error })),
-      ]);
-
-      if (outcome.kind === "error") {
-        throw new Error(outcome.error);
-      }
-
-      expect(typeof outcome.payload.text).toBe("string");
-      if (outcome.payload.text.trim().length > 0) {
-        expect(outcome.payload.text.toLowerCase()).toContain("voice note");
-      } else {
-        expect(outcome.payload.isLowConfidence).toBe(true);
-      }
-    } finally {
-      await Promise.allSettled([transcription, errorSignal]);
-      await ctx.client.setVoiceMode(false);
-      rmSync(voiceCwd, { recursive: true, force: true });
-    }
-  },
-  90_000,
-);
 
 speechTest(
   "streams dictation PCM and returns final transcript",

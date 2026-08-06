@@ -51,22 +51,6 @@ const LogConfigSchema = z
   })
   .strict();
 
-const OpenAiSpeechEndpointSchema = z
-  .object({
-    apiKey: z.string().trim().min(1).optional(),
-    baseUrl: z.string().trim().min(1).optional(),
-  })
-  .strict();
-
-const OpenAiProviderSchema = z
-  .object({
-    apiKey: z.string().min(1).optional(),
-    baseUrl: z.string().trim().min(1).optional(),
-    stt: OpenAiSpeechEndpointSchema.optional(),
-    tts: OpenAiSpeechEndpointSchema.optional(),
-  })
-  .strict();
-
 const LocalSpeechProviderSchema = z
   .object({
     modelsDir: z.string().min(1).optional(),
@@ -75,7 +59,6 @@ const LocalSpeechProviderSchema = z
 
 const ProvidersSchema = z
   .object({
-    openai: OpenAiProviderSchema.optional(),
     local: LocalSpeechProviderSchema.optional(),
   })
   .strict();
@@ -96,59 +79,13 @@ const DaemonAuthSchema = z
     password: BcryptHashSchema.optional(),
   })
   .strict();
-
-const SpeechProviderIdSchema = z
-  .string()
-  .trim()
-  .toLowerCase()
-  .pipe(z.enum(["openai", "local"]));
-
 const FeatureDictationSchema = z
   .object({
     enabled: z.boolean().optional(),
+    refineWithAgent: z.boolean().optional(),
     stt: z
       .object({
-        provider: SpeechProviderIdSchema.optional(),
         model: z.string().min(1).optional(),
-        language: z.string().trim().min(1).optional(),
-        confidenceThreshold: z.number().optional(),
-      })
-      .strict()
-      .optional(),
-  })
-  .strict();
-
-const FeatureVoiceModeSchema = z
-  .object({
-    enabled: z.boolean().optional(),
-    llm: z
-      .object({
-        provider: z.string().optional(),
-        model: z.string().min(1).optional(),
-      })
-      .strict()
-      .optional(),
-    stt: z
-      .object({
-        provider: SpeechProviderIdSchema.optional(),
-        model: z.string().min(1).optional(),
-        language: z.string().trim().min(1).optional(),
-      })
-      .strict()
-      .optional(),
-    turnDetection: z
-      .object({
-        provider: SpeechProviderIdSchema.optional(),
-      })
-      .strict()
-      .optional(),
-    tts: z
-      .object({
-        provider: SpeechProviderIdSchema.optional(),
-        model: z.string().min(1).optional(),
-        voice: z.enum(["alloy", "echo", "fable", "onyx", "nova", "shimmer"]).optional(),
-        speakerId: z.number().int().optional(),
-        speed: z.number().optional(),
       })
       .strict()
       .optional(),
@@ -307,7 +244,6 @@ export const PersistedConfigSchema = z
     features: z
       .object({
         dictation: FeatureDictationSchema.optional(),
-        voiceMode: FeatureVoiceModeSchema.optional(),
         webUi: FeatureWebUiSchema.optional(),
       })
       .strict()
@@ -360,42 +296,45 @@ function getLogger(logger: LoggerLike | undefined): LoggerLike | undefined {
   return logger?.child({ module: "config" });
 }
 
-// Removed config fields are stripped before parsing so the strict schema does not
-// reject a config written by an older release. The stripped values are discarded,
-// not migrated — there is no back-compat for the removed `providers.openai.voice`
-// block (use `providers.openai.stt` / `providers.openai.tts`).
+// COMPAT(removedSpeechConfig): added in v0.5.0, remove after 2027-02-04.
+// Removed Voice mode and cloud-speech fields are discarded before strict parsing.
 function stripRemovedConfigFields(parsed: unknown): unknown {
-  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-    return parsed;
-  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return parsed;
 
   const root = { ...(parsed as Record<string, unknown>) };
   const providers = root.providers;
-  if (!providers || typeof providers !== "object" || Array.isArray(providers)) {
-    return root;
+  if (providers && typeof providers === "object" && !Array.isArray(providers)) {
+    const providersRecord = { ...(providers as Record<string, unknown>) };
+    delete providersRecord.openai;
+    const local = providersRecord.local;
+    if (local && typeof local === "object" && !Array.isArray(local)) {
+      const localRecord = { ...(local as Record<string, unknown>) };
+      delete localRecord.autoDownload;
+      providersRecord.local = localRecord;
+    }
+    root.providers = providersRecord;
   }
 
-  const providersRecord = { ...(providers as Record<string, unknown>) };
-
-  const local = providersRecord.local;
-  if (local && typeof local === "object" && !Array.isArray(local)) {
-    const localRecord = { ...(local as Record<string, unknown>) };
-    delete localRecord.autoDownload;
-    providersRecord.local = localRecord;
+  const features = root.features;
+  if (features && typeof features === "object" && !Array.isArray(features)) {
+    const featuresRecord = { ...(features as Record<string, unknown>) };
+    delete featuresRecord.voiceMode;
+    const dictation = featuresRecord.dictation;
+    if (dictation && typeof dictation === "object" && !Array.isArray(dictation)) {
+      const dictationRecord = { ...(dictation as Record<string, unknown>) };
+      const stt = dictationRecord.stt;
+      if (stt && typeof stt === "object" && !Array.isArray(stt)) {
+        const sttRecord = { ...(stt as Record<string, unknown>) };
+        delete sttRecord.provider;
+        delete sttRecord.language;
+        delete sttRecord.confidenceThreshold;
+        dictationRecord.stt = sttRecord;
+      }
+      featuresRecord.dictation = dictationRecord;
+    }
+    root.features = featuresRecord;
   }
 
-  const openai = providersRecord.openai;
-  if (openai && typeof openai === "object" && !Array.isArray(openai)) {
-    const openaiRecord = { ...(openai as Record<string, unknown>) };
-    // COMPAT(openaiVoiceConfig): added 2026-06-30, remove after 2026-12-30.
-    // Drop a `providers.openai.voice` block left by an older release so the strict
-    // schema doesn't reject it. The value is discarded, not migrated — there is no
-    // back-compat; configure `providers.openai.stt` / `providers.openai.tts` instead.
-    delete openaiRecord.voice;
-    providersRecord.openai = openaiRecord;
-  }
-
-  root.providers = providersRecord;
   return root;
 }
 

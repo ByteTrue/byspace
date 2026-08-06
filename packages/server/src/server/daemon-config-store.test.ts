@@ -590,4 +590,26 @@ describe("DaemonConfigStore", () => {
       env: {},
     });
   });
+
+  test("patch persists the opt-in dictation refinement setting", () => {
+    const byspaceHome = mkdtempSync(path.join(tmpdir(), "byspace-daemon-config-store-"));
+    tempDirs.push(byspaceHome);
+    const store = new DaemonConfigStore(
+      byspaceHome,
+      {
+        mcp: { injectIntoAgents: false },
+        providers: {},
+        metadataGeneration: { providers: [] },
+        autoArchiveAfterMerge: false,
+        enableTerminalAgentHooks: false,
+        appendSystemPrompt: "",
+      },
+      undefined,
+    );
+
+    store.patch({ dictation: { refineWithAgent: true } });
+
+    expect(store.get().dictation?.refineWithAgent).toBe(true);
+    expect(loadPersistedConfig(byspaceHome).features?.dictation?.refineWithAgent).toBe(true);
+  });
 });

@@ -87,13 +87,12 @@ try {
   assert(status.stdout.includes("running"), "daemon should be running when onboarding exits");
   console.log("✓ onboarding prints pairing info and waits for daemon readiness\n");
 
-  console.log("Test 2: non-interactive onboarding persists voice disabled config");
+  console.log("Test 2: non-interactive onboarding does not preconfigure a dictation model");
   const configRaw = await readFile(join(byspaceHome, "config.json"), "utf-8");
   const config = JSON.parse(configRaw) as {
     app?: { baseUrl?: string };
     features?: {
-      dictation?: { enabled?: boolean };
-      voiceMode?: { enabled?: boolean };
+      dictation?: { stt?: { model?: string | null } };
     };
   };
 
@@ -103,21 +102,16 @@ try {
     "persisted config should use the current CLI release app",
   );
   assert.strictEqual(
-    config.features?.dictation?.enabled,
-    false,
-    "dictation.enabled should be false",
-  );
-  assert.strictEqual(
-    config.features?.voiceMode?.enabled,
-    false,
-    "voiceMode.enabled should be false",
+    config.features?.dictation?.stt?.model,
+    undefined,
+    "onboarding should not select a dictation model",
   );
   const daemonLog = await readFile(join(byspaceHome, "daemon.log"), "utf-8");
   assert(
     !daemonLog.includes("Ensuring local speech models"),
-    "daemon should not attempt local speech model setup when voice is disabled",
+    "daemon should not attempt local speech model setup during onboarding",
   );
-  console.log("✓ non-interactive run persisted voice disabled choices\n");
+  console.log("✓ non-interactive run left dictation model selection empty\n");
 } finally {
   await $`BYSPACE_HOME=${byspaceHome} npx byspace daemon stop --home ${byspaceHome} --force`.nothrow();
   await rm(byspaceHome, { recursive: true, force: true });

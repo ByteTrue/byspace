@@ -168,13 +168,7 @@ Single file, validated with `PersistedConfigSchema`.
     root?: string            // optional root for new worktrees; defaults to $BYSPACE_HOME/worktrees
   },
   providers: {
-    openai: {
-      apiKey?: string,
-      baseUrl?: string,
-      stt?: { apiKey?: string, baseUrl?: string },
-      tts?: { apiKey?: string, baseUrl?: string }
-    },
-    local: { modelsDir: string }
+    local: { modelsDir?: string }
   },
   agents: {
     // ProviderOverrideSchema; legacy entries with `command: { mode, ... }` are migrated to the
@@ -186,8 +180,7 @@ Single file, validated with `PersistedConfigSchema`.
     }
   },
   features: {
-    dictation: { enabled, stt: { provider, model, language, confidenceThreshold } },
-    voiceMode: { enabled, llm, stt: { provider, model, language }, turnDetection, tts: { provider, model, voice, speakerId, speed } }
+    dictation: { enabled?: boolean, refineWithAgent?: boolean, stt: { model?: string } }
   },
   log: {
     level, format,
@@ -197,46 +190,28 @@ Single file, validated with `PersistedConfigSchema`.
 }
 ```
 
-All fields are optional with sensible defaults.
+All fields are optional. Dictation is local-only and starts unconfigured: the daemon does not
+download a model until a user chooses **Download and use** in that Host's settings. The selected
+model id is stored in `features.dictation.stt.model`; downloaded files live under
+`providers.local.modelsDir` or `$BYSPACE_HOME/models/local-speech`. Selection and model files are
+therefore Host-scoped, not browser-scoped.
 
-`agents.metadataGeneration.providers` controls the preferred structured-generation fallback order for daemon-side metadata tasks such as commit messages, PR text, branch names, and generated agent titles. Entries are tried first in the configured order, then BySpace falls through to dynamically discovered defaults and finally the current selection when available.
+`agents.metadataGeneration.providers` controls the preferred structured-generation fallback order
+for daemon-side metadata tasks such as commit messages, PR text, branch names, and generated agent
+titles. Entries are tried first in the configured order, then BySpace falls through to dynamically
+discovered defaults and finally the current selection when available.
 
-Local speech model ids are intentionally narrow: STT uses `parakeet-tdt-0.6b-v2-int8`, TTS uses `kokoro-en-v0_19`, and turn detection uses the bundled Silero VAD model.
+The built-in speech catalog is an allowlist because each entry needs a verified download, checksum, license attribution, and native sherpa-onnx recognizer configuration. It contains `fire-red-asr2-aed-int8` for Mandarin-first quality and `sensevoice-small-int8` for a smaller/faster multilingual option. Dictation language is auto-detected by the selected model. No speech API keys or cloud endpoints are used.
 
-Set these to select OpenAI instead of local speech:
+`features.dictation.refineWithAgent` defaults false. When enabled, final transcript text uses the same structured-generation provider resolution and non-persisted internal Agent path as titles and Git metadata. Audio is never sent to the provider. Provider failures fall back to the raw transcript, and the composer keeps both raw and refined drafts available until the user edits or sends.
 
-| Env var                          | Applies to                      |
-| -------------------------------- | ------------------------------- |
-| `BYSPACE_VOICE_STT_PROVIDER`     | Voice mode STT provider         |
-| `BYSPACE_DICTATION_STT_PROVIDER` | Composer dictation STT provider |
-| `BYSPACE_VOICE_TTS_PROVIDER`     | Voice mode TTS provider         |
+Relevant environment overrides are:
 
-OpenAI speech can be configured under `providers.openai`. STT and TTS resolve independently, so they can point at different endpoints:
-
-```json
-{
-  "providers": {
-    "openai": {
-      "stt": {
-        "apiKey": "sk-...",
-        "baseUrl": "https://stt.example.com/v1"
-      },
-      "tts": {
-        "apiKey": "sk-...",
-        "baseUrl": "https://api.openai.com/v1"
-      }
-    }
-  }
-}
-```
-
-`providers.openai.stt` is used for both composer dictation and voice mode speech-to-text; `providers.openai.tts` is used for voice mode text-to-speech. The equivalent env vars are `OPENAI_STT_API_KEY`/`OPENAI_STT_BASE_URL` and `OPENAI_TTS_API_KEY`/`OPENAI_TTS_BASE_URL`. Each feature falls back to `providers.openai.apiKey`/`providers.openai.baseUrl`, then `OPENAI_API_KEY`/`OPENAI_BASE_URL`, when its own fields are unset. These settings apply only to BySpace OpenAI speech features, not to Codex or other OpenAI-backed tools.
-
-BySpace uses these paths under the configured OpenAI base URL:
-
-- dictation STT: `/v1/audio/transcriptions`
-- voice mode STT: `/v1/audio/transcriptions`
-- voice mode TTS: `/v1/audio/speech`
+| Env var                             | Applies to                           |
+| ----------------------------------- | ------------------------------------ |
+| `BYSPACE_DICTATION_ENABLED`         | Enable or disable composer dictation |
+| `BYSPACE_DICTATION_LOCAL_STT_MODEL` | Explicit selected local model id     |
+| `BYSPACE_LOCAL_MODELS_DIR`          | Host speech-model storage directory  |
 
 ---
 

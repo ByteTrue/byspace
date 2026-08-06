@@ -31,7 +31,6 @@ import {
 } from "../../workspace-archive-service.js";
 import { workspaceLifecycleCoordinator } from "../../workspace-lifecycle-coordinator.js";
 import { createAgentCommand, type CreateAgentFromMcpInput } from "../create-agent/create.js";
-import type { VoiceCallerContext, VoiceSpeakHandler } from "../../voice-types.js";
 import type { FirstAgentContext } from "../../messages.js";
 import { expandUserPath, isSameOrDescendantPath, resolvePathFromBase } from "../../path-utils.js";
 import type { TerminalManager } from "../../../terminal/terminal-manager.js";
@@ -125,19 +124,12 @@ export interface BySpaceToolHostDependencies {
   ) => Promise<string>;
   byspaceHome?: string;
   worktreesRoot?: string;
-  /**
-   * ID of the agent that is using this tool catalog.
-   * Used for cwd/mode inheritance when agents spawn child agents.
-   */
   callerAgentId?: string;
-  /**
-   * Optional resolver for session-bound speak handlers.
-   * Used by hidden voice agents to narrate through daemon-managed TTS.
-   */
-  resolveSpeakHandler?: (callerAgentId: string) => VoiceSpeakHandler | null;
-  resolveCallerContext?: (callerAgentId: string) => VoiceCallerContext | null;
-  enableVoiceTools?: boolean;
-  voiceOnly?: boolean;
+  resolveCallerContext?: (callerAgentId: string) => {
+    childAgentDefaultLabels?: Record<string, string>;
+    lockedCwd?: string;
+    allowCustomCwd?: boolean;
+  } | null;
   logger: Logger;
 }
 
@@ -546,7 +538,6 @@ export function createBySpaceToolCatalog(options: BySpaceToolHostDependencies): 
     scheduleService,
     providerSnapshotManager,
     callerAgentId,
-    resolveSpeakHandler,
     resolveCallerContext,
     logger,
   } = options;
@@ -1153,49 +1144,6 @@ export function createBySpaceToolCatalog(options: BySpaceToolHostDependencies): 
   type AgentToAgentCreateAgentArgs = z.infer<typeof agentToAgentCreateAgentArgsSchema>;
   type TopLevelCreateAgentArgs = z.infer<typeof canonicalTopLevelCreateAgentArgsSchema>;
   type TopLevelCreateAgentToolArgs = z.infer<typeof topLevelCreateAgentArgsSchema>;
-
-  if (options.voiceOnly || options.enableVoiceTools || callerContext?.enableVoiceTools) {
-    registerTool(
-      "speak",
-      {
-        title: "Speak",
-        description:
-          "Speak text to the user via daemon-managed voice output. Blocks until playback completes.",
-        inputSchema: {
-          text: z
-            .string()
-            .trim()
-            .min(1, "text is required")
-            .max(4000, "text must be 4000 characters or fewer"),
-        },
-        outputSchema: {
-          ok: z.boolean(),
-        },
-      },
-      async (args, context) => {
-        if (!callerAgentId) {
-          throw new Error("speak is only available to agent-scoped tool sessions");
-        }
-        const handler = resolveSpeakHandler?.(callerAgentId) ?? null;
-        if (!handler) {
-          throw new Error(`No speak handler registered for your session '${callerAgentId}'`);
-        }
-        await handler({
-          text: args.text,
-          callerAgentId,
-          signal: context?.signal,
-        });
-        return {
-          content: [],
-          structuredContent: ensureValidJson({ ok: true }),
-        };
-      },
-    );
-  }
-
-  if (options.voiceOnly) {
-    return toCatalog();
-  }
 
   registerTool(
     "create_workspace",

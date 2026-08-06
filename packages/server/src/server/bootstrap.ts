@@ -97,9 +97,7 @@ import {
 } from "./byspace-worktree-service.js";
 import { createBySpaceWorktreeWorkflow } from "./worktree-session.js";
 import { DownloadTokenStore } from "./file-download/token-store.js";
-import type { OpenAiSpeechProviderConfig } from "./speech/providers/openai/config.js";
 import type { LocalSpeechProviderConfig } from "./speech/providers/local/config.js";
-import type { RequestedSpeechProviders } from "./speech/speech-types.js";
 import { createSpeechService } from "./speech/speech-runtime.js";
 import { AgentManager } from "./agent/agent-manager.js";
 import { AgentStorage } from "./agent/agent-storage.js";
@@ -311,17 +309,11 @@ function summarizeAgentMcpDebugBody(body: unknown): Record<string, unknown> {
   };
 }
 
-export type BySpaceOpenAIConfig = OpenAiSpeechProviderConfig;
 export type BySpaceLocalSpeechConfig = LocalSpeechProviderConfig;
 
-export interface BySpaceSpeechSttLanguages {
-  dictation: string;
-  voice: string;
-}
-
 export interface BySpaceSpeechConfig {
-  providers: RequestedSpeechProviders;
-  sttLanguages?: BySpaceSpeechSttLanguages;
+  enabled: boolean;
+  sttLanguage: string;
   local?: BySpaceLocalSpeechConfig;
 }
 
@@ -376,12 +368,9 @@ export interface BySpaceDaemonConfig {
   };
   appBaseUrl?: string;
   auth?: DaemonAuthConfig;
-  openai?: BySpaceOpenAIConfig;
   speech?: BySpaceSpeechConfig;
-  voiceLlmProvider?: AgentProvider | null;
-  voiceLlmProviderExplicit?: boolean;
-  voiceLlmModel?: string | null;
   dictationFinalTimeoutMs?: number;
+  dictationRefineWithAgent?: boolean;
   downloadTokenTtlMs?: number;
   agentProviderSettings?: AgentProviderRuntimeSettingsMap;
   metadataGeneration?: {
@@ -471,6 +460,7 @@ function createInitialMutableDaemonConfig(config: BySpaceDaemonConfig): MutableD
     metadataGeneration: {
       providers: config.metadataGeneration?.providers ?? [],
     },
+    dictation: { refineWithAgent: config.dictationRefineWithAgent ?? false },
     autoArchiveAfterMerge: config.autoArchiveAfterMerge ?? false,
     enableTerminalAgentHooks: config.enableTerminalAgentHooks ?? false,
     terminalAgentHooks: config.terminalAgentHooks,
@@ -1122,10 +1112,7 @@ export async function createBySpaceDaemon(
     { elapsed: elapsed() },
     `Agent registry loaded (${persistedRecords.length} record${persistedRecords.length === 1 ? "" : "s"}); agents will initialize on demand`,
   );
-  logger.info(
-    "Voice mode configured for agent-scoped resume flow (no dedicated voice assistant provider)",
-  );
-  logger.info({ elapsed: elapsed() }, "Preparing voice and MCP runtime");
+  logger.info({ elapsed: elapsed() }, "Preparing MCP runtime");
 
   const createAgentToolHostDependencies = (
     runtime: BySpaceToolRuntimeContext,
@@ -1177,10 +1164,6 @@ export async function createBySpaceDaemon(
     byspaceHome: config.byspaceHome,
     worktreesRoot: config.worktreesRoot,
     callerAgentId: runtime.callerAgentId,
-    enableVoiceTools: runtime.enableVoiceTools,
-    voiceOnly: runtime.voiceOnly,
-    resolveSpeakHandler: (agentId) => wsServer?.resolveVoiceSpeakHandler(agentId) ?? null,
-    resolveCallerContext: (agentId) => wsServer?.resolveVoiceCallerContext(agentId) ?? null,
     logger,
   });
   const createAgentToolCatalog = (runtime: BySpaceToolRuntimeContext) =>
@@ -1311,7 +1294,7 @@ export async function createBySpaceDaemon(
 
   const speechService = createSpeechService({
     logger,
-    openaiConfig: config.openai,
+    byspaceHome: config.byspaceHome,
     speechConfig: config.speech,
   });
   logger.info({ elapsed: elapsed() }, "Speech service created");

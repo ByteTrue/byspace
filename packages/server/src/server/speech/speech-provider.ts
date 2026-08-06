@@ -1,5 +1,4 @@
 import type pino from "pino";
-import type { Readable } from "node:stream";
 
 export interface LogprobToken {
   token: string;
@@ -50,19 +49,12 @@ export interface StreamingTranscriptionSession {
 }
 
 export interface SpeechToTextProvider {
-  id: "openai" | "local" | (string & {});
+  /** Optional model-specific cap for invisible background commits during long dictation. */
+  dictationBackgroundCommitSeconds?: number;
+  id: "local";
   createSession(params: {
     logger: pino.Logger;
     language?: string;
     prompt?: string;
   }): StreamingTranscriptionSession;
-}
-
-export interface SpeechStreamResult {
-  stream: Readable;
-  format: string;
-}
-
-export interface TextToSpeechProvider {
-  synthesizeSpeech(text: string): Promise<SpeechStreamResult>;
 }

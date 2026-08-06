@@ -50,7 +50,11 @@ import type { ScriptHealthState } from "./script-health-monitor.js";
 import type { ServiceProxySubsystem } from "./service-proxy.js";
 import type { WorkspaceScriptRuntimeStore } from "./workspace-script-runtime-store.js";
 import type { SpeechReadinessSnapshot, SpeechService } from "./speech/speech-runtime.js";
-import type { VoiceCallerContext, VoiceSpeakHandler } from "./voice-types.js";
+import {
+  createDictationTranscriptRefiner,
+  type DictationTranscriptRefiner,
+} from "./dictation/dictation-transcript-refiner.js";
+import { createAgentStructuredTextGeneration } from "./session/checkout/git-metadata-generator.js";
 import {
   computeNotificationPlan,
   isPushEligibleAttentionReason,
@@ -321,8 +325,8 @@ function resolveCapabilityReason(params: {
     return "";
   }
 
-  if (readiness.voiceFeature.reasonCode === "model_download_in_progress") {
-    const baseMessage = readiness.voiceFeature.message.trim();
+  if (readiness.dictation.reasonCode === "model_download_in_progress") {
+    const baseMessage = readiness.dictation.message.trim();
     if (baseMessage.includes("Try again in a few minutes")) {
       return baseMessage;
     }
@@ -348,13 +352,8 @@ function buildServerCapabilities(params: {
           readiness,
         }),
       }),
-      voice: toServerCapabilityState({
-        state: readiness.realtimeVoice,
-        reason: resolveCapabilityReason({
-          state: readiness.realtimeVoice,
-          readiness,
-        }),
-      }),
+      // COMPAT(voiceModeRemoval): added in v0.5.0, remove after 2027-02-04.
+      voice: { enabled: false, reason: "Voice mode has been removed." },
     },
   };
 }
@@ -484,6 +483,7 @@ export class VoiceAssistantWebSocketServer {
   private readonly pushNotificationSender: PushNotificationSender;
   private readonly mcpBaseUrl: string | null;
   private speech!: SpeechService | null;
+  private readonly dictationTranscriptRefiner: DictationTranscriptRefiner;
   private terminalManager!: TerminalManager | null;
   private serviceProxy!: ServiceProxySubsystem | null;
   private scriptRuntimeStore!: WorkspaceScriptRuntimeStore | null;
@@ -494,8 +494,6 @@ export class VoiceAssistantWebSocketServer {
   private dictation!: {
     finalTimeoutMs?: number;
   } | null;
-  private readonly voiceSpeakHandlers = new Map<string, VoiceSpeakHandler>();
-  private readonly voiceCallerContexts = new Map<string, VoiceCallerContext>();
   private readonly workspaceSetupSnapshots = new Map<string, WorkspaceSetupSnapshot>();
   private readonly providerSnapshotManager: ProviderSnapshotManager;
   private onLifecycleIntent!: ((intent: SessionLifecycleIntent) => void) | null;
@@ -586,6 +584,20 @@ export class VoiceAssistantWebSocketServer {
     this.byspaceHome = byspaceHome;
     this.worktreesRoot = daemonRuntimeConfig?.worktreesRoot;
     this.daemonConfigStore = daemonConfigStore;
+    if (!providerSnapshotManager) {
+      throw new Error("providerSnapshotManager is required");
+    }
+    this.providerSnapshotManager = providerSnapshotManager;
+    this.dictationTranscriptRefiner = createDictationTranscriptRefiner({
+      agentManager,
+      generation: createAgentStructuredTextGeneration({
+        agentManager,
+        providerSnapshotManager,
+        readDaemonConfig: () => this.daemonConfigStore.get(),
+      }),
+      isEnabled: () => this.daemonConfigStore.get().dictation?.refineWithAgent === true,
+      logger: this.logger.child({ module: "dictation-refinement" }),
+    });
     this.mcpBaseUrl = mcpBaseUrl;
     this.assignOptionalServices({
       speech,
@@ -600,10 +612,6 @@ export class VoiceAssistantWebSocketServer {
       serviceProxyPublicBaseUrl,
       resolveScriptHealth,
     });
-    if (!providerSnapshotManager) {
-      throw new Error("providerSnapshotManager is required");
-    }
-    this.providerSnapshotManager = providerSnapshotManager;
     this.serverCapabilities = buildServerCapabilities({
       readiness: this.speech?.getReadiness() ?? null,
     });
@@ -1211,9 +1219,6 @@ export class VoiceAssistantWebSocketServer {
       workspaceAutoName: this.workspaceAutoName,
       daemonConfigStore: this.daemonConfigStore,
       mcpBaseUrl: this.mcpBaseUrl,
-      stt: () => this.speech?.resolveStt() ?? null,
-      sttLanguage: this.speech?.resolveSttLanguage() ?? "en",
-      tts: () => this.speech?.resolveTts() ?? null,
       terminalManager: this.terminalManager,
       providerSnapshotManager: this.providerSnapshotManager,
       providerUsageService: this.providerUsageService,
@@ -1225,23 +1230,6 @@ export class VoiceAssistantWebSocketServer {
       getDaemonTcpHost: this.getDaemonTcpHost ?? undefined,
       serviceProxyPublicBaseUrl: this.serviceProxyPublicBaseUrl,
       resolveScriptHealth: this.resolveScriptHealth ?? undefined,
-      voice: {
-        turnDetection: () => this.speech?.resolveTurnDetection() ?? null,
-      },
-      voiceBridge: {
-        registerVoiceSpeakHandler: (agentId, handler) => {
-          this.voiceSpeakHandlers.set(agentId, handler);
-        },
-        unregisterVoiceSpeakHandler: (agentId) => {
-          this.voiceSpeakHandlers.delete(agentId);
-        },
-        registerVoiceCallerContext: (agentId, context) => {
-          this.voiceCallerContexts.set(agentId, context);
-        },
-        unregisterVoiceCallerContext: (agentId) => {
-          this.voiceCallerContexts.delete(agentId);
-        },
-      },
       dictation:
         this.dictation || this.speech
           ? {
@@ -1249,6 +1237,11 @@ export class VoiceAssistantWebSocketServer {
               stt: () => this.speech?.resolveDictationStt() ?? null,
               sttLanguage: this.speech?.resolveDictationSttLanguage() ?? "en",
               getSpeechReadiness: () => this.speech!.getReadiness(),
+              listModels: () => this.speech!.listModels(),
+              downloadModel: (modelId) => this.speech!.downloadModel(modelId),
+              selectModel: (modelId) => this.speech!.selectModel(modelId),
+              deleteModel: (modelId) => this.speech!.deleteModel(modelId),
+              refineTranscript: (input) => this.dictationTranscriptRefiner.refine(input),
             }
           : undefined,
       serverId: this.serverId,
@@ -1393,6 +1386,10 @@ export class VoiceAssistantWebSocketServer {
       version: this.daemonVersion,
       ...(this.serverCapabilities ? { capabilities: this.serverCapabilities } : {}),
       features: {
+        // COMPAT(speechModelSelection): added in v0.5.0, remove gate after 2027-02-04.
+        speechModelSelection: true,
+        // COMPAT(dictationRefinement): added in v0.5.0, remove gate after 2027-02-04.
+        dictationRefinement: true,
         // COMPAT(providersSnapshot): keep optional until all clients rely on snapshot flow.
         providersSnapshot: true,
         // COMPAT(checkoutForgeSetAutoMerge): added in v0.1.106, remove old
@@ -1529,14 +1526,6 @@ export class VoiceAssistantWebSocketServer {
       log.error({ err }, "Client error");
       await this.detachSocket(ws, { error: err });
     });
-  }
-
-  public resolveVoiceSpeakHandler(callerAgentId: string): VoiceSpeakHandler | null {
-    return this.voiceSpeakHandlers.get(callerAgentId) ?? null;
-  }
-
-  public resolveVoiceCallerContext(callerAgentId: string): VoiceCallerContext | null {
-    return this.voiceCallerContexts.get(callerAgentId) ?? null;
   }
 
   private async detachSocket(

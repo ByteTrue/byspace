@@ -1,11 +1,12 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import {
+  appendDictationTranscript,
+  applyDictationRefinement,
   computeCanStartDictation,
-  resolveComposerSurfacePresentation,
   runAlternateSendAction,
   runDefaultSendAction,
   runMessageInputKeyboardAction,
-  stopRealtimeVoice,
+  toggleDictationRefinement,
 } from "./state";
 
 const connected = { isConnected: true } as never;
@@ -21,7 +22,7 @@ function createDictationKeyboard({ startsRecording }: { startsRecording: boolean
       runMessageInputKeyboardAction("dictation-toggle", {
         focusInput: () => undefined,
         isDictationRecording: () => isRecording,
-        markTranscriptForSend: () => actions.push("send transcript"),
+        isDictationActive: () => isRecording,
         startDictation: () => {
           actions.push("start");
           isRecording = startsRecording;
@@ -31,26 +32,80 @@ function createDictationKeyboard({ startsRecording }: { startsRecording: boolean
           isRecording = false;
         },
         cancelDictation: () => undefined,
-        toggleRealtimeVoice: () => undefined,
-        isRealtimeVoiceActive: false,
-        toggleRealtimeVoiceMute: () => undefined,
       }),
   };
 }
 
-describe("composer surface presentation", () => {
-  it("shows only the input when no voice overlay is active", () => {
-    expect(resolveComposerSurfacePresentation(false)).toEqual({
-      input: { opacity: 1, pointerEvents: "auto" },
-      overlay: { opacity: 0, pointerEvents: "none" },
+describe("appendDictationTranscript", () => {
+  it("appends final text to an empty draft", () => {
+    expect(appendDictationTranscript("", "hello world")).toBe("hello world");
+  });
+
+  it("separates final text from an existing draft", () => {
+    expect(appendDictationTranscript("Existing draft", "hello world")).toBe(
+      "Existing draft hello world",
+    );
+  });
+
+  it("preserves line breaks returned by the final transcript", () => {
+    expect(appendDictationTranscript("Existing draft", "第一件事\nsecond task")).toBe(
+      "Existing draft 第一件事\nsecond task",
+    );
+  });
+
+  it("keeps Mandarin text and punctuation adjacent", () => {
+    expect(appendDictationTranscript("你好", "世界")).toBe("你好世界");
+    expect(appendDictationTranscript("你好", "，世界")).toBe("你好，世界");
+    expect(appendDictationTranscript("你好", "“世界”")).toBe("你好“世界”");
+    expect(appendDictationTranscript("hello", "世界")).toBe("hello 世界");
+  });
+
+  it("returns the original draft when the final transcript is empty", () => {
+    expect(appendDictationTranscript("Existing draft", "")).toBe("Existing draft");
+  });
+});
+
+describe("dictation refinement choice", () => {
+  it("defaults to the AI draft and toggles losslessly to the original", () => {
+    const applied = applyDictationRefinement("existing draft", "cleaned transcript", {
+      requestId: "refine-1",
+      originalText: "raw transcript",
+    });
+    expect(applied).toEqual({
+      draft: "existing draft cleaned transcript",
+      choice: {
+        originalDraft: "existing draft raw transcript",
+        refinedDraft: "existing draft cleaned transcript",
+        showingOriginal: false,
+      },
+    });
+
+    const original = toggleDictationRefinement(applied.draft, applied.choice!);
+    expect(original.draft).toBe("existing draft raw transcript");
+    expect(original.choice?.showingOriginal).toBe(true);
+
+    const refined = toggleDictationRefinement(original.draft, original.choice!);
+    expect(refined.draft).toBe("existing draft cleaned transcript");
+    expect(refined.choice?.showingOriginal).toBe(false);
+  });
+
+  it("clears a stale comparison without replacing a manual edit", () => {
+    const applied = applyDictationRefinement("draft", "cleaned", {
+      requestId: "refine-2",
+      originalText: "raw",
+    });
+    expect(toggleDictationRefinement("manually edited", applied.choice!)).toEqual({
+      draft: "manually edited",
+      choice: null,
     });
   });
 
-  it("shows only the voice overlay while voice UI is active", () => {
-    expect(resolveComposerSurfacePresentation(true)).toEqual({
-      input: { opacity: 0, pointerEvents: "none" },
-      overlay: { opacity: 1, pointerEvents: "auto" },
-    });
+  it("uses the raw transcript when refinement did not run", () => {
+    expect(
+      applyDictationRefinement("draft", "raw", {
+        requestId: "refine-3",
+      }),
+    ).toEqual({ draft: "draft raw", choice: null });
   });
 });
 
@@ -150,7 +205,7 @@ describe("dictation keyboard behavior", () => {
     keyboard.pressDictationShortcut();
     keyboard.pressDictationShortcut();
 
-    expect(keyboard.actions).toEqual(["start", "send transcript", "confirm", "start"]);
+    expect(keyboard.actions).toEqual(["start", "confirm", "start"]);
   });
 
   it("can retry when starting dictation does not enter the recording state", () => {
@@ -160,6 +215,27 @@ describe("dictation keyboard behavior", () => {
     keyboard.pressDictationShortcut();
 
     expect(keyboard.actions).toEqual(["start", "start"]);
+  });
+
+  it("owns the cancel shortcut while transcription or refinement is processing", () => {
+    const calls: string[] = [];
+    const handled = runMessageInputKeyboardAction("dictation-cancel", {
+      focusInput: () => undefined,
+      isDictationRecording: () => false,
+      isDictationActive: () => true,
+      startDictation: () => {
+        calls.push("start");
+      },
+      confirmDictation: () => {
+        calls.push("confirm");
+      },
+      cancelDictation: () => {
+        calls.push("cancel");
+      },
+    });
+
+    expect(handled).toBe(true);
+    expect(calls).toEqual(["cancel"]);
   });
 });
 
@@ -218,47 +294,5 @@ describe("composer send behavior", () => {
 
     expect(defaultAction.calls).toEqual(["queue"]);
     expect(alternateAction.calls).toEqual(["send"]);
-  });
-});
-
-describe("stopRealtimeVoice", () => {
-  it("keeps voice mode active when the running agent refuses cancellation", async () => {
-    const cancellationError = new Error("active run cancellation was not acknowledged");
-    const cancelAgent = vi.fn().mockRejectedValue(cancellationError);
-    const stopVoice = vi.fn().mockResolvedValue(undefined);
-
-    await expect(
-      stopRealtimeVoice({
-        voice: { stopVoice },
-        isRealtimeVoiceForCurrentAgent: true,
-        isAgentRunning: true,
-        client: { cancelAgent },
-        voiceAgentId: "agent-1",
-      }),
-    ).rejects.toBe(cancellationError);
-
-    expect(stopVoice).not.toHaveBeenCalled();
-  });
-
-  it("stops voice mode after the running agent acknowledges cancellation", async () => {
-    const calls: string[] = [];
-
-    await stopRealtimeVoice({
-      voice: {
-        stopVoice: async () => {
-          calls.push("stop voice");
-        },
-      },
-      isRealtimeVoiceForCurrentAgent: true,
-      isAgentRunning: true,
-      client: {
-        cancelAgent: async () => {
-          calls.push("cancel agent");
-        },
-      },
-      voiceAgentId: "agent-1",
-    });
-
-    expect(calls).toEqual(["cancel agent", "stop voice"]);
   });
 });

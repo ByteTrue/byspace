@@ -7,8 +7,6 @@ export type KeyboardActionId =
   | "message-input.dictation-toggle"
   | "message-input.dictation-cancel"
   | "message-input.dictation-confirm"
-  | "message-input.voice-toggle"
-  | "message-input.voice-mute-toggle"
   | "message-input.mode-cycle"
   | "workspace.tab.new"
   | "workspace.tab.close-current"
@@ -41,8 +39,6 @@ export type KeyboardActionDefinition =
   | { id: "message-input.dictation-toggle"; scope: KeyboardActionScope }
   | { id: "message-input.dictation-cancel"; scope: KeyboardActionScope }
   | { id: "message-input.dictation-confirm"; scope: KeyboardActionScope }
-  | { id: "message-input.voice-toggle"; scope: KeyboardActionScope }
-  | { id: "message-input.voice-mute-toggle"; scope: KeyboardActionScope }
   | { id: "message-input.mode-cycle"; scope: KeyboardActionScope }
   | { id: "workspace.tab.new"; scope: KeyboardActionScope }
   | { id: "workspace.tab.close-current"; scope: KeyboardActionScope }

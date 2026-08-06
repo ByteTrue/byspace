@@ -44,7 +44,7 @@ import { HorizontalScrollProvider } from "@/contexts/horizontal-scroll-context";
 import { SessionProvider } from "@/contexts/session-context";
 import { SidebarCalloutProvider } from "@/contexts/sidebar-callout-context";
 import { ToastProvider } from "@/contexts/toast-context";
-import { VoiceProvider } from "@/contexts/voice-context";
+import { AudioProvider } from "@/contexts/audio-context";
 import { shouldRunStartupGiveUpTimer } from "@/navigation/host-runtime-bootstrap";
 import { registerWorkspaceRouteNavigationRef } from "@/navigation/workspace-route-navigation";
 import { ThemedStack } from "@/navigation/themed-stack";
@@ -423,12 +423,12 @@ function ProvidersWrapper({ children }: { children: ReactNode }) {
   }, [settingsLoading, settings.uiFontSize, settings.codeFontSize]);
 
   return (
-    <VoiceProvider>
+    <AudioProvider>
       <OfferLinkListener upsertDaemonFromOfferUrl={upsertConnectionFromOfferUrl} />
       <HostSessionManager />
       <FaviconStatusSync />
       {children}
-    </VoiceProvider>
+    </AudioProvider>
   );
 }
 

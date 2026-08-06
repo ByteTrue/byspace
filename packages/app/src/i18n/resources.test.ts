@@ -302,7 +302,6 @@ describe("translation resources", () => {
   });
 
   it("includes shared utility chrome keys for the Batch 4F migration", () => {
-    expect(en.realtimeVoice.actions.mute).toBe("Mute realtime voice");
     expect(en.rewind.actions.conversation).toBe("Rewind conversation");
     expect(en.rewind.warning).toBe("This action cannot be undone");
     expect(en.diffViewer.empty).toBe("No changes to display");
@@ -349,10 +348,9 @@ describe("translation resources", () => {
     expect(en.message.attachments.imageLoadFailed).toBe("Couldn't load image");
     expect(en.message.attachments.imageUnavailable).toBe("Image unavailable");
     expect(en.message.dictation.start).toBe("Start voice dictation");
+    expect(en.message.dictation.stop).toBe("Stop and transcribe");
     expect(en.message.dictation.cancel).toBe("Cancel dictation");
     expect(en.message.dictation.retry).toBe("Retry dictation");
-    expect(en.message.dictation.insert).toBe("Insert transcription");
-    expect(en.message.dictation.insertAndSend).toBe("Insert transcription and send");
     expect(en.message.dictation.failed).toBe("Dictation failed: {{error}}");
     expect(en.message.dictation.failedRetry).toBe("Dictation failed. Tap retry.");
     expect(en.message.question.submit).toBe("Submit");

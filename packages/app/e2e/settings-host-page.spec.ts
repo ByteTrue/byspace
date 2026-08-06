@@ -234,6 +234,36 @@ test.describe("Settings host page", () => {
     await expectRetiredSidebarSectionsAbsent(page);
   });
 
+  test("dictation section offers local models and opt-in Agent cleanup", async ({ page }) => {
+    const serverId = getServerId();
+
+    await gotoAppShell(page);
+    await openSettings(page);
+    await openSettingsHost(page, serverId);
+    await openHostSection(page, serverId, "dictation");
+
+    await expectSettingsHeader(page, "Dictation");
+    await expect(page.getByTestId("host-dictation-settings")).toBeVisible();
+    const fireRedRow = page.getByTestId("speech-model-fire-red-asr2-aed-int8");
+    await expect(fireRedRow).toContainText("FireRedASR2-AED");
+    await expect(page.getByTestId("speech-model-action-fire-red-asr2-aed-int8")).toHaveText(
+      "Download & use",
+    );
+    expect((await fireRedRow.boundingBox())?.height).toBeLessThan(120);
+
+    const senseVoiceRow = page.getByTestId("speech-model-sensevoice-small-int8");
+    await expect(senseVoiceRow).toContainText("SenseVoice Small");
+    await expect(page.getByTestId("speech-model-action-sensevoice-small-int8")).toHaveText(
+      "Download & use",
+    );
+
+    const refinement = page.getByRole("switch", { name: "Clean up dictation with AI" });
+    await expect(refinement).not.toBeChecked();
+    await expect(page.getByTestId("host-dictation-settings")).toContainText("Use original");
+    await refinement.click();
+    await expect(refinement).toBeChecked();
+  });
+
   test("navigating to /settings/hosts/[serverId] redirects to the connections section", async ({
     page,
   }) => {

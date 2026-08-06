@@ -1,12 +1,17 @@
+export interface DictationRefinementMeta {
+  requestId: string;
+  originalText?: string;
+}
+
 import { i18n } from "@/i18n/i18next";
 
 export type DictationStatus = "idle" | "recording" | "uploading" | "failed";
 
 export interface UseDictationOptions {
   client: import("@bytetrue/byspace-client/internal/daemon-client").DaemonClient | null;
-  onTranscript: (text: string, meta: { requestId: string }) => void;
-  onPartialTranscript?: (text: string, meta: { requestId: string }) => void;
+  onTranscript: (text: string, meta: DictationRefinementMeta) => void;
   onError?: (error: Error) => void;
+  refineTranscript?: (text: string) => Promise<{ text: string; refined: boolean }>;
   onPermanentFailure?: (error: Error, context: { requestId: string }) => void;
   canStart?: () => boolean;
   canConfirm?: () => boolean;
@@ -16,8 +21,8 @@ export interface UseDictationOptions {
 export interface UseDictationResult {
   isRecording: boolean;
   isRecordingActive: () => boolean;
+  isDictationActive: () => boolean;
   isProcessing: boolean;
-  partialTranscript: string;
   volume: number;
   duration: number;
   error: string | null;

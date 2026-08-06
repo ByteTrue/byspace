@@ -1,120 +1,110 @@
+import path from "node:path";
 import { z } from "zod";
 
-export type SherpaOnnxModelKind = "stt-offline" | "tts";
+export type SherpaOnnxRuntime =
+  | { kind: "fire_red_asr"; encoder: string; decoder: string; tokens: string }
+  | {
+      kind: "sense_voice";
+      model: string;
+      tokens: string;
+      language: "auto";
+      useInverseTextNormalization: 1;
+    };
 
-type DefaultModelRole = "stt" | "tts";
-
-interface SherpaOnnxCatalogEntry {
-  kind: SherpaOnnxModelKind;
+export interface SherpaOnnxCatalogEntry {
+  kind: "stt-offline";
+  label: string;
+  description: string;
   archiveUrl: string;
+  archiveSizeBytes: number;
+  archiveSha256: string;
   extractedDir: string;
   requiredFiles: string[];
-  description: string;
-  defaultFor?: DefaultModelRole;
+  dictationBackgroundCommitSeconds?: number;
+  runtime: SherpaOnnxRuntime;
 }
 
 export const SHERPA_ONNX_MODEL_CATALOG = {
-  "parakeet-tdt-0.6b-v2-int8": {
+  "fire-red-asr2-aed-int8": {
     kind: "stt-offline",
-    archiveUrl:
-      "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-nemo-parakeet-tdt-0.6b-v2-int8.tar.bz2",
-    extractedDir: "sherpa-onnx-nemo-parakeet-tdt-0.6b-v2-int8",
-    requiredFiles: ["encoder.int8.onnx", "decoder.int8.onnx", "joiner.int8.onnx", "tokens.txt"],
-    description: "NVIDIA Parakeet TDT v2 (offline NeMo transducer, English).",
-    defaultFor: "stt",
-  },
-  "parakeet-tdt-0.6b-v3-int8": {
-    kind: "stt-offline",
-    archiveUrl:
-      "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8.tar.bz2",
-    extractedDir: "sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8",
-    requiredFiles: ["encoder.int8.onnx", "decoder.int8.onnx", "joiner.int8.onnx", "tokens.txt"],
+    label: "FireRedASR2-AED",
     description:
-      "NVIDIA Parakeet TDT v3 (offline NeMo transducer, 25 European languages, auto-detected).",
-  },
-  "kokoro-en-v0_19": {
-    kind: "tts",
+      "Mandarin-first; supports English, Mandarin-English code-switching, and 20+ Chinese dialects.",
     archiveUrl:
-      "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/kokoro-en-v0_19.tar.bz2",
-    extractedDir: "kokoro-en-v0_19",
-    requiredFiles: ["model.onnx", "voices.bin", "tokens.txt", "espeak-ng-data"],
-    description: "Kokoro TTS (higher quality; larger).",
-    defaultFor: "tts",
+      "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-fire-red-asr2-zh_en-int8-2026-02-26.tar.bz2",
+    archiveSizeBytes: 838_589_068,
+    archiveSha256: "43015b3f1643a5688b4821e8ed323473d38b798c4ec291471fe00df1bcfc4f1c",
+    extractedDir: "sherpa-onnx-fire-red-asr2-zh_en-int8-2026-02-26",
+    requiredFiles: ["encoder.int8.onnx", "decoder.int8.onnx", "tokens.txt"],
+    runtime: {
+      kind: "fire_red_asr",
+      encoder: "encoder.int8.onnx",
+      decoder: "decoder.int8.onnx",
+      tokens: "tokens.txt",
+    },
+  },
+  "sensevoice-small-int8": {
+    kind: "stt-offline",
+    label: "SenseVoice Small",
+    description:
+      "Alibaba FunASR SenseVoice Small; fast Mandarin, English, Cantonese, Japanese, and Korean recognition with punctuation.",
+    archiveUrl:
+      "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17.tar.bz2",
+    archiveSizeBytes: 163_002_883,
+    archiveSha256: "7d1efa2138a65b0b488df37f8b89e3d91a60676e416f515b952358d83dfd347e",
+    extractedDir: "sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17",
+    requiredFiles: ["model.int8.onnx", "tokens.txt", "LICENSE"],
+    dictationBackgroundCommitSeconds: 30,
+    runtime: {
+      kind: "sense_voice",
+      model: "model.int8.onnx",
+      tokens: "tokens.txt",
+      language: "auto",
+      useInverseTextNormalization: 1,
+    },
   },
 } as const satisfies Record<string, SherpaOnnxCatalogEntry>;
 
 export type SherpaOnnxModelId = keyof typeof SHERPA_ONNX_MODEL_CATALOG;
 export type LocalSpeechModelId = SherpaOnnxModelId;
+export type LocalSttModelId = SherpaOnnxModelId;
 
-type ModelIdByKind<K extends SherpaOnnxModelKind> = {
-  [Id in SherpaOnnxModelId]: (typeof SHERPA_ONNX_MODEL_CATALOG)[Id]["kind"] extends K ? Id : never;
-}[SherpaOnnxModelId];
+export const LOCAL_STT_MODEL_IDS = Object.keys(SHERPA_ONNX_MODEL_CATALOG) as LocalSttModelId[];
 
-export type LocalSttModelId = ModelIdByKind<"stt-offline">;
-export type LocalTtsModelId = ModelIdByKind<"tts">;
-
-const ALL_MODEL_IDS: SherpaOnnxModelId[] = Object.keys(SHERPA_ONNX_MODEL_CATALOG).filter(
-  (k): k is SherpaOnnxModelId => k in SHERPA_ONNX_MODEL_CATALOG,
+export const LocalSttModelIdSchema = z.enum(
+  LOCAL_STT_MODEL_IDS as [LocalSttModelId, ...LocalSttModelId[]],
 );
 
-function isLocalSttModelId(id: SherpaOnnxModelId): id is LocalSttModelId {
-  return SHERPA_ONNX_MODEL_CATALOG[id].kind !== "tts";
-}
-
-function isLocalTtsModelId(id: SherpaOnnxModelId): id is LocalTtsModelId {
-  return SHERPA_ONNX_MODEL_CATALOG[id].kind === "tts";
-}
-
-export const LOCAL_STT_MODEL_IDS: LocalSttModelId[] = ALL_MODEL_IDS.filter(isLocalSttModelId);
-
-export const LOCAL_TTS_MODEL_IDS: LocalTtsModelId[] = ALL_MODEL_IDS.filter(isLocalTtsModelId);
-
-function resolveDefaultModelId(role: "stt"): LocalSttModelId;
-function resolveDefaultModelId(role: "tts"): LocalTtsModelId;
-function resolveDefaultModelId(role: DefaultModelRole): SherpaOnnxModelId {
-  const match = ALL_MODEL_IDS.find((id) => {
-    const entry: SherpaOnnxCatalogEntry = SHERPA_ONNX_MODEL_CATALOG[id];
-    return entry.defaultFor === role;
-  });
-  if (!match) {
-    throw new Error(`No default model configured for role '${role}'`);
-  }
-  return match;
-}
-
-export const DEFAULT_LOCAL_STT_MODEL = resolveDefaultModelId("stt");
-export const DEFAULT_LOCAL_TTS_MODEL = resolveDefaultModelId("tts");
-
-function createModelIdSchema<T extends string>(modelIds: readonly T[]): z.ZodType<T, string> {
-  const validIds = new Set<string>(modelIds);
-  return z
-    .string()
-    .trim()
-    .toLowerCase()
-    .refine((value) => validIds.has(value), {
-      message: "Invalid model id",
-    })
-    .transform((value) => value as T);
-}
-
-export const LocalSttModelIdSchema = createModelIdSchema(LOCAL_STT_MODEL_IDS);
-export const LocalTtsModelIdSchema = createModelIdSchema(LOCAL_TTS_MODEL_IDS);
-
-export type SherpaOnnxModelSpec = SherpaOnnxCatalogEntry & {
-  id: SherpaOnnxModelId;
-};
+export type SherpaOnnxModelSpec = SherpaOnnxCatalogEntry & { id: SherpaOnnxModelId };
 
 export function listSherpaOnnxModels(): SherpaOnnxModelSpec[] {
-  return ALL_MODEL_IDS.map((id) => Object.assign({ id }, SHERPA_ONNX_MODEL_CATALOG[id]));
+  return LOCAL_STT_MODEL_IDS.map((id) => Object.assign({ id }, SHERPA_ONNX_MODEL_CATALOG[id]));
 }
 
 export function getSherpaOnnxModelSpec(id: SherpaOnnxModelId): SherpaOnnxModelSpec {
   const spec = SHERPA_ONNX_MODEL_CATALOG[id];
-  if (!spec) {
-    throw new Error(`Unknown local speech model id: ${id}`);
-  }
-  return {
-    id,
-    ...spec,
-  };
+  if (!spec) throw new Error(`Unknown local speech model id: ${id}`);
+  return { id, ...spec };
+}
+
+export function resolveSherpaOfflineRecognizerConfig(modelsDir: string, id: LocalSttModelId) {
+  const spec = getSherpaOnnxModelSpec(id);
+  const modelDir = path.join(modelsDir, spec.extractedDir);
+  const runtime = spec.runtime;
+  const model =
+    runtime.kind === "fire_red_asr"
+      ? {
+          kind: runtime.kind,
+          encoder: path.join(modelDir, runtime.encoder),
+          decoder: path.join(modelDir, runtime.decoder),
+          tokens: path.join(modelDir, runtime.tokens),
+        }
+      : {
+          kind: runtime.kind,
+          model: path.join(modelDir, runtime.model),
+          tokens: path.join(modelDir, runtime.tokens),
+          language: runtime.language,
+          useInverseTextNormalization: runtime.useInverseTextNormalization,
+        };
+  return { model, numThreads: 2, sampleRate: 16_000 } as const;
 }

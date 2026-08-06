@@ -2,7 +2,6 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { resolveBySpaceNodeEnv } from "./byspace-env.js";
-import { z } from "zod";
 import { expandTilde } from "../utils/path.js";
 
 import type { BySpaceDaemonConfig } from "./bootstrap.js";
@@ -12,7 +11,6 @@ import {
   LogLevelSchema,
   type PersistedConfig,
 } from "./persisted-config.js";
-import type { AgentProvider } from "./agent/agent-sdk-types.js";
 import type {
   AgentProviderRuntimeSettingsMap,
   ProviderOverride,
@@ -120,18 +118,6 @@ function resolveLogConfigFromEnv(
     ...(envLogLevel.success ? { level: envLogLevel.data } : {}),
     ...(envLogFormat.success ? { format: envLogFormat.data } : {}),
   };
-}
-
-const OptionalVoiceLlmProviderSchema = z
-  .union([z.string(), z.null(), z.undefined()])
-  .transform((value): string | null =>
-    typeof value === "string" ? value.trim().toLowerCase() : null,
-  )
-  .pipe(z.union([AgentProviderSchema, z.null()]));
-
-function parseOptionalVoiceLlmProvider(value: unknown): AgentProvider | null {
-  const parsed = OptionalVoiceLlmProviderSchema.safeParse(value);
-  return parsed.success ? parsed.data : null;
 }
 
 function extractProviderOverrides(
@@ -264,12 +250,6 @@ function resolveRelayConfig(input: ResolveRelayInput): ResolvedRelay {
   return { enabled, endpoint, publicEndpoint, useTls, publicUseTls };
 }
 
-interface ResolvedVoiceLlm {
-  provider: AgentProvider | null;
-  providerExplicit: boolean;
-  model: string | null;
-}
-
 function resolveServiceProxyPublicBaseUrl(value: string | null): string | null {
   if (value === null) {
     return null;
@@ -329,21 +309,6 @@ function resolveWebUiConfig(
   return {
     enabled,
     distDir,
-  };
-}
-
-function resolveVoiceLlmConfig(
-  env: NodeJS.ProcessEnv,
-  persisted: ReturnType<typeof loadPersistedConfig>,
-): ResolvedVoiceLlm {
-  const envVoiceLlmProvider = parseOptionalVoiceLlmProvider(env.BYSPACE_VOICE_LLM_PROVIDER);
-  const persistedVoiceLlmProvider = parseOptionalVoiceLlmProvider(
-    persisted.features?.voiceMode?.llm?.provider,
-  );
-  return {
-    provider: envVoiceLlmProvider ?? persistedVoiceLlmProvider ?? null,
-    providerExplicit: envVoiceLlmProvider !== null || persistedVoiceLlmProvider !== null,
-    model: persisted.features?.voiceMode?.llm?.model ?? null,
   };
 }
 
@@ -504,13 +469,12 @@ export function loadConfig(
   const serviceProxy = resolveServiceProxyConfig(env, persisted);
   const webUi = resolveWebUiConfig(byspaceHome, env, options?.cli, persisted);
 
-  const { openai, speech } = resolveSpeechConfig({
+  const speech = resolveSpeechConfig({
     byspaceHome,
     env,
     persisted,
   });
 
-  const voiceLlm = resolveVoiceLlmConfig(env, persisted);
   const providerOverrides = extractProviderOverrides(
     persisted.agents?.providers as Record<string, unknown> | undefined,
   );
@@ -545,11 +509,8 @@ export function loadConfig(
     webUi,
     appBaseUrl,
     auth: resolveAuthConfig(env, persisted),
-    openai,
     speech,
-    voiceLlmProvider: voiceLlm.provider,
-    voiceLlmProviderExplicit: voiceLlm.providerExplicit,
-    voiceLlmModel: voiceLlm.model,
+    dictationRefineWithAgent: Boolean(persisted.features?.dictation?.refineWithAgent),
     agentProviderSettings: extractAgentProviderSettings(providerOverrides),
     metadataGeneration: persisted.agents?.metadataGeneration,
     providerOverrides,

@@ -10,7 +10,7 @@ import dotenv from "dotenv";
 import { loadDaemonClientConstructor } from "./helpers/daemon-client-loader";
 import { createNodeWebSocketFactory, type NodeWebSocketFactory } from "./helpers/node-ws-factory";
 import { forkBySpaceHomeMetadata, resolveBySpaceHomePath } from "./helpers/byspace-home-fork";
-import { withDisabledE2ESpeechEnv } from "./helpers/speech-env";
+import { withUnconfiguredE2ESpeechEnv } from "./helpers/speech-env";
 
 function resolveWranglerCliPath(): string {
   const cliPath = [
@@ -229,48 +229,6 @@ async function stopCurrentDaemonFromPidLock(): Promise<void> {
     return;
   }
   await stopProcessByPid(pid);
-}
-
-function summarizeOpenAiErrorBody(body: string): string {
-  const trimmed = body.trim();
-  if (!trimmed) {
-    return "empty response body";
-  }
-  if (trimmed.length <= 240) {
-    return trimmed;
-  }
-  return `${trimmed.slice(0, 240)}…`;
-}
-
-async function isOpenAiApiKeyUsable(apiKey: string | undefined): Promise<boolean> {
-  const key = apiKey?.trim();
-  if (!key) {
-    return false;
-  }
-
-  try {
-    const response = await fetch("https://api.openai.com/v1/models?limit=1", {
-      method: "GET",
-      headers: {
-        Authorization: `Bearer ${key}`,
-      },
-    });
-    if (response.ok) {
-      return true;
-    }
-    const body = await response.text();
-    console.warn(
-      `[e2e] OPENAI_API_KEY probe failed (${response.status}): ${summarizeOpenAiErrorBody(body)}`,
-    );
-    return false;
-  } catch (error) {
-    console.warn(
-      `[e2e] OPENAI_API_KEY probe request failed: ${
-        error instanceof Error ? error.message : String(error)
-      }`,
-    );
-    return false;
-  }
 }
 
 let daemonProcess: ChildProcess | null = null;
@@ -521,31 +479,8 @@ async function applyBySpaceHomeFork(targetHome: string): Promise<void> {
   }
 }
 
-async function logSpeechHarnessConfig(): Promise<void> {
-  const openAiUsable = await isOpenAiApiKeyUsable(process.env.OPENAI_API_KEY);
-  const defaultLocalModelsDir = path.join(
-    process.env.HOME ?? "",
-    ".byspace",
-    "models",
-    "local-speech",
-  );
-  const hasDefaultLocalModelsDir =
-    defaultLocalModelsDir.trim().length > 0 && existsSync(defaultLocalModelsDir);
-
-  // Default app E2E does not cover speech flows. Keep speech disabled here so
-  // unrelated tests never start background local-model downloads.
-  if (!openAiUsable && !hasDefaultLocalModelsDir) {
-    console.warn(
-      "[e2e] Neither OPENAI_API_KEY nor local speech models found — app E2E keeps dictation/voice disabled. " +
-        "Tests that require dictation should gate on BYSPACE_DICTATION_ENABLED.",
-    );
-    return;
-  }
-
-  const speechAssets = openAiUsable ? "OpenAI" : `local models at ${defaultLocalModelsDir}`;
-  console.log(
-    `[e2e] Speech assets available from ${speechAssets}; app E2E keeps dictation/voice disabled.`,
-  );
+function logSpeechHarnessConfig(): void {
+  console.log("[e2e] Dictation starts unconfigured; app E2E never downloads a speech model.");
 }
 
 interface RelayStreamState {
@@ -744,7 +679,7 @@ interface DaemonSpawnArgs {
 function startDaemon(args: DaemonSpawnArgs): ChildProcess {
   const serverDir = path.resolve(__dirname, "../../..", "packages/server");
   const tsxBin = execSync("which tsx").toString().trim();
-  const env = withDisabledE2ESpeechEnv({
+  const env = withUnconfiguredE2ESpeechEnv({
     ...process.env,
     PATH: `${args.fakeEditorBinDir}${path.delimiter}${process.env.PATH ?? ""}`,
     BYSPACE_HOME: args.byspaceHome,
@@ -842,7 +777,7 @@ export default async function globalSetup() {
 
   const cleanup = () => performCleanup(shouldRemoveBySpaceHome);
 
-  await logSpeechHarnessConfig();
+  logSpeechHarnessConfig();
 
   try {
     const relayPort = await startRelay(new Set([port, metroPort]));

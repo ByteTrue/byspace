@@ -61,11 +61,7 @@ npm start
 
 **📋 Planned** (Phases 4-9):
 
-- LLM integration (OpenAI GPT-4)
-- Agent orchestrator
-- Speech-to-Text (Deepgram)
-- Text-to-Speech (OpenAI)
-- Audio streaming
+- Local dictation
 - UI polish
 
 See [IMPLEMENTATION_PLAN.md](./IMPLEMENTATION_PLAN.md) for complete details.
@@ -73,11 +69,8 @@ See [IMPLEMENTATION_PLAN.md](./IMPLEMENTATION_PLAN.md) for complete details.
 ## Environment Variables
 
 ```bash
-OPENAI_API_KEY=your-openai-key-here      # GPT-4 and TTS
-DEEPGRAM_API_KEY=your-deepgram-key-here  # Streaming STT
-STT_MODEL=whisper-1        # Optional: override to gpt-4o-transcribe, etc.
-STT_CONFIDENCE_THRESHOLD=-3.0  # Optional: reject low-confidence clips
-STT_DEBUG_AUDIO_DIR=.stt-debug # Optional: persist raw dictation audio for debugging
+BYSPACE_LOCAL_MODELS_DIR=~/.byspace/models/local-speech  # Optional model directory override
+BYSPACE_DICTATION_LOCAL_STT_MODEL=                        # Prefer selecting in Host settings
 BYSPACE_HOME=~/.byspace        # Runtime state directory (agents/, etc.)
 BYSPACE_LISTEN=127.0.0.1:6777  # Listen address (host:port or /path/to/socket)
 ```
@@ -93,7 +86,7 @@ BYSPACE_HOME=~/.byspace-blue BYSPACE_LISTEN=127.0.0.1:7777 npm run dev
 - **Server**: Express, TypeScript, ws (WebSocket)
 - **Client**: React 18, Vite, TypeScript
 - **Terminal**: tmux (via child_process)
-- **AI**: OpenAI (LLM + TTS), Deepgram (STT)
+- **Local dictation**: sherpa-onnx
 
 ## Testing
 

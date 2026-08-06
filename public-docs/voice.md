@@ -1,129 +1,65 @@
 ---
-title: Voice
-description: BySpace voice architecture, local-first model execution, and provider configuration.
-nav: Voice
+title: Dictation
+description: Local speech-to-text model setup and operation.
+nav: Dictation
 order: 41
 category: Configuration
 ---
 
-# Voice
+# Dictation
 
-BySpace has first-class voice support for dictation and voice mode conversations with your coding environment.
+BySpace supports local speech-to-text dictation. It does not provide Voice mode, text-to-speech, or cloud speech providers.
 
-## Philosophy
+## Set up a Host
 
-Voice is local-first. You can run speech fully on-device, or choose OpenAI for speech features. For voice reasoning/orchestration, BySpace reuses agent providers already installed and authenticated on your machine.
+Dictation models belong to the Host running the daemon. Each Host is configured independently.
 
-This keeps credentials and execution in your environment and avoids introducing a separate cloud-only voice stack.
+1. Open **Host Settings** for the Host you want to use.
+2. Open **Dictation**.
+3. Choose **Download and use** for a model.
+4. Wait for the model to finish downloading and become **In use**.
 
-## Architecture
+BySpace does not download a model by default. Until you complete these steps, the microphone remains visible but opens the Dictation settings instead of recording.
 
-- Speech I/O: STT and TTS providers per feature (`local` or `openai`)
-- Local speech runtime: ONNX models executed on CPU by default
-- Voice LLM orchestration: hidden agent session using your configured provider (`claude`, `codex`, or `opencode`)
-- Tooling path: MCP stdio bridge for voice tools and agent control
+## Model catalog
 
-## Local Speech
+The catalog contains two CPU models:
 
-Local speech defaults to model IDs `parakeet-tdt-0.6b-v2-int8` (STT) and `kokoro-en-v0_19` (TTS, speaker 0 / voice 00).
+- `sensevoice-small-int8` (SenseVoice Small ONNX int8) is the smaller/faster option. It supports Mandarin, English, Cantonese, Japanese, and Korean and includes punctuation. The download is about 155 MiB. SenseVoice is provided by Alibaba FunASR under its bundled FunASR Model License.
+- `fire-red-asr2-aed-int8` (FireRedASR2-AED ONNX int8) is the Mandarin-first quality option, with English, Chinese dialects, and Chinese-English code-switching support. The download is about 800 MiB.
 
-Missing models are downloaded at daemon startup into `$BYSPACE_HOME/models/local-speech`. Downloads happen only for missing files.
+Only the selected model is loaded. Models are downloaded from the fixed BySpace catalog, verified by exact size and SHA-256 checksum, and installed under `$BYSPACE_HOME/models/local-speech` unless you override the model directory. Arbitrary model URLs are not accepted.
 
-### Local STT models and language support
+## Manage a model
 
-| Model ID                    | Languages                                                                                                                                                                                                                                                                    |
-| --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `parakeet-tdt-0.6b-v2-int8` | English only (default). Includes punctuation and capitalization.                                                                                                                                                                                                             |
-| `parakeet-tdt-0.6b-v3-int8` | 25 European languages, auto-detected: Bulgarian, Croatian, Czech, Danish, Dutch, English, Estonian, Finnish, French, German, Greek, Hungarian, Italian, Latvian, Lithuanian, Maltese, Polish, Portuguese, Romanian, Russian, Slovak, Slovenian, Spanish, Swedish, Ukrainian. |
+The Dictation settings show the selected model and its current state:
 
-**To use a non-English language, switch the local STT model to `parakeet-tdt-0.6b-v3-int8`.** v3 detects the spoken language automatically — there is no per-language setting for it. The `language` field below does **not** steer the local Parakeet model (v2 is English-only, v3 auto-detects); it only applies to the OpenAI STT provider.
+- **Download and use** installs and selects a model.
+- **Use** switches to an already installed model.
+- **Delete** removes the model from that Host. Deleting the active model returns dictation to the unconfigured state.
+- **Retry** retries a failed download.
 
-```json
-{
-  "version": 1,
-  "features": {
-    "dictation": {
-      "stt": { "provider": "local", "model": "parakeet-tdt-0.6b-v2-int8", "language": "en" }
-    },
-    "voiceMode": {
-      "llm": { "provider": "claude", "model": "haiku" },
-      "stt": { "provider": "local", "model": "parakeet-tdt-0.6b-v2-int8", "language": "en" },
-      "tts": { "provider": "local", "model": "kokoro-en-v0_19", "speakerId": 0 }
-    }
-  },
-  "providers": {
-    "local": {
-      "modelsDir": "~/.byspace/models/local-speech"
-    }
-  }
-}
-```
+A model change never interrupts an active dictation session. Finish the current session before switching or deleting its model.
 
-For multilingual local dictation, set the model to v3 — it auto-detects the language, so no `language` field is needed:
+## Use dictation
 
-```json
-{
-  "version": 1,
-  "features": {
-    "dictation": {
-      "stt": { "provider": "local", "model": "parakeet-tdt-0.6b-v3-int8" }
-    }
-  }
-}
-```
+Select the microphone in the composer to start recording. The existing draft remains visible and cannot be edited while recording. Select **Stop and transcribe** when you finish speaking; BySpace then appends one final transcript to the draft for review.
 
-The `language` field applies only to the OpenAI STT provider: set `features.dictation.stt.language` for dictation and `features.voiceMode.stt.language` for voice mode. If voice language is omitted, BySpace uses the dictation language before falling back to `en`. It has no effect on the local Parakeet models.
+The recording toolbar also provides **Cancel**, which discards the recording without changing the draft. Dictation does not stream provisional text, infer sentence breaks from pauses, or send automatically.
 
-## OpenAI Voice Option
+## Optional AI refinement
 
-You can switch dictation, voice STT, and voice TTS to OpenAI by setting provider fields to `openai` and providing OpenAI credentials.
+Turn on **Clean up with AI** in the Host's Dictation settings to clean up the final transcript through the same structured-generation Provider path used for titles and Git metadata. This optional setting defaults off. It can restore punctuation and paragraphs, remove obvious filler or repetition, and repair an unambiguous recognition typo. It creates one extra model call.
 
-```json
-{
-  "version": 1,
-  "features": {
-    "dictation": { "stt": { "provider": "openai" } },
-    "voiceMode": {
-      "stt": { "provider": "openai" },
-      "tts": { "provider": "openai" }
-    }
-  },
-  "providers": {
-    "openai": {
-      "stt": {
-        "apiKey": "...",
-        "baseUrl": "https://api.openai.com/v1"
-      },
-      "tts": {
-        "apiKey": "...",
-        "baseUrl": "https://api.openai.com/v1"
-      }
-    }
-  }
-}
-```
+Audio remains on the Host; only transcript text is sent through the same structured-generation provider path used for titles and Git metadata. Provider failures fail open to the original transcript.
 
-`providers.openai.stt` covers dictation and voice mode speech-to-text, and `providers.openai.tts` covers voice mode text-to-speech. Because they resolve independently, you can point STT and TTS at different endpoints. Each falls back to `providers.openai.apiKey`/`baseUrl`, then `OPENAI_API_KEY`/`OPENAI_BASE_URL`, when unset. These settings configure only BySpace OpenAI speech traffic, without changing Codex or other OpenAI-backed tools.
+A successful result appears in the composer as an **AI-cleaned transcript**, never sends automatically, and keeps a **Use original** toggle so you can compare or restore the raw ASR text.
 
-BySpace uses these paths under the configured OpenAI base URL:
+## Advanced environment overrides
 
-- dictation STT: `/v1/audio/transcriptions`
-- voice mode STT: `/v1/audio/transcriptions`
-- voice mode TTS: `/v1/audio/speech`
+The Host settings are the normal configuration path. These environment variables are available for controlled deployments:
 
-## Environment Variables
+- `BYSPACE_LOCAL_MODELS_DIR`: override the Host-local model directory.
+- `BYSPACE_DICTATION_LOCAL_STT_MODEL`: override the selected catalog model ID.
 
-- `BYSPACE_VOICE_LLM_PROVIDER`, voice agent provider override
-- `BYSPACE_DICTATION_STT_PROVIDER`, `BYSPACE_VOICE_STT_PROVIDER`, `BYSPACE_VOICE_TTS_PROVIDER`, speech provider selection (`local` or `openai`)
-- `OPENAI_STT_API_KEY`, `OPENAI_STT_BASE_URL`, OpenAI speech-to-text endpoint (dictation + voice mode STT)
-- `OPENAI_TTS_API_KEY`, `OPENAI_TTS_BASE_URL`, OpenAI text-to-speech endpoint (voice mode TTS)
-- `BYSPACE_LOCAL_MODELS_DIR`, local model storage directory
-- `BYSPACE_DICTATION_LOCAL_STT_MODEL`, local dictation STT model ID
-- `BYSPACE_VOICE_LOCAL_STT_MODEL`, `BYSPACE_VOICE_LOCAL_TTS_MODEL`, local voice STT/TTS model IDs
-- `BYSPACE_DICTATION_LANGUAGE`, dictation STT language (OpenAI STT only; ignored by local Parakeet)
-- `BYSPACE_VOICE_LANGUAGE`, voice mode STT language; falls back to `BYSPACE_DICTATION_LANGUAGE` when unset (OpenAI STT only; ignored by local Parakeet)
-- `BYSPACE_VOICE_LOCAL_TTS_SPEAKER_ID`, `BYSPACE_VOICE_LOCAL_TTS_SPEED`, optional local voice TTS tuning
-
-## Operational Notes
-
-Voice mode can launch and control agents. Treat voice prompts with the same care as direct agent instructions, especially when specifying working directories or destructive operations.
+The legacy `features.voiceMode` configuration is accepted only for backward-compatible config parsing and has no runtime effect.

@@ -1,24 +1,18 @@
-import { ensureSherpaOnnxModels, getSherpaOnnxModelDir } from "./sherpa/model-downloader.js";
 import {
-  DEFAULT_LOCAL_STT_MODEL,
-  DEFAULT_LOCAL_TTS_MODEL,
+  ensureSherpaOnnxModel,
+  getSherpaOnnxModelDir,
+  isSherpaOnnxModelReady,
+  recoverSherpaOnnxModelDeletion,
+  stageSherpaOnnxModelDeletion,
+} from "./sherpa/model-downloader.js";
+import {
   LocalSttModelIdSchema,
-  LocalTtsModelIdSchema,
   listSherpaOnnxModels,
   type LocalSpeechModelId,
   type LocalSttModelId,
-  type LocalTtsModelId,
 } from "./sherpa/model-catalog.js";
 
-export {
-  DEFAULT_LOCAL_STT_MODEL,
-  DEFAULT_LOCAL_TTS_MODEL,
-  LocalSttModelIdSchema,
-  LocalTtsModelIdSchema,
-  type LocalSpeechModelId,
-  type LocalSttModelId,
-  type LocalTtsModelId,
-};
+export { LocalSttModelIdSchema, type LocalSpeechModelId, type LocalSttModelId };
 
 export type LocalSpeechModelSpec = ReturnType<typeof listSherpaOnnxModels>[number];
 
@@ -34,10 +28,15 @@ export async function ensureLocalSpeechModels(options: {
   modelsDir: string;
   modelIds: LocalSpeechModelId[];
   logger: import("pino").Logger;
-}): Promise<Record<LocalSpeechModelId, string>> {
-  return ensureSherpaOnnxModels({
-    modelsDir: options.modelsDir,
-    modelIds: options.modelIds,
-    logger: options.logger,
-  });
+}): Promise<void> {
+  await Promise.all(
+    [...new Set(options.modelIds)].map((modelId) => ensureSherpaOnnxModel({ ...options, modelId })),
+  );
 }
+
+export {
+  ensureSherpaOnnxModel,
+  isSherpaOnnxModelReady,
+  recoverSherpaOnnxModelDeletion,
+  stageSherpaOnnxModelDeletion,
+};

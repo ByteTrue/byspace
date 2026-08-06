@@ -325,58 +325,22 @@ function createReadySpeechReadinessSnapshot(): SpeechReadinessSnapshot {
       retryable: false,
       missingModelIds: [],
     },
-    realtimeVoice: {
-      enabled: true,
-      available: true,
-      reasonCode: "ready",
-      message: "Realtime voice is ready.",
-      retryable: false,
-      missingModelIds: [],
-    },
-    voiceFeature: {
-      enabled: true,
-      available: true,
-      reasonCode: "ready",
-      message: "Voice features are ready.",
-      retryable: false,
-      missingModelIds: [],
-    },
   };
 }
 
 function createDownloadInProgressSpeechReadinessSnapshot(): SpeechReadinessSnapshot {
   return {
     generatedAt: "2026-02-14T00:00:00.000Z",
-    requiredLocalModelIds: ["parakeet-tdt-0.6b-v2-int8"],
-    missingLocalModelIds: ["parakeet-tdt-0.6b-v2-int8"],
-    download: {
-      inProgress: true,
-      error: null,
-    },
+    requiredLocalModelIds: ["fire-red-asr2-aed-int8"],
+    missingLocalModelIds: ["fire-red-asr2-aed-int8"],
+    download: { inProgress: true, error: null },
     dictation: {
       enabled: true,
       available: false,
-      reasonCode: "stt_unavailable",
-      message: "Dictation is unavailable: speech-to-text service is not ready.",
-      retryable: false,
-      missingModelIds: [],
-    },
-    realtimeVoice: {
-      enabled: true,
-      available: false,
-      reasonCode: "stt_unavailable",
-      message: "Realtime voice is unavailable: speech-to-text service is not ready.",
-      retryable: false,
-      missingModelIds: [],
-    },
-    voiceFeature: {
-      enabled: true,
-      available: false,
       reasonCode: "model_download_in_progress",
-      message:
-        "Voice features are unavailable while models download in the background (parakeet-tdt-0.6b-v2-int8).",
+      message: "The selected dictation model is downloading.",
       retryable: true,
-      missingModelIds: ["parakeet-tdt-0.6b-v2-int8"],
+      missingModelIds: ["fire-red-asr2-aed-int8"],
     },
   };
 }
@@ -944,10 +908,8 @@ describe("relay external socket reconnect behavior", () => {
       speechReadiness.dictation.enabled,
     );
     expect(serverInfo.capabilities?.voice?.dictation?.reason).toBe("");
-    expect(serverInfo.capabilities?.voice?.voice?.enabled).toBe(
-      speechReadiness.realtimeVoice.enabled,
-    );
-    expect(serverInfo.capabilities?.voice?.voice?.reason).toBe("");
+    expect(serverInfo.capabilities?.voice?.voice?.enabled).toBe(false);
+    expect(serverInfo.capabilities?.voice?.voice?.reason).toBe("Voice mode has been removed.");
 
     await server.close();
   });
@@ -970,7 +932,7 @@ describe("relay external socket reconnect behavior", () => {
     const secondEnvelope = sentServerInfoEnvelopes(socket)[1];
     const secondPayload = parseServerInfoStatusPayload(secondEnvelope.message?.payload);
     expect(secondPayload?.capabilities?.voice?.dictation.enabled).toBe(true);
-    expect(secondPayload?.capabilities?.voice?.voice.enabled).toBe(true);
+    expect(secondPayload?.capabilities?.voice?.voice.enabled).toBe(false);
 
     // Same readiness should not produce another server_info broadcast.
     server.publishSpeechReadiness(speechReadiness);
@@ -994,10 +956,8 @@ describe("relay external socket reconnect behavior", () => {
 
     const envelope = sentServerInfoEnvelopes(socket)[1];
     const payload = parseServerInfoStatusPayload(envelope.message?.payload);
-    expect(payload?.capabilities?.voice?.dictation.enabled).toBe(true);
-    expect(payload?.capabilities?.voice?.voice.enabled).toBe(true);
+    expect(payload?.capabilities?.voice?.voice.enabled).toBe(false);
     expect(payload?.capabilities?.voice?.dictation.reason).toContain("Try again in a few minutes.");
-    expect(payload?.capabilities?.voice?.voice.reason).toContain("Try again in a few minutes.");
 
     await server.close();
   });

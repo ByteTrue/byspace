@@ -27,6 +27,7 @@ import {
   Shield,
   Plus,
   FolderGit2,
+  Mic,
 } from "lucide-react-native";
 import { DropdownTrigger } from "@/components/ui/dropdown-trigger";
 import { ComboboxTrigger } from "@/components/ui/combobox-trigger";
@@ -61,7 +62,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem } from "@/component
 import { resolveAppVersion } from "@/utils/app-version";
 import { settingsStyles } from "@/styles/settings";
 import { THINKING_TONE_NATIVE_PCM_BASE64 } from "@/utils/thinking-tone.native-pcm";
-import { useVoiceAudioEngineOptional } from "@/contexts/voice-context";
+import { useAudioEngineOptional } from "@/contexts/audio-context";
 import {
   LANGUAGE_OPTIONS,
   formatLanguageOptionLabel,
@@ -72,6 +73,7 @@ import {
 import {
   HostConnectionsPage,
   HostAgentsPage,
+  HostDictationPage,
   HostSettingsPage,
   HostProvidersPage,
   HostUsagePage,
@@ -129,6 +131,7 @@ interface HostSectionItem {
 const HOST_SECTION_ITEMS: HostSectionItem[] = [
   { id: "host", labelKey: "settings.hostSections.host", icon: Server },
   { id: "connections", labelKey: "settings.hostSections.connections", icon: Network },
+  { id: "dictation", labelKey: "settings.hostSections.dictation", icon: Mic },
   { id: "agents", labelKey: "settings.hostSections.agents", icon: Bot },
   { id: "workspaces", labelKey: "settings.hostSections.workspaces", icon: FolderGit2 },
   { id: "providers", labelKey: "settings.hostSections.providers", icon: Boxes },
@@ -142,6 +145,8 @@ function renderHostSettingsContent(
   switch (view.section) {
     case "connections":
       return <HostConnectionsPage serverId={view.serverId} />;
+    case "dictation":
+      return <HostDictationPage serverId={view.serverId} />;
     case "agents":
       return <HostAgentsPage serverId={view.serverId} />;
     case "workspaces":
@@ -355,14 +360,14 @@ function GeneralSection({
 }
 
 interface DiagnosticsSectionProps {
-  voiceAudioEngine: ReturnType<typeof useVoiceAudioEngineOptional>;
+  audioEngine: ReturnType<typeof useAudioEngineOptional>;
   isPlaybackTestRunning: boolean;
   playbackTestResult: string | null;
   handlePlaybackTest: () => Promise<void>;
 }
 
 function DiagnosticsSection({
-  voiceAudioEngine,
+  audioEngine,
   isPlaybackTestRunning,
   playbackTestResult,
   handlePlaybackTest,
@@ -386,7 +391,7 @@ function DiagnosticsSection({
             variant="secondary"
             size="sm"
             onPress={handlePlayPress}
-            disabled={!voiceAudioEngine || isPlaybackTestRunning}
+            disabled={!audioEngine || isPlaybackTestRunning}
           >
             {isPlaybackTestRunning
               ? t("settings.diagnostics.playing")
@@ -836,7 +841,7 @@ export default function SettingsScreen({ view, openAddHostIntent = null }: Setti
   const router = useRouter();
   const { theme } = useUnistyles();
   const { t } = useTranslation();
-  const voiceAudioEngine = useVoiceAudioEngineOptional();
+  const audioEngine = useAudioEngineOptional();
   const { settings, isLoading: settingsLoading, updateSettings } = useAppSettings();
   const [isAddHostMethodVisible, setIsAddHostMethodVisible] = useState(false);
   const [isDirectHostVisible, setIsDirectHostVisible] = useState(false);
@@ -904,7 +909,7 @@ export default function SettingsScreen({ view, openAddHostIntent = null }: Setti
   );
 
   const handlePlaybackTest = useCallback(async () => {
-    if (!voiceAudioEngine || isPlaybackTestRunning) {
+    if (!audioEngine || isPlaybackTestRunning) {
       return;
     }
 
@@ -913,9 +918,9 @@ export default function SettingsScreen({ view, openAddHostIntent = null }: Setti
 
     try {
       const bytes = Buffer.from(THINKING_TONE_NATIVE_PCM_BASE64, "base64");
-      await voiceAudioEngine.initialize();
-      voiceAudioEngine.stop();
-      await voiceAudioEngine.play({
+      await audioEngine.initialize();
+      audioEngine.stop();
+      await audioEngine.play({
         type: "audio/pcm;rate=16000;bits=16",
         size: bytes.byteLength,
         async arrayBuffer() {
@@ -930,7 +935,7 @@ export default function SettingsScreen({ view, openAddHostIntent = null }: Setti
     } finally {
       setIsPlaybackTestRunning(false);
     }
-  }, [isPlaybackTestRunning, t, voiceAudioEngine]);
+  }, [audioEngine, isPlaybackTestRunning, t]);
 
   const closeAddConnectionFlow = useCallback(() => {
     setIsAddHostMethodVisible(false);
@@ -1103,7 +1108,7 @@ export default function SettingsScreen({ view, openAddHostIntent = null }: Setti
               />
               <AppearanceSection />
               <DiagnosticsSection
-                voiceAudioEngine={voiceAudioEngine}
+                audioEngine={audioEngine}
                 isPlaybackTestRunning={isPlaybackTestRunning}
                 playbackTestResult={playbackTestResult}
                 handlePlaybackTest={handlePlaybackTest}

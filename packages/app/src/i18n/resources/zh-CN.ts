@@ -89,16 +89,9 @@ export const zhCN: TranslationResources = {
       interrupt: "中断",
     },
     voice: {
-      enableVoiceMode: "启用语音模式",
-      voiceMode: "语音模式",
-      unmuteVoiceMode: "取消静音语音模式",
-      muteVoiceMode: "静音语音模式",
       stopDictation: "停止听写",
       startDictation: "开始听写",
-      unmuteVoice: "取消静音",
-      muteVoice: "静音",
       dictation: "听写",
-      interruptBeforeVoice: "启动语音模式前请先中断 Agent",
     },
     attachments: {
       addImage: "添加图片",
@@ -282,12 +275,15 @@ export const zhCN: TranslationResources = {
     },
     dictation: {
       start: "开始语音听写",
+      stop: "停止并转写",
       cancel: "取消听写",
       retry: "重试听写",
-      insert: "插入转写",
-      insertAndSend: "插入转写并发送",
       failed: "听写失败：{{error}}",
       failedRetry: "听写失败。点按重试。",
+      aiRefinedTranscript: "AI 已整理转写",
+      originalTranscript: "原始转写",
+      useOriginal: "使用原文",
+      useAiRefinement: "使用 AI 整理",
     },
     question: {
       submit: "提交",
@@ -1206,13 +1202,6 @@ export const zhCN: TranslationResources = {
       copied: "已复制",
     },
   },
-  realtimeVoice: {
-    actions: {
-      mute: "静音 realtime voice",
-      unmute: "取消静音 realtime voice",
-      stop: "停止 realtime voice 并中断 turn",
-    },
-  },
   rewind: {
     tooltip: "回退到此消息",
     warning: "此操作无法撤销",
@@ -1388,6 +1377,7 @@ export const zhCN: TranslationResources = {
     },
     hostSections: {
       connections: "连接",
+      dictation: "听写",
       agents: "Agents",
       workspaces: "Workspaces",
       providers: "Providers",
@@ -1564,12 +1554,10 @@ export const zhCN: TranslationResources = {
         cycleTheme: "循环切换主题",
         focusMessageInput: "聚焦消息输入框",
         cycleAgentMode: "循环切换代理模式",
-        toggleVoiceMode: "切换语音模式",
         startStopDictation: "开始/停止听写",
         interruptAgent: "中断 Agent",
         sendMessage: "发送消息",
         queueMessage: "消息排队",
-        muteUnmuteVoiceMode: "静音/取消静音语音模式",
       },
       helpNotes: {
         showKeyboardShortcuts: "焦点不在文本输入框或终端内时可用。",
@@ -1595,6 +1583,37 @@ export const zhCN: TranslationResources = {
       badges: {
         relay: "Relay",
         local: "本地",
+      },
+      dictation: {
+        title: "听写",
+        description: "语音仅在此 Host 本地转写，不会发送到任何 API。",
+        updateHost: "更新 Host 后才能选择听写模型。",
+        disconnected: "连接此 Host 后才能管理听写模型。",
+        loading: "正在加载模型…",
+        loadError: "无法加载听写模型",
+        operationError: "听写模型操作失败",
+        refinement: {
+          title: "使用 AI 整理",
+          hint: "本地转写完成后，仅将文字发送到标题和 Git 文本使用的同一套 LLM Provider 链路。会额外调用一次模型；失败时保留原始转写，并提供“使用原文”切换。",
+          accessibilityLabel: "使用 AI 整理听写文本",
+        },
+        status: {
+          inUse: "使用中",
+          downloading: "下载中…",
+          downloaded: "已下载",
+          failed: "下载失败",
+          notDownloaded: "未下载",
+        },
+        actions: {
+          use: "使用",
+          downloadAndUse: "下载并使用",
+          delete: "删除 {{model}}",
+        },
+        models: {
+          fireRedDescription: "中文优先；支持英文、中英混说及 20 多种中文方言。",
+          senseVoiceDescription:
+            "阿里 FunASR SenseVoice Small；快速支持中文、英文、粤语、日语和韩语，并自带标点。采用 FunASR Model License。",
+        },
       },
       connections: {
         title: "连接",

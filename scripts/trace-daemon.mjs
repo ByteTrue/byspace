@@ -43,8 +43,6 @@ const entries = [
 const additionalInputs = [
   // Shell integration scripts loaded by the terminal manager
   "packages/server/dist/server/terminal/shell-integration/**",
-  // Silero VAD ONNX model (sherpa speech provider)
-  "packages/server/dist/server/server/speech/providers/local/sherpa/assets/silero_vad.onnx",
   // Server runtime config files (read by path, not require)
   "packages/server/.env.example",
   // CLI shebang script wrapping dist/index.js

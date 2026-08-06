@@ -69,11 +69,11 @@ New worktrees are created under `$BYSPACE_HOME/worktrees` by default. To place n
 
 Relative paths are resolved against `BYSPACE_HOME`. Existing worktrees remain where they are; changing this setting only changes where BySpace creates and discovers BySpace-managed worktrees going forward.
 
-## Voice
+## Dictation
 
-Voice is configured through `features.dictation` and `features.voiceMode`, with provider credentials under `providers`.
+Dictation uses a local speech model installed and selected for each Host. BySpace does not download a model by default and does not provide Voice mode or cloud speech providers.
 
-For voice philosophy, architecture, and complete local/OpenAI setup examples, see [Voice docs](/docs/voice).
+See [Dictation](/docs/voice) for setup and the current model catalog.
 
 ## Bundled web UI
 
@@ -198,15 +198,8 @@ In the Web app, enter the password in the direct connection setup screen.
 - `BYSPACE_LOG_FILE_ROTATE_COUNT`, override `log.file.rotate.maxFiles`
 - `BYSPACE_LOG`, `BYSPACE_LOG_FORMAT`, legacy log overrides (still supported)
 - `OPENAI_API_KEY`, override OpenAI provider key
-- `OPENAI_STT_API_KEY`, `OPENAI_STT_BASE_URL`, OpenAI speech-to-text endpoint (dictation + voice mode STT)
-- `OPENAI_TTS_API_KEY`, `OPENAI_TTS_BASE_URL`, OpenAI text-to-speech endpoint (voice mode TTS)
-- `BYSPACE_VOICE_LLM_PROVIDER`, override voice LLM provider (`claude`, `codex`, `opencode`)
-- `BYSPACE_DICTATION_STT_PROVIDER`, `BYSPACE_VOICE_STT_PROVIDER`, `BYSPACE_VOICE_TTS_PROVIDER`, override voice provider selection (`local` or `openai`)
-- `BYSPACE_LOCAL_MODELS_DIR`, control local model directory
-- `BYSPACE_DICTATION_LOCAL_STT_MODEL`, override local dictation STT model
-- `BYSPACE_VOICE_LOCAL_STT_MODEL`, `BYSPACE_VOICE_LOCAL_TTS_MODEL`, override local voice STT/TTS models
-- `BYSPACE_DICTATION_LANGUAGE`, `BYSPACE_VOICE_LANGUAGE`, override dictation and voice STT language
-- `BYSPACE_VOICE_LOCAL_TTS_SPEAKER_ID`, `BYSPACE_VOICE_LOCAL_TTS_SPEED`, optional local voice TTS tuning
+- `BYSPACE_LOCAL_MODELS_DIR`, override the Host-local speech model directory
+- `BYSPACE_DICTATION_LOCAL_STT_MODEL`, override the selected local dictation model
 
 ## Schema
 

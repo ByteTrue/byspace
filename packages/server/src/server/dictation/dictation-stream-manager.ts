@@ -17,25 +17,49 @@ import { parsePcmRateFromFormat, pcm16lePeakAbs } from "../speech/audio.js";
 const PCM_CHANNELS = 1;
 const PCM_BITS_PER_SAMPLE = 16;
 const DEFAULT_DICTATION_FINAL_TIMEOUT_MS = 10000;
-const DEFAULT_DICTATION_AUTO_COMMIT_SECONDS = 15;
+const DEFAULT_DICTATION_BACKGROUND_COMMIT_SECONDS = 15;
 const DICTATION_FINAL_TIMEOUT_MAX_MS = 5 * 60 * 1000;
 const DICTATION_FINAL_TIMEOUT_PER_PENDING_SEGMENT_MS = 15 * 1000;
 const DICTATION_FINAL_TIMEOUT_PER_PENDING_AUDIO_SECOND_MS = 1500;
 const DICTATION_FINAL_TIMEOUT_PER_MISSING_SEQ_MS = 250;
-const DICTATION_SILENCE_PEAK_THRESHOLD = Number.parseInt(
-  process.env.BYSPACE_DICTATION_SILENCE_PEAK_THRESHOLD ?? "300",
-  10,
-);
 
-function parseNonNegativeNumber(value: string | undefined): number | null {
-  if (value === undefined) {
-    return null;
+interface DictationDebugPort {
+  isEnabled: typeof isBySpaceDictationDebugEnabled;
+  createChunkWriter: typeof createDictationDebugChunkWriter;
+  persistAudio: typeof maybePersistDictationDebugAudio;
+}
+
+const DEFAULT_DICTATION_DEBUG_PORT: DictationDebugPort = {
+  isEnabled: isBySpaceDictationDebugEnabled,
+  createChunkWriter: createDictationDebugChunkWriter,
+  persistAudio: maybePersistDictationDebugAudio,
+};
+
+const CJK_BOUNDARY_START_RE = /^[\p{Script=Han}，。！？、；：“‘「『【（]/u;
+const CJK_BOUNDARY_END_RE = /[\p{Script=Han}，。！？、；：”’」』】）]$/u;
+const CJK_NO_LEADING_SPACE_RE = /^[，。！？、；：”’」』】）]/u;
+
+function joinTranscriptSegments(segments: string[]): string {
+  let joined = "";
+
+  for (const segment of segments) {
+    const text = segment.trim();
+    if (!text) {
+      continue;
+    }
+    if (!joined) {
+      joined = text;
+    } else if (
+      CJK_NO_LEADING_SPACE_RE.test(text) ||
+      (CJK_BOUNDARY_END_RE.test(joined) && CJK_BOUNDARY_START_RE.test(text))
+    ) {
+      joined += text;
+    } else {
+      joined += ` ${text}`;
+    }
   }
-  const parsed = Number.parseFloat(value);
-  if (!Number.isFinite(parsed) || parsed < 0) {
-    return null;
-  }
-  return parsed;
+
+  return joined;
 }
 
 function convertPCMToWavBuffer(
@@ -81,15 +105,18 @@ interface DictationStreamState {
   receivedChunks: Map<number, Buffer>;
   nextSeqToForward: number;
   ackSeq: number;
-  autoCommitBytes: number;
+  backgroundCommitBytes: number;
   bytesSinceCommit: number;
   peakSinceCommit: number;
+  pendingBackgroundCommitAcknowledgements: number;
   committedSegmentIds: string[];
+  pendingCommittedSegmentIdsByPreviousId: Map<string | null, string>;
   transcriptsBySegmentId: Map<string, string>;
   finalTranscriptSegmentIds: Set<string>;
   awaitingFinalCommit: boolean;
   finishRequested: boolean;
   finishSealed: boolean;
+  finalizing: boolean;
   finalSeq: number | null;
   finalTimeout: ReturnType<typeof setTimeout> | null;
 }
@@ -100,7 +127,6 @@ export type DictationStreamOutboundMessage =
       type: "dictation_stream_finish_accepted";
       payload: { dictationId: string; timeoutMs: number };
     }
-  | { type: "dictation_stream_partial"; payload: { dictationId: string; text: string } }
   | {
       type: "dictation_stream_final";
       payload: { dictationId: string; text: string; debugRecordingPath?: string };
@@ -132,7 +158,8 @@ export class DictationStreamManager {
   private readonly resolveStt: () => SpeechToTextProvider | null;
   private readonly language: string;
   private readonly finalTimeoutMs: number;
-  private readonly autoCommitSeconds: number;
+  private readonly backgroundCommitSeconds: number;
+  private readonly debug: DictationDebugPort;
   private readonly streams = new Map<string, DictationStreamState>();
 
   constructor(params: {
@@ -142,7 +169,8 @@ export class DictationStreamManager {
     stt: Resolvable<SpeechToTextProvider | null>;
     language?: string;
     finalTimeoutMs?: number;
-    autoCommitSeconds?: number;
+    backgroundCommitSeconds?: number;
+    debug?: DictationDebugPort;
   }) {
     this.logger = params.logger.child({ component: "dictation-stream-manager" });
     this.emit = params.emit;
@@ -150,10 +178,9 @@ export class DictationStreamManager {
     this.resolveStt = toResolver(params.stt);
     this.language = params.language ?? "en";
     this.finalTimeoutMs = params.finalTimeoutMs ?? DEFAULT_DICTATION_FINAL_TIMEOUT_MS;
-    this.autoCommitSeconds =
-      params.autoCommitSeconds ??
-      parseNonNegativeNumber(process.env.BYSPACE_DICTATION_AUTO_COMMIT_SECONDS) ??
-      DEFAULT_DICTATION_AUTO_COMMIT_SECONDS;
+    this.backgroundCommitSeconds =
+      params.backgroundCommitSeconds ?? DEFAULT_DICTATION_BACKGROUND_COMMIT_SECONDS;
+    this.debug = params.debug ?? DEFAULT_DICTATION_DEBUG_PORT;
   }
 
   public cleanupAll(): void {
@@ -188,17 +215,39 @@ export class DictationStreamManager {
       return;
     }
 
-    stt.on("committed", ({ segmentId }) => {
+    stt.on("committed", ({ segmentId, previousSegmentId }) => {
       const state = this.streams.get(dictationId);
       if (!state) {
         return;
       }
-      state.committedSegmentIds.push(segmentId);
-      state.bytesSinceCommit = 0;
-      state.peakSinceCommit = 0;
 
-      if (state.finishRequested && state.awaitingFinalCommit) {
-        state.awaitingFinalCommit = false;
+      state.pendingCommittedSegmentIdsByPreviousId.set(previousSegmentId, segmentId);
+      let expectedPreviousSegmentId = state.committedSegmentIds.at(-1) ?? null;
+      while (true) {
+        const nextSegmentId =
+          state.pendingCommittedSegmentIdsByPreviousId.get(expectedPreviousSegmentId);
+        if (!nextSegmentId) {
+          break;
+        }
+        state.pendingCommittedSegmentIdsByPreviousId.delete(expectedPreviousSegmentId);
+        state.committedSegmentIds.push(nextSegmentId);
+
+        const isBackgroundCommitAcknowledgement = state.pendingBackgroundCommitAcknowledgements > 0;
+        if (isBackgroundCommitAcknowledgement) {
+          state.pendingBackgroundCommitAcknowledgements -= 1;
+        } else {
+          state.bytesSinceCommit = 0;
+          state.peakSinceCommit = 0;
+        }
+
+        if (
+          state.finishRequested &&
+          state.awaitingFinalCommit &&
+          !isBackgroundCommitAcknowledgement
+        ) {
+          state.awaitingFinalCommit = false;
+        }
+        expectedPreviousSegmentId = nextSegmentId;
       }
 
       this.maybeFinalizeDictationStream(dictationId);
@@ -213,19 +262,6 @@ export class DictationStreamManager {
       if (isFinal) {
         state.finalTranscriptSegmentIds.add(segmentId);
       }
-
-      if (state.finishRequested && state.awaitingFinalCommit && isFinal) {
-        state.awaitingFinalCommit = false;
-      }
-
-      const orderedIds = state.committedSegmentIds.includes(segmentId)
-        ? state.committedSegmentIds
-        : [...state.committedSegmentIds, segmentId];
-      const partialText = orderedIds
-        .map((id) => state.transcriptsBySegmentId.get(id) ?? "")
-        .join(" ")
-        .trim();
-      this.emitDictationPartial(dictationId, partialText);
 
       this.maybeSealDictationStreamFinish(dictationId);
       this.maybeFinalizeDictationStream(dictationId);
@@ -272,15 +308,18 @@ export class DictationStreamManager {
       return;
     }
 
-    const debugChunkWriter = createDictationDebugChunkWriter(
+    const debugChunkWriter = this.debug.createChunkWriter(
       { sessionId: this.sessionId, dictationId },
       this.logger,
     );
 
     const outputRate = stt.requiredSampleRate;
-    const autoCommitBytes =
-      this.autoCommitSeconds > 0
-        ? Math.max(1, Math.round(this.autoCommitSeconds * outputRate * 2))
+    const bytesPerSecond = outputRate * (PCM_BITS_PER_SAMPLE / 8);
+    const backgroundCommitSeconds =
+      sttProvider.dictationBackgroundCommitSeconds ?? this.backgroundCommitSeconds;
+    const backgroundCommitBytes =
+      backgroundCommitSeconds > 0
+        ? Math.max(1, Math.round(backgroundCommitSeconds * bytesPerSecond))
         : 0;
 
     this.streams.set(dictationId, {
@@ -303,15 +342,18 @@ export class DictationStreamManager {
       receivedChunks: new Map(),
       nextSeqToForward: 0,
       ackSeq: -1,
-      autoCommitBytes,
+      backgroundCommitBytes,
       bytesSinceCommit: 0,
       peakSinceCommit: 0,
+      pendingBackgroundCommitAcknowledgements: 0,
       committedSegmentIds: [],
+      pendingCommittedSegmentIdsByPreviousId: new Map(),
       transcriptsBySegmentId: new Map(),
       finalTranscriptSegmentIds: new Set(),
       awaitingFinalCommit: false,
       finishRequested: false,
       finishSealed: false,
+      finalizing: false,
       finalSeq: null,
       finalTimeout: null,
     });
@@ -356,12 +398,8 @@ export class DictationStreamManager {
 
       const resampled = state.resampler ? state.resampler.processChunk(pcm16) : pcm16;
       if (resampled.length > 0) {
-        state.stt.appendPcm16(resampled);
-        state.debugAudioChunks.push(resampled);
-        state.bytesSinceCommit += resampled.length;
-        state.peakSinceCommit = Math.max(state.peakSinceCommit, pcm16lePeakAbs(resampled));
         try {
-          this.maybeAutoCommitDictationSegment(state);
+          this.appendDictationAudio(state, resampled);
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
           void this.failAndCleanupDictationStream(params.dictationId, message, true);
@@ -424,7 +462,6 @@ export class DictationStreamManager {
     }
 
     this.maybeSealDictationStreamFinish(dictationId);
-    this.maybeFinalizeDictationStream(dictationId);
 
     const updatedState = this.streams.get(dictationId);
     if (!updatedState) {
@@ -432,16 +469,18 @@ export class DictationStreamManager {
     }
 
     const timeoutEstimate = this.estimateFinalizationTimeout(updatedState);
-    if (updatedState.finalTimeout) {
-      clearTimeout(updatedState.finalTimeout);
+    if (!updatedState.finalizing) {
+      if (updatedState.finalTimeout) {
+        clearTimeout(updatedState.finalTimeout);
+      }
+      updatedState.finalTimeout = setTimeout(() => {
+        void this.failAndCleanupDictationStream(
+          dictationId,
+          "Timed out waiting for final transcription",
+          true,
+        );
+      }, timeoutEstimate.timeoutMs);
     }
-    updatedState.finalTimeout = setTimeout(() => {
-      void this.failAndCleanupDictationStream(
-        dictationId,
-        "Timed out waiting for final transcription",
-        true,
-      );
-    }, timeoutEstimate.timeoutMs);
 
     this.emit({
       type: "dictation_stream_finish_accepted",
@@ -463,6 +502,8 @@ export class DictationStreamManager {
       },
       "Accepted dictation finish request with adaptive timeout budget",
     );
+
+    this.maybeFinalizeDictationStream(dictationId);
   }
 
   public handleCancel(dictationId: string): void {
@@ -473,12 +514,8 @@ export class DictationStreamManager {
     this.emit({ type: "dictation_stream_ack", payload: { dictationId, ackSeq } });
   }
 
-  private emitDictationPartial(dictationId: string, text: string): void {
-    this.emit({ type: "dictation_stream_partial", payload: { dictationId, text } });
-  }
-
   private async maybePersistDictationStreamAudio(dictationId: string): Promise<string | null> {
-    if (!isBySpaceDictationDebugEnabled()) {
+    if (!this.debug.isEnabled()) {
       return null;
     }
 
@@ -500,7 +537,7 @@ export class DictationStreamManager {
       PCM_CHANNELS,
       PCM_BITS_PER_SAMPLE,
     );
-    const path = await maybePersistDictationDebugAudio(
+    const path = await this.debug.persistAudio(
       wavBuffer,
       { sessionId: state.sessionId, dictationId: state.dictationId, format: "audio/wav" },
       this.logger,
@@ -584,6 +621,7 @@ export class DictationStreamManager {
     }, 0);
     const pendingSegments =
       pendingCommittedSegments +
+      state.pendingBackgroundCommitAcknowledgements +
       pendingUncommittedTranscriptSegments +
       (state.awaitingFinalCommit ? 1 : 0);
     const pendingAudioSeconds = Math.ceil(Math.max(0, state.bytesSinceCommit) / bytesPerSecond);
@@ -608,23 +646,47 @@ export class DictationStreamManager {
     };
   }
 
-  private maybeAutoCommitDictationSegment(state: DictationStreamState): void {
-    if (state.finishRequested) {
-      return;
+  private appendDictationAudio(state: DictationStreamState, pcm16: Buffer): void {
+    let offset = 0;
+    while (offset < pcm16.length) {
+      const remainingBeforeCommit =
+        state.backgroundCommitBytes > 0
+          ? state.backgroundCommitBytes - state.bytesSinceCommit
+          : pcm16.length - offset;
+      const end = Math.min(pcm16.length, offset + remainingBeforeCommit);
+      const pending = pcm16.subarray(offset, end);
+
+      state.stt.appendPcm16(pending);
+      state.debugAudioChunks.push(pending);
+      state.bytesSinceCommit += pending.length;
+      state.peakSinceCommit = Math.max(state.peakSinceCommit, pcm16lePeakAbs(pending));
+      offset = end;
+
+      if (
+        !state.finishRequested &&
+        state.backgroundCommitBytes > 0 &&
+        state.bytesSinceCommit >= state.backgroundCommitBytes
+      ) {
+        this.commitDictationSegment(state);
+      }
     }
-    if (state.autoCommitBytes <= 0 || state.bytesSinceCommit < state.autoCommitBytes) {
-      return;
-    }
-    if (state.peakSinceCommit < DICTATION_SILENCE_PEAK_THRESHOLD) {
+  }
+
+  private commitDictationSegment(state: DictationStreamState): void {
+    if (state.peakSinceCommit === 0) {
       state.stt.clear();
-      state.bytesSinceCommit = 0;
-      state.peakSinceCommit = 0;
-      return;
+    } else {
+      state.pendingBackgroundCommitAcknowledgements += 1;
+      try {
+        state.stt.commit();
+      } catch (error) {
+        state.pendingBackgroundCommitAcknowledgements -= 1;
+        throw error;
+      }
     }
 
     state.bytesSinceCommit = 0;
     state.peakSinceCommit = 0;
-    state.stt.commit();
   }
 
   private maybeSealDictationStreamFinish(dictationId: string): void {
@@ -643,29 +705,19 @@ export class DictationStreamManager {
     }
 
     if (state.bytesSinceCommit > 0) {
-      if (state.peakSinceCommit < DICTATION_SILENCE_PEAK_THRESHOLD) {
+      if (state.peakSinceCommit === 0) {
         this.logger.debug(
           {
             dictationId,
             bytesSinceCommit: state.bytesSinceCommit,
             peakSinceCommit: state.peakSinceCommit,
           },
-          "Dictation finish: clearing silence-only tail (skip final commit)",
+          "Dictation finish: clearing all-zero PCM tail (skip final commit)",
         );
         state.stt.clear();
         state.bytesSinceCommit = 0;
         state.peakSinceCommit = 0;
         state.awaitingFinalCommit = false;
-        const droppedSegments = this.dropUncommittedNonFinalTranscripts(state);
-        if (droppedSegments > 0) {
-          this.logger.debug(
-            {
-              dictationId,
-              droppedSegments,
-            },
-            "Dictation finish: dropped uncommitted non-final transcript segments after silence clear",
-          );
-        }
       } else {
         state.awaitingFinalCommit = true;
         try {
@@ -682,21 +734,53 @@ export class DictationStreamManager {
 
     state.finishSealed = true;
   }
-
-  private dropUncommittedNonFinalTranscripts(state: DictationStreamState): number {
-    const committedSet = new Set(state.committedSegmentIds);
-    let droppedCount = 0;
-    for (const segmentId of state.transcriptsBySegmentId.keys()) {
-      if (committedSet.has(segmentId)) {
-        continue;
-      }
-      if (state.finalTranscriptSegmentIds.has(segmentId)) {
-        continue;
-      }
-      state.transcriptsBySegmentId.delete(segmentId);
-      droppedCount += 1;
+  private async persistAndEmitDictationStreamFinal(
+    state: DictationStreamState,
+    text: string,
+  ): Promise<void> {
+    if (state.finalizing) {
+      return;
     }
-    return droppedCount;
+    state.finalizing = true;
+    if (state.finalTimeout) {
+      clearTimeout(state.finalTimeout);
+      state.finalTimeout = null;
+    }
+
+    let debugRecordingPath: string | null = null;
+    try {
+      debugRecordingPath = await this.maybePersistDictationStreamAudio(state.dictationId);
+    } catch (error) {
+      this.logger.warn(
+        { dictationId: state.dictationId, err: error },
+        "Failed to persist dictation debug audio",
+      );
+    }
+    if (this.streams.get(state.dictationId) !== state) {
+      return;
+    }
+
+    this.emit({
+      type: "dictation_stream_final",
+      payload: {
+        dictationId: state.dictationId,
+        text,
+        ...(debugRecordingPath ? { debugRecordingPath } : {}),
+      },
+    });
+    if (debugRecordingPath) {
+      this.emit({
+        type: "activity_log",
+        payload: {
+          id: uuidv4(),
+          timestamp: new Date(),
+          type: "system",
+          content: `Saved dictation audio: ${debugRecordingPath}`,
+          metadata: { recordingPath: debugRecordingPath, dictationId: state.dictationId },
+        },
+      });
+    }
+    this.cleanupDictationStream(state.dictationId);
   }
 
   private maybeFinalizeDictationStream(dictationId: string): void {
@@ -714,6 +798,9 @@ export class DictationStreamManager {
     if (state.awaitingFinalCommit) {
       return;
     }
+    if (state.pendingBackgroundCommitAcknowledgements > 0) {
+      return;
+    }
 
     const committedSet = new Set(state.committedSegmentIds);
     const orderedSegmentIds: string[] = [...state.committedSegmentIds];
@@ -724,30 +811,7 @@ export class DictationStreamManager {
     }
 
     if (orderedSegmentIds.length === 0) {
-      void (async () => {
-        const debugRecordingPath = await this.maybePersistDictationStreamAudio(dictationId);
-        this.emit({
-          type: "dictation_stream_final",
-          payload: {
-            dictationId,
-            text: "",
-            ...(debugRecordingPath ? { debugRecordingPath } : {}),
-          },
-        });
-        if (debugRecordingPath) {
-          this.emit({
-            type: "activity_log",
-            payload: {
-              id: uuidv4(),
-              timestamp: new Date(),
-              type: "system",
-              content: `Saved dictation audio: ${debugRecordingPath}`,
-              metadata: { recordingPath: debugRecordingPath, dictationId },
-            },
-          });
-        }
-        this.cleanupDictationStream(dictationId);
-      })();
+      void this.persistAndEmitDictationStreamFinal(state, "");
       return;
     }
 
@@ -758,35 +822,11 @@ export class DictationStreamManager {
       return;
     }
 
-    const orderedText = orderedSegmentIds
-      .map((segmentId) => state.transcriptsBySegmentId.get(segmentId) ?? "")
-      .join(" ")
-      .trim();
+    const orderedText = joinTranscriptSegments(
+      orderedSegmentIds.map((segmentId) => state.transcriptsBySegmentId.get(segmentId) ?? ""),
+    );
 
-    void (async () => {
-      const debugRecordingPath = await this.maybePersistDictationStreamAudio(dictationId);
-      this.emit({
-        type: "dictation_stream_final",
-        payload: {
-          dictationId,
-          text: orderedText,
-          ...(debugRecordingPath ? { debugRecordingPath } : {}),
-        },
-      });
-      if (debugRecordingPath) {
-        this.emit({
-          type: "activity_log",
-          payload: {
-            id: uuidv4(),
-            timestamp: new Date(),
-            type: "system",
-            content: `Saved dictation audio: ${debugRecordingPath}`,
-            metadata: { recordingPath: debugRecordingPath, dictationId },
-          },
-        });
-      }
-      this.cleanupDictationStream(dictationId);
-    })();
+    void this.persistAndEmitDictationStreamFinal(state, orderedText);
   }
 }
 
