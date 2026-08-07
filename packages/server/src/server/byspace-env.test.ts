@@ -14,8 +14,13 @@ describe("byspace env contract", () => {
     BYSPACE_AGENT_ID: "agent-123",
     BYSPACE_NODE_ENV: "production",
     BYSPACE_SUPERVISED: "1",
+    BYSPACE_PI_TERMINAL_HOOK_OWNER_PID: "12345",
   };
-  const runtimeControlEnvKeys = ["BYSPACE_NODE_ENV", "BYSPACE_SUPERVISED"] as const;
+  const runtimeControlEnvKeys = [
+    "BYSPACE_NODE_ENV",
+    "BYSPACE_SUPERVISED",
+    "BYSPACE_PI_TERMINAL_HOOK_OWNER_PID",
+  ] as const;
 
   test("builds internal daemon child env by preserving pass-through and control vars", () => {
     expect(createBySpaceInternalEnv(baseEnv)).toMatchObject(baseEnv);
@@ -26,6 +31,7 @@ describe("byspace env contract", () => {
       EXTRA_VALUE: "from-overlay",
       BYSPACE_NODE_ENV: "test",
       BYSPACE_SUPERVISED: "1",
+      BYSPACE_PI_TERMINAL_HOOK_OWNER_PID: "67890",
       PATH: "/custom/bin",
     });
 
