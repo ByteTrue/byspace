@@ -884,7 +884,7 @@ function WorkspacesSectionHeader() {
             >
               {({ hovered, pressed }) => (
                 <View style={styles.attentionFilterRow}>
-                  <CircleAlert size={14} color={attentionIconColor(hovered, pressed)} />
+                  <CircleAlert size={14} color={attentionIconColor(Boolean(hovered), pressed)} />
                   {needsAttentionWorkspaceCount > 0 ? (
                     <Text style={styles.attentionFilterCount}>{needsAttentionWorkspaceCount}</Text>
                   ) : null}
