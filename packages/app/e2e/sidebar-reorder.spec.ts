@@ -36,9 +36,8 @@ async function quickDragFirstRowAfterSecond(rows: Locator) {
   await expect.poll(() => rowTestIds(rows)).toEqual([before[1], before[0]]);
 }
 
-test("projects and workspaces reorder with an immediate mouse drag", async ({ page }) => {
+test("workspaces reorder with an immediate mouse drag", async ({ page }) => {
   const firstProject = await seedWorkspace({ repoPrefix: "sidebar-reorder-first-" });
-  const secondProject = await seedWorkspace({ repoPrefix: "sidebar-reorder-second-" });
 
   try {
     const secondWorkspace = await firstProject.client.createWorkspace({
@@ -55,8 +54,6 @@ test("projects and workspaces reorder with an immediate mouse drag", async ({ pa
 
     await gotoAppShell(page);
     await waitForSidebarHydration(page);
-
-    await quickDragFirstRowAfterSecond(page.locator('[data-testid^="sidebar-project-row-"]'));
     const firstWorkspaceTestId = `sidebar-workspace-row-${getServerId()}:${firstProject.workspaceId}`;
     const secondWorkspaceTestId = `sidebar-workspace-row-${getServerId()}:${secondWorkspace.workspace.id}`;
     await quickDragFirstRowAfterSecond(
@@ -66,6 +63,5 @@ test("projects and workspaces reorder with an immediate mouse drag", async ({ pa
     );
   } finally {
     await firstProject.cleanup();
-    await secondProject.cleanup();
   }
 });

@@ -10,7 +10,6 @@ import {
 import { seedWorkspace } from "./helpers/seed-client";
 import { expectWorkspaceHeader } from "./helpers/workspace-ui";
 import { getServerId } from "./helpers/server-id";
-import { escapeRegex } from "./helpers/regex";
 
 const GITHUB_REMOTE_URL = "https://github.com/test-owner/test-repo.git";
 
@@ -31,9 +30,8 @@ async function openWorkspaceFromSidebar(
 
 async function waitForSidebarProject(page: import("@playwright/test").Page, projectName: string) {
   const row = page
-    .getByRole("button", {
-      name: new RegExp(escapeRegex(projectName), "i"),
-    })
+    .locator('[data-testid^="sidebar-project-row-"]')
+    .filter({ hasText: projectName })
     .first();
   await expect(row).toBeVisible({ timeout: 30_000 });
   return row;
