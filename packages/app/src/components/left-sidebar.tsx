@@ -1,6 +1,7 @@
 import { router, usePathname } from "expo-router";
 import {
   CalendarClock,
+  CircleAlert,
   FolderPlus,
   History,
   Home,
@@ -63,14 +64,11 @@ type SidebarTheme = ReturnType<typeof useUnistyles>["theme"];
 interface SidebarSharedProps {
   theme: SidebarTheme;
   projects: SidebarProjectedProject[];
-  needsAttentionProjectCount: number;
   workspaceEntriesByKey: ReadonlyMap<string, SidebarWorkspaceEntry>;
   isInitialLoad: boolean;
   isRevalidating: boolean;
   isManualRefresh: boolean;
-  collapsedProjectKeys: ReadonlySet<string>;
   shortcutIndexByWorkspaceKey: Map<string, number>;
-  toggleProjectCollapsed: (projectKey: string) => void;
   handleRefresh: () => void;
   handleOpenProject: () => void;
   handleHome: () => void;
@@ -115,13 +113,10 @@ export const LeftSidebar = memo(function LeftSidebar({ active }: { active: boole
 
   const {
     projects,
-    needsAttentionProjectCount,
     workspaceEntriesByKey,
     isInitialLoad,
     isRevalidating,
     refreshAll,
-    collapsedProjectKeys,
-    toggleProjectCollapsed,
     shortcutModel,
   } = useSidebarModel();
   const { shortcutIndexByWorkspaceKey } = shortcutModel;
@@ -214,14 +209,11 @@ export const LeftSidebar = memo(function LeftSidebar({ active }: { active: boole
   const sharedProps = {
     theme,
     projects,
-    needsAttentionProjectCount,
     workspaceEntriesByKey,
     isInitialLoad,
     isRevalidating,
     isManualRefresh,
-    collapsedProjectKeys,
     shortcutIndexByWorkspaceKey,
-    toggleProjectCollapsed,
     handleRefresh,
     labels,
   };
@@ -508,14 +500,11 @@ function SidebarFooter({
 function MobileSidebar({
   theme,
   projects,
-  needsAttentionProjectCount,
   workspaceEntriesByKey,
   isInitialLoad,
   isRevalidating,
   isManualRefresh,
-  collapsedProjectKeys,
   shortcutIndexByWorkspaceKey,
-  toggleProjectCollapsed,
   handleRefresh,
   handleOpenProject,
   handleHome,
@@ -607,10 +596,7 @@ function MobileSidebar({
           <SidebarAgentListSkeleton />
         ) : (
           <SidebarWorkspaceList
-            collapsedProjectKeys={collapsedProjectKeys}
-            onToggleProjectCollapsed={toggleProjectCollapsed}
             shortcutIndexByWorkspaceKey={shortcutIndexByWorkspaceKey}
-            needsAttentionProjectCount={needsAttentionProjectCount}
             projects={projects}
             workspaceEntriesByKey={workspaceEntriesByKey}
             isRefreshing={isManualRefresh && isRevalidating}
@@ -639,14 +625,11 @@ function MobileSidebar({
 function DesktopSidebar({
   theme,
   projects,
-  needsAttentionProjectCount,
   workspaceEntriesByKey,
   isInitialLoad,
   isRevalidating,
   isManualRefresh,
-  collapsedProjectKeys,
   shortcutIndexByWorkspaceKey,
-  toggleProjectCollapsed,
   handleRefresh,
   handleOpenProject,
   handleHome,
@@ -749,10 +732,7 @@ function DesktopSidebar({
           <SidebarAgentListSkeleton />
         ) : (
           <SidebarWorkspaceList
-            collapsedProjectKeys={collapsedProjectKeys}
-            onToggleProjectCollapsed={toggleProjectCollapsed}
             shortcutIndexByWorkspaceKey={shortcutIndexByWorkspaceKey}
-            needsAttentionProjectCount={needsAttentionProjectCount}
             projects={projects}
             workspaceEntriesByKey={workspaceEntriesByKey}
             isRefreshing={isManualRefresh && isRevalidating}
@@ -791,6 +771,24 @@ function WorkspacesSectionHeader() {
   const setCommandCenterOpen = useKeyboardShortcutsStore((state) => state.setCommandCenterOpen);
   const newWorkspaceKeys = useShortcutKeys("new-workspace");
   const commandCenterKeys = useShortcutKeys("toggle-command-center");
+  const attentionOnly = useSidebarViewStore((state) => state.attentionOnly);
+  const setAttentionOnly = useSidebarViewStore((state) => state.setAttentionOnly);
+  const needsAttentionWorkspaceCount = useSidebarModel().needsAttentionWorkspaceCount;
+  const attentionFilterLabel = t("sidebar.actions.needsAttentionFilter");
+  const handleAttentionFilterPress = useCallback(
+    () => setAttentionOnly(!attentionOnly),
+    [attentionOnly, setAttentionOnly],
+  );
+  const attentionAccessibilityState = useMemo(() => ({ selected: attentionOnly }), [attentionOnly]);
+  const attentionIconColor = (hovered: boolean, pressed: boolean) => {
+    if (attentionOnly) {
+      return theme.colors.statusWarning;
+    }
+    if (hovered || pressed) {
+      return theme.colors.foreground;
+    }
+    return theme.colors.foregroundMuted;
+  };
   const handleSearchPress = useCallback(() => setCommandCenterOpen(true), [setCommandCenterOpen]);
   const headerButtonStyle = useCallback(
     ({ hovered = false, pressed }: PressableStateCallbackType & { hovered?: boolean }) => [
@@ -798,6 +796,13 @@ function WorkspacesSectionHeader() {
       (hovered || pressed) && styles.workspacesHeaderIconButtonHovered,
     ],
     [],
+  );
+  const attentionButtonStyle = useCallback(
+    ({ hovered = false, pressed }: PressableStateCallbackType & { hovered?: boolean }) => [
+      styles.workspacesHeaderIconButton,
+      (hovered || pressed || attentionOnly) && styles.workspacesHeaderIconButtonHovered,
+    ],
+    [attentionOnly],
   );
   const newWorkspaceButtonStyle = useCallback(
     ({ hovered = false, pressed }: PressableStateCallbackType & { hovered?: boolean }) => [
@@ -865,6 +870,30 @@ function WorkspacesSectionHeader() {
           </TooltipTrigger>
           <TooltipContent side="bottom" align="center" offset={8}>
             <IconTooltipContent label="Search" shortcutKeys={commandCenterKeys} />
+          </TooltipContent>
+        </Tooltip>
+        <Tooltip delayDuration={300}>
+          <TooltipTrigger asChild>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={attentionFilterLabel}
+              accessibilityState={attentionAccessibilityState}
+              testID="sidebar-needs-attention-filter"
+              style={attentionButtonStyle}
+              onPress={handleAttentionFilterPress}
+            >
+              {({ hovered, pressed }) => (
+                <View style={styles.attentionFilterRow}>
+                  <CircleAlert size={14} color={attentionIconColor(hovered, pressed)} />
+                  {needsAttentionWorkspaceCount > 0 ? (
+                    <Text style={styles.attentionFilterCount}>{needsAttentionWorkspaceCount}</Text>
+                  ) : null}
+                </View>
+              )}
+            </Pressable>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" align="center" offset={8}>
+            <IconTooltipContent label={attentionFilterLabel} />
           </TooltipContent>
         </Tooltip>
         <Tooltip delayDuration={300}>
@@ -941,6 +970,16 @@ const styles = StyleSheet.create((theme) => ({
   },
   workspacesHeaderIconButtonHovered: {
     backgroundColor: theme.colors.surfaceSidebarHover,
+  },
+  attentionFilterRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+  },
+  attentionFilterCount: {
+    color: theme.colors.statusWarning,
+    fontSize: theme.fontSize.xs,
+    fontWeight: theme.fontWeight.medium,
   },
   workspacesHeaderIconButtonDisabled: {
     opacity: 0.45,

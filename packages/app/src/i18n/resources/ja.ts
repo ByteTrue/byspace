@@ -875,6 +875,8 @@ export const ja: TranslationResources = {
       home: "ホーム",
       settings: "設定",
       closeSidebar: "サイドバーを閉じる",
+      needsAttentionFilter: "対応が必要",
+      emptyAttention: "現在対応が必要な会話はありません",
     },
     help: {
       trigger: "ヘルプとサポート",
@@ -890,8 +892,6 @@ export const ja: TranslationResources = {
     sections: {
       sessions: "履歴",
       schedules: "スケジュール",
-      needsAttention: "対応が必要",
-      otherProjects: "その他のプロジェクト",
     },
     worktreeSetup: {
       title: "ワークツリースクリプトを設定",
@@ -944,8 +944,6 @@ export const ja: TranslationResources = {
         copyPath: "パスをコピー",
         copyBranchName: "ブランチ名をコピー",
         rename: "ワークスペースの名前を変更",
-        pin: "上部に固定",
-        unpin: "固定解除",
         archive: "アーカイブ",
         archiveWorkspace: "ワークスペースをアーカイブ",
         hideFromSidebar: "サイドバーから非表示",

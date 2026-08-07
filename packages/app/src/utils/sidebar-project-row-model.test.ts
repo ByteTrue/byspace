@@ -1,37 +1,23 @@
 import { describe, expect, it } from "vitest";
 import type {
   SidebarProjectEntry,
-  SidebarWorkspaceEntry,
+  SidebarWorkspacePlacement,
 } from "@/hooks/use-sidebar-workspaces-list";
 import {
-  buildSidebarProjectRowModel,
   resolveSidebarProjectIconTarget,
+  resolveSidebarProjectNewWorkspaceTarget,
 } from "./sidebar-project-row-model";
 
-function workspace(overrides: Partial<SidebarWorkspaceEntry> = {}): SidebarWorkspaceEntry {
+function workspace(): SidebarWorkspacePlacement {
   return {
     workspaceKey: "srv:ws-root",
     serverId: "srv",
     workspaceId: "ws-root",
     projectKey: "project-1",
     projectName: "byspace",
-    workspaceDirectory: "/repo",
     projectKind: "git",
     workspaceKind: "checkout",
     name: "byspace",
-    title: null,
-    currentBranch: null,
-    statusBucket: "done",
-    diffStat: null,
-    prHint: null,
-    archiveHasUncommittedChanges: null,
-    archiveUnpushedCommitCount: null,
-    scripts: [],
-    hasRunningScripts: false,
-    statusEnteredAt: null,
-    ...overrides,
-    agentSummary: overrides.agentSummary ?? null,
-    archivingAt: overrides.archivingAt ?? null,
   };
 }
 
@@ -50,109 +36,71 @@ function project(overrides: Partial<SidebarProjectEntry> = {}): SidebarProjectEn
   };
 }
 
-describe("buildSidebarProjectRowModel", () => {
-  it("renders a non-git single-workspace project as an expandable section", () => {
-    const result = buildSidebarProjectRowModel({
-      project: project({
-        projectKind: "directory",
-        workspaces: [workspace({ workspaceId: "ws-non-git", workspaceKind: "checkout" })],
-      }),
-      collapsed: false,
+describe("resolveSidebarProjectNewWorkspaceTarget", () => {
+  it("hides the action for a non-git project without workspace multiplicity", () => {
+    const target = resolveSidebarProjectNewWorkspaceTarget({
+      project: project({ projectKind: "directory" }),
     });
 
-    expect(result).toEqual({
-      kind: "project_section",
-      chevron: "collapse",
-      trailingAction: { kind: "none" },
-    });
+    expect(target).toBeNull();
   });
 
-  it("renders a single-workspace git project as an expandable section with the new workspace action", () => {
-    const result = buildSidebarProjectRowModel({
-      project: project({
-        projectKind: "git",
-        workspaces: [workspace({ workspaceId: "ws-main", workspaceKind: "checkout" })],
-      }),
-      collapsed: true,
-    });
+  it("shows the action for a single-workspace git project", () => {
+    const target = resolveSidebarProjectNewWorkspaceTarget({ project: project() });
 
-    expect(result).toEqual({
-      kind: "project_section",
-      chevron: "expand",
-      trailingAction: {
-        kind: "new_workspace",
-        target: { projectKey: "project-1" },
-      },
-    });
+    expect(target).toEqual({ projectKey: "project-1" });
   });
 
-  it("shows the new workspace action for a non-git project when the host supports workspace multiplicity", () => {
-    const result = buildSidebarProjectRowModel({
-      project: project({ projectKind: "directory", workspaces: [] }),
-      collapsed: false,
+  it("shows the action for a non-git project when the host supports workspace multiplicity", () => {
+    const target = resolveSidebarProjectNewWorkspaceTarget({
+      project: project({ projectKind: "directory" }),
       supportsMultiplicityByServerId: new Map([["srv", true]]),
     });
 
-    expect(result.trailingAction).toEqual({
-      kind: "new_workspace",
-      target: { projectKey: "project-1" },
-    });
+    expect(target).toEqual({ projectKey: "project-1" });
   });
 
-  it("hides the new workspace action for a non-git project when the host lacks workspace multiplicity", () => {
-    const result = buildSidebarProjectRowModel({
-      project: project({ projectKind: "directory", workspaces: [] }),
-      collapsed: false,
+  it("hides the action when workspace multiplicity is explicitly unavailable", () => {
+    const target = resolveSidebarProjectNewWorkspaceTarget({
+      project: project({ projectKind: "directory" }),
       supportsMultiplicityByServerId: new Map([["srv", false]]),
     });
 
-    expect(result.trailingAction).toEqual({ kind: "none" });
+    expect(target).toBeNull();
   });
 
-  it("still shows the new workspace action for a git project regardless of multiplicity", () => {
-    const result = buildSidebarProjectRowModel({
-      project: project({ projectKind: "git" }),
-      collapsed: false,
+  it("shows the action for a git project regardless of workspace multiplicity", () => {
+    const target = resolveSidebarProjectNewWorkspaceTarget({
+      project: project(),
       supportsMultiplicityByServerId: new Map([["srv", false]]),
     });
 
-    expect(result.trailingAction).toEqual({
-      kind: "new_workspace",
-      target: { projectKey: "project-1" },
-    });
+    expect(target).toEqual({ projectKey: "project-1" });
   });
 
   it("keeps multi-host creation scoped to the aggregate project", () => {
-    const result = buildSidebarProjectRowModel({
+    const target = resolveSidebarProjectNewWorkspaceTarget({
       project: project({
         hosts: [
           { serverId: "host-a", iconWorkingDir: "/repo/a", canCreateWorktree: false },
           { serverId: "host-b", iconWorkingDir: "/repo/b", canCreateWorktree: true },
         ],
       }),
-      collapsed: false,
     });
 
-    expect(result.trailingAction).toEqual({
-      kind: "new_workspace",
-      target: { projectKey: "project-1" },
-    });
+    expect(target).toEqual({ projectKey: "project-1" });
   });
 
   it("preserves opaque aggregate project keys in creation targets", () => {
-    const result = buildSidebarProjectRowModel({
+    const target = resolveSidebarProjectNewWorkspaceTarget({
       project: project({ projectKey: " project-1 " }),
-      collapsed: false,
     });
 
-    expect(result.trailingAction).toEqual({
-      kind: "new_workspace",
-      target: { projectKey: " project-1 " },
-    });
+    expect(target).toEqual({ projectKey: " project-1 " });
   });
 
-  it("keeps multiplicity-backed creation scoped to the aggregate project", () => {
-    const result = buildSidebarProjectRowModel({
+  it("supports multiplicity from any host in an aggregate project", () => {
+    const target = resolveSidebarProjectNewWorkspaceTarget({
       project: project({
         projectKind: "directory",
         hosts: [
@@ -160,38 +108,14 @@ describe("buildSidebarProjectRowModel", () => {
           { serverId: "host-b", iconWorkingDir: "/repo/b", canCreateWorktree: false },
         ],
       }),
-      collapsed: false,
       supportsMultiplicityByServerId: new Map([["host-b", true]]),
     });
 
-    expect(result.trailingAction).toEqual({
-      kind: "new_workspace",
-      target: { projectKey: "project-1" },
-    });
+    expect(target).toEqual({ projectKey: "project-1" });
   });
+});
 
-  it("renders a multi-workspace git project as an expandable section with a new workspace action", () => {
-    const result = buildSidebarProjectRowModel({
-      project: project({
-        projectKind: "git",
-        workspaces: [
-          workspace({ workspaceId: "ws-main", workspaceKind: "checkout" }),
-          workspace({ workspaceId: "ws-feature", workspaceKind: "worktree" }),
-        ],
-      }),
-      collapsed: true,
-    });
-
-    expect(result).toEqual({
-      kind: "project_section",
-      chevron: "expand",
-      trailingAction: {
-        kind: "new_workspace",
-        target: { projectKey: "project-1" },
-      },
-    });
-  });
-
+describe("resolveSidebarProjectIconTarget", () => {
   it("resolves project icons from the project host, not the focused host", () => {
     const iconTarget = resolveSidebarProjectIconTarget(
       project({
@@ -203,21 +127,5 @@ describe("buildSidebarProjectRowModel", () => {
     );
 
     expect(iconTarget).toEqual({ serverId: "host-b", iconWorkingDir: "/repo/b" });
-  });
-
-  it("renders an empty project as an expandable section", () => {
-    const result = buildSidebarProjectRowModel({
-      project: project({ projectKind: "git", workspaces: [] }),
-      collapsed: false,
-    });
-
-    expect(result).toEqual({
-      kind: "project_section",
-      chevron: "collapse",
-      trailingAction: {
-        kind: "new_workspace",
-        target: { projectKey: "project-1" },
-      },
-    });
   });
 });

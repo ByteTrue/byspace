@@ -535,7 +535,7 @@ describe("translation resources", () => {
     expect(en.workspace.hoverCard.scriptsAccessibility).toBe("Workspace scripts");
     expect(en.workspace.hoverCard.detailsAccessibility).toBe("Workspace details");
     expect(en.workspace.hoverCard.agentStatus.needsInput).toBe("Needs input");
-    expect(en.sidebar.sections.needsAttention).toBe("Needs attention");
+    expect(en.sidebar.actions.needsAttentionFilter).toBe("Needs attention");
     expect(en.sidebar.workspace.agentSummary.needsAttention).toBe(
       "Agents needing attention: {{count}}",
     );

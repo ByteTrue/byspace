@@ -885,6 +885,8 @@ export const ru: TranslationResources = {
       home: "Дом",
       settings: "Настройки",
       closeSidebar: "Закрыть боковую панель",
+      needsAttentionFilter: "Требуют внимания",
+      emptyAttention: "Сейчас ничего не требует вашего внимания",
     },
     help: {
       trigger: "Помощь и поддержка",
@@ -900,8 +902,6 @@ export const ru: TranslationResources = {
     sections: {
       sessions: "История",
       schedules: "Расписания",
-      needsAttention: "Требует внимания",
-      otherProjects: "Другие проекты",
     },
     worktreeSetup: {
       title: "Настройка сценариев рабочего дерева",
@@ -954,8 +954,6 @@ export const ru: TranslationResources = {
         copyPath: "Копировать путь",
         copyBranchName: "Скопировать название ветки",
         rename: "Переименовать рабочую область",
-        pin: "Закрепить вверху",
-        unpin: "Открепить",
         archive: "Архив",
         archiveWorkspace: "Архивировать рабочее пространство",
         hideFromSidebar: "Скрыть с боковой панели",

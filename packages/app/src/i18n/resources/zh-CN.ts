@@ -856,6 +856,8 @@ export const zhCN: TranslationResources = {
       home: "首页",
       settings: "设置",
       closeSidebar: "关闭侧边栏",
+      needsAttentionFilter: "待处理",
+      emptyAttention: "当前没有需要你处理的会话",
     },
     help: {
       trigger: "帮助与支持",
@@ -871,8 +873,6 @@ export const zhCN: TranslationResources = {
     sections: {
       sessions: "历史",
       schedules: "计划",
-      needsAttention: "需要处理",
-      otherProjects: "其他项目",
     },
     worktreeSetup: {
       title: "设置 worktree scripts",
@@ -923,8 +923,6 @@ export const zhCN: TranslationResources = {
         copyPath: "复制路径",
         copyBranchName: "复制分支名称",
         rename: "重命名 workspace",
-        pin: "置顶",
-        unpin: "取消置顶",
         archive: "归档",
         archiveWorkspace: "归档工作区",
         hideFromSidebar: "从侧边栏隐藏",

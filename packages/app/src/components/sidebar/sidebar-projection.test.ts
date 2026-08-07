@@ -80,190 +80,79 @@ function projectKeys(projects: readonly SidebarProjectEntry[]): string[] {
 }
 
 describe("buildSidebarProjection", () => {
-  it("keeps each project once and moves any project with attention into the first section", () => {
+  it("keeps the input order regardless of attention or activity", () => {
     const waiting = makeWorkspace({
       id: "waiting",
-      projectKey: "needs-attention",
+      projectKey: "second",
       status: "attention",
       statusEnteredAt: "2026-07-01T09:00:00.000Z",
-      needsAttentionCount: 2,
-    });
-    const working = makeWorkspace({
-      id: "working",
-      projectKey: "needs-attention",
-      status: "running",
-      latestActivityAt: "2026-07-01T10:00:00.000Z",
-      workingCount: 1,
-    });
-    const other = makeWorkspace({
-      id: "other",
-      projectKey: "other",
-      latestActivityAt: "2026-07-01T11:00:00.000Z",
-    });
-
-    const projection = buildSidebarProjection({
-      projects: [
-        makeProject("other", [other.placement]),
-        makeProject("needs-attention", [working.placement, waiting.placement]),
-      ],
-      pinnedKeys: { pinnedWorkspaceKeys: [], pinnedAtByKey: {} },
-      workspaceEntriesByKey: new Map([
-        [waiting.entry.workspaceKey, waiting.entry],
-        [working.entry.workspaceKey, working.entry],
-        [other.entry.workspaceKey, other.entry],
-      ]),
-      projectNamesByKey: new Map(),
-      collapsedProjectKeys: new Set(),
-    });
-
-    expect(projectKeys(projection.needsAttentionProjects)).toEqual(["needs-attention"]);
-    expect(projectKeys(projection.otherProjects)).toEqual(["other"]);
-    expect(projection.needsAttentionProjects[0]?.needsAttentionCount).toBe(1);
-    expect(projection.needsAttentionProjects[0]?.workspaces.map((row) => row.workspaceId)).toEqual([
-      "waiting",
-      "working",
-    ]);
-  });
-
-  it("sorts attention projects by the oldest wait first", () => {
-    const newer = makeWorkspace({
-      id: "newer",
-      projectKey: "newer-project",
-      status: "failed",
-      statusEnteredAt: "2026-07-01T10:00:00.000Z",
       needsAttentionCount: 1,
-    });
-    const older = makeWorkspace({
-      id: "older",
-      projectKey: "older-project",
-      status: "needs_input",
-      statusEnteredAt: "2026-07-01T08:00:00.000Z",
-      needsAttentionCount: 1,
-    });
-
-    const projection = buildSidebarProjection({
-      projects: [
-        makeProject("newer-project", [newer.placement]),
-        makeProject("older-project", [older.placement]),
-      ],
-      pinnedKeys: { pinnedWorkspaceKeys: [], pinnedAtByKey: {} },
-      workspaceEntriesByKey: new Map([
-        [newer.entry.workspaceKey, newer.entry],
-        [older.entry.workspaceKey, older.entry],
-      ]),
-      projectNamesByKey: new Map(),
-      collapsedProjectKeys: new Set(),
-    });
-
-    expect(projectKeys(projection.needsAttentionProjects)).toEqual([
-      "older-project",
-      "newer-project",
-    ]);
-  });
-
-  it("sorts other projects by recent activity and leaves empty projects at the end", () => {
-    const older = makeWorkspace({
-      id: "older",
-      projectKey: "older-project",
-      latestActivityAt: "2026-07-01T08:00:00.000Z",
-    });
-    const newer = makeWorkspace({
-      id: "newer",
-      projectKey: "newer-project",
-      latestActivityAt: "2026-07-01T10:00:00.000Z",
-    });
-
-    const projection = buildSidebarProjection({
-      projects: [
-        makeProject("empty", []),
-        makeProject("older-project", [older.placement]),
-        makeProject("newer-project", [newer.placement]),
-      ],
-      pinnedKeys: { pinnedWorkspaceKeys: [], pinnedAtByKey: {} },
-      workspaceEntriesByKey: new Map([
-        [older.entry.workspaceKey, older.entry],
-        [newer.entry.workspaceKey, newer.entry],
-      ]),
-      projectNamesByKey: new Map(),
-      collapsedProjectKeys: new Set(),
-    });
-
-    expect(projectKeys(projection.otherProjects)).toEqual([
-      "newer-project",
-      "older-project",
-      "empty",
-    ]);
-  });
-
-  it("keeps the explicit pin override ahead of recent activity in Other projects", () => {
-    const pinned = makeWorkspace({
-      id: "pinned",
-      projectKey: "project",
-      latestActivityAt: "2026-07-01T08:00:00.000Z",
     });
     const recent = makeWorkspace({
       id: "recent",
-      projectKey: "project",
-      latestActivityAt: "2026-07-01T10:00:00.000Z",
+      projectKey: "first",
+      latestActivityAt: "2026-07-01T11:00:00.000Z",
+    });
+    const idle = makeWorkspace({
+      id: "idle",
+      projectKey: "first",
+      latestActivityAt: "2026-07-01T08:00:00.000Z",
     });
 
     const projection = buildSidebarProjection({
-      projects: [makeProject("project", [recent.placement, pinned.placement])],
-      pinnedKeys: {
-        pinnedWorkspaceKeys: [pinned.entry.workspaceKey],
-        pinnedAtByKey: { [pinned.entry.workspaceKey]: "2026-07-01T12:00:00.000Z" },
-      },
+      projects: [
+        makeProject("first", [idle.placement, recent.placement]),
+        makeProject("second", [waiting.placement]),
+        makeProject("empty", []),
+      ],
       workspaceEntriesByKey: new Map([
-        [pinned.entry.workspaceKey, pinned.entry],
+        [waiting.entry.workspaceKey, waiting.entry],
         [recent.entry.workspaceKey, recent.entry],
+        [idle.entry.workspaceKey, idle.entry],
       ]),
-      projectNamesByKey: new Map(),
-      collapsedProjectKeys: new Set(),
+      attentionOnly: false,
     });
 
-    expect(projection.otherProjects[0]?.workspaces.map((row) => row.workspaceId)).toEqual([
-      "pinned",
+    expect(projectKeys(projection.projects)).toEqual(["first", "second", "empty"]);
+    expect(projection.projects[0]?.workspaces.map((row) => row.workspaceId)).toEqual([
+      "idle",
       "recent",
     ]);
+    expect(projection.projects.map((project) => project.needsAttentionCount)).toEqual([0, 1, 0]);
+    expect(projection.needsAttentionWorkspaceCount).toBe(1);
     expect(projection.shortcutModel.shortcutTargets).toEqual([
-      { serverId: "srv", workspaceId: "pinned" },
+      { serverId: "srv", workspaceId: "idle" },
       { serverId: "srv", workspaceId: "recent" },
+      { serverId: "srv", workspaceId: "waiting" },
     ]);
   });
 
-  it("keeps oldest-waiting order ahead of pinning in Needs attention", () => {
-    const older = makeWorkspace({
-      id: "older",
-      projectKey: "project",
+  it("attentionOnly shows only attention workspaces and drops quiet projects", () => {
+    const waiting = makeWorkspace({
+      id: "waiting",
+      projectKey: "mixed",
       status: "needs_input",
-      statusEnteredAt: "2026-07-01T08:00:00.000Z",
       needsAttentionCount: 1,
     });
-    const pinnedNewer = makeWorkspace({
-      id: "pinned-newer",
-      projectKey: "project",
-      status: "failed",
-      statusEnteredAt: "2026-07-01T10:00:00.000Z",
-      needsAttentionCount: 1,
+    const quiet = makeWorkspace({
+      id: "quiet",
+      projectKey: "mixed",
     });
 
     const projection = buildSidebarProjection({
-      projects: [makeProject("project", [pinnedNewer.placement, older.placement])],
-      pinnedKeys: {
-        pinnedWorkspaceKeys: [pinnedNewer.entry.workspaceKey],
-        pinnedAtByKey: { [pinnedNewer.entry.workspaceKey]: "2026-07-01T12:00:00.000Z" },
-      },
+      projects: [
+        makeProject("mixed", [quiet.placement, waiting.placement]),
+        makeProject("quiet-project", [quiet.placement]),
+      ],
       workspaceEntriesByKey: new Map([
-        [older.entry.workspaceKey, older.entry],
-        [pinnedNewer.entry.workspaceKey, pinnedNewer.entry],
+        [waiting.entry.workspaceKey, waiting.entry],
+        [quiet.entry.workspaceKey, quiet.entry],
       ]),
-      projectNamesByKey: new Map(),
-      collapsedProjectKeys: new Set(),
+      attentionOnly: true,
     });
 
-    expect(projection.needsAttentionProjects[0]?.workspaces.map((row) => row.workspaceId)).toEqual([
-      "older",
-      "pinned-newer",
-    ]);
+    expect(projectKeys(projection.projects)).toEqual(["mixed"]);
+    expect(projection.projects[0]?.workspaces.map((row) => row.workspaceId)).toEqual(["waiting"]);
+    expect(projection.needsAttentionWorkspaceCount).toBe(1);
   });
 });

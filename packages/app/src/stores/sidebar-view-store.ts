@@ -12,6 +12,9 @@ interface SidebarViewStoreState {
   toggleHostFilter: (serverId: string) => void;
   clearHostFilters: () => void;
   reconcileHostFilters: (serverIds: readonly string[]) => void;
+  // Session-only view toggle: show only workspaces that need the user's action.
+  attentionOnly: boolean;
+  setAttentionOnly: (attentionOnly: boolean) => void;
 }
 
 interface SidebarViewPersistedState {
@@ -59,6 +62,8 @@ export const useSidebarViewStore = create<SidebarViewStoreState>()(
   persist(
     (set) => ({
       hostFilters: [],
+      attentionOnly: false,
+      setAttentionOnly: (attentionOnly) => set({ attentionOnly }),
       toggleHostFilter: (serverId) =>
         set((state) => ({
           hostFilters: state.hostFilters.includes(serverId)

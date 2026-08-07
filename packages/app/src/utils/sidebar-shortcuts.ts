@@ -13,11 +13,6 @@ export interface SidebarShortcutModel {
   shortcutIndexByWorkspaceKey: Map<string, number>;
 }
 
-export interface SidebarShortcutSection {
-  workspaces: readonly SidebarWorkspacePlacement[];
-  collapsed?: boolean;
-}
-
 function createShortcutTarget(
   workspace: SidebarWorkspacePlacement,
 ): SidebarShortcutWorkspaceTarget {
@@ -28,33 +23,15 @@ function createShortcutTarget(
 }
 
 export function buildSidebarShortcutModel(input: {
-  projects: SidebarProjectEntry[];
-  collapsedProjectKeys: ReadonlySet<string>;
-  shortcutLimit?: number;
-}): SidebarShortcutModel {
-  return buildSidebarShortcutSections({
-    sections: input.projects.map((project) => ({
-      workspaces: project.workspaces,
-      collapsed: input.collapsedProjectKeys.has(project.projectKey),
-    })),
-    shortcutLimit: input.shortcutLimit,
-  });
-}
-
-export function buildSidebarShortcutSections(input: {
-  sections: readonly SidebarShortcutSection[];
+  projects: readonly SidebarProjectEntry[];
   shortcutLimit?: number;
 }): SidebarShortcutModel {
   const maxShortcuts = Math.max(0, Math.floor(input.shortcutLimit ?? 9));
   const shortcutTargets: SidebarShortcutWorkspaceTarget[] = [];
   const shortcutIndexByWorkspaceKey = new Map<string, number>();
 
-  for (const section of input.sections) {
-    if (section.collapsed) {
-      continue;
-    }
-
-    for (const workspace of section.workspaces) {
+  for (const project of input.projects) {
+    for (const workspace of project.workspaces) {
       if (shortcutTargets.length >= maxShortcuts) {
         break;
       }

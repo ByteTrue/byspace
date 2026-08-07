@@ -886,6 +886,8 @@ export const ptBR: TranslationResources = {
       home: "Início",
       settings: "Configurações",
       closeSidebar: "Fechar barra lateral",
+      needsAttentionFilter: "Precisam de atenção",
+      emptyAttention: "Nada precisa da sua atenção agora",
     },
     help: {
       trigger: "Ajuda e suporte",
@@ -901,8 +903,6 @@ export const ptBR: TranslationResources = {
     sections: {
       sessions: "Histórico",
       schedules: "Agendamentos",
-      needsAttention: "Precisa de atenção",
-      otherProjects: "Outros projetos",
     },
     worktreeSetup: {
       title: "Configurar scripts de worktree",
@@ -955,8 +955,6 @@ export const ptBR: TranslationResources = {
         copyPath: "Copiar caminho",
         copyBranchName: "Copiar nome da branch",
         rename: "Renomear workspace",
-        pin: "Fixar no topo",
-        unpin: "Desafixar",
         archive: "Arquivar",
         archiveWorkspace: "Arquivar workspace",
         hideFromSidebar: "Ocultar da barra lateral",

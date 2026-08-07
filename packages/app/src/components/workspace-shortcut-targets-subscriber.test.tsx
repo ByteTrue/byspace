@@ -9,7 +9,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { getHostRuntimeStore } from "@/runtime/host-runtime";
 import { useKeyboardShortcutsStore } from "@/stores/keyboard-shortcuts-store";
 import { useSessionStore, type WorkspaceDescriptor } from "@/stores/session-store";
-import { useSidebarCollapsedSectionsStore } from "@/stores/sidebar-collapsed-sections-store";
 import { useSidebarOrderStore } from "@/stores/sidebar-order-store";
 import { useSidebarViewStore } from "@/stores/sidebar-view-store";
 import type { HostProfile } from "@/types/host-connection";
@@ -77,9 +76,6 @@ describe("WorkspaceShortcutTargetsSubscriber", () => {
 
     useKeyboardShortcutsStore.setState({
       sidebarShortcutWorkspaceTargets: [],
-    });
-    useSidebarCollapsedSectionsStore.setState({
-      collapsedProjectKeys: new Set(),
     });
     useSidebarOrderStore.setState({
       projectOrder: [],

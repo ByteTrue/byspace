@@ -5,17 +5,14 @@ import {
   type SidebarWorkspacesListResult,
 } from "@/hooks/use-sidebar-workspaces-list";
 import { useSidebarWorkspaceEntries } from "@/hooks/use-sidebar-workspace-entries";
-import { usePinnedSidebarKeys } from "@/hooks/use-sidebar-pins";
-import { useSidebarCollapsedSectionsStore } from "@/stores/sidebar-collapsed-sections-store";
+import { useSidebarViewStore } from "@/stores/sidebar-view-store";
 import type { SidebarShortcutModel } from "@/utils/sidebar-shortcuts";
 import { buildSidebarProjection, type SidebarProjectedProject } from "./sidebar-projection";
 
 interface SidebarModel extends Omit<SidebarWorkspacesListResult, "projects"> {
   projects: SidebarProjectedProject[];
-  needsAttentionProjectCount: number;
+  needsAttentionWorkspaceCount: number;
   workspaceEntriesByKey: ReadonlyMap<string, SidebarWorkspaceEntry>;
-  collapsedProjectKeys: ReadonlySet<string>;
-  toggleProjectCollapsed: (projectKey: string) => void;
   shortcutModel: SidebarShortcutModel;
 }
 
@@ -29,52 +26,30 @@ export function SidebarModelProvider({
   children: ReactNode;
 }) {
   const list = useSidebarWorkspacesList();
-  const collapsedProjectKeys = useSidebarCollapsedSectionsStore(
-    (state) => state.collapsedProjectKeys,
-  );
-  const toggleProjectCollapsed = useSidebarCollapsedSectionsStore(
-    (state) => state.toggleProjectCollapsed,
-  );
+  const attentionOnly = useSidebarViewStore((state) => state.attentionOnly);
   const workspaceEntriesByKey = useSidebarWorkspaceEntries(list.workspacePlacements, true);
-  const pinnedKeys = usePinnedSidebarKeys(list.projects);
   const projection = useMemo(
     () =>
       buildSidebarProjection({
         projects: list.projects,
-        pinnedKeys,
         workspaceEntriesByKey,
-        projectNamesByKey: list.projectNamesByKey,
-        collapsedProjectKeys,
+        attentionOnly,
       }),
-    [
-      collapsedProjectKeys,
-      list.projectNamesByKey,
-      list.projects,
-      pinnedKeys,
-      workspaceEntriesByKey,
-    ],
-  );
-  const projects = useMemo(
-    () => [...projection.needsAttentionProjects, ...projection.otherProjects],
-    [projection.needsAttentionProjects, projection.otherProjects],
+    [attentionOnly, list.projects, workspaceEntriesByKey],
   );
   const value = useMemo(
     () => ({
       ...list,
-      projects,
-      needsAttentionProjectCount: projection.needsAttentionProjects.length,
+      projects: projection.projects,
+      needsAttentionWorkspaceCount: projection.needsAttentionWorkspaceCount,
       workspaceEntriesByKey,
-      collapsedProjectKeys,
-      toggleProjectCollapsed,
       shortcutModel: projection.shortcutModel,
     }),
     [
-      collapsedProjectKeys,
       list,
-      projects,
-      projection.needsAttentionProjects.length,
+      projection.needsAttentionWorkspaceCount,
+      projection.projects,
       projection.shortcutModel,
-      toggleProjectCollapsed,
       workspaceEntriesByKey,
     ],
   );

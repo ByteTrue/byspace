@@ -11,18 +11,6 @@ export interface SidebarProjectNewWorkspaceTarget {
   projectKey: string;
 }
 
-export type SidebarProjectTrailingAction =
-  | { kind: "new_workspace"; target: SidebarProjectNewWorkspaceTarget }
-  | { kind: "none" };
-
-export interface SidebarProjectSectionRowModel {
-  kind: "project_section";
-  chevron: "expand" | "collapse";
-  trailingAction: SidebarProjectTrailingAction;
-}
-
-export type SidebarProjectRowModel = SidebarProjectSectionRowModel;
-
 const EMPTY_MULTIPLICITY_MAP: ReadonlyMap<string, boolean> = new Map();
 
 function hostTarget(input: {
@@ -49,37 +37,17 @@ export function resolveSidebarProjectIconTarget(
   return null;
 }
 
-function resolveNewWorkspaceTarget(
-  project: SidebarProjectEntry,
-  workspaceMultiplicityByServerId: ReadonlyMap<string, boolean>,
-): SidebarProjectNewWorkspaceTarget | null {
-  const projectKey = project.projectKey;
+export function resolveSidebarProjectNewWorkspaceTarget(input: {
+  project: SidebarProjectEntry;
+  supportsMultiplicityByServerId?: ReadonlyMap<string, boolean>;
+}): SidebarProjectNewWorkspaceTarget | null {
+  const projectKey = input.project.projectKey;
   if (!projectKey.trim()) {
     return null;
   }
-  const hosts = getWorkspaceCreationHosts({ project, workspaceMultiplicityByServerId });
+  const hosts = getWorkspaceCreationHosts({
+    project: input.project,
+    workspaceMultiplicityByServerId: input.supportsMultiplicityByServerId ?? EMPTY_MULTIPLICITY_MAP,
+  });
   return hosts.length > 0 ? { projectKey } : null;
-}
-
-function projectTrailingAction(
-  project: SidebarProjectEntry,
-  supportsMultiplicityByServerId: ReadonlyMap<string, boolean>,
-): SidebarProjectTrailingAction {
-  const target = resolveNewWorkspaceTarget(project, supportsMultiplicityByServerId);
-  return target ? { kind: "new_workspace", target } : { kind: "none" };
-}
-
-export function buildSidebarProjectRowModel(input: {
-  project: SidebarProjectEntry;
-  collapsed: boolean;
-  supportsMultiplicityByServerId?: ReadonlyMap<string, boolean>;
-}): SidebarProjectRowModel {
-  return {
-    kind: "project_section",
-    chevron: input.collapsed ? "expand" : "collapse",
-    trailingAction: projectTrailingAction(
-      input.project,
-      input.supportsMultiplicityByServerId ?? EMPTY_MULTIPLICITY_MAP,
-    ),
-  };
 }

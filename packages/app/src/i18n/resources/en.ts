@@ -874,6 +874,8 @@ export const en = {
       home: "Home",
       settings: "Settings",
       closeSidebar: "Close sidebar",
+      needsAttentionFilter: "Needs attention",
+      emptyAttention: "Nothing needs your attention",
     },
     help: {
       trigger: "Help and support",
@@ -889,8 +891,6 @@ export const en = {
     sections: {
       sessions: "History",
       schedules: "Schedules",
-      needsAttention: "Needs attention",
-      otherProjects: "Other projects",
     },
     worktreeSetup: {
       title: "Set up worktree scripts",
@@ -943,8 +943,6 @@ export const en = {
         copyPath: "Copy path",
         copyBranchName: "Copy branch name",
         rename: "Rename workspace",
-        pin: "Pin to top",
-        unpin: "Unpin",
         archive: "Archive",
         archiveWorkspace: "Archive workspace",
         hideFromSidebar: "Hide from sidebar",

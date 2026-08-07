@@ -20,25 +20,22 @@ Terminal Tab 可以在切换后保留本地 renderer 状态，但保留挂载不
 
 ## 侧栏 Workspace 导航
 
-侧栏以 Project 作为定位 Workspace 的唯一信息结构，不再提供独立的 Status 视图。状态只用于提升 Project 与 Workspace 的相关性：等待输入、权限、检查或失败的内容优先进入 `Needs attention`；其余内容留在正常 Project 列表。
+侧栏以 Project 作为定位 Workspace 的唯一信息结构，不再提供独立的 Status 视图。状态只做原位表达（行内 ⚠ 计数、状态点），不参与排序；标题栏的「待处理」过滤按钮（⚠）开启后只显示需要用户操作的会话，是用户主动的视图切换，不引起重排。
 
 ```text
-Workspaces                                      [搜索] [显示偏好]
+Workspaces                     [⚠ N] [+] [搜索] [显示偏好]
 
-Needs attention  N       ← 有待处理 Project 时才显示
-▼ Project A       ⚠ N                               [+]
+Project A       ⚠ N                               [+]
     Workspace A1  ⚠ N
     Workspace A2  ● N
-
-Other projects           ← 上下两组同时存在时才显示
-▼ Project B                                           [+]
+Project B                                           [+]
     Workspace B1  ● N
-▶ Empty project                                       [+]
+Empty project                                       [+]
 ```
 
-Project 只出现一次；待处理 Project 和 Workspace 按最早等待排序，其余 Project 按最近 Agent 活动排序，空 Project 可见但沉底。`Other projects` 中用户显式置顶的 Workspace 优先于自动活动排序。没有待处理 Project 时，两处分组标题都隐藏，用户直接看到 Project 列表。
+Project 只出现一次；全部 Project 与 Workspace 的顺序一律是用户管理序（拖拽顺序，新增追加），选中、Agent 活动与状态变更都不触发重排。Project 行无收起/展开，Workspace 无置顶。
 
-Workspace 行常驻显示需要处理或正在工作的 Agent 数；Hover 在保留 Workspace 元数据的同时，按父子层级展示全部未归档 Agent 及其精确状态。行内摘要是关键状态入口，不能依赖 Hover。daemon 汇总的 Workspace 状态（包括 Terminal 活动）与 Agent 细分状态共同参与排序和状态显示，任何一方都不能覆盖丢失另一方。
+Workspace 行常驻显示需要处理或正在工作的 Agent 数；Hover 在保留 Workspace 元数据的同时，按父子层级展示全部未归档 Agent 及其精确状态。行内摘要是关键状态入口，不能依赖 Hover。daemon 汇总的 Workspace 状态（包括 Terminal 活动）与 Agent 细分状态共同参与状态显示，但都不改变顺序。
 
 侧栏不提供独占整行空间的全局 `New workspace` 行。Workspaces 标题栏 `+` 是常驻全局入口；每个 Project 行的 `+` 是当前项目内创建 Workspace 的上下文入口，空 Project 也通过它创建第一个 Workspace；`Cmd/Ctrl+N` 保留为全局加速入口。三者进入同一个 Project-first Composer。
 

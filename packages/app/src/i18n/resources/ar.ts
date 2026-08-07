@@ -864,6 +864,8 @@ export const ar: TranslationResources = {
       home: "بيت",
       settings: "إعدادات",
       closeSidebar: "إغلاق الشريط الجانبي",
+      needsAttentionFilter: "بحاجة إلى انتباهك",
+      emptyAttention: "لا يوجد ما يحتاج إلى انتباهك حالياً",
     },
     help: {
       trigger: "المساعدة والدعم",
@@ -879,8 +881,6 @@ export const ar: TranslationResources = {
     sections: {
       sessions: "السجل",
       schedules: "الجداول",
-      needsAttention: "تحتاج إلى انتباه",
-      otherProjects: "مشاريع أخرى",
     },
     worktreeSetup: {
       title: "إعداد البرامج النصية لشجرة العمل",
@@ -933,8 +933,6 @@ export const ar: TranslationResources = {
         copyPath: "نسخ المسار",
         copyBranchName: "انسخ اسم الفرع",
         rename: "إعادة تسمية مساحة العمل",
-        pin: "تثبيت في الأعلى",
-        unpin: "إلغاء التثبيت",
         archive: "أرشيف",
         archiveWorkspace: "أرشفة مساحة العمل",
         hideFromSidebar: "إخفاء من الشريط الجانبي",

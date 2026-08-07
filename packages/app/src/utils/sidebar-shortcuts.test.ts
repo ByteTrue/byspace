@@ -57,7 +57,7 @@ function project(projectKey: string, workspaces: SidebarWorkspaceEntry[]): Sideb
 }
 
 describe("buildSidebarShortcutModel", () => {
-  it("builds shortcut targets in visual order and excludes collapsed projects", () => {
+  it("builds shortcut targets in visual order", () => {
     const projects = [
       project("p1", [
         workspace({
@@ -91,16 +91,18 @@ describe("buildSidebarShortcutModel", () => {
 
     const model = buildSidebarShortcutModel({
       projects,
-      collapsedProjectKeys: new Set<string>(["p2"]),
     });
 
     expect(model.shortcutTargets).toEqual([
       { serverId: "s1", workspaceId: "ws-main" },
       { serverId: "s1", workspaceId: "ws-feat-a" },
+      { serverId: "s1", workspaceId: "ws-repo2-main" },
+      { serverId: "s1", workspaceId: "ws-repo2-feat-a" },
     ]);
     expect(model.shortcutIndexByWorkspaceKey.get("s1:ws-main")).toBe(1);
     expect(model.shortcutIndexByWorkspaceKey.get("s1:ws-feat-a")).toBe(2);
-    expect(model.shortcutIndexByWorkspaceKey.get("s1:ws-repo2-main")).toBeUndefined();
+    expect(model.shortcutIndexByWorkspaceKey.get("s1:ws-repo2-main")).toBe(3);
+    expect(model.shortcutIndexByWorkspaceKey.get("s1:ws-repo2-feat-a")).toBe(4);
   });
 
   it("limits shortcuts to 9", () => {
@@ -116,43 +118,11 @@ describe("buildSidebarShortcutModel", () => {
 
     const model = buildSidebarShortcutModel({
       projects,
-      collapsedProjectKeys: new Set<string>(),
     });
 
     expect(model.shortcutTargets).toHaveLength(9);
     expect(model.shortcutTargets[0]).toEqual({ serverId: "s", workspaceId: "ws-1" });
     expect(model.shortcutTargets[8]).toEqual({ serverId: "s", workspaceId: "ws-9" });
-  });
-
-  it("excludes a collapsed project's workspaces regardless of project kind", () => {
-    const gitProject = project("p1", [
-      workspace({
-        serverId: "s1",
-        workspaceId: "ws-main",
-        workspaceDirectory: "/repo/main",
-        name: "main",
-      }),
-    ]);
-    const directoryProject = project("p2", [
-      workspace({
-        serverId: "s1",
-        workspaceId: "ws-script",
-        workspaceDirectory: "/scripts",
-        name: "scripts",
-      }),
-    ]);
-    directoryProject.projectKind = "directory";
-    directoryProject.hosts = directoryProject.hosts.map((host) => ({
-      ...host,
-      canCreateWorktree: false,
-    }));
-
-    const model = buildSidebarShortcutModel({
-      projects: [gitProject, directoryProject],
-      collapsedProjectKeys: new Set<string>(["p1", "p2"]),
-    });
-
-    expect(model.shortcutTargets).toEqual([]);
   });
 });
 

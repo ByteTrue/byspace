@@ -96,6 +96,10 @@ Any gap between A and B (margins between siblings inside the same parent) is par
 
 If A and B genuinely can't share a parent — B portals into a different layer, floats above other content — see [Section: real gaps](#real-gaps-with-floating-panels) below.
 
+### Failure mode 4 — Mouse-click focus pins the revealed content
+
+If the trigger tracks `onFocus` / `onBlur` (for keyboard users), remember that on Web a mouse click also focuses the inner `Pressable`, and that focus bubbles to the trigger. If focus pins the revealed content open, a clicked row keeps the card up until something else takes focus. Gate the focus handler on `:focus-visible` so only keyboard focus pins; `handleTriggerFocus` in `workspace-hover-card.tsx` is the reference.
+
 ## Touch and compact browser fallback
 
 Touch input has no hover. Anything hidden behind hover must remain available in the compact browser layout:
@@ -133,4 +137,5 @@ Before opening a PR that touches hover:
 - [ ] Revealed content inside the trigger uses `opacity` + `pointerEvents`, not conditional rendering, if mounting it would reflow the trigger.
 - [ ] Visibility in compact browser layouts works without hover (`isHovered || isCompact`).
 - [ ] If the revealed content sits in a separate layer (portal, floating panel), `useHoverSafeZone` is wired up.
+- [ ] If the trigger tracks focus for keyboard users, the handler ignores non-`:focus-visible` focus — a mouse click must never pin the revealed content.
 - [ ] You opened the dev server, hovered the trigger, and slowly moved the mouse along **every** revealed element — including any visible gaps — without losing hover state.

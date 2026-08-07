@@ -894,6 +894,8 @@ export const fr: TranslationResources = {
       home: "Maison",
       settings: "Paramètres",
       closeSidebar: "Fermer la barre latérale",
+      needsAttentionFilter: "À traiter",
+      emptyAttention: "Rien ne nécessite votre attention",
     },
     help: {
       trigger: "Aide et assistance",
@@ -909,8 +911,6 @@ export const fr: TranslationResources = {
     sections: {
       sessions: "Historique",
       schedules: "Planifications",
-      needsAttention: "À traiter",
-      otherProjects: "Autres projets",
     },
     worktreeSetup: {
       title: "Configurer les scripts d'arbre de travail",
@@ -963,8 +963,6 @@ export const fr: TranslationResources = {
         copyPath: "Copier le chemin",
         copyBranchName: "Copier le nom de la branche",
         rename: "Renommer l'espace de travail",
-        pin: "Épingler en haut",
-        unpin: "Désépingler",
         archive: "Archive",
         archiveWorkspace: "Archiver l’espace de travail",
         hideFromSidebar: "Masquer de la barre latérale",

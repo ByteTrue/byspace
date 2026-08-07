@@ -28,7 +28,7 @@ import { ForgeBrandIcon } from "@/git/forge-icon";
 import type { Theme } from "@/styles/theme";
 import { DiffStat } from "@/components/diff-stat";
 import { Pressable } from "react-native";
-import type { GestureResponderEvent } from "react-native";
+import type { FocusEvent, GestureResponderEvent } from "react-native";
 import { Portal } from "@gorhom/portal";
 import { useBottomSheetModalInternal } from "@gorhom/bottom-sheet";
 import type { SidebarWorkspaceEntry } from "@/hooks/use-sidebar-workspaces-list";
@@ -159,13 +159,20 @@ function WorkspaceHoverCardDesktop({
     scheduleClose();
   }, [scheduleClose]);
 
-  const handleTriggerFocus = useCallback(() => {
-    triggerFocusedRef.current = true;
-    clearGraceTimer();
-    if (!isDragging) {
-      setOpen(true);
-    }
-  }, [clearGraceTimer, isDragging]);
+  const handleTriggerFocus = useCallback(
+    (event: FocusEvent) => {
+      // On Web a mouse click also focuses the row; only keyboard focus should
+      // pin the card open, otherwise a clicked row keeps it up until blur.
+      const target = (event.nativeEvent as unknown as { target?: Element }).target;
+      if (target?.matches && !target.matches(":focus-visible")) return;
+      triggerFocusedRef.current = true;
+      clearGraceTimer();
+      if (!isDragging) {
+        setOpen(true);
+      }
+    },
+    [clearGraceTimer, isDragging],
+  );
 
   const handleTriggerBlur = useCallback(() => {
     triggerFocusedRef.current = false;

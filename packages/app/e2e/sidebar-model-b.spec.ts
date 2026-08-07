@@ -35,6 +35,14 @@ async function seedSecondWorkspace(seeded: SeededWorkspace, title: string): Prom
   return created.workspace.id;
 }
 
+async function workspaceRowOrder(page: Page): Promise<Array<string | null>> {
+  return page.locator('[data-testid^="sidebar-workspace-row-"]').evaluateAll((rows) => {
+    const testIds: Array<string | null> = [];
+    for (const row of rows) testIds.push(row.getAttribute("data-testid"));
+    return testIds;
+  });
+}
+
 test.describe("Model B sidebar shape", () => {
   test.describe.configure({ timeout: 180_000 });
 
@@ -61,9 +69,6 @@ test.describe("Model B sidebar shape", () => {
       await expect(workspaceRow(page, gitSecondId)).toBeVisible({ timeout: 30_000 });
       await expect(workspaceRow(page, nonGitProject.workspaceId)).toBeVisible({ timeout: 30_000 });
       await expect(workspaceRow(page, nonGitSecondId)).toBeVisible({ timeout: 30_000 });
-
-      await expect(page.getByTestId("sidebar-needs-attention-section")).toHaveCount(0);
-      await expect(page.getByTestId("sidebar-other-projects-section")).toHaveCount(0);
 
       // Both projects show a per-row New workspace icon (revealed on hover): the
       // git project can branch off a worktree, and the non-git project can add
@@ -103,8 +108,7 @@ test.describe("Model B sidebar shape", () => {
       const attentionSummary = row.getByTestId("workspace-agent-summary-attention");
       await expect(attentionSummary).toHaveText("1");
       await expect(attentionSummary).toHaveAccessibleName("Agents needing attention: 1");
-      await expect(page.getByTestId("sidebar-needs-attention-section")).toContainText("1");
-      await expect(page.getByTestId("sidebar-other-projects-section")).toHaveCount(0);
+      await expect(page.getByTestId("sidebar-needs-attention-filter")).toContainText("1");
       await row.hover();
 
       const hoverCard = page.getByTestId("workspace-hover-card");
@@ -112,11 +116,15 @@ test.describe("Model B sidebar shape", () => {
       await expect(hoverCard).toContainText("Needs user decision");
       await expect(hoverCard).toContainText("Needs input");
 
+      await row.click();
       await page.mouse.move(1000, 700);
       await expect(hoverCard).toHaveCount(0);
-      await row.focus();
-      await expect(hoverCard).toBeVisible({ timeout: 10_000 });
 
+      await row.focus();
+      await page.keyboard.press("Shift+Tab");
+      await page.keyboard.press("Tab");
+      await expect(row).toBeFocused();
+      await expect(hoverCard).toBeVisible({ timeout: 10_000 });
       await page.setViewportSize({ width: 390, height: 844 });
       if (!(await row.isVisible())) {
         await page.getByTestId("menu-button").click();
@@ -125,6 +133,50 @@ test.describe("Model B sidebar shape", () => {
       await expect(hoverCard).toHaveCount(0);
     } finally {
       await mock.cleanup();
+    }
+  });
+
+  test("filters to attention workspaces, shows the empty state, and restores order", async ({
+    page,
+  }) => {
+    const quiet = await seedWorkspace({ repoPrefix: "model-b-quiet-" });
+    const mock = await seedMockAgentWorkspace({
+      repoPrefix: "model-b-attention-filter-",
+      title: "Needs user decision",
+      initialPrompt: "Emit synthetic plan approval.",
+    });
+
+    try {
+      const parked = await mock.client.waitForFinish(mock.agentId, 15_000);
+      expect(parked.status).toBe("permission");
+
+      await gotoAppShell(page);
+      await waitForSidebarHydration(page);
+
+      const quietRow = workspaceRow(page, quiet.workspaceId);
+      const attentionRow = workspaceRow(page, mock.workspaceId);
+      await expect(quietRow).toBeVisible({ timeout: 30_000 });
+      await expect(attentionRow).toBeVisible({ timeout: 30_000 });
+
+      const initialOrder = await workspaceRowOrder(page);
+      const filter = page.getByTestId("sidebar-needs-attention-filter");
+
+      await filter.click();
+      await expect(attentionRow).toBeVisible();
+      await expect(quietRow).toHaveCount(0);
+
+      await mock.client.archiveAgent(mock.agentId);
+      await expect(page.getByTestId("sidebar-attention-empty-state")).toBeVisible({
+        timeout: 30_000,
+      });
+
+      await filter.click();
+      await expect(quietRow).toBeVisible({ timeout: 30_000 });
+      await expect(attentionRow).toBeVisible({ timeout: 30_000 });
+      await expect.poll(() => workspaceRowOrder(page)).toEqual(initialOrder);
+    } finally {
+      await mock.cleanup();
+      await quiet.cleanup();
     }
   });
 

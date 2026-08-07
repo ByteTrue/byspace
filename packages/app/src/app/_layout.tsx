@@ -26,7 +26,6 @@ import { DownloadToast } from "@/components/download-toast";
 import { KeyboardShortcutsDialog } from "@/components/keyboard-shortcuts-dialog";
 import { LeftSidebar } from "@/components/left-sidebar";
 import { SidebarModelProvider } from "@/components/sidebar/sidebar-model";
-import { WorkspacePinShortcutHandler } from "@/components/workspace-pin-shortcut-handler";
 import { CompactExplorerSidebarHost } from "@/components/compact-explorer-sidebar-host";
 import { ProviderSettingsHost } from "@/components/provider-settings-host";
 import { RootErrorBoundary } from "@/components/root-error-boundary";
@@ -337,7 +336,6 @@ function AppContainer({ children, chromeEnabled: chromeEnabledOverride }: AppCon
       <DownloadToast />
       <WorktreeSetupCalloutSource />
       <CommandCenterRootActions />
-      <WorkspacePinShortcutHandler />
       <CommandCenter />
       <AddProjectFlowHost />
       <HostChooserModal />
