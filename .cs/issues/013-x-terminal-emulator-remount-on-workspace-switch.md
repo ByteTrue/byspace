@@ -139,3 +139,25 @@ workspace 失焦 → `isWorkspaceFocused` 变 false → emulator 卸载（runtim
 - **已修：全局 `html`/`body` 滚动锁的所有权竞态。** `applyDocumentBoundsStyles` 原来每个 emulator 自己快照、自己还原，只在 LIFO 卸载下成立：两个终端共存时，先卸载的会把锁掤掉（另一个还需要），后卸载的又把“已含锁的快照”写回去，页面永久停在 `overflow: hidden`。现在改为引用计数的共享锁（第一个挂载时上锁、最后一个卸载时还原），并且 root 容器路径不再接管 `html`/`body`，避免同一批样式两个生命期不同的主人。本改动把共存上限从 1 个 workspace 扩到 3 个，不先修它就会把这个竞态放大。
 - **已单独修复（`.cs/issues/015-x-service-proxy-websocket-upgrade-stolen-by-daemon-socket.md`，根因不是 header 而是 `ws` 抢答 400）：服务代理下的 dev server 整页重载循环。** 用户经 `app--….localhost:6777` 访问 Expo dev server 时页面每 ~400ms 重载一次。只读复现对比：直连 Metro（`localhost:50876`）12s 内 4 次导航、无异常；走代理 28 次导航，并反复报 `ws://…/hot`、`ws://…/message` 握手 400 —— Metro 的 HMR 与消息通道升级失败，Expo dev client 以整页重载重试。daemon 以 `passthroughUnknown: true` 注册了 upgrade handler，所以 WS 升级总体支持，最可能是 upgrade 路径与 HTTP 路径的 header 组装（尤其 `Host`）不一致。与本 issue 无关。
 - **已消失：启动阶段的一次性 xterm 实例。** 那 1–2 个实例同样是两道门控造成的；两道删除后回归测试里启动只构造 1 个实例，无需单独处理。
+
+## 2026-08-07 残余首帧宽度修复
+
+### 现象与边界
+
+013 原本只覆盖 deck 内仍保留挂载的 workspace。用户在远程连接、长历史、首次打开或超过 3 个 workspace 导致 deck eviction 后，仍能看到 Terminal 先以窄宽度从顶部回放历史，再立刻变宽并重新排版。
+
+### 根因
+
+`TerminalEmulator` 在 `runtime.mount()` 返回后立刻声明 renderer ready，但 runtime 要到下一帧才从 DOM renderer 换成 WebGL；两者的 cell metrics 相差约 5%。`TerminalPane` 因而在 DOM 的暂态列数下订阅，daemon 按 `restore.size` 先 resize PTY、再生成并发送最多 1000 行快照。快照尚在解析时 WebGL 换装又触发 fit，于是首次恢复从错误宽度开始，长历史与 Relay 只会放大这段过程。客户端还会在 mount 时立即回放缓存快照，把旧快照尺寸再次强加给新 renderer。
+
+### 修法
+
+- runtime 只在 WebGL 换装完成且容器已经可测量的一次 fit 后声明 renderer ready；隐藏的 retained pane 等到首次可测量 fit 才 ready。
+- `TerminalPane` 在该 ready 条件成立前不 attach stream，因此首次 `subscribe_terminal_request.restore.size` 从一开始就是最终 renderer geometry。
+- 新挂载不再立即回放客户端缓存快照；可见 pane 只接受 daemon 在正确 claim/resize 后生成的权威 restore。保留 renderer 的恢复仍走 014 已有 revision resume，不受影响。
+
+### 验证
+
+- `terminal-emulator-runtime.browser.test.ts` 新增不可测量容器回归：WebGL 帧已经经过也不能 ready，变为可测量并 fit 后才可 ready；37/37 通过。
+- `terminal-workspace-switch-retention.spec.ts` 与 `terminal-restore-window.spec.ts`：2/2 通过；保留挂载与长历史恢复语义未退化。
+- App typecheck 通过。

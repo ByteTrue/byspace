@@ -213,6 +213,8 @@ export function TerminalPane({
   const [isAttaching, setIsAttaching] = useState(false);
   const [streamError, setStreamError] = useState<string | null>(null);
   const [rendererReadyStreamKey, setRendererReadyStreamKey] = useState<string | null>(null);
+  const isTerminalRendererReady = rendererReadyStreamKey === terminalStreamKey;
+  const shouldAttachTerminalStream = isTerminalStreamActive && isTerminalRendererReady;
   const [modifiers, setModifiers] = useState<ModifierState>(EMPTY_MODIFIERS);
   const [focusRequestToken, setFocusRequestToken] = useState(0);
   const [resizeRequestToken, setResizeRequestToken] = useState(0);
@@ -237,8 +239,6 @@ export function TerminalPane({
   const pendingTerminalInputRef = useRef<PendingTerminalInput[]>([]);
   const lastAutoFocusKeyRef = useRef<string | null>(null);
   const paneFocusResizeClaimRef = useRef(EMPTY_FOCUS_CLAIM_STATE);
-  const initialSnapshot = workspaceTerminalSession.snapshots.get({ terminalId });
-
   useEffect(() => {
     terminalIdRef.current = terminalId;
     inputModeRef.current = {
@@ -263,6 +263,12 @@ export function TerminalPane({
   const handleRendererReadyChange = useCallback(
     (change: TerminalRendererReadyChange) => {
       setRendererReadyStreamKey((current) => applyTerminalRendererReadyChange(current, change));
+      if (isTerminalStreamActive) {
+        if (change.isReady && change.streamKey === terminalStreamKey) {
+          setIsAttaching(true);
+        }
+        return;
+      }
       if (!shouldReplayTerminalSnapshotForRenderer({ change, terminalStreamKey })) {
         return;
       }
@@ -272,7 +278,7 @@ export function TerminalPane({
         emulatorRef.current?.renderSnapshot(snapshot);
       }
     },
-    [terminalId, terminalStreamKey, workspaceTerminalSession.snapshots],
+    [isTerminalStreamActive, terminalId, terminalStreamKey, workspaceTerminalSession.snapshots],
   );
 
   useEffect(() => {
@@ -296,7 +302,7 @@ export function TerminalPane({
       isAppVisible,
       isClientReady: client !== null,
       isConnected,
-      isRendererReady: rendererReadyStreamKey === terminalStreamKey,
+      isRendererReady: isTerminalRendererReady,
     });
     const step = reconcileFocusClaim(paneFocusResizeClaimRef.current, {
       key: !isPaneFocused || !terminalId ? null : `${scopeKey}:${terminalId}`,
@@ -313,6 +319,7 @@ export function TerminalPane({
     isConnected,
     isPaneFocused,
     isWorkspaceFocused,
+    isTerminalRendererReady,
     rendererReadyStreamKey,
     requestTerminalReflow,
     scopeKey,
@@ -448,7 +455,7 @@ export function TerminalPane({
 
     streamControllerRef.current = controller;
     controller.setTerminal({
-      terminalId: isTerminalStreamActive ? terminalIdRef.current : null,
+      terminalId: shouldAttachTerminalStream ? terminalIdRef.current : null,
     });
 
     return () => {
@@ -462,6 +469,7 @@ export function TerminalPane({
     handleStreamControllerStatus,
     isConnected,
     isTerminalStreamActive,
+    shouldAttachTerminalStream,
     markResumeAnchor,
     supportsTerminalRestoreModes,
     workspaceTerminalSession.snapshots,
@@ -469,11 +477,11 @@ export function TerminalPane({
 
   useEffect(() => {
     pendingTerminalInputRef.current = [];
-    const nextTerminalId = isTerminalStreamActive ? terminalId : null;
+    const nextTerminalId = shouldAttachTerminalStream ? terminalId : null;
     streamControllerRef.current?.setTerminal({
       terminalId: nextTerminalId,
     });
-  }, [isTerminalStreamActive, terminalId]);
+  }, [shouldAttachTerminalStream, terminalId]);
 
   const enqueuePendingTerminalInput = useCallback((entry: PendingTerminalInput) => {
     const queue = pendingTerminalInputRef.current;
@@ -886,7 +894,6 @@ export function TerminalPane({
             scrollbackLines={settings.terminalScrollbackLines}
             fontSize={settings.codeFontSize}
             swipeGesturesEnabled={swipeGesturesEnabled}
-            initialSnapshot={initialSnapshot}
             onRendererReadyChange={handleRendererReadyChange}
             onSwipeRight={handleSwipeRight}
             onSwipeLeft={handleSwipeLeft}
