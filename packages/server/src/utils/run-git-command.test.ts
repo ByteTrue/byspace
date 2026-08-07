@@ -188,13 +188,6 @@ describe("runGitCommand", () => {
     vi.unstubAllEnvs();
   });
 
-  it("uses one conservative Git concurrency default", async () => {
-    const { resolveGitConcurrency } = await loadRunGitCommand(8);
-
-    expect(resolveGitConcurrency(undefined)).toBe(2);
-    expect(resolveGitConcurrency("3")).toBe(3);
-  });
-
   it("throttles concurrent git commands to the configured limit", async () => {
     const { runGitCommand } = await loadRunGitCommand(2);
 

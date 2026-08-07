@@ -225,10 +225,6 @@ interface WorkspaceGitRefreshRequest {
   notify: boolean;
 }
 
-function shouldInvalidateCheckoutCommits(input: { force: boolean; reason: string }): boolean {
-  return input.force;
-}
-
 type WorkspaceGitRefreshState =
   | {
       status: "idle";
@@ -826,7 +822,7 @@ export class WorkspaceGitServiceImpl implements WorkspaceGitService {
     return {
       force,
       includeForge: options?.includeForge ?? true,
-      invalidateCommits: shouldInvalidateCheckoutCommits({ force, reason }),
+      invalidateCommits: force,
       reason,
       notify,
     };

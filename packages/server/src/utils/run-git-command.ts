@@ -12,11 +12,7 @@ const DEFAULT_TIMEOUT_MS = 30_000;
 const DEFAULT_MAX_OUTPUT_BYTES = 20 * 1024 * 1024; // 20MB
 const DEFAULT_STDERR_LIMIT = 2048;
 
-export function resolveGitConcurrency(configured: string | undefined): number {
-  return Number.parseInt(configured ?? "2", 10) || 2;
-}
-
-const gitConcurrency = resolveGitConcurrency(process.env.BYSPACE_GIT_CONCURRENCY);
+const gitConcurrency = Number.parseInt(process.env.BYSPACE_GIT_CONCURRENCY ?? "2", 10) || 2;
 const gitLimit = pLimit(gitConcurrency);
 const gitRuntimeMetrics = new GitCommandRuntimeMetricsWindow(gitConcurrency);
 
