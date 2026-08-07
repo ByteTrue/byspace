@@ -21,6 +21,7 @@ Git and forge metadata are demand-driven on every platform because their subproc
 
 ## Invariants (the easy-to-break ones)
 
+- **Forced Git refreshes preserve caller causality.** A forced request arriving during an in-flight read must receive a post-arrival read, even if the current read fails. Transition the refresh target to idle before the loop promise settles so a listener microtask starts a new read instead of queueing behind a completed one.
 - **Coalescers are leading+trailing throttles.** The first chunk after an idle window flushes immediately (synchronously); only sustained bursts wait for the trailing timer. That timer targets the **remaining** part of the original 5ms window rather than starting another 5ms delay from the latest chunk. Reverting to trailing-only adds a full window to every keystroke echo; restarting a full delay during a burst can stretch the intended window toward 10ms.
 - **Output coalescing happens in the worker, before IPC.** One `process.send` per pty chunk was a main-loop flood under build output. Non-output messages (snapshot/snapshotReady/titleChange/exit) must flush the coalescer first so ordering is preserved.
 - **Coalesced output carries the LAST chunk's revision.** Snapshot replay dedup (`replayTerminalOutputAfterSnapshot`) skips buffered output with `revision <= replayRevision`; a merged batch with a lower revision would be wrongly skipped (lost output).

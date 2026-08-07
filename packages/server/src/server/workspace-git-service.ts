@@ -873,25 +873,38 @@ export class WorkspaceGitServiceImpl implements WorkspaceGitService {
     let snapshot!: WorkspaceGitRuntimeSnapshot;
 
     while (true) {
-      snapshot = await this.refreshSnapshot(target, request);
-      this.rememberSnapshot(target, snapshot, {
-        notify: request.notify,
-        forceEmit: request.force,
-      });
-
-      const state = target.refreshState;
-      if (state.status !== "in-flight" || !state.queued) {
-        break;
+      let failed = false;
+      let failure: unknown;
+      try {
+        snapshot = await this.refreshSnapshot(target, request);
+        this.rememberSnapshot(target, snapshot, {
+          notify: request.notify,
+          forceEmit: request.force,
+        });
+      } catch (error) {
+        failed = true;
+        failure = error;
       }
 
-      request = state.queued;
-      state.queued = null;
-      state.force = request.force;
-      state.includeForge = request.includeForge;
-      state.invalidateCommits = request.invalidateCommits;
-    }
+      const state = target.refreshState;
+      if (state.status === "in-flight" && state.queued) {
+        request = state.queued;
+        state.queued = null;
+        state.force = request.force;
+        state.includeForge = request.includeForge;
+        state.invalidateCommits = request.invalidateCommits;
+        continue;
+      }
 
-    return snapshot;
+      // Go idle before this async function settles so listener microtasks cannot queue behind a completed read.
+      if (state.status === "in-flight") {
+        target.refreshState = { status: "idle" };
+      }
+      if (failed) {
+        throw failure;
+      }
+      return snapshot;
+    }
   }
 
   private async refreshSnapshot(

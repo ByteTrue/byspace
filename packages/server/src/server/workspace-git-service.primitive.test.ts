@@ -481,6 +481,69 @@ describe("WorkspaceGitServiceImpl primitive refresh entrypoint", () => {
     service.dispose();
   });
 
+  test("a forced listener microtask starts a new read after the current refresh settles", async () => {
+    const getCheckoutStatus = vi
+      .fn<() => Promise<CheckoutStatusGit>>()
+      .mockImplementationOnce(async () => createCheckoutStatus(REPO_CWD))
+      .mockImplementationOnce(async () => createCheckoutStatus(REPO_CWD))
+      .mockImplementationOnce(async () => createCheckoutStatus(REPO_CWD, { isDirty: true }));
+    const service = createService({ getCheckoutStatus });
+    await service.getSnapshot(REPO_CWD);
+
+    let secondRefresh: Promise<WorkspaceGitRuntimeSnapshot> | null = null;
+    const requestSecondRefresh = () => {
+      secondRefresh ??= service.getSnapshot(REPO_CWD, {
+        force: true,
+        includeForge: false,
+        reason: "listener-microtask",
+      });
+    };
+    const subscription = service.registerWorkspace({ cwd: REPO_CWD }, () =>
+      queueMicrotask(requestSecondRefresh),
+    );
+
+    await service.getSnapshot(REPO_CWD, {
+      force: true,
+      includeForge: false,
+      reason: "first",
+    });
+    await flushPromises();
+    if (!secondRefresh) {
+      throw new Error("listener did not schedule the second refresh");
+    }
+    const snapshot = await secondRefresh;
+
+    expect(getCheckoutStatus).toHaveBeenCalledTimes(3);
+    expect(snapshot.git.isDirty).toBe(true);
+
+    subscription.unsubscribe();
+    service.dispose();
+  });
+
+  test("a queued forced refresh still runs when the current refresh fails", async () => {
+    const failedRefresh = createDeferred<CheckoutStatusGit>();
+    const getCheckoutStatus = vi
+      .fn<() => Promise<CheckoutStatusGit>>()
+      .mockImplementationOnce(async () => createCheckoutStatus(REPO_CWD))
+      .mockImplementationOnce(async () => failedRefresh.promise)
+      .mockImplementationOnce(async () => createCheckoutStatus(REPO_CWD, { isDirty: true }));
+    const service = createService({ getCheckoutStatus });
+    await service.getSnapshot(REPO_CWD);
+
+    const first = service.getSnapshot(REPO_CWD, { force: true, reason: "first" });
+    await flushPromises();
+    const second = service.getSnapshot(REPO_CWD, { force: true, reason: "second" });
+    const completion = Promise.all([first, second]);
+
+    failedRefresh.reject(new Error("first refresh failed"));
+    const snapshots = await completion;
+
+    expect(getCheckoutStatus).toHaveBeenCalledTimes(3);
+    expect(snapshots.map((snapshot) => snapshot.git.isDirty)).toEqual([true, true]);
+
+    service.dispose();
+  });
+
   test("a forced GitHub-inclusive call during an in-flight forced git refresh queues a GitHub refresh", async () => {
     const forcedGitRefresh = createDeferred<CheckoutStatusGit>();
     const getCheckoutStatus = vi
