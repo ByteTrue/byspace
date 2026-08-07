@@ -320,11 +320,9 @@ export function TerminalPane({
     isPaneFocused,
     isWorkspaceFocused,
     isTerminalRendererReady,
-    rendererReadyStreamKey,
     requestTerminalReflow,
     scopeKey,
     terminalId,
-    terminalStreamKey,
   ]);
 
   const handleTerminalFocus = useCallback(() => {

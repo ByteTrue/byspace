@@ -17,7 +17,7 @@ pty (node-pty, forked worker process)
 
 Terminal frames share the daemon main event loop with all agent traffic. The `eventLoopDelay` block in the `ws_runtime_metrics` log line (every 30s in `daemon.log`) is the ground truth for "the daemon is busy" — p99/max there directly bound worst-case terminal frame delay.
 
-Git and forge metadata are demand-driven on every platform because their subprocesses share this event loop. There is no filesystem-triggered Git refresh, recurring workspace self-heal, background fetch, or adaptive PR poll. Read on first client demand, explicit `checkout.refresh.request`, and after a BySpace-owned Git mutation; external changes may remain stale until manual refresh. Keep default Git concurrency at 2 on every platform and preserve batched tracked diffs and historical blob reads. The opt-in guard is `BYSPACE_GIT_DIFF_BOTTLENECK_E2E=1 npx vitest run packages/server/src/server/daemon-e2e/git-diff-bottleneck.local.e2e.test.ts --bail=1`.
+Git and forge metadata are demand-driven on every platform because their subprocesses share this event loop. There is no filesystem-triggered Git refresh, recurring workspace self-heal, background fetch, or adaptive PR poll. Read on first client demand, explicit `checkout.refresh.request`, safety-critical branch/merge mutation preflight, and after a BySpace-owned Git mutation; external changes may remain stale until manual refresh. Keep default Git concurrency at 2 on every platform and preserve batched tracked diffs and historical blob reads. The opt-in guard is `BYSPACE_GIT_DIFF_BOTTLENECK_E2E=1 npx vitest run packages/server/src/server/daemon-e2e/git-diff-bottleneck.local.e2e.test.ts --bail=1`.
 
 ## Invariants (the easy-to-break ones)
 

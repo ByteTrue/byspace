@@ -41,7 +41,7 @@ Windows Chrome 通过 daemon 自带的 localhost Web UI 使用 Local Direct Term
 
 ## 当前修复
 
-- Git/forge 状态改为全平台统一的 demand-driven 模型：没有文件系统触发的 Git refresh、60s workspace self-heal、3 分钟 background fetch 或 GitHub PR adaptive poll。checkout diff subscription 只首读一次；之后仅 `checkout.refresh.request` 和 BySpace 自己完成的 Git mutation 会刷新。外部程序修改仓库后 UI 可保持旧状态，直到用户手动刷新。
+- Git/forge 状态改为全平台统一的 demand-driven 模型：没有文件系统触发的 Git refresh、60s workspace self-heal、3 分钟 background fetch 或 GitHub PR adaptive poll。checkout diff subscription 只首读一次；之后仅 `checkout.refresh.request`、branch/merge mutation 的安全 preflight 和 BySpace 自己完成的 Git mutation 会刷新。外部程序修改仓库后 UI 可保持旧状态，直到用户手动刷新；但会影响数据安全的 clean-tree 检查始终读取权威状态。
 - 默认 Git 并发在所有平台统一为 2；`BYSPACE_GIT_CONCURRENCY` 显式配置仍优先，不再有 Windows/macOS 默认分支。
 - tracked text diff 每个 subprocess 最多合并 64 个 path；structured diff 的历史内容从每文件一个 `git show` 改为一次 `git cat-file --batch`。已有单文件/总量上限、binary/too-large placeholder 与异常 fallback 保持不变。
 - macOS 隔离 E2E：1,200 个 tracked 修改时 checkout 948ms、原生 `git diff` 171ms、比值 5.54×，通过 `<10×` 门槛；100 文件门槛也通过。

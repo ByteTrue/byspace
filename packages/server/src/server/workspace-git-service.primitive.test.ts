@@ -455,12 +455,13 @@ describe("WorkspaceGitServiceImpl primitive refresh entrypoint", () => {
     service.dispose();
   });
 
-  test("a forced call during an in-flight forced refresh does not queue another re-run", async () => {
+  test("a forced call during an in-flight forced refresh queues a fresh re-run", async () => {
     const forcedRefresh = createDeferred<CheckoutStatusGit>();
     const getCheckoutStatus = vi
       .fn<() => Promise<CheckoutStatusGit>>()
       .mockImplementationOnce(async () => createCheckoutStatus(REPO_CWD))
-      .mockImplementationOnce(async () => forcedRefresh.promise);
+      .mockImplementationOnce(async () => forcedRefresh.promise)
+      .mockImplementationOnce(async () => createCheckoutStatus(REPO_CWD, { isDirty: true }));
     const service = createService({ getCheckoutStatus });
     await service.getSnapshot(REPO_CWD);
 
@@ -472,9 +473,10 @@ describe("WorkspaceGitServiceImpl primitive refresh entrypoint", () => {
     expect(getCheckoutStatus).toHaveBeenCalledTimes(2);
 
     forcedRefresh.resolve(createCheckoutStatus(REPO_CWD));
-    await Promise.all([first, second]);
+    const snapshots = await Promise.all([first, second]);
 
-    expect(getCheckoutStatus).toHaveBeenCalledTimes(2);
+    expect(getCheckoutStatus).toHaveBeenCalledTimes(3);
+    expect(snapshots.map((snapshot) => snapshot.git.isDirty)).toEqual([true, true]);
 
     service.dispose();
   });

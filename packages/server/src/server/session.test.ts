@@ -1740,7 +1740,11 @@ describe("session checkout merge handling", () => {
       requestId: "request-1",
     });
 
-    expect(workspaceGitService.getSnapshot).toHaveBeenCalledWith("/tmp/request-worktree");
+    expect(workspaceGitService.getSnapshot).toHaveBeenCalledWith("/tmp/request-worktree", {
+      force: true,
+      includeForge: false,
+      reason: "merge-to-base-preflight",
+    });
     expect(checkoutGitMocks.getCheckoutStatus).not.toHaveBeenCalled();
     expect(checkoutGitMocks.mergeToBase).toHaveBeenCalledWith(
       "/tmp/request-worktree",
@@ -1756,7 +1760,14 @@ describe("session checkout merge handling", () => {
     });
     expect(github.invalidate).toHaveBeenCalledTimes(1);
     expect(github.invalidate).toHaveBeenCalledWith({ cwd: "/tmp/base-worktree" });
-    expect(checkoutDiffManager.scheduleRefreshForCwd).toHaveBeenCalledWith("/tmp/request-worktree");
+    expect(checkoutDiffManager.scheduleRefreshForCwd).toHaveBeenNthCalledWith(
+      1,
+      "/tmp/base-worktree",
+    );
+    expect(checkoutDiffManager.scheduleRefreshForCwd).toHaveBeenNthCalledWith(
+      2,
+      "/tmp/request-worktree",
+    );
     expect(messages).toContainEqual({
       type: "checkout_merge_response",
       payload: {
@@ -1789,7 +1800,11 @@ describe("session checkout merge handling", () => {
       requestId: "request-merge-from-base",
     });
 
-    expect(workspaceGitService.getSnapshot).toHaveBeenCalledWith("/tmp/request-worktree");
+    expect(workspaceGitService.getSnapshot).toHaveBeenCalledWith("/tmp/request-worktree", {
+      force: true,
+      includeForge: false,
+      reason: "merge-from-base-preflight",
+    });
     expect(messages).toContainEqual({
       type: "checkout_merge_from_base_response",
       payload: {
