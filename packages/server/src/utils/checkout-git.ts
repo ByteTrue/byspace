@@ -6,11 +6,7 @@ import type { CheckoutCommit, CheckoutCommitFile } from "@bytetrue/byspace-proto
 import { maxBase64EncryptedPlaintextByteLength } from "@bytetrue/byspace-relay";
 import type { Logger } from "pino";
 import type { ParsedDiffFile } from "../server/utils/diff-highlighter.js";
-import {
-  highlightDiffWithFileContent,
-  parseAndHighlightDiff,
-  parseDiff,
-} from "../server/utils/diff-highlighter.js";
+import { parseAndHighlightDiff } from "../server/utils/diff-highlighter.js";
 import { parseGitHubRepoFromRemote } from "../server/workspace-git-metadata.js";
 import { createGitHubService } from "../services/github-service.js";
 import type {
@@ -552,6 +548,67 @@ async function readGitFileContentAtRef(
   }
 }
 
+interface GitFileAtRefRequest {
+  ref: string;
+  path: string;
+}
+
+async function readGitFileContentsAtRefs(
+  cwd: string,
+  requests: GitFileAtRefRequest[],
+): Promise<Array<string | null>> {
+  if (requests.length === 0) {
+    return [];
+  }
+
+  const fallback = () =>
+    Promise.all(requests.map(({ ref, path }) => readGitFileContentAtRef(cwd, ref, path)));
+  if (requests.some(({ ref, path }) => /[\r\n]/.test(ref) || /[\r\n]/.test(path))) {
+    return fallback();
+  }
+
+  try {
+    const result = await runGitCommand(["cat-file", "--batch"], {
+      cwd,
+      envOverlay: READ_ONLY_GIT_ENV,
+      input: `${requests.map(({ ref, path }) => `${ref}:${path}`).join("\n")}\n`,
+    });
+    if (result.truncated) {
+      return fallback();
+    }
+
+    const output = Buffer.from(result.stdout, "utf8");
+    const contents: Array<string | null> = [];
+    let offset = 0;
+    for (const _request of requests) {
+      const headerEnd = output.indexOf(0x0a, offset);
+      if (headerEnd < 0) {
+        return fallback();
+      }
+      const header = output.subarray(offset, headerEnd).toString("utf8");
+      offset = headerEnd + 1;
+      if (header.endsWith(" missing")) {
+        contents.push(null);
+        continue;
+      }
+      const sizeMatch = header.match(/^[0-9a-f]+ blob (\d+)$/);
+      if (!sizeMatch) {
+        return fallback();
+      }
+      const size = Number.parseInt(sizeMatch[1] ?? "", 10);
+      const contentEnd = offset + size;
+      if (contentEnd >= output.length || output[contentEnd] !== 0x0a) {
+        return fallback();
+      }
+      contents.push(output.subarray(offset, contentEnd).toString("utf8"));
+      offset = contentEnd + 1;
+    }
+    return contents;
+  } catch {
+    return fallback();
+  }
+}
+
 async function tryResolveMergeBase(cwd: string, baseRef: string): Promise<string | null> {
   try {
     const { stdout } = await runGitCommand(["merge-base", baseRef, "HEAD"], {
@@ -587,7 +644,7 @@ function buildGitDiffArgs(args: { ignoreWhitespace?: boolean; extra: string[] })
 }
 
 const TRACKED_DIFF_NUMSTAT_MAX_BYTES = 2 * 1024 * 1024; // 2MB
-const TRACKED_DIFF_BATCH_SIZE = 8;
+const TRACKED_DIFF_BATCH_SIZE = 64;
 const EMPTY_TREE_OBJECT_ID = "4b825dc642cb6eb9a060e54bf8d69288fbee4904";
 
 function isUnbornHeadDiffError(error: unknown): boolean {
@@ -678,6 +735,39 @@ async function getTrackedDiffTextForPath(input: {
     text: result.stdout,
     truncated: result.truncated,
   };
+}
+
+async function getTrackedDiffTextForPaths(input: {
+  cwd: string;
+  refsForDiff: CheckoutDiffRefs;
+  paths: string[];
+  ignoreWhitespace: boolean;
+}): Promise<{ text: string; truncated: boolean }> {
+  const result = await runGitCommand(
+    buildGitDiffArgs({
+      ignoreWhitespace: input.ignoreWhitespace,
+      extra: [...getCheckoutDiffRefArgs(input.refsForDiff), "--", ...input.paths],
+    }),
+    {
+      cwd: input.cwd,
+      envOverlay: READ_ONLY_GIT_ENV,
+      maxOutputBytes: TOTAL_DIFF_MAX_BYTES,
+    },
+  );
+
+  return { text: result.stdout, truncated: result.truncated };
+}
+
+function trackedDiffBatchFitsPerFileLimit(text: string): boolean {
+  if (text.length === 0) {
+    return true;
+  }
+  if (!text.startsWith("diff --git ")) {
+    return false;
+  }
+  return text
+    .split(/(?=^diff --git )/m)
+    .every((section) => Buffer.byteLength(section, "utf8") <= PER_FILE_DIFF_MAX_BYTES);
 }
 
 export class NotGitRepoError extends Error {
@@ -2620,31 +2710,6 @@ interface AppendStructuredTrackedDiffsInput {
   ) => void;
 }
 
-async function buildHighlightedTrackedDiffFile(input: {
-  cwd: string;
-  change: CheckoutFileChange;
-  parsedFile: ParsedDiffFile;
-  refsForDiff: CheckoutDiffRefs;
-}): Promise<ParsedDiffFile> {
-  const { cwd, change, parsedFile, refsForDiff } = input;
-  const refPath = change.oldPath ?? change.path;
-  const [oldFileContent, newFileContent] = await Promise.all([
-    change.isNew ? null : readGitFileContentAtRef(cwd, refsForDiff.baseRef, refPath),
-    refsForDiff.targetRef ? readGitFileContentAtRef(cwd, refsForDiff.targetRef, change.path) : null,
-  ]);
-  const highlightedFile = await highlightDiffWithFileContent(parsedFile, cwd, {
-    oldFileContent,
-    newFileContent,
-  });
-  return {
-    ...highlightedFile,
-    path: change.path,
-    isNew: change.isNew,
-    isDeleted: change.isDeleted,
-    status: "ok",
-  };
-}
-
 function isWhitespaceOnlyTrackedChange(input: {
   change: CheckoutFileChange;
   stat: FileStat;
@@ -2658,6 +2723,51 @@ function isWhitespaceOnlyTrackedChange(input: {
   );
 }
 
+async function loadTrackedDiffHighlightContents(
+  input: Pick<
+    AppendStructuredTrackedDiffsInput,
+    "cwd" | "trackedChanges" | "trackedPlaceholderByPath" | "trackedDiffText" | "refsForDiff"
+  >,
+): Promise<{
+  oldContentByPath: Map<string, string | null>;
+  newContentByPath: Map<string, string | null>;
+}> {
+  const { cwd, trackedChanges, trackedPlaceholderByPath, trackedDiffText, refsForDiff } = input;
+  const oldContentByPath = new Map<string, string | null>();
+  const newContentByPath = new Map<string, string | null>();
+  if (trackedDiffText.length === 0) {
+    return { oldContentByPath, newContentByPath };
+  }
+
+  const contentRequests: GitFileAtRefRequest[] = [];
+  const contentKeys: Array<{ path: string; side: "old" | "new" }> = [];
+  for (const change of trackedChanges) {
+    if (trackedPlaceholderByPath.has(change.path)) {
+      continue;
+    }
+    if (!change.isNew) {
+      contentRequests.push({ ref: refsForDiff.baseRef, path: change.oldPath ?? change.path });
+      contentKeys.push({ path: change.path, side: "old" });
+    }
+    if (refsForDiff.targetRef && !change.isDeleted) {
+      contentRequests.push({ ref: refsForDiff.targetRef, path: change.path });
+      contentKeys.push({ path: change.path, side: "new" });
+    }
+  }
+
+  const contents = await readGitFileContentsAtRefs(cwd, contentRequests);
+  for (let index = 0; index < contentKeys.length; index += 1) {
+    const key = contentKeys[index];
+    if (key) {
+      (key.side === "old" ? oldContentByPath : newContentByPath).set(
+        key.path,
+        contents[index] ?? null,
+      );
+    }
+  }
+  return { oldContentByPath, newContentByPath };
+}
+
 async function appendStructuredTrackedDiffs(
   input: AppendStructuredTrackedDiffsInput,
 ): Promise<boolean> {
@@ -2667,13 +2777,19 @@ async function appendStructuredTrackedDiffs(
     trackedNumstatByPath,
     trackedPlaceholderByPath,
     trackedDiffText,
-    refsForDiff,
     ignoreWhitespace,
     structured,
     appendTrackedPlaceholderComment,
   } = input;
 
-  const parsedTrackedFiles = trackedDiffText.length > 0 ? parseDiff(trackedDiffText) : [];
+  const { oldContentByPath, newContentByPath } = await loadTrackedDiffHighlightContents(input);
+  const parsedTrackedFiles =
+    trackedDiffText.length > 0
+      ? await parseAndHighlightDiff(trackedDiffText, cwd, {
+          getOldFileContent: async (file) => oldContentByPath.get(file.path) ?? null,
+          getNewFileContent: async (file) => newContentByPath.get(file.path) ?? null,
+        })
+      : [];
   const parsedTrackedByPath = new Map(parsedTrackedFiles.map((file) => [file.path, file]));
 
   for (const change of trackedChanges) {
@@ -2693,12 +2809,13 @@ async function appendStructuredTrackedDiffs(
     const stat = trackedNumstatByPath.get(change.path) ?? null;
     const parsedFile = parsedTrackedByPath.get(change.path);
     if (parsedFile) {
-      const file = await buildHighlightedTrackedDiffFile({
-        cwd,
-        change,
-        parsedFile,
-        refsForDiff,
-      });
+      const file = {
+        ...parsedFile,
+        path: change.path,
+        isNew: change.isNew,
+        isDeleted: change.isDeleted,
+        status: "ok",
+      } satisfies ParsedDiffFile;
       if (!appendStructuredFile(structured, file)) {
         return false;
       }
@@ -2843,6 +2960,24 @@ async function processTrackedChanges(
   let trackedDiffBytes = 0;
   for (let start = 0; start < trackedDiffPaths.length; start += TRACKED_DIFF_BATCH_SIZE) {
     const paths = trackedDiffPaths.slice(start, start + TRACKED_DIFF_BATCH_SIZE);
+    const batchDiff = await getTrackedDiffTextForPaths({
+      cwd,
+      refsForDiff,
+      paths,
+      ignoreWhitespace,
+    }).catch(() => null);
+    const batchBytes = batchDiff ? Buffer.byteLength(batchDiff.text, "utf8") : 0;
+    if (
+      batchDiff &&
+      !batchDiff.truncated &&
+      trackedDiffBatchFitsPerFileLimit(batchDiff.text) &&
+      trackedDiffBytes + batchBytes <= TOTAL_DIFF_MAX_BYTES
+    ) {
+      trackedDiffBytes += batchBytes;
+      trackedDiffText += batchDiff.text;
+      continue;
+    }
+
     const trackedDiffs = await Promise.all(
       paths.map((path) =>
         getTrackedDiffTextForPath({

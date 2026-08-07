@@ -528,7 +528,7 @@ export class CheckoutSession {
       this.scheduleDiffRefresh(cwd);
 
       // Push a workspace_update immediately so the sidebar/header reflect
-      // the new branch name without waiting for the background git watcher.
+      // the mutation without requiring a manual refresh.
       await this.host.emitWorkspaceUpdateForCwd(cwd);
 
       this.host.emit({
@@ -586,7 +586,7 @@ export class CheckoutSession {
       // TODO(K10): PR-binding on branch rename is deferred — see plan K10.
 
       // Push a workspace_update immediately so the sidebar/header reflect
-      // the new branch name without waiting for the background git watcher.
+      // the mutation without requiring a manual refresh.
       await this.host.emitWorkspaceUpdateForCwd(cwd);
 
       this.host.emit({

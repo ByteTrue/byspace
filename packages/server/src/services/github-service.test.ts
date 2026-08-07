@@ -7,7 +7,6 @@ import {
   GitHubAuthenticationError,
   GitHubCliMissingError,
   GitHubCommandError,
-  computeGithubNextInterval,
   createGitHubService,
   type GitHubCommandRunner,
   type GitHubCommandRunnerOptions,
@@ -17,9 +16,6 @@ import {
 import { isPlatform } from "../test-utils/platform.js";
 import { CheckoutPrStatusResponseSchema } from "@bytetrue/byspace-protocol/messages";
 
-const EXPECTED_GITHUB_FAST_POLL_MS = 20_000;
-const EXPECTED_GITHUB_SLOW_POLL_MS = 120_000;
-const EXPECTED_GITHUB_ERROR_BACKOFF_CAP_MS = 300_000;
 const CURRENT_PR_STATUS_BASE_FIELDS =
   "number,url,title,state,isDraft,baseRefName,headRefName,headRefOid,mergedAt,reviewDecision,mergeable,headRepositoryOwner";
 const CURRENT_PR_STATUS_FIELDS = `${CURRENT_PR_STATUS_BASE_FIELDS},statusCheckRollup`;
@@ -284,16 +280,6 @@ function githubStatusFacts(
     isInMergeQueue: false,
     ...overrides,
   };
-}
-
-function recordCurrentPullRequestStatusReads(service: ReturnType<typeof createGitHubService>) {
-  const reads: Parameters<typeof service.getCurrentPullRequestStatus>[0][] = [];
-  const getCurrentPullRequestStatus = service.getCurrentPullRequestStatus.bind(service);
-  service.getCurrentPullRequestStatus = vi.fn(async (options) => {
-    reads.push(options);
-    return getCurrentPullRequestStatus(options);
-  });
-  return reads;
 }
 
 function currentPullRequestStatusCalls(calls: RunnerCall[]): RunnerCall[] {
@@ -679,29 +665,6 @@ describe("ForgeService", () => {
     ]);
   });
 
-  it("computes fast cadence for pending and slow cadence for stable PR states", () => {
-    const pendingStatus = createCurrentPullRequestStatus({ checksStatus: "pending" });
-    const runningCheckStatus = createCurrentPullRequestStatus({
-      checksStatus: "success",
-      checks: [{ name: "ci", status: "pending", url: null }],
-    });
-    const stableStatus = createCurrentPullRequestStatus({ checksStatus: "success" });
-
-    expect(computeGithubNextInterval(pendingStatus, 0)).toBe(EXPECTED_GITHUB_FAST_POLL_MS);
-    expect(computeGithubNextInterval(runningCheckStatus, 0)).toBe(EXPECTED_GITHUB_FAST_POLL_MS);
-    expect(computeGithubNextInterval(stableStatus, 0)).toBe(EXPECTED_GITHUB_SLOW_POLL_MS);
-    expect(computeGithubNextInterval(null, 0)).toBe(EXPECTED_GITHUB_SLOW_POLL_MS);
-  });
-
-  it("computes exponential error backoff up to the cap", () => {
-    const stableStatus = createCurrentPullRequestStatus({ checksStatus: "success" });
-
-    expect(computeGithubNextInterval(stableStatus, 1)).toBe(EXPECTED_GITHUB_SLOW_POLL_MS);
-    expect(computeGithubNextInterval(stableStatus, 2)).toBe(240_000);
-    expect(computeGithubNextInterval(stableStatus, 3)).toBe(EXPECTED_GITHUB_ERROR_BACKOFF_CAP_MS);
-    expect(computeGithubNextInterval(stableStatus, 4)).toBe(EXPECTED_GITHUB_ERROR_BACKOFF_CAP_MS);
-  });
-
   it("loads pull request checkout target details through GraphQL", async () => {
     const runner = createRunner([repoViewJson(), pullRequestCheckoutTargetJson()]);
     const service = createGitHubService({
@@ -755,219 +718,6 @@ describe("ForgeService", () => {
       repoName: "repo",
       url: "https://github.acme.internal/acme/repo/pull/42",
     });
-  });
-
-  it("polls PR status at fast cadence while checks are pending", async () => {
-    let now = 0;
-    const runner = createRunner([
-      currentPullRequestJson({
-        statusCheckRollup: [{ __typename: "StatusContext", context: "ci", state: "PENDING" }],
-      }),
-      currentPullRequestJson({
-        statusCheckRollup: [{ __typename: "StatusContext", context: "ci", state: "PENDING" }],
-      }),
-    ]);
-    const service = createGitHubService({
-      ttlMs: 0,
-      runner: runner.runner,
-      resolveGhPath: async () => "/usr/bin/gh",
-      now: () => now,
-    });
-    const reads = recordCurrentPullRequestStatusReads(service);
-
-    const subscription = service.retainCurrentPullRequestStatusPoll?.({
-      cwd: "/repo",
-      headRef: "feature/fork",
-    });
-    await service.getCurrentPullRequestStatus({ cwd: "/repo", headRef: "feature/fork" });
-
-    now = EXPECTED_GITHUB_FAST_POLL_MS;
-    await vi.advanceTimersByTimeAsync(EXPECTED_GITHUB_FAST_POLL_MS);
-
-    expect(currentPullRequestStatusCalls(runner.calls)).toHaveLength(2);
-    expect(reads.map((read) => read.reason)).toEqual([undefined, "self-heal-github"]);
-
-    subscription?.unsubscribe();
-    service.dispose?.();
-  });
-
-  it("retained fork PR status polls keep the head repository owner", async () => {
-    const runner = createRunner([
-      currentPullRequestJson({
-        headRefName: "open-button-targets-active-file",
-        headRepositoryOwner: { login: "fork-owner" },
-      }),
-    ]);
-    const service = createGitHubService({
-      ttlMs: 0,
-      runner: runner.runner,
-      resolveGhPath: async () => "/usr/bin/gh",
-    });
-    const reads = recordCurrentPullRequestStatusReads(service);
-
-    const subscription = service.retainCurrentPullRequestStatusPoll?.({
-      cwd: "/repo",
-      headRef: "open-button-targets-active-file",
-      headRepositoryOwner: "fork-owner",
-    });
-    await vi.advanceTimersByTimeAsync(0);
-
-    expect(reads).toEqual([
-      expect.objectContaining({
-        cwd: "/repo",
-        headRef: "open-button-targets-active-file",
-        headRepositoryOwner: "fork-owner",
-        reason: "self-heal-github",
-      }),
-    ]);
-    expect(currentPullRequestStatusCalls(runner.calls)).toHaveLength(1);
-
-    subscription?.unsubscribe();
-    service.dispose?.();
-  });
-
-  it("polls PR status at slow cadence after stable checks", async () => {
-    let now = 0;
-    const runner = createRunner([
-      currentPullRequestJson({
-        statusCheckRollup: [{ __typename: "StatusContext", context: "ci", state: "SUCCESS" }],
-      }),
-      currentPullRequestJson({
-        statusCheckRollup: [{ __typename: "StatusContext", context: "ci", state: "SUCCESS" }],
-      }),
-    ]);
-    const service = createGitHubService({
-      ttlMs: 0,
-      runner: runner.runner,
-      resolveGhPath: async () => "/usr/bin/gh",
-      now: () => now,
-    });
-    const reads = recordCurrentPullRequestStatusReads(service);
-
-    const subscription = service.retainCurrentPullRequestStatusPoll?.({
-      cwd: "/repo",
-      headRef: "feature/fork",
-    });
-    await service.getCurrentPullRequestStatus({ cwd: "/repo", headRef: "feature/fork" });
-
-    now = EXPECTED_GITHUB_FAST_POLL_MS;
-    await vi.advanceTimersByTimeAsync(EXPECTED_GITHUB_FAST_POLL_MS);
-    expect(currentPullRequestStatusCalls(runner.calls)).toHaveLength(1);
-
-    now = EXPECTED_GITHUB_SLOW_POLL_MS;
-    await vi.advanceTimersByTimeAsync(EXPECTED_GITHUB_SLOW_POLL_MS - EXPECTED_GITHUB_FAST_POLL_MS);
-    expect(currentPullRequestStatusCalls(runner.calls)).toHaveLength(2);
-    expect(reads.map((read) => read.reason)).toEqual([undefined, "self-heal-github"]);
-
-    subscription?.unsubscribe();
-    service.dispose?.();
-  });
-
-  it("backs off consecutive poll errors and resets cadence after recovery", async () => {
-    let now = 0;
-    const runner = createScriptedRunner([
-      currentPullRequestJson({
-        statusCheckRollup: [{ __typename: "StatusContext", context: "ci", state: "PENDING" }],
-      }),
-      currentPullRequestGithubFactsJson(),
-      { error: new Error("network down") },
-      { error: new Error("network still down") },
-      currentPullRequestJson({
-        statusCheckRollup: [{ __typename: "StatusContext", context: "ci", state: "SUCCESS" }],
-      }),
-      currentPullRequestGithubFactsJson(),
-      currentPullRequestJson({
-        statusCheckRollup: [{ __typename: "StatusContext", context: "ci", state: "SUCCESS" }],
-      }),
-      currentPullRequestGithubFactsJson(),
-    ]);
-    const service = createGitHubService({
-      ttlMs: 0,
-      runner: runner.runner,
-      resolveGhPath: async () => "/usr/bin/gh",
-      now: () => now,
-    });
-    const reads = recordCurrentPullRequestStatusReads(service);
-
-    const subscription = service.retainCurrentPullRequestStatusPoll?.({
-      cwd: "/repo",
-      headRef: "feature/fork",
-    });
-    await service.getCurrentPullRequestStatus({ cwd: "/repo", headRef: "feature/fork" });
-
-    now = EXPECTED_GITHUB_FAST_POLL_MS;
-    await vi.advanceTimersByTimeAsync(EXPECTED_GITHUB_FAST_POLL_MS);
-    now += EXPECTED_GITHUB_FAST_POLL_MS;
-    await vi.advanceTimersByTimeAsync(EXPECTED_GITHUB_FAST_POLL_MS);
-    now += EXPECTED_GITHUB_FAST_POLL_MS * 2;
-    await vi.advanceTimersByTimeAsync(EXPECTED_GITHUB_FAST_POLL_MS * 2);
-    now += EXPECTED_GITHUB_SLOW_POLL_MS;
-    await vi.advanceTimersByTimeAsync(EXPECTED_GITHUB_SLOW_POLL_MS);
-
-    expect(currentPullRequestStatusCalls(runner.calls)).toHaveLength(5);
-    expect(reads.map((read) => read.reason)).toEqual([
-      undefined,
-      "self-heal-github",
-      "self-heal-github",
-      "self-heal-github",
-      "self-heal-github",
-    ]);
-
-    subscription?.unsubscribe();
-    service.dispose?.();
-  });
-
-  it("unsubscribe clears the adaptive GitHub poll timer", async () => {
-    let now = 0;
-    const runner = createRunner([
-      currentPullRequestJson({
-        statusCheckRollup: [{ __typename: "StatusContext", context: "ci", state: "PENDING" }],
-      }),
-    ]);
-    const service = createGitHubService({
-      ttlMs: 0,
-      runner: runner.runner,
-      resolveGhPath: async () => "/usr/bin/gh",
-      now: () => now,
-    });
-
-    const subscription = service.retainCurrentPullRequestStatusPoll?.({
-      cwd: "/repo",
-      headRef: "feature/fork",
-    });
-    await service.getCurrentPullRequestStatus({ cwd: "/repo", headRef: "feature/fork" });
-    subscription?.unsubscribe();
-
-    now = EXPECTED_GITHUB_FAST_POLL_MS;
-    await vi.advanceTimersByTimeAsync(EXPECTED_GITHUB_FAST_POLL_MS);
-
-    expect(currentPullRequestStatusCalls(runner.calls)).toHaveLength(1);
-
-    service.dispose?.();
-  });
-
-  it("dispose clears all adaptive GitHub poll timers", async () => {
-    let now = 0;
-    const runner = createRunner([
-      currentPullRequestJson({
-        statusCheckRollup: [{ __typename: "StatusContext", context: "ci", state: "PENDING" }],
-      }),
-    ]);
-    const service = createGitHubService({
-      ttlMs: 0,
-      runner: runner.runner,
-      resolveGhPath: async () => "/usr/bin/gh",
-      now: () => now,
-    });
-
-    service.retainCurrentPullRequestStatusPoll?.({ cwd: "/repo", headRef: "feature/fork" });
-    await service.getCurrentPullRequestStatus({ cwd: "/repo", headRef: "feature/fork" });
-    service.dispose?.();
-
-    now = EXPECTED_GITHUB_FAST_POLL_MS;
-    await vi.advanceTimersByTimeAsync(EXPECTED_GITHUB_FAST_POLL_MS);
-
-    expect(currentPullRequestStatusCalls(runner.calls)).toHaveLength(1);
   });
 
   it("fetches PR reviews and issue comments with one GraphQL call sorted chronologically", async () => {

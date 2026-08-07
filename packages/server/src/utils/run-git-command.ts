@@ -12,7 +12,11 @@ const DEFAULT_TIMEOUT_MS = 30_000;
 const DEFAULT_MAX_OUTPUT_BYTES = 20 * 1024 * 1024; // 20MB
 const DEFAULT_STDERR_LIMIT = 2048;
 
-const gitConcurrency = parseInt(process.env.BYSPACE_GIT_CONCURRENCY ?? "8", 10) || 8;
+export function resolveGitConcurrency(configured: string | undefined): number {
+  return Number.parseInt(configured ?? "2", 10) || 2;
+}
+
+const gitConcurrency = resolveGitConcurrency(process.env.BYSPACE_GIT_CONCURRENCY);
 const gitLimit = pLimit(gitConcurrency);
 const gitRuntimeMetrics = new GitCommandRuntimeMetricsWindow(gitConcurrency);
 
@@ -24,6 +28,7 @@ export interface GitCommandOptions {
   timeout?: number;
   maxOutputBytes?: number;
   acceptExitCodes?: number[];
+  input?: string;
 }
 
 export interface GitCommandResult {
@@ -171,8 +176,11 @@ export function runGitCommand(
           cwd: options.cwd,
           envOverlay,
           shell: false,
-          stdio: ["ignore", "pipe", "pipe"],
+          stdio: [options.input === undefined ? "ignore" : "pipe", "pipe", "pipe"],
         });
+        if (options.input !== undefined) {
+          child.stdin?.end(options.input);
+        }
 
         let settled = false;
         let metricFinished = false;

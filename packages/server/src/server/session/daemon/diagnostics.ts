@@ -35,8 +35,6 @@ interface DiagnosticWebSocketRuntimeMetrics {
   peakInflightRequests: number;
   checkoutDiffTargetCount: number;
   checkoutDiffSubscriptionCount: number;
-  checkoutDiffWatcherCount: number;
-  checkoutDiffFallbackRefreshTargetCount: number;
 }
 
 interface DiagnosticAgentRuntimeMetrics {
@@ -293,10 +291,6 @@ function collectWebSocketRuntimeEntries(options: DaemonDiagnosticsOptions): Diag
       value: [
         `targets=${formatNumberMetric(runtime.checkoutDiffTargetCount)}`,
         `subscriptions=${formatNumberMetric(runtime.checkoutDiffSubscriptionCount)}`,
-        `watchers=${formatNumberMetric(runtime.checkoutDiffWatcherCount)}`,
-        `fallbackRefreshTargets=${formatNumberMetric(
-          runtime.checkoutDiffFallbackRefreshTargetCount,
-        )}`,
       ].join(", "),
     },
     {
