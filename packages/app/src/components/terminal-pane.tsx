@@ -214,6 +214,15 @@ export function TerminalPane({
   const [streamError, setStreamError] = useState<string | null>(null);
   const [rendererReadyStreamKey, setRendererReadyStreamKey] = useState<string | null>(null);
   const isTerminalRendererReady = rendererReadyStreamKey === terminalStreamKey;
+  const canClaimTerminalSize =
+    isPaneFocused &&
+    canRequestFocusClaim({
+      isWorkspaceFocused,
+      isAppVisible,
+      isClientReady: client !== null,
+      isConnected,
+      isRendererReady: isTerminalRendererReady,
+    });
   const shouldAttachTerminalStream = isTerminalStreamActive && isTerminalRendererReady;
   const [modifiers, setModifiers] = useState<ModifierState>(EMPTY_MODIFIERS);
   const [focusRequestToken, setFocusRequestToken] = useState(0);
@@ -239,6 +248,8 @@ export function TerminalPane({
   const pendingTerminalInputRef = useRef<PendingTerminalInput[]>([]);
   const lastAutoFocusKeyRef = useRef<string | null>(null);
   const paneFocusResizeClaimRef = useRef(EMPTY_FOCUS_CLAIM_STATE);
+  const canClaimTerminalSizeRef = useRef(canClaimTerminalSize);
+  canClaimTerminalSizeRef.current = canClaimTerminalSize;
   useEffect(() => {
     terminalIdRef.current = terminalId;
     inputModeRef.current = {
@@ -297,33 +308,16 @@ export function TerminalPane({
   }, [isMobile, isPaneFocused, isWorkspaceFocused, requestTerminalFocus, scopeKey, terminalId]);
 
   useEffect(() => {
-    const canRequest = canRequestFocusClaim({
-      isWorkspaceFocused,
-      isAppVisible,
-      isClientReady: client !== null,
-      isConnected,
-      isRendererReady: isTerminalRendererReady,
-    });
     const step = reconcileFocusClaim(paneFocusResizeClaimRef.current, {
       key: !isPaneFocused || !terminalId ? null : `${scopeKey}:${terminalId}`,
-      canRequest,
+      canRequest: canClaimTerminalSize,
     });
     paneFocusResizeClaimRef.current = step.state;
     if (step.shouldRequest) {
       lastSentTerminalSizeRef.current = null;
       requestTerminalReflow();
     }
-  }, [
-    client,
-    isAppVisible,
-    isConnected,
-    isPaneFocused,
-    isWorkspaceFocused,
-    isTerminalRendererReady,
-    requestTerminalReflow,
-    scopeKey,
-    terminalId,
-  ]);
+  }, [canClaimTerminalSize, isPaneFocused, requestTerminalReflow, scopeKey, terminalId]);
 
   const handleTerminalFocus = useCallback(() => {
     if (isWorkspaceFocused && isPaneFocused) {
@@ -396,15 +390,16 @@ export function TerminalPane({
       return;
     }
 
+    const canUseMeasuredTerminalSize = () =>
+      canClaimTerminalSizeRef.current ||
+      paneFocusResizeClaimRef.current.claimedKey === terminalStreamKey;
     const controller = new TerminalStreamController({
       client,
-      // Attach re-asserts geometry, but only for a pane that already claimed this PTY: a client
-      // that never claimed (a terminal created while the window was blurred) must not take the
-      // size here. When it does re-assert, it has to carry what the renderer currently shows —
-      // the subscribe response lands after the post-mount refit ladder and the WebGL renderer
-      // swap have moved the column count, and this send is the one the daemon acts on last.
+      // Attach may carry final renderer geometry, but that also resizes the PTY. A new pane may
+      // do that only while it can claim; a blurred mount must stay at the spawn size until focus
+      // returns. A pane that already owns this terminal may re-assert its settled geometry.
       getPreferredSize: () =>
-        lastSentTerminalSizeRef.current
+        lastSentTerminalSizeRef.current && canUseMeasuredTerminalSize()
           ? (measuredTerminalSizeRef.current ?? lastSentTerminalSizeRef.current)
           : null,
       onOutput: ({ terminalId: outputTerminalId, data }) => {
@@ -437,7 +432,7 @@ export function TerminalPane({
         const anchor = resumeAnchorRef.current;
         return resolveTerminalRestoreOptions({
           supportsTerminalRestoreModes,
-          size: measuredTerminalSizeRef.current,
+          size: canUseMeasuredTerminalSize() ? measuredTerminalSizeRef.current : null,
           // Only this renderer, still holding this terminal's stream, can be
           // resumed. A reload builds a new one while the daemon session (and
           // its record of what it sent) survives, and that renderer needs the
@@ -470,6 +465,7 @@ export function TerminalPane({
     shouldAttachTerminalStream,
     markResumeAnchor,
     supportsTerminalRestoreModes,
+    terminalStreamKey,
     workspaceTerminalSession.snapshots,
   ]);
 

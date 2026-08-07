@@ -153,11 +153,11 @@ workspace 失焦 → `isWorkspaceFocused` 变 false → emulator 卸载（runtim
 ### 修法
 
 - runtime 只在 WebGL 换装完成且容器已经可测量的一次 fit 后声明 renderer ready；隐藏的 retained pane 等到首次可测量 fit 才 ready。
-- `TerminalPane` 在该 ready 条件成立前不 attach stream，因此首次 `subscribe_terminal_request.restore.size` 从一开始就是最终 renderer geometry。
+- `TerminalPane` 在该 ready 条件成立前不 attach stream；有权 claim 或已持有当前终端尺寸时，`subscribe_terminal_request.restore.size` 从一开始就是最终 renderer geometry。失焦期间新建的 pane 仍可 attach，但必须省略这个会 resize PTY 的 size，等窗口恢复焦点后再 claim。
 - 新挂载不再立即回放客户端缓存快照；可见 pane 只接受 daemon 在正确 claim/resize 后生成的权威 restore。保留 renderer 的恢复仍走 014 已有 revision resume，不受影响。
 
 ### 验证
 
 - `terminal-emulator-runtime.browser.test.ts` 新增不可测量容器回归：WebGL 帧已经经过也不能 ready，变为可测量并 fit 后才可 ready；37/37 通过。
-- `terminal-workspace-switch-retention.spec.ts` 与 `terminal-restore-window.spec.ts`：2/2 通过；保留挂载与长历史恢复语义未退化。
+- `terminal-workspace-switch-retention.spec.ts`、`terminal-restore-window.spec.ts`、`terminal-stuck-size.spec.ts` 与 `terminal-passive-refit-claim.spec.ts`：4/4 通过；保留挂载、长历史恢复与尺寸 ownership 语义未退化。
 - App typecheck 通过。
