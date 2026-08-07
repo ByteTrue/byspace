@@ -243,9 +243,10 @@ export async function selectNewWorkspaceProject(
 ): Promise<void> {
   const trigger = page.getByTestId("new-workspace-project-picker-trigger");
   await expect(trigger).toBeVisible({ timeout: 30_000 });
-  await trigger.click();
-
   const option = page.getByTestId(`new-workspace-project-picker-option-${input.projectKey}`);
+  if (!(await option.isVisible())) {
+    await trigger.click();
+  }
   await expect(option).toBeVisible({ timeout: 30_000 });
   await option.click();
 

@@ -242,7 +242,7 @@ test.describe("Add Project command-center flow", () => {
           projectName: directoryName,
           projectPath: directoryPath,
         });
-        await expect(page.getByTestId("host-picker-trigger")).toContainText(SECONDARY_HOST_LABEL);
+        await expect(page.getByTestId("host-picker-trigger")).toHaveCount(0);
         await expectProjectDirectory(directoryPath);
       } finally {
         await rm(parentDirectory, { recursive: true, force: true });
