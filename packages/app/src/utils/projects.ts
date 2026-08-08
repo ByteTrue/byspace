@@ -20,6 +20,7 @@ export interface ProjectHostEntry {
   projectId?: string;
   projectName?: string;
   projectCustomName?: string | null;
+  customIconRevision?: string | null;
   serverName: string;
   isOnline: boolean;
   repoRoot: string;
@@ -82,6 +83,7 @@ interface HostGroup {
   projectId: string;
   projectName: string;
   projectCustomName: string | null;
+  customIconRevision: string | null;
   serverName: string;
   isOnline: boolean;
   workspaces: WorkspaceDescriptor[];
@@ -109,6 +111,7 @@ function hostProjectRecords(host: ProjectHost): ProjectDescriptor[] {
       projectKey: workspace.project?.projectKey ?? workspace.projectId,
       projectDisplayName: workspace.projectDisplayName,
       projectCustomName: workspace.projectCustomName ?? null,
+      projectCustomIconRevision: workspace.projectCustomIconRevision ?? null,
       projectRootPath: workspace.projectRootPath,
       projectKind: workspace.projectKind,
     });
@@ -156,6 +159,7 @@ function toHostEntry(group: HostGroup): ProjectHostEntry {
     projectId: group.projectId,
     projectName: group.projectName,
     projectCustomName: group.projectCustomName,
+    customIconRevision: group.customIconRevision,
     serverName: group.serverName,
     isOnline: group.isOnline,
     repoRoot: canonical?.project?.checkout.mainRepoRoot ?? group.fallbackRepoRoot,
@@ -203,6 +207,7 @@ export function buildProjects(input: BuildProjectsInput): BuildProjectsResult {
         projectId: placement.projectId,
         projectName: project.projectDisplayName,
         projectCustomName: project.projectCustomName,
+        customIconRevision: project.projectCustomIconRevision ?? null,
         serverName: host.serverName,
         isOnline: host.isOnline,
         workspaces: host.workspaces.filter(

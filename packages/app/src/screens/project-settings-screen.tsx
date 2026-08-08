@@ -1,3 +1,4 @@
+import { Buffer } from "buffer";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
@@ -32,6 +33,7 @@ import { SettingsSection } from "@/screens/settings/settings-section";
 import { settingsStyles } from "@/styles/settings";
 import { useProjects } from "@/hooks/use-projects";
 import { useProjectIconDataByProjectKey } from "@/projects/project-icons";
+import { useFilePicker } from "@/hooks/use-file-picker";
 import { useHostRuntimeClient, useHostRuntimeSnapshot } from "@/runtime/host-runtime";
 import { useHostFeature } from "@/runtime/host-features";
 import { useToast } from "@/contexts/toast-context";
@@ -215,15 +217,24 @@ function ProjectSettingsBody({
       {
         serverId: selectedHost.serverId,
         projectKey: project.projectKey,
+        projectId: selectedHost.projectId,
         iconWorkingDir: selectedHost.repoRoot,
+        customIconRevision: selectedHost.customIconRevision,
       },
     ],
-    [project.projectKey, selectedHost.repoRoot, selectedHost.serverId],
+    [
+      project.projectKey,
+      selectedHost.customIconRevision,
+      selectedHost.projectId,
+      selectedHost.repoRoot,
+      selectedHost.serverId,
+    ],
   );
   const projectIconDataByKey = useProjectIconDataByProjectKey({
     projects: projectIconTargets,
   });
   const projectIconDataUri = projectIconDataByKey.get(project.projectKey) ?? null;
+  const supportsCustomIcon = useHostFeature(selectedHost.serverId, "projectCustomIcon");
   const loadedConfig: BySpaceConfigRaw | null = data?.ok ? (data.config ?? {}) : null;
   const loadedRevision: BySpaceConfigRevision | null = data?.ok ? data.revision : null;
   const readError: ProjectConfigRpcError | null = data && !data.ok ? data.error : null;
@@ -252,6 +263,14 @@ function ProjectSettingsBody({
             projectCustomName={selectedHost.projectCustomName ?? null}
             client={client}
           />
+          {supportsCustomIcon && selectedHost.projectId ? (
+            <ProjectIconEditor
+              serverId={selectedHost.serverId}
+              projectId={selectedHost.projectId}
+              hasCustomIcon={Boolean(selectedHost.customIconRevision)}
+              client={client}
+            />
+          ) : null}
         </View>
         <HostContext hosts={hosts} selectedHost={selectedHost} onSelectHost={onSelectHost} />
       </View>
@@ -1092,6 +1111,71 @@ function ProjectNameEditor({
       >
         <X size={ICON_SIZE} color={styles.iconColor.color} />
       </Pressable>
+    </View>
+  );
+}
+
+function ProjectIconEditor({
+  serverId,
+  projectId,
+  hasCustomIcon,
+  client,
+}: {
+  serverId: string;
+  projectId: string;
+  hasCustomIcon: boolean;
+  client: DaemonClient;
+}) {
+  const { t } = useTranslation();
+  const queryClient = useQueryClient();
+  const toast = useToast();
+  const { pickFiles } = useFilePicker();
+  const mutation = useMutation({
+    mutationFn: (source: { type: "automatic" } | { type: "upload"; data: string }) =>
+      client.setProjectIcon(projectId, source),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["projects"] });
+      queryClient.invalidateQueries({ queryKey: ["projectIcon", serverId] });
+    },
+    onError: (error) => {
+      toast.show(
+        error instanceof Error ? error.message : t("settings.project.rename.errorFallback"),
+        {
+          variant: "error",
+        },
+      );
+    },
+  });
+  const handleChoose = useCallback(async () => {
+    const file = (await pickFiles())?.[0];
+    if (!file) return;
+    mutation.mutate({ type: "upload", data: Buffer.from(file.bytes).toString("base64") });
+  }, [mutation, pickFiles]);
+  const handleUseAutomatic = useCallback(() => {
+    mutation.mutate({ type: "automatic" });
+  }, [mutation]);
+  return (
+    <View style={styles.nameEditorRow}>
+      <Button
+        testID="project-icon-change-button"
+        variant="outline"
+        size="sm"
+        onPress={handleChoose}
+        disabled={mutation.isPending}
+      >
+        {t("settings.project.scripts.actions.edit")}
+      </Button>
+      {hasCustomIcon ? (
+        <Button
+          testID="project-icon-reset-button"
+          variant="ghost"
+          size="sm"
+          onPress={handleUseAutomatic}
+          disabled={mutation.isPending}
+        >
+          {t("settings.project.rename.reset")}
+        </Button>
+      ) : null}
     </View>
   );
 }

@@ -136,7 +136,7 @@ function getWebpDimensions(buffer: Buffer): ImageDimensions | null {
   return null;
 }
 
-function getImageDimensions(buffer: Buffer, mimeType: string): ImageDimensions | null {
+export function getImageDimensions(buffer: Buffer, mimeType: string): ImageDimensions | null {
   switch (mimeType) {
     case "image/png":
       return getPngDimensions(buffer);

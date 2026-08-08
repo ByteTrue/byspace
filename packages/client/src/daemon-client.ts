@@ -62,7 +62,9 @@ import type {
   DirectorySuggestionsResponse,
   BySpaceWorktreeListResponse,
   BySpaceWorktreeArchiveResponse,
+  ProjectIconSource,
   ProjectIconResponse,
+  ProjectIconGetResponse,
   ProjectAddResponse,
   ProjectCreateDirectoryResponse,
   OpenProjectResponseMessage,
@@ -2586,6 +2588,18 @@ export class DaemonClient {
     return { customName: payload.customName };
   }
 
+  async setProjectIcon(
+    projectId: string,
+    source: ProjectIconSource,
+    requestId?: string,
+  ): Promise<void> {
+    const payload = await this.sendNamespacedCorrelatedSessionRequest<"project.icon.set.response">({
+      requestId,
+      message: { type: "project.icon.set.request", projectId, source },
+    });
+    if (!payload.accepted) throw new Error(payload.error ?? "setProjectIcon rejected");
+  }
+
   async removeProject(
     projectId: string,
     requestId?: string,
@@ -4366,6 +4380,16 @@ export class DaemonClient {
         path,
       },
       responseType: "file_download_token_response",
+    });
+  }
+
+  async getProjectIcon(
+    projectId: string,
+    requestId?: string,
+  ): Promise<ProjectIconGetResponse["payload"]> {
+    return this.sendNamespacedCorrelatedSessionRequest<"project.icon.get.response">({
+      requestId,
+      message: { type: "project.icon.get.request", projectId },
     });
   }
 

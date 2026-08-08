@@ -689,3 +689,24 @@ describe("deriveSidebarLoadingState", () => {
     ).toEqual({ isLoading: false, isInitialLoad: false, isRevalidating: false });
   });
 });
+
+describe("createSidebarWorkspaceEntry workspace directory label", () => {
+  it("uses the daemon-provided slug for a BySpace-owned worktree", () => {
+    const descriptor = workspaceWithForge(undefined, "https://github.com/acme/repo/pull/42");
+    descriptor.workspaceDirectory = "/worktrees/feature/packages/app";
+    descriptor.worktreeSlug = "feature";
+
+    const entry = createSidebarWorkspaceEntry({ serverId: "srv", workspace: descriptor });
+
+    expect(entry.workspaceDirectoryLabel).toBe("feature");
+  });
+
+  it("shortens the workspace path when the daemon omits a worktree slug", () => {
+    const descriptor = workspaceWithForge(undefined, "https://github.com/acme/repo/pull/42");
+    descriptor.workspaceDirectory = "/home/alice/external/feature";
+
+    const entry = createSidebarWorkspaceEntry({ serverId: "srv", workspace: descriptor });
+
+    expect(entry.workspaceDirectoryLabel).toBe("~/external/feature");
+  });
+});
