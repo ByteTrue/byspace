@@ -99,6 +99,41 @@ describe("daemon bearer auth", () => {
     }
   });
 
+  test("ordinary CLI commands ignore the restricted token on passwordless daemons", async () => {
+    const daemonHandle = await createTestBySpaceDaemon();
+    try {
+      const tokenPath = join(daemonHandle.byspaceHome, "ordinary-cli-token.txt");
+      await daemonHandle.daemon.terminalManager.createTerminal({
+        workspaceId: "auth-test",
+        cwd: daemonHandle.byspaceHome,
+        command: process.execPath,
+        args: [
+          "-e",
+          `require("node:fs").writeFileSync(${JSON.stringify(tokenPath)}, process.env.BYSPACE_CLI_TOKEN)`,
+        ],
+      });
+      const token = await waitForFile(tokenPath);
+      const result = await execFileAsync(
+        process.execPath,
+        [
+          tsxCli,
+          "packages/cli/src/index.js",
+          "--json",
+          "ls",
+          "--host",
+          `127.0.0.1:${daemonHandle.port}`,
+        ],
+        {
+          cwd: process.cwd(),
+          env: { ...process.env, BYSPACE_CLI_TOKEN: token, BYSPACE_PASSWORD: undefined },
+        },
+      );
+      expect(JSON.parse(result.stdout)).toEqual([]);
+    } finally {
+      await daemonHandle.close();
+    }
+  }, 15_000);
+
   test("requires Authorization bearer on protected HTTP routes when password is configured", async () => {
     const daemonHandle = await createTestBySpaceDaemon({
       auth: { password: CORRECT_PASSWORD_HASH },
@@ -230,7 +265,11 @@ describe("daemon bearer auth", () => {
         ],
         {
           cwd: process.cwd(),
-          env: { ...process.env, BYSPACE_CLI_TOKEN: token, BYSPACE_PASSWORD: undefined },
+          env: {
+            ...process.env,
+            BYSPACE_CLI_TOKEN: token,
+            BYSPACE_PASSWORD: "wrong-operator-password",
+          },
         },
       );
       expect(JSON.parse(cliResult.stdout)).toEqual(

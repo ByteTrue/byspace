@@ -245,7 +245,6 @@ export interface AgentManagerOptions {
   onAgentAttention?: AgentAttentionCallback;
   durableTimelineStore?: AgentTimelineStore;
   terminalManager?: TerminalManager | null;
-  byspaceToolCatalogFactory?: BySpaceToolCatalogFactory;
   cliAuthToken?: string;
   appendSystemPrompt?: string;
   agentStreamCoalesceWindowMs?: number;
@@ -598,7 +597,6 @@ export class AgentManager {
     this.registry = options?.registry;
     this.durableTimelineStore = options?.durableTimelineStore;
     this.onAgentAttention = options?.onAgentAttention;
-    this.byspaceToolCatalogFactory = options.byspaceToolCatalogFactory ?? null;
     this.cliAuthToken = options.cliAuthToken;
     this.appendSystemPrompt = options.appendSystemPrompt ?? "";
     this.logger = options.logger.child({ module: "agent", component: "agent-manager" });

@@ -1,3 +1,4 @@
+import { text } from "node:stream/consumers";
 import { readFile } from "node:fs/promises";
 import { Command } from "commander";
 import type { OrchestrationToolDescriptor } from "@bytetrue/byspace-protocol/messages";
@@ -13,7 +14,6 @@ import type {
 import { withOutput } from "../../output/index.js";
 
 interface ToolCommandOptions extends CommandOptions {
-  host?: string;
   voice?: boolean;
 }
 
@@ -53,7 +53,7 @@ function callerAgentId(): string | undefined {
 }
 
 async function connectToolClient(options: ToolCommandOptions) {
-  const client = await connectToDaemon({ host: options.host });
+  const client = await connectToDaemon({ host: options.host, useAgentCliToken: true });
   // COMPAT(cliOrchestrationTools): added in v0.5.0, remove after 2027-02-07.
   if (client.getLastServerInfoMessage()?.features?.cliOrchestrationTools !== true) {
     await client.close().catch(() => {});
@@ -66,11 +66,7 @@ async function connectToolClient(options: ToolCommandOptions) {
 }
 
 async function readStdin(): Promise<string> {
-  const chunks: Buffer[] = [];
-  for await (const chunk of process.stdin) {
-    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
-  }
-  return Buffer.concat(chunks).toString("utf8");
+  return text(process.stdin);
 }
 
 export async function parseToolInput(options: Pick<ToolCallOptions, "input" | "inputFile">) {

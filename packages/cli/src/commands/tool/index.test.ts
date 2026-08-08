@@ -1,9 +1,7 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { parseToolInput } from "./index.js";
 
 describe("parseToolInput", () => {
-  afterEach(() => vi.unstubAllGlobals());
-
   it("defaults to an empty object", async () => {
     await expect(parseToolInput({})).resolves.toEqual({});
   });

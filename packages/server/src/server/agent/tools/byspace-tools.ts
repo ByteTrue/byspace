@@ -779,7 +779,10 @@ export function createBySpaceToolCatalog(options: BySpaceToolHostDependencies): 
     cwd?: string;
     isolation?: "local" | "worktree";
   }) => {
-    const resolvedCwd = resolveScopedCwd(params?.cwd, { required: true });
+    const resolvedCwd = resolveScopedCwd(
+      params?.cwd ?? (callerAgentId || callerCwd ? undefined : process.cwd()),
+      { required: true },
+    );
     const callerAgent = resolveCallerAgent();
     if (callerAgent) {
       return {
@@ -1430,7 +1433,7 @@ export function createBySpaceToolCatalog(options: BySpaceToolHostDependencies): 
         guidance: z.string().optional(),
       },
     },
-    async (args: unknown) => {
+    async (args: unknown, context) => {
       const {
         snapshot,
         background: createdInBackground,
@@ -1490,6 +1493,7 @@ export function createBySpaceToolCatalog(options: BySpaceToolHostDependencies): 
       try {
         if (!createdInBackground && initialPromptStarted) {
           const result = await waitForAgentWithTimeout(agentManager, snapshot.id, {
+            signal: context.signal,
             waitForActive: true,
           });
 
@@ -1809,13 +1813,16 @@ export function createBySpaceToolCatalog(options: BySpaceToolHostDependencies): 
         guidance: z.string().optional(),
       },
     },
-    async ({
-      agentId,
-      prompt,
-      sessionMode,
-      background = Boolean(callerAgentId),
-      notifyOnFinish = Boolean(callerAgentId),
-    }) => {
+    async (
+      {
+        agentId,
+        prompt,
+        sessionMode,
+        background = Boolean(callerAgentId),
+        notifyOnFinish = Boolean(callerAgentId),
+      },
+      context,
+    ) => {
       const shouldNotifyOnFinish = Boolean(callerAgentId && notifyOnFinish && background);
 
       await sendPromptToAgent({
@@ -1840,6 +1847,7 @@ export function createBySpaceToolCatalog(options: BySpaceToolHostDependencies): 
       // If not running in background, wait for completion
       if (!background) {
         const result = await waitForAgentWithTimeout(agentManager, agentId, {
+          signal: context.signal,
           waitForActive: true,
         });
 

@@ -20,6 +20,7 @@ import { resolveCliVersion } from "../version.js";
 export interface ConnectOptions {
   host?: string;
   timeout?: number;
+  useAgentCliToken?: boolean;
 }
 
 export interface DaemonConnectionCommandError {
@@ -247,7 +248,7 @@ export function resolveDaemonPassword(host: string): string | undefined {
     const fromUri = parseConnectionUri(trimmed).password;
     if (fromUri) return fromUri;
   }
-  const fromEnv = process.env.BYSPACE_PASSWORD || process.env.BYSPACE_CLI_TOKEN;
+  const fromEnv = process.env.BYSPACE_PASSWORD;
   return fromEnv && fromEnv.length > 0 ? fromEnv : undefined;
 }
 
@@ -373,7 +374,9 @@ export async function connectToDaemon(options?: ConnectOptions): Promise<DaemonC
       throw new Error(`Unable to connect to BySpace daemon via ${hosts.join(", ")}`);
     }
     const host = hosts[index];
-    const password = resolveDaemonPassword(host);
+    const agentCliToken = process.env.BYSPACE_CLI_TOKEN?.trim();
+    const password =
+      options?.useAgentCliToken && agentCliToken ? agentCliToken : resolveDaemonPassword(host);
     const result = await tryConnectHost(host, password, clientId, timeout, nodeWebSocketFactory);
     if ("client" in result) {
       return result.client;

@@ -3,7 +3,6 @@ import { v4 as uuidv4 } from "uuid";
 import { lstat, mkdir, mkdtemp, rename, rm, stat } from "node:fs/promises";
 import { resolve, sep } from "path";
 import { homedir } from "node:os";
-import { z } from "zod";
 import { CLIENT_CAPS, type ClientCapability } from "@bytetrue/byspace-protocol/client-capabilities";
 import {
   serializeAgentStreamEvent,
@@ -65,6 +64,7 @@ import {
   normalizeClientRestartRpcReason,
 } from "./lifecycle-reasons.js";
 
+import { serializeBySpaceToolInputParameters } from "./agent/tools/byspace-tool-serialization.js";
 import { AgentManager, AgentRunCancellationError } from "./agent/agent-manager.js";
 import { ProviderSnapshotManager } from "./agent/provider-snapshot-manager.js";
 import type {
@@ -6695,25 +6695,12 @@ export class Session {
         callerAgentId: msg.callerAgentId,
         enableVoiceTools: msg.includeVoice,
       });
-      const tools = Array.from(catalog.tools.values()).map((tool) => {
-        let inputSchema: z.ZodType = z.object({});
-        if (tool.inputSchema) {
-          inputSchema =
-            typeof (tool.inputSchema as z.ZodType).safeParse === "function"
-              ? (tool.inputSchema as z.ZodType)
-              : z.object(tool.inputSchema as z.ZodRawShape);
-        }
-        return {
-          name: tool.name,
-          title: tool.title,
-          description: tool.description,
-          inputSchema: z.toJSONSchema(inputSchema, {
-            target: "draft-07",
-            unrepresentable: "any",
-            io: "input",
-          }) as Record<string, unknown>,
-        };
-      });
+      const tools = Array.from(catalog.tools.values()).map((tool) => ({
+        name: tool.name,
+        title: tool.title,
+        description: tool.description,
+        inputSchema: serializeBySpaceToolInputParameters(tool),
+      }));
       this.emit({
         type: "orchestration.tools.list.response",
         payload: { requestId: msg.requestId, success: true, error: null, tools },
