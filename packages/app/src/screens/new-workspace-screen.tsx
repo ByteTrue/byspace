@@ -66,6 +66,7 @@ import {
   useHostProjects,
   type HostProjectListItem,
 } from "@/projects/host-projects";
+import { buildProjectIconRequestTarget } from "@/projects/project-icon-lookup";
 import { useProjectIconDataByProjectKey } from "@/projects/project-icons";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
 import type { ComposerAttachment } from "@/attachments/types";
@@ -1631,7 +1632,12 @@ export function NewWorkspaceScreen({
         if (!placement || !iconWorkingDir) {
           return [];
         }
-        return [{ projectKey: project.projectKey, serverId: placement.serverId, iconWorkingDir }];
+        return [
+          buildProjectIconRequestTarget(project.projectKey, {
+            ...placement,
+            iconWorkingDir,
+          }),
+        ];
       }),
     [projects, workspaceMultiplicityByServerId],
   );

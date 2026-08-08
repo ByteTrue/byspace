@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { resolveProjectIconLookup } from "./project-icon-lookup";
+import { buildProjectIconRequestTarget, resolveProjectIconLookup } from "./project-icon-lookup";
 
 describe("project icon lookup", () => {
   const target = { projectId: "prj_host_local", iconWorkingDir: "/projects/byspace" };
@@ -15,6 +15,27 @@ describe("project icon lookup", () => {
     expect(resolveProjectIconLookup(target, false)).toEqual({
       kind: "legacy",
       cwd: "/projects/byspace",
+    });
+  });
+
+  it("retains the host-local ID and custom revision in consumer targets", () => {
+    const request = buildProjectIconRequestTarget("project-key", {
+      serverId: "host-a",
+      projectId: "prj_host_local",
+      iconWorkingDir: "/projects/byspace",
+      customIconRevision: "revision-2",
+    });
+
+    expect(request).toEqual({
+      serverId: "host-a",
+      projectKey: "project-key",
+      projectId: "prj_host_local",
+      iconWorkingDir: "/projects/byspace",
+      customIconRevision: "revision-2",
+    });
+    expect(resolveProjectIconLookup(request, true)).toEqual({
+      kind: "project",
+      projectId: "prj_host_local",
     });
   });
 });

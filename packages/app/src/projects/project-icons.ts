@@ -3,15 +3,12 @@ import { useQueries } from "@tanstack/react-query";
 import type { ProjectIcon } from "@bytetrue/byspace-protocol/messages";
 import { useHostFeatureMap } from "@/runtime/host-features";
 import { getHostRuntimeStore, isHostRuntimeConnected } from "@/runtime/host-runtime";
-import { resolveProjectIconLookup } from "@/projects/project-icon-lookup";
+import {
+  resolveProjectIconLookup,
+  type ProjectIconRequestTarget,
+} from "@/projects/project-icon-lookup";
 
-export interface ProjectIconRequestTarget {
-  serverId: string;
-  projectKey: string;
-  projectId?: string;
-  iconWorkingDir: string;
-  customIconRevision?: string | null;
-}
+export type { ProjectIconRequestTarget } from "@/projects/project-icon-lookup";
 
 function iconDataUri(icon: ProjectIcon | null): string | null {
   return icon ? `data:${icon.mimeType};base64,${icon.data}` : null;
