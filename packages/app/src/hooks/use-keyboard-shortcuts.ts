@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef } from "react";
 import { usePathname, useRouter } from "expo-router";
 import { useKeyboardShortcutsStore } from "@/stores/keyboard-shortcuts-store";
+import { usePanelStore } from "@/stores/panel-store";
 import { setCommandCenterFocusRestoreElement } from "@/utils/command-center-focus-restore";
 import { navigateToWorkspace } from "@/stores/navigation-active-workspace-store";
 import { keyboardActionDispatcher } from "@/keyboard/keyboard-action-dispatcher";
@@ -109,6 +110,9 @@ export function useKeyboardShortcuts({
         case "dispatch":
           return keyboardActionDispatcher.dispatch(action.action);
         case "navigate-workspace":
+          if (usePanelStore.getState().desktop.focusModeEnabled) {
+            usePanelStore.getState().toggleFocusMode();
+          }
           keyboardWorkspaceSelectionRef.current = {
             serverId: action.serverId,
             workspaceId: action.workspaceId,
@@ -116,6 +120,9 @@ export function useKeyboardShortcuts({
           navigateToWorkspace({ serverId: action.serverId, workspaceId: action.workspaceId });
           return true;
         case "navigate-last-workspace":
+          if (usePanelStore.getState().desktop.focusModeEnabled) {
+            usePanelStore.getState().toggleFocusMode();
+          }
           return navigateToLastWorkspace();
         case "router-replace":
           router.replace(action.route as Parameters<typeof router.replace>[0]);

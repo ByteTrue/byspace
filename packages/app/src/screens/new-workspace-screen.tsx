@@ -1500,6 +1500,19 @@ function resolveNewWorkspacePickerAvailability(input: {
   };
 }
 
+function resolveSelectedProjectIsGit(input: {
+  queriedIsGit: boolean | undefined;
+  project: HostProjectListItem | null;
+  serverId: string;
+}): boolean {
+  return (
+    input.queriedIsGit ??
+    input.project?.hosts.some(
+      (host) => host.serverId === input.serverId && host.canCreateWorktree,
+    ) === true
+  );
+}
+
 export function NewWorkspaceScreen({
   serverId,
   sourceDirectory: sourceDirectoryProp,
@@ -1708,7 +1721,11 @@ export function NewWorkspaceScreen({
   const { effectiveIsolation, setIsolation, canCreateWorktree, showRefPicker } =
     useWorkspaceIsolation({
       supportsMultiplicity: supportsWorkspaceMultiplicity,
-      selectedIsGit: checkoutStatusQuery.data?.isGit === true,
+      selectedIsGit: resolveSelectedProjectIsGit({
+        queriedIsGit: checkoutStatusQuery.data?.isGit,
+        project: selectedProject,
+        serverId: selectedServerId,
+      }),
     });
 
   const branchSuggestionsQuery = useQuery({
