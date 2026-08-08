@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { join } from "node:path";
 import { promisify } from "node:util";
+import { fileURLToPath } from "node:url";
 import { WebSocket } from "ws";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
@@ -13,6 +14,7 @@ const CORRECT_PASSWORD_HASH = "$2b$12$OLxyuuP9uLK30Uzc4wQX0O6liuU/Q1t5P2b0Ebf36m
 const execFileAsync = promisify(execFile);
 const require = createRequire(import.meta.url);
 const tsxCli = require.resolve("tsx/cli");
+const cliEntry = fileURLToPath(new URL("../../../cli/src/index.js", import.meta.url));
 
 function connectWebSocket(params: {
   port: number;
@@ -115,14 +117,7 @@ describe("daemon bearer auth", () => {
       const token = await waitForFile(tokenPath);
       const result = await execFileAsync(
         process.execPath,
-        [
-          tsxCli,
-          "packages/cli/src/index.js",
-          "--json",
-          "ls",
-          "--host",
-          `127.0.0.1:${daemonHandle.port}`,
-        ],
+        [tsxCli, cliEntry, "--json", "ls", "--host", `127.0.0.1:${daemonHandle.port}`],
         {
           cwd: process.cwd(),
           env: { ...process.env, BYSPACE_CLI_TOKEN: token, BYSPACE_PASSWORD: undefined },
@@ -254,15 +249,7 @@ describe("daemon bearer auth", () => {
 
       const cliResult = await execFileAsync(
         process.execPath,
-        [
-          tsxCli,
-          "packages/cli/src/index.js",
-          "--json",
-          "tool",
-          "list",
-          "--host",
-          `127.0.0.1:${daemonHandle.port}`,
-        ],
+        [tsxCli, cliEntry, "--json", "tool", "list", "--host", `127.0.0.1:${daemonHandle.port}`],
         {
           cwd: process.cwd(),
           env: {
