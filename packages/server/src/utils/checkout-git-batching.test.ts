@@ -6,6 +6,10 @@ import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 
 const spawnCounters = vi.hoisted(() => ({
   trackedTextDiffCalls: 0,
+  showCalls: 0,
+  catFileBatchCalls: 0,
+  failBatchedTrackedDiff: false,
+  failCatFileBatch: false,
 }));
 
 vi.mock("child_process", async () => {
@@ -20,8 +24,9 @@ vi.mock("child_process", async () => {
         // find the actual git subcommand.
         const subcommandIndex =
           normalizedArgs[0] === "-c" && normalizedArgs[1] === "core.quotepath=false" ? 2 : 0;
+        const subcommand = normalizedArgs[subcommandIndex];
         const isTrackedTextDiff =
-          normalizedArgs[subcommandIndex] === "diff" &&
+          subcommand === "diff" &&
           normalizedArgs.includes("HEAD") &&
           !normalizedArgs.includes("--numstat") &&
           !normalizedArgs.includes("--no-index") &&
@@ -29,6 +34,22 @@ vi.mock("child_process", async () => {
           !normalizedArgs.includes("--name-status");
         if (isTrackedTextDiff) {
           spawnCounters.trackedTextDiffCalls += 1;
+          const separatorIndex = normalizedArgs.lastIndexOf("--");
+          if (
+            spawnCounters.failBatchedTrackedDiff &&
+            normalizedArgs.length - separatorIndex - 1 > 1
+          ) {
+            throw new Error("simulated command-line limit");
+          }
+        }
+        if (subcommand === "show") {
+          spawnCounters.showCalls += 1;
+        }
+        if (subcommand === "cat-file" && normalizedArgs.includes("--batch")) {
+          spawnCounters.catFileBatchCalls += 1;
+          if (spawnCounters.failCatFileBatch) {
+            throw new Error("simulated cat-file batch failure");
+          }
         }
       }
       return actual.spawn(...args);
@@ -71,13 +92,17 @@ describe("checkout git diff batching", () => {
     tempDir = setup.tempDir;
     repoDir = setup.repoDir;
     spawnCounters.trackedTextDiffCalls = 0;
+    spawnCounters.showCalls = 0;
+    spawnCounters.catFileBatchCalls = 0;
+    spawnCounters.failBatchedTrackedDiff = false;
+    spawnCounters.failCatFileBatch = false;
   });
 
   afterEach(() => {
     rmSync(tempDir, { recursive: true, force: true });
   });
 
-  it("uses per-file tracked git diff commands for tracked file diffs", async () => {
+  it("batches tracked file diffs into bounded git commands", async () => {
     const result = await getCheckoutDiff(repoDir, {
       mode: "uncommitted",
       includeStructured: false,
@@ -85,6 +110,44 @@ describe("checkout git diff batching", () => {
 
     expect(result.diff).toContain("file-0.txt");
     expect(result.diff).toContain("file-19.txt");
-    expect(spawnCounters.trackedTextDiffCalls).toBe(20);
+    expect(spawnCounters.trackedTextDiffCalls).toBe(1);
+  });
+
+  it("falls back to per-file diffs when a batch cannot spawn", async () => {
+    spawnCounters.failBatchedTrackedDiff = true;
+
+    const result = await getCheckoutDiff(repoDir, {
+      mode: "uncommitted",
+      includeStructured: false,
+    });
+
+    expect(result.diff).toContain("file-0.txt");
+    expect(result.diff).toContain("file-19.txt");
+    expect(spawnCounters.trackedTextDiffCalls).toBe(21);
+  });
+
+  it("does not read every historical file to highlight a live structured diff", async () => {
+    const result = await getCheckoutDiff(repoDir, {
+      mode: "uncommitted",
+      includeStructured: true,
+    });
+
+    expect(result.structured).toHaveLength(20);
+    expect(spawnCounters.trackedTextDiffCalls).toBe(1);
+    expect(spawnCounters.showCalls).toBe(0);
+    expect(spawnCounters.catFileBatchCalls).toBe(1);
+  });
+
+  it("falls back to individual historical reads when cat-file batching fails", async () => {
+    spawnCounters.failCatFileBatch = true;
+
+    const result = await getCheckoutDiff(repoDir, {
+      mode: "uncommitted",
+      includeStructured: true,
+    });
+
+    expect(result.structured).toHaveLength(20);
+    expect(spawnCounters.catFileBatchCalls).toBe(1);
+    expect(spawnCounters.showCalls).toBe(20);
   });
 });

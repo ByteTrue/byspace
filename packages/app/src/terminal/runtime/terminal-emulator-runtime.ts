@@ -47,6 +47,7 @@ export interface TerminalEmulatorRuntimeMountInput {
   theme: ITheme;
   fontFamily?: string;
   fontSize?: number;
+  onRendererReady?: () => void;
 }
 
 export interface TerminalEmulatorRuntimeCallbacks {
@@ -537,6 +538,13 @@ export class TerminalEmulatorRuntime {
     const unicode11Addon = new Unicode11Addon();
     let webglAddon: WebglAddon | null = null;
     let imageAddon: ImageAddon | null = null;
+    let canSignalRendererReady = false;
+    let didSignalRendererReady = false;
+    const signalRendererReady = (): void => {
+      if (!canSignalRendererReady || didSignalRendererReady) return;
+      didSignalRendererReady = true;
+      input.onRendererReady?.();
+    };
     terminal.loadAddon(fitAddon);
     terminal.loadAddon(unicode11Addon);
     terminal.loadAddon(
@@ -630,10 +638,14 @@ export class TerminalEmulatorRuntime {
         imageAddon = new ImageAddon();
         terminal.loadAddon(imageAddon);
         registerProtocolQuerySuppression();
-        this.fitAndEmitResize?.({ force: true, shouldClaim: false });
       } catch {
         disposeWebglRenderer();
       }
+      // WebGL and the DOM renderer use different cell metrics. Do not let the
+      // caller request a restore until the renderer swap has produced a real fit;
+      // otherwise a long replay starts at the transient DOM width and reflows mid-parse.
+      canSignalRendererReady = true;
+      this.fitAndEmitResize?.({ force: true, shouldClaim: false });
     });
 
     const restoreDocumentStyles = this.applyDocumentBoundsStyles({
@@ -673,6 +685,7 @@ export class TerminalEmulatorRuntime {
       const nextCols = currentTerminal.cols;
       const previous = this.lastSize;
       if (!force && previous && previous.rows === nextRows && previous.cols === nextCols) {
+        signalRendererReady();
         return true;
       }
 
@@ -683,6 +696,7 @@ export class TerminalEmulatorRuntime {
         cols: nextCols,
         shouldClaim,
       });
+      signalRendererReady();
       return true;
     };
     this.fitAndEmitResize = fitAndEmitResize;

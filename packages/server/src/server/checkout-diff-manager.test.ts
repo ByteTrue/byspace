@@ -1,321 +1,161 @@
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-
-const { toCheckoutErrorMock } = vi.hoisted(() => ({
-  toCheckoutErrorMock: vi.fn((error: unknown) => ({
-    message: error instanceof Error ? error.message : String(error),
-  })),
-}));
-
-vi.mock("./checkout-git-utils.js", () => ({
-  toCheckoutError: toCheckoutErrorMock,
-}));
-
-import type pino from "pino";
+import { describe, expect, test, vi } from "vitest";
 import { CheckoutDiffManager } from "./checkout-diff-manager.js";
-import type { WorkspaceGitService } from "./workspace-git-service.js";
 
-interface Deferred<T> {
-  promise: Promise<T>;
-  resolve(value: T): void;
-}
-
-function createDeferred<T>(): Deferred<T> {
-  let resolve!: (value: T) => void;
-  const promise = new Promise<T>((resolvePromise) => {
-    resolve = resolvePromise;
-  });
-  return { promise, resolve };
-}
-
-function createPendingManager() {
-  const watches: Array<{
-    cwd: string;
-    onChange: () => void;
-    unsubscribeCalls: number;
-    resolve(): void;
-  }> = [];
-  const workspaceGitService = {
-    getCheckoutDiff: async () => ({ diff: "", structured: [] }),
-    requestWorkingTreeWatch: (cwd: string, onChange: () => void) => {
-      const pending = createDeferred<{ repoRoot: string | null; unsubscribe: () => void }>();
-      const watch = {
-        cwd,
-        onChange,
-        unsubscribeCalls: 0,
-        resolve: () => {
-          pending.resolve({
-            repoRoot: "/tmp/repo",
-            unsubscribe: () => {
-              watch.unsubscribeCalls += 1;
-            },
-          });
-        },
-      };
-      watches.push(watch);
-      return pending.promise;
-    },
-  };
-  const logger = { child: () => logger, warn: () => {} };
-  const manager = new CheckoutDiffManager({
-    logger: logger as unknown as pino.Logger,
-    byspaceHome: "/tmp/byspace-test",
-    workspaceGitService,
-  });
-  return { manager, watches };
+function createManager(getCheckoutDiff = vi.fn(async () => ({ diff: "", structured: [] }))) {
+  const manager = new CheckoutDiffManager({ getCheckoutDiff });
+  return { getCheckoutDiff, manager };
 }
 
 describe("CheckoutDiffManager", () => {
-  beforeEach(() => {
-    vi.useFakeTimers();
-    toCheckoutErrorMock.mockClear();
-  });
-
-  afterEach(() => {
-    vi.useRealTimers();
-  });
-
-  function createManager(options?: {
-    repoRoot?: string | null;
-    getCheckoutDiffImplementation?: ReturnType<typeof vi.fn>;
-  }) {
-    const unsubscribe = vi.fn();
-    let onChange: (() => void) | null = null;
-    const mockRequestWorkingTreeWatch = vi.fn(async (_cwd: string, listener: () => void) => {
-      onChange = listener;
-      return {
-        repoRoot: options?.repoRoot === undefined ? "/tmp/repo" : options.repoRoot,
-        unsubscribe,
-      };
-    });
-
-    const workspaceGitService = {
-      subscribe: vi.fn(),
-      peekSnapshot: vi.fn(),
-      getSnapshot: vi.fn(),
-      getCheckoutDiff:
-        options?.getCheckoutDiffImplementation ?? vi.fn(async () => ({ diff: "", structured: [] })),
-      refresh: vi.fn(),
-      scheduleRefreshForCwd: vi.fn(),
-      requestWorkingTreeWatch: mockRequestWorkingTreeWatch,
-      dispose: vi.fn(),
-    };
-
-    const logger = {
-      child: () => logger,
-      warn: vi.fn(),
-    };
-
-    const manager = new CheckoutDiffManager({
-      logger: logger as unknown as pino.Logger,
-      byspaceHome: "/tmp/byspace-test",
-      workspaceGitService: workspaceGitService as unknown as WorkspaceGitService,
-    });
-
-    return {
-      manager,
-      workspaceGitService,
-      mockRequestWorkingTreeWatch,
-      unsubscribe,
-      getOnChange: () => onChange,
-    };
-  }
-
-  test("subscribe requests a working tree watch with the correct cwd", async () => {
-    const { manager, mockRequestWorkingTreeWatch } = createManager();
-
-    await manager.subscribe(
-      {
-        cwd: "/tmp/repo/packages/server",
-        compare: { mode: "uncommitted" },
-      },
-      () => {},
+  test("loads a diff once on demand without requiring a working-tree watcher", async () => {
+    const { getCheckoutDiff, manager } = createManager(
+      vi.fn(async () => ({
+        diff: "",
+        structured: [{ path: "a.ts", additions: 1, deletions: 0, status: "modified" as const }],
+      })),
     );
-
-    expect(mockRequestWorkingTreeWatch).toHaveBeenCalledWith(
-      "/tmp/repo/packages/server",
-      expect.any(Function),
-    );
-  });
-
-  test("unsubscribe calls the working tree watch unsubscribe", async () => {
-    const { manager, unsubscribe } = createManager();
 
     const subscription = await manager.subscribe(
-      {
-        cwd: "/tmp/repo/packages/server",
-        compare: { mode: "uncommitted" },
-      },
-      () => {},
-    );
-
-    subscription.unsubscribe();
-
-    expect(unsubscribe).toHaveBeenCalledTimes(1);
-  });
-
-  test("cancels a subscription while its working tree watch is still opening", async () => {
-    const { manager, watches } = createPendingManager();
-    const abort = new AbortController();
-
-    const pendingSubscription = manager.subscribe(
-      {
-        cwd: "/tmp/repo/packages/server",
-        compare: { mode: "uncommitted" },
-        signal: abort.signal,
-      },
-      () => {},
-    );
-    abort.abort();
-    watches[0].resolve();
-    await pendingSubscription;
-
-    expect(watches[0].unsubscribeCalls).toBe(1);
-    expect(manager.getMetrics()).toEqual({
-      checkoutDiffTargetCount: 0,
-      checkoutDiffSubscriptionCount: 0,
-      checkoutDiffWatcherCount: 0,
-      checkoutDiffFallbackRefreshTargetCount: 0,
-    });
-  });
-
-  test("shares one opening target between concurrent subscriptions", async () => {
-    const { manager, watches } = createPendingManager();
-
-    const firstSubscription = manager.subscribe(
-      { cwd: "/tmp/repo/packages/server", compare: { mode: "uncommitted" } },
-      () => {},
-    );
-    const secondSubscription = manager.subscribe(
-      { cwd: "/tmp/repo/packages/server", compare: { mode: "uncommitted" } },
-      () => {},
-    );
-
-    expect(watches).toHaveLength(1);
-    watches[0].resolve();
-    const [first, second] = await Promise.all([firstSubscription, secondSubscription]);
-    expect(manager.getMetrics().checkoutDiffSubscriptionCount).toBe(2);
-
-    first.unsubscribe();
-    expect(watches[0].unsubscribeCalls).toBe(0);
-    second.unsubscribe();
-    expect(watches[0].unsubscribeCalls).toBe(1);
-  });
-
-  test("diffCwd uses repoRoot from the working tree watch result", async () => {
-    const { manager, workspaceGitService } = createManager({ repoRoot: "/tmp/repo" });
-
-    await manager.subscribe(
-      {
-        cwd: "/tmp/repo/packages/server",
-        compare: { mode: "uncommitted" },
-      },
-      () => {},
-    );
-
-    expect(workspaceGitService.getCheckoutDiff).toHaveBeenCalledWith(
-      "/tmp/repo",
-      expect.objectContaining({ mode: "uncommitted", includeStructured: true }),
-      undefined,
-    );
-  });
-
-  test("diff refresh is triggered when the working tree watch callback fires", async () => {
-    const getCheckoutDiff = vi
-      .fn()
-      .mockResolvedValueOnce({
-        diff: "",
-        structured: [{ path: "a.ts", additions: 1, deletions: 0, status: "modified" }],
-      })
-      .mockResolvedValueOnce({
-        diff: "",
-        structured: [{ path: "b.ts", additions: 2, deletions: 0, status: "modified" }],
-      });
-
-    const { manager, getOnChange } = createManager({
-      getCheckoutDiffImplementation: getCheckoutDiff,
-    });
-    const listener = vi.fn();
-
-    await manager.subscribe(
-      {
-        cwd: "/tmp/repo/packages/server",
-        compare: { mode: "uncommitted" },
-      },
-      listener,
-    );
-
-    const onChange = getOnChange();
-    expect(onChange).toBeTypeOf("function");
-
-    onChange?.();
-    await vi.advanceTimersByTimeAsync(150);
-
-    expect(listener).toHaveBeenCalledTimes(1);
-    expect(listener).toHaveBeenCalledWith({
-      cwd: "/tmp/repo/packages/server",
-      files: [{ path: "b.ts", additions: 2, deletions: 0, status: "modified" }],
-      error: null,
-    });
-  });
-
-  test("watch-triggered refresh forces a cache bypass on getCheckoutDiff", async () => {
-    const getCheckoutDiff = vi
-      .fn()
-      .mockResolvedValueOnce({
-        diff: "",
-        structured: [{ path: "a.ts", additions: 1, deletions: 0, status: "modified" }],
-      })
-      .mockResolvedValueOnce({
-        diff: "",
-        structured: [{ path: "b.ts", additions: 2, deletions: 0, status: "modified" }],
-      });
-
-    const { manager, getOnChange } = createManager({
-      getCheckoutDiffImplementation: getCheckoutDiff,
-    });
-
-    await manager.subscribe(
-      {
-        cwd: "/tmp/repo/packages/server",
-        compare: { mode: "uncommitted" },
-      },
+      { cwd: "/tmp/repo", compare: { mode: "uncommitted" } },
       vi.fn(),
     );
 
-    expect(getCheckoutDiff).toHaveBeenNthCalledWith(
-      1,
+    expect(subscription.initial.files).toEqual([
+      { path: "a.ts", additions: 1, deletions: 0, status: "modified" },
+    ]);
+    expect(getCheckoutDiff).toHaveBeenCalledTimes(1);
+    expect(getCheckoutDiff).toHaveBeenCalledWith(
       "/tmp/repo",
-      expect.objectContaining({ mode: "uncommitted" }),
-      undefined,
-    );
-
-    const onChange = getOnChange();
-    onChange?.();
-    await vi.advanceTimersByTimeAsync(150);
-
-    expect(getCheckoutDiff).toHaveBeenCalledTimes(2);
-    const watchFiredCall = getCheckoutDiff.mock.calls[1];
-    expect(watchFiredCall[2]).toEqual({
-      force: true,
-      reason: expect.stringContaining("working-tree"),
-    });
-  });
-
-  test("falls back to cwd when the working tree watch returns no repo root", async () => {
-    const { manager, workspaceGitService } = createManager({ repoRoot: null });
-
-    await manager.subscribe(
-      {
-        cwd: "/tmp/plain",
-        compare: { mode: "uncommitted" },
-      },
-      () => {},
-    );
-
-    expect(workspaceGitService.getCheckoutDiff).toHaveBeenCalledWith(
-      "/tmp/plain",
       expect.objectContaining({ mode: "uncommitted", includeStructured: true }),
       undefined,
     );
+    expect(manager.getMetrics()).toEqual({
+      checkoutDiffTargetCount: 1,
+      checkoutDiffSubscriptionCount: 1,
+    });
+
+    subscription.unsubscribe();
+    expect(manager.getMetrics().checkoutDiffTargetCount).toBe(0);
+  });
+
+  test("shares the initial on-demand read between concurrent subscribers", async () => {
+    const { getCheckoutDiff, manager } = createManager();
+
+    const [first, second] = await Promise.all([
+      manager.subscribe({ cwd: "/tmp/repo", compare: { mode: "uncommitted" } }, vi.fn()),
+      manager.subscribe({ cwd: "/tmp/repo", compare: { mode: "uncommitted" } }, vi.fn()),
+    ]);
+
+    expect(getCheckoutDiff).toHaveBeenCalledTimes(1);
+    expect(manager.getMetrics().checkoutDiffSubscriptionCount).toBe(2);
+    first.unsubscribe();
+    second.unsubscribe();
+  });
+
+  test("refreshes active diffs only when explicitly requested", async () => {
+    const getCheckoutDiff = vi
+      .fn()
+      .mockResolvedValueOnce({
+        diff: "",
+        structured: [{ path: "a.ts", additions: 1, deletions: 0, status: "modified" }],
+      })
+      .mockResolvedValueOnce({
+        diff: "",
+        structured: [{ path: "b.ts", additions: 2, deletions: 0, status: "modified" }],
+      });
+    const { manager } = createManager(getCheckoutDiff);
+    const listener = vi.fn();
+    const subscription = await manager.subscribe(
+      { cwd: "/tmp/repo", compare: { mode: "uncommitted" } },
+      listener,
+    );
+
+    manager.scheduleRefreshForCwd("/tmp/repo");
+
+    await vi.waitFor(() => expect(listener).toHaveBeenCalledTimes(1));
+    expect(listener).toHaveBeenCalledWith({
+      cwd: "/tmp/repo",
+      files: [{ path: "b.ts", additions: 2, deletions: 0, status: "modified" }],
+      error: null,
+    });
+    expect(getCheckoutDiff).toHaveBeenLastCalledWith(
+      "/tmp/repo",
+      expect.objectContaining({ mode: "uncommitted" }),
+      { force: true, reason: "explicit-refresh" },
+    );
+
+    subscription.unsubscribe();
+  });
+
+  test("does not emit when an explicit refresh produces the same payload", async () => {
+    const { manager } = createManager();
+    const listener = vi.fn();
+    const subscription = await manager.subscribe(
+      { cwd: "/tmp/repo", compare: { mode: "uncommitted" } },
+      listener,
+    );
+
+    manager.scheduleRefreshForCwd("/tmp/repo");
+
+    await vi.waitFor(() => expect(manager.getMetrics().checkoutDiffTargetCount).toBe(1));
+    expect(listener).not.toHaveBeenCalled();
+    subscription.unsubscribe();
+  });
+
+  test("serializes a mutation refresh behind an in-flight initial read", async () => {
+    interface DiffResult {
+      diff: string;
+      structured: Array<{
+        path: string;
+        additions: number;
+        deletions: number;
+        status: "modified";
+      }>;
+    }
+    let resolveInitial!: (value: DiffResult) => void;
+    const initial = new Promise<DiffResult>((resolve) => {
+      resolveInitial = resolve;
+    });
+    const getCheckoutDiff = vi
+      .fn()
+      .mockImplementationOnce(() => initial)
+      .mockResolvedValueOnce({
+        diff: "",
+        structured: [{ path: "fresh.ts", additions: 1, deletions: 0, status: "modified" }],
+      });
+    const { manager } = createManager(getCheckoutDiff);
+    const listener = vi.fn();
+    const subscriptionPromise = manager.subscribe(
+      { cwd: "/tmp/repo", compare: { mode: "uncommitted" } },
+      listener,
+    );
+
+    await vi.waitFor(() => expect(getCheckoutDiff).toHaveBeenCalledTimes(1));
+    manager.scheduleRefreshForCwd("/tmp/repo");
+    await Promise.resolve();
+    expect(getCheckoutDiff).toHaveBeenCalledTimes(1);
+
+    resolveInitial({
+      diff: "",
+      structured: [{ path: "stale.ts", additions: 1, deletions: 0, status: "modified" }],
+    });
+    const subscription = await subscriptionPromise;
+    await vi.waitFor(() => expect(listener).toHaveBeenCalledTimes(1));
+    expect(listener).toHaveBeenCalledWith({
+      cwd: "/tmp/repo",
+      files: [{ path: "fresh.ts", additions: 1, deletions: 0, status: "modified" }],
+      error: null,
+    });
+
+    const second = await manager.subscribe(
+      { cwd: "/tmp/repo", compare: { mode: "uncommitted" } },
+      vi.fn(),
+    );
+    expect(second.initial.files).toEqual([
+      { path: "fresh.ts", additions: 1, deletions: 0, status: "modified" },
+    ]);
+    expect(getCheckoutDiff).toHaveBeenCalledTimes(2);
+    subscription.unsubscribe();
+    second.unsubscribe();
   });
 });

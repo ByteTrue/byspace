@@ -321,8 +321,6 @@ describe("DaemonSession", () => {
           terminalDirectorySubscriptionCount: 5,
           checkoutDiffTargetCount: 6,
           checkoutDiffSubscriptionCount: 7,
-          checkoutDiffWatcherCount: 8,
-          checkoutDiffFallbackRefreshTargetCount: 9,
         },
         latency: [
           {
@@ -370,9 +368,7 @@ describe("DaemonSession", () => {
       "Latency: diagnostics.request count=2 p50=4ms max=7ms total=11ms",
     );
     expect(message.payload.diagnostic).toContain("Inbound session requests: diagnostics.request=2");
-    expect(message.payload.diagnostic).toContain(
-      "Checkout diff: targets=6, subscriptions=7, watchers=8, fallbackRefreshTargets=9",
-    );
+    expect(message.payload.diagnostic).toContain("Checkout diff: targets=6, subscriptions=7");
     expect(message.payload.diagnostic).toContain("Agent lifecycle: idle=8, running=2");
   });
 });

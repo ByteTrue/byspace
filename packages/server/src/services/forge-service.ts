@@ -494,16 +494,7 @@ export interface ForgeService {
    * cannot change the outcome and is pure overhead.
    */
   authProbeCanThrow?: boolean;
-  retainCurrentPullRequestStatusPoll?(options: {
-    cwd: string;
-    headRef: string;
-    headSha?: string;
-    headRepositoryOwner?: string;
-    onStatus?: (status: CurrentPullRequestStatus | null) => void;
-    onError?: (error: unknown) => void;
-  }): { unsubscribe: () => void };
   invalidate(options: { cwd: string }): void;
-  dispose?(): void;
 }
 
 /** Parse an optional ISO timestamp to epoch ms, 0 when absent or unparseable. */

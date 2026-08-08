@@ -765,9 +765,6 @@ export async function createBySpaceDaemon(
     providerDefinitions: initialAgentManagerState.providerDefinitions,
     registry: agentStorage,
     appendSystemPrompt: config.appendSystemPrompt,
-    onWorkspaceStateMayHaveChanged: ({ cwd }) => {
-      workspaceGitService.onWorkspaceStateMayHaveChanged(cwd);
-    },
     mcpAuthToken: agentMcpAuthToken,
     logger,
   });
@@ -812,11 +809,7 @@ export async function createBySpaceDaemon(
   })();
   await chatService.initialize();
   logger.info({ elapsed: elapsed() }, "Chat service initialized");
-  const checkoutDiffManager = new CheckoutDiffManager({
-    logger,
-    byspaceHome: config.byspaceHome,
-    workspaceGitService,
-  });
+  const checkoutDiffManager = new CheckoutDiffManager(workspaceGitService);
   const archiveWorkspaceRecordExternal = async (workspaceId: string) => {
     const session = wsServer?.listActiveSessions()[0];
     if (session) {

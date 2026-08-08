@@ -102,6 +102,7 @@ function createTerminalHost(input: {
   height: number;
   scrollback?: number;
   callbacks?: TerminalEmulatorRuntimeCallbacks;
+  onRendererReady?: () => void;
 }): MountedTerminal {
   const root = document.createElement("div");
   root.style.width = `${input.width}px`;
@@ -153,6 +154,7 @@ function createTerminalHost(input: {
       foreground: "#e6e6e6",
       cursor: "#e6e6e6",
     },
+    onRendererReady: input.onRendererReady,
   });
 
   const mounted = {
@@ -307,6 +309,49 @@ describe("terminal emulator runtime in a real browser", () => {
 
     expect(window.__byspaceTerminal).toBe(terminal);
     expect(window.__byspaceTerminal?.options.scrollback).toBe(42_000);
+  });
+
+  it("reports ready only after the post-WebGL renderer has a measurable fit", async () => {
+    await page.viewport(900, 600);
+    let readyCount = 0;
+    const mounted = createTerminalHost({
+      width: 0,
+      height: 360,
+      onRendererReady: () => {
+        readyCount += 1;
+      },
+    });
+
+    await nextFrame();
+    await nextFrame();
+    expect(readyCount).toBe(0);
+
+    mounted.root.style.width = "720px";
+    expect(mounted.runtime.resize({ force: true, shouldClaim: false })).toBe(true);
+    expect(readyCount).toBe(1);
+    expect(latestSize(mounted.sizes).cols).toBeGreaterThan(0);
+  });
+
+  it("reports ready after a hidden renderer swap restores the same geometry", async () => {
+    await page.viewport(900, 600);
+    let readyCount = 0;
+    const mounted = createTerminalHost({
+      width: 720,
+      height: 360,
+      onRendererReady: () => {
+        readyCount += 1;
+      },
+    });
+    const initialSize = latestSize(mounted.sizes);
+    mounted.root.style.width = "0px";
+
+    await nextFrame();
+    expect(readyCount).toBe(0);
+
+    mounted.root.style.width = "720px";
+    expect(mounted.runtime.resize()).toBe(true);
+    expect(latestSize(mounted.sizes)).toEqual(initialSize);
+    expect(readyCount).toBe(1);
   });
 
   it("does not claim PTY ownership from passive mount refits", async () => {

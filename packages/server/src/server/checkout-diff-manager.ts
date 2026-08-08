@@ -1,15 +1,9 @@
-import type pino from "pino";
 import type { SubscribeCheckoutDiffRequest, SessionOutboundMessage } from "./messages.js";
 import type { WorkspaceGitService } from "./workspace-git-service.js";
 import { expandTilde } from "../utils/path.js";
 import { toCheckoutError } from "./checkout-git-utils.js";
 
-const CHECKOUT_DIFF_WATCH_DEBOUNCE_MS = 150;
-
-type CheckoutDiffWorkspace = Pick<
-  WorkspaceGitService,
-  "getCheckoutDiff" | "requestWorkingTreeWatch"
->;
+type CheckoutDiffWorkspace = Pick<WorkspaceGitService, "getCheckoutDiff">;
 
 export type CheckoutDiffCompareInput = SubscribeCheckoutDiffRequest["compare"];
 
@@ -21,23 +15,18 @@ export type CheckoutDiffSnapshotPayload = Omit<
 export interface CheckoutDiffMetrics {
   checkoutDiffTargetCount: number;
   checkoutDiffSubscriptionCount: number;
-  checkoutDiffWatcherCount: number;
-  checkoutDiffFallbackRefreshTargetCount: number;
 }
 
-interface CheckoutDiffWatchTarget {
+interface CheckoutDiffTarget {
   key: string;
   cwd: string;
-  diffCwd: string;
   compare: CheckoutDiffCompareInput;
   listeners: Set<(snapshot: CheckoutDiffSnapshotPayload) => void>;
-  workingTreeWatchUnsubscribe: (() => void) | null;
-  debounceTimer: NodeJS.Timeout | null;
+  loadPromise: Promise<CheckoutDiffSnapshotPayload> | null;
   refreshPromise: Promise<void> | null;
   refreshQueued: boolean;
   latestPayload: CheckoutDiffSnapshotPayload | null;
   latestFingerprint: string | null;
-  openPromise: Promise<void> | null;
 }
 
 export interface CheckoutDiffSubscriptionRequest {
@@ -53,49 +42,33 @@ export interface CheckoutDiffSubscription {
 
 export class CheckoutDiffManager {
   private readonly workspaceGitService: CheckoutDiffWorkspace;
-  private readonly targets = new Map<string, CheckoutDiffWatchTarget>();
+  private readonly targets = new Map<string, CheckoutDiffTarget>();
 
-  constructor(options: {
-    logger: pino.Logger;
-    byspaceHome: string;
-    workspaceGitService: CheckoutDiffWorkspace;
-  }) {
-    this.workspaceGitService = options.workspaceGitService;
+  constructor(workspaceGitService: CheckoutDiffWorkspace) {
+    this.workspaceGitService = workspaceGitService;
   }
 
   async subscribe(
     params: CheckoutDiffSubscriptionRequest,
     listener: (snapshot: CheckoutDiffSnapshotPayload) => void,
   ): Promise<CheckoutDiffSubscription> {
-    const cwd = params.cwd;
+    const cwd = expandTilde(params.cwd);
     const compare = this.normalizeCompare(params.compare);
     const target = this.ensureTarget(cwd, compare);
     target.listeners.add(listener);
-    target.openPromise ??= this.openTarget(target);
 
     let isSubscribed = true;
     const unsubscribe = () => {
-      if (!isSubscribed) {
-        return;
-      }
+      if (!isSubscribed) return;
       isSubscribed = false;
       params.signal?.removeEventListener("abort", unsubscribe);
       this.removeListener(target, listener);
     };
     params.signal?.addEventListener("abort", unsubscribe, { once: true });
-    if (params.signal?.aborted) {
-      unsubscribe();
-    }
+    if (params.signal?.aborted) unsubscribe();
 
     try {
-      await target.openPromise;
-      const initial =
-        target.latestPayload ??
-        (await this.computeCheckoutDiffSnapshot(target.cwd, target.compare, {
-          diffCwd: target.diffCwd,
-        }));
-      target.latestPayload = initial;
-      target.latestFingerprint = JSON.stringify(initial);
+      const initial = target.latestPayload ?? (await this.loadTarget(target));
       return { initial, unsubscribe };
     } catch (error) {
       unsubscribe();
@@ -106,40 +79,29 @@ export class CheckoutDiffManager {
   scheduleRefreshForCwd(cwd: string): void {
     const resolvedCwd = expandTilde(cwd);
     for (const target of this.targets.values()) {
-      if (target.cwd !== resolvedCwd && target.diffCwd !== resolvedCwd) {
-        continue;
-      }
-      this.scheduleTargetRefresh(target);
+      if (target.cwd === resolvedCwd) void this.refreshTarget(target);
     }
   }
 
   getMetrics(): CheckoutDiffMetrics {
     let checkoutDiffSubscriptionCount = 0;
-
     for (const target of this.targets.values()) {
       checkoutDiffSubscriptionCount += target.listeners.size;
     }
-
     return {
       checkoutDiffTargetCount: this.targets.size,
       checkoutDiffSubscriptionCount,
-      checkoutDiffWatcherCount: 0,
-      checkoutDiffFallbackRefreshTargetCount: 0,
     };
   }
 
   dispose(): void {
-    for (const target of this.targets.values()) {
-      this.closeTarget(target);
-    }
+    for (const target of this.targets.values()) target.listeners.clear();
     this.targets.clear();
   }
 
   private normalizeCompare(compare: CheckoutDiffCompareInput): CheckoutDiffCompareInput {
     const ignoreWhitespace = compare.ignoreWhitespace === true;
-    if (compare.mode === "uncommitted") {
-      return { mode: "uncommitted", ignoreWhitespace };
-    }
+    if (compare.mode === "uncommitted") return { mode: "uncommitted", ignoreWhitespace };
     const trimmedBaseRef = compare.baseRef?.trim();
     return trimmedBaseRef
       ? { mode: "base", baseRef: trimmedBaseRef, ignoreWhitespace }
@@ -155,111 +117,82 @@ export class CheckoutDiffManager {
     ]);
   }
 
-  private closeTarget(target: CheckoutDiffWatchTarget): void {
-    if (target.debounceTimer) {
-      clearTimeout(target.debounceTimer);
-      target.debounceTimer = null;
-    }
-    target.workingTreeWatchUnsubscribe?.();
-    target.workingTreeWatchUnsubscribe = null;
-    target.listeners.clear();
-  }
-
   private removeListener(
-    target: CheckoutDiffWatchTarget,
+    target: CheckoutDiffTarget,
     listener: (snapshot: CheckoutDiffSnapshotPayload) => void,
   ): void {
     target.listeners.delete(listener);
-    if (target.listeners.size > 0) {
-      return;
-    }
-    this.closeTarget(target);
-    if (this.targets.get(target.key) === target) {
-      this.targets.delete(target.key);
-    }
-  }
-
-  private scheduleTargetRefresh(target: CheckoutDiffWatchTarget): void {
-    if (target.debounceTimer) {
-      clearTimeout(target.debounceTimer);
-    }
-    target.debounceTimer = setTimeout(() => {
-      target.debounceTimer = null;
-      void this.refreshTarget(target);
-    }, CHECKOUT_DIFF_WATCH_DEBOUNCE_MS);
+    if (target.listeners.size > 0) return;
+    if (this.targets.get(target.key) === target) this.targets.delete(target.key);
   }
 
   private async computeCheckoutDiffSnapshot(
-    cwd: string,
-    compare: CheckoutDiffCompareInput,
-    options?: { diffCwd?: string; force?: boolean; reason?: string },
+    target: CheckoutDiffTarget,
+    force = false,
   ): Promise<CheckoutDiffSnapshotPayload> {
-    const diffCwd = options?.diffCwd ?? cwd;
     try {
       const diffResult = await this.workspaceGitService.getCheckoutDiff(
-        diffCwd,
+        target.cwd,
         {
-          mode: compare.mode,
-          baseRef: compare.baseRef,
-          ignoreWhitespace: compare.ignoreWhitespace,
+          mode: target.compare.mode,
+          baseRef: target.compare.baseRef,
+          ignoreWhitespace: target.compare.ignoreWhitespace,
           includeStructured: true,
         },
-        options?.force
-          ? { force: true, reason: options.reason ?? "checkout-diff-refresh" }
-          : undefined,
+        force ? { force: true, reason: "explicit-refresh" } : undefined,
       );
       if (diffResult.diffTooLarge) {
         return {
-          cwd,
+          cwd: target.cwd,
           files: [],
           diffTooLarge: true,
           error: toCheckoutError(new Error("Diff too large to display")),
         };
       }
-      const files = [...(diffResult.structured ?? [])];
-      files.sort((a, b) => {
-        if (a.path === b.path) return 0;
+      const files = [...(diffResult.structured ?? [])].sort((a, b) => {
+        if (a.path === b.path) {
+          return 0;
+        }
         return a.path < b.path ? -1 : 1;
       });
-      return {
-        cwd,
-        files,
-        error: null,
-      };
+      return { cwd: target.cwd, files, error: null };
     } catch (error) {
-      return {
-        cwd,
-        files: [],
-        error: toCheckoutError(error),
-      };
+      return { cwd: target.cwd, files: [], error: toCheckoutError(error) };
     }
   }
 
-  private async refreshTarget(target: CheckoutDiffWatchTarget): Promise<void> {
+  private loadTarget(target: CheckoutDiffTarget): Promise<CheckoutDiffSnapshotPayload> {
+    target.loadPromise ??= this.computeCheckoutDiffSnapshot(target)
+      .then((snapshot) => {
+        target.latestPayload = snapshot;
+        target.latestFingerprint = JSON.stringify(snapshot);
+        return snapshot;
+      })
+      .finally(() => {
+        target.loadPromise = null;
+      });
+    return target.loadPromise;
+  }
+
+  private async refreshTarget(target: CheckoutDiffTarget): Promise<void> {
     if (target.refreshPromise) {
       target.refreshQueued = true;
       return;
     }
-
+    const loadPromise = target.loadPromise;
     target.refreshPromise = (async () => {
+      if (loadPromise) await loadPromise;
       do {
         target.refreshQueued = false;
-        const snapshot = await this.computeCheckoutDiffSnapshot(target.cwd, target.compare, {
-          diffCwd: target.diffCwd,
-          force: true,
-          reason: "working-tree-watch",
-        });
+        const snapshot = await this.computeCheckoutDiffSnapshot(target, true);
         target.latestPayload = snapshot;
         const fingerprint = JSON.stringify(snapshot);
         if (fingerprint !== target.latestFingerprint) {
           target.latestFingerprint = fingerprint;
-          for (const listener of target.listeners) {
-            listener(snapshot);
-          }
+          for (const listener of target.listeners) listener(snapshot);
         }
       } while (target.refreshQueued);
     })();
-
     try {
       await target.refreshPromise;
     } finally {
@@ -267,41 +200,22 @@ export class CheckoutDiffManager {
     }
   }
 
-  private ensureTarget(cwd: string, compare: CheckoutDiffCompareInput): CheckoutDiffWatchTarget {
-    const targetKey = this.buildTargetKey(cwd, compare);
-    const existing = this.targets.get(targetKey);
-    if (existing) {
-      return existing;
-    }
-
-    const target: CheckoutDiffWatchTarget = {
-      key: targetKey,
+  private ensureTarget(cwd: string, compare: CheckoutDiffCompareInput): CheckoutDiffTarget {
+    const key = this.buildTargetKey(cwd, compare);
+    const existing = this.targets.get(key);
+    if (existing) return existing;
+    const target: CheckoutDiffTarget = {
+      key,
       cwd,
-      diffCwd: cwd,
       compare,
       listeners: new Set(),
-      workingTreeWatchUnsubscribe: null,
-      debounceTimer: null,
+      loadPromise: null,
       refreshPromise: null,
       refreshQueued: false,
       latestPayload: null,
       latestFingerprint: null,
-      openPromise: null,
     };
-    this.targets.set(targetKey, target);
+    this.targets.set(key, target);
     return target;
-  }
-
-  private async openTarget(target: CheckoutDiffWatchTarget): Promise<void> {
-    const { repoRoot, unsubscribe } = await this.workspaceGitService.requestWorkingTreeWatch(
-      target.cwd,
-      () => this.scheduleTargetRefresh(target),
-    );
-    target.diffCwd = repoRoot ?? target.cwd;
-    if (this.targets.get(target.key) !== target || target.listeners.size === 0) {
-      unsubscribe();
-      return;
-    }
-    target.workingTreeWatchUnsubscribe = unsubscribe;
   }
 }

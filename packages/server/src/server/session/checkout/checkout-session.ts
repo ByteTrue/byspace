@@ -528,7 +528,7 @@ export class CheckoutSession {
       this.scheduleDiffRefresh(cwd);
 
       // Push a workspace_update immediately so the sidebar/header reflect
-      // the new branch name without waiting for the background git watcher.
+      // the mutation without requiring a manual refresh.
       await this.host.emitWorkspaceUpdateForCwd(cwd);
 
       this.host.emit({
@@ -586,7 +586,7 @@ export class CheckoutSession {
       // TODO(K10): PR-binding on branch rename is deferred — see plan K10.
 
       // Push a workspace_update immediately so the sidebar/header reflect
-      // the new branch name without waiting for the background git watcher.
+      // the mutation without requiring a manual refresh.
       await this.host.emitWorkspaceUpdateForCwd(cwd);
 
       this.host.emit({
@@ -730,7 +730,11 @@ export class CheckoutSession {
     const { cwd, requestId } = msg;
 
     try {
-      const snapshot = await this.workspaceGitService.getSnapshot(cwd);
+      const snapshot = await this.workspaceGitService.getSnapshot(cwd, {
+        force: true,
+        includeForge: false,
+        reason: "merge-to-base-preflight",
+      });
       if (!snapshot.git.isGit) {
         throw new Error(`Not a git repository: ${cwd}`);
       }
@@ -761,7 +765,10 @@ export class CheckoutSession {
         this.gitMutation.notifyGitMutation(mutatedCwd, "merge-to-base", { invalidateForge: true }),
         ...(mutatedCwd !== cwd ? [this.gitMutation.notifyGitMutation(cwd, "merge-to-base")] : []),
       ]);
-      this.scheduleDiffRefresh(cwd);
+      this.scheduleDiffRefresh(mutatedCwd);
+      if (mutatedCwd !== cwd) {
+        this.scheduleDiffRefresh(cwd);
+      }
 
       this.host.emit({
         type: "checkout_merge_response",
@@ -792,7 +799,11 @@ export class CheckoutSession {
 
     try {
       if (msg.requireCleanTarget ?? true) {
-        const snapshot = await this.workspaceGitService.getSnapshot(cwd);
+        const snapshot = await this.workspaceGitService.getSnapshot(cwd, {
+          force: true,
+          includeForge: false,
+          reason: "merge-from-base-preflight",
+        });
         if (snapshot.git.isDirty) {
           throw new Error("Working directory has uncommitted changes.");
         }
