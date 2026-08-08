@@ -804,13 +804,6 @@ function createSessionForWorkspaceTests(
   return session;
 }
 
-function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
-  let resolve!: (value: T) => void;
-  const promise = new Promise<T>((resolvePromise) => {
-    resolve = resolvePromise;
-  });
-  return { promise, resolve };
-}
 test("agent updates preserve queued live transitions across stored metadata reads", async () => {
   const running = makeManagedAgent({
     id: "agent-coherent",
@@ -900,7 +893,7 @@ test("agent updates preserve queued live transitions across stored metadata read
           turnId: "turn-running",
           startedAt: "2026-07-31T10:00:00.500Z",
         },
-        updatedAt: "2026-07-31T10:00:01.000Z",
+        updatedAt: "2026-07-31T10:00:03.000Z",
         model: "running-model",
         title: "Stored title",
       }),
@@ -910,7 +903,7 @@ test("agent updates preserve queued live transitions across stored metadata read
       agent: expect.objectContaining({
         status: "idle",
         activeTurn: null,
-        updatedAt: "2026-07-31T10:00:02.000Z",
+        updatedAt: "2026-07-31T10:00:03.000Z",
         model: "idle-model",
         title: "Stored title",
       }),
