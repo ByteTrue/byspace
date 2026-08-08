@@ -201,6 +201,11 @@ function SubagentsTrackRow({
             <Text style={styles.rowLabel} numberOfLines={1}>
               {displayLabel}
             </Text>
+            {presentation.subtitle ? (
+              <Text style={styles.rowSubtitle} numberOfLines={1}>
+                {presentation.subtitle}
+              </Text>
+            ) : null}
             {row.kind === "byspace" ? (
               <SubagentRowActions
                 rowId={row.id}
@@ -387,6 +392,14 @@ const styles = StyleSheet.create((theme) => ({
     minWidth: 0,
     fontSize: theme.fontSize.sm,
     color: theme.colors.foreground,
+  },
+  // Keep provider context secondary and bounded so the task remains readable on compact screens.
+  rowSubtitle: {
+    flexShrink: 1,
+    minWidth: 0,
+    maxWidth: "45%",
+    fontSize: theme.fontSize.xs,
+    color: theme.colors.foregroundMuted,
   },
   actionClusterVisible: {
     flexDirection: "row",

@@ -362,6 +362,7 @@ function createSessionForTest(options: SessionForTestOptions = {}): Session {
     byspaceHome: options.byspaceHome ?? "/tmp/byspace-home",
     agentManager: asAgentManager({
       listAgents: vi.fn(() => []),
+      listProviderSubagentActivity: vi.fn(() => []),
       subscribe: vi.fn(() => () => {}),
       ...options.agentManager,
     }),
