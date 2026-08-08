@@ -110,9 +110,6 @@ export function useKeyboardShortcuts({
         case "dispatch":
           return keyboardActionDispatcher.dispatch(action.action);
         case "navigate-workspace":
-          if (usePanelStore.getState().desktop.focusModeEnabled) {
-            usePanelStore.getState().toggleFocusMode();
-          }
           keyboardWorkspaceSelectionRef.current = {
             serverId: action.serverId,
             workspaceId: action.workspaceId,
@@ -120,9 +117,6 @@ export function useKeyboardShortcuts({
           navigateToWorkspace({ serverId: action.serverId, workspaceId: action.workspaceId });
           return true;
         case "navigate-last-workspace":
-          if (usePanelStore.getState().desktop.focusModeEnabled) {
-            usePanelStore.getState().toggleFocusMode();
-          }
           return navigateToLastWorkspace();
         case "router-replace":
           router.replace(action.route as Parameters<typeof router.replace>[0]);
@@ -175,11 +169,16 @@ export function useKeyboardShortcuts({
           shortcutsDialogOpen: store.shortcutsDialogOpen,
         },
       );
-      return performShortcutAction(
+      const handled = performShortcutAction(
         shortcutAction,
         input.domEvent,
         input.browserFocusRestoreElement,
       );
+      const panelState = usePanelStore.getState();
+      if (handled && panelState.desktop.focusModeEnabled && input.action.startsWith("sidebar.")) {
+        panelState.toggleFocusMode();
+      }
+      return handled;
     };
 
     const resolveAndPerformShortcut = (input: {
