@@ -595,8 +595,6 @@ function createSessionForWorkspaceTests(
     onWorkspaceRecovered?: SessionOptions["onWorkspaceRecovered"];
     workspaceGitService?: ReturnType<typeof createNoopWorkspaceGitService>;
     terminalManager?: TerminalManager | null;
-    agentManager?: SessionOptions["agentManager"];
-    agentStorage?: SessionOptions["agentStorage"];
     agentManager?: { [K in keyof SessionOptions["agentManager"]]?: unknown };
     agentStorage?: { [K in keyof SessionOptions["agentStorage"]]?: unknown };
     projectRegistry?: SessionOptions["projectRegistry"];
@@ -619,18 +617,19 @@ function createSessionForWorkspaceTests(
     warn: vi.fn(),
     error: vi.fn(),
   };
-  const agentManager = asAgentManager({
-    subscribe: () => () => {},
-    listAgents: () => [],
-    listProviderSubagentActivity: () => [],
-    getAgent: () => null,
-    archiveAgent: async () => ({ archivedAt: new Date().toISOString() }),
-    archiveSnapshot: async () => ({}),
-    unarchiveSnapshot: async () => true,
-    clearAgentAttention: async () => {},
-    notifyAgentState: () => {},
-    ...options.agentManager,
-  });
+  const agentManager = asAgentManager(
+    options.agentManager ?? {
+      subscribe: () => () => {},
+      listAgents: () => [],
+      listProviderSubagentActivity: () => [],
+      getAgent: () => null,
+      archiveAgent: async () => ({ archivedAt: new Date().toISOString() }),
+      archiveSnapshot: async () => ({}),
+      unarchiveSnapshot: async () => true,
+      clearAgentAttention: async () => {},
+      notifyAgentState: () => {},
+    },
+  );
   const workspaceRegistry: SessionOptions["workspaceRegistry"] = options.workspaceRegistry ?? {
     initialize: async () => {},
     existsOnDisk: async () => true,
@@ -692,33 +691,34 @@ function createSessionForWorkspaceTests(
       byspaceHome: options.byspaceHome ?? "/tmp/byspace-test",
       worktreesRoot: options.worktreesRoot,
       agentManager,
-      agentStorage: asAgentStorage({
-        list: async () => [
-          createPersistedWorkspaceRecord({
-            workspaceId: "ws-repo-running",
-            projectId: "proj-repo-running",
-            cwd: REPO_CWD,
-            kind: "directory",
-            displayName: "repo",
-            createdAt: "2026-03-01T12:00:00.000Z",
-            updatedAt: "2026-03-01T12:00:00.000Z",
-          }),
-        ],
-        get: async (workspaceId: string) =>
-          workspaceId === "ws-repo-running"
-            ? createPersistedWorkspaceRecord({
-                workspaceId: "ws-repo-running",
-                projectId: "proj-repo-running",
-                cwd: REPO_CWD,
-                kind: "directory",
-                displayName: "repo",
-                createdAt: "2026-03-01T12:00:00.000Z",
-                updatedAt: "2026-03-01T12:00:00.000Z",
-              })
-            : null,
-        upsert: async () => {},
-        ...options.agentStorage,
-      }),
+      agentStorage: asAgentStorage(
+        options.agentStorage ?? {
+          list: async () => [
+            createPersistedWorkspaceRecord({
+              workspaceId: "ws-repo-running",
+              projectId: "proj-repo-running",
+              cwd: REPO_CWD,
+              kind: "directory",
+              displayName: "repo",
+              createdAt: "2026-03-01T12:00:00.000Z",
+              updatedAt: "2026-03-01T12:00:00.000Z",
+            }),
+          ],
+          get: async (workspaceId: string) =>
+            workspaceId === "ws-repo-running"
+              ? createPersistedWorkspaceRecord({
+                  workspaceId: "ws-repo-running",
+                  projectId: "proj-repo-running",
+                  cwd: REPO_CWD,
+                  kind: "directory",
+                  displayName: "repo",
+                  createdAt: "2026-03-01T12:00:00.000Z",
+                  updatedAt: "2026-03-01T12:00:00.000Z",
+                })
+              : null,
+          upsert: async () => {},
+        },
+      ),
       projectRegistry: options.projectRegistry ?? {
         initialize: async () => {},
         existsOnDisk: async () => true,
