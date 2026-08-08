@@ -1,6 +1,11 @@
 import { useCallback, useState } from "react";
 import type { LayoutChangeEvent } from "react-native";
 
+export function readMeasuredWidth(event: LayoutChangeEvent): number | null {
+  const width = event.nativeEvent.layout.width;
+  return width > 0 ? width : null;
+}
+
 /**
  * Tracks the width of a container via onLayout.
  */
@@ -31,8 +36,8 @@ export function useContainerWidthBelow(
   return {
     onLayout: useCallback(
       (e: LayoutChangeEvent) => {
-        const width = e.nativeEvent.layout.width;
-        if (width <= 0) {
+        const width = readMeasuredWidth(e);
+        if (width === null) {
           return;
         }
         const nextIsBelow = width < threshold;
