@@ -8,17 +8,18 @@ export function getStatusDotColor(input: {
 }): string | null {
   const { theme, bucket, showDoneAsInactive = false } = input;
 
+  // Tiny dots deliberately use the stronger semantic status band.
   if (bucket === "needs_input") {
-    return theme.colors.palette.amber[500];
+    return theme.colors.statusDotWarning;
   }
   if (bucket === "failed") {
-    return theme.colors.palette.red[500];
+    return theme.colors.statusDotDanger;
   }
   if (bucket === "running") {
-    return theme.colors.palette.blue[500];
+    return theme.colors.statusDotRunning;
   }
   if (bucket === "attention") {
-    return theme.colors.palette.green[500];
+    return theme.colors.statusDotSuccess;
   }
   if (bucket === "done") {
     return showDoneAsInactive ? theme.colors.border : null;

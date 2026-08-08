@@ -4,7 +4,7 @@ import {
 } from "@gorhom/bottom-sheet";
 import React from "react";
 import { forwardRef, useCallback, useEffect, useMemo, useRef } from "react";
-import type { ElementRef } from "react";
+import type { ElementRef, ReactNode } from "react";
 import {
   type BottomSheetController,
   createBottomSheetVisibilityTracker,
@@ -12,11 +12,16 @@ import {
 
 type GorhomBottomSheetModalMethods = ElementRef<typeof GorhomBottomSheetModal>;
 
+export type ContextBridge = (children: ReactNode) => ReactNode;
+
 type IsolatedBottomSheetModalProps = Omit<
   BottomSheetModalProps,
-  "enableDismissOnClose" | "stackBehavior"
+  "enableDismissOnClose" | "stackBehavior" | "children"
 > & {
+  children?: ReactNode;
   presentation?: "push" | "replace";
+  /** Re-establishes callsite context on the far side of Gorhom's non-React portal. */
+  contextBridge?: ContextBridge | null;
 };
 
 export type IsolatedBottomSheetModalRef = GorhomBottomSheetModalMethods;
@@ -25,7 +30,7 @@ export const IsolatedBottomSheetModal = forwardRef<
   IsolatedBottomSheetModalRef,
   IsolatedBottomSheetModalProps
 >(function IsolatedBottomSheetModal(props, ref) {
-  const { children, presentation = "push", ...bottomSheetProps } = props;
+  const { children, presentation = "push", contextBridge, ...bottomSheetProps } = props;
   const modal = (
     <GorhomBottomSheetModal
       {...bottomSheetProps}
@@ -33,7 +38,7 @@ export const IsolatedBottomSheetModal = forwardRef<
       enableDismissOnClose
       stackBehavior={presentation}
     >
-      {children}
+      {contextBridge ? contextBridge(children) : children}
     </GorhomBottomSheetModal>
   );
 

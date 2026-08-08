@@ -33,7 +33,10 @@ import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import type { Theme } from "@/styles/theme";
 import { type GestureType } from "react-native-gesture-handler";
 import * as Clipboard from "expo-clipboard";
-import { DiffStat } from "@/components/diff-stat";
+import {
+  hasSidebarWorkspaceTrailing,
+  SidebarWorkspaceTrailingContent,
+} from "@/components/sidebar/workspace-trailing";
 import {
   CircleAlert,
   ExternalLink,
@@ -47,6 +50,9 @@ import { NestableScrollContainer } from "react-native-draggable-flatlist";
 import { DraggableList, type DraggableRenderItemInfo } from "./draggable-list";
 import type { DraggableListDragHandleProps } from "./draggable-list.types";
 import { getHostRuntimeStore, useHosts } from "@/runtime/host-runtime";
+import { useHostBadges } from "@/hosts/use-host-badges";
+import type { HostBadgeModel } from "@/hosts/appearance";
+import { useSidebarMetaPreferences } from "@/components/sidebar/display-preferences/model";
 import { useHostFeatureMap } from "@/runtime/host-features";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { useProjectIconDataByProjectKey } from "@/projects/project-icons";
@@ -56,7 +62,6 @@ import {
   parseHostWorkspaceRouteFromPathname,
 } from "@/utils/host-routes";
 import {
-  shouldShowSidebarHostLabels,
   type SidebarProjectEntry,
   type SidebarWorkspaceEntry,
   type SidebarWorkspacePlacement,
@@ -141,22 +146,19 @@ const foregroundMutedColorMapping = (theme: Theme) => ({
   color: theme.colors.foregroundMuted,
 });
 const redColorMapping = (theme: Theme) => ({
-  color: theme.colors.palette.red[500],
+  color: theme.colors.statusDanger,
 });
 const amberColorMapping = (theme: Theme) => ({
-  color: theme.colors.palette.amber[500],
+  color: theme.colors.statusWarning,
 });
 const greenColorMapping = (theme: Theme) => ({
-  color: theme.colors.palette.green[500],
+  color: theme.colors.statusSuccess,
 });
 const purpleColorMapping = (theme: Theme) => ({
-  color: theme.colors.palette.purple[500],
+  color: theme.colors.statusMerged,
 });
 const syncedLoaderColorMapping = (theme: Theme) => ({
-  color:
-    theme.colorScheme === "light"
-      ? theme.colors.palette.amber[700]
-      : theme.colors.palette.amber[500],
+  color: theme.colors.statusWarning,
 });
 
 function getPrIconUniMapping(state: PrHint["state"]) {
@@ -247,7 +249,7 @@ interface ProjectHeaderRowProps {
 
 interface WorkspaceRowInnerProps {
   workspace: SidebarWorkspaceEntry;
-  subtitle?: string | null;
+  subtitle?: HostBadgeModel | null;
   selected: boolean;
   shortcutNumber: number | null;
   showShortcutBadge: boolean;
@@ -589,10 +591,12 @@ function WorkspaceRowRightGroup({
   onRename?: () => void;
 }) {
   const { t } = useTranslation();
+  const { trailing } = useSidebarMetaPreferences();
   const showShortcut = showShortcutBadge && shortcutNumber !== null;
   const showKebab = Boolean(onArchive && (isHovered || isTouchPlatform || isCompactBreakpoint));
   const showKebabInSlot = showKebab && !showShortcut;
-  const shouldRenderActionSlot = Boolean(onArchive || workspace.diffStat);
+  const hasTrailing = hasSidebarWorkspaceTrailing({ workspace, trailing });
+  const shouldRenderActionSlot = Boolean(onArchive || hasTrailing);
 
   return (
     <>
@@ -602,14 +606,9 @@ function WorkspaceRowRightGroup({
       {shouldRenderActionSlot ? (
         <SidebarWorkspaceTrailingActionSlot>
           <SidebarWorkspaceTrailingActionBase
-            visible={Boolean(workspace.diffStat && !showKebabInSlot && !showShortcut)}
+            visible={hasTrailing && !showKebabInSlot && !showShortcut}
           >
-            {workspace.diffStat ? (
-              <DiffStat
-                additions={workspace.diffStat.additions}
-                deletions={workspace.diffStat.deletions}
-              />
-            ) : null}
+            <SidebarWorkspaceTrailingContent workspace={workspace} trailing={trailing} />
           </SidebarWorkspaceTrailingActionBase>
           <SidebarWorkspaceTrailingActionOverlay visible={showKebabInSlot}>
             {onArchive ? (
@@ -1033,7 +1032,7 @@ function WorkspaceRowInner({
             >
               <SidebarWorkspaceRowContent
                 workspace={workspace}
-                subtitle={subtitle}
+                hostBadge={subtitle}
                 scriptIconKind={scriptIconKind}
                 isHovered={isHovered}
                 isLoading={isArchiving || isCreating}
@@ -1083,7 +1082,7 @@ function WorkspaceRowWithMenu({
   isCreating = false,
 }: {
   workspace: SidebarWorkspaceEntry;
-  subtitle?: string | null;
+  subtitle?: HostBadgeModel | null;
   selected: boolean;
   shortcutNumber: number | null;
   showShortcutBadge: boolean;
@@ -1242,7 +1241,7 @@ function WorkspaceRowWithMenu({
 interface WorkspaceRowItemProps {
   workspace: SidebarWorkspacePlacement;
   workspaceEntry: SidebarWorkspaceEntry | null;
-  subtitle?: string | null;
+  subtitle?: HostBadgeModel | null;
   shortcutNumber: number | null;
   showShortcutBadge: boolean;
   canCopyBranchName: boolean;
@@ -1353,7 +1352,7 @@ function WorkspaceRow({
   selected,
 }: {
   workspaceEntry: SidebarWorkspaceEntry | null;
-  subtitle?: string | null;
+  subtitle?: HostBadgeModel | null;
   shortcutNumber: number | null;
   showShortcutBadge: boolean;
   onPress: () => void;
@@ -1405,7 +1404,7 @@ function ProjectBlock({
   useNestable,
   creatingWorkspaceIds,
   activeWorkspaceSelection,
-  hostLabelByServerId,
+  hostBadgeByServerId,
   showHostLabels,
   supportsMultiplicityByServerId,
 }: {
@@ -1426,7 +1425,7 @@ function ProjectBlock({
   useNestable: boolean;
   creatingWorkspaceIds: ReadonlySet<string>;
   activeWorkspaceSelection: ActiveWorkspaceSelection | null;
-  hostLabelByServerId: ReadonlyMap<string, string>;
+  hostBadgeByServerId: ReadonlyMap<string, HostBadgeModel>;
   showHostLabels: boolean;
   supportsMultiplicityByServerId: ReadonlyMap<string, boolean>;
 }) {
@@ -1464,9 +1463,7 @@ function ProjectBlock({
         <MemoWorkspaceRowItem
           workspace={item}
           workspaceEntry={workspaceEntriesByKey.get(item.workspaceKey) ?? null}
-          subtitle={
-            showHostLabels ? (hostLabelByServerId.get(item.serverId) ?? item.serverId) : null
-          }
+          subtitle={showHostLabels ? (hostBadgeByServerId.get(item.serverId) ?? null) : null}
           shortcutNumber={shortcutIndexByWorkspaceKey.get(item.workspaceKey) ?? null}
           showShortcutBadge={showShortcutBadges}
           canCopyBranchName={project.projectKind === "git"}
@@ -1485,7 +1482,7 @@ function ProjectBlock({
       showHostLabels,
       activeWorkspaceSelection,
       creatingWorkspaceIds,
-      hostLabelByServerId,
+      hostBadgeByServerId,
       onWorkspacePress,
       selectionEnabled,
       shortcutIndexByWorkspaceKey,
@@ -1640,7 +1637,7 @@ function areProjectBlockPropsEqual(previous: ProjectBlockProps, next: ProjectBlo
     previous.selectionEnabled === next.selectionEnabled &&
     previous.showShortcutBadges === next.showShortcutBadges &&
     previous.shortcutIndexByWorkspaceKey === next.shortcutIndexByWorkspaceKey &&
-    previous.hostLabelByServerId === next.hostLabelByServerId &&
+    previous.hostBadgeByServerId === next.hostBadgeByServerId &&
     previous.showHostLabels === next.showHostLabels &&
     previous.supportsMultiplicityByServerId === next.supportsMultiplicityByServerId &&
     previous.parentGestureRef === next.parentGestureRef &&
@@ -1698,16 +1695,11 @@ export function SidebarWorkspaceList({
 }: SidebarWorkspaceListProps) {
   const pathname = usePathname();
   const hosts = useHosts();
-  const hostLabelByServerId = useMemo(() => {
-    const labels = new Map<string, string>();
-    for (const host of hosts) {
-      labels.set(host.serverId, host.label?.trim() || host.serverId);
-    }
-    return labels;
-  }, [hosts]);
+  const { rowItems } = useSidebarMetaPreferences();
+  const hostBadgeByServerId = useHostBadges({ enabled: rowItems.host });
   const serverIds = useMemo(() => hosts.map((host) => host.serverId), [hosts]);
   const supportsMultiplicityByServerId = useHostFeatureMap(serverIds, "workspaceMultiplicity");
-  const showHostLabels = useMemo(() => shouldShowSidebarHostLabels(projects), [projects]);
+  const showHostLabels = rowItems.host;
 
   return (
     <ProjectModeList
@@ -1720,7 +1712,7 @@ export function SidebarWorkspaceList({
       listHeaderComponent={listHeaderComponent}
       parentGestureRef={parentGestureRef}
       pathname={pathname}
-      hostLabelByServerId={hostLabelByServerId}
+      hostBadgeByServerId={hostBadgeByServerId}
       showHostLabels={showHostLabels}
       supportsMultiplicityByServerId={supportsMultiplicityByServerId}
     />
@@ -1737,12 +1729,12 @@ function ProjectModeList({
   listHeaderComponent,
   parentGestureRef,
   pathname,
-  hostLabelByServerId,
+  hostBadgeByServerId,
   showHostLabels,
   supportsMultiplicityByServerId,
 }: Omit<SidebarWorkspaceListProps, "isRefreshing" | "onRefresh"> & {
   pathname: string;
-  hostLabelByServerId: ReadonlyMap<string, string>;
+  hostBadgeByServerId: ReadonlyMap<string, HostBadgeModel>;
   showHostLabels: boolean;
   supportsMultiplicityByServerId: ReadonlyMap<string, boolean>;
 }) {
@@ -1905,7 +1897,7 @@ function ProjectModeList({
         useNestable={platformIsNative}
         creatingWorkspaceIds={creatingWorkspaceIds}
         activeWorkspaceSelection={activeWorkspaceSelection}
-        hostLabelByServerId={hostLabelByServerId}
+        hostBadgeByServerId={hostBadgeByServerId}
         showHostLabels={showHostLabels}
         supportsMultiplicityByServerId={supportsMultiplicityByServerId}
       />
@@ -1914,7 +1906,7 @@ function ProjectModeList({
       activeWorkspaceSelection,
       handleWorktreeCreated,
       handleWorkspaceReorder,
-      hostLabelByServerId,
+      hostBadgeByServerId,
       showHostLabels,
       supportsMultiplicityByServerId,
       onWorkspacePress,
@@ -2288,19 +2280,19 @@ const styles = StyleSheet.create((theme) => ({
     flexShrink: 0,
   },
   statusDotNeedsInput: {
-    backgroundColor: theme.colors.palette.amber[500],
+    backgroundColor: theme.colors.statusDotWarning,
     borderColor: theme.colors.surface0,
   },
   statusDotFailed: {
-    backgroundColor: theme.colors.palette.red[500],
+    backgroundColor: theme.colors.statusDotDanger,
     borderColor: theme.colors.surface0,
   },
   statusDotRunning: {
-    backgroundColor: theme.colors.palette.blue[500],
+    backgroundColor: theme.colors.statusDotRunning,
     borderColor: theme.colors.surface0,
   },
   statusDotAttention: {
-    backgroundColor: theme.colors.palette.green[500],
+    backgroundColor: theme.colors.statusDotSuccess,
     borderColor: theme.colors.surface0,
   },
 }));

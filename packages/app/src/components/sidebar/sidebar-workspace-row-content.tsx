@@ -26,6 +26,9 @@ import { isEmphasizedStatusDotBucket } from "@/utils/status-dot-color";
 import { shouldRenderSyncedStatusLoader } from "@/utils/status-loader";
 import { openExternalUrl } from "@/utils/open-external-url";
 import { resolveSidebarWorkspacePrimaryLabel } from "@/components/sidebar/sidebar-workspace-title";
+import { HostBadge } from "@/hosts/host-badge";
+import type { HostBadgeModel } from "@/hosts/appearance";
+import { useSidebarMetaPreferences } from "@/components/sidebar/display-preferences/model";
 
 const DEFAULT_STATUS_DOT_SIZE = 7;
 const EMPHASIZED_STATUS_DOT_SIZE = 9;
@@ -34,17 +37,12 @@ const EMPHASIZED_STATUS_DOT_OFFSET = -1;
 
 const foregroundColorMapping = (theme: Theme) => ({ color: theme.colors.foreground });
 const foregroundMutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
-const amberColorMapping = (theme: Theme) => ({ color: theme.colors.palette.amber[500] });
-const syncedLoaderColorMapping = (theme: Theme) => ({
-  color:
-    theme.colorScheme === "light"
-      ? theme.colors.palette.amber[700]
-      : theme.colors.palette.amber[500],
-});
-const blueColorMapping = (theme: Theme) => ({ color: theme.colors.palette.blue[500] });
-const greenColorMapping = (theme: Theme) => ({ color: theme.colors.palette.green[500] });
-const redColorMapping = (theme: Theme) => ({ color: theme.colors.palette.red[500] });
-const purpleColorMapping = (theme: Theme) => ({ color: theme.colors.palette.purple[500] });
+const amberColorMapping = (theme: Theme) => ({ color: theme.colors.statusWarning });
+const syncedLoaderColorMapping = (theme: Theme) => ({ color: theme.colors.statusWarning });
+const blueColorMapping = (theme: Theme) => ({ color: theme.colors.statusDotRunning });
+const greenColorMapping = (theme: Theme) => ({ color: theme.colors.statusSuccess });
+const redColorMapping = (theme: Theme) => ({ color: theme.colors.statusDanger });
+const purpleColorMapping = (theme: Theme) => ({ color: theme.colors.statusMerged });
 
 const ThemedExternalLink = withUnistyles(ExternalLink);
 const ThemedGitPullRequest = withUnistyles(GitPullRequest);
@@ -92,7 +90,7 @@ export function SidebarWorkspaceRowFrame({
 
 export const SidebarWorkspaceRowContent = memo(function SidebarWorkspaceRowContent({
   workspace,
-  subtitle,
+  hostBadge,
   scriptIconKind = null,
   isHovered,
   isLoading,
@@ -103,7 +101,7 @@ export const SidebarWorkspaceRowContent = memo(function SidebarWorkspaceRowConte
   children,
 }: {
   workspace: SidebarWorkspaceEntry;
-  subtitle?: string | null;
+  hostBadge?: HostBadgeModel | null;
   scriptIconKind?: SidebarWorkspaceScriptIconKind | null;
   isHovered: boolean;
   isLoading: boolean;
@@ -118,14 +116,18 @@ export const SidebarWorkspaceRowContent = memo(function SidebarWorkspaceRowConte
     settings: { workspaceTitleSource },
   } = useAppSettings();
   const workspaceLabel = resolveSidebarWorkspacePrimaryLabel({ workspace, workspaceTitleSource });
+  const { checksDisplay, rowItems } = useSidebarMetaPreferences();
+  const visibleScriptIconKind = rowItems.services ? scriptIconKind : null;
   const workspaceBranchTextStyle = useMemo(
     () => [
       styles.workspaceBranchText,
-      scriptIconKind ? styles.workspaceBranchTextWithAccessory : styles.workspaceBranchTextFlexible,
+      visibleScriptIconKind
+        ? styles.workspaceBranchTextWithAccessory
+        : styles.workspaceBranchTextFlexible,
       isHovered && styles.workspaceBranchTextHovered,
       isCreating && styles.workspaceBranchTextCreating,
     ],
-    [scriptIconKind, isHovered, isCreating],
+    [visibleScriptIconKind, isHovered, isCreating],
   );
 
   return (
@@ -143,22 +145,26 @@ export const SidebarWorkspaceRowContent = memo(function SidebarWorkspaceRowConte
               <Text style={workspaceBranchTextStyle} numberOfLines={1}>
                 {workspaceLabel}
               </Text>
-              {scriptIconKind ? <WorkspaceScriptIcon kind={scriptIconKind} /> : null}
+              {visibleScriptIconKind ? <WorkspaceScriptIcon kind={visibleScriptIconKind} /> : null}
             </View>
             <View style={sidebarWorkspaceRowStyles.rowRight}>
               <WorkspaceAgentSummary workspace={workspace} />
               {children}
             </View>
           </View>
-          {subtitle ? (
-            <Text style={styles.workspaceSubtitle} numberOfLines={1}>
-              {subtitle}
-            </Text>
-          ) : null}
-          {workspace.prHint ? (
+          {hostBadge || (rowItems.changeRequest && workspace.prHint) ? (
             <View style={styles.workspacePrBadgeRow}>
-              <PrBadge hint={workspace.prHint} />
-              <ChecksBadge checks={workspace.prHint.checks} forge={workspace.prHint.forge} />
+              {hostBadge ? <HostBadge badge={hostBadge} /> : null}
+              {rowItems.changeRequest && workspace.prHint ? (
+                <PrBadge hint={workspace.prHint} />
+              ) : null}
+              {rowItems.changeRequest && workspace.prHint && checksDisplay !== "none" ? (
+                <ChecksBadge
+                  checks={workspace.prHint.checks}
+                  forge={workspace.prHint.forge}
+                  showText={checksDisplay === "iconAndText"}
+                />
+              ) : null}
             </View>
           ) : null}
         </View>
@@ -200,10 +206,19 @@ function WorkspaceStatusIndicator({
   reserveIdleSpace?: boolean;
 }) {
   const shouldShowSyncedLoader = shouldRenderSyncedStatusLoader({ bucket });
+  const { t } = useTranslation();
+  const statusLabel = loading
+    ? t("sidebar.workspace.status.creating")
+    : t(`workspace.hoverCard.agentStatus.${bucket}`);
 
   if (loading) {
     return (
-      <View style={styles.workspaceStatusDot} testID="workspace-status-indicator-loading">
+      <View
+        style={styles.workspaceStatusDot}
+        accessible
+        accessibilityLabel={statusLabel}
+        testID="workspace-status-indicator-loading"
+      >
         <ThemedLoadingSpinner size={8} uniProps={foregroundMutedColorMapping} />
       </View>
     );
@@ -211,7 +226,12 @@ function WorkspaceStatusIndicator({
 
   if (shouldShowSyncedLoader) {
     return (
-      <View style={styles.workspaceStatusDot} testID="workspace-status-indicator-running">
+      <View
+        style={styles.workspaceStatusDot}
+        accessible
+        accessibilityLabel={statusLabel}
+        testID="workspace-status-indicator-running"
+      >
         <ThemedSyncedLoader size={11} uniProps={syncedLoaderColorMapping} />
       </View>
     );
@@ -219,7 +239,12 @@ function WorkspaceStatusIndicator({
 
   if (bucket === "needs_input") {
     return (
-      <View style={styles.workspaceStatusDot} testID="workspace-status-indicator-needs_input">
+      <View
+        style={styles.workspaceStatusDot}
+        accessible
+        accessibilityLabel={statusLabel}
+        testID="workspace-status-indicator-needs_input"
+      >
         <ThemedCircleAlert size={14} uniProps={amberColorMapping} />
       </View>
     );
@@ -227,7 +252,12 @@ function WorkspaceStatusIndicator({
 
   if (bucket === "attention") {
     return (
-      <View style={styles.workspaceStatusDot} testID="workspace-status-indicator-attention">
+      <View
+        style={styles.workspaceStatusDot}
+        accessible
+        accessibilityLabel={statusLabel}
+        testID="workspace-status-indicator-attention"
+      >
         <View style={styles.standaloneStatusDot} />
       </View>
     );
@@ -235,7 +265,12 @@ function WorkspaceStatusIndicator({
 
   if (bucket === "done") {
     return reserveIdleSpace ? (
-      <View style={styles.workspaceStatusDot} testID="workspace-status-indicator-done" />
+      <View
+        style={styles.workspaceStatusDot}
+        accessible
+        accessibilityLabel={statusLabel}
+        testID="workspace-status-indicator-done"
+      />
     ) : null;
   }
 
@@ -253,7 +288,12 @@ function WorkspaceStatusIndicator({
       ? EMPHASIZED_STATUS_DOT_OFFSET
       : DEFAULT_STATUS_DOT_OFFSET;
   return (
-    <View style={styles.workspaceStatusDot} testID={`workspace-status-indicator-${bucket}`}>
+    <View
+      style={styles.workspaceStatusDot}
+      accessible
+      accessibilityLabel={statusLabel}
+      testID={`workspace-status-indicator-${bucket}`}
+    >
       <KindIcon size={14} uniProps={foregroundMutedColorMapping} />
       {dotColorStyle ? (
         <StatusDotOverlay
@@ -344,7 +384,15 @@ function PrBadge({ hint }: { hint: PrHint }) {
   );
 }
 
-function ChecksBadge({ checks, forge }: { checks: PrHint["checks"]; forge: PrHint["forge"] }) {
+function ChecksBadge({
+  checks,
+  forge,
+  showText,
+}: {
+  checks: PrHint["checks"];
+  forge: PrHint["forge"];
+  showText: boolean;
+}) {
   if (!checks || checks.length === 0) return null;
   const failed = checks.filter((check) => check.status === "failure").length;
   if (failed === 0) return null;
@@ -352,7 +400,7 @@ function ChecksBadge({ checks, forge }: { checks: PrHint["checks"]; forge: PrHin
   return (
     <View style={checksBadgeStyles.badge}>
       {renderChecksBadgeForgeIcon(icon)}
-      <Text style={checksBadgeStyles.text}>{failed} failed</Text>
+      {showText ? <Text style={checksBadgeStyles.text}>{failed} failed</Text> : null}
     </View>
   );
 }
@@ -605,7 +653,7 @@ const styles = StyleSheet.create((theme) => ({
     width: 8,
     height: 8,
     borderRadius: theme.borderRadius.full,
-    backgroundColor: theme.colors.palette.green[500],
+    backgroundColor: theme.colors.statusDotSuccess,
   },
   workspaceBranchText: {
     color: theme.colors.foreground,
@@ -645,19 +693,19 @@ const styles = StyleSheet.create((theme) => ({
     marginTop: theme.spacing[1],
   },
   statusDotNeedsInput: {
-    backgroundColor: theme.colors.palette.amber[500],
+    backgroundColor: theme.colors.statusDotWarning,
     borderColor: theme.colors.surface0,
   },
   statusDotFailed: {
-    backgroundColor: theme.colors.palette.red[500],
+    backgroundColor: theme.colors.statusDotDanger,
     borderColor: theme.colors.surface0,
   },
   statusDotRunning: {
-    backgroundColor: theme.colors.palette.blue[500],
+    backgroundColor: theme.colors.statusDotRunning,
     borderColor: theme.colors.surface0,
   },
   statusDotAttention: {
-    backgroundColor: theme.colors.palette.green[500],
+    backgroundColor: theme.colors.statusDotSuccess,
     borderColor: theme.colors.surface0,
   },
 }));

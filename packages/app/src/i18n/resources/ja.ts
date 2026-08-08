@@ -190,7 +190,7 @@ export const ja: TranslationResources = {
     states: {
       notFound: "エージェントが見つかりません",
       failedToLoad: "エージェントの読み込みに失敗しました",
-      reconnecting: "再接続中...",
+      reconnecting: "再接続中",
       timelineSyncFailed: "エージェントの履歴を更新できませんでした。再試行しています…",
       timelineSyncing: "最新の進捗を同期中...",
       archivingTitle: "エージェントをアーカイブ中...",

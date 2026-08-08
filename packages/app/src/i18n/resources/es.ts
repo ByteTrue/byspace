@@ -190,7 +190,7 @@ export const es: TranslationResources = {
     states: {
       notFound: "Agentno encontrado",
       failedToLoad: "No se pudo cargar el agente",
-      reconnecting: "Reconectando...",
+      reconnecting: "Reconectando",
       timelineSyncFailed: "No se pudo actualizar el historial del agente. Reintentando…",
       timelineSyncing: "Sincronizando el progreso más reciente...",
       archivingTitle: "Agente de archivo...",

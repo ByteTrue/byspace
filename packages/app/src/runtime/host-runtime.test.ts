@@ -355,6 +355,7 @@ function makeHost(input?: Partial<HostProfile>): HostProfile {
     serverId: input?.serverId ?? "srv_test",
     label: input?.label ?? "test host",
     lifecycle: input?.lifecycle ?? {},
+    appearance: input?.appearance ?? { color: "none", badgeDisplay: null },
     connections: input?.connections ?? [direct, relay],
     preferredConnectionId: input?.preferredConnectionId ?? direct.id,
     createdAt: input?.createdAt ?? new Date(0).toISOString(),
@@ -1493,6 +1494,50 @@ describe("HostRuntimeStore", () => {
         process.env.EXPO_PUBLIC_LOCAL_DAEMON = previousOverride;
       }
     }
+  });
+
+  it("tracks connection status transitions independently of agent panels", async () => {
+    useHostRuntimeClock();
+    const host = makeHost({
+      connections: [
+        {
+          id: "direct:lan:6767",
+          type: "directTcp",
+          endpoint: "lan:6767",
+        },
+      ],
+    });
+    const fakeClient = new FakeDaemonClient();
+    fakeClient.setConnectionState({ status: "connected" });
+    const store = new HostRuntimeStore({
+      deps: {
+        createClient: () => fakeClient as unknown as DaemonClient,
+        connectToDaemon: async ({ host: hostProfile }) => ({
+          client: fakeClient as unknown as DaemonClient,
+          serverId: hostProfile.serverId,
+          hostname: hostProfile.label ?? null,
+        }),
+        getClientId: async () => "cid_test_runtime",
+      },
+    });
+
+    store.syncHosts([host]);
+    await fakeClient.waitForFetches(1);
+    await waitForDirectoryReady(store, host.serverId);
+    await vi.advanceTimersByTimeAsync(1_500);
+
+    const outageStartedAt = Date.now();
+    fakeClient.setConnectionState({ status: "disconnected", reason: "transport closed" });
+    expect(store.getConnectionStatusSince(host.serverId)).toBe(outageStartedAt);
+
+    await vi.advanceTimersByTimeAsync(500);
+    expect(store.getConnectionStatusSince(host.serverId)).toBe(outageStartedAt);
+
+    const reconnectStartedAt = Date.now();
+    fakeClient.setConnectionState({ status: "connected" });
+    expect(store.getConnectionStatusSince(host.serverId)).toBe(reconnectStartedAt);
+
+    store.syncHosts([]);
   });
 
   it("bootstraps agent directory subscription when host transitions online", async () => {

@@ -188,7 +188,7 @@ export const en = {
     states: {
       notFound: "Agent not found",
       failedToLoad: "Failed to load agent",
-      reconnecting: "Reconnecting...",
+      reconnecting: "Reconnecting",
       timelineSyncFailed: "Couldn't refresh agent history. Retrying…",
       timelineSyncing: "Syncing latest progress...",
       archivingTitle: "Archiving agent...",

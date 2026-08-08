@@ -119,21 +119,33 @@ const darkDiffColors = {
   diffDeletion: "#ef4444", // red-500
 };
 
-// Status colors — semantic signals for success/danger/warning/merged. Used by
-// check statuses, PR states, and review decisions. Kept a step darker than the
-// raw palette so they read as signals, not neon.
+// Status colors share one semantic band. Tiny filled dots use the stronger band below.
 const lightStatusColors = {
-  statusSuccess: "#15803d", // green-700
-  statusDanger: "#b91c1c", // red-700
-  statusWarning: "#d97706", // amber-600
-  statusMerged: "#7c3aed", // purple-600
+  statusSuccess: "#3e704a",
+  statusDanger: "#9d433b",
+  statusWarning: "#7b5d39",
+  statusMerged: "#7347af",
 };
 
 const darkStatusColors = {
-  statusSuccess: "#16a34a", // green-600
-  statusDanger: "#dc2626", // red-600
-  statusWarning: "#f59e0b", // amber-500
-  statusMerged: "#9333ea", // purple-600
+  statusSuccess: "#6cb17b",
+  statusDanger: "#d8847b",
+  statusWarning: "#c09664",
+  statusMerged: "#a890d5",
+};
+
+const lightStatusDotColors = {
+  statusDotSuccess: "#186933",
+  statusDotDanger: "#a11c1c",
+  statusDotWarning: "#774e14",
+  statusDotRunning: "#165a96",
+};
+
+const darkStatusDotColors = {
+  statusDotSuccess: "#35c264",
+  statusDotDanger: "#f7796d",
+  statusDotWarning: "#db932e",
+  statusDotRunning: "#5caaf6",
 };
 
 // Semantic color tokens - Layer-based system
@@ -188,6 +200,7 @@ const lightSemanticColors = {
 
   ...lightDiffColors,
   ...lightStatusColors,
+  ...lightStatusDotColors,
 
   terminal: {
     background: "#ffffff",
@@ -304,6 +317,7 @@ function buildDarkSemanticColors(tint: DarkThemeConfig) {
 
     ...darkDiffColors,
     ...darkStatusColors,
+    ...darkStatusDotColors,
 
     terminal: {
       background: tint.surface0,

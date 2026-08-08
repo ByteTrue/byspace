@@ -50,6 +50,7 @@ function hostProfile(serverId = "srv"): HostProfile {
     serverId,
     label: "Shortcut Host",
     lifecycle: {},
+    appearance: { color: "none", badgeDisplay: null },
     connections: [],
     preferredConnectionId: null,
     createdAt: now,

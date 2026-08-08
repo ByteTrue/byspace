@@ -1,150 +1,244 @@
-import { useCallback, useMemo } from "react";
-import { Text, View, type PressableStateCallbackType } from "react-native";
+import { useCallback, useMemo, type ReactElement } from "react";
+import { View, type PressableStateCallbackType } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { Settings2 } from "lucide-react-native";
 import type { Theme } from "@/styles/theme";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+  MenuItem,
+  MenuRoot,
+  MenuSeparator,
+  MenuSubTrigger,
+  MenuSurface,
+  MenuTrigger,
+  type MenuPageDefinition,
+} from "@/components/ui/menu";
 import { HostStatusDot } from "@/components/host-status-dot";
-import { isWeb as platformIsWeb } from "@/constants/platform";
-import { useAppSettings, type WorkspaceTitleSource } from "@/hooks/use-settings";
 import { useHosts } from "@/runtime/host-runtime";
-import { useSidebarViewStore } from "@/stores/sidebar-view-store";
+import {
+  SIDEBAR_CHECKS_DISPLAYS,
+  type SidebarChecksDisplay,
+} from "./display-preferences/checks-display";
+import {
+  useSidebarDisplayPreferences,
+  type SidebarTrailingChoice,
+} from "./display-preferences/model";
+import { SIDEBAR_ROW_ITEMS, type SidebarRowItem } from "./display-preferences/row-items";
+import type { WorkspaceTitleSource } from "@/hooks/use-settings";
 
 const ThemedSettings2 = withUnistyles(Settings2);
-const filterColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
+const mutedIconMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
+const MENU_WIDTH = 232;
 
-const WORKSPACE_TITLE_SOURCE_ITEMS: Array<{ value: WorkspaceTitleSource; label: string }> = [
-  { value: "title", label: "Title" },
-  { value: "branch", label: "Branch name" },
-];
+const TITLE_LABELS: Record<WorkspaceTitleSource, string> = {
+  title: "Title",
+  branch: "Branch name",
+};
+const ROW_ITEM_LABELS: Record<SidebarRowItem, string> = {
+  host: "Host",
+  changeRequest: "Pull request",
+  services: "Services",
+};
+const CHECKS_LABELS: Record<SidebarChecksDisplay, string> = {
+  iconAndText: "Icon and text",
+  icon: "Icon only",
+  none: "Hidden",
+};
+const TRAILING_LABELS: Record<SidebarTrailingChoice, string> = {
+  diff: "Diff stat",
+  timestamp: "Timestamp",
+};
 
-interface DisplayPreferenceOption<Value extends string> {
-  value: Value;
-  label: string;
-}
-
-export function SidebarDisplayPreferencesMenu() {
-  const hostFilters = useSidebarViewStore((state) => state.hostFilters);
-  const toggleHostFilter = useSidebarViewStore((state) => state.toggleHostFilter);
-  const clearHostFilters = useSidebarViewStore((state) => state.clearHostFilters);
+export function SidebarDisplayPreferencesMenu(): ReactElement {
+  const preferences = useSidebarDisplayPreferences();
   const hosts = useHosts();
-  const {
-    settings: { workspaceTitleSource },
-    updateSettings,
-  } = useAppSettings();
-
-  const handleWorkspaceTitleSourceSelect = useCallback(
-    (source: WorkspaceTitleSource) => {
-      void updateSettings({ workspaceTitleSource: source });
-    },
-    [updateSettings],
-  );
-
+  const showHostFilter = hosts.length > 1;
   const triggerStyle = useCallback(
-    ({ hovered = false }: PressableStateCallbackType & { hovered?: boolean }) => [
+    ({ hovered }: PressableStateCallbackType & { hovered: boolean }) => [
       styles.trigger,
       hovered && styles.triggerHovered,
     ],
     [],
   );
 
-  const showHostFilter = hosts.length > 1;
-  const allHostsSelected = hostFilters.length === 0;
+  const pages = useMemo<MenuPageDefinition[]>(() => {
+    const definitions: MenuPageDefinition[] = [
+      {
+        id: "titleSource",
+        title: "Workspace title",
+        content: (Object.keys(TITLE_LABELS) as WorkspaceTitleSource[]).map((value) => (
+          <OptionItem
+            key={value}
+            value={value}
+            label={TITLE_LABELS[value]}
+            selected={preferences.titleSource === value}
+            onSelect={preferences.setTitleSource}
+            testID={`sidebar-workspace-title-source-${value}`}
+          />
+        )),
+      },
+      { id: "show", title: "Show", content: <ShowPage preferences={preferences} /> },
+      {
+        id: "checks",
+        title: "Checks",
+        content: SIDEBAR_CHECKS_DISPLAYS.map((value) => (
+          <OptionItem
+            key={value}
+            value={value}
+            label={CHECKS_LABELS[value]}
+            selected={preferences.checksDisplay === value}
+            onSelect={preferences.setChecksDisplay}
+            testID={`sidebar-checks-display-${value}`}
+          />
+        )),
+      },
+    ];
+    if (showHostFilter) {
+      definitions.push({
+        id: "hostFilter",
+        title: "Hosts",
+        content: <HostFilterPage preferences={preferences} hosts={hosts} />,
+      });
+    }
+    return definitions;
+  }, [hosts, preferences, showHostFilter]);
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger
+    <MenuRoot compactMode="sheet">
+      <MenuTrigger
         style={triggerStyle}
-        accessibilityRole={platformIsWeb ? undefined : "button"}
+        accessibilityRole="button"
         accessibilityLabel="Display preferences"
         testID="sidebar-display-preferences-menu"
       >
-        <ThemedSettings2 size={14} uniProps={filterColorMapping} />
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" width={220} testID="sidebar-display-preferences-content">
+        <ThemedSettings2 size={14} uniProps={mutedIconMapping} />
+      </MenuTrigger>
+      <MenuSurface
+        align="end"
+        width={MENU_WIDTH}
+        pages={pages}
+        sheetTitle="Display preferences"
+        testID="sidebar-display-preferences-content"
+      >
+        <MenuSubTrigger id="titleSource" value={TITLE_LABELS[preferences.titleSource]}>
+          Workspace title
+        </MenuSubTrigger>
+        <MenuSubTrigger id="show">Show</MenuSubTrigger>
         {showHostFilter ? (
           <>
-            <View style={styles.menuHeader}>
-              <Text style={styles.menuHeaderLabel}>Filter</Text>
-            </View>
-            <DropdownMenuItem
-              testID="sidebar-host-filter-all"
-              selected={allHostsSelected}
-              closeOnSelect={false}
-              onSelect={clearHostFilters}
-            >
-              All hosts
-            </DropdownMenuItem>
-            {hosts.map((host) => (
-              <HostFilterItem
-                key={host.serverId}
-                label={host.label?.trim() || host.serverId}
-                serverId={host.serverId}
-                selected={hostFilters.includes(host.serverId)}
-                onToggle={toggleHostFilter}
-              />
-            ))}
+            <MenuSeparator />
+            <MenuSubTrigger id="hostFilter" indicator={preferences.hostFilters.length > 0}>
+              Hosts
+            </MenuSubTrigger>
           </>
         ) : null}
-        {showHostFilter ? <DropdownMenuSeparator /> : null}
-        <View style={styles.menuHeader}>
-          <Text style={styles.menuHeaderLabel}>Workspace title</Text>
-        </View>
-        {WORKSPACE_TITLE_SOURCE_ITEMS.map((item) => (
-          <DisplayPreferenceMenuItem
-            key={item.value}
-            item={item}
-            isSelected={workspaceTitleSource === item.value}
-            testIDPrefix="sidebar-workspace-title-source"
-            onSelect={handleWorkspaceTitleSourceSelect}
-          />
-        ))}
-      </DropdownMenuContent>
-    </DropdownMenu>
+      </MenuSurface>
+    </MenuRoot>
   );
 }
 
-function DisplayPreferenceMenuItem<Value extends string>({
-  item,
-  isSelected,
-  testIDPrefix,
+type Preferences = ReturnType<typeof useSidebarDisplayPreferences>;
+
+function OptionItem<Value extends string>({
+  value,
+  label,
+  selected,
+  closeOnSelect = true,
   onSelect,
+  testID,
 }: {
-  item: DisplayPreferenceOption<Value>;
-  isSelected: boolean;
-  testIDPrefix: string;
+  value: Value;
+  label: string;
+  selected: boolean;
+  closeOnSelect?: boolean;
   onSelect: (value: Value) => void;
-}) {
-  const handleSelect = useCallback(() => onSelect(item.value), [item.value, onSelect]);
+  testID: string;
+}): ReactElement {
+  const handleSelect = useCallback(() => onSelect(value), [onSelect, value]);
   return (
-    <DropdownMenuItem
-      testID={`${testIDPrefix}-${item.value}`}
-      selected={isSelected}
+    <MenuItem
+      selected={selected}
+      closeOnSelect={closeOnSelect}
       onSelect={handleSelect}
+      testID={testID}
     >
-      <Text style={styles.optionLabel}>{item.label}</Text>
-    </DropdownMenuItem>
+      {label}
+    </MenuItem>
+  );
+}
+
+function ShowPage({ preferences }: { preferences: Preferences }): ReactElement {
+  return (
+    <>
+      {SIDEBAR_ROW_ITEMS.map((item) => (
+        <OptionItem
+          key={item}
+          value={item}
+          label={ROW_ITEM_LABELS[item]}
+          selected={preferences.rowItems[item]}
+          closeOnSelect={false}
+          onSelect={preferences.toggleRowItem}
+          testID={`sidebar-row-item-${item}`}
+        />
+      ))}
+      <MenuSubTrigger id="checks">Checks</MenuSubTrigger>
+      <MenuSeparator />
+      {(Object.keys(TRAILING_LABELS) as SidebarTrailingChoice[]).map((choice) => (
+        <OptionItem
+          key={choice}
+          value={choice}
+          label={TRAILING_LABELS[choice]}
+          selected={preferences.trailing === choice}
+          closeOnSelect={false}
+          onSelect={preferences.toggleTrailing}
+          testID={`sidebar-workspace-trailing-${choice}`}
+        />
+      ))}
+    </>
+  );
+}
+
+function HostFilterPage({
+  preferences,
+  hosts,
+}: {
+  preferences: Preferences;
+  hosts: ReturnType<typeof useHosts>;
+}): ReactElement {
+  return (
+    <>
+      <MenuItem
+        selected={preferences.hostFilters.length === 0}
+        closeOnSelect={false}
+        onSelect={preferences.clearHostFilters}
+        testID="sidebar-host-filter-all"
+      >
+        All hosts
+      </MenuItem>
+      {hosts.map((host) => (
+        <HostFilterItem
+          key={host.serverId}
+          serverId={host.serverId}
+          label={host.label.trim() || host.serverId}
+          selected={preferences.hostFilters.includes(host.serverId)}
+          onToggle={preferences.toggleHostFilter}
+        />
+      ))}
+    </>
   );
 }
 
 function HostFilterItem({
-  label,
   serverId,
+  label,
   selected,
   onToggle,
 }: {
-  label: string;
   serverId: string;
+  label: string;
   selected: boolean;
   onToggle: (serverId: string) => void;
-}) {
-  const handleSelect = useCallback(() => onToggle(serverId), [serverId, onToggle]);
+}): ReactElement {
+  const handleSelect = useCallback(() => onToggle(serverId), [onToggle, serverId]);
   const leading = useMemo(
     () => (
       <View testID={`sidebar-host-filter-status-${serverId}`}>
@@ -153,17 +247,16 @@ function HostFilterItem({
     ),
     [serverId],
   );
-
   return (
-    <DropdownMenuItem
-      testID={`sidebar-host-filter-${serverId}`}
+    <MenuItem
       selected={selected}
       closeOnSelect={false}
       leading={leading}
       onSelect={handleSelect}
+      testID={`sidebar-host-filter-${serverId}`}
     >
       {label}
-    </DropdownMenuItem>
+    </MenuItem>
   );
 }
 
@@ -177,17 +270,5 @@ const styles = StyleSheet.create((theme) => ({
   },
   triggerHovered: {
     backgroundColor: theme.colors.surfaceSidebarHover,
-  },
-  menuHeader: {
-    paddingHorizontal: theme.spacing[3],
-    paddingVertical: theme.spacing[2],
-  },
-  menuHeaderLabel: {
-    fontSize: theme.fontSize.xs,
-    fontWeight: theme.fontWeight.medium,
-    color: theme.colors.foregroundMuted,
-  },
-  optionLabel: {
-    fontSize: theme.fontSize.sm,
   },
 }));
