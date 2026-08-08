@@ -9,6 +9,8 @@ import { spawn } from "node:child_process";
 
 import { generateLocalPairingOffer } from "../pairing-offer.js";
 import { createTestBySpaceDaemon } from "../test-utils/byspace-daemon.js";
+import { DaemonClient } from "../test-utils/daemon-client.js";
+import { loadPersistedConfig } from "../persisted-config.js";
 
 function createCapturingLogger() {
   const lines: string[] = [];
@@ -195,77 +197,96 @@ describe("ConnectionOfferV2 (daemon E2E)", () => {
     }
   });
 
-  test("respects --no-relay (CLI) by not emitting a pairing offer", async () => {
-    process.env.BYSPACE_PRIMARY_LAN_IP = "192.168.1.12";
+  test.each([
+    { flag: "--relay", expected: true },
+    { flag: "--no-relay", expected: false },
+  ])(
+    "worker consumes $flag as an immutable launch override",
+    async ({ flag, expected }) => {
+      process.env.BYSPACE_PRIMARY_LAN_IP = "192.168.1.12";
 
-    const tempHome = await mkdtemp(path.join(os.tmpdir(), "byspace-offer-e2e-"));
-    const port = await getAvailablePort();
+      const tempHome = await mkdtemp(path.join(os.tmpdir(), "byspace-offer-e2e-"));
+      const port = await getAvailablePort();
+      const serverRoot = path.resolve(import.meta.dirname, "../../..");
+      const supervisorPath = path.join(serverRoot, "scripts/supervisor-entrypoint.ts");
+      const tsxBin = path.resolve(serverRoot, "../../node_modules/.bin/tsx");
+      const env = {
+        ...process.env,
+        BYSPACE_HOME: tempHome,
+        BYSPACE_LISTEN: `127.0.0.1:${port}`,
+        BYSPACE_RELAY_ENDPOINT: "127.0.0.1:9",
+        BYSPACE_RELAY_USE_TLS: "false",
+        OPENAI_API_KEY: "",
+        BYSPACE_DICTATION_ENABLED: "0",
+        BYSPACE_VOICE_MODE_ENABLED: "0",
+        BYSPACE_LOG_FORMAT: "json",
+      };
+      const stdoutLines: string[] = [];
+      const proc = spawn(tsxBin, [supervisorPath, "--dev", flag], {
+        env,
+        stdio: ["ignore", "pipe", "pipe"],
+      });
+      let client: DaemonClient | null = null;
 
-    const serverRoot = path.resolve(import.meta.dirname, "../../..");
-    const supervisorPath = path.join(serverRoot, "scripts/supervisor-entrypoint.ts");
-    const tsxBin = path.resolve(serverRoot, "../../node_modules/.bin/tsx");
-
-    const env = {
-      ...process.env,
-      BYSPACE_HOME: tempHome,
-      BYSPACE_LISTEN: `0.0.0.0:${port}`,
-      OPENAI_API_KEY: "",
-      BYSPACE_DICTATION_ENABLED: "0",
-      BYSPACE_VOICE_MODE_ENABLED: "0",
-      BYSPACE_LOG_FORMAT: "json",
-    };
-
-    const stdoutLines: string[] = [];
-    const proc = spawn(tsxBin, [supervisorPath, "--dev", "--no-relay"], {
-      env,
-      stdio: ["ignore", "pipe", "pipe"],
-    });
-
-    try {
-      const sawListeningLog = await new Promise<boolean>((resolve, reject) => {
-        const timeout = setTimeout(() => {
-          proc.kill();
-          reject(new Error("timed out waiting for server listening log"));
-        }, 15000);
-
-        const onData = (data: Buffer) => {
-          const text = data.toString("utf8");
-          stdoutLines.push(text);
-          for (const line of text.split("\n")) {
-            if (!line.trim()) continue;
-            try {
-              const parsed = JSON.parse(line) as { msg?: string };
-              if (parsed.msg !== `Server listening on http://0.0.0.0:${port}`) continue;
-              clearTimeout(timeout);
-              resolve(true);
-              return;
-            } catch {
-              // ignore
+      try {
+        await new Promise<void>((resolve, reject) => {
+          const timeout = setTimeout(() => {
+            reject(new Error("timed out waiting for server listening log"));
+          }, 15000);
+          const onData = (data: Buffer) => {
+            const text = data.toString("utf8");
+            stdoutLines.push(text);
+            for (const line of text.split("\n")) {
+              if (!line.trim()) continue;
+              try {
+                const parsed = JSON.parse(line) as { msg?: string };
+                if (parsed.msg !== `Server listening on http://127.0.0.1:${port}`) continue;
+                clearTimeout(timeout);
+                resolve();
+                return;
+              } catch {
+                // Ignore non-JSON development output.
+              }
             }
-          }
-        };
+          };
 
-        proc.stdout?.on("data", onData);
-        proc.on("error", (err) => {
-          clearTimeout(timeout);
-          reject(err);
-        });
-        proc.on("exit", (code) => {
-          if (code && code !== 0) {
+          proc.stdout?.on("data", onData);
+          proc.on("error", (error) => {
             clearTimeout(timeout);
-            reject(new Error(`daemon process exited early with code ${code}`));
-          }
+            reject(error);
+          });
+          proc.on("exit", (code) => {
+            if (code !== null && code !== 0) {
+              clearTimeout(timeout);
+              reject(new Error(`daemon process exited early with code ${code}`));
+            }
+          });
         });
-      });
 
-      expect(sawListeningLog).toBe(true);
-    } catch (err) {
-      throw new Error(`failed; stdout so far:\\n${stdoutLines.join("")}\\n\\n${String(err)}`, {
-        cause: err,
-      });
-    } finally {
-      proc.kill();
-      await rm(tempHome, { recursive: true, force: true });
-    }
-  }, 30000);
+        client = new DaemonClient({
+          url: `ws://127.0.0.1:${port}/ws`,
+          appVersion: "0.1.82",
+        });
+        await client.connect();
+
+        expect((await client.getDaemonStatus()).relay?.enabled).toBe(expected);
+        expect((await client.getDaemonConfig()).config.relay?.enabled).toBe(expected);
+        await expect(client.patchDaemonConfig({ relay: { enabled: !expected } })).rejects.toThrow(
+          "Relay is controlled by a daemon launch override",
+        );
+        expect((await client.getDaemonStatus()).relay?.enabled).toBe(expected);
+        expect((await client.getDaemonConfig()).config.relay?.enabled).toBe(expected);
+        expect(loadPersistedConfig(tempHome).daemon?.relay?.enabled).toBe(false);
+      } catch (error) {
+        throw new Error(`failed; stdout so far:\n${stdoutLines.join("")}\n\n${String(error)}`, {
+          cause: error,
+        });
+      } finally {
+        await client?.close().catch(() => undefined);
+        proc.kill();
+        await rm(tempHome, { recursive: true, force: true });
+      }
+    },
+    30000,
+  );
 });

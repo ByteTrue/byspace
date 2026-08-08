@@ -194,6 +194,48 @@ function normalizePassword(value: string | undefined): string | null {
   return value.length > 0 ? value : null;
 }
 
+const HTTP_HEADER_NAME_PATTERN = /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/;
+
+function normalizeCustomHeaders(
+  headers: Record<string, string> | undefined,
+): Record<string, string> | undefined {
+  if (!headers) return undefined;
+
+  const normalized: Record<string, string> = {};
+  const names = new Set<string>();
+  for (const [name, value] of Object.entries(headers)) {
+    if (!HTTP_HEADER_NAME_PATTERN.test(name)) {
+      throw new Error(`Invalid HTTP header name: ${JSON.stringify(name)}`);
+    }
+    if (typeof value !== "string" || /[\r\n]/.test(value)) {
+      throw new Error(`Invalid HTTP header value for ${JSON.stringify(name)}`);
+    }
+
+    const normalizedName = name.toLowerCase();
+    if (names.has(normalizedName)) {
+      throw new Error(`Duplicate HTTP header name: ${JSON.stringify(name)}`);
+    }
+    names.add(normalizedName);
+    normalized[name] = value;
+  }
+
+  return normalized;
+}
+
+function applyAuthoritativeAuthorization(
+  customHeaders: Record<string, string> | undefined,
+  authorization: string | undefined,
+): Record<string, string> {
+  const headers = { ...customHeaders };
+  if (!authorization) return headers;
+
+  for (const name of Object.keys(headers)) {
+    if (name.toLowerCase() === "authorization") delete headers[name];
+  }
+  headers.Authorization = authorization;
+  return headers;
+}
+
 function extractCorrelatedResponseIdentity(input: unknown): CorrelatedResponseIdentity | null {
   if (!input || typeof input !== "object") {
     return null;
@@ -1139,8 +1181,11 @@ export class DaemonClient {
   private lastLivenessRttMs: number | null = null;
   private consecutiveLivenessFailures = 0;
 
-  constructor(private config: DaemonClientConfig) {
-    this.logger = config.logger ?? consoleLogger;
+  private config: DaemonClientConfig;
+
+  constructor(config: DaemonClientConfig) {
+    this.config = { ...config, headers: normalizeCustomHeaders(config.headers) };
+    this.logger = this.config.logger ?? consoleLogger;
     this.logConnectionPath = isRelayClientWebSocketUrl(this.config.url) ? "relay" : "direct";
     let parsedUrlForLog: URL | null = null;
     try {
@@ -1224,13 +1269,11 @@ export class DaemonClient {
       return;
     }
 
-    const headers: Record<string, string> = { ...this.config.headers };
     const password = normalizePassword(this.config.password);
-    if (password) {
-      headers.Authorization = `Bearer ${password}`;
-    } else if (this.config.authHeader) {
-      headers.Authorization = this.config.authHeader;
-    }
+    const headers = applyAuthoritativeAuthorization(
+      this.config.headers,
+      password ? `Bearer ${password}` : this.config.authHeader,
+    );
     const protocols = password ? [`byspace.bearer.${password}`] : undefined;
 
     try {

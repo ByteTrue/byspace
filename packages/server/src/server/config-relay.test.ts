@@ -35,14 +35,20 @@ describe("daemon relay config", () => {
     expect(loadConfig(legacyHome, { env: {} }).relayEnabled).toBe(true);
   });
 
-  test("marks launch overrides immutable", async () => {
-    const home = await createBySpaceHome({ version: 1, daemon: { relay: {} } });
-    expect(loadConfig(home, { env: { BYSPACE_RELAY_ENABLED: "false" } }).relayEnabledMutable).toBe(
-      false,
-    );
-    expect(loadConfig(home, { env: {}, cli: { relayEnabled: true } }).relayEnabledMutable).toBe(
-      false,
-    );
+  test.each([
+    { label: "environment true", env: { BYSPACE_RELAY_ENABLED: "true" }, expected: true },
+    { label: "environment false", env: { BYSPACE_RELAY_ENABLED: "false" }, expected: false },
+    { label: "CLI true", env: {}, cli: { relayEnabled: true }, expected: true },
+    { label: "CLI false", env: {}, cli: { relayEnabled: false }, expected: false },
+  ])("applies $label as an immutable relay override", async ({ env, cli, expected }) => {
+    const home = await createBySpaceHome({
+      version: 1,
+      daemon: { relay: { enabled: !expected } },
+    });
+    const config = loadConfig(home, { env, cli });
+
+    expect(config.relayEnabled).toBe(expected);
+    expect(config.relayEnabledMutable).toBe(false);
   });
 
   test("loads relay TLS from env, persisted config, and hosted relay fallback", async () => {

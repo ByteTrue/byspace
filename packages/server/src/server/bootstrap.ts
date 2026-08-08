@@ -450,7 +450,7 @@ function createInitialMutableDaemonConfig(config: BySpaceDaemonConfig): MutableD
   );
 
   const initialConfig: MutableDaemonConfig = {
-    ...(config.relayEnabledMutable ? { relay: { enabled: config.relayEnabled ?? false } } : {}),
+    relay: { enabled: config.relayEnabled ?? true },
     mcp: { injectIntoAgents: false },
     providers,
     metadataGeneration: {
@@ -482,6 +482,7 @@ export async function createBySpaceDaemon(
     config.byspaceHome,
     createInitialMutableDaemonConfig(config),
     logger,
+    { relayEnabledMutable: config.relayEnabledMutable ?? true },
   );
 
   const serverId = getOrCreateServerId(config.byspaceHome, { logger });
@@ -1417,7 +1418,7 @@ export async function createBySpaceDaemon(
               daemonKeyPair: daemonKeyPair.keyPair,
               initialEnabled: relayEnabled,
             });
-            if (config.relayEnabledMutable) {
+            if (config.relayEnabledMutable ?? true) {
               daemonConfigStore.onFieldChange("relay.enabled", (value) => {
                 const enabled = value === true;
                 daemonRuntimeConfig.relay.enabled = enabled;

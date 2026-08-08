@@ -464,6 +464,22 @@ test("passes password as HTTP bearer header and WebSocket subprotocol", async ()
   });
 });
 
+test.each([
+  ["an invalid name", { "Bad Header": "value" }, "Invalid HTTP header name"],
+  ["a CR/LF value", { Foo: "first\r\nsecond" }, "Invalid HTTP header value"],
+  ["a case-insensitive duplicate", { Foo: "first", foo: "second" }, "Duplicate HTTP header name"],
+])("rejects custom headers with %s", (_label, headers, expectedError) => {
+  expect(
+    () =>
+      new DaemonClient({
+        url: "ws://test",
+        clientId: "clsk_unit_test",
+        headers,
+        reconnect: { enabled: false },
+      }),
+  ).toThrow(expectedError);
+});
+
 test("merges custom headers and gives password Authorization precedence", async () => {
   const logger = createMockLogger();
   const mock = createMockTransport();
@@ -474,7 +490,7 @@ test("merges custom headers and gives password Authorization precedence", async 
     clientId: "clsk_unit_test",
     password: "shared-secret",
     authHeader: "Bearer legacy-secret",
-    headers: { Authorization: "Bearer custom-secret", "X-Custom": "custom-value" },
+    headers: { authorization: "Bearer custom-secret", "X-Custom": "custom-value" },
     logger,
     reconnect: { enabled: false },
     transportFactory,
