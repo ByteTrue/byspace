@@ -345,6 +345,10 @@ export const ar: TranslationResources = {
     },
   },
   workspace: {
+    status: {
+      serviceRunning: "الخدمة {{name}} قيد التشغيل",
+      serviceUnhealthy: "الخدمة {{name}} غير سليمة",
+    },
     route: {
       loading: "جارٍ تحميل مساحة العمل",
       connecting: "الاتصال",
@@ -819,6 +823,14 @@ export const ar: TranslationResources = {
           pullRequest: "سحب الطلب #{{number}}",
           pullRequest_mr: "طلب دمج !{{number}}",
         },
+        checksSummary: {
+          passedLabel: "تم الاجتياز",
+          failedLabel: "فشل",
+          runningLabel: "قيد التشغيل",
+          passedAccessible: "تم اجتياز الشيكات",
+          failedAccessible: "فشلت عمليات التحقق",
+          runningAccessible: "الشيكات قيد التشغيل",
+        },
         states: {
           draft: "مسودة",
           merged: "تم الدمج",
@@ -857,6 +869,27 @@ export const ar: TranslationResources = {
       noHost: "لا مضيف",
       switchTitle: "تبديل المضيف",
       searchPlaceholder: "بحث عن المضيفين...",
+    },
+    display: {
+      trigger: "تفضيلات العرض",
+      titleSource: {
+        label: "عنوان مساحة العمل",
+        options: { title: "العنوان", branch: "اسم الفرع" },
+      },
+      show: {
+        label: "عرض",
+        host: "المضيف",
+        changeRequest: "سحب الطلب",
+        services: "الخدمات",
+        checks: "الشيكات",
+        diff: "الإحصائيات المختلفة",
+        timestamp: "الطابع الزمني",
+      },
+      checks: {
+        label: "الشيكات",
+        options: { iconAndText: "الأيقونة والنص", icon: "أيقونة فقط", none: "مخفي" },
+      },
+      hostFilter: { label: "المضيفون", all: "جميع المضيفين" },
     },
     actions: {
       addProject: "إضافة مشروع",
@@ -1640,6 +1673,32 @@ export const ar: TranslationResources = {
     },
     host: {
       notFound: "لم يتم العثور على Host",
+      appearance: {
+        title: "المظهر",
+        color: {
+          label: "اللون",
+          options: {
+            none: "لا شيء",
+            blue: "أزرق",
+            cyan: "سماوي",
+            green: "أخضر",
+            lime: "ليموني",
+            yellow: "أصفر",
+            orange: "برتقالي",
+            red: "أحمر",
+            pink: "وردي",
+            purple: "أرجواني",
+          },
+        },
+        badgeDisplay: {
+          label: "عرض الشارة",
+          options: {
+            name: "الاسم",
+            icon: "الأيقونة فقط",
+            hidden: "مخفي",
+          },
+        },
+      },
       badges: {
         relay: "تتابع",
         local: "محلي",

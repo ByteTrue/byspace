@@ -19,12 +19,19 @@ const HOST_ICON_MAPPINGS: Record<HostColor, (theme: Theme) => { color: string }>
   return mappings;
 })();
 
-export function HostBadge({ badge }: { badge: HostBadgeModel }) {
+export function HostBadge({
+  badge,
+  accessible = true,
+}: {
+  badge: HostBadgeModel;
+  accessible?: boolean;
+}) {
   return (
     <View
       style={styles.badge}
       testID={`host-badge-${badge.serverId}`}
-      accessibilityLabel={badge.label}
+      accessible={accessible}
+      accessibilityLabel={accessible ? badge.label : undefined}
     >
       <ThemedServer size={HOST_BADGE_ICON_SIZE} uniProps={HOST_ICON_MAPPINGS[badge.color]} />
       {badge.showLabel ? (

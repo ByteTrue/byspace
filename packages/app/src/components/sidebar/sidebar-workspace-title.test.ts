@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { resolveSidebarWorkspacePrimaryLabel } from "@/components/sidebar/sidebar-workspace-title";
+import {
+  resolveSidebarWorkspaceAccessibilityLabel,
+  resolveSidebarWorkspacePrimaryLabel,
+} from "@/components/sidebar/sidebar-workspace-title";
 
 describe("resolveSidebarWorkspacePrimaryLabel", () => {
   it("uses the workspace name in title mode", () => {
@@ -27,5 +30,22 @@ describe("resolveSidebarWorkspacePrimaryLabel", () => {
     });
 
     expect(label).toBe("Local folder");
+  });
+});
+
+describe("resolveSidebarWorkspaceAccessibilityLabel", () => {
+  it("composes the authoritative row label and omits missing metadata", () => {
+    expect(
+      resolveSidebarWorkspaceAccessibilityLabel({
+        workspace: { name: "Investigate search", currentBranch: "fix/search" },
+        workspaceTitleSource: "branch",
+        projectName: "BySpace",
+        hostLabel: "Remote",
+        pullRequestLabel: "Pull request 42",
+        checksLabel: "Checks failed",
+        serviceLabel: null,
+        statusLabel: "Needs attention",
+      }),
+    ).toBe("BySpace, fix/search, Remote, Pull request 42, Checks failed, Needs attention");
   });
 });

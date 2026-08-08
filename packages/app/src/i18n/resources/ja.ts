@@ -348,6 +348,10 @@ export const ja: TranslationResources = {
     },
   },
   workspace: {
+    status: {
+      serviceRunning: "サービス {{name}} 実行中",
+      serviceUnhealthy: "サービス {{name}} 異常",
+    },
     route: {
       loading: "ワークスペースを読み込み中",
       connecting: "接続中",
@@ -830,6 +834,14 @@ export const ja: TranslationResources = {
           pullRequest: "プルリクエスト#{{number}}",
           pullRequest_mr: "マージリクエスト !{{number}}",
         },
+        checksSummary: {
+          passedLabel: "合格",
+          failedLabel: "失敗した",
+          runningLabel: "ランニング",
+          passedAccessible: "チェックに合格しました",
+          failedAccessible: "チェックに失敗しました",
+          runningAccessible: "実行中のチェック",
+        },
         states: {
           draft: "ドラフト",
           merged: "マージ済み",
@@ -868,6 +880,27 @@ export const ja: TranslationResources = {
       noHost: "ホストなし",
       switchTitle: "ホストを切り替え",
       searchPlaceholder: "ホストを検索...",
+    },
+    display: {
+      trigger: "表示設定",
+      titleSource: {
+        label: "ワークスペースのタイトル",
+        options: { title: "タイトル", branch: "支店名" },
+      },
+      show: {
+        label: "表示",
+        host: "ホスト",
+        changeRequest: "プルリクエスト",
+        services: "サービス",
+        checks: "小切手",
+        diff: "差分統計",
+        timestamp: "タイムスタンプ",
+      },
+      checks: {
+        label: "小切手",
+        options: { iconAndText: "アイコンとテキスト", icon: "アイコンのみ", none: "隠れた" },
+      },
+      hostFilter: { label: "ホスト", all: "すべてのホスト" },
     },
     actions: {
       addProject: "プロジェクトを追加",
@@ -1654,6 +1687,32 @@ export const ja: TranslationResources = {
     },
     host: {
       notFound: "ホストが見つかりません",
+      appearance: {
+        title: "外観",
+        color: {
+          label: "色",
+          options: {
+            none: "なし",
+            blue: "青",
+            cyan: "シアン",
+            green: "緑",
+            lime: "ライム",
+            yellow: "黄色",
+            orange: "オレンジ",
+            red: "赤",
+            pink: "ピンク",
+            purple: "紫",
+          },
+        },
+        badgeDisplay: {
+          label: "バッジ表示",
+          options: {
+            name: "名前",
+            icon: "アイコンのみ",
+            hidden: "隠れた",
+          },
+        },
+      },
       badges: {
         relay: "リレー",
         local: "ローカル",

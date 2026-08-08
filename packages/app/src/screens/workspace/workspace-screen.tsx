@@ -1,3 +1,5 @@
+import { HostBadge } from "@/hosts/host-badge";
+import { useHostBadges } from "@/hosts/use-host-badges";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import {
   memo,
@@ -1077,7 +1079,7 @@ function WorkspaceHeaderMenu({
   );
 
   return (
-    <DropdownMenu>
+    <DropdownMenu compactMode="sheet">
       <DropdownMenuTrigger
         testID="workspace-header-menu-trigger"
         style={isMobile ? styles.compactHeaderActionButton : styles.headerActionButton}
@@ -1222,6 +1224,7 @@ function WorkspaceHeaderTitleBar({
   onScriptTerminalStarted,
   onViewScriptTerminal,
 }: WorkspaceHeaderTitleBarProps) {
+  const hostBadge = useHostBadges({ enabled: isMobile }).get(normalizedServerId);
   return (
     <View style={styles.headerTitleContainer}>
       {isLoading ? (
@@ -1242,6 +1245,7 @@ function WorkspaceHeaderTitleBar({
           ) : null}
         </View>
       )}
+      {isMobile && hostBadge ? <HostBadge badge={hostBadge} /> : null}
       <View style={styles.compactHeaderMenuCluster}>
         <WorkspaceHeaderMenu
           normalizedServerId={normalizedServerId}

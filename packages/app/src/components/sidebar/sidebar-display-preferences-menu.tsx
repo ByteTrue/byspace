@@ -1,4 +1,5 @@
 import { useCallback, useMemo, type ReactElement } from "react";
+import { useTranslation } from "react-i18next";
 import { View, type PressableStateCallbackType } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { Settings2 } from "lucide-react-native";
@@ -29,26 +30,27 @@ const ThemedSettings2 = withUnistyles(Settings2);
 const mutedIconMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
 const MENU_WIDTH = 232;
 
-const TITLE_LABELS: Record<WorkspaceTitleSource, string> = {
-  title: "Title",
-  branch: "Branch name",
+const TITLE_LABEL_KEYS: Record<WorkspaceTitleSource, string> = {
+  title: "sidebar.display.titleSource.options.title",
+  branch: "sidebar.display.titleSource.options.branch",
 };
-const ROW_ITEM_LABELS: Record<SidebarRowItem, string> = {
-  host: "Host",
-  changeRequest: "Pull request",
-  services: "Services",
+const ROW_ITEM_LABEL_KEYS: Record<SidebarRowItem, string> = {
+  host: "sidebar.display.show.host",
+  changeRequest: "sidebar.display.show.changeRequest",
+  services: "sidebar.display.show.services",
 };
-const CHECKS_LABELS: Record<SidebarChecksDisplay, string> = {
-  iconAndText: "Icon and text",
-  icon: "Icon only",
-  none: "Hidden",
+const CHECKS_LABEL_KEYS: Record<SidebarChecksDisplay, string> = {
+  iconAndText: "sidebar.display.checks.options.iconAndText",
+  icon: "sidebar.display.checks.options.icon",
+  none: "sidebar.display.checks.options.none",
 };
-const TRAILING_LABELS: Record<SidebarTrailingChoice, string> = {
-  diff: "Diff stat",
-  timestamp: "Timestamp",
+const TRAILING_LABEL_KEYS: Record<SidebarTrailingChoice, string> = {
+  diff: "sidebar.display.show.diff",
+  timestamp: "sidebar.display.show.timestamp",
 };
 
 export function SidebarDisplayPreferencesMenu(): ReactElement {
+  const { t } = useTranslation();
   const preferences = useSidebarDisplayPreferences();
   const hosts = useHosts();
   const showHostFilter = hosts.length > 1;
@@ -64,27 +66,31 @@ export function SidebarDisplayPreferencesMenu(): ReactElement {
     const definitions: MenuPageDefinition[] = [
       {
         id: "titleSource",
-        title: "Workspace title",
-        content: (Object.keys(TITLE_LABELS) as WorkspaceTitleSource[]).map((value) => (
+        title: t("sidebar.display.titleSource.label"),
+        content: (Object.keys(TITLE_LABEL_KEYS) as WorkspaceTitleSource[]).map((value) => (
           <OptionItem
             key={value}
             value={value}
-            label={TITLE_LABELS[value]}
+            label={t(TITLE_LABEL_KEYS[value])}
             selected={preferences.titleSource === value}
             onSelect={preferences.setTitleSource}
             testID={`sidebar-workspace-title-source-${value}`}
           />
         )),
       },
-      { id: "show", title: "Show", content: <ShowPage preferences={preferences} /> },
+      {
+        id: "show",
+        title: t("sidebar.display.show.label"),
+        content: <ShowPage preferences={preferences} />,
+      },
       {
         id: "checks",
-        title: "Checks",
+        title: t("sidebar.display.checks.label"),
         content: SIDEBAR_CHECKS_DISPLAYS.map((value) => (
           <OptionItem
             key={value}
             value={value}
-            label={CHECKS_LABELS[value]}
+            label={t(CHECKS_LABEL_KEYS[value])}
             selected={preferences.checksDisplay === value}
             onSelect={preferences.setChecksDisplay}
             testID={`sidebar-checks-display-${value}`}
@@ -95,19 +101,19 @@ export function SidebarDisplayPreferencesMenu(): ReactElement {
     if (showHostFilter) {
       definitions.push({
         id: "hostFilter",
-        title: "Hosts",
+        title: t("sidebar.display.hostFilter.label"),
         content: <HostFilterPage preferences={preferences} hosts={hosts} />,
       });
     }
     return definitions;
-  }, [hosts, preferences, showHostFilter]);
+  }, [hosts, preferences, showHostFilter, t]);
 
   return (
     <MenuRoot compactMode="sheet">
       <MenuTrigger
         style={triggerStyle}
         accessibilityRole="button"
-        accessibilityLabel="Display preferences"
+        accessibilityLabel={t("sidebar.display.trigger")}
         testID="sidebar-display-preferences-menu"
       >
         <ThemedSettings2 size={14} uniProps={mutedIconMapping} />
@@ -116,18 +122,18 @@ export function SidebarDisplayPreferencesMenu(): ReactElement {
         align="end"
         width={MENU_WIDTH}
         pages={pages}
-        sheetTitle="Display preferences"
+        sheetTitle={t("sidebar.display.trigger")}
         testID="sidebar-display-preferences-content"
       >
-        <MenuSubTrigger id="titleSource" value={TITLE_LABELS[preferences.titleSource]}>
-          Workspace title
+        <MenuSubTrigger id="titleSource" value={t(TITLE_LABEL_KEYS[preferences.titleSource])}>
+          {t("sidebar.display.titleSource.label")}
         </MenuSubTrigger>
-        <MenuSubTrigger id="show">Show</MenuSubTrigger>
+        <MenuSubTrigger id="show">{t("sidebar.display.show.label")}</MenuSubTrigger>
         {showHostFilter ? (
           <>
             <MenuSeparator />
             <MenuSubTrigger id="hostFilter" indicator={preferences.hostFilters.length > 0}>
-              Hosts
+              {t("sidebar.display.hostFilter.label")}
             </MenuSubTrigger>
           </>
         ) : null}
@@ -167,26 +173,27 @@ function OptionItem<Value extends string>({
 }
 
 function ShowPage({ preferences }: { preferences: Preferences }): ReactElement {
+  const { t } = useTranslation();
   return (
     <>
       {SIDEBAR_ROW_ITEMS.map((item) => (
         <OptionItem
           key={item}
           value={item}
-          label={ROW_ITEM_LABELS[item]}
+          label={t(ROW_ITEM_LABEL_KEYS[item])}
           selected={preferences.rowItems[item]}
           closeOnSelect={false}
           onSelect={preferences.toggleRowItem}
           testID={`sidebar-row-item-${item}`}
         />
       ))}
-      <MenuSubTrigger id="checks">Checks</MenuSubTrigger>
+      <MenuSubTrigger id="checks">{t("sidebar.display.show.checks")}</MenuSubTrigger>
       <MenuSeparator />
-      {(Object.keys(TRAILING_LABELS) as SidebarTrailingChoice[]).map((choice) => (
+      {(Object.keys(TRAILING_LABEL_KEYS) as SidebarTrailingChoice[]).map((choice) => (
         <OptionItem
           key={choice}
           value={choice}
-          label={TRAILING_LABELS[choice]}
+          label={t(TRAILING_LABEL_KEYS[choice])}
           selected={preferences.trailing === choice}
           closeOnSelect={false}
           onSelect={preferences.toggleTrailing}
@@ -204,6 +211,7 @@ function HostFilterPage({
   preferences: Preferences;
   hosts: ReturnType<typeof useHosts>;
 }): ReactElement {
+  const { t } = useTranslation();
   return (
     <>
       <MenuItem
@@ -212,7 +220,7 @@ function HostFilterPage({
         onSelect={preferences.clearHostFilters}
         testID="sidebar-host-filter-all"
       >
-        All hosts
+        {t("sidebar.display.hostFilter.all")}
       </MenuItem>
       {hosts.map((host) => (
         <HostFilterItem

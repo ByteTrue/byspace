@@ -83,8 +83,6 @@ import { toWorktreeArchiveRisk } from "@/git/worktree-archive-warning";
 import { hasVisibleOrderChanged, mergeWithRemainder } from "@/utils/sidebar-reorder";
 import { confirmDialog } from "@/utils/confirm-dialog";
 import { projectIconPlaceholderLabelFromDisplayName } from "@/utils/project-display-name";
-import { shouldRenderSyncedStatusLoader } from "@/utils/status-loader";
-import { isEmphasizedStatusDotBucket } from "@/utils/status-dot-color";
 import type { SidebarStateBucket } from "@/utils/sidebar-agent-state";
 import { useLimitedSidebarGroup } from "@/components/sidebar/use-limited-sidebar-group";
 import type { SidebarProjectedProject } from "@/components/sidebar/sidebar-projection";
@@ -121,14 +119,21 @@ import {
   removeProjectFromHosts,
 } from "@/projects/project-remove";
 import { isWeb as platformIsWeb, isNative as platformIsNative } from "@/constants/platform";
+import { useAppSettings } from "@/hooks/use-settings";
+import { resolveSidebarWorkspaceAccessibilityLabel } from "@/components/sidebar/sidebar-workspace-title";
+import {
+  CHECK_STATE_ACCESSIBLE_KEYS,
+  selectCheckSummary,
+  selectWorkspaceServiceSummary,
+  workspaceServiceLabelKey,
+} from "@/components/sidebar/workspace-meta-row";
+import { getProjectStatusBadgeContent } from "@/utils/project-status-badge-content";
 
 const workspaceKeyExtractor = (workspace: SidebarWorkspacePlacement) => workspace.workspaceKey;
 
 const WORKSPACE_STATUS_DOT_WIDTH = 14;
 const DEFAULT_STATUS_DOT_SIZE = 7;
-const EMPHASIZED_STATUS_DOT_SIZE = 9;
 const DEFAULT_STATUS_DOT_OFFSET = 0;
-const EMPHASIZED_STATUS_DOT_OFFSET = -1;
 const ThemedExternalLink = withUnistyles(ExternalLink);
 const ThemedGitPullRequest = withUnistyles(GitPullRequest);
 const ThemedLoadingSpinner = withUnistyles(LoadingSpinner);
@@ -229,7 +234,7 @@ interface ProjectHeaderRowProps {
   project: SidebarProjectEntry;
   displayName: string;
   iconDataUri: string | null;
-  workspace: SidebarWorkspaceEntry | null;
+  statusBucket: SidebarStateBucket;
   needsAttentionCount?: number;
   selected?: boolean;
   newWorkspaceTarget: SidebarProjectNewWorkspaceTarget | null;
@@ -373,74 +378,53 @@ const prBadgeStyles = StyleSheet.create((theme) => ({
   },
 }));
 
-function StatusDotOverlay({
-  dotColorStyle,
-  size,
-  offset,
-}: {
-  dotColorStyle: ViewStyle;
-  size: number;
-  offset: number;
-}) {
-  const overlayStyle = useMemo(
-    () => [
-      styles.statusDotOverlay,
-      dotColorStyle,
-      {
-        width: size,
-        height: size,
-        right: offset,
-        bottom: offset,
-      },
-    ],
-    [dotColorStyle, size, offset],
-  );
-  return <View style={overlayStyle} />;
-}
-
 function ProjectLeadingVisual({
   displayName,
   iconDataUri,
-  workspace,
+  statusBucket,
   projectKey,
   isArchiving = false,
 }: {
   displayName: string;
   iconDataUri: string | null;
-  workspace: SidebarWorkspaceEntry | null;
+  statusBucket: SidebarStateBucket;
   projectKey: string;
   isArchiving?: boolean;
 }) {
+  const { t } = useTranslation();
   const placeholderLabel = projectIconPlaceholderLabelFromDisplayName(displayName);
   const placeholderInitial = placeholderLabel.charAt(0).toUpperCase();
-  const activeWorkspace = workspace;
-  const shouldShowWorkspaceStatus =
-    activeWorkspace !== null && (isArchiving || activeWorkspace.statusBucket !== "done");
-  const shouldShowSyncedLoader = activeWorkspace
-    ? shouldRenderSyncedStatusLoader({ bucket: activeWorkspace.statusBucket })
-    : false;
+  const badge = getProjectStatusBadgeContent(statusBucket);
 
-  if (!shouldShowWorkspaceStatus || !activeWorkspace) {
+  if (isArchiving) {
     return (
       <View style={styles.projectLeadingVisualSlot}>
-        <ProjectIcon
-          iconDataUri={iconDataUri}
-          placeholderInitial={placeholderInitial}
-          projectKey={projectKey}
-        />
+        <ThemedSyncedLoader size={14} uniProps={syncedLoaderColorMapping} />
       </View>
     );
   }
 
   return (
-    <ProjectLeadingVisualStatus
-      iconDataUri={iconDataUri}
-      placeholderInitial={placeholderInitial}
-      projectKey={projectKey}
-      isArchiving={isArchiving}
-      shouldShowSyncedLoader={shouldShowSyncedLoader}
-      activeWorkspace={activeWorkspace}
-    />
+    <View style={styles.projectLeadingVisualSlot}>
+      <ProjectIcon
+        iconDataUri={iconDataUri}
+        placeholderInitial={placeholderInitial}
+        projectKey={projectKey}
+      />
+      {badge ? (
+        <View
+          style={styles.projectStatusBadge}
+          accessible
+          accessibilityLabel={t(`workspace.hoverCard.agentStatus.${statusBucket}`)}
+        >
+          {badge.kind === "alert" ? (
+            <ThemedCircleAlert size={11} uniProps={amberColorMapping} />
+          ) : (
+            <View style={[styles.projectStatusBadgeDot, getStatusDotColorStyle(badge.bucket)]} />
+          )}
+        </View>
+      ) : null}
+    </View>
   );
 }
 
@@ -653,72 +637,6 @@ function ProjectIcon({
   );
 }
 
-function ProjectLeadingVisualStatus({
-  iconDataUri,
-  placeholderInitial,
-  projectKey,
-  isArchiving,
-  shouldShowSyncedLoader,
-  activeWorkspace,
-}: {
-  iconDataUri: string | null;
-  placeholderInitial: string;
-  projectKey: string;
-  isArchiving: boolean;
-  shouldShowSyncedLoader: boolean;
-  activeWorkspace: SidebarWorkspaceEntry;
-}) {
-  if (isArchiving) {
-    return (
-      <View style={styles.projectLeadingVisualSlot}>
-        <ThemedLoadingSpinner size={8} uniProps={foregroundMutedColorMapping} />
-      </View>
-    );
-  }
-
-  if (shouldShowSyncedLoader) {
-    return (
-      <View style={styles.projectLeadingVisualSlot}>
-        <ThemedSyncedLoader size={11} uniProps={syncedLoaderColorMapping} />
-      </View>
-    );
-  }
-
-  if (activeWorkspace.statusBucket === "needs_input") {
-    return (
-      <View style={styles.projectLeadingVisualSlot}>
-        <ThemedCircleAlert size={14} uniProps={amberColorMapping} />
-      </View>
-    );
-  }
-
-  const dotColorStyle = getStatusDotColorStyle(activeWorkspace.statusBucket);
-  const statusDotSize = isEmphasizedStatusDotBucket(activeWorkspace.statusBucket)
-    ? EMPHASIZED_STATUS_DOT_SIZE
-    : DEFAULT_STATUS_DOT_SIZE;
-  const statusDotOffset =
-    statusDotSize === EMPHASIZED_STATUS_DOT_SIZE
-      ? EMPHASIZED_STATUS_DOT_OFFSET
-      : DEFAULT_STATUS_DOT_OFFSET;
-
-  return (
-    <View style={styles.projectLeadingVisualSlot}>
-      <ProjectIcon
-        iconDataUri={iconDataUri}
-        placeholderInitial={placeholderInitial}
-        projectKey={projectKey}
-      />
-      {dotColorStyle ? (
-        <StatusDotOverlay
-          dotColorStyle={dotColorStyle}
-          size={statusDotSize}
-          offset={statusDotOffset}
-        />
-      ) : null}
-    </View>
-  );
-}
-
 function NewWorktreeButton({
   displayName,
   onPress,
@@ -801,7 +719,7 @@ function ProjectHeaderRow({
   project,
   displayName,
   iconDataUri,
-  workspace,
+  statusBucket,
   needsAttentionCount = 0,
   selected = false,
   newWorkspaceTarget,
@@ -859,7 +777,7 @@ function ProjectHeaderRow({
         <ProjectLeadingVisual
           displayName={displayName}
           iconDataUri={iconDataUri}
-          workspace={workspace}
+          statusBucket={statusBucket}
           projectKey={project.projectKey}
           isArchiving={isArchiving}
         />
@@ -992,19 +910,37 @@ function WorkspaceRowInner({
   }, [interaction.didLongPressRef, onPress]);
 
   const accessibilityState = useMemo(() => ({ selected }), [selected]);
+  const { t } = useTranslation();
+  const {
+    settings: { workspaceTitleSource },
+  } = useAppSettings();
+  const serviceSummary = selectWorkspaceServiceSummary(workspace.scripts);
+  const checksSummary = selectCheckSummary(workspace.prHint);
+  const statusLabel = isCreating
+    ? t("sidebar.workspace.status.creating")
+    : t(`workspace.hoverCard.agentStatus.${workspace.statusBucket}`);
+  const pullRequestLabel = workspace.prHint
+    ? t("workspace.git.pr.accessibility.pullRequest", {
+        number: workspace.prHint.number,
+        context: getForgePresentation(normalizeForge(workspace.prHint.forge)).changeRequestContext,
+      })
+    : null;
+  const accessibilityLabel = resolveSidebarWorkspaceAccessibilityLabel({
+    workspace,
+    workspaceTitleSource,
+    projectName: workspace.projectName,
+    statusLabel,
+    hostLabel: subtitle?.label,
+    pullRequestLabel,
+    checksLabel: checksSummary ? t(CHECK_STATE_ACCESSIBLE_KEYS[checksSummary.state]) : null,
+    serviceLabel: serviceSummary
+      ? t(workspaceServiceLabelKey(serviceSummary), { name: serviceSummary.name })
+      : null,
+  });
 
   return (
     <SidebarWorkspaceRowFrame workspace={workspace} isDragging={isDragging}>
       {({ isHovered, hoverHandlers }) => {
-        const isDesktop = !isTouchPlatform;
-        const showScriptsIcon = isDesktop && workspace.hasRunningScripts;
-        const hasRunningService = workspace.scripts.some(
-          (s) => s.lifecycle === "running" && (s.type ?? "service") === "service",
-        );
-        let scriptIconKind: "service" | "command" | null = null;
-        if (showScriptsIcon) {
-          scriptIconKind = hasRunningService ? "service" : "command";
-        }
         const workspaceRowStyle = getProjectWorkspaceRowStyle({
           isDragging,
           selected,
@@ -1023,6 +959,7 @@ function WorkspaceRowInner({
               aria-selected={selected}
               accessibilityRole="button"
               accessibilityState={accessibilityState}
+              accessibilityLabel={accessibilityLabel}
               style={workspaceRowStyle}
               onPressIn={interaction.handlePressIn}
               onTouchMove={interaction.handleTouchMove}
@@ -1033,7 +970,7 @@ function WorkspaceRowInner({
               <SidebarWorkspaceRowContent
                 workspace={workspace}
                 hostBadge={subtitle}
-                scriptIconKind={scriptIconKind}
+                serviceSummary={serviceSummary}
                 isHovered={isHovered}
                 isLoading={isArchiving || isCreating}
                 isCreating={isCreating}
@@ -1604,7 +1541,7 @@ function ProjectBlock({
         project={project}
         displayName={displayName}
         iconDataUri={iconDataUri}
-        workspace={null}
+        statusBucket={project.statusBucket}
         needsAttentionCount={project.needsAttentionCount}
         selected={false}
         newWorkspaceTarget={newWorkspaceTarget}
@@ -2066,6 +2003,24 @@ const styles = StyleSheet.create((theme) => ({
     flexShrink: 0,
     alignItems: "center",
     justifyContent: "center",
+  },
+  projectStatusBadge: {
+    position: "absolute",
+    right: -5,
+    bottom: -5,
+    width: 15,
+    height: 15,
+    borderRadius: theme.borderRadius.full,
+    borderWidth: 2,
+    borderColor: theme.colors.surface0,
+    backgroundColor: theme.colors.surface0,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  projectStatusBadgeDot: {
+    width: 7,
+    height: 7,
+    borderRadius: theme.borderRadius.full,
   },
   projectIconFallback: {
     width: "100%",

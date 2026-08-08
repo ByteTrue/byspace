@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { deriveSidebarStateBucket } from "./sidebar-agent-state";
+import { aggregateSidebarStateBuckets, deriveSidebarStateBucket } from "./sidebar-agent-state";
 
 describe("deriveSidebarStateBucket", () => {
   it("prioritizes pending permissions as needs_input", () => {
@@ -44,5 +44,13 @@ describe("deriveSidebarStateBucket", () => {
         attentionReason: null,
       }),
     ).toBe("done");
+  });
+});
+
+describe("aggregateSidebarStateBuckets", () => {
+  it("selects the most urgent project status regardless of workspace order", () => {
+    expect(aggregateSidebarStateBuckets(["done", "running", "failed"])).toBe("failed");
+    expect(aggregateSidebarStateBuckets(["attention", "running"])).toBe("running");
+    expect(aggregateSidebarStateBuckets([])).toBe("done");
   });
 });

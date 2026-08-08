@@ -120,6 +120,11 @@ describe("buildSidebarProjection", () => {
     ]);
     expect(projection.projects.map((project) => project.needsAttentionCount)).toEqual([0, 1, 0]);
     expect(projection.needsAttentionWorkspaceCount).toBe(1);
+    expect(projection.projects.map((project) => project.statusBucket)).toEqual([
+      "done",
+      "attention",
+      "done",
+    ]);
     expect(projection.shortcutModel.shortcutTargets).toEqual([
       { serverId: "srv", workspaceId: "idle" },
       { serverId: "srv", workspaceId: "recent" },

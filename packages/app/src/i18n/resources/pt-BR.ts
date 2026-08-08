@@ -348,6 +348,10 @@ export const ptBR: TranslationResources = {
     },
   },
   workspace: {
+    status: {
+      serviceRunning: "Serviço {{name}} em execução",
+      serviceUnhealthy: "Serviço {{name}} com falha",
+    },
     route: {
       loading: "Carregando workspace",
       connecting: "Conectando",
@@ -841,6 +845,14 @@ export const ptBR: TranslationResources = {
           pullRequest: "Pull request #{{number}}",
           pullRequest_mr: "Merge request !{{number}}",
         },
+        checksSummary: {
+          passedLabel: "Passado",
+          failedLabel: "Fracassado",
+          runningLabel: "Correndo",
+          passedAccessible: "Verificações aprovadas",
+          failedAccessible: "Falha nas verificações",
+          runningAccessible: "Verificações em execução",
+        },
         states: {
           draft: "Rascunho",
           merged: "Mergeada",
@@ -879,6 +891,27 @@ export const ptBR: TranslationResources = {
       noHost: "Nenhum host",
       switchTitle: "Trocar host",
       searchPlaceholder: "Buscar hosts...",
+    },
+    display: {
+      trigger: "Preferências de exibição",
+      titleSource: {
+        label: "Título do espaço de trabalho",
+        options: { title: "Título", branch: "Nome da filial" },
+      },
+      show: {
+        label: "Mostrar",
+        host: "Hospedar",
+        changeRequest: "Solicitação pull",
+        services: "Serviços",
+        checks: "Verificações",
+        diff: "Estatísticas diferentes",
+        timestamp: "Carimbo de data e hora",
+      },
+      checks: {
+        label: "Verificações",
+        options: { iconAndText: "Ícone e texto", icon: "Somente ícone", none: "Escondido" },
+      },
+      hostFilter: { label: "Anfitriões", all: "Todos os anfitriões" },
     },
     actions: {
       addProject: "Adicionar projeto",
@@ -1667,6 +1700,32 @@ export const ptBR: TranslationResources = {
     },
     host: {
       notFound: "Host não encontrado",
+      appearance: {
+        title: "Aparência",
+        color: {
+          label: "Cor",
+          options: {
+            none: "Nenhum",
+            blue: "Azul",
+            cyan: "Ciano",
+            green: "Verde",
+            lime: "Lima",
+            yellow: "Amarelo",
+            orange: "Laranja",
+            red: "Vermelho",
+            pink: "Rosa",
+            purple: "Roxo",
+          },
+        },
+        badgeDisplay: {
+          label: "Exibição de crachá",
+          options: {
+            name: "Nome",
+            icon: "Somente ícone",
+            hidden: "Escondido",
+          },
+        },
+      },
       badges: {
         relay: "Relay",
         local: "Local",

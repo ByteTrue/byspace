@@ -344,6 +344,10 @@ export const en = {
     },
   },
   workspace: {
+    status: {
+      serviceRunning: "Service {{name}} running",
+      serviceUnhealthy: "Service {{name}} unhealthy",
+    },
     route: {
       loading: "Loading workspace",
       connecting: "Connecting",
@@ -829,6 +833,14 @@ export const en = {
           pullRequest: "Pull request #{{number}}",
           pullRequest_mr: "Merge request !{{number}}",
         },
+        checksSummary: {
+          passedLabel: "Passed",
+          failedLabel: "Failed",
+          runningLabel: "Running",
+          passedAccessible: "Checks passed",
+          failedAccessible: "Checks failed",
+          runningAccessible: "Checks running",
+        },
         states: {
           draft: "Draft",
           merged: "Merged",
@@ -867,6 +879,27 @@ export const en = {
       noHost: "No host",
       switchTitle: "Switch host",
       searchPlaceholder: "Search hosts...",
+    },
+    display: {
+      trigger: "Display preferences",
+      titleSource: {
+        label: "Workspace title",
+        options: { title: "Title", branch: "Branch name" },
+      },
+      show: {
+        label: "Show",
+        host: "Host",
+        changeRequest: "Pull request",
+        services: "Services",
+        checks: "Checks",
+        diff: "Diff stat",
+        timestamp: "Timestamp",
+      },
+      checks: {
+        label: "Checks",
+        options: { iconAndText: "Icon and text", icon: "Icon only", none: "Hidden" },
+      },
+      hostFilter: { label: "Hosts", all: "All hosts" },
     },
     actions: {
       addProject: "Add project",
@@ -1650,6 +1683,32 @@ export const en = {
     },
     host: {
       notFound: "Host not found",
+      appearance: {
+        title: "Appearance",
+        color: {
+          label: "Color",
+          options: {
+            none: "None",
+            blue: "Blue",
+            cyan: "Cyan",
+            green: "Green",
+            lime: "Lime",
+            yellow: "Yellow",
+            orange: "Orange",
+            red: "Red",
+            pink: "Pink",
+            purple: "Purple",
+          },
+        },
+        badgeDisplay: {
+          label: "Badge display",
+          options: {
+            name: "Name",
+            icon: "Icon only",
+            hidden: "Hidden",
+          },
+        },
+      },
       badges: {
         relay: "Relay",
         local: "Local",

@@ -1,3 +1,6 @@
+import { handleMenuSheetEscape } from "./menu-sheet-keyboard";
+import { useGlobalWebOverlayLayer, useWebOverlayRegistration } from "@/lib/overlay-root";
+import { isWeb } from "@/constants/platform";
 import {
   createContext,
   useCallback,
@@ -320,6 +323,16 @@ function MenuSheetSurface({
   );
 
   const handleClose = useCallback(() => menu.setOpen(false), [menu]);
+  const modalLayer = useGlobalWebOverlayLayer("modal", isWeb && menu.open);
+  const handleWebOverlayKeyDown = useCallback(
+    (event: KeyboardEvent) => handleMenuSheetEscape(event, handleClose),
+    [handleClose],
+  );
+  const setWebOverlayScope = useWebOverlayRegistration({
+    active: isWeb && menu.open,
+    layer: modalLayer,
+    onKeyDown: handleWebOverlayKeyDown,
+  });
   const { sheetRef, handleSheetChange, handleSheetDismiss } = useIsolatedBottomSheetVisibility({
     visible: menu.open,
     isEnabled: true,
@@ -374,17 +387,19 @@ function MenuSheetSurface({
         showsVerticalScrollIndicator={false}
         testID={testID ? `${testID}-content` : undefined}
       >
-        {openPage ? (
-          <>
-            <MenuSheetHeader title={openPage.title} onBack={menu.goBack} />
-            <MenuPage depth={depth}>{openPage.content}</MenuPage>
-          </>
-        ) : (
-          <>
-            {sheetTitle ? <MenuSheetHeader title={sheetTitle} onBack={null} /> : null}
-            <MenuPage depth={0}>{children}</MenuPage>
-          </>
-        )}
+        <View ref={setWebOverlayScope}>
+          {openPage ? (
+            <>
+              <MenuSheetHeader title={openPage.title} onBack={menu.goBack} />
+              <MenuPage depth={depth}>{openPage.content}</MenuPage>
+            </>
+          ) : (
+            <>
+              {sheetTitle ? <MenuSheetHeader title={sheetTitle} onBack={null} /> : null}
+              <MenuPage depth={0}>{children}</MenuPage>
+            </>
+          )}
+        </View>
       </BottomSheetScrollView>
     </ThemedBottomSheetModal>
   );

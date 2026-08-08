@@ -345,6 +345,10 @@ export const zhCN: TranslationResources = {
     },
   },
   workspace: {
+    status: {
+      serviceRunning: "服务 {{name}} 运行中",
+      serviceUnhealthy: "服务 {{name}} 异常",
+    },
     route: {
       loading: "正在加载 workspace",
       connecting: "正在连接",
@@ -811,6 +815,14 @@ export const zhCN: TranslationResources = {
           pullRequest: "Pull request #{{number}}",
           pullRequest_mr: "合并请求 !{{number}}",
         },
+        checksSummary: {
+          passedLabel: "通过",
+          failedLabel: "失败的",
+          runningLabel: "跑步",
+          passedAccessible: "检查通过",
+          failedAccessible: "检查失败",
+          runningAccessible: "检查运行",
+        },
         states: {
           draft: "Draft",
           merged: "已 merge",
@@ -849,6 +861,27 @@ export const zhCN: TranslationResources = {
       noHost: "没有 Host",
       switchTitle: "切换 Host",
       searchPlaceholder: "搜索 Hosts...",
+    },
+    display: {
+      trigger: "显示首选项",
+      titleSource: {
+        label: "工作区标题",
+        options: { title: "标题", branch: "分行名称" },
+      },
+      show: {
+        label: "展示",
+        host: "主持人",
+        changeRequest: "拉取请求",
+        services: "服务",
+        checks: "检查",
+        diff: "差异统计",
+        timestamp: "时间戳",
+      },
+      checks: {
+        label: "检查",
+        options: { iconAndText: "图标和文本", icon: "仅图标", none: "隐" },
+      },
+      hostFilter: { label: "主持人", all: "所有主机" },
     },
     actions: {
       addProject: "添加 project",
@@ -1625,6 +1658,32 @@ export const zhCN: TranslationResources = {
     },
     host: {
       notFound: "Host 未找到",
+      appearance: {
+        title: "外貌",
+        color: {
+          label: "颜色",
+          options: {
+            none: "没有任何",
+            blue: "蓝色的",
+            cyan: "青色",
+            green: "绿色的",
+            lime: "酸橙",
+            yellow: "黄色的",
+            orange: "橙子",
+            red: "红色的",
+            pink: "粉色的",
+            purple: "紫色的",
+          },
+        },
+        badgeDisplay: {
+          label: "徽章显示",
+          options: {
+            name: "姓名",
+            icon: "仅图标",
+            hidden: "隐",
+          },
+        },
+      },
       badges: {
         relay: "Relay",
         local: "本地",

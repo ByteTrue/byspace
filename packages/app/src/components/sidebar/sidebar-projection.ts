@@ -4,9 +4,11 @@ import type {
 } from "@/hooks/use-sidebar-workspaces-list";
 import { buildSidebarShortcutModel, type SidebarShortcutModel } from "@/utils/sidebar-shortcuts";
 import { isAgentStatusNeedingAttention } from "@/utils/workspace-agent-summary";
+import { aggregateSidebarStateBuckets } from "@/utils/sidebar-agent-state";
 
 export interface SidebarProjectedProject extends SidebarProjectEntry {
   needsAttentionCount: number;
+  statusBucket: SidebarWorkspaceEntry["statusBucket"];
 }
 
 export interface SidebarProjection {
@@ -45,7 +47,17 @@ export function buildSidebarProjection(input: {
     if (input.attentionOnly && attentionCount === 0) {
       continue;
     }
-    projectedProjects.push({ ...project, workspaces, needsAttentionCount: attentionCount });
+    projectedProjects.push({
+      ...project,
+      workspaces,
+      needsAttentionCount: attentionCount,
+      statusBucket: aggregateSidebarStateBuckets(
+        project.workspaces.flatMap((workspace) => {
+          const bucket = input.workspaceEntriesByKey.get(workspace.workspaceKey)?.statusBucket;
+          return bucket ? [bucket] : [];
+        }),
+      ),
+    });
   }
 
   return {

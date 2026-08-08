@@ -348,6 +348,10 @@ export const es: TranslationResources = {
     },
   },
   workspace: {
+    status: {
+      serviceRunning: "Servicio {{name}} en ejecución",
+      serviceUnhealthy: "Servicio {{name}} con fallos",
+    },
     route: {
       loading: "Cargando espacio de trabajo",
       connecting: "Conectando",
@@ -850,6 +854,14 @@ export const es: TranslationResources = {
           pullRequest: "Solicitud de extracción n.°{{number}}",
           pullRequest_mr: "Solicitud de fusión !{{number}}",
         },
+        checksSummary: {
+          passedLabel: "Aprobado",
+          failedLabel: "Fallido",
+          runningLabel: "Corriendo",
+          passedAccessible: "Controles pasados",
+          failedAccessible: "Comprobaciones fallidas",
+          runningAccessible: "Comprobaciones en ejecución",
+        },
         states: {
           draft: "Borrador",
           merged: "Fusionado",
@@ -888,6 +900,27 @@ export const es: TranslationResources = {
       noHost: "Sin anfitrión",
       switchTitle: "Cambiar de anfitrión",
       searchPlaceholder: "Buscar hosts...",
+    },
+    display: {
+      trigger: "Preferencias de visualización",
+      titleSource: {
+        label: "Título del espacio de trabajo",
+        options: { title: "Título", branch: "Nombre de la sucursal" },
+      },
+      show: {
+        label: "Mostrar",
+        host: "Anfitrión",
+        changeRequest: "Solicitud de extracción",
+        services: "Servicios",
+        checks: "Cheques",
+        diff: "Diferencia de estadísticas",
+        timestamp: "Marca de tiempo",
+      },
+      checks: {
+        label: "Cheques",
+        options: { iconAndText: "Icono y texto", icon: "Solo icono", none: "Oculto" },
+      },
+      hostFilter: { label: "Anfitriones", all: "Todos los anfitriones" },
     },
     actions: {
       addProject: "Agregar proyecto",
@@ -1676,6 +1709,32 @@ export const es: TranslationResources = {
     },
     host: {
       notFound: "Hostno encontrado",
+      appearance: {
+        title: "Apariencia",
+        color: {
+          label: "Color",
+          options: {
+            none: "Ninguno",
+            blue: "Azul",
+            cyan: "Cian",
+            green: "Verde",
+            lime: "Cal",
+            yellow: "Amarillo",
+            orange: "Naranja",
+            red: "Rojo",
+            pink: "Rosa",
+            purple: "Púrpura",
+          },
+        },
+        badgeDisplay: {
+          label: "Exhibición de insignia",
+          options: {
+            name: "Nombre",
+            icon: "Sólo icono",
+            hidden: "Oculto",
+          },
+        },
+      },
       badges: {
         relay: "Relé",
         local: "Local",

@@ -347,6 +347,10 @@ export const ru: TranslationResources = {
     },
   },
   workspace: {
+    status: {
+      serviceRunning: "Сервис {{name}} запущен",
+      serviceUnhealthy: "Сервис {{name}} неисправен",
+    },
     route: {
       loading: "Загрузка рабочей области",
       connecting: "Подключение",
@@ -840,6 +844,14 @@ export const ru: TranslationResources = {
           pullRequest: "Запрос на извлечение №{{number}}",
           pullRequest_mr: "Запрос на слияние !{{number}}",
         },
+        checksSummary: {
+          passedLabel: "Прошло",
+          failedLabel: "Неуспешный",
+          runningLabel: "Бег",
+          passedAccessible: "Проверки пройдены",
+          failedAccessible: "Проверки не пройдены",
+          runningAccessible: "Проверки выполняются",
+        },
         states: {
           draft: "Черновик",
           merged: "Объединено",
@@ -878,6 +890,27 @@ export const ru: TranslationResources = {
       noHost: "Нет хоста",
       switchTitle: "Сменить хост",
       searchPlaceholder: "Поиск хостов...",
+    },
+    display: {
+      trigger: "Настройки дисплея",
+      titleSource: {
+        label: "Название рабочей области",
+        options: { title: "Заголовок", branch: "Название филиала" },
+      },
+      show: {
+        label: "Показывать",
+        host: "Хозяин",
+        changeRequest: "Запрос на извлечение",
+        services: "Услуги",
+        checks: "Чеки",
+        diff: "Разница в статистике",
+        timestamp: "Метка времени",
+      },
+      checks: {
+        label: "Чеки",
+        options: { iconAndText: "Значок и текст", icon: "Только значок", none: "Скрытый" },
+      },
+      hostFilter: { label: "Хозяева", all: "Все хозяева" },
     },
     actions: {
       addProject: "Добавить проект",
@@ -1668,6 +1701,32 @@ export const ru: TranslationResources = {
     },
     host: {
       notFound: "Host не найден",
+      appearance: {
+        title: "Появление",
+        color: {
+          label: "Цвет",
+          options: {
+            none: "Никто",
+            blue: "Синий",
+            cyan: "Голубой",
+            green: "Зеленый",
+            lime: "Лайм",
+            yellow: "Желтый",
+            orange: "Апельсин",
+            red: "Красный",
+            pink: "Розовый",
+            purple: "Фиолетовый",
+          },
+        },
+        badgeDisplay: {
+          label: "Отображение значка",
+          options: {
+            name: "Имя",
+            icon: "Только значок",
+            hidden: "Скрытый",
+          },
+        },
+      },
       badges: {
         relay: "Реле",
         local: "Местный",

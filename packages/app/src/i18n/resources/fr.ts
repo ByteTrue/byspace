@@ -349,6 +349,10 @@ export const fr: TranslationResources = {
     },
   },
   workspace: {
+    status: {
+      serviceRunning: "Service {{name}} en cours",
+      serviceUnhealthy: "Service {{name}} en échec",
+    },
     route: {
       loading: "Chargement de l'espace de travail",
       connecting: "De liaison",
@@ -849,6 +853,14 @@ export const fr: TranslationResources = {
           pullRequest: "Demande de tirage #{{number}}",
           pullRequest_mr: "Demande de fusion !{{number}}",
         },
+        checksSummary: {
+          passedLabel: "Passé",
+          failedLabel: "Échoué",
+          runningLabel: "En cours d'exécution",
+          passedAccessible: "Contrôles réussis",
+          failedAccessible: "Échec des vérifications",
+          runningAccessible: "Contrôles en cours",
+        },
         states: {
           draft: "Brouillon",
           merged: "Fusionné",
@@ -887,6 +899,27 @@ export const fr: TranslationResources = {
       noHost: "Aucun hôte",
       switchTitle: "Changer d'hôte",
       searchPlaceholder: "Rechercher des hôtes...",
+    },
+    display: {
+      trigger: "Préférences d'affichage",
+      titleSource: {
+        label: "Titre de l'espace de travail",
+        options: { title: "Titre", branch: "Nom de la succursale" },
+      },
+      show: {
+        label: "Afficher",
+        host: "Hôte",
+        changeRequest: "Demande de tirage",
+        services: "Prestations",
+        checks: "Chèques",
+        diff: "Statistiques de différence",
+        timestamp: "Horodatage",
+      },
+      checks: {
+        label: "Chèques",
+        options: { iconAndText: "Icône et texte", icon: "Icône uniquement", none: "Caché" },
+      },
+      hostFilter: { label: "Hôtes", all: "Tous les hôtes" },
     },
     actions: {
       addProject: "Ajouter un projet",
@@ -1676,6 +1709,32 @@ export const fr: TranslationResources = {
     },
     host: {
       notFound: "Hostintrouvable",
+      appearance: {
+        title: "Apparence",
+        color: {
+          label: "Couleur",
+          options: {
+            none: "Aucun",
+            blue: "Bleu",
+            cyan: "Cyan",
+            green: "Vert",
+            lime: "Citron vert",
+            yellow: "Jaune",
+            orange: "Orange",
+            red: "Rouge",
+            pink: "Rose",
+            purple: "Violet",
+          },
+        },
+        badgeDisplay: {
+          label: "Affichage des badges",
+          options: {
+            name: "Nom",
+            icon: "Icône uniquement",
+            hidden: "Caché",
+          },
+        },
+      },
       badges: {
         relay: "Relais",
         local: "Locale",
