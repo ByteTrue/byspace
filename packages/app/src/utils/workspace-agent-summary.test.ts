@@ -21,6 +21,7 @@ function agent(input: {
     id: input.id,
     provider: "codex",
     status: input.status ?? "idle",
+    activeTurn: null,
     createdAt: new Date("2026-01-01T00:00:00.000Z"),
     updatedAt: new Date(input.updatedAt),
     lastUserMessageAt: null,

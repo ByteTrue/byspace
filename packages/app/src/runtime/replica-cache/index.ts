@@ -11,17 +11,18 @@ import {
 import {
   normalizeEmptyProjectDescriptor,
   normalizeWorkspaceDescriptor,
+  selectAgentTimelineState,
   useSessionStore,
   type Agent,
   type SessionReplica,
   type SessionState,
   type WorkspaceDescriptor,
 } from "@/stores/session-store";
-import type { StreamItem } from "@/types/stream";
+import { isUnreconciledLocalUserMessage, type StreamItem } from "@/types/stream";
 import { normalizeAgentSnapshot } from "@/utils/agent-snapshots";
 
 const STORAGE_KEY = "@byspace:replica-cache";
-const CACHE_VERSION = 1;
+const CACHE_VERSION = 3;
 const PERSIST_DELAY_MS = 750;
 const MAX_TIMELINE_ITEMS = 50;
 const MAX_CACHE_BYTES = 1024 * 1024;
@@ -36,14 +37,6 @@ const StoredAgentSchema = z.object({
 const StoredTimelineSchema = z.object({
   agentId: z.string(),
   items: z.unknown(),
-  cursor: z
-    .object({
-      epoch: z.string(),
-      startSeq: z.number().int().nonnegative(),
-      endSeq: z.number().int().nonnegative(),
-    })
-    .nullable(),
-  hasOlder: z.boolean(),
 });
 
 const StoredHostSchema = z.object({
@@ -140,8 +133,6 @@ function deserializeTimeline(stored: StoredHost["timeline"]): SessionReplica["ti
   return {
     agentId: stored.agentId,
     items: decoded,
-    cursor: stored.cursor,
-    hasOlder: stored.hasOlder,
   };
 }
 
@@ -370,14 +361,20 @@ export class ReplicaCache {
             (workspace) => workspace.workspaceDirectory === focusedAgent.cwd,
           ))
         : undefined;
-      const items = focusedAgentId ? session.agentStreamTail.get(focusedAgentId) : undefined;
+      const timelineState = focusedAgentId
+        ? selectAgentTimelineState(session, focusedAgentId)
+        : { status: "cold" as const };
+      const items =
+        timelineState.status === "cold"
+          ? undefined
+          : timelineState.items.filter(
+              (item) => item.kind !== "user_message" || !isUnreconciledLocalUserMessage(item),
+            );
       const timeline =
         focusedAgent && items
           ? {
               agentId: focusedAgent.id,
               items: encodeDates(items.slice(-MAX_TIMELINE_ITEMS)),
-              cursor: session.agentTimelineCursor.get(focusedAgent.id) ?? null,
-              hasOlder: session.agentTimelineHasOlder.get(focusedAgent.id) ?? false,
             }
           : null;
       const stored: StoredHost = {

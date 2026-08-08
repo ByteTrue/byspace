@@ -4,9 +4,10 @@ import { normalizeAgentSnapshot } from "@/utils/agent-snapshots";
 import {
   normalizeEmptyProjectDescriptor,
   normalizeWorkspaceDescriptor,
+  selectAgentTimelineState,
   useSessionStore,
 } from "@/stores/session-store";
-import type { StreamItem } from "@/types/stream";
+import { createUserMessage, type StreamItem } from "@/types/stream";
 import { ReplicaCache, type ReplicaCacheStorage } from ".";
 
 const SERVER_ID = "cached-host";
@@ -169,6 +170,10 @@ describe("ReplicaCache", () => {
     expect(session?.agentAuthoritativeHistoryApplied.get("agent-1")).not.toBe(true);
     expect(session?.agentTimelineCursor.get("agent-1")).toBeUndefined();
     expect(session?.agentTimelineHasOlder.get("agent-1")).not.toBe(true);
+    expect(selectAgentTimelineState(session, "agent-1")).toEqual({
+      status: "painted",
+      items: [message("message-1", "Cached")],
+    });
   });
 
   it("persists only the focused agent view with a short timeline tail", async () => {
@@ -225,6 +230,43 @@ describe("ReplicaCache", () => {
     expect(session?.agentAuthoritativeHistoryApplied.get("agent-2")).not.toBe(true);
     expect(session?.agentTimelineCursor.get("agent-2")).toBeUndefined();
     expect(session?.agentTimelineHasOlder.get("agent-2")).not.toBe(true);
+
+    const persisted = JSON.parse(storage.values.get("@byspace:replica-cache") ?? "null") as {
+      version: number;
+      hosts: Array<{ timeline: Record<string, unknown> | null }>;
+    };
+    expect(persisted.version).toBe(3);
+    expect(Object.keys(persisted.hosts[0]?.timeline ?? {}).sort()).toEqual(["agentId", "items"]);
+  });
+
+  it("persists reconciled rows without caching unreconciled local presentations", async () => {
+    const storage = new MemoryStorage();
+    const cache = new ReplicaCache(storage);
+    cache.setHosts([SERVER_ID]);
+    seedSession();
+    const unreconciled = createUserMessage({
+      clientMessageId: "client-pending",
+      text: "Pending",
+      timestamp: new Date("2026-07-18T08:01:00.000Z"),
+    });
+    const reconciled = createUserMessage({
+      clientMessageId: "client-sent",
+      messageId: "provider-sent",
+      timelineCursor: { epoch: "epoch-1", seq: 11 },
+      text: "Sent",
+      timestamp: new Date("2026-07-18T08:01:30.000Z"),
+    });
+    useSessionStore
+      .getState()
+      .setAgentStreamTail(SERVER_ID, new Map([["agent-1", [unreconciled, reconciled]]]));
+
+    await cache.flush();
+    useSessionStore.getState().clearSession(SERVER_ID);
+    await cache.restore();
+
+    expect(useSessionStore.getState().sessions[SERVER_ID]?.agentStreamTail.get("agent-1")).toEqual([
+      reconciled,
+    ]);
   });
 
   it("evicts the least recently written host when the cache exceeds its byte budget", async () => {
@@ -252,14 +294,39 @@ describe("ReplicaCache", () => {
     expect(Object.keys(useSessionStore.getState().sessions).sort()).toEqual(["host-a", "host-c"]);
   });
 
-  it("drops malformed or unknown cache versions", async () => {
+  it("rejects version 1 cache data and overwrites it on flush", async () => {
     const storage = new MemoryStorage();
     storage.values.set("@byspace:replica-cache", JSON.stringify({ version: 999, hosts: [] }));
+    storage.values.set(
+      "@byspace:replica-cache",
+      JSON.stringify({
+        version: 1,
+        hosts: [
+          {
+            serverId: SERVER_ID,
+            agents: [],
+            workspaces: [],
+            emptyProjects: [],
+            timeline: {
+              agentId: "agent-1",
+              items: [],
+              cursor: { epoch: "poisoned", startSeq: 1, endSeq: 100 },
+              hasOlder: false,
+            },
+          },
+        ],
+      }),
+    );
     const cache = new ReplicaCache(storage);
     cache.setHosts([SERVER_ID]);
 
     await cache.restore();
+    await cache.flush();
 
     expect(useSessionStore.getState().sessions[SERVER_ID]).toBeUndefined();
+    expect(JSON.parse(storage.values.get("@byspace:replica-cache") ?? "null")).toEqual({
+      version: 3,
+      hosts: [],
+    });
   });
 });

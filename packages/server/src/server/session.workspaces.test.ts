@@ -86,6 +86,14 @@ const UNREGISTERED_CWD = path.resolve("/tmp/unregistered");
 
 const terminalManagers: TerminalManager[] = [];
 
+function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((resolvePromise) => {
+    resolve = resolvePromise;
+  });
+  return { promise, resolve };
+}
+
 afterEach(async () => {
   while (terminalManagers.length > 0) {
     const manager = terminalManagers.pop();
@@ -315,6 +323,7 @@ function makeManagedAgent(input: {
   workspaceId?: string;
   lifecycle: AgentSnapshotPayload["status"];
   updatedAt: string;
+  activeTurn?: { turnId: string; startedAt: string };
 }) {
   const now = new Date(input.updatedAt);
   const snapshot = makeAgent({
@@ -350,6 +359,8 @@ function makeManagedAgent(input: {
     unsubscribeSession: null,
     session: null,
     activeForegroundTurnId: input.lifecycle === "running" ? "turn-1" : null,
+    activeTurnId: input.activeTurn?.turnId ?? null,
+    activeTurnStartedAt: input.activeTurn ? new Date(input.activeTurn.startedAt) : null,
   };
 }
 
@@ -586,6 +597,8 @@ function createSessionForWorkspaceTests(
     terminalManager?: TerminalManager | null;
     agentManager?: SessionOptions["agentManager"];
     agentStorage?: SessionOptions["agentStorage"];
+    agentManager?: { [K in keyof SessionOptions["agentManager"]]?: unknown };
+    agentStorage?: { [K in keyof SessionOptions["agentStorage"]]?: unknown };
     projectRegistry?: SessionOptions["projectRegistry"];
     workspaceRegistry?: SessionOptions["workspaceRegistry"];
     github?: ForgeService;
@@ -606,19 +619,18 @@ function createSessionForWorkspaceTests(
     warn: vi.fn(),
     error: vi.fn(),
   };
-  const agentManager =
-    options.agentManager ??
-    asAgentManager({
-      subscribe: () => () => {},
-      listAgents: () => [],
-      listProviderSubagentActivity: () => [],
-      getAgent: () => null,
-      archiveAgent: async () => ({ archivedAt: new Date().toISOString() }),
-      archiveSnapshot: async () => ({}),
-      unarchiveSnapshot: async () => true,
-      clearAgentAttention: async () => {},
-      notifyAgentState: () => {},
-    });
+  const agentManager = asAgentManager({
+    subscribe: () => () => {},
+    listAgents: () => [],
+    listProviderSubagentActivity: () => [],
+    getAgent: () => null,
+    archiveAgent: async () => ({ archivedAt: new Date().toISOString() }),
+    archiveSnapshot: async () => ({}),
+    unarchiveSnapshot: async () => true,
+    clearAgentAttention: async () => {},
+    notifyAgentState: () => {},
+    ...options.agentManager,
+  });
   const workspaceRegistry: SessionOptions["workspaceRegistry"] = options.workspaceRegistry ?? {
     initialize: async () => {},
     existsOnDisk: async () => true,
@@ -680,34 +692,33 @@ function createSessionForWorkspaceTests(
       byspaceHome: options.byspaceHome ?? "/tmp/byspace-test",
       worktreesRoot: options.worktreesRoot,
       agentManager,
-      agentStorage:
-        options.agentStorage ??
-        asAgentStorage({
-          list: async () => [
-            createPersistedWorkspaceRecord({
-              workspaceId: "ws-repo-running",
-              projectId: "proj-repo-running",
-              cwd: REPO_CWD,
-              kind: "directory",
-              displayName: "repo",
-              createdAt: "2026-03-01T12:00:00.000Z",
-              updatedAt: "2026-03-01T12:00:00.000Z",
-            }),
-          ],
-          get: async (workspaceId: string) =>
-            workspaceId === "ws-repo-running"
-              ? createPersistedWorkspaceRecord({
-                  workspaceId: "ws-repo-running",
-                  projectId: "proj-repo-running",
-                  cwd: REPO_CWD,
-                  kind: "directory",
-                  displayName: "repo",
-                  createdAt: "2026-03-01T12:00:00.000Z",
-                  updatedAt: "2026-03-01T12:00:00.000Z",
-                })
-              : null,
-          upsert: async () => {},
-        }),
+      agentStorage: asAgentStorage({
+        list: async () => [
+          createPersistedWorkspaceRecord({
+            workspaceId: "ws-repo-running",
+            projectId: "proj-repo-running",
+            cwd: REPO_CWD,
+            kind: "directory",
+            displayName: "repo",
+            createdAt: "2026-03-01T12:00:00.000Z",
+            updatedAt: "2026-03-01T12:00:00.000Z",
+          }),
+        ],
+        get: async (workspaceId: string) =>
+          workspaceId === "ws-repo-running"
+            ? createPersistedWorkspaceRecord({
+                workspaceId: "ws-repo-running",
+                projectId: "proj-repo-running",
+                cwd: REPO_CWD,
+                kind: "directory",
+                displayName: "repo",
+                createdAt: "2026-03-01T12:00:00.000Z",
+                updatedAt: "2026-03-01T12:00:00.000Z",
+              })
+            : null,
+        upsert: async () => {},
+        ...options.agentStorage,
+      }),
       projectRegistry: options.projectRegistry ?? {
         initialize: async () => {},
         existsOnDisk: async () => true,
@@ -800,6 +811,112 @@ function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
   });
   return { promise, resolve };
 }
+test("agent updates preserve queued live transitions across stored metadata reads", async () => {
+  const running = makeManagedAgent({
+    id: "agent-coherent",
+    cwd: REPO_CWD,
+    workspaceId: "ws-repo-running",
+    lifecycle: "running",
+    updatedAt: "2026-07-31T10:00:01.000Z",
+    activeTurn: {
+      turnId: "turn-running",
+      startedAt: "2026-07-31T10:00:00.500Z",
+    },
+  }) as unknown as ManagedAgent;
+  const idle = makeManagedAgent({
+    id: "agent-coherent",
+    cwd: REPO_CWD,
+    workspaceId: "ws-repo-running",
+    lifecycle: "idle",
+    updatedAt: "2026-07-31T10:00:02.000Z",
+  }) as unknown as ManagedAgent;
+  running.config.model = "running-model";
+  idle.config = running.config;
+  const stored = makeStoredAgent({
+    id: "agent-coherent",
+    cwd: REPO_CWD,
+    updatedAt: "2026-07-31T10:00:03.000Z",
+  });
+  stored.title = "Stored title";
+  const storageReadStarted = deferred<void>();
+  const firstStorageRead = deferred<StoredAgentRecord | null>();
+  const emittedAgentUpdates: Extract<
+    SessionOutboundMessage,
+    { type: "agent_update" }
+  >["payload"][] = [];
+  const twoUpdatesEmitted = deferred<void>();
+  let storageReadCount = 0;
+  let forwardAgentEvent: ((event: AgentManagerEvent) => void) | null = null;
+  const session = createSessionForWorkspaceTests({
+    onMessage: (message) => {
+      if (message.type !== "agent_update") return;
+      emittedAgentUpdates.push(message.payload);
+      if (emittedAgentUpdates.length === 2) twoUpdatesEmitted.resolve();
+    },
+    agentManager: {
+      subscribe: (listener: (event: AgentManagerEvent) => void) => {
+        forwardAgentEvent = listener;
+        return () => {};
+      },
+      getAgent: () => idle,
+    },
+    agentStorage: {
+      get: async () => {
+        storageReadCount += 1;
+        if (storageReadCount === 1) {
+          storageReadStarted.resolve();
+          return firstStorageRead.promise;
+        }
+        return stored;
+      },
+    },
+  });
+  session.projectRegistry.get = async () =>
+    createPersistedProjectRecord({
+      projectId: "proj-repo-running",
+      rootPath: REPO_CWD,
+      kind: "non_git",
+      displayName: "repo",
+      createdAt: "2026-07-31T10:00:00.000Z",
+      updatedAt: "2026-07-31T10:00:00.000Z",
+    });
+  activateAgentUpdatesSubscription(session, "sub-coherent");
+  if (!forwardAgentEvent) throw new Error("Agent event listener was not installed");
+
+  forwardAgentEvent({ type: "agent_state", agent: running });
+  await storageReadStarted.promise;
+  idle.config.model = "idle-model";
+  forwardAgentEvent({ type: "agent_state", agent: idle });
+  idle.config.model = "mutated-after-queue";
+  firstStorageRead.resolve(stored);
+  await twoUpdatesEmitted.promise;
+
+  expect(emittedAgentUpdates).toEqual([
+    expect.objectContaining({
+      kind: "upsert",
+      agent: expect.objectContaining({
+        status: "running",
+        activeTurn: {
+          turnId: "turn-running",
+          startedAt: "2026-07-31T10:00:00.500Z",
+        },
+        updatedAt: "2026-07-31T10:00:01.000Z",
+        model: "running-model",
+        title: "Stored title",
+      }),
+    }),
+    expect.objectContaining({
+      kind: "upsert",
+      agent: expect.objectContaining({
+        status: "idle",
+        activeTurn: null,
+        updatedAt: "2026-07-31T10:00:02.000Z",
+        model: "idle-model",
+        title: "Stored title",
+      }),
+    }),
+  ]);
+});
 
 test("client heartbeat clears attention for the focused terminal", async () => {
   const clearedTerminalIds: string[] = [];

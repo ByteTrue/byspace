@@ -2,6 +2,7 @@ import type { SessionOutboundMessage } from "@bytetrue/byspace-protocol/messages
 import { useCreateFlowStore } from "@/stores/create-flow-store";
 import { useSessionStore } from "@/stores/session-store";
 import type { StreamItem } from "@/types/stream";
+import { getSendingClientMessageIds } from "@/composer/submission/model";
 import {
   getInitDeferred,
   getInitKey,
@@ -50,23 +51,18 @@ function applyStreamPatches(input: {
 }): void {
   const { serverId, agentId, result, currentTail, currentHead } = input;
   const store = useSessionStore.getState();
-  if (result.tail !== currentTail) {
-    store.setAgentStreamTail(serverId, (prev) => {
-      const next = new Map(prev);
-      next.set(agentId, result.tail);
-      return next;
+  if (
+    result.tail !== currentTail ||
+    result.head !== currentHead ||
+    result.acknowledgedClientMessageIds.length > 0
+  ) {
+    store.setAgentStreamState(serverId, agentId, {
+      ...(result.tail !== currentTail ? { tail: result.tail } : {}),
+      ...(result.head !== currentHead ? { head: result.head } : {}),
+      ...(result.acknowledgedClientMessageIds.length > 0
+        ? { acknowledgedClientMessageIds: result.acknowledgedClientMessageIds }
+        : {}),
     });
-  }
-  if (result.head !== currentHead) {
-    if (result.head.length === 0) {
-      store.clearAgentStreamHead(serverId, agentId);
-    } else {
-      store.setAgentStreamHead(serverId, (prev) => {
-        const next = new Map(prev);
-        next.set(agentId, result.head);
-        return next;
-      });
-    }
   }
   if (!result.cursorChanged) return;
   store.setAgentTimelineCursor(serverId, (prev) => {
@@ -99,7 +95,6 @@ export class AgentTimelineReplica {
       serverId: options.serverId,
       setAgentStreamState: store.setAgentStreamState,
       setAgentTimelineCursor: store.setAgentTimelineCursor,
-      setAgents: store.setAgents,
       recoverTimelineGap: options.recoverGap,
     });
   }
@@ -137,11 +132,6 @@ export class AgentTimelineReplica {
     const currentCursor = session?.agentTimelineCursor.get(agentId);
     const currentTail = session?.agentStreamTail.get(agentId) ?? [];
     const currentHead = session?.agentStreamHead.get(agentId) ?? [];
-    const replace =
-      payload.reset ||
-      (payload.direction === "tail" &&
-        ((isInitializing && Boolean(activeInitDeferred)) || !currentCursor));
-
     const result = processTimelineResponse({
       payload,
       currentTail,
@@ -150,6 +140,7 @@ export class AgentTimelineReplica {
       isInitializing,
       hasActiveInitDeferred: Boolean(activeInitDeferred),
       initRequestDirection: activeInitDeferred?.requestDirection ?? "tail",
+      sendingClientMessageIds: getSendingClientMessageIds(session?.messageSubmissions.get(agentId)),
     });
 
     if (result.error) {
@@ -159,29 +150,24 @@ export class AgentTimelineReplica {
     }
 
     applyStreamPatches({ serverId, agentId, result, currentTail, currentHead });
-    this.updatePagination(agentId, payload, result, replace, mayUpdatePagination);
+    this.updatePagination(agentId, result, mayUpdatePagination);
     this.finalizeAppliedPage(agentId, payload, result, initKey, maySettleInitialization);
   }
 
   private updatePagination(
     agentId: string,
-    payload: AgentTimelineResponsePayload,
     result: ProcessTimelineResponseOutput,
-    replace: boolean,
     mayUpdatePagination: boolean,
   ): void {
-    if (
-      !mayUpdatePagination ||
-      (!replace &&
-        (payload.direction !== "before" || (!result.cursorChanged && payload.entries.length > 0)))
-    ) {
+    if (!mayUpdatePagination || result.older === "unchanged") {
       return;
     }
     const { serverId } = this.options;
+    const hasOlder = result.older === "available";
     useSessionStore.getState().setAgentTimelineHasOlder(serverId, (prev) => {
-      if (prev.get(agentId) === payload.hasOlder) return prev;
+      if (prev.get(agentId) === hasOlder) return prev;
       const next = new Map(prev);
-      next.set(agentId, payload.hasOlder);
+      next.set(agentId, hasOlder);
       return next;
     });
   }
