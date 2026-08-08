@@ -155,7 +155,7 @@ Single file, validated with `PersistedConfigSchema`.
     listen: "127.0.0.1:6777",
     hostnames: true | string[],   // legacy alias `allowedHosts` is migrated on load
     trustedProxies: true | string[], // defaults to ["loopback"]; Express proxy names/CIDRs
-    mcp: { enabled: boolean, injectIntoAgents: boolean },
+    mcp: { enabled: boolean, injectIntoAgents: boolean }, // injectIntoAgents is a deprecated, ignored compatibility field
     appendSystemPrompt: string,    // appended to supported provider system/developer prompts
     cors: { allowedOrigins: string[] },
     relay: { enabled: boolean, endpoint: string, publicEndpoint: string, useTls: boolean, publicUseTls: boolean },

@@ -36,7 +36,6 @@ import {
   type ProviderCatalog,
   type ToolCallDetail,
 } from "../../agent-sdk-types.js";
-import type { BySpaceToolCatalog } from "../../tools/types.js";
 import { importSessionFromPersistence } from "../../provider-session-import.js";
 import { runProviderTurn } from "../provider-runner.js";
 import {
@@ -95,11 +94,6 @@ import { mapOmpAvailableCommandsUpdate, mapOmpRuntimeSlashCommands } from "./com
 import { streamOmpHistory } from "./history.js";
 import { mapOmpTodoReminderEvent, mapOmpTodoState, mapOmpTodoToolResult } from "./todo-mapper.js";
 import { mapOmpRuntimeEventToTimelineItem } from "./event-mapper.js";
-import {
-  clearOmpHostToolState,
-  handleOmpHostToolRuntimeEvent,
-  setOmpHostTools,
-} from "./host-tools.js";
 import { OmpSubagentIndex } from "./subagent-index.js";
 import { mapOmpToolDetail } from "./tool-call-mapper.js";
 import { mapOmpUsage } from "./usage-mapper.js";
@@ -184,7 +178,6 @@ interface OmpAgentSessionOptions {
   subagentCardScheduler?: OmpSubagentCardScheduler;
   providerIdleScheduler?: OmpProviderIdleScheduler;
   noTurnScheduler?: OmpNoTurnScheduler;
-  byspaceTools?: BySpaceToolCatalog;
   /**
    * When false (resumed sessions), replayed session events are dropped until
    * the first prompt or agent_start so history is not re-emitted as live
@@ -491,7 +484,6 @@ function withOmpCapabilities(): AgentCapabilityFlags {
   return {
     ...OMP_CORE_CAPABILITIES,
     supportsMcpServers: false,
-    supportsNativeBySpaceTools: true,
   };
 }
 
@@ -908,7 +900,6 @@ export class OmpAgentSession implements AgentSession {
     this.state = options.initialState;
     this.currentModeId = options.currentModeId ?? null;
     this.logger = options.logger;
-    this.byspaceTools = options.byspaceTools;
     this.live = options.live ?? true;
     this.providerIdleScheduler = options.providerIdleScheduler ?? createOmpProviderIdleScheduler();
     this.noTurnScheduler = options.noTurnScheduler ?? createOmpNoTurnScheduler();
@@ -941,7 +932,6 @@ export class OmpAgentSession implements AgentSession {
   private readonly runtimeSession: OmpRuntimeSession;
   private readonly config: AgentSessionConfig;
   private readonly logger: Logger;
-  private readonly byspaceTools?: BySpaceToolCatalog;
 
   get id(): string | null {
     return this.state.sessionId;
@@ -1183,7 +1173,6 @@ export class OmpAgentSession implements AgentSession {
   }
 
   private clearOmpTurnState(): void {
-    clearOmpHostToolState(this.runtimeSession);
     this.subagentCardTracker.clear();
   }
 
@@ -1633,15 +1622,6 @@ export class OmpAgentSession implements AgentSession {
   }
 
   private handleExtraRuntimeEvent(event: OmpRuntimeEvent): boolean {
-    if (
-      handleOmpHostToolRuntimeEvent(event, {
-        runtimeSession: this.runtimeSession,
-        byspaceTools: this.byspaceTools,
-        logger: this.logger,
-      })
-    ) {
-      return true;
-    }
     if (event.type === "subagent_lifecycle") {
       const payload = (event as Extract<OmpRuntimeEvent, { type: "subagent_lifecycle" }>).payload;
       if (payload.parentToolCallId && this.activeToolCalls.has(payload.parentToolCallId)) {
@@ -2232,16 +2212,6 @@ export class OmpAgentClient implements AgentClient {
     this.runtime = options.runtime ?? createRuntime(options.logger, runtimeSettings);
   }
 
-  private async configureNativeBySpaceTools(
-    runtimeSession: OmpRuntimeSession,
-    catalog: BySpaceToolCatalog | undefined,
-  ): Promise<void> {
-    if (!catalog) {
-      return;
-    }
-    await setOmpHostTools(runtimeSession, catalog);
-  }
-
   async createSession(
     config: AgentSessionConfig,
     launchContext?: AgentLaunchContext,
@@ -2259,7 +2229,6 @@ export class OmpAgentClient implements AgentClient {
       env: launchContext?.env,
     });
     try {
-      await this.configureNativeBySpaceTools(runtimeSession, launchContext?.byspaceTools);
       return new OmpAgentSession({
         runtimeSession,
         config,
@@ -2269,7 +2238,6 @@ export class OmpAgentClient implements AgentClient {
         subagentCardScheduler: this.subagentCardScheduler,
         providerIdleScheduler: this.providerIdleScheduler,
         noTurnScheduler: this.noTurnScheduler,
-        byspaceTools: launchContext?.byspaceTools,
       });
     } catch (error) {
       await runtimeSession.close().catch(() => undefined);
@@ -2300,7 +2268,6 @@ export class OmpAgentClient implements AgentClient {
       }),
     );
     try {
-      await this.configureNativeBySpaceTools(runtimeSession, launchContext?.byspaceTools);
       return new OmpAgentSession({
         runtimeSession,
         config: resumeConfig.config,
@@ -2310,7 +2277,6 @@ export class OmpAgentClient implements AgentClient {
         subagentCardScheduler: this.subagentCardScheduler,
         providerIdleScheduler: this.providerIdleScheduler,
         noTurnScheduler: this.noTurnScheduler,
-        byspaceTools: launchContext?.byspaceTools,
         live: false,
       });
     } catch (error) {

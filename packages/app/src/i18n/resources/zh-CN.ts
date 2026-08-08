@@ -1639,11 +1639,6 @@ export const zhCN: TranslationResources = {
       orchestration: {
         title: "编排",
         unavailable: "连接到这个 Host 以管理编排",
-        enableTools: {
-          title: "启用 BySpace tools",
-          hint: "Agent 将能够管理 worktree、Agent 和计划",
-          accessibilityLabel: "注入 BySpace tools",
-        },
         skills: {
           title: "编排 Skills",
           installHint: "为受支持的编程 Agent 安装 BySpace 内置 Skills",

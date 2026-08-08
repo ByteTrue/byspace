@@ -1690,11 +1690,6 @@ export const es: TranslationResources = {
       orchestration: {
         title: "Orquestación",
         unavailable: "Conéctese a este host para administrar la orquestación",
-        enableTools: {
-          title: "Habilitar herramientasBySpace",
-          hint: "Los agentes podrán gestionar árboles de trabajo, agentes y horarios.",
-          accessibilityLabel: "Inyectar herramientasBySpace",
-        },
         skills: {
           title: "Skills de orquestación",
           installHint: "Instala los skills incluidos de BySpace para los agentes compatibles",

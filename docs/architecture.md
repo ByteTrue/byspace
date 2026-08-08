@@ -286,7 +286,7 @@ All providers:
 - Map tool calls to a normalized `ToolCallDetail` type
 - Expose provider-specific modes (plan, default, full-access)
 
-Providers that can accept native tool definitions should set `supportsNativeBySpaceTools` and read `launchContext.byspaceTools`. The daemon then passes the shared BySpace tool catalog directly and removes the internal BySpace MCP server from that provider launch config. Providers that only support MCP continue to receive the same tools through the MCP fallback at `/mcp/agents`.
+BySpace orchestration is provider-neutral: the bundled BySpace skill teaches agents to call `byspace tool list|describe|call`, and the CLI executes the shared tool catalog over authenticated WebSocket RPC. Provider launch configs receive neither injected native BySpace tools nor an automatically added `/mcp/agents` server.
 
 ## Data flow: running an agent
 

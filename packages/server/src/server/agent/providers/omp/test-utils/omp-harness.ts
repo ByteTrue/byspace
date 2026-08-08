@@ -11,7 +11,6 @@ import type {
   AgentStreamEvent,
   AgentTimelineItem,
 } from "../../../agent-sdk-types.js";
-import type { BySpaceToolCatalog } from "../../../tools/types.js";
 import {
   OmpAgentClient,
   OmpAgentSession,
@@ -87,14 +86,8 @@ export class OmpHarness {
     this.omp.failNextSubagentSubscription("events", error);
   }
 
-  async start(
-    config: Partial<AgentSessionConfig> = {},
-    byspaceTools?: BySpaceToolCatalog,
-  ): Promise<void> {
-    const session = await this.client.createSession(
-      { provider: "omp", cwd: CWD, ...config },
-      byspaceTools ? { byspaceTools } : undefined,
-    );
+  async start(config: Partial<AgentSessionConfig> = {}): Promise<void> {
+    const session = await this.client.createSession({ provider: "omp", cwd: CWD, ...config });
     if (!(session instanceof OmpAgentSession)) {
       throw new Error("OMP client returned a non-OMP session");
     }
@@ -137,10 +130,6 @@ export class OmpHarness {
       ...(launch.session ? { session: launch.session } : {}),
       argv: launch.argv,
     };
-  }
-
-  registeredHostTools() {
-    return this.omp.latestSession().hostToolSetRequests;
   }
 
   capabilities() {

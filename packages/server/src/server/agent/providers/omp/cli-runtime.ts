@@ -14,7 +14,6 @@ import {
   OmpBranchMessagesResultSchema,
   OmpBranchResultSchema,
   OmpCommandsResultSchema,
-  OmpHostToolsResultSchema,
   OmpMessagesResultSchema,
   OmpModelSchema,
   OmpModelsResultSchema,
@@ -28,9 +27,6 @@ import {
   type OmpModel,
   type OmpPromptAck,
   type OmpRpcCommand,
-  type OmpRpcHostToolDefinition,
-  type OmpRpcHostToolResult,
-  type OmpRpcHostToolUpdate,
   type OmpRpcSlashCommand,
   type OmpRuntimeEvent,
   type OmpSessionState,
@@ -200,21 +196,6 @@ class OmpCliRuntimeSession implements OmpRuntimeSession {
 
   async setSubagentSubscription(level: OmpSubagentSubscriptionLevel): Promise<void> {
     await this.request({ type: "set_subagent_subscription", level });
-  }
-
-  async setHostTools(tools: OmpRpcHostToolDefinition[]): Promise<string[]> {
-    const data = OmpHostToolsResultSchema.parse(
-      await this.request({ type: "set_host_tools", tools }),
-    );
-    return data.toolNames ?? [];
-  }
-
-  sendHostToolResult(result: OmpRpcHostToolResult): void {
-    this.process.send({ ...result });
-  }
-
-  sendHostToolUpdate(update: OmpRpcHostToolUpdate): void {
-    this.process.send({ ...update });
   }
 
   async branch(entryId: string): Promise<{ text: string }> {

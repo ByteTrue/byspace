@@ -361,7 +361,7 @@ OMP ships as a first-class built-in provider option. It is disabled by default; 
 }
 ```
 
-Custom OMP profiles should extend `omp`. They inherit the OMP adapter's `rpc-ui` approvals, native BySpace host tools, provider-managed subagents, and import behavior:
+Custom OMP profiles should extend `omp`. They inherit the OMP adapter's `rpc-ui` approvals, provider-managed subagents, and import behavior; orchestration remains available through the shared BySpace skill and CLI:
 
 ```json
 {
@@ -466,7 +466,7 @@ Required fields for ACP providers:
 - `label`
 - `command` — the command to spawn the agent process (must support ACP over stdio)
 
-BySpace tools such as subagent creation come from the shared internal tool catalog. ACP providers receive those tools through the MCP fallback by default because ACP exposes `mcpServers`, not BySpace's native tool catalog. Some ACP adapters cannot create sessions when `mcpServers` is non-empty. Disable injected MCP for those providers with `params.supportsMcpServers: false`:
+BySpace orchestration tools are available through the bundled skill and `byspace tool` CLI, so ACP providers do not need an injected MCP server. `params.supportsMcpServers` controls only user-configured MCP servers. Set it to `false` when an ACP adapter cannot create sessions with non-empty `mcpServers`:
 
 ```json
 {

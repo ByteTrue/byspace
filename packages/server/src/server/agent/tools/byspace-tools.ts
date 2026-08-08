@@ -130,6 +130,10 @@ export interface BySpaceToolHostDependencies {
    * Used for cwd/mode inheritance when agents spawn child agents.
    */
   callerAgentId?: string;
+  /** Working directory supplied by a terminal CLI caller. */
+  callerCwd?: string;
+  /** Workspace supplied by a terminal CLI caller. */
+  callerWorkspaceId?: string;
   /**
    * Optional resolver for session-bound speak handlers.
    * Used by hidden voice agents to narrate through daemon-managed TTS.
@@ -546,6 +550,8 @@ export function createBySpaceToolCatalog(options: BySpaceToolHostDependencies): 
     scheduleService,
     providerSnapshotManager,
     callerAgentId,
+    callerCwd,
+    callerWorkspaceId,
     resolveSpeakHandler,
     resolveCallerContext,
     logger,
@@ -648,14 +654,15 @@ export function createBySpaceToolCatalog(options: BySpaceToolHostDependencies): 
     }
 
     const trimmedCwd = requestedCwd?.trim();
-    if (!trimmedCwd) {
-      if (opts?.required) {
-        throw new Error("cwd is required");
-      }
-      throw new Error("cwd is required outside an agent-scoped session");
-    }
+    if (trimmedCwd) return expandUserPath(trimmedCwd);
 
-    return expandUserPath(trimmedCwd);
+    const fallbackCwd = callerCwd?.trim();
+    if (fallbackCwd) return expandUserPath(fallbackCwd);
+
+    if (opts?.required) {
+      throw new Error("cwd is required");
+    }
+    throw new Error("cwd is required outside an agent-scoped session");
   };
 
   async function resolveTerminalWorkspaceId(resolvedCwd: string): Promise<string> {
@@ -665,6 +672,8 @@ export function createBySpaceToolCatalog(options: BySpaceToolHostDependencies): 
     if (callerAgent?.workspaceId) {
       return callerAgent.workspaceId;
     }
+
+    if (callerWorkspaceId) return callerWorkspaceId;
 
     if (!options.ensureWorkspaceForCreate) {
       throw new Error(
@@ -690,6 +699,8 @@ export function createBySpaceToolCatalog(options: BySpaceToolHostDependencies): 
       }
       return callerAgent.workspaceId;
     }
+    if (callerWorkspaceId) return callerWorkspaceId;
+
     throw new Error("workspaceId is required outside an agent-scoped session");
   }
 
@@ -768,12 +779,7 @@ export function createBySpaceToolCatalog(options: BySpaceToolHostDependencies): 
     cwd?: string;
     isolation?: "local" | "worktree";
   }) => {
-    const resolvedCwd = resolveScopedCwd(
-      params?.cwd ?? (callerAgentId ? undefined : process.cwd()),
-      {
-        required: true,
-      },
-    );
+    const resolvedCwd = resolveScopedCwd(params?.cwd, { required: true });
     const callerAgent = resolveCallerAgent();
     if (callerAgent) {
       return {
@@ -1951,8 +1957,8 @@ export function createBySpaceToolCatalog(options: BySpaceToolHostDependencies): 
       },
     },
     async ({ includeArchived = false, cwd, sinceHours = 48, statuses, limit = 50 }) => {
-      const callerCwd = callerAgentId ? resolveCallerAgent()?.cwd : undefined;
-      const requestedCwd = cwd?.trim() ? expandUserPath(cwd) : callerCwd;
+      const agentCwd = callerAgentId ? resolveCallerAgent()?.cwd : undefined;
+      const requestedCwd = cwd?.trim() ? expandUserPath(cwd) : agentCwd;
       const statusFilter = statuses && statuses.length > 0 ? new Set(statuses) : null;
       const sinceMs = Date.now() - sinceHours * 60 * 60 * 1000;
       const liveSnapshots = agentManager.listAgents();

@@ -1,7 +1,6 @@
 import type { Options as ClaudeAgentOptions } from "@anthropic-ai/claude-agent-sdk";
 import type { AgentProviderNotice } from "@bytetrue/byspace-protocol/agent-types";
 import type { AgentAttachment } from "@bytetrue/byspace-protocol/messages";
-import type { BySpaceToolCatalog } from "./tools/types.js";
 
 export type { AgentProviderNotice };
 
@@ -172,7 +171,6 @@ export interface AgentCapabilityFlags {
   supportsSessionListing?: boolean;
   supportsDynamicModes: boolean;
   supportsMcpServers: boolean;
-  supportsNativeBySpaceTools?: boolean;
   supportsReasoningStream: boolean;
   supportsToolInvocations: boolean;
   supportsRewindConversation?: boolean;
@@ -587,11 +585,6 @@ export interface AgentSessionConfig {
 export interface AgentLaunchContext {
   agentId?: string;
   env?: Record<string, string>;
-  /**
-   * Runtime-only internal BySpace tools. This must never be persisted into
-   * AgentSessionConfig; providers may adapt it to their native tool surface.
-   */
-  byspaceTools?: BySpaceToolCatalog;
 }
 
 export interface AgentCreateSessionOptions {

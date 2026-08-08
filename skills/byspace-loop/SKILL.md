@@ -14,7 +14,7 @@ A loop is a worker/verifier cycle: launch a worker → check verification → re
 
 Read the **byspace** skill. Before choosing worker or verifier providers, read `~/.byspace/orchestration-preferences.json` unless the user explicitly named providers in this request. Do not start the loop until you have read it.
 
-Loops are a CLI primitive: `byspace loop run`. Manage with `byspace loop ls`, `byspace loop inspect <id>`, `byspace loop logs <id>`, `byspace loop stop <id>`.
+Loops are a CLI primitive: `byspace loop run ... --json`. Manage with `byspace loop ls --json`, `byspace loop inspect <id> --json`, `byspace loop logs <id>`, and `byspace loop stop <id> --json`. Parse the launch result and report the loop ID; do not infer launch success from prose output.
 
 ## Your job
 
@@ -28,7 +28,7 @@ Loops are a CLI primitive: `byspace loop run`. Manage with `byspace loop ls`, `b
 5. **Sleep** — `--sleep` only when polling something external. Otherwise let it run as fast as the loop completes.
 6. **Stops** — set a sensible `--max-iterations` and/or `--max-time`. Open-ended loops are how runaways happen.
 7. **Archive** — `--archive` keeps agents after each iteration for inspection.
-8. Launch with `byspace loop run`.
+8. Launch with `byspace loop run ... --json` and inspect the structured result.
 
 ## Common shapes
 

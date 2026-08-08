@@ -255,4 +255,29 @@ const SourceSchema = z.object({
     });
     expect(result.success).toBe(true);
   });
+  it("accepts orchestration tool response envelopes", () => {
+    const envelope = {
+      type: "session",
+      message: {
+        type: "orchestration.tools.list.response",
+        payload: {
+          requestId: "tools-1",
+          success: true,
+          error: null,
+          tools: [
+            {
+              name: "list_agents",
+              description: "List agents",
+              inputSchema: { type: "object" },
+            },
+          ],
+        },
+      },
+    };
+
+    expect(GeneratedWSOutboundMessageSchema.safeParse(envelope)).toEqual({
+      success: true,
+      data: envelope,
+    });
+  });
 });

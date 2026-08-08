@@ -54,11 +54,12 @@ The receiving agent has zero context. Include:
 
 ## Launch
 
-Create the agent via BySpace with a `[Handoff] <task>` title, the briefing as initial prompt, and `relationship: { kind: "detached" }`.
+Call `create_agent` through `byspace tool call` with a `[Handoff] <task>` title, the selected provider, the briefing as `initialPrompt`, and `relationship: { "kind": "detached" }`. Include `background: true` only in terminal scope; omit it in agent scope, where creation is already asynchronous and the field is rejected. Parse the JSON response and report the returned agent ID.
 
 Use `workspace` for placement:
 
-- No worktree: `workspace: { kind: "current" }`.
+- No worktree, agent scope: `workspace: { kind: "current" }`.
+- No worktree, terminal scope: use the base skill's existing `$BYSPACE_WORKSPACE_ID` workspace or create a directory workspace at the absolute current cwd.
 - Worktree: `workspace: { kind: "create", source: { kind: "worktree", target: { kind: "branch-off", worktreeSlug: "<short-task-slug>", branchName: "fix/<short-task-slug>" } } }`.
 - Existing workspace already created by `create_workspace`: `workspace: { kind: "existing", workspaceId: "<returned-workspace-id>" }`.
 

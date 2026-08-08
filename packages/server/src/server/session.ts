@@ -3,6 +3,7 @@ import { v4 as uuidv4 } from "uuid";
 import { lstat, mkdir, mkdtemp, rename, rm, stat } from "node:fs/promises";
 import { resolve, sep } from "path";
 import { homedir } from "node:os";
+import { z } from "zod";
 import { CLIENT_CAPS, type ClientCapability } from "@bytetrue/byspace-protocol/client-capabilities";
 import {
   serializeAgentStreamEvent,
@@ -603,6 +604,7 @@ export class Session {
   private registryMutationQueue: Promise<void> = Promise.resolve();
   private readonly optimisticInitialAgentWorkspaceIds = new Set<string>();
   private isCleanedUp = false;
+  private readonly activeOrchestrationToolCalls = new Set<AbortController>();
   private viewedTimelineAgentIds = new Set<string>();
   private readonly viewedTimelineAgentIdsBySource = new Map<object, Set<string>>();
   private readonly selectiveTimelineCapabilityBySource = new Map<object, boolean>();
@@ -1946,6 +1948,10 @@ export class Session {
         return this.daemonSession.handleOrchestrationSkillsGetStatusRequest(msg);
       case "daemon.orchestration_skills.set_installed.request":
         return this.daemonSession.handleOrchestrationSkillsSetInstalledRequest(msg);
+      case "orchestration.tools.list.request":
+        return this.handleOrchestrationToolsListRequest(msg);
+      case "orchestration.tools.call.request":
+        return this.handleOrchestrationToolCallRequest(msg);
       case "diagnostics.request":
         return this.daemonSession.handleDiagnosticsRequest(msg);
       case "daemon.update.request":
@@ -6681,12 +6687,111 @@ export class Session {
     this.emit(msg);
   }
 
+  private async handleOrchestrationToolsListRequest(
+    msg: Extract<SessionInboundMessage, { type: "orchestration.tools.list.request" }>,
+  ): Promise<void> {
+    try {
+      const catalog = await this.agentManager.createBySpaceToolCatalog({
+        callerAgentId: msg.callerAgentId,
+        enableVoiceTools: msg.includeVoice,
+      });
+      const tools = Array.from(catalog.tools.values()).map((tool) => {
+        let inputSchema: z.ZodType = z.object({});
+        if (tool.inputSchema) {
+          inputSchema =
+            typeof (tool.inputSchema as z.ZodType).safeParse === "function"
+              ? (tool.inputSchema as z.ZodType)
+              : z.object(tool.inputSchema as z.ZodRawShape);
+        }
+        return {
+          name: tool.name,
+          title: tool.title,
+          description: tool.description,
+          inputSchema: z.toJSONSchema(inputSchema, {
+            target: "draft-07",
+            unrepresentable: "any",
+            io: "input",
+          }) as Record<string, unknown>,
+        };
+      });
+      this.emit({
+        type: "orchestration.tools.list.response",
+        payload: { requestId: msg.requestId, success: true, error: null, tools },
+      });
+    } catch (error) {
+      this.emit({
+        type: "orchestration.tools.list.response",
+        payload: {
+          requestId: msg.requestId,
+          success: false,
+          error: error instanceof Error ? error.message : String(error),
+          tools: [],
+        },
+      });
+    }
+  }
+
+  private async handleOrchestrationToolCallRequest(
+    msg: Extract<SessionInboundMessage, { type: "orchestration.tools.call.request" }>,
+  ): Promise<void> {
+    const controller = new AbortController();
+    this.activeOrchestrationToolCalls.add(controller);
+    try {
+      const catalog = await this.agentManager.createBySpaceToolCatalog({
+        callerAgentId: msg.callerAgentId,
+        callerCwd: msg.callerCwd,
+        callerWorkspaceId: msg.callerWorkspaceId,
+        enableVoiceTools: msg.includeVoice,
+      });
+      const result = await catalog.executeTool(msg.toolName, msg.input ?? {}, {
+        signal: controller.signal,
+      });
+      if (result.isError) {
+        throw new Error(
+          result.content
+            .map((item) => item.text)
+            .filter((text): text is string => Boolean(text))
+            .join("\n") || `Tool '${msg.toolName}' failed`,
+        );
+      }
+      const structuredContent = result.structuredContent;
+      const structuredResult =
+        structuredContent &&
+        typeof structuredContent === "object" &&
+        !Array.isArray(structuredContent)
+          ? (structuredContent as Record<string, unknown>)
+          : { content: result.content };
+      this.emit({
+        type: "orchestration.tools.call.response",
+        payload: {
+          requestId: msg.requestId,
+          success: true,
+          error: null,
+          result: structuredResult,
+        },
+      });
+    } catch (error) {
+      this.emit({
+        type: "orchestration.tools.call.response",
+        payload: {
+          requestId: msg.requestId,
+          success: false,
+          error: error instanceof Error ? error.message : String(error),
+        },
+      });
+    } finally {
+      this.activeOrchestrationToolCalls.delete(controller);
+    }
+  }
+
   /**
    * Clean up session resources
    */
   public async cleanup(): Promise<void> {
     this.sessionLogger.trace({}, "agent.session.lifecycle.cleanup");
     this.isCleanedUp = true;
+    for (const controller of this.activeOrchestrationToolCalls) controller.abort();
+    this.activeOrchestrationToolCalls.clear();
 
     if (this.unsubscribeAgentEvents) {
       this.unsubscribeAgentEvents();

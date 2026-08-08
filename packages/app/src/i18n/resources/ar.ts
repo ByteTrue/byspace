@@ -1654,11 +1654,6 @@ export const ar: TranslationResources = {
       orchestration: {
         title: "التنسيق",
         unavailable: "اتصل بهذا المضيف لإدارة التنسيق",
-        enableTools: {
-          title: "تمكين أدوات BySpace",
-          hint: "سيتمكن الوكلاء من إدارة أشجار العمل والوكلاء والجداول الزمنية",
-          accessibilityLabel: "حقن أدوات BySpace",
-        },
         skills: {
           title: "مهارات التنسيق",
           installHint: "تثبيت مهارات BySpace المضمنة للوكلاء المدعومين",

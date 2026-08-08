@@ -11,6 +11,7 @@ import { createScriptCommand } from "./commands/script/index.js";
 import { createTerminalCommand } from "./commands/terminal/index.js";
 import { createWorktreeCommand } from "./commands/worktree/index.js";
 import { createWorkspaceCommand } from "./commands/workspace/index.js";
+import { createToolCommand } from "./commands/tool/index.js";
 import { createHooksCommand } from "./commands/hooks.js";
 import { createHeartbeatCommand } from "./commands/heartbeat/index.js";
 import { startCommand as daemonStartCommand } from "./commands/daemon/start.js";
@@ -179,6 +180,9 @@ export function createCli(): Command {
   // Schedule commands
   program.addCommand(createScheduleCommand());
   program.addCommand(createHeartbeatCommand());
+
+  // Canonical orchestration tool bridge for skills and terminal agents
+  program.addCommand(createToolCommand());
 
   // Permission commands
   program.addCommand(createPermitCommand());

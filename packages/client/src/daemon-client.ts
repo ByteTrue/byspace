@@ -85,6 +85,8 @@ import type {
   DiagnosticsResponse,
   DaemonOrchestrationSkillsGetStatusResponse,
   DaemonOrchestrationSkillsSetInstalledResponse,
+  OrchestrationToolCallResponse,
+  OrchestrationToolsListResponse,
   AgentRewindResponseMessage,
   ListTerminalsResponse,
   CreateTerminalResponse,
@@ -4422,6 +4424,46 @@ export class DaemonClient {
     return this.sendNamespacedCorrelatedSessionRequest({
       requestId,
       message: { type: "daemon.orchestration_skills.set_installed.request", installed },
+    });
+  }
+
+  async listOrchestrationTools(options?: {
+    callerAgentId?: string;
+    includeVoice?: boolean;
+    requestId?: string;
+  }): Promise<OrchestrationToolsListResponse["payload"]> {
+    return this.sendNamespacedCorrelatedSessionRequest({
+      requestId: options?.requestId,
+      message: {
+        type: "orchestration.tools.list.request",
+        callerAgentId: options?.callerAgentId,
+        includeVoice: options?.includeVoice,
+      },
+    });
+  }
+
+  async callOrchestrationTool(options: {
+    toolName: string;
+    input?: Record<string, unknown>;
+    callerAgentId?: string;
+    callerCwd?: string;
+    callerWorkspaceId?: string;
+    includeVoice?: boolean;
+    requestId?: string;
+    timeout?: number;
+  }): Promise<OrchestrationToolCallResponse["payload"]> {
+    return this.sendNamespacedCorrelatedSessionRequest({
+      requestId: options.requestId,
+      message: {
+        type: "orchestration.tools.call.request",
+        callerAgentId: options.callerAgentId,
+        callerCwd: options.callerCwd,
+        callerWorkspaceId: options.callerWorkspaceId,
+        includeVoice: options.includeVoice,
+        toolName: options.toolName,
+        input: options.input,
+      },
+      timeout: options.timeout,
     });
   }
 

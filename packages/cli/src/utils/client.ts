@@ -247,7 +247,7 @@ export function resolveDaemonPassword(host: string): string | undefined {
     const fromUri = parseConnectionUri(trimmed).password;
     if (fromUri) return fromUri;
   }
-  const fromEnv = process.env.BYSPACE_PASSWORD;
+  const fromEnv = process.env.BYSPACE_PASSWORD || process.env.BYSPACE_CLI_TOKEN;
   return fromEnv && fromEnv.length > 0 ? fromEnv : undefined;
 }
 

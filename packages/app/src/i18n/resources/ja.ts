@@ -1668,11 +1668,6 @@ export const ja: TranslationResources = {
       orchestration: {
         title: "オーケストレーション",
         unavailable: "オーケストレーションを管理するにはこのホストに接続してください",
-        enableTools: {
-          title: "BySpaceツールを有効にする",
-          hint: "エージェントがワークツリー、エージェント、スケジュールを管理できるようになります",
-          accessibilityLabel: "BySpaceツールを有効にする",
-        },
         skills: {
           title: "オーケストレーションスキル",
           installHint:

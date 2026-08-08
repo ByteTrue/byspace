@@ -64,10 +64,6 @@ import { AgentRunState, type ForegroundTurnWaiter } from "./agent-run-state.js";
 import { getAgentProviderDefinition } from "@bytetrue/byspace-protocol/provider-manifest";
 import { invokeRewindCapability, type RewindMode } from "./rewind/rewind.js";
 import { isSystemInjectedEnvelope } from "./agent-prompt.js";
-import {
-  stripInternalBySpaceMcpServer,
-  withRuntimeBySpaceMcpServer,
-} from "./runtime-mcp-config.js";
 import { resolveCreateAgentTitles } from "./create-agent-title.js";
 import type { BySpaceToolCatalogFactory } from "./tools/types.js";
 import {
@@ -154,7 +150,7 @@ function buildStoredAgentConfig(record: StoredAgentRecord): AgentSessionConfig {
     config.systemPrompt = record.config.systemPrompt;
   }
   if (record.config.mcpServers != null) config.mcpServers = record.config.mcpServers;
-  return stripInternalBySpaceMcpServer(config);
+  return config;
 }
 
 export { AGENT_LIFECYCLE_STATUSES, type AgentLifecycleStatus };
@@ -249,10 +245,8 @@ export interface AgentManagerOptions {
   onAgentAttention?: AgentAttentionCallback;
   durableTimelineStore?: AgentTimelineStore;
   terminalManager?: TerminalManager | null;
-  mcpBaseUrl?: string;
-  mcpAuthToken?: string;
-  byspaceToolsEnabled?: boolean;
   byspaceToolCatalogFactory?: BySpaceToolCatalogFactory;
+  cliAuthToken?: string;
   appendSystemPrompt?: string;
   agentStreamCoalesceWindowMs?: number;
   rescueTimeouts?: AgentManagerRescueTimeouts;
@@ -590,10 +584,8 @@ export class AgentManager {
   private readonly agentLifecycleMutations = new Map<string, Promise<unknown>>();
   private readonly deletingAgents = new Set<string>();
   private readonly agentStreamCoalescer: AgentStreamCoalescer;
-  private mcpBaseUrl: string | null;
-  private readonly mcpAuthToken: string | null;
-  private byspaceToolsEnabled = true;
   private byspaceToolCatalogFactory: BySpaceToolCatalogFactory | null = null;
+  private readonly cliAuthToken: string | undefined;
   private appendSystemPrompt: string;
   private onAgentAttention?: AgentAttentionCallback;
   private onAgentArchived?: AgentArchivedCallback;
@@ -606,9 +598,8 @@ export class AgentManager {
     this.registry = options?.registry;
     this.durableTimelineStore = options?.durableTimelineStore;
     this.onAgentAttention = options?.onAgentAttention;
-    this.mcpBaseUrl = options?.mcpBaseUrl ?? null;
-    this.mcpAuthToken = options?.mcpAuthToken ?? null;
-    this.configureBySpaceTools(options);
+    this.byspaceToolCatalogFactory = options.byspaceToolCatalogFactory ?? null;
+    this.cliAuthToken = options.cliAuthToken;
     this.appendSystemPrompt = options.appendSystemPrompt ?? "";
     this.logger = options.logger.child({ module: "agent", component: "agent-manager" });
     this.rescueTimeouts = {
@@ -629,11 +620,6 @@ export class AgentManager {
       providerDefinitions: options.providerDefinitions ?? {},
       clients: options.clients ?? {},
     });
-  }
-
-  private configureBySpaceTools(options: AgentManagerOptions): void {
-    this.byspaceToolsEnabled = options.byspaceToolsEnabled ?? true;
-    this.byspaceToolCatalogFactory = options.byspaceToolCatalogFactory ?? null;
   }
 
   registerClient(provider: AgentProvider, client: AgentClient): void {
@@ -671,30 +657,21 @@ export class AgentManager {
     this.onAgentArchived = callback;
   }
 
-  setMcpBaseUrl(url: string | null): void {
-    this.mcpBaseUrl = url;
-  }
-
   prepareForShutdown(): void {
     this.acceptingAgentRegistrations = false;
-  }
-
-  setBySpaceToolsEnabled(enabled: boolean): void {
-    this.byspaceToolsEnabled = enabled;
   }
 
   setBySpaceToolCatalogFactory(factory: BySpaceToolCatalogFactory | null): void {
     this.byspaceToolCatalogFactory = factory;
   }
 
-  /**
-   * Capability token the daemon's own MCP clients must present to the Agent MCP
-   * endpoint when a daemon password is configured. Read by the per-client
-   * session to authenticate its own MCP connection. Stays in the daemon — never
-   * sent to remote clients.
-   */
-  getMcpAuthToken(): string | null {
-    return this.mcpAuthToken;
+  createBySpaceToolCatalog(
+    runtimeContext: Parameters<BySpaceToolCatalogFactory>[0] = {},
+  ): ReturnType<BySpaceToolCatalogFactory> {
+    if (!this.byspaceToolCatalogFactory) {
+      throw new Error("BySpace orchestration tools are unavailable");
+    }
+    return this.byspaceToolCatalogFactory(runtimeContext);
   }
 
   setAppendSystemPrompt(prompt: string | null | undefined): void {
@@ -1067,24 +1044,18 @@ export class AgentManager {
     if (options.replaceExistingState) {
       await this.deleteAgentState(resolvedAgentId);
     }
-    const { storedConfig, launchConfig } = await this.prepareSessionConfig(
-      config,
-      resolvedAgentId,
-      options?.env,
-    );
+    const { storedConfig, launchConfig } = await this.prepareSessionConfig(config, options?.env);
     this.requireEnabledProvider(storedConfig.provider);
     const client = await this.requireAvailableClient({
       provider: storedConfig.provider,
     });
     const launchContext = await this.buildLaunchContext(
       resolvedAgentId,
-      client,
       storedConfig.cwd,
       options?.env,
     );
-    const providerLaunchConfig = this.resolveProviderLaunchConfig(launchConfig, launchContext);
     const createOptions = this.buildCreateSessionOptions(options);
-    const session = await client.createSession(providerLaunchConfig, launchContext, createOptions);
+    const session = await client.createSession(launchConfig, launchContext, createOptions);
     return this.registerSession(session, storedConfig, resolvedAgentId, {
       labels: options.labels,
       initialTitle: options.initialTitle,
@@ -1144,10 +1115,7 @@ export class AgentManager {
       ...overrides,
       provider: handle.provider,
     } as AgentSessionConfig;
-    const { storedConfig, launchConfig } = await this.prepareSessionConfig(
-      mergedConfig,
-      resolvedAgentId,
-    );
+    const { storedConfig, launchConfig } = await this.prepareSessionConfig(mergedConfig);
 
     const client = this.requireClient(handle.provider);
     const available = await client.isAvailable();
@@ -1156,14 +1124,8 @@ export class AgentManager {
         `Provider '${handle.provider}' is not available. Please ensure the CLI is installed.`,
       );
     }
-    const launchContext = await this.buildLaunchContext(resolvedAgentId, client, storedConfig.cwd);
-    const providerLaunchConfig = this.resolveProviderLaunchConfig(launchConfig, launchContext);
-    const session = await client.resumeSession(
-      handle,
-      providerLaunchConfig,
-      launchContext,
-      resumeOptions,
-    );
+    const launchContext = await this.buildLaunchContext(resolvedAgentId, storedConfig.cwd);
+    const session = await client.resumeSession(handle, launchConfig, launchContext, resumeOptions);
     return this.registerSession(session, storedConfig, resolvedAgentId, {
       ...options,
       persistence: handle,
@@ -1196,27 +1158,21 @@ export class AgentManager {
       throw new Error(`Provider '${input.provider}' does not support importing sessions`);
     }
 
-    const { storedConfig, launchConfig } = await this.prepareSessionConfig(
-      {
-        provider: input.provider,
-        cwd: input.cwd,
-      },
-      resolvedAgentId,
-    );
-    const launchContext = await this.buildLaunchContext(resolvedAgentId, client, storedConfig.cwd);
-    const providerLaunchConfig = this.resolveProviderLaunchConfig(launchConfig, launchContext);
+    const { storedConfig, launchConfig } = await this.prepareSessionConfig({
+      provider: input.provider,
+      cwd: input.cwd,
+    });
+    const launchContext = await this.buildLaunchContext(resolvedAgentId, storedConfig.cwd);
     const imported = await client.importSession(
       {
         providerHandleId: input.providerHandleId,
         cwd: input.cwd,
       },
-      { config: providerLaunchConfig, storedConfig, launchContext },
+      { config: launchConfig, storedConfig, launchContext },
     );
     let handedToRegistration = false;
     try {
-      const importedConfig = await this.normalizeConfig(
-        stripInternalBySpaceMcpServer(imported.config),
-      );
+      const importedConfig = await this.normalizeConfig(imported.config);
       const timelineRows = buildImportedTimelineRows(imported.timeline);
       const initialTitle = resolveImportedAgentTitle(importedConfig, timelineRows);
 
@@ -1285,13 +1241,12 @@ export class AgentManager {
       ...overrides,
       provider,
     } as AgentSessionConfig;
-    const { storedConfig, launchConfig } = await this.prepareSessionConfig(refreshConfig, agentId);
-    const launchContext = await this.buildLaunchContext(agentId, client, storedConfig.cwd);
-    const providerLaunchConfig = this.resolveProviderLaunchConfig(launchConfig, launchContext);
+    const { storedConfig, launchConfig } = await this.prepareSessionConfig(refreshConfig);
+    const launchContext = await this.buildLaunchContext(agentId, storedConfig.cwd);
 
     const session = handle
-      ? await client.resumeSession(handle, providerLaunchConfig, launchContext)
-      : await client.createSession(providerLaunchConfig, launchContext);
+      ? await client.resumeSession(handle, launchConfig, launchContext)
+      : await client.createSession(launchConfig, launchContext);
 
     let handedToRegistration = false;
     try {
@@ -4315,18 +4270,10 @@ export class AgentManager {
 
   private async prepareSessionConfig(
     config: AgentSessionConfig,
-    agentId: string,
     env?: Record<string, string>,
   ): Promise<PreparedSessionConfig> {
-    const storedConfig = await this.normalizeConfig(stripInternalBySpaceMcpServer(config), { env });
-    const launchConfig = this.applyDaemonAppendSystemPrompt(
-      withRuntimeBySpaceMcpServer({
-        config: storedConfig,
-        agentId,
-        mcpBaseUrl: this.mcpBaseUrl,
-        mcpAuthToken: this.mcpAuthToken,
-      }),
-    );
+    const storedConfig = await this.normalizeConfig(config, { env });
+    const launchConfig = this.applyDaemonAppendSystemPrompt(storedConfig);
     return { storedConfig, launchConfig };
   }
 
@@ -4345,7 +4292,6 @@ export class AgentManager {
 
   private async buildLaunchContext(
     agentId: string,
-    client: AgentClient,
     cwd: string,
     env?: Record<string, string>,
   ): Promise<AgentLaunchContext> {
@@ -4355,23 +4301,10 @@ export class AgentManager {
         ...env,
         BYSPACE_AGENT_ID: agentId,
         BYSPACE_AGENT_CWD: cwd,
+        ...(this.cliAuthToken ? { BYSPACE_CLI_TOKEN: this.cliAuthToken } : {}),
       },
     };
-    if (
-      this.byspaceToolsEnabled &&
-      client.capabilities.supportsNativeBySpaceTools &&
-      this.byspaceToolCatalogFactory
-    ) {
-      context.byspaceTools = await this.byspaceToolCatalogFactory({ callerAgentId: agentId });
-    }
     return context;
-  }
-
-  private resolveProviderLaunchConfig(
-    launchConfig: AgentSessionConfig,
-    launchContext: AgentLaunchContext,
-  ): AgentSessionConfig {
-    return launchContext.byspaceTools ? stripInternalBySpaceMcpServer(launchConfig) : launchConfig;
   }
 
   private async requireAvailableClient(options: { provider: AgentProvider }): Promise<AgentClient> {
