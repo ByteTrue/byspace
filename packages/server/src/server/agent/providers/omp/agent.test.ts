@@ -1,6 +1,5 @@
 import { describe, expect, test } from "vitest";
 
-import type { BySpaceToolCatalog } from "../../tools/types.js";
 import type { OmpNoTurnScheduler, OmpProviderIdleScheduler } from "./agent.js";
 import { OmpHarness } from "./test-utils/omp-harness.js";
 
@@ -49,27 +48,10 @@ class ManualNoTurnScheduler implements OmpNoTurnScheduler {
   }
 }
 
-function createToolCatalog(): BySpaceToolCatalog {
-  return {
-    tools: new Map([
-      [
-        "create_agent",
-        {
-          name: "create_agent",
-          description: "Create a BySpace agent.",
-          handler: async () => ({ content: [] }),
-        },
-      ],
-    ]),
-    getTool: () => undefined,
-    executeTool: async () => ({ content: [] }),
-  };
-}
-
 describe("OMP agent client and session", () => {
-  test("owns launch configuration and registers native host tools", async () => {
+  test("owns launch configuration", async () => {
     const omp = new OmpHarness();
-    await omp.start({ modeId: "ask" }, createToolCatalog());
+    await omp.start({ modeId: "ask" });
 
     expect(omp.launchConfiguration()).toEqual({
       cwd: "/tmp/byspace-omp-agent-test",
@@ -77,12 +59,8 @@ describe("OMP agent client and session", () => {
       modeId: "ask",
       argv: ["omp", "--mode", "rpc-ui", "--approval-mode", "always-ask"],
     });
-    expect(omp.registeredHostTools()).toEqual([
-      [expect.objectContaining({ name: "create_agent" })],
-    ]);
     expect(omp.capabilities()).toMatchObject({
       supportsMcpServers: false,
-      supportsNativeBySpaceTools: true,
     });
   });
 
@@ -107,7 +85,7 @@ describe("OMP agent client and session", () => {
 
   test("passes --thinking when a thinking option is provided", async () => {
     const omp = new OmpHarness();
-    await omp.start({ modeId: "ask", thinkingOptionId: "xhigh" }, createToolCatalog());
+    await omp.start({ modeId: "ask", thinkingOptionId: "xhigh" });
 
     expect(omp.launchConfiguration().argv).toEqual([
       "omp",

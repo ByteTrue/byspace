@@ -68,6 +68,7 @@ import type { ForgeService } from "../services/forge-service.js";
 import {
   extractWsBearerProtocol,
   extractWsBearerToken,
+  isAgentCliTokenValid,
   isBearerTokenValid,
   type DaemonAuthConfig,
 } from "./auth.js";
@@ -447,6 +448,7 @@ export class VoiceAssistantWebSocketServer {
   private readonly pendingConnections: Map<WebSocketLike, PendingConnection> = new Map();
   private readonly sessions: Map<WebSocketLike, SessionConnection> = new Map();
   private readonly socketIdentities: Map<WebSocketLike, WebSocketConnectionIdentity> = new Map();
+  private readonly agentCliSockets = new WeakSet<WebSocketLike>();
   private readonly externalSessionsByKey: Map<string, SessionConnection> = new Map();
   private readonly serverId: string;
   private readonly daemonVersion: string;
@@ -707,7 +709,7 @@ export class VoiceAssistantWebSocketServer {
       },
     });
     wss.on("connection", (ws, request) => {
-      void this.attachAuthenticatedSocket(ws, request, password);
+      void this.attachAuthenticatedSocket(ws, request, auth);
     });
     return wss;
   }
@@ -789,13 +791,14 @@ export class VoiceAssistantWebSocketServer {
   private async attachAuthenticatedSocket(
     ws: WebSocket,
     request: IncomingMessage,
-    password: string | undefined,
+    auth: DaemonAuthConfig | undefined,
   ): Promise<void> {
-    if (password) {
-      const requestMetadata = extractSocketRequestMetadata(request);
-      const protocol = extractWsBearerProtocol(request.headers["sec-websocket-protocol"]);
-      const token = extractWsBearerToken(protocol);
-      const isAuthorized = isBearerTokenValid({ password, token });
+    const requestMetadata = extractSocketRequestMetadata(request);
+    const protocol = extractWsBearerProtocol(request.headers["sec-websocket-protocol"]);
+    const token = extractWsBearerToken(protocol);
+    const isAgentCli = isAgentCliTokenValid(auth, token);
+    if (auth?.password && !isAgentCli) {
+      const isAuthorized = isBearerTokenValid({ password: auth.password, token });
       if (!isAuthorized) {
         const reason = token === null ? "Password required" : "Incorrect password";
         this.logger.warn(
@@ -806,6 +809,7 @@ export class VoiceAssistantWebSocketServer {
         return;
       }
     }
+    if (isAgentCli) this.agentCliSockets.add(ws);
 
     await this.attachSocket(ws, request);
   }
@@ -1407,6 +1411,8 @@ export class VoiceAssistantWebSocketServer {
         checkoutRefresh: true,
         // COMPAT(cliCallerAgentContext): added in v0.2.0, remove after 2027-01-25.
         cliCallerAgentContext: true,
+        // COMPAT(cliOrchestrationTools): added in v0.5.0, remove after 2027-02-07.
+        cliOrchestrationTools: true,
         // COMPAT(workspaceMultiplicity): added in v0.1.97, drop the gate when floor >= v0.1.97
         workspaceMultiplicity: true,
         // COMPAT(projectRemove): added in v0.1.97, drop the gate when floor >= v0.1.97.
@@ -1829,6 +1835,15 @@ export class VoiceAssistantWebSocketServer {
 
       const message = parsedMessage.data;
       this.recordInboundMessageType(message.type);
+
+      if (this.agentCliSockets.has(ws) && !isAgentCliMessageAllowed(message)) {
+        this.logger.warn(
+          { messageType: message.type },
+          "Rejected non-orchestration agent CLI request",
+        );
+        ws.close(1008, "Agent CLI token only permits orchestration requests");
+        return;
+      }
 
       if (message.type === "ping") {
         this.applicationSocketLease.claim(ws);
@@ -2443,6 +2458,15 @@ export function isWebSocketSameOrigin(
   }
 
   return isLoopbackAlias(originUrl.hostname) && isLoopbackAlias(requestAuthority.hostname);
+}
+
+function isAgentCliMessageAllowed(message: WSInboundMessage): boolean {
+  if (message.type === "hello" || message.type === "ping") return true;
+  if (message.type !== "session") return false;
+  return (
+    message.message.type.startsWith("orchestration.tools.") ||
+    message.message.type.startsWith("loop.")
+  );
 }
 
 function selectWebSocketProtocol(

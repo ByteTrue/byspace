@@ -3,7 +3,26 @@ name: byspace
 description: BySpace reference for managing workspaces, agents, schedules, and heartbeats.
 ---
 
-BySpace is a daemon that supervises AI coding agents on your machine. Control it through tools or a CLI.
+BySpace is a daemon that supervises AI coding agents on your machine. The CLI is the only orchestration execution path; this skill teaches you how to use it.
+
+## Execution contract
+
+- Use `byspace tool list --json` to discover the catalog and `byspace tool describe <name> --json` before calling an unfamiliar tool. Do not guess inputs.
+- Execute every orchestration operation with `byspace tool call <name> --input-file - --json`, passing one JSON object on stdin. The CLI invokes the same shared catalog and validation used by the MCP endpoint.
+- Use machine-readable JSON for discovery and calls. Read the returned payload and errors; an agent ID alone does not mean the requested work finished.
+- Preserve every setting the user requested: relationship, workspace, provider/model, mode, thinking, features, labels, background behavior, and notification behavior.
+- Respect the schema returned for the current caller. In particular, top-level `create_agent` accepts `background` and blocks by default; agent-scoped `create_agent` is always asynchronous, rejects `background`, and defaults to a finish notification.
+- When the requested workflow needs an agent's answer, use top-level blocking behavior or wait for the agent-scoped completion notification and then read the result. Never report success merely because creation succeeded.
+- Use `create_agent` to create a daemon-managed agent visible in the BySpace UI. Do not launch a terminal process as a substitute.
+- The CLI automatically supplies caller agent, cwd, and workspace context when available. A terminal process needs no registration or special identity; it can create ordinary UI agents through the same commands.
+- Before `create_agent`, distinguish caller scope: with `BYSPACE_AGENT_ID`, use the requested relationship and `workspace: { "kind": "current" }` when appropriate; without it, `subagent` and `current` are invalid. A terminal caller must use `relationship: { "kind": "detached" }` and either `workspace: { "kind": "existing", "workspaceId": "$BYSPACE_WORKSPACE_ID" }` when that variable exists, or `workspace: { "kind": "create", "source": { "kind": "directory", "path": "<absolute current cwd>" } }` otherwise.
+
+Example:
+
+```bash
+printf '%s' '{"statuses":["running"],"limit":20}' \
+  | byspace tool call list_agents --input-file - --json
+```
 
 ## Workspaces
 
@@ -67,7 +86,7 @@ Only set feature IDs returned by `inspect_provider`. For Codex fast mode, look f
 
 **`create_heartbeat`** — sends you a prompt on a cron cadence. Required: `prompt`, `cron`. Optional: `timezone`, `name`, `maxRuns`, `expiresIn`. Use for reminders, PR/build babysitting, and status checks that should return to this conversation.
 
-**`delete_heartbeat`** stops it. MCP intentionally exposes no heartbeat update tool; delete and recreate when its task or cadence changes.
+**`delete_heartbeat`** stops it. The shared catalog intentionally exposes no heartbeat update operation; delete and recreate when its task or cadence changes.
 
 Schedules have the full list/inspect/update/pause/resume/run-once/log/delete surface. Heartbeats deliberately do not.
 
@@ -111,19 +130,17 @@ For agent-scoped `create_agent` and background `send_agent_prompt`, leave `notif
 
 Don't poll `list_agents` or `get_agent_status` to "check on" a running agent. The notification will tell you.
 
-## CLI parity
+## CLI discovery
 
-The `byspace` CLI is a thin wrapper over the same daemon. Same surface:
+The canonical surface is:
 
 ```bash
-byspace run --provider codex/gpt-5.4 --mode full-access --worktree feat/x "<prompt>"
-byspace send <agent-id> "<follow-up>"
-byspace ls
-byspace worktree ls
-byspace schedule create --cron "*/15 * * * *" "ping main build"
+byspace tool list --json
+byspace tool describe create_agent --json
+printf '%s' '{"includeArchived":false}' | byspace tool call list_agents --input-file - --json
 ```
 
-Discover with `byspace --help` and `byspace <cmd> --help`.
+Domain-specific CLI commands such as `byspace run`, `send`, and `schedule` remain useful for humans, but orchestration skills use `byspace tool` so parameters, defaults, validation, side effects, results, and errors stay identical to the shared catalog.
 
 ## Ops and debugging
 

@@ -36,6 +36,8 @@ export interface BySpaceToolCatalog {
 
 export interface BySpaceToolRuntimeContext {
   callerAgentId?: string;
+  callerCwd?: string;
+  callerWorkspaceId?: string;
   enableVoiceTools?: boolean;
   voiceOnly?: boolean;
 }

@@ -1681,11 +1681,6 @@ export const ptBR: TranslationResources = {
       orchestration: {
         title: "Orquestração",
         unavailable: "Conecte-se a este host para gerenciar a orquestração",
-        enableTools: {
-          title: "Ativar ferramentas do BySpace",
-          hint: "Agentes poderão gerenciar worktrees, agentes e agendamentos",
-          accessibilityLabel: "Injetar ferramentas do BySpace",
-        },
         skills: {
           title: "Skills de orquestração",
           installHint: "Instale os skills incluídos do BySpace para agentes compatíveis",

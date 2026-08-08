@@ -38,7 +38,6 @@ import type {
   ImportProviderSessionContext,
   ResolveAgentDefaultModeInput,
 } from "./agent-sdk-types.js";
-import type { BySpaceToolCatalog } from "./tools/types.js";
 import type { ProviderDefinition } from "./provider-registry.js";
 
 interface Deferred<T> {
@@ -1761,6 +1760,7 @@ test("createAgent passes daemon launch env through the provider launch context",
     registry: storage,
     logger,
     idFactory: () => "00000000-0000-4000-8000-000000000103",
+    cliAuthToken: "agent-cli-secret",
   });
 
   const snapshot = await manager.createAgent(
@@ -1783,6 +1783,7 @@ test("createAgent passes daemon launch env through the provider launch context",
     env: {
       BYSPACE_AGENT_ID: snapshot.id,
       BYSPACE_AGENT_CWD: workdir,
+      BYSPACE_CLI_TOKEN: "agent-cli-secret",
     },
   });
 });
@@ -1862,287 +1863,6 @@ test("createAgent persists workspaceId on the stored record and emits it in the 
   }
 });
 
-test("createAgent injects byspace MCP server only into provider launch config", async () => {
-  const workdir = mkdtempSync(join(tmpdir(), "agent-manager-test-"));
-  const storagePath = join(workdir, "agents");
-  const storage = new AgentStorage(storagePath, logger);
-
-  class CaptureClient extends TestAgentClient {
-    lastConfig: AgentSessionConfig | null = null;
-
-    override async createSession(config: AgentSessionConfig): Promise<AgentSession> {
-      this.lastConfig = config;
-      return new TestAgentSession(config);
-    }
-  }
-
-  const client = new CaptureClient();
-  const manager = new AgentManager({
-    clients: {
-      codex: client,
-    },
-    registry: storage,
-    logger,
-    mcpBaseUrl: "http://127.0.0.1:6777/mcp/agents",
-    idFactory: () => "00000000-0000-4000-8000-000000000103",
-  });
-
-  const snapshot = await manager.createAgent(
-    {
-      provider: "codex",
-      cwd: workdir,
-      mcpServers: {
-        custom: {
-          type: "stdio",
-          command: "custom-mcp",
-        },
-      },
-    },
-    undefined,
-    { workspaceId: undefined },
-  );
-
-  expect(snapshot.config.mcpServers).toEqual({
-    custom: {
-      type: "stdio",
-      command: "custom-mcp",
-    },
-  });
-  expect(client.lastConfig?.mcpServers).toEqual({
-    byspace: {
-      type: "http",
-      url: `http://127.0.0.1:6777/mcp/agents?callerAgentId=${snapshot.id}`,
-    },
-    custom: {
-      type: "stdio",
-      command: "custom-mcp",
-    },
-  });
-
-  const stored = await storage.get(snapshot.id);
-  expect(stored?.config?.mcpServers).toEqual({
-    custom: {
-      type: "stdio",
-      command: "custom-mcp",
-    },
-  });
-});
-
-test("createAgent passes native BySpace tools through launch context without internal MCP", async () => {
-  const workdir = mkdtempSync(join(tmpdir(), "agent-manager-test-"));
-  const storagePath = join(workdir, "agents");
-  const storage = new AgentStorage(storagePath, logger);
-
-  const byspaceTools: BySpaceToolCatalog = {
-    tools: new Map(),
-    getTool: () => undefined,
-    executeTool: async () => {
-      throw new Error("No tools registered in test catalog");
-    },
-  };
-
-  class NativeToolsClient extends TestAgentClient {
-    override readonly capabilities = {
-      ...TEST_CAPABILITIES,
-      supportsMcpServers: true,
-      supportsNativeBySpaceTools: true,
-    };
-    lastConfig: AgentSessionConfig | null = null;
-    lastLaunchContext: AgentLaunchContext | undefined;
-
-    override async createSession(
-      config: AgentSessionConfig,
-      launchContext?: AgentLaunchContext,
-    ): Promise<AgentSession> {
-      this.lastConfig = config;
-      this.lastLaunchContext = launchContext;
-      return new TestAgentSession(config);
-    }
-  }
-
-  const client = new NativeToolsClient();
-  const manager = new AgentManager({
-    clients: {
-      codex: client,
-    },
-    registry: storage,
-    logger,
-    mcpBaseUrl: "http://127.0.0.1:6777/mcp/agents",
-    byspaceToolCatalogFactory: () => byspaceTools,
-    idFactory: () => "00000000-0000-4000-8000-000000000106",
-  });
-
-  const snapshot = await manager.createAgent(
-    {
-      provider: "codex",
-      cwd: workdir,
-      mcpServers: {
-        custom: {
-          type: "stdio",
-          command: "custom-mcp",
-        },
-      },
-    },
-    undefined,
-    { workspaceId: undefined },
-  );
-
-  expect(client.lastLaunchContext?.byspaceTools).toBe(byspaceTools);
-  expect(client.lastConfig?.mcpServers).toEqual({
-    custom: {
-      type: "stdio",
-      command: "custom-mcp",
-    },
-  });
-  expect(snapshot.config.mcpServers).toEqual({
-    custom: {
-      type: "stdio",
-      command: "custom-mcp",
-    },
-  });
-
-  const stored = await storage.get(snapshot.id);
-  expect(stored?.config?.mcpServers).toEqual({
-    custom: {
-      type: "stdio",
-      command: "custom-mcp",
-    },
-  });
-});
-
-test("createAgent injects the MCP auth token as a bearer header into the launch config", async () => {
-  const workdir = mkdtempSync(join(tmpdir(), "agent-manager-test-"));
-  const storagePath = join(workdir, "agents");
-  const storage = new AgentStorage(storagePath, logger);
-
-  class CaptureClient extends TestAgentClient {
-    lastConfig: AgentSessionConfig | null = null;
-
-    override async createSession(config: AgentSessionConfig): Promise<AgentSession> {
-      this.lastConfig = config;
-      return new TestAgentSession(config);
-    }
-  }
-
-  const client = new CaptureClient();
-  const manager = new AgentManager({
-    clients: {
-      codex: client,
-    },
-    registry: storage,
-    logger,
-    mcpBaseUrl: "http://127.0.0.1:6777/mcp/agents",
-    mcpAuthToken: "cap-token",
-    idFactory: () => "00000000-0000-4000-8000-000000000104",
-  });
-
-  const snapshot = await manager.createAgent(
-    {
-      provider: "codex",
-      cwd: workdir,
-    },
-    undefined,
-    { workspaceId: undefined },
-  );
-
-  expect(manager.getMcpAuthToken()).toBe("cap-token");
-  expect(client.lastConfig?.mcpServers?.byspace).toEqual({
-    type: "http",
-    url: `http://127.0.0.1:6777/mcp/agents?callerAgentId=${snapshot.id}`,
-    headers: { Authorization: "Bearer cap-token" },
-  });
-
-  rmSync(workdir, { recursive: true, force: true });
-});
-
-test("resumeAgentFromPersistence replaces stored internal byspace MCP with current runtime URL", async () => {
-  const workdir = mkdtempSync(join(tmpdir(), "agent-manager-test-"));
-  const storagePath = join(workdir, "agents");
-  const storage = new AgentStorage(storagePath, logger);
-  const client = new TestAgentClient();
-  const manager = new AgentManager({
-    clients: {
-      codex: client,
-    },
-    registry: storage,
-    logger,
-    mcpBaseUrl: "http://127.0.0.1:6768/mcp/agents",
-    idFactory: () => "00000000-0000-4000-8000-000000000105",
-  });
-  const handle: AgentPersistenceHandle = {
-    provider: "codex",
-    sessionId: "session-123",
-    metadata: {
-      cwd: workdir,
-    },
-  };
-
-  const snapshot = await manager.resumeAgentFromPersistence(handle, {
-    cwd: workdir,
-    mcpServers: {
-      byspace: {
-        type: "http",
-        url: "http://127.0.0.1:6777/mcp/agents?callerAgentId=stale-agent",
-      },
-      custom: {
-        type: "stdio",
-        command: "custom-mcp",
-      },
-    },
-  });
-
-  expect(client.resumeOverrides[0]?.mcpServers).toEqual({
-    byspace: {
-      type: "http",
-      url: `http://127.0.0.1:6768/mcp/agents?callerAgentId=${snapshot.id}`,
-    },
-    custom: {
-      type: "stdio",
-      command: "custom-mcp",
-    },
-  });
-  expect(snapshot.config.mcpServers).toEqual({
-    custom: {
-      type: "stdio",
-      command: "custom-mcp",
-    },
-  });
-});
-
-test("resumeAgentFromPersistence drops stored internal byspace MCP when runtime injection is disabled", async () => {
-  const workdir = mkdtempSync(join(tmpdir(), "agent-manager-test-"));
-  const storagePath = join(workdir, "agents");
-  const storage = new AgentStorage(storagePath, logger);
-  const client = new TestAgentClient();
-  const manager = new AgentManager({
-    clients: {
-      codex: client,
-    },
-    registry: storage,
-    logger,
-  });
-  const handle: AgentPersistenceHandle = {
-    provider: "codex",
-    sessionId: "session-123",
-    metadata: {
-      cwd: workdir,
-    },
-  };
-
-  const snapshot = await manager.resumeAgentFromPersistence(handle, {
-    cwd: workdir,
-    mcpServers: {
-      byspace: {
-        type: "http",
-        url: "http://127.0.0.1:6777/mcp/agents?callerAgentId=stale-agent",
-      },
-    },
-  });
-
-  expect(client.resumeOverrides[0]?.mcpServers).toBeUndefined();
-  expect(snapshot.config.mcpServers).toBeUndefined();
-});
-
 test("createAgent preserves a user-provided byspace MCP config", async () => {
   const workdir = mkdtempSync(join(tmpdir(), "agent-manager-test-"));
   const storagePath = join(workdir, "agents");
@@ -2164,7 +1884,6 @@ test("createAgent preserves a user-provided byspace MCP config", async () => {
     },
     registry: storage,
     logger,
-    mcpBaseUrl: "http://127.0.0.1:6777/mcp/agents",
     idFactory: () => "00000000-0000-4000-8000-000000000104",
   });
 

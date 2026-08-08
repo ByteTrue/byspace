@@ -2,9 +2,6 @@ import type {
   OmpAgentMessage,
   OmpModel,
   OmpPromptAck,
-  OmpRpcHostToolDefinition,
-  OmpRpcHostToolResult,
-  OmpRpcHostToolUpdate,
   OmpRpcSlashCommand,
   OmpRuntimeEvent,
   OmpSessionState,
@@ -58,9 +55,6 @@ export interface OmpRuntimeSession {
   getSessionStats(): Promise<OmpSessionStats>;
   getCommands(): Promise<OmpRpcSlashCommand[]>;
   setSubagentSubscription(level: OmpSubagentSubscriptionLevel): Promise<void>;
-  setHostTools(tools: OmpRpcHostToolDefinition[]): Promise<string[]>;
-  sendHostToolResult(result: OmpRpcHostToolResult): void;
-  sendHostToolUpdate(update: OmpRpcHostToolUpdate): void;
   branch(entryId: string): Promise<{ text: string }>;
   getBranchMessages(): Promise<Array<{ entryId: string; text: string }>>;
   activeBranchEntryId?: string;

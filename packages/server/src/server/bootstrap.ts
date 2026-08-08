@@ -2,9 +2,9 @@ import express from "express";
 import { createServer as createHTTPServer, type IncomingMessage, type ServerResponse } from "http";
 import { constants, existsSync, unlinkSync } from "fs";
 import { open } from "fs/promises";
-import { randomUUID } from "node:crypto";
 import { hostname as getHostname } from "node:os";
 import path from "node:path";
+import { randomBytes } from "node:crypto";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import type { Logger } from "pino";
 import { z } from "zod";
@@ -163,11 +163,7 @@ import {
 } from "./managed-processes/managed-processes.js";
 import { terminateWithTreeKill } from "../utils/tree-kill.js";
 import { isHostnameAllowed, type HostnamesConfig } from "./hostnames.js";
-import {
-  createRequireBearerMiddleware,
-  isAgentMcpRequestAuthorized,
-  type DaemonAuthConfig,
-} from "./auth.js";
+import { createRequireBearerMiddleware, type DaemonAuthConfig } from "./auth.js";
 import { createWebUiMiddleware } from "./web-ui.js";
 import { WorkspaceAutoName } from "./workspace-auto-name.js";
 import { createGitMutationService } from "./session/git-mutation/git-mutation-service.js";
@@ -189,7 +185,7 @@ function formatHostForHttpUrl(host: string): string {
   return host.includes(":") && !host.startsWith("[") ? `[${host}]` : host;
 }
 
-function resolveAgentMcpClientHost(host: string): string {
+function resolveLocalClientHost(host: string): string {
   if (host === "0.0.0.0") {
     return "127.0.0.1";
   }
@@ -199,22 +195,11 @@ function resolveAgentMcpClientHost(host: string): string {
   return host;
 }
 
-function createAgentMcpBaseUrl(listenTarget: ListenTarget | null): string | null {
-  if (!listenTarget || listenTarget.type !== "tcp") {
-    return null;
-  }
-  const host = resolveAgentMcpClientHost(listenTarget.host);
-  return new URL(
-    "/mcp/agents",
-    `http://${formatHostForHttpUrl(host)}:${listenTarget.port}`,
-  ).toString();
-}
-
 function createTerminalActivityUrl(listenTarget: ListenTarget | null): string | null {
   if (!listenTarget || listenTarget.type !== "tcp") {
     return null;
   }
-  const host = resolveAgentMcpClientHost(listenTarget.host);
+  const host = resolveLocalClientHost(listenTarget.host);
   return new URL(
     "/api/terminal-activity",
     `http://${formatHostForHttpUrl(host)}:${listenTarget.port}`,
@@ -350,7 +335,6 @@ export interface BySpaceDaemonConfig {
   hostnames?: HostnamesConfig;
   trustedProxies?: true | string[];
   mcpEnabled?: boolean;
-  mcpInjectIntoAgents?: boolean;
   autoArchiveAfterMerge?: boolean;
   enableTerminalAgentHooks?: boolean;
   terminalAgentHooks?: MutableDaemonConfig["terminalAgentHooks"];
@@ -466,7 +450,7 @@ function createInitialMutableDaemonConfig(config: BySpaceDaemonConfig): MutableD
   );
 
   const initialConfig: MutableDaemonConfig = {
-    mcp: { injectIntoAgents: config.mcpInjectIntoAgents ?? true },
+    mcp: { injectIntoAgents: false },
     providers,
     metadataGeneration: {
       providers: config.metadataGeneration?.providers ?? [],
@@ -500,6 +484,8 @@ export async function createBySpaceDaemon(
   );
 
   const serverId = getOrCreateServerId(config.byspaceHome, { logger });
+  const agentCliToken = randomBytes(32).toString("base64url");
+  const runtimeAuth = { ...config.auth, agentCliToken };
   const daemonKeyPair = await loadOrCreateDaemonKeyPair(config.byspaceHome, logger);
   const managedProcesses = createBootstrapManagedProcessRegistry(config, logger);
   // Reconcile the helper-process ledger in the background so it never blocks the
@@ -517,15 +503,6 @@ export async function createBySpaceDaemon(
     ttlMs: downloadTokenTtlMs,
   });
 
-  // Capability token authenticating the daemon's own agents to the loopback
-  // Agent MCP endpoint (/mcp/agents). Random per daemon run, injected only into
-  // local agent configs and the daemon's own MCP client — never sent to remote
-  // clients — so it cannot be replayed off-box. This lets the injected MCP
-  // authenticate even when the daemon password is set via the app (hash only,
-  // no plaintext available). Mirrors the /api/files/download capability-token
-  // pattern.
-  const agentMcpAuthToken = randomUUID();
-
   const listenTarget = parseListenString(config.listen);
 
   const app = express();
@@ -534,6 +511,7 @@ export async function createBySpaceDaemon(
   let workspaceRegistry: FileBackedWorkspaceRegistry | null = null;
   const terminalManager = createConfiguredTerminalManager({
     getTerminalActivityUrl: () => createTerminalActivityUrl(boundListenTarget),
+    agentCliToken,
   });
   applyTerminalAgentHookSetting({ store: daemonConfigStore, logger });
 
@@ -634,7 +612,7 @@ export async function createBySpaceDaemon(
   mountWebUi(app, config, logger);
 
   app.use(
-    createRequireBearerMiddleware(config.auth, (context) => {
+    createRequireBearerMiddleware(runtimeAuth, (context) => {
       logger.warn(context, "Rejected HTTP request with invalid daemon password");
     }),
   );
@@ -765,7 +743,7 @@ export async function createBySpaceDaemon(
     providerDefinitions: initialAgentManagerState.providerDefinitions,
     registry: agentStorage,
     appendSystemPrompt: config.appendSystemPrompt,
-    mcpAuthToken: agentMcpAuthToken,
+    cliAuthToken: agentCliToken,
     logger,
   });
 
@@ -1170,6 +1148,8 @@ export async function createBySpaceDaemon(
     byspaceHome: config.byspaceHome,
     worktreesRoot: config.worktreesRoot,
     callerAgentId: runtime.callerAgentId,
+    callerCwd: runtime.callerCwd,
+    callerWorkspaceId: runtime.callerWorkspaceId,
     enableVoiceTools: runtime.enableVoiceTools,
     voiceOnly: runtime.voiceOnly,
     resolveSpeakHandler: (agentId) => wsServer?.resolveVoiceSpeakHandler(agentId) ?? null,
@@ -1179,10 +1159,8 @@ export async function createBySpaceDaemon(
   const createAgentToolCatalog = (runtime: BySpaceToolRuntimeContext) =>
     createBySpaceToolCatalog(createAgentToolHostDependencies(runtime));
   agentManager.setBySpaceToolCatalogFactory(createAgentToolCatalog);
-  agentManager.setBySpaceToolsEnabled(config.mcpInjectIntoAgents !== false);
 
   const mcpEnabled = config.mcpEnabled ?? true;
-  let agentMcpBaseUrl: string | null = null;
   if (mcpEnabled) {
     const agentMcpRoute = "/mcp/agents";
 
@@ -1216,20 +1194,6 @@ export async function createBySpaceDaemon(
       req: express.Request,
       res: express.Response,
     ): Promise<void> => {
-      // This route is exempt from the global daemon-password middleware, so it
-      // authenticates here using the injected capability token (or a valid
-      // daemon password). Without this, a password-protected daemon would be
-      // wide open on its agent control plane.
-      if (
-        !(await isAgentMcpRequestAuthorized({
-          password: config.auth?.password,
-          capabilityToken: agentMcpAuthToken,
-          authorizationHeader: req.header("authorization"),
-        }))
-      ) {
-        res.status(401).json({ error: "Unauthorized" });
-        return;
-      }
       if (config.mcpDebug) {
         logger.debug(
           {
@@ -1340,14 +1304,6 @@ export async function createBySpaceDaemon(
           mainStarted = true;
           const logAndResolve = async () => {
             boundListenTarget = resolveBoundListenTarget(listenTarget, httpServer);
-            const mcpBaseUrl = mcpEnabled ? createAgentMcpBaseUrl(boundListenTarget) : null;
-            agentMcpBaseUrl = config.mcpInjectIntoAgents === false ? null : mcpBaseUrl;
-            agentManager.setMcpBaseUrl(agentMcpBaseUrl);
-            agentManager.setBySpaceToolsEnabled(config.mcpInjectIntoAgents !== false);
-            daemonConfigStore.onFieldChange("mcp.injectIntoAgents", (value) => {
-              agentManager.setMcpBaseUrl(value ? mcpBaseUrl : null);
-              agentManager.setBySpaceToolsEnabled(value !== false);
-            });
             daemonConfigStore.onFieldChange("appendSystemPrompt", (value) => {
               agentManager.setAppendSystemPrompt(typeof value === "string" ? value : "");
             });
@@ -1395,10 +1351,10 @@ export async function createBySpaceDaemon(
               downloadTokenStore,
               config.byspaceHome,
               daemonConfigStore,
-              mcpBaseUrl,
+              null,
               { allowedOrigins, hostnames: configuredHostnames },
               workspaceAutoName,
-              config.auth,
+              runtimeAuth,
               speechService,
               terminalManager,
               {

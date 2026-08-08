@@ -97,7 +97,6 @@ export type CliConfigOverrides = Partial<{
   relayEnabled: boolean;
   relayUseTls: boolean;
   mcpEnabled: boolean;
-  mcpInjectIntoAgents: boolean;
   webUiEnabled: boolean;
   hostnames: HostnamesConfig;
 }>;
@@ -452,8 +451,6 @@ function resolveStaticLoadConfigSettings(
 ) {
   return {
     mcpEnabled: cli?.mcpEnabled ?? persisted.daemon?.mcp?.enabled ?? true,
-    mcpInjectIntoAgents:
-      cli?.mcpInjectIntoAgents ?? persisted.daemon?.mcp?.injectIntoAgents ?? false,
     autoArchiveAfterMerge: persisted.daemon?.autoArchiveAfterMerge ?? false,
     appendSystemPrompt: resolveAppendSystemPrompt(persisted),
     terminalProfiles: persisted.daemon?.terminalProfiles,
@@ -485,7 +482,6 @@ export function loadConfig(
   const listen = resolveListenAddress(env, options?.cli, persisted);
   const {
     mcpEnabled,
-    mcpInjectIntoAgents,
     autoArchiveAfterMerge,
     appendSystemPrompt,
     terminalProfiles,
@@ -525,7 +521,6 @@ export function loadConfig(
     hostnames,
     trustedProxies,
     mcpEnabled,
-    mcpInjectIntoAgents,
     autoArchiveAfterMerge,
     enableTerminalAgentHooks: persisted.daemon?.enableTerminalAgentHooks ?? false,
     terminalAgentHooks: persisted.daemon?.terminalAgentHooks,

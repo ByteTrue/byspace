@@ -144,6 +144,7 @@ export const MutableDaemonConfigSchema = z
   .object({
     mcp: z
       .object({
+        // COMPAT(injectIntoAgents): ignored since v0.5.0; remove after 2027-02-07.
         injectIntoAgents: z.boolean(),
       })
       .passthrough(),
@@ -1356,6 +1357,24 @@ export const DaemonOrchestrationSkillsSetInstalledRequestSchema = z.object({
   requestId: z.string(),
 });
 
+export const OrchestrationToolsListRequestSchema = z.object({
+  type: z.literal("orchestration.tools.list.request"),
+  requestId: z.string(),
+  callerAgentId: z.string().optional(),
+  includeVoice: z.boolean().optional(),
+});
+
+export const OrchestrationToolCallRequestSchema = z.object({
+  type: z.literal("orchestration.tools.call.request"),
+  requestId: z.string(),
+  callerAgentId: z.string().optional(),
+  callerCwd: z.string().optional(),
+  callerWorkspaceId: z.string().optional(),
+  includeVoice: z.boolean().optional(),
+  toolName: z.string(),
+  input: z.record(z.string(), z.unknown()).optional(),
+});
+
 export const AgentTimelineCursorSchema = z.object({
   epoch: z.string(),
   seq: z.number().int().nonnegative(),
@@ -2459,6 +2478,8 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   DaemonUpdateRequestMessageSchema,
   DaemonOrchestrationSkillsGetStatusRequestSchema,
   DaemonOrchestrationSkillsSetInstalledRequestSchema,
+  OrchestrationToolsListRequestSchema,
+  OrchestrationToolCallRequestSchema,
   FetchAgentTimelineRequestMessageSchema,
   ProviderSubagentListRequestMessageSchema,
   ProviderSubagentTimelineRequestMessageSchema,
@@ -2752,6 +2773,8 @@ export const ServerInfoStatusPayloadSchema = z
         checkoutRefresh: z.boolean().optional(),
         // COMPAT(cliCallerAgentContext): added in v0.2.0, remove after 2027-01-25.
         cliCallerAgentContext: z.boolean().optional(),
+        // COMPAT(cliOrchestrationTools): added in v0.5.0; remove the gate after 2027-02-07.
+        cliOrchestrationTools: z.boolean().optional(),
         // COMPAT(workspaceMultiplicity): added in v0.1.97, drop the gate when floor >= v0.1.97
         workspaceMultiplicity: z.boolean().optional(),
         // COMPAT(projectRemove): added in v0.1.97, drop the gate when floor >= v0.1.97.
@@ -5057,6 +5080,36 @@ export type DaemonOrchestrationSkillsSetInstalledResponse = z.infer<
   typeof DaemonOrchestrationSkillsSetInstalledResponseSchema
 >;
 
+export const OrchestrationToolDescriptorSchema = z.object({
+  name: z.string(),
+  title: z.string().optional(),
+  description: z.string(),
+  inputSchema: z.record(z.string(), z.unknown()),
+});
+export type OrchestrationToolDescriptor = z.infer<typeof OrchestrationToolDescriptorSchema>;
+
+export const OrchestrationToolsListResponseSchema = z.object({
+  type: z.literal("orchestration.tools.list.response"),
+  payload: z.object({
+    requestId: z.string(),
+    success: z.boolean(),
+    error: z.string().nullable(),
+    tools: z.array(OrchestrationToolDescriptorSchema),
+  }),
+});
+export type OrchestrationToolsListResponse = z.infer<typeof OrchestrationToolsListResponseSchema>;
+
+export const OrchestrationToolCallResponseSchema = z.object({
+  type: z.literal("orchestration.tools.call.response"),
+  payload: z.object({
+    requestId: z.string(),
+    success: z.boolean(),
+    error: z.string().nullable(),
+    result: z.record(z.string(), z.unknown()).optional(),
+  }),
+});
+export type OrchestrationToolCallResponse = z.infer<typeof OrchestrationToolCallResponseSchema>;
+
 export const DaemonUpdateProgressMessageSchema = z.object({
   type: z.literal("daemon.update.progress"),
   payload: z.object({
@@ -5125,6 +5178,8 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   DiagnosticsResponseSchema,
   DaemonOrchestrationSkillsGetStatusResponseSchema,
   DaemonOrchestrationSkillsSetInstalledResponseSchema,
+  OrchestrationToolsListResponseSchema,
+  OrchestrationToolCallResponseSchema,
   GetDaemonConfigResponseMessageSchema,
   SetDaemonConfigResponseMessageSchema,
   ReadProjectConfigResponseMessageSchema,

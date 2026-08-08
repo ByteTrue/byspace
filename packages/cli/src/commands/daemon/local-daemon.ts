@@ -17,7 +17,6 @@ export interface DaemonStartOptions {
   relay?: boolean;
   relayUseTls?: boolean;
   mcp?: boolean;
-  injectMcp?: boolean;
   webUi?: boolean;
   hostnames?: string;
 }
@@ -143,9 +142,6 @@ function buildRunnerArgs(options: DaemonStartOptions): string[] {
 
   if (options.mcp === false) {
     args.push("--no-mcp");
-  }
-  if (options.injectMcp === false) {
-    args.push("--no-inject-mcp");
   }
   if (options.webUi === true) {
     args.push("--web-ui");

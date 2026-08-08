@@ -42,7 +42,6 @@ export function createDaemonCommand(): Command {
     .option("--port <port>", "Port for restarted daemon listen target")
     .option("--no-relay", "Disable relay on restarted daemon")
     .option("--no-mcp", "Disable Agent MCP on restarted daemon")
-    .option("--no-inject-mcp", "Disable auto-injecting the BySpace MCP into created agents")
     .option("--web-ui", "Enable the bundled daemon web UI on restarted daemon")
     .option("--no-web-ui", "Disable the bundled daemon web UI on restarted daemon")
     .option(

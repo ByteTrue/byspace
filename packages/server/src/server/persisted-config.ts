@@ -243,6 +243,7 @@ export const PersistedConfigSchema = z
         mcp: z
           .object({
             enabled: z.boolean().optional(),
+            // COMPAT(injectIntoAgents): accept legacy persisted configs until 2027-02-07.
             injectIntoAgents: z.boolean().optional(),
           })
           .passthrough()

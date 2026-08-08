@@ -12,7 +12,6 @@ import {
   clickEditHostLabel,
   expectHostLabelEditMode,
   expectHostConnectionsCard,
-  expectHostInjectMcpCard,
   expectHostActionCards,
   expectHostProvidersCard,
   expectHostNoLocalOnlyRows,
@@ -105,18 +104,6 @@ test.describe("Settings host page", () => {
     await expect(
       page.getByText("Scan this QR code with BySpace on your phone, or copy the link below."),
     ).toBeVisible();
-  });
-
-  test("agents section shows the inject MCP toggle", async ({ page }) => {
-    const serverId = getServerId();
-
-    await gotoAppShell(page);
-    await openSettings(page);
-    await openSettingsHost(page, serverId);
-
-    await openHostSection(page, serverId, "agents");
-    await expectSettingsHeader(page, "Agents");
-    await expectHostInjectMcpCard(page);
   });
 
   test("providers section shows the providers card", async ({ page }) => {

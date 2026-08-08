@@ -453,6 +453,7 @@ it("injects parent-minted terminal activity env through the worker", async () =>
   const activityUrl = "http://127.0.0.1:12345/api/terminal-activity";
   manager = createWorkerTerminalManager({
     getTerminalActivityUrl: () => activityUrl,
+    agentCliToken: "agent-cli-secret",
   });
 
   const session = trackTerminal(
@@ -468,6 +469,7 @@ it("injects parent-minted terminal activity env through the worker", async () =>
             url: process.env.BYSPACE_TERMINAL_ACTIVITY_URL,
             hookCli: process.env.BYSPACE_HOOK_CLI,
             path: process.env.PATH ?? process.env.Path,
+            cliToken: process.env.BYSPACE_CLI_TOKEN,
           }),
         );
         setInterval(() => {}, 1000);
@@ -483,6 +485,7 @@ it("injects parent-minted terminal activity env through the worker", async () =>
     url?: string;
     hookCli?: string;
     path?: string;
+    cliToken?: string;
   };
   const byspaceCliBinDir = resolveBySpaceCliBinDir();
   const byspaceCliPath = resolveBySpaceCliExecutablePath();
@@ -493,6 +496,7 @@ it("injects parent-minted terminal activity env through the worker", async () =>
   expect(env.token).not.toBe("");
   expect(env.url).toBe(activityUrl);
   expect(env.hookCli).toBe(byspaceCliPath);
+  expect(env.cliToken).toBe("agent-cli-secret");
   expect(manager.validateTerminalActivityToken(session.id, env.token ?? "")).toBe("valid");
   await expect(manager.setTerminalActivity(session.id, "attention")).resolves.toBe(true);
   expect(env.path?.split(delimiter)[0]).toBe(byspaceCliBinDir);

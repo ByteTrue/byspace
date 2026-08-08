@@ -145,14 +145,23 @@ console.log("=== CLI IPC Target Helpers ===\n");
 {
   console.log("Test 10: daemon password resolution prefers TCP URI query, falls back to env");
   const previousEnv = process.env.BYSPACE_PASSWORD;
+  const previousCliToken = process.env.BYSPACE_CLI_TOKEN;
   try {
     delete process.env.BYSPACE_PASSWORD;
+    delete process.env.BYSPACE_CLI_TOKEN;
     assert.strictEqual(
       resolveDaemonPassword("tcp://example.com:6777?ssl=true&password=query-secret"),
       "query-secret",
     );
     assert.strictEqual(resolveDaemonPassword("tcp://missing.example:6777"), undefined);
     assert.strictEqual(resolveDaemonPassword("example.com:6777"), undefined);
+    process.env.BYSPACE_CLI_TOKEN = "agent-cli-secret";
+    assert.strictEqual(
+      resolveDaemonPassword("localhost:6777"),
+      undefined,
+      "Agent CLI token must not affect ordinary CLI commands",
+    );
+    delete process.env.BYSPACE_CLI_TOKEN;
 
     process.env.BYSPACE_PASSWORD = "env-secret";
     assert.strictEqual(
@@ -183,6 +192,11 @@ console.log("=== CLI IPC Target Helpers ===\n");
       delete process.env.BYSPACE_PASSWORD;
     } else {
       process.env.BYSPACE_PASSWORD = previousEnv;
+    }
+    if (previousCliToken === undefined) {
+      delete process.env.BYSPACE_CLI_TOKEN;
+    } else {
+      process.env.BYSPACE_CLI_TOKEN = previousCliToken;
     }
   }
   console.log("✓ daemon password resolution prefers TCP URI query, falls back to env\n");
