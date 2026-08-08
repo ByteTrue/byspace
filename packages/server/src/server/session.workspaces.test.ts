@@ -10,6 +10,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { setImmediate as waitForImmediate } from "node:timers/promises";
 import { afterEach, expect, test, vi } from "vitest";
 import { z } from "zod";
 
@@ -790,6 +791,14 @@ function createSessionForWorkspaceTests(
     }),
   );
   return session;
+}
+
+function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((resolvePromise) => {
+    resolve = resolvePromise;
+  });
+  return { promise, resolve };
 }
 
 test("client heartbeat clears attention for the focused terminal", async () => {
@@ -7594,15 +7603,34 @@ test("overlapping workspace rebuilds publish the newest provider subagent status
     },
   });
 
+  const initialWorkspace = {
+    id: "ws-repo-running",
+    projectId: "proj-repo-running",
+    projectDisplayName: "repo",
+    projectRootPath: REPO_CWD,
+    workspaceDirectory: REPO_CWD,
+    projectKind: "git" as const,
+    workspaceKind: "local_checkout" as const,
+    name: "repo",
+    status: "done" as const,
+    activityAt: null,
+    diffStat: null,
+  };
+  session.listFetchWorkspacesEntries = async () => ({
+    entries: [initialWorkspace],
+    emptyProjects: [],
+    pageInfo: { nextCursor: null, prevCursor: null, hasMore: false },
+  });
+  session.reconcileAndEmitWorkspaceUpdates = async () => undefined;
+
   await session.handleMessage({
     type: "fetch_workspaces_request",
     requestId: "provider-subagent-workspace-status",
     subscribe: { subscriptionId: "provider-subagent-workspace-status" },
   });
-  const initialWorkspace = findByType(emitted, "fetch_workspaces_response")?.payload.entries[0];
-  if (!initialWorkspace) {
-    throw new Error("Expected initial workspace descriptor");
-  }
+  expect(findByType(emitted, "fetch_workspaces_response")?.payload.entries).toEqual([
+    initialWorkspace,
+  ]);
   const firstBuildStarted = deferred<void>();
   const releaseFirstBuild = deferred<void>();
   let buildCount = 0;

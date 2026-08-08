@@ -545,3 +545,38 @@ test("session close disposes a provider that arrives from an in-flight reconnect
     rmSync(workdir, { recursive: true, force: true });
   }
 });
+
+test("session close rejects an in-flight app-server connection request", async () => {
+  const workdir = mkdtempSync(join(tmpdir(), "codex-process-close-connect-"));
+  let releaseInitialize: (() => void) | undefined;
+  const initializeGate = new Promise<void>((resolve) => {
+    releaseInitialize = resolve;
+  });
+  const appServer = createFakeCodexAppServer({
+    initialize: async () => {
+      await initializeGate;
+      return {};
+    },
+  });
+  const session = new CodexAppServerAgentSession(
+    { provider: "codex", cwd: workdir, modeId: "auto", model: "gpt-5.4" },
+    null,
+    logger,
+    async () => appServer.child,
+  );
+
+  try {
+    const initializeRequest = appServer.nextResponse();
+    const connect = session.connect();
+    await initializeRequest;
+    const rejection = expect(connect).rejects.toThrow("Codex app-server client is closed");
+
+    await session.close();
+
+    await rejection;
+  } finally {
+    releaseInitialize?.();
+    await session.close();
+    rmSync(workdir, { recursive: true, force: true });
+  }
+});

@@ -530,6 +530,7 @@ describe("ClaudeAgentClient binary resolution", () => {
     const session = await client.createSession({
       provider: "claude",
       cwd: process.cwd(),
+      extra: { claude: { forwardSubagentText: false } },
     });
 
     await expect(
@@ -545,6 +546,7 @@ describe("ClaudeAgentClient binary resolution", () => {
       "project",
       "local",
     ]);
+    expect(queryFactory.mock.calls[0]?.[0].options.forwardSubagentText).toBe(true);
 
     await session.close();
   });

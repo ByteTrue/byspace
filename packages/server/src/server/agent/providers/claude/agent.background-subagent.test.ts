@@ -113,8 +113,10 @@ describe("background Claude subagents", () => {
     }
   });
 
-  async function runStream(): Promise<AgentStreamEvent[]> {
-    queryFactory.mockImplementation(() => buildQueryMock(BACKGROUND_SUBAGENT_STREAM));
+  async function runStream(
+    messages: ReadonlyArray<Record<string, unknown>> = BACKGROUND_SUBAGENT_STREAM,
+  ): Promise<AgentStreamEvent[]> {
+    queryFactory.mockImplementation(() => buildQueryMock(messages));
     const session = await new ClaudeAgentClient({
       logger: createTestLogger(),
       queryFactory,
@@ -150,6 +152,41 @@ describe("background Claude subagents", () => {
       id: "toolu_01TVF5JXom1yoZVoiaEWAoUV",
       item: { type: "user_message", text: "Reply with just the word: banana" },
     });
+  });
+
+  test("routes forwarded child assistant text into the nested timeline", async () => {
+    const events = await runStream([
+      { type: "system", subtype: "init", session_id: "child-session", permissionMode: "default" },
+      {
+        type: "system",
+        subtype: "task_started",
+        task_id: "task-1",
+        tool_use_id: "toolu_child",
+        task_type: "local_agent",
+        description: "Inspect the code",
+        prompt: "Report the result",
+      },
+      {
+        type: "assistant",
+        parent_tool_use_id: "toolu_child",
+        message: {
+          model: "claude-sonnet-4-6",
+          content: [{ type: "text", text: "The child result" }],
+        },
+      },
+      { type: "result", subtype: "success", usage: {}, total_cost_usd: 0 },
+    ]);
+
+    expect(events).toContainEqual(
+      expect.objectContaining({
+        type: "provider_subagent",
+        event: expect.objectContaining({
+          type: "timeline",
+          id: "toolu_child",
+          item: { type: "assistant_message", text: "The child result" },
+        }),
+      }),
+    );
   });
 
   test("exposes a workflow through the same provider-subagent stream as its child frames", async () => {

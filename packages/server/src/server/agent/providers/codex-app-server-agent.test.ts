@@ -28,6 +28,7 @@ import {
 } from "./codex-app-server-agent.js";
 import { CodexAppServerClient } from "./codex/app-server-transport.js";
 import {
+  createCodexAppServerChildProcess,
   createFakeCodexAppServer,
   type FakeCodexAppServer,
   waitForNextPermission,
@@ -537,6 +538,16 @@ describe("Codex app-server provider", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  test("rejects pending transport requests when disposed", async () => {
+    const client = new CodexAppServerClient(createCodexAppServerChildProcess(), createTestLogger());
+    const request = client.request("initialize", {});
+    const rejection = expect(request).rejects.toThrow("Codex app-server client is closed");
+
+    await client.dispose();
+
+    await rejection;
   });
 
   test("round-trips server-initiated command approvals through the real app-server transport", async () => {
