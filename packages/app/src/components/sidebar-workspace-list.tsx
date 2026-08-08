@@ -234,7 +234,7 @@ interface ProjectHeaderRowProps {
   project: SidebarProjectEntry;
   displayName: string;
   iconDataUri: string | null;
-  statusBucket: SidebarStateBucket;
+  statusBucket: SidebarStateBucket | null;
   needsAttentionCount?: number;
   selected?: boolean;
   newWorkspaceTarget: SidebarProjectNewWorkspaceTarget | null;
@@ -387,7 +387,7 @@ function ProjectLeadingVisual({
 }: {
   displayName: string;
   iconDataUri: string | null;
-  statusBucket: SidebarStateBucket;
+  statusBucket: SidebarStateBucket | null;
   projectKey: string;
   isArchiving?: boolean;
 }) {
@@ -916,9 +916,12 @@ function WorkspaceRowInner({
   } = useAppSettings();
   const serviceSummary = selectWorkspaceServiceSummary(workspace.scripts);
   const checksSummary = selectCheckSummary(workspace.prHint);
-  const statusLabel = isCreating
-    ? t("sidebar.workspace.status.creating")
-    : t(`workspace.hoverCard.agentStatus.${workspace.statusBucket}`);
+  let statusLabel: string | null = null;
+  if (isCreating) {
+    statusLabel = t("sidebar.workspace.status.creating");
+  } else if (workspace.statusBucket !== "done") {
+    statusLabel = t(`workspace.hoverCard.agentStatus.${workspace.statusBucket}`);
+  }
   const pullRequestLabel = workspace.prHint
     ? t("workspace.git.pr.accessibility.pullRequest", {
         number: workspace.prHint.number,
@@ -1541,7 +1544,7 @@ function ProjectBlock({
         project={project}
         displayName={displayName}
         iconDataUri={iconDataUri}
-        statusBucket={project.statusBucket}
+        statusBucket={canToggleWorkspaces && !workspacesExpanded ? project.statusBucket : null}
         needsAttentionCount={project.needsAttentionCount}
         selected={false}
         newWorkspaceTarget={newWorkspaceTarget}
