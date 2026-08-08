@@ -359,6 +359,11 @@ export interface AgentTimelineCursorState {
   epoch: string;
   startSeq: number;
   endSeq: number;
+  retainedRanges?: Array<{
+    startSeq: number;
+    endSeq: number;
+    hasOlder?: boolean;
+  }>;
 }
 
 export interface SessionReplicaTimeline {
@@ -382,6 +387,7 @@ export type AgentTimelineState =
       items: StreamItem[];
       range: AgentTimelineCursorState | null;
       older: "available" | "none";
+      newer: "available" | "none";
     };
 
 export function selectAgentTimelineState(
@@ -396,6 +402,7 @@ export function selectAgentTimelineState(
       items,
       range: session.agentTimelineCursor.get(agentId) ?? null,
       older: session.agentTimelineHasOlder.get(agentId) === true ? "available" : "none",
+      newer: session.agentTimelineHasNewer.get(agentId) === true ? "available" : "none",
     };
   }
   return items.length > 0 ? { status: "painted", items } : { status: "cold" };
@@ -447,6 +454,7 @@ export interface SessionState {
   messageSubmissions: Map<string, MessageSubmissionRecord[]>;
   agentTimelineCursor: Map<string, AgentTimelineCursorState>;
   agentTimelineHasOlder: Map<string, boolean>;
+  agentTimelineHasNewer: Map<string, boolean>;
   agentTimelineOlderFetchInFlight: Map<string, boolean>;
   historySyncGeneration: number;
   agentHistorySyncGeneration: Map<string, number>;
@@ -580,6 +588,10 @@ interface SessionStoreActions {
     serverId: string,
     state: Map<string, boolean> | ((prev: Map<string, boolean>) => Map<string, boolean>),
   ) => void;
+  setAgentTimelineHasNewer: (
+    serverId: string,
+    state: Map<string, boolean> | ((prev: Map<string, boolean>) => Map<string, boolean>),
+  ) => void;
   setAgentTimelineOlderFetchInFlight: (
     serverId: string,
     state: Map<string, boolean> | ((prev: Map<string, boolean>) => Map<string, boolean>),
@@ -599,6 +611,7 @@ interface SessionStoreActions {
       head: StreamItem[];
       range: AgentTimelineCursorState | null;
       older: "available" | "none" | "unchanged";
+      newer: boolean;
       synchronized: boolean;
       acknowledgedClientMessageIds: string[];
     },
@@ -703,6 +716,7 @@ function createInitialSessionState(
     messageSubmissions: new Map(),
     agentTimelineCursor: new Map(),
     agentTimelineHasOlder: new Map(),
+    agentTimelineHasNewer: new Map(),
     agentTimelineOlderFetchInFlight: new Map(),
     historySyncGeneration: 0,
     agentHistorySyncGeneration: new Map(),
@@ -1441,6 +1455,23 @@ export const useSessionStore = create<SessionStore>()(
         });
       },
 
+      setAgentTimelineHasNewer: (serverId, state) => {
+        set((prev) => {
+          const session = prev.sessions[serverId];
+          if (!session) return prev;
+          const nextState =
+            typeof state === "function" ? state(session.agentTimelineHasNewer) : state;
+          if (session.agentTimelineHasNewer === nextState) return prev;
+          return {
+            ...prev,
+            sessions: {
+              ...prev.sessions,
+              [serverId]: { ...session, agentTimelineHasNewer: nextState },
+            },
+          };
+        });
+      },
+
       setAgentTimelineOlderFetchInFlight: (serverId, state) => {
         set((prev) => {
           const session = prev.sessions[serverId];
@@ -1557,6 +1588,8 @@ export const useSessionStore = create<SessionStore>()(
           if (state.older !== "unchanged") {
             nextHasOlder.set(agentId, state.older === "available");
           }
+          const nextHasNewer = new Map(session.agentTimelineHasNewer);
+          nextHasNewer.set(agentId, state.newer);
           const nextAuthoritative = new Map(session.agentAuthoritativeHistoryApplied);
           const nextSyncGeneration = new Map(session.agentHistorySyncGeneration);
           const currentSubmissions = session.messageSubmissions.get(agentId) ?? [];
@@ -1588,6 +1621,7 @@ export const useSessionStore = create<SessionStore>()(
                 agentStreamHead: nextHead,
                 agentTimelineCursor: nextCursor,
                 agentTimelineHasOlder: nextHasOlder,
+                agentTimelineHasNewer: nextHasNewer,
                 agentAuthoritativeHistoryApplied: nextAuthoritative,
                 agentHistorySyncGeneration: nextSyncGeneration,
                 messageSubmissions,

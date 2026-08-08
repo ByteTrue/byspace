@@ -174,6 +174,7 @@ export const ru: TranslationResources = {
   agentStream: {
     empty: "Начните общаться с этим агентом...",
     scrollToBottom: "Прокрутить вниз",
+    historyLoadFailed: "Не удалось загрузить историю агента",
     collapseAllToolCalls: "Свернуть все вызовы инструментов",
     permission: {
       plan: "План",
@@ -1567,6 +1568,10 @@ export const ru: TranslationResources = {
       },
       detailLevel: {
         title: "Уровень детализации",
+      },
+      chatOutline: {
+        title: "Структура чата",
+        description: "Показывать структуру для перехода между запросами",
       },
       fonts: {
         title: "Шрифты",

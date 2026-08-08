@@ -36,6 +36,7 @@ export interface AppSettings {
   workspaceTitleSource: WorkspaceTitleSource;
   autoExpandReasoning: boolean;
   toolCallDetailLevel: ToolCallDetailLevel;
+  chatOutlineEnabled: boolean;
   vimKeybindings: boolean;
 }
 
@@ -54,6 +55,7 @@ export const DEFAULT_CLIENT_SETTINGS: AppSettings = {
   workspaceTitleSource: "title",
   autoExpandReasoning: false,
   toolCallDetailLevel: "detailed",
+  chatOutlineEnabled: true,
   vimKeybindings: false,
 };
 
@@ -177,6 +179,9 @@ function pickAppSettings(stored: StoredAppSettings): Partial<AppSettings> {
   }
   if (typeof stored.vimKeybindings === "boolean") {
     result.vimKeybindings = stored.vimKeybindings;
+  }
+  if (typeof stored.chatOutlineEnabled === "boolean") {
+    result.chatOutlineEnabled = stored.chatOutlineEnabled;
   }
   if (
     typeof stored.workspaceTitleSource === "string" &&

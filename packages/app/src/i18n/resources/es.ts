@@ -174,6 +174,7 @@ export const es: TranslationResources = {
   agentStream: {
     empty: "Comience a chatear con este agente...",
     scrollToBottom: "Desplazarse hacia abajo",
+    historyLoadFailed: "No se pudo cargar el historial del agente",
     collapseAllToolCalls: "Contraer todas las llamadas de herramientas",
     permission: {
       plan: "Plan",
@@ -1576,6 +1577,10 @@ export const es: TranslationResources = {
       },
       detailLevel: {
         title: "Nivel de detalle",
+      },
+      chatOutline: {
+        title: "Esquema del chat",
+        description: "Muestra un esquema para saltar entre instrucciones",
       },
       fonts: {
         title: "Fuentes",

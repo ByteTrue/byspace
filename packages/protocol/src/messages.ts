@@ -1436,6 +1436,14 @@ export const FetchAgentTimelineRequestMessageSchema = z.object({
   limit: z.number().int().nonnegative().optional(),
   // Default should be projected for app timeline loading.
   projection: z.enum(["projected", "canonical"]).optional(),
+  // Allow the client to merge this bounded page outside its contiguous loaded range.
+  mergeWindow: z.boolean().optional(),
+});
+
+export const AgentTimelineListPromptsRequestMessageSchema = z.object({
+  type: z.literal("agent.timeline.list_prompts.request"),
+  agentId: z.string(),
+  requestId: z.string(),
 });
 
 export const ProviderSubagentListRequestMessageSchema = z.object({
@@ -2527,6 +2535,7 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   OrchestrationToolsListRequestSchema,
   OrchestrationToolCallRequestSchema,
   FetchAgentTimelineRequestMessageSchema,
+  AgentTimelineListPromptsRequestMessageSchema,
   ProviderSubagentListRequestMessageSchema,
   ProviderSubagentTimelineRequestMessageSchema,
   SetAgentTimelineSubscriptionRequestMessageSchema,
@@ -2809,6 +2818,8 @@ export const ServerInfoStatusPayloadSchema = z
         relayConfig: z.boolean().optional(),
         // COMPAT(terminalRestoreModes): added in v0.1.81, remove gate after 2026-11-23.
         "terminal-restore-modes": z.boolean().optional(),
+        // COMPAT(agentTimelinePromptIndex): added in v0.3.0, remove gate after 2027-02-08.
+        agentTimelinePromptIndex: z.boolean().optional(),
         // COMPAT(terminalAgentHookProviders): added in v0.2.0, remove gate after 2027-01-21.
         terminalAgentHookProviders: z.boolean().optional(),
         // COMPAT(orchestrationSkills): added in v0.2.0-beta.5, remove gate after 2027-01-22.
@@ -3587,7 +3598,25 @@ export const FetchAgentTimelineResponseMessageSchema = z.object({
     endCursor: AgentTimelineCursorSchema.nullable(),
     hasOlder: z.boolean(),
     hasNewer: z.boolean(),
+    mergeWindow: z.boolean().optional(),
     entries: z.array(AgentTimelineEntryPayloadSchema),
+    error: z.string().nullable(),
+  }),
+});
+
+export const AgentTimelineListPromptsResponseMessageSchema = z.object({
+  type: z.literal("agent.timeline.list_prompts.response"),
+  payload: z.object({
+    requestId: z.string(),
+    agentId: z.string(),
+    epoch: z.string(),
+    prompts: z.array(
+      z.object({
+        seq: z.number().int().nonnegative(),
+        timestamp: z.string(),
+        preview: z.string(),
+      }),
+    ),
     error: z.string().nullable(),
   }),
 });
@@ -5221,6 +5250,7 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   ArchiveWorkspaceResponseMessageSchema,
   FetchAgentResponseMessageSchema,
   FetchAgentTimelineResponseMessageSchema,
+  AgentTimelineListPromptsResponseMessageSchema,
   ProviderSubagentListResponseMessageSchema,
   ProviderSubagentTimelineResponseMessageSchema,
   ProviderSubagentUpdateMessageSchema,
@@ -5423,6 +5453,9 @@ export type ArchiveWorkspaceResponseMessage = z.infer<typeof ArchiveWorkspaceRes
 export type FetchAgentResponseMessage = z.infer<typeof FetchAgentResponseMessageSchema>;
 export type FetchAgentTimelineResponseMessage = z.infer<
   typeof FetchAgentTimelineResponseMessageSchema
+>;
+export type AgentTimelineListPromptsResponseMessage = z.infer<
+  typeof AgentTimelineListPromptsResponseMessageSchema
 >;
 export type AgentForkContextResponseMessage = z.infer<typeof AgentForkContextResponseMessageSchema>;
 export type CancelAgentResponseMessage = z.infer<typeof CancelAgentResponseMessageSchema>;

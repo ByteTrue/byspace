@@ -172,6 +172,7 @@ export const en = {
   agentStream: {
     empty: "Start chatting with this agent...",
     scrollToBottom: "Scroll to bottom",
+    historyLoadFailed: "Couldn't load agent history",
     collapseAllToolCalls: "Collapse all tool calls",
     permission: {
       plan: "Plan",
@@ -1550,6 +1551,10 @@ export const en = {
       },
       detailLevel: {
         title: "Detail level",
+      },
+      chatOutline: {
+        title: "Chat outline",
+        description: "Show an outline for jumping between prompts",
       },
       fonts: {
         title: "Fonts",

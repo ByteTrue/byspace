@@ -170,6 +170,7 @@ describe("ReplicaCache", () => {
     expect(session?.agentAuthoritativeHistoryApplied.get("agent-1")).not.toBe(true);
     expect(session?.agentTimelineCursor.get("agent-1")).toBeUndefined();
     expect(session?.agentTimelineHasOlder.get("agent-1")).not.toBe(true);
+    expect(session?.agentTimelineHasNewer.get("agent-1")).not.toBe(true);
     expect(selectAgentTimelineState(session, "agent-1")).toEqual({
       status: "painted",
       items: [message("message-1", "Cached")],

@@ -150,26 +150,36 @@ export class AgentTimelineReplica {
     }
 
     applyStreamPatches({ serverId, agentId, result, currentTail, currentHead });
-    this.updatePagination(agentId, result, mayUpdatePagination);
+    this.updatePagination(agentId, payload, result, mayUpdatePagination);
     this.finalizeAppliedPage(agentId, payload, result, initKey, maySettleInitialization);
   }
 
   private updatePagination(
     agentId: string,
+    payload: AgentTimelineResponsePayload,
     result: ProcessTimelineResponseOutput,
     mayUpdatePagination: boolean,
   ): void {
-    if (!mayUpdatePagination || result.older === "unchanged") {
-      return;
-    }
+    if (!mayUpdatePagination) return;
     const { serverId } = this.options;
-    const hasOlder = result.older === "available";
-    useSessionStore.getState().setAgentTimelineHasOlder(serverId, (prev) => {
-      if (prev.get(agentId) === hasOlder) return prev;
-      const next = new Map(prev);
-      next.set(agentId, hasOlder);
-      return next;
-    });
+    const store = useSessionStore.getState();
+    if (result.older !== "unchanged") {
+      const hasOlder = result.older === "available";
+      store.setAgentTimelineHasOlder(serverId, (prev) => {
+        if (prev.get(agentId) === hasOlder) return prev;
+        const next = new Map(prev);
+        next.set(agentId, hasOlder);
+        return next;
+      });
+    }
+    if (payload.direction !== "before") {
+      store.setAgentTimelineHasNewer(serverId, (prev) => {
+        if (prev.get(agentId) === payload.hasNewer) return prev;
+        const next = new Map(prev);
+        next.set(agentId, payload.hasNewer);
+        return next;
+      });
+    }
   }
 
   private finalizeAppliedPage(
