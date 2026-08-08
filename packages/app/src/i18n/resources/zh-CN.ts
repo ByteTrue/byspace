@@ -1224,6 +1224,8 @@ export const zhCN: TranslationResources = {
       loadingOffer: "正在加载配对 offer...",
       failedToLoadOffer: "加载配对 offer 失败。",
       relayDisabled: "Relay 未启用。启用 relay 后才能配对设备。",
+      enableRelay: "Enable relay",
+      enablingRelay: "Enabling relay...",
       unavailable: "配对 offer 不可用。",
       hint: "用手机上的 BySpace 扫描此二维码，或复制下方链接。",
       qrUnavailable: "二维码不可用。",

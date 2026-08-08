@@ -55,6 +55,7 @@ export interface BySpaceClientConfig {
   runtimeGeneration?: number | null;
   password?: string;
   authHeader?: string;
+  headers?: Record<string, string>;
   suppressSendErrors?: boolean;
   logger?: BySpaceLogger;
   connectTimeoutMs?: number;

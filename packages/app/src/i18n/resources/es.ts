@@ -1272,6 +1272,8 @@ export const es: TranslationResources = {
       loadingOffer: "Cargando oferta de maridaje...",
       failedToLoadOffer: "No se pudo cargar la oferta de emparejamiento.",
       relayDisabled: "El relé no está habilitado. Habilite el relé para emparejar un dispositivo.",
+      enableRelay: "Enable relay",
+      enablingRelay: "Enabling relay...",
       unavailable: "Oferta de maridaje no disponible.",
       hint: "Escanee este códigoQRconBySpaceen su teléfono o copie el enlace a continuación.",
       qrUnavailable: "CódigoQRno disponible.",

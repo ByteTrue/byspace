@@ -7,6 +7,7 @@ import { StyleSheet } from "react-native-unistyles";
 import { RotateCw, Copy, Check } from "lucide-react-native";
 import { settingsStyles } from "@/styles/settings";
 import { Button } from "@/components/ui/button";
+import { useDaemonConfig } from "@/hooks/use-daemon-config";
 import { useHostRuntimeClient, useHostRuntimeIsConnected } from "@/runtime/host-runtime";
 import { useFetchQuery } from "@/data/query";
 
@@ -44,6 +45,9 @@ function resolvePairingViewState(args: {
 export function PairDeviceSection({ serverId }: { serverId: string }) {
   const { t } = useTranslation();
   const [copied, setCopied] = useState(false);
+  const [relayError, setRelayError] = useState<string | null>(null);
+  const [isEnablingRelay, setIsEnablingRelay] = useState(false);
+  const daemonConfig = useDaemonConfig(serverId);
   const daemonClient = useHostRuntimeClient(serverId);
   const isConnected = useHostRuntimeIsConnected(serverId);
 
@@ -76,6 +80,19 @@ export function PairDeviceSection({ serverId }: { serverId: string }) {
     setTimeout(() => setCopied(false), 2000);
   }, [pairingQuery.data?.url]);
 
+  const handleEnableRelay = useCallback(async () => {
+    setRelayError(null);
+    setIsEnablingRelay(true);
+    try {
+      await daemonConfig.patchConfig({ relay: { enabled: true } });
+      await pairingQuery.refetch();
+    } catch (error) {
+      setRelayError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setIsEnablingRelay(false);
+    }
+  }, [daemonConfig, pairingQuery]);
+
   const handleRefetch = useCallback(() => {
     void pairingQuery.refetch();
   }, [pairingQuery]);
@@ -97,6 +114,8 @@ export function PairDeviceSection({ serverId }: { serverId: string }) {
       retry: t("pairing.device.retry"),
       copy: t("pairing.device.copy"),
       copied: t("pairing.device.copied"),
+      enableRelay: t("pairing.device.enableRelay"),
+      enablingRelay: t("pairing.device.enablingRelay"),
     }),
     [t],
   );
@@ -121,6 +140,10 @@ export function PairDeviceSection({ serverId }: { serverId: string }) {
           qrImageSource={qrImageSource}
           qrQuery={qrQuery}
           copied={copied}
+          canEnableRelay={daemonConfig.config?.relay?.enabled === false}
+          isEnablingRelay={isEnablingRelay}
+          relayError={relayError}
+          handleEnableRelay={handleEnableRelay}
           handleRefetch={handleRefetch}
           handleCopyPress={handleCopyPress}
           labels={bodyLabels}
@@ -135,6 +158,10 @@ interface PairDeviceBodyProps {
   qrImageSource: { uri: string } | null;
   qrQuery: { isError: boolean };
   copied: boolean;
+  canEnableRelay: boolean;
+  isEnablingRelay: boolean;
+  relayError: string | null;
+  handleEnableRelay: () => void;
   handleRefetch: () => void;
   handleCopyPress: () => void;
   labels: {
@@ -144,12 +171,25 @@ interface PairDeviceBodyProps {
     retry: string;
     copy: string;
     copied: string;
+    enableRelay: string;
+    enablingRelay: string;
   };
 }
 
 function PairDeviceBody(props: PairDeviceBodyProps) {
-  const { viewState, qrImageSource, qrQuery, copied, handleRefetch, handleCopyPress, labels } =
-    props;
+  const {
+    viewState,
+    qrImageSource,
+    qrQuery,
+    copied,
+    canEnableRelay,
+    isEnablingRelay,
+    relayError,
+    handleEnableRelay,
+    handleRefetch,
+    handleCopyPress,
+    labels,
+  } = props;
 
   const retryIcon = useMemo(() => <RotateCw size={14} />, []);
   const copyIcon = useMemo(() => (copied ? <Check size={14} /> : <Copy size={14} />), [copied]);
@@ -159,6 +199,17 @@ function PairDeviceBody(props: PairDeviceBodyProps) {
       <View style={styles.centered}>
         <ActivityIndicator size="small" />
         <Text style={styles.hint}>{labels.loadingOffer}</Text>
+      </View>
+    );
+  }
+
+  if (viewState.tag === "unavailable" && canEnableRelay) {
+    return (
+      <View style={styles.centered}>
+        <Text style={styles.hint}>{relayError ?? viewState.message}</Text>
+        <Button variant="default" size="sm" onPress={handleEnableRelay} disabled={isEnablingRelay}>
+          {isEnablingRelay ? labels.enablingRelay : labels.enableRelay}
+        </Button>
       </View>
     );
   }

@@ -187,11 +187,13 @@ interface ResolveRelayInput {
   persisted: ReturnType<typeof loadPersistedConfig>;
   cliRelayEnabled: boolean | undefined;
   cliRelayUseTls: boolean | undefined;
+  configCreated: boolean;
   hostedRelease: BySpaceHostedRelease;
 }
 
 interface ResolvedRelay {
   enabled: boolean;
+  enabledMutable: boolean;
   endpoint: string;
   publicEndpoint: string;
   useTls: boolean;
@@ -236,12 +238,17 @@ function resolveRelayTlsDefault(
   return configuredUseTls ?? (isBySpaceHostedRelayEndpoint(endpoint) || inheritedUseTls);
 }
 
+function isRelayEnabledMutable(input: ResolveRelayInput): boolean {
+  return input.cliRelayEnabled === undefined && input.env.BYSPACE_RELAY_ENABLED === undefined;
+}
+
 function resolveRelayConfig(input: ResolveRelayInput): ResolvedRelay {
+  const enabledMutable = isRelayEnabledMutable(input);
   const enabled =
     input.cliRelayEnabled ??
     parseBooleanEnv(input.env.BYSPACE_RELAY_ENABLED) ??
     input.persisted.daemon?.relay?.enabled ??
-    true;
+    input.configCreated;
   const endpoint =
     input.env.BYSPACE_RELAY_ENDPOINT ??
     mapHostedRelayEndpoint(input.persisted.daemon?.relay?.endpoint, input.hostedRelease) ??
@@ -260,7 +267,7 @@ function resolveRelayConfig(input: ResolveRelayInput): ResolvedRelay {
     input.persisted.daemon?.relay?.publicUseTls,
     resolveRelayTlsDefault(publicEndpoint, configuredUseTls, useTls),
   );
-  return { enabled, endpoint, publicEndpoint, useTls, publicUseTls };
+  return { enabled, enabledMutable, endpoint, publicEndpoint, useTls, publicUseTls };
 }
 
 interface ResolvedVoiceLlm {
@@ -478,6 +485,7 @@ export function loadConfig(
   const env = options?.env ?? process.env;
   const daemonVersion = options?.releaseVersion ?? resolveDaemonVersion();
   const hostedRelease = resolveBySpaceHostedRelease(daemonVersion);
+  const configCreated = existsSync(path.join(byspaceHome, "config.json"));
   const persisted = loadPersistedConfig(byspaceHome);
   const listen = resolveListenAddress(env, options?.cli, persisted);
   const {
@@ -495,6 +503,7 @@ export function loadConfig(
     persisted,
     cliRelayEnabled: options?.cli?.relayEnabled,
     cliRelayUseTls: options?.cli?.relayUseTls,
+    configCreated,
     hostedRelease,
   });
   const serviceProxy = resolveServiceProxyConfig(env, persisted);
@@ -532,6 +541,7 @@ export function loadConfig(
     staticDir: "public",
     agentClients: {},
     relayEnabled: relay.enabled,
+    relayEnabledMutable: relay.enabledMutable,
     relayEndpoint: relay.endpoint,
     relayPublicEndpoint: relay.publicEndpoint,
     relayUseTls: relay.useTls,

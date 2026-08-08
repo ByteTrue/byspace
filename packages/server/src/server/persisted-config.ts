@@ -339,7 +339,7 @@ export function createDefaultPersistedConfig(
         allowedOrigins: [hostedRelease.appBaseUrl],
       },
       relay: {
-        enabled: true,
+        enabled: false,
       },
     },
     app: {

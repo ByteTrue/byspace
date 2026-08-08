@@ -1264,6 +1264,8 @@ export const ru: TranslationResources = {
       loadingOffer: "Загрузка предложения по сопряжению...",
       failedToLoadOffer: "Не удалось загрузить предложение сопряжения.",
       relayDisabled: "Реле не включено. Включите реле для сопряжения устройства.",
+      enableRelay: "Enable relay",
+      enablingRelay: "Enabling relay...",
       unavailable: "Предложение по сопряжению недоступно.",
       hint: "Отсканируйте этот код QR с помощью BySpace на своем телефоне или скопируйте ссылку ниже.",
       qrUnavailable: "Код QR недоступен.",

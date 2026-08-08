@@ -345,6 +345,14 @@ function mergeMutableConfigIntoPersistedConfig(params: {
     ...persisted,
     daemon: {
       ...persisted.daemon,
+      ...(mutable.relay !== undefined
+        ? {
+            relay: {
+              ...persisted.daemon?.relay,
+              enabled: mutable.relay.enabled,
+            },
+          }
+        : {}),
       mcp: {
         ...persisted.daemon?.mcp,
         injectIntoAgents: mutable.mcp.injectIntoAgents,

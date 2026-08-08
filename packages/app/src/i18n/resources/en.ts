@@ -1249,6 +1249,8 @@ export const en = {
       loadingOffer: "Loading pairing offer...",
       failedToLoadOffer: "Failed to load pairing offer.",
       relayDisabled: "Relay is not enabled. Enable relay to pair a device.",
+      enableRelay: "Enable relay",
+      enablingRelay: "Enabling relay...",
       unavailable: "Pairing offer unavailable.",
       hint: "Scan this QR code with BySpace on your phone, or copy the link below.",
       qrUnavailable: "QR code unavailable.",

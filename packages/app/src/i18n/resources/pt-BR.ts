@@ -1263,6 +1263,8 @@ export const ptBR: TranslationResources = {
       loadingOffer: "Carregando oferta de pareamento...",
       failedToLoadOffer: "Falha ao carregar oferta de pareamento.",
       relayDisabled: "Relay não está ativado. Ative o relay para parear um dispositivo.",
+      enableRelay: "Enable relay",
+      enablingRelay: "Enabling relay...",
       unavailable: "Oferta de pareamento indisponível.",
       hint: "Escaneie este QR code com o BySpace no seu celular ou copie o link abaixo.",
       qrUnavailable: "QR code indisponível.",

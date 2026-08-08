@@ -525,6 +525,13 @@ class ClampingModelClient extends TestAgentClient {
   }
 }
 
+class McpCapableTestAgentSession extends TestAgentSession {
+  override readonly capabilities = {
+    ...TEST_CAPABILITIES,
+    supportsMcpServers: true,
+  };
+}
+
 class ControlledInterruptSession extends TestAgentSession {
   interruptCalled = false;
 
@@ -1873,7 +1880,7 @@ test("createAgent preserves a user-provided byspace MCP config", async () => {
 
     override async createSession(config: AgentSessionConfig): Promise<AgentSession> {
       this.lastConfig = config;
-      return new TestAgentSession(config);
+      return new McpCapableTestAgentSession(config);
     }
   }
 
@@ -2240,7 +2247,7 @@ test("resumeAgentFromPersistence keeps metadata config, applies overrides, and p
         provider: "codex",
         cwd: overrides?.cwd ?? metadata.cwd ?? process.cwd(),
       };
-      return new TestAgentSession(merged);
+      return new McpCapableTestAgentSession(merged);
     }
   }
 
@@ -8470,4 +8477,123 @@ test("user_message events wrapping a byspace-system envelope are not restored du
 
   expect(userMessages).toHaveLength(1);
   expect(userMessages[0].text).toBe("real user message");
+});
+
+test("createAgent closes and rejects a provider session that cannot honor MCP servers", async () => {
+  const workdir = mkdtempSync(join(tmpdir(), "agent-manager-test-"));
+  const session = new (class extends TestAgentSession {
+    closed = false;
+    override async close(): Promise<void> {
+      this.closed = true;
+    }
+  })({ provider: "codex", cwd: workdir });
+  class UnsupportedMcpClient extends TestAgentClient {
+    override async createSession(): Promise<AgentSession> {
+      return session;
+    }
+  }
+  const agentId = "00000000-0000-4000-8000-000000000107";
+  const manager = new AgentManager({
+    clients: { codex: new UnsupportedMcpClient() },
+    registry: new AgentStorage(join(workdir, "agents"), logger),
+    logger,
+    idFactory: () => agentId,
+  });
+
+  try {
+    await expect(
+      manager.createAgent(
+        {
+          provider: "codex",
+          cwd: workdir,
+          mcpServers: { custom: { type: "http", url: "https://example.com/mcp" } },
+        },
+        undefined,
+        { workspaceId: undefined },
+      ),
+    ).rejects.toThrow("Provider 'codex' does not support MCP servers");
+    expect(session.closed).toBe(true);
+    expect(manager.getAgent(agentId)).toBeNull();
+  } finally {
+    rmSync(workdir, { recursive: true, force: true });
+  }
+});
+
+test("resumeAgentFromPersistence closes and rejects unsupported MCP config", async () => {
+  const workdir = mkdtempSync(join(tmpdir(), "agent-manager-test-"));
+  const session = new (class extends TestAgentSession {
+    closed = false;
+    override async close(): Promise<void> {
+      this.closed = true;
+    }
+  })({ provider: "codex", cwd: workdir });
+  class UnsupportedResumeClient extends TestAgentClient {
+    override async resumeSession(): Promise<AgentSession> {
+      return session;
+    }
+  }
+  const agentId = "00000000-0000-4000-8000-000000000108";
+  const manager = new AgentManager({
+    clients: { codex: new UnsupportedResumeClient() },
+    registry: new AgentStorage(join(workdir, "agents"), logger),
+    logger,
+  });
+
+  try {
+    await expect(
+      manager.resumeAgentFromPersistence(
+        { provider: "codex", sessionId: "persist-unsupported-mcp", metadata: { cwd: workdir } },
+        {
+          cwd: workdir,
+          mcpServers: { custom: { type: "http", url: "https://example.com/mcp" } },
+        },
+        agentId,
+      ),
+    ).rejects.toThrow("Provider 'codex' does not support MCP servers");
+    expect(session.closed).toBe(true);
+    expect(manager.getAgent(agentId)).toBeNull();
+  } finally {
+    rmSync(workdir, { recursive: true, force: true });
+  }
+});
+
+test("reloadAgentSession preserves the live session when replacement cannot honor MCP", async () => {
+  const workdir = mkdtempSync(join(tmpdir(), "agent-manager-test-"));
+  const original = new TestAgentSession({ provider: "codex", cwd: workdir });
+  const replacement = new (class extends TestAgentSession {
+    closed = false;
+    override async close(): Promise<void> {
+      this.closed = true;
+    }
+  })({ provider: "codex", cwd: workdir });
+  class UnsupportedReloadClient extends TestAgentClient {
+    override async createSession(): Promise<AgentSession> {
+      return original;
+    }
+    override async resumeSession(): Promise<AgentSession> {
+      return replacement;
+    }
+  }
+  const manager = new AgentManager({
+    clients: { codex: new UnsupportedReloadClient() },
+    registry: new AgentStorage(join(workdir, "agents"), logger),
+    logger,
+  });
+
+  try {
+    const created = await manager.createAgent(
+      { provider: "codex", cwd: workdir },
+      "00000000-0000-4000-8000-000000000109",
+      { workspaceId: undefined },
+    );
+    await expect(
+      manager.reloadAgentSession(created.id, {
+        mcpServers: { custom: { type: "http", url: "https://example.com/mcp" } },
+      }),
+    ).rejects.toThrow("Provider 'codex' does not support MCP servers");
+    expect(replacement.closed).toBe(true);
+    expect(manager.getAgent(created.id)?.session).toBe(original);
+  } finally {
+    rmSync(workdir, { recursive: true, force: true });
+  }
 });

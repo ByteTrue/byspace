@@ -1252,6 +1252,8 @@ export const ja: TranslationResources = {
       failedToLoadOffer: "ペアリングオファーの読み込みに失敗しました。",
       relayDisabled:
         "リレーが有効になっていません。デバイスをペアリングするにはリレーを有効にしてください。",
+      enableRelay: "Enable relay",
+      enablingRelay: "Enabling relay...",
       unavailable: "ペアリングオファーが利用できません。",
       hint: "スマートフォンのBySpaceでこのQRコードをスキャンするか、以下のリンクをコピーしてください。",
       qrUnavailable: "QRコードが利用できません。",

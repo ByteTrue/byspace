@@ -132,9 +132,8 @@ import { wrapSessionMessage, type SessionOutboundMessage } from "./messages.js";
 import type { TerminalManager } from "../terminal/terminal-manager.js";
 import { createConfiguredTerminalManager } from "../terminal/terminal-manager-factory.js";
 import { applyTerminalAgentHookSetting } from "../terminal/agent-hooks/terminal-agent-hook-setting.js";
-import { createConnectionOfferV2, encodeOfferToFragmentUrl } from "./connection-offer.js";
 import { loadOrCreateDaemonKeyPair } from "./daemon-keypair.js";
-import { startRelayTransport, type RelayTransportController } from "./relay-transport.js";
+import { RelayRuntime } from "./relay-runtime.js";
 import type { PushNotificationSender } from "./push/notifications.js";
 import { getOrCreateServerId } from "./server-id.js";
 import { resolveDaemonVersion } from "./daemon-version.js";
@@ -346,6 +345,7 @@ export interface BySpaceDaemonConfig {
   agentClients: Partial<Record<AgentProvider, AgentClient>>;
   agentStoragePath: string;
   relayEnabled?: boolean;
+  relayEnabledMutable?: boolean;
   relayEndpoint?: string;
   relayPublicEndpoint?: string;
   relayUseTls?: boolean;
@@ -450,6 +450,7 @@ function createInitialMutableDaemonConfig(config: BySpaceDaemonConfig): MutableD
   );
 
   const initialConfig: MutableDaemonConfig = {
+    ...(config.relayEnabledMutable ? { relay: { enabled: config.relayEnabled ?? false } } : {}),
     mcp: { injectIntoAgents: false },
     providers,
     metadataGeneration: {
@@ -494,7 +495,7 @@ export async function createBySpaceDaemon(
   void reconcileManagedProcessLedger(managedProcesses, logger).catch((error) => {
     logger.warn({ err: error }, "Failed to reconcile managed helper process ledger");
   });
-  let relayTransport: RelayTransportController | null = null;
+  let relayRuntime: RelayRuntime | null = null;
 
   const staticDir = config.staticDir;
   const downloadTokenTtlMs = config.downloadTokenTtlMs ?? 60000;
@@ -1318,6 +1319,20 @@ export async function createBySpaceDaemon(
                 : relayUseTls);
             const appBaseUrl = config.appBaseUrl ?? hostedRelease.appBaseUrl;
 
+            const daemonRuntimeConfig = {
+              listen: formatListenTarget(boundListenTarget ?? listenTarget),
+              worktreesRoot: config.worktreesRoot,
+              workspaceServicePorts: config.workspaceServicePorts,
+              appBaseUrl,
+              relay: {
+                enabled: relayEnabled,
+                endpoint: relayEndpoint,
+                publicEndpoint: relayPublicEndpoint,
+                useTls: relayUseTls,
+                publicUseTls: relayPublicUseTls,
+              },
+            };
+
             if (boundListenTarget.type === "tcp") {
               logger.info(
                 {
@@ -1384,49 +1399,36 @@ export async function createBySpaceDaemon(
               github,
               config.pushNotificationSender,
               providerSnapshotManager,
-              {
-                listen: formatListenTarget(boundListenTarget ?? listenTarget),
-                worktreesRoot: config.worktreesRoot,
-                workspaceServicePorts: config.workspaceServicePorts,
-                appBaseUrl,
-                relay: {
-                  enabled: relayEnabled,
-                  endpoint: relayEndpoint,
-                  publicEndpoint: relayPublicEndpoint,
-                  useTls: relayUseTls,
-                  publicUseTls: relayPublicUseTls,
-                },
-              },
+              daemonRuntimeConfig,
               serviceProxyPublicBaseUrl,
             );
 
-            if (relayEnabled) {
-              const offer = await createConnectionOfferV2({
-                serverId,
-                daemonPublicKeyB64: daemonKeyPair.publicKeyB64,
-                relay: {
-                  endpoint: relayPublicEndpoint,
-                  useTls: relayPublicUseTls,
-                },
-              });
-
-              encodeOfferToFragmentUrl({ offer, appBaseUrl });
-
-              relayTransport?.stop().catch(() => undefined);
-              relayTransport = startRelayTransport({
-                logger,
-                attachSocket: (ws, metadata) => {
-                  if (!wsServer) {
-                    throw new Error("WebSocket server not initialized");
-                  }
-                  return wsServer.attachExternalSocket(ws, metadata);
-                },
-                relayEndpoint,
-                relayUseTls,
-                serverId,
-                daemonKeyPair: daemonKeyPair.keyPair,
+            relayRuntime = new RelayRuntime({
+              logger,
+              attachSocket: (ws, metadata) => {
+                if (!wsServer) {
+                  throw new Error("WebSocket server not initialized");
+                }
+                return wsServer.attachExternalSocket(ws, metadata);
+              },
+              relayEndpoint,
+              relayUseTls,
+              serverId,
+              daemonKeyPair: daemonKeyPair.keyPair,
+              initialEnabled: relayEnabled,
+            });
+            if (config.relayEnabledMutable) {
+              daemonConfigStore.onFieldChange("relay.enabled", (value) => {
+                const enabled = value === true;
+                daemonRuntimeConfig.relay.enabled = enabled;
+                void relayRuntime?.setEnabled(enabled).catch((error) => {
+                  daemonRuntimeConfig.relay.enabled = false;
+                  daemonConfigStore.patch({ relay: { enabled: false } });
+                  logger.error({ err: error }, "Failed to update relay transport");
+                });
               });
             }
+            await relayRuntime.start();
           };
 
           logAndResolve().then(resolve, reject);
@@ -1473,7 +1475,7 @@ export async function createBySpaceDaemon(
     terminalManager.killAll();
     speechService.stop();
     await scheduleService.stop().catch(() => undefined);
-    await relayTransport?.stop().catch(() => undefined);
+    await relayRuntime?.stop().catch(() => undefined);
     if (wsServer) {
       await wsServer.close();
     }

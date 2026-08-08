@@ -460,6 +460,7 @@ export function createDefaultDeps(): HostRuntimeControllerDeps {
             useTls: connection.useTls ?? false,
           }),
           ...(connection.password ? { password: connection.password } : {}),
+          ...(connection.headers ? { headers: connection.headers } : {}),
         });
       }
       return new DaemonClient({
