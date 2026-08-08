@@ -10,11 +10,9 @@ category: Orchestration
 
 This is the complete catalog behind the workflows in [Orchestration](/docs/orchestration) and [Common workflows](/docs/orchestration-workflows). You normally ask for an outcome in natural language and let the agent choose the tools.
 
-BySpace can inject these tools into every new agent it launches. Open **Settings → your host → Agents** and turn on **Enable BySpace tools**, or set `daemon.mcp.injectIntoAgents` to `true`.
+BySpace does not inject the catalog into launched agents. Bundled orchestration skills call the same catalog through the `byspace tool` CLI. Install them under **Settings → your host → Agents → Orchestration skills**.
 
-Depending on the provider, BySpace delivers the catalog through its native tool interface or MCP. The capabilities are the same either way.
-
-The MCP server itself is controlled by `daemon.mcp.enabled`. Existing agents may need a reload.
+External MCP clients can explicitly connect to `/mcp/agents` when `daemon.mcp.enabled` is enabled. The endpoint uses the daemon's bearer authentication.
 
 ## Tools
 

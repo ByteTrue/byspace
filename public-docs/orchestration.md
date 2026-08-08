@@ -34,7 +34,7 @@ BySpace subagents are full agents managed by the BySpace daemon. The orchestrato
 
 ## Try it
 
-Open **Settings → your host → Agents**, then turn on **Enable BySpace tools**. Start a new agent, or reload an existing one so it receives the tools.
+Open **Settings → your host → Agents**, then install **Orchestration skills**. Start or reload an agent so it can discover the installed skills and use the `byspace` CLI.
 
 Then ask naturally:
 
@@ -70,6 +70,6 @@ new CI failures, and stop when all checks pass or after two hours.
 
 The base [`/byspace` orchestration skill](/docs/skills) teaches agents how to create heartbeats, so you only need to ask. A heartbeat continues the current conversation; a [schedule](/docs/schedules) is better for standalone cron-style jobs such as daily triage.
 
-You do not need to name MCP tools in your prompts. Ask for the workflow; the agent uses the tools underneath.
+You do not need to name tools or CLI commands in your prompts. Ask for the workflow; the installed skills teach the agent how to use BySpace.
 
 Continue with [Common workflows](/docs/orchestration-workflows) for copyable prompts, [Orchestration skills](/docs/skills) for packaged workflows, or the [MCP reference](/docs/mcp) for the complete tool catalog.

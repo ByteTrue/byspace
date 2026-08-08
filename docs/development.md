@@ -222,7 +222,7 @@ Build the artifact for packaging or measurement with:
 npm run build:daemon-web-ui
 ```
 
-This exports the browser Web app and copies it into `packages/server/dist/server/web-ui`, precompressing `.html`, `.js`, `.css`, and JSON assets as `.br` and `.gz`.
+This exports the browser Web app and copies it into `packages/server/dist/server/web-ui`, precompressing `.html`, `.js`, `.css`, and JSON assets as `.br` and `.gz`. The root `npm run build` also refreshes this embedded copy after building every workspace, so a production-style local rebuild cannot retain an older Web UI.
 
 Measured bundle size for a standard Expo web export:
 
