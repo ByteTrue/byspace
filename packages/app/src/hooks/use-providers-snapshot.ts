@@ -6,7 +6,11 @@ import type { DaemonClient } from "@bytetrue/byspace-client/internal/daemon-clie
 import { useHostRuntimeClient, useHostRuntimeIsConnected } from "@/runtime/host-runtime";
 import { useSessionStore } from "@/stores/session-store";
 import { useReplicaQuery } from "@/data/query";
-import { queryClient as singletonQueryClient } from "@/data/query-client";
+import {
+  providerSnapshotCache,
+  ProviderSnapshotCacheMissError,
+  type ProviderSnapshotCache,
+} from "@/data/provider-snapshot-cache";
 import { agentCommandsQueryRoot } from "@/hooks/agent-commands-query";
 import {
   isProvidersSnapshotHomeScope,
@@ -28,9 +32,31 @@ export type ProvidersSnapshotClient = Pick<
 
 export async function fetchProvidersSnapshot(input: {
   client: ProvidersSnapshotClient;
+  serverId: string;
   cwd: string | null;
+  cache?: ProviderSnapshotCache;
 }): Promise<GetProvidersSnapshotResult> {
-  return input.client.getProvidersSnapshot(providersSnapshotRequestOptions({ cwd: input.cwd }));
+  const cache = input.cache ?? providerSnapshotCache;
+  const cached = await cache.read(input.serverId, input.cwd);
+  const snapshot = await input.client.getProvidersSnapshot(
+    providersSnapshotRequestOptions({ cwd: input.cwd, ifNoneMatch: cached?.hash }),
+  );
+  if (snapshot.notModified) {
+    if (!cached) {
+      throw new ProviderSnapshotCacheMissError();
+    }
+    return { ...snapshot, entries: cached.entries };
+  }
+  if (snapshot.compactSnapshot && snapshot.snapshotHash) {
+    await cache.write({
+      serverId: input.serverId,
+      cwd: input.cwd,
+      hash: snapshot.snapshotHash,
+      generatedAt: snapshot.generatedAt,
+      compactSnapshot: snapshot.compactSnapshot,
+    });
+  }
+  return snapshot;
 }
 
 export async function refreshAndApplyProvidersSnapshot(input: {
@@ -39,11 +65,17 @@ export async function refreshAndApplyProvidersSnapshot(input: {
   serverId: string;
   cwd: string | null;
   providers?: AgentProvider[];
+  cache?: ProviderSnapshotCache;
 }): Promise<RefreshProvidersSnapshotResult> {
   const refreshResult = await input.client.refreshProvidersSnapshot(
     providersSnapshotRequestOptions({ cwd: input.cwd, providers: input.providers }),
   );
-  const snapshot = await fetchProvidersSnapshot({ client: input.client, cwd: input.cwd });
+  const snapshot = await fetchProvidersSnapshot({
+    client: input.client,
+    serverId: input.serverId,
+    cwd: input.cwd,
+    cache: input.cache,
+  });
   input.queryClient.setQueryData(providersSnapshotQueryKey(input.serverId, input.cwd), snapshot);
   void input.queryClient.invalidateQueries({
     queryKey: agentCommandsQueryRoot(input.serverId),
@@ -111,10 +143,10 @@ export function useProvidersSnapshot(
     enabled: Boolean(enabled && supportsSnapshot && serverId && client && isConnected),
     pushEvent: "providers_snapshot_update",
     queryFn: async () => {
-      if (!client) {
+      if (!client || !serverId) {
         throw new Error(t("workspace.terminal.hostDisconnected"));
       }
-      return fetchProvidersSnapshot({ client, cwd });
+      return fetchProvidersSnapshot({ client, serverId, cwd });
     },
   });
 
@@ -166,18 +198,4 @@ export function useProvidersSnapshot(
     refresh,
     refetchIfStale,
   };
-}
-
-export function prefetchProvidersSnapshot(
-  serverId: string,
-  client: DaemonClient,
-  options: { cwd?: string | null } = {},
-): void {
-  const cwd = normalizeProvidersSnapshotCwd(options.cwd);
-  const queryKey = providersSnapshotQueryKey(serverId, cwd);
-  void singletonQueryClient.prefetchQuery({
-    queryKey,
-    staleTime: Infinity,
-    queryFn: () => fetchProvidersSnapshot({ client, cwd }),
-  });
 }

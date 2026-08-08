@@ -5,7 +5,6 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { useClientActivity } from "@/hooks/use-client-activity";
 import { useAppVisible } from "@/hooks/use-app-visible";
-import { prefetchProvidersSnapshot } from "@/hooks/use-providers-snapshot";
 import { generateMessageId, type StreamItem } from "@/types/stream";
 import type { AgentAttachment, SessionOutboundMessage } from "@bytetrue/byspace-protocol/messages";
 import { parseServerInfoStatusPayload } from "@bytetrue/byspace-protocol/messages";
@@ -374,19 +373,6 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
       ...(serverInfo.features ? { features: serverInfo.features } : {}),
     });
   }, [client, serverId, updateSessionServerInfo]);
-
-  useEffect(() => {
-    if (!isConnected) {
-      return;
-    }
-
-    const serverInfo = client.getLastServerInfoMessage();
-    if (!serverInfo?.features?.providersSnapshot) {
-      return;
-    }
-
-    prefetchProvidersSnapshot(serverId, client);
-  }, [client, isConnected, serverId]);
 
   useEffect(() => {
     const unregister = voiceRuntime?.registerSession({

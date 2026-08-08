@@ -18,6 +18,10 @@ export const CLIENT_CAPS = {
   // COMPAT(providerSubagents): added in v0.1.107. The daemon emits provider-owned
   // child descriptors and timelines only to clients that understand the new messages.
   providerSubagents: "provider_subagents",
+  // COMPAT(compactProviderSnapshots): added in v0.3.0. Capable clients receive
+  // provider catalogs with shared thinking sets and may revalidate by content hash.
+  // Remove the legacy snapshot encoding after 2027-02-04.
+  compactProviderSnapshots: "compact_provider_snapshots",
 } as const;
 
 export type ClientCapability = (typeof CLIENT_CAPS)[keyof typeof CLIENT_CAPS];

@@ -532,6 +532,7 @@ test("advertises client capabilities in hello", async () => {
     clientType: "cli",
     protocolVersion: 1,
     capabilities: {
+      compact_provider_snapshots: true,
       custom_mode_icons: true,
       provider_subagents: true,
       reasoning_merge_enum: true,
@@ -4136,6 +4137,81 @@ test("lists available providers via RPC", async () => {
     fetchedAt: "2026-02-12T00:00:00.000Z",
     requestId: request.requestId,
   });
+});
+
+test("requests provider snapshots conditionally and expands the compact response", async () => {
+  const mock = createMockTransport();
+  const client = new DaemonClient({
+    url: "ws://test",
+    clientId: "clsk_provider_snapshot_test",
+    reconnect: { enabled: false },
+    transportFactory: () => mock.transport,
+  });
+  clients.push(client);
+
+  const connectPromise = client.connect();
+  mock.triggerOpen();
+  await connectPromise;
+
+  const promise = client.getProvidersSnapshot({ cwd: "/repo", ifNoneMatch: "previous-hash" });
+  const request = parseSentFrame(mock.sent[0]);
+  expect(request).toMatchObject({
+    type: "get_providers_snapshot_request",
+    cwd: "/repo",
+    ifNoneMatch: "previous-hash",
+  });
+
+  mock.triggerMessage(
+    wrapSessionMessage({
+      type: "get_providers_snapshot_response",
+      payload: {
+        entries: [],
+        compactSnapshot: {
+          entries: [
+            {
+              provider: "pi",
+              status: "ready",
+              enabled: true,
+              models: [
+                { id: "model-a", label: "Model A", thinkingSet: 0 },
+                { id: "model-b", label: "Model B", thinkingSet: 0 },
+              ],
+            },
+          ],
+          thinkingSets: [
+            {
+              options: [{ id: "high", label: "High", isDefault: true }],
+              defaultOptionId: "high",
+            },
+          ],
+        },
+        snapshotHash: "next-hash",
+        generatedAt: "2026-08-04T00:00:00.000Z",
+        requestId: request.requestId,
+      },
+    }),
+  );
+
+  const response = await promise;
+  expect(response.entries[0]?.models).toEqual([
+    {
+      provider: "pi",
+      id: "model-a",
+      label: "Model A",
+      thinkingOptions: [{ id: "high", label: "High", isDefault: true }],
+      defaultThinkingOptionId: "high",
+    },
+    {
+      provider: "pi",
+      id: "model-b",
+      label: "Model B",
+      thinkingOptions: [{ id: "high", label: "High", isDefault: true }],
+      defaultThinkingOptionId: "high",
+    },
+  ]);
+  expect(response.entries[0]?.models?.[0]?.thinkingOptions).toBe(
+    response.entries[0]?.models?.[1]?.thinkingOptions,
+  );
 });
 
 test("lists commands with draft config via RPC", async () => {
