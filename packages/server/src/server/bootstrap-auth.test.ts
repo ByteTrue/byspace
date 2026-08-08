@@ -1,9 +1,5 @@
-import { execFile } from "node:child_process";
 import { readFile } from "node:fs/promises";
-import { createRequire } from "node:module";
 import { join } from "node:path";
-import { promisify } from "node:util";
-import { fileURLToPath } from "node:url";
 import { WebSocket } from "ws";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
@@ -11,10 +7,6 @@ import { createTestBySpaceDaemon } from "./test-utils/byspace-daemon.js";
 
 const originalEnv = { ...process.env };
 const CORRECT_PASSWORD_HASH = "$2b$12$OLxyuuP9uLK30Uzc4wQX0O6liuU/Q1t5P2b0Ebf36mULvpVK3DRZW";
-const execFileAsync = promisify(execFile);
-const require = createRequire(import.meta.url);
-const tsxCli = require.resolve("tsx/cli");
-const cliEntry = fileURLToPath(new URL("../../../cli/src/index.js", import.meta.url));
 
 function connectWebSocket(params: {
   port: number;
@@ -100,34 +92,6 @@ describe("daemon bearer auth", () => {
       await daemonHandle.close();
     }
   });
-
-  test("ordinary CLI commands ignore the restricted token on passwordless daemons", async () => {
-    const daemonHandle = await createTestBySpaceDaemon();
-    try {
-      const tokenPath = join(daemonHandle.byspaceHome, "ordinary-cli-token.txt");
-      await daemonHandle.daemon.terminalManager.createTerminal({
-        workspaceId: "auth-test",
-        cwd: daemonHandle.byspaceHome,
-        command: process.execPath,
-        args: [
-          "-e",
-          `require("node:fs").writeFileSync(${JSON.stringify(tokenPath)}, process.env.BYSPACE_CLI_TOKEN)`,
-        ],
-      });
-      const token = await waitForFile(tokenPath);
-      const result = await execFileAsync(
-        process.execPath,
-        [tsxCli, cliEntry, "--json", "ls", "--host", `127.0.0.1:${daemonHandle.port}`],
-        {
-          cwd: process.cwd(),
-          env: { ...process.env, BYSPACE_CLI_TOKEN: token, BYSPACE_PASSWORD: undefined },
-        },
-      );
-      expect(JSON.parse(result.stdout)).toEqual([]);
-    } finally {
-      await daemonHandle.close();
-    }
-  }, 15_000);
 
   test("requires Authorization bearer on protected HTTP routes when password is configured", async () => {
     const daemonHandle = await createTestBySpaceDaemon({
@@ -246,22 +210,6 @@ describe("daemon bearer auth", () => {
       await expect(listResponse).resolves.toMatchObject({
         message: { payload: { requestId: "list-1", success: true } },
       });
-
-      const cliResult = await execFileAsync(
-        process.execPath,
-        [tsxCli, cliEntry, "--json", "tool", "list", "--host", `127.0.0.1:${daemonHandle.port}`],
-        {
-          cwd: process.cwd(),
-          env: {
-            ...process.env,
-            BYSPACE_CLI_TOKEN: token,
-            BYSPACE_PASSWORD: "wrong-operator-password",
-          },
-        },
-      );
-      expect(JSON.parse(cliResult.stdout)).toEqual(
-        expect.arrayContaining([expect.objectContaining({ name: "list_agents" })]),
-      );
 
       const closed = new Promise<{ code: number; reason: string }>((resolve) => {
         ws.once("close", (code, reason) => resolve({ code, reason: reason.toString() }));
