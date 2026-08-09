@@ -172,6 +172,13 @@ try {
     ...process.env,
     BYSPACE_HOME: home,
     BYSPACE_LISTEN: `127.0.0.1:${port}`,
+    BYSPACE_RELAY_ENABLED: undefined,
+    BYSPACE_RELAY_ENDPOINT: undefined,
+    BYSPACE_RELAY_PUBLIC_ENDPOINT: undefined,
+    BYSPACE_RELAY_USE_TLS: undefined,
+    BYSPACE_RELAY_PUBLIC_USE_TLS: undefined,
+    BYSPACE_APP_BASE_URL: undefined,
+    BYSPACE_CORS_ORIGINS: undefined,
   };
 
   runNpm(["install", "--global", "--prefix", installRoot, "--no-audit", "--no-fund", artifact], {
@@ -259,12 +266,6 @@ try {
     throw new Error("Installed CLI help did not render");
   }
 
-  runBinary(["daemon", "start", "--no-relay"], { env });
-  daemonStarted = true;
-  const status = waitForDaemon(env);
-  if (status.home !== home || status.listen !== `127.0.0.1:${port}`) {
-    throw new Error(`Daemon used unexpected paths: ${JSON.stringify(status)}`);
-  }
   const expectedHostedRelease = version.includes("-")
     ? {
         appBaseUrl: "https://app-beta.byspace.zijieapi.de5.net",
@@ -274,16 +275,54 @@ try {
         appBaseUrl: "https://app.byspace.zijieapi.de5.net",
         relayEndpoint: "relay.byspace.zijieapi.de5.net:443",
       };
-  if (status.relay !== `wss://${expectedHostedRelease.relayEndpoint}`) {
-    throw new Error(`Daemon used unexpected release relay: ${JSON.stringify(status)}`);
+  runBinary(["daemon", "start"], { env });
+  daemonStarted = true;
+  const defaultStatus = waitForDaemon(env);
+  if (defaultStatus.home !== home || defaultStatus.listen !== `127.0.0.1:${port}`) {
+    throw new Error(`Daemon used unexpected paths: ${JSON.stringify(defaultStatus)}`);
   }
-  const persistedConfig = JSON.parse(readFileSync(join(home, "config.json"), "utf8"));
+  if (defaultStatus.relay !== "disabled") {
+    throw new Error(`Fresh daemon enabled relay without opt-in: ${JSON.stringify(defaultStatus)}`);
+  }
+  const defaultPersistedConfig = JSON.parse(readFileSync(join(home, "config.json"), "utf8"));
   if (
-    persistedConfig.app?.baseUrl !== expectedHostedRelease.appBaseUrl ||
-    !persistedConfig.daemon?.cors?.allowedOrigins?.includes(expectedHostedRelease.appBaseUrl)
+    defaultPersistedConfig.daemon?.relay?.enabled !== false ||
+    defaultPersistedConfig.app?.baseUrl !== expectedHostedRelease.appBaseUrl ||
+    !defaultPersistedConfig.daemon?.cors?.allowedOrigins?.includes(expectedHostedRelease.appBaseUrl)
   ) {
     throw new Error(
-      `Daemon persisted unexpected release endpoints: ${JSON.stringify(persistedConfig)}`,
+      `Daemon persisted unexpected release defaults: ${JSON.stringify(defaultPersistedConfig)}`,
+    );
+  }
+
+  const pairing = JSON.parse(runBinary(["daemon", "pair", "--relay", "--json"], { env }));
+  const pairingUrl = typeof pairing.url === "string" ? new URL(pairing.url) : null;
+  const encodedOffer = pairingUrl
+    ? new URLSearchParams(pairingUrl.hash.slice(1)).get("offer")
+    : null;
+  const pairingOffer = encodedOffer
+    ? JSON.parse(Buffer.from(encodedOffer, "base64url").toString("utf8"))
+    : null;
+  if (
+    pairing.relayEnabled !== true ||
+    !pairingUrl ||
+    `${pairingUrl.origin}${pairingUrl.pathname}` !== `${expectedHostedRelease.appBaseUrl}/` ||
+    pairingOffer?.relay?.endpoint !== expectedHostedRelease.relayEndpoint ||
+    pairingOffer?.relay?.useTls !== true
+  ) {
+    throw new Error(`Daemon produced an unexpected relay opt-in offer: ${JSON.stringify(pairing)}`);
+  }
+  const optedInStatus = waitForDaemon(env);
+  if (optedInStatus.relay !== `wss://${expectedHostedRelease.relayEndpoint}`) {
+    throw new Error(`Daemon used unexpected release relay: ${JSON.stringify(optedInStatus)}`);
+  }
+  const optedInPersistedConfig = JSON.parse(readFileSync(join(home, "config.json"), "utf8"));
+  if (
+    optedInPersistedConfig.daemon?.relay?.enabled !== true ||
+    optedInPersistedConfig.daemon.relay.endpoint !== undefined
+  ) {
+    throw new Error(
+      `Daemon persisted unexpected relay opt-in config: ${JSON.stringify(optedInPersistedConfig)}`,
     );
   }
   process.stdout.write(`BySpace ${version} package smoke passed on port ${port}.\n`);
