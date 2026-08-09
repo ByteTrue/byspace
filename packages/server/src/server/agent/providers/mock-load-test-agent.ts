@@ -644,6 +644,7 @@ export class MockLoadTestAgentSession implements AgentSession {
   private modeId: string | null;
   private modelId: string | null;
   private readonly rewindError: string | null;
+  private readonly assistantResponse: string | null;
   private remainingPromptRejections: number;
 
   constructor(options: { config: AgentSessionConfig; sessionId: string; logger?: Logger }) {
@@ -654,6 +655,10 @@ export class MockLoadTestAgentSession implements AgentSession {
     this.rewindError =
       typeof options.config.featureValues?.mockRewindError === "string"
         ? options.config.featureValues.mockRewindError
+        : null;
+    this.assistantResponse =
+      typeof options.config.featureValues?.mockAssistantResponse === "string"
+        ? options.config.featureValues.mockAssistantResponse
         : null;
     const requestedPromptRejections = options.config.featureValues?.mockPromptRejections;
     this.remainingPromptRejections =
@@ -728,6 +733,8 @@ export class MockLoadTestAgentSession implements AgentSession {
         this.scheduleLargePayloadTurn(turn, largePayload);
       } else if (stress) {
         this.scheduleStressTurn(turn, stress);
+      } else if (this.assistantResponse) {
+        this.scheduleSettledAssistantTurn(turn, this.assistantResponse);
       } else {
         this.schedule(turn, 0);
       }
