@@ -47,6 +47,14 @@ import type { WorkspaceGitService } from "./workspace-git-service.js";
 import { isPlatform } from "../test-utils/platform.js";
 import { WorkspaceSetupRuntime } from "./workspace-setup-runtime.js";
 
+function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((resolvePromise) => {
+    resolve = resolvePromise;
+  });
+  return { promise, resolve };
+}
+
 interface LegacyCreateWorktreeTestOptions {
   branchName: string;
   cwd: string;
@@ -868,6 +876,79 @@ describe("runWorktreeSetupInBackground", () => {
         status: "completed",
         error: null,
       });
+    },
+  );
+
+  // POSIX-only: setup command uses sh and sleep so abort can be observed mid-command.
+  test.skipIf(isPlatform("win32"))(
+    "aborts a running workspace setup command without progress or workspace writeback",
+    async () => {
+      const { tempDir, repoDir } = createGitRepo({
+        byspaceConfig: {
+          worktree: {
+            setup: ["sh -c 'sleep 2; printf wrote > aborted-write.txt'"],
+          },
+        },
+      });
+      cleanupPaths.push(tempDir);
+      const byspaceHome = path.join(tempDir, ".byspace");
+      const createdWorktree = await createLegacyWorktreeForTest({
+        branchName: "feature-aborted-setup",
+        cwd: repoDir,
+        baseBranch: "main",
+        worktreeSlug: "feature-aborted-setup",
+        runSetup: false,
+        byspaceHome,
+      });
+      const emitted: SessionOutboundMessage[] = [];
+      const snapshots = new Map<string, unknown>();
+      const commandStarted = deferred<void>();
+      const emitWorkspaceUpdateForWorkspaceId = vi.fn(async () => {});
+      const archiveWorkspaceRecord = vi.fn(async () => {});
+      const controller = new AbortController();
+      const run = runWorktreeSetupInBackground(
+        {
+          byspaceHome,
+          emitWorkspaceUpdateForWorkspaceId,
+          cacheWorkspaceSetupSnapshot: (workspaceId, snapshot) =>
+            snapshots.set(workspaceId, snapshot),
+          emit: (message) => {
+            emitted.push(message);
+            if (
+              message.type === "workspace_setup_progress" &&
+              message.payload.detail.commands.some((command) => command.status === "running")
+            ) {
+              commandStarted.resolve();
+            }
+          },
+          sessionLogger: createLogger(),
+          terminalManager: null,
+          archiveWorkspaceRecord,
+        },
+        {
+          requestCwd: repoDir,
+          repoRoot: repoDir,
+          workspaceId: "ws-aborted-setup",
+          worktree: {
+            branchName: "feature-aborted-setup",
+            worktreePath: createdWorktree.worktreePath,
+          },
+          shouldBootstrap: true,
+          slug: "feature-aborted-setup",
+          worktreePath: createdWorktree.worktreePath,
+        },
+        controller.signal,
+      );
+      await commandStarted.promise;
+      const emittedAtAbort = emitted.length;
+      controller.abort();
+      await run;
+
+      expect(existsSync(path.join(createdWorktree.worktreePath, "aborted-write.txt"))).toBe(false);
+      expect(emitted).toHaveLength(emittedAtAbort);
+      expect(snapshots.get("ws-aborted-setup")).toMatchObject({ status: "running" });
+      expect(emitWorkspaceUpdateForWorkspaceId).not.toHaveBeenCalled();
+      expect(archiveWorkspaceRecord).not.toHaveBeenCalled();
     },
   );
 

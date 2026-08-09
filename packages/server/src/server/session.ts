@@ -2783,6 +2783,12 @@ export class Session {
         const projectWorkspaces = (await this.workspaceRegistry.list()).filter(
           (workspace) => workspace.projectId === projectId,
         );
+        await Promise.all(
+          projectWorkspaces.map((workspace) =>
+            this.workspaceSetupRuntime.stop(workspace.workspaceId),
+          ),
+        );
+
         const activeWorkspaceIds = projectWorkspaces
           .filter((workspace) => !workspace.archivedAt)
           .map((workspace) => workspace.workspaceId);
@@ -4777,6 +4783,7 @@ export class Session {
       workspaceRegistry: this.workspaceRegistry,
       logger: this.sessionLogger,
       workspaceGitService: this.workspaceGitService,
+      stopWorkspaceSetup: (workspaceId) => this.workspaceSetupRuntime.stop(workspaceId),
     });
     const result = await service.runOnce();
     const changedWorkspaceIds = new Set<string>();
@@ -5968,8 +5975,8 @@ export class Session {
           this.workspaceAutoName.scheduleForWorktree(autoNameInput, {
             currentSelection: this.getFocusedAgentSelectionForCwd(autoNameInput.workspace.cwd),
           }),
-        startWorkspaceSetup: (workspaceId, operation) =>
-          this.workspaceSetupRuntime.start(workspaceId, operation),
+        startWorkspaceSetup: (workspaceId, operation, afterSettled) =>
+          this.workspaceSetupRuntime.start(workspaceId, operation, afterSettled),
         emitWorkspaceUpdateForWorkspaceId: (workspaceId) =>
           this.emitWorkspaceUpdateForWorkspaceId(workspaceId),
         cacheWorkspaceSetupSnapshot: (workspaceId, snapshot) => {

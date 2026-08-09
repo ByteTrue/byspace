@@ -30,6 +30,14 @@ interface CreateAgentWorktreeTestResult {
   shouldBootstrap: boolean;
 }
 
+function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((resolvePromise) => {
+    resolve = resolvePromise;
+  });
+  return { promise, resolve };
+}
+
 async function cleanupTerminalManager(terminalManager: TerminalManager): Promise<void> {
   const terminalsByCwd = await Promise.all(
     terminalManager.listDirectories().map((cwd) => terminalManager.getTerminals(cwd)),
@@ -91,6 +99,67 @@ describe("runAsyncWorktreeBootstrap", () => {
     await Promise.all(realTerminalManagers.map(cleanupTerminalManager));
     rmSync(tempDir, { recursive: true, force: true });
   });
+
+  async function createConfiguredBootstrapWorktree(
+    config: unknown,
+    slug: string,
+  ): Promise<CreateAgentWorktreeTestResult> {
+    writeFileSync(join(repoDir, "byspace.json"), JSON.stringify(config));
+    execFileSync("git", ["add", "byspace.json"], { cwd: repoDir, stdio: "pipe" });
+    execFileSync("git", ["-c", "commit.gpgsign=false", "commit", "-m", `config ${slug}`], {
+      cwd: repoDir,
+      stdio: "pipe",
+    });
+    return createBootstrapWorktreeForTest({
+      cwd: repoDir,
+      branchName: slug,
+      baseBranch: "main",
+      worktreeSlug: slug,
+      byspaceHome,
+    });
+  }
+
+  function createBootstrapTerminal(input: {
+    id: string;
+    ready?: boolean;
+    onSend?: (data: string) => void;
+    onSubscribe?: () => void;
+  }): TerminalSession {
+    return {
+      id: input.id,
+      name: "Bootstrap",
+      cwd: repoDir,
+      send: (message: { type: string; data?: string }) => {
+        if (message.type === "input") {
+          input.onSend?.(message.data ?? "");
+        }
+      },
+      subscribe: () => {
+        input.onSubscribe?.();
+        return () => {};
+      },
+      getState: () => ({
+        rows: 1,
+        cols: 1,
+        grid: input.ready ? [[{ char: "$" }]] : [],
+        scrollback: [],
+        cursor: { row: 0, col: 0 },
+      }),
+    } as unknown as TerminalSession;
+  }
+
+  function createBootstrapTerminalManager(input: {
+    createTerminal: TerminalManager["createTerminal"];
+    killed: string[];
+  }): TerminalManager {
+    return {
+      createTerminal: input.createTerminal,
+      registerCwdEnv: () => {},
+      killTerminalAndWait: async (terminalId: string) => {
+        input.killed.push(terminalId);
+      },
+    } as unknown as TerminalManager;
+  }
 
   it("does not fail setup when live timeline emission throws", async () => {
     writeFileSync(
@@ -303,6 +372,240 @@ describe("runAsyncWorktreeBootstrap", () => {
     expect(readyAt).toBeGreaterThan(0);
     expect(sendAt).toBeGreaterThan(0);
     expect(sendAt).toBeGreaterThanOrEqual(readyAt);
+  });
+
+  it("does not create terminals when aborted at the terminal timeline boundary", async () => {
+    const worktreeBootstrap = await createConfiguredBootstrapWorktree(
+      { worktree: { terminals: [{ command: "echo terminal" }] } },
+      "feature-abort-terminal-timeline",
+    );
+    const controller = new AbortController();
+    const timelineStarted = deferred<void>();
+    const releaseTimeline = deferred<void>();
+    const persisted: AgentTimelineItem[] = [];
+    let createCalls = 0;
+    const killed: string[] = [];
+    const run = runAsyncWorktreeBootstrap({
+      agentId: "agent-abort-terminal-timeline",
+      workspaceId: "ws-abort-terminal-timeline",
+      worktree: worktreeBootstrap.worktree,
+      terminalManager: createBootstrapTerminalManager({
+        killed,
+        createTerminal: async () => {
+          createCalls += 1;
+          return createBootstrapTerminal({ id: "term-never" });
+        },
+      }),
+      appendTimelineItem: async (item) => {
+        persisted.push(item);
+        if (
+          item.type === "tool_call" &&
+          item.name === "byspace_worktree_terminals" &&
+          item.status === "running"
+        ) {
+          timelineStarted.resolve();
+          await releaseTimeline.promise;
+        }
+        return true;
+      },
+      signal: controller.signal,
+    });
+    await timelineStarted.promise;
+    controller.abort();
+    releaseTimeline.resolve();
+    await run;
+
+    expect(createCalls).toBe(0);
+    expect(killed).toEqual([]);
+    expect(
+      persisted
+        .filter((item) => item.type === "tool_call" && item.name === "byspace_worktree_terminals")
+        .map((item) => item.status),
+    ).toEqual(["running"]);
+  });
+
+  it("cleans up a terminal created while setup is being aborted", async () => {
+    const worktreeBootstrap = await createConfiguredBootstrapWorktree(
+      { worktree: { terminals: [{ command: "echo terminal" }] } },
+      "feature-abort-terminal-create",
+    );
+    const controller = new AbortController();
+    const createStarted = deferred<void>();
+    const created = deferred<TerminalSession>();
+    const killed: string[] = [];
+    const sent: string[] = [];
+    const persisted: AgentTimelineItem[] = [];
+    const run = runAsyncWorktreeBootstrap({
+      agentId: "agent-abort-terminal-create",
+      workspaceId: "ws-abort-terminal-create",
+      worktree: worktreeBootstrap.worktree,
+      terminalManager: createBootstrapTerminalManager({
+        killed,
+        createTerminal: async () => {
+          createStarted.resolve();
+          return created.promise;
+        },
+      }),
+      appendTimelineItem: async (item) => {
+        persisted.push(item);
+        return true;
+      },
+      signal: controller.signal,
+    });
+    await createStarted.promise;
+    controller.abort();
+    created.resolve(
+      createBootstrapTerminal({
+        id: "term-created-during-abort",
+        ready: true,
+        onSend: (data) => sent.push(data),
+      }),
+    );
+    await run;
+
+    expect(sent).toEqual([]);
+    expect(killed).toContain("term-created-during-abort");
+    expect(
+      persisted.some(
+        (item) =>
+          item.type === "tool_call" &&
+          item.name === "byspace_worktree_terminals" &&
+          item.status === "completed",
+      ),
+    ).toBe(false);
+  });
+
+  it("cancels terminal readiness and closes the terminal without sending the command", async () => {
+    const worktreeBootstrap = await createConfiguredBootstrapWorktree(
+      { worktree: { terminals: [{ command: "echo terminal" }] } },
+      "feature-abort-terminal-readiness",
+    );
+    const controller = new AbortController();
+    const subscribed = deferred<void>();
+    const killed: string[] = [];
+    const sent: string[] = [];
+    const persisted: AgentTimelineItem[] = [];
+    const run = runAsyncWorktreeBootstrap({
+      agentId: "agent-abort-terminal-readiness",
+      workspaceId: "ws-abort-terminal-readiness",
+      worktree: worktreeBootstrap.worktree,
+      terminalManager: createBootstrapTerminalManager({
+        killed,
+        createTerminal: async () =>
+          createBootstrapTerminal({
+            id: "term-waiting",
+            onSend: (data) => sent.push(data),
+            onSubscribe: () => subscribed.resolve(),
+          }),
+      }),
+      appendTimelineItem: async (item) => {
+        persisted.push(item);
+        return true;
+      },
+      signal: controller.signal,
+    });
+    await subscribed.promise;
+    controller.abort();
+    await run;
+
+    expect(sent).toEqual([]);
+    expect(killed).toContain("term-waiting");
+    expect(
+      persisted.some(
+        (item) =>
+          item.type === "tool_call" &&
+          item.name === "byspace_worktree_terminals" &&
+          item.status === "completed",
+      ),
+    ).toBe(false);
+  });
+
+  it("closes an executing terminal when abort is observed at command send", async () => {
+    const worktreeBootstrap = await createConfiguredBootstrapWorktree(
+      { worktree: { terminals: [{ command: "echo terminal" }] } },
+      "feature-abort-terminal-send",
+    );
+    const controller = new AbortController();
+    const killed: string[] = [];
+    const sent: string[] = [];
+    const persisted: AgentTimelineItem[] = [];
+    await runAsyncWorktreeBootstrap({
+      agentId: "agent-abort-terminal-send",
+      workspaceId: "ws-abort-terminal-send",
+      worktree: worktreeBootstrap.worktree,
+      terminalManager: createBootstrapTerminalManager({
+        killed,
+        createTerminal: async () =>
+          createBootstrapTerminal({
+            id: "term-command-started",
+            ready: true,
+            onSend: (data) => {
+              sent.push(data);
+              controller.abort();
+            },
+          }),
+      }),
+      appendTimelineItem: async (item) => {
+        persisted.push(item);
+        return true;
+      },
+      signal: controller.signal,
+    });
+
+    expect(sent).toEqual(["echo terminal\r"]);
+    expect(killed).toContain("term-command-started");
+    expect(
+      persisted.some(
+        (item) =>
+          item.type === "tool_call" &&
+          item.name === "byspace_worktree_terminals" &&
+          item.status === "completed",
+      ),
+    ).toBe(false);
+  });
+
+  it("drains an in-flight live update without running queued writeback after abort", async () => {
+    const worktreeBootstrap = await createConfiguredBootstrapWorktree(
+      {
+        worktree: {
+          setup: [
+            "node -e \"process.stdout.write('one'); setTimeout(() => process.stdout.write('two'), 5000)\"",
+          ],
+        },
+      },
+      "feature-abort-live-queue",
+    );
+    const controller = new AbortController();
+    const firstLiveWrite = deferred<void>();
+    const releaseLiveWrite = deferred<void>();
+    const liveItems: AgentTimelineItem[] = [];
+    const persisted: AgentTimelineItem[] = [];
+    const run = runAsyncWorktreeBootstrap({
+      agentId: "agent-abort-live-queue",
+      workspaceId: "ws-abort-live-queue",
+      worktree: worktreeBootstrap.worktree,
+      terminalManager: null,
+      appendTimelineItem: async (item) => {
+        persisted.push(item);
+        return true;
+      },
+      emitLiveTimelineItem: async (item) => {
+        liveItems.push(item);
+        firstLiveWrite.resolve();
+        await releaseLiveWrite.promise;
+        return true;
+      },
+      signal: controller.signal,
+    });
+    await firstLiveWrite.promise;
+    controller.abort();
+    releaseLiveWrite.resolve();
+    await run;
+
+    expect(liveItems).toHaveLength(1);
+    expect(
+      persisted.some((item) => item.type === "tool_call" && item.name === "byspace_worktree_setup"),
+    ).toBe(false);
   });
 
   interface CreateTerminalCall {

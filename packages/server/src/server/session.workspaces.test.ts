@@ -72,6 +72,7 @@ import {
 } from "./test-utils/session-stubs.js";
 import { generateProjectId } from "./workspace-registry-model.js";
 import { workspaceLifecycleCoordinator } from "./workspace-lifecycle-coordinator.js";
+import { WorkspaceSetupRuntime } from "./workspace-setup-runtime.js";
 import {
   FileBackedProjectRegistry,
   FileBackedWorkspaceRegistry,
@@ -599,6 +600,7 @@ function createSessionForWorkspaceTests(
     agentStorage?: { [K in keyof SessionOptions["agentStorage"]]?: unknown };
     projectRegistry?: SessionOptions["projectRegistry"];
     workspaceRegistry?: SessionOptions["workspaceRegistry"];
+    workspaceSetupRuntime?: WorkspaceSetupRuntime;
     github?: ForgeService;
     byspaceHome?: string;
     worktreesRoot?: string;
@@ -799,6 +801,7 @@ function createSessionForWorkspaceTests(
       tts: null,
       providerSnapshotManager,
       terminalManager: options.terminalManager ?? null,
+      workspaceSetupRuntime: options.workspaceSetupRuntime,
     }),
   );
   return session;
@@ -3730,8 +3733,10 @@ test("archiving the last workspace emits a remove carrying the now-empty project
 
 test("project.remove.request archives active workspaces and removes the project record", async () => {
   const emitted: SessionOutboundMessage[] = [];
+  const workspaceSetupRuntime = new WorkspaceSetupRuntime();
   const session = createSessionForWorkspaceTests({
     onMessage: (message) => emitted.push(message),
+    workspaceSetupRuntime,
   });
   const project = createPersistedProjectRecord({
     projectId: "proj-remove-with-workspace",
@@ -3754,6 +3759,18 @@ test("project.remove.request archives active workspaces and removes the project 
   const workspaces = new Map<string, PersistedWorkspaceRecord>([
     [workspace.workspaceId, workspace],
   ]);
+
+  const setupStarted = deferred<void>();
+  const setupAborted = deferred<void>();
+  const releaseSetup = deferred<void>();
+  let setupSettled = false;
+  workspaceSetupRuntime.start(workspace.workspaceId, async (signal) => {
+    setupStarted.resolve();
+    signal.addEventListener("abort", () => setupAborted.resolve(), { once: true });
+    await releaseSetup.promise;
+    setupSettled = true;
+  });
+  await setupStarted.promise;
 
   session.projectRegistry.get = async (projectId: string) => projects.get(projectId) ?? null;
   session.projectRegistry.list = async () => Array.from(projects.values());
@@ -3798,11 +3815,20 @@ test("project.remove.request archives active workspaces and removes the project 
     return descriptors;
   };
 
-  await session.handleMessage({
+  const removal = session.handleMessage({
     type: "project.remove.request",
     projectId: project.projectId,
     requestId: "req-remove-project",
   });
+  await setupAborted.promise;
+
+  expect(setupSettled).toBe(false);
+  expect(projects.has(project.projectId)).toBe(true);
+  expect(workspaces.get(workspace.workspaceId)).toEqual(workspace);
+
+  releaseSetup.resolve();
+  await removal;
+  expect(setupSettled).toBe(true);
 
   expect(projects.has(project.projectId)).toBe(false);
   expect(workspaces.get(workspace.workspaceId)).toEqual({

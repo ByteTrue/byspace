@@ -651,6 +651,10 @@ export async function runWorktreeSetupCommands(options: {
   signal?: AbortSignal;
   onEvent?: (event: WorktreeSetupCommandProgressEvent) => void;
 }): Promise<WorktreeSetupCommandResult[]> {
+  if (options.signal?.aborted) {
+    return [];
+  }
+
   // Read byspace.json from the worktree (it will have the same content as the source repo)
   const setupCommands = getWorktreeSetupCommands(options.worktreePath);
   if (setupCommands.length === 0) {
@@ -668,6 +672,9 @@ export async function runWorktreeSetupCommands(options: {
 
   const results: WorktreeSetupCommandResult[] = [];
   for (const [index, cmd] of setupCommands.entries()) {
+    if (options.signal?.aborted) {
+      break;
+    }
     const result = options.onEvent
       ? await execSetupCommandStreamed({
           command: cmd,
@@ -683,6 +690,10 @@ export async function runWorktreeSetupCommands(options: {
           env: setupEnv,
         });
     results.push(result);
+
+    if (options.signal?.aborted) {
+      break;
+    }
 
     if (result.exitCode !== 0) {
       if (options.cleanupOnFailure) {

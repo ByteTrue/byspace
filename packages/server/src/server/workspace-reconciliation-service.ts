@@ -56,6 +56,7 @@ export interface WorkspaceReconciliationServiceOptions {
   projectRegistry: ProjectRegistry;
   workspaceRegistry: WorkspaceRegistry;
   logger: pino.Logger;
+  stopWorkspaceSetup: (workspaceId: string) => Promise<void>;
   intervalMs?: number;
   onChanges?: (changes: ReconciliationChange[]) => void;
   workspaceGitService?: Pick<WorkspaceGitService, "getWorkspaceGitMetadata">;
@@ -71,6 +72,7 @@ export class WorkspaceReconciliationService {
   private readonly onChanges: ((changes: ReconciliationChange[]) => void) | null;
   private readonly workspaceGitService: Pick<WorkspaceGitService, "getWorkspaceGitMetadata"> | null;
   private readonly lifecycleCoordinator: WorkspaceLifecycleCoordinator;
+  private readonly stopWorkspaceSetup: (workspaceId: string) => Promise<void>;
   private timer: ReturnType<typeof setInterval> | null = null;
   private running = false;
 
@@ -83,6 +85,7 @@ export class WorkspaceReconciliationService {
     this.onChanges = options.onChanges ?? null;
     this.workspaceGitService = options.workspaceGitService ?? null;
     this.lifecycleCoordinator = options.lifecycleCoordinator ?? workspaceLifecycleCoordinator;
+    this.stopWorkspaceSetup = options.stopWorkspaceSetup;
   }
 
   start(): void {
@@ -137,6 +140,7 @@ export class WorkspaceReconciliationService {
     const missingWorkspaces = activeWorkspaces.filter((workspace) => !existsSync(workspace.cwd));
     await Promise.all(
       missingWorkspaces.map(async (workspace) => {
+        await this.stopWorkspaceSetup(workspace.workspaceId);
         const timestamp = new Date().toISOString();
         await archivePersistedWorkspaceRecord({
           workspaceId: workspace.workspaceId,

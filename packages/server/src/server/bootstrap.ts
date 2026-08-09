@@ -778,6 +778,7 @@ export async function createBySpaceDaemon(
     workspaceRegistry,
     logger,
     workspaceGitService,
+    stopWorkspaceSetup: (workspaceId) => workspaceSetupRuntime.stop(workspaceId),
   });
   void (async () => {
     try {
@@ -951,8 +952,8 @@ export async function createBySpaceDaemon(
           await emitWorkspaceUpdatesExternal([workspaceId]);
         },
         cacheWorkspaceSetupSnapshot: () => {},
-        startWorkspaceSetup: (workspaceId, operation) =>
-          workspaceSetupRuntime.start(workspaceId, operation),
+        startWorkspaceSetup: (workspaceId, operation, afterSettled) =>
+          workspaceSetupRuntime.start(workspaceId, operation, afterSettled),
         emit: emitExternalSessionMessage,
         sessionLogger: logger,
         terminalManager,
