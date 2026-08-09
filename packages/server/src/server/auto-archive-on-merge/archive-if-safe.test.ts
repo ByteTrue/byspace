@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import type { Logger } from "pino";
@@ -13,6 +13,7 @@ import {
 } from "./archive-if-safe.js";
 import type { ArchiveResult, ActiveWorkspaceRef } from "../workspace-archive-service.js";
 import type { WorkspaceGitRuntimeSnapshot } from "../workspace-git-service.js";
+import { WorkspaceSetupRuntime } from "../workspace-setup-runtime.js";
 import { createWorktree, type WorktreeConfig } from "../../utils/worktree.js";
 import type { ForgeService } from "../../../services/forge-service.js";
 import type { StoredAgentRecord } from "../agent/agent-storage.js";
@@ -20,6 +21,21 @@ import type { StoredAgentRecord } from "../agent/agent-storage.js";
 const CWD = "/tmp/byspace/worktrees/repo/branch";
 const BYSPACE_HOME = "/tmp/byspace";
 const WORKTREES_ROOT = "/tmp/byspace/worktrees/repo";
+
+function deferred(): { promise: Promise<void>; resolve: () => void } {
+  let resolve!: () => void;
+  const promise = new Promise<void>((resolvePromise) => {
+    resolve = resolvePromise;
+  });
+  return { promise, resolve };
+}
+
+function waitForAbort(signal: AbortSignal): Promise<void> {
+  if (signal.aborted) return Promise.resolve();
+  return new Promise((resolve) => {
+    signal.addEventListener("abort", () => resolve(), { once: true });
+  });
+}
 
 function createPullRequest(
   overrides?: Partial<NonNullable<WorkspaceGitRuntimeSnapshot["forge"]["pullRequest"]>>,
@@ -113,6 +129,7 @@ function createHarness(overrides?: {
     markWorkspaceArchiving: vi.fn(),
     clearWorkspaceArchiving: vi.fn(),
     emitWorkspaceUpdatesForWorkspaceIds: vi.fn(),
+    stopWorkspaceSetup: vi.fn(async () => undefined),
   };
   const archiveByScope = vi.fn(
     overrides?.archiveByScope ??
@@ -261,6 +278,8 @@ function createRealOutcomeHarness(input: {
   worktreePath: string;
   activeWorkspaces: ActiveWorkspaceRef[];
   archivedWorkspaceIds: Set<string>;
+  stopWorkspaceSetup?: (workspaceId: string) => Promise<void>;
+  onArchiveWorkspaceRecord?: (workspaceId: string) => void;
 }) {
   const active = [...input.activeWorkspaces];
   const logger = pino({ level: "silent" });
@@ -327,10 +346,12 @@ function createRealOutcomeHarness(input: {
       if (index !== -1) {
         active.splice(index, 1);
       }
+      input.onArchiveWorkspaceRecord?.(workspaceId);
     },
     markWorkspaceArchiving: () => {},
     clearWorkspaceArchiving: () => {},
     emitWorkspaceUpdatesForWorkspaceIds: vi.fn(),
+    stopWorkspaceSetup: input.stopWorkspaceSetup ?? (async () => undefined),
   };
 
   return {
@@ -620,5 +641,81 @@ describe("archiveIfSafe", () => {
 
     expect(archivedWorkspaceIds.has(workspaceA)).toBe(true);
     expect(existsSync(worktree.worktreePath)).toBe(false);
+  });
+  test("real outcome: aborts and settles setup before auto-archive mutation and cleanup", async () => {
+    const { tempDir, repoDir } = createGitRepo();
+    const byspaceHome = path.join(tempDir, ".byspace");
+    const worktree = await createBySpaceOwnedWorktree(repoDir, byspaceHome, "merged-running-setup");
+    const workspaceId = "ws-merged-running-setup";
+    const archivedWorkspaceIds = new Set<string>();
+    const setupStarted = deferred();
+    const setupAborted = deferred();
+    const allowSetupToSettle = deferred();
+    const events: string[] = [];
+    const workspaceSetupRuntime = new WorkspaceSetupRuntime();
+    const setupOutput = path.join(worktree.worktreePath, "setup-output.txt");
+    let stopWorkspaceSetupCalls = 0;
+
+    workspaceSetupRuntime.start(workspaceId, async (signal) => {
+      writeFileSync(setupOutput, "setup started\n");
+      events.push("setup-started");
+      setupStarted.resolve();
+      await waitForAbort(signal);
+      writeFileSync(setupOutput, "setup aborting\n", { flag: "a" });
+      events.push("setup-aborted");
+      setupAborted.resolve();
+      await allowSetupToSettle.promise;
+      writeFileSync(setupOutput, "setup settled\n", { flag: "a" });
+      events.push("setup-settled");
+    });
+    await setupStarted.promise;
+
+    const harness = createRealOutcomeHarness({
+      byspaceHome,
+      repoDir,
+      worktreePath: worktree.worktreePath,
+      activeWorkspaces: [{ workspaceId, cwd: worktree.worktreePath, kind: "worktree" }],
+      archivedWorkspaceIds,
+      stopWorkspaceSetup: async (workspaceIdToStop) => {
+        stopWorkspaceSetupCalls += 1;
+        await workspaceSetupRuntime.stop(workspaceIdToStop);
+      },
+      onArchiveWorkspaceRecord: () => events.push("workspace-archived"),
+    });
+    const archive = archiveIfSafe({
+      cwd: worktree.worktreePath,
+      pullRequest: createPullRequest({ isMerged: true }),
+      inFlight: harness.inFlight,
+      options: harness.options,
+      log: harness.log,
+    });
+
+    await setupAborted.promise;
+    expect(events).toEqual(["setup-started", "setup-aborted"]);
+    expect(archivedWorkspaceIds.has(workspaceId)).toBe(false);
+    expect(existsSync(worktree.worktreePath)).toBe(true);
+
+    await archiveIfSafe({
+      cwd: worktree.worktreePath,
+      pullRequest: createPullRequest({ isMerged: true }),
+      inFlight: harness.inFlight,
+      options: harness.options,
+      log: harness.log,
+    });
+    expect(stopWorkspaceSetupCalls).toBe(1);
+    expect(events).toEqual(["setup-started", "setup-aborted"]);
+
+    allowSetupToSettle.resolve();
+    await archive;
+
+    expect(events).toEqual([
+      "setup-started",
+      "setup-aborted",
+      "setup-settled",
+      "workspace-archived",
+    ]);
+    expect(archivedWorkspaceIds.has(workspaceId)).toBe(true);
+    expect(existsSync(worktree.worktreePath)).toBe(false);
+    expect(stopWorkspaceSetupCalls).toBe(1);
   });
 });

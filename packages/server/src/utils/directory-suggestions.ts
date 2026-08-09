@@ -33,6 +33,10 @@ export interface SearchDirectoryEntriesOptions {
   respectGitIgnore?: boolean;
 }
 
+export interface DirectorySuggestionDependencies {
+  runGitCommand: typeof runGitCommand;
+}
+
 interface QueryPlan {
   isPathQuery: boolean;
   parentPart: string;
@@ -71,20 +75,12 @@ interface DirectoryListCacheEntry {
   changedAtMs: number;
   entries: RawChildEntry[];
 }
-
-interface GitIgnoredPathsCacheEntry {
-  expiresAt: number;
-  paths: Promise<Set<string>>;
-}
-
 const DEFAULT_LIMIT = 30;
 const MAX_LIMIT = 100;
 const DEFAULT_MAX_DEPTH = 12;
 const DEFAULT_MAX_ENTRIES_SCANNED = 20_000;
 const DIRECTORY_LIST_CACHE_TTL_MS = 8_000;
 const DIRECTORY_LIST_CACHE_MAX_ENTRIES = 4_000;
-const GIT_IGNORED_PATHS_CACHE_TTL_MS = 8_000;
-const GIT_IGNORED_PATHS_CACHE_MAX_ENTRIES = 256;
 // Windows does not reliably update directory mtime/ctime when children change,
 // so metadata cannot safely validate a cross-request listing cache there.
 const CAN_VALIDATE_DIRECTORY_CACHE_FROM_METADATA = process.platform !== "win32";
@@ -117,25 +113,27 @@ const IGNORED_DIRECTORY_NAMES = new Set([
   ".git",
 ]);
 const directoryListCache = new Map<string, DirectoryListCacheEntry>();
-const gitIgnoredPathsCache = new Map<string, GitIgnoredPathsCacheEntry>();
+const defaultDependencies: DirectorySuggestionDependencies = { runGitCommand };
 
 export async function searchDirectoryEntries(
   options: SearchDirectoryEntriesOptions,
+  dependencies: DirectorySuggestionDependencies = defaultDependencies,
 ): Promise<DirectorySuggestionEntry[]> {
   const root = await resolveDirectory(options.root);
   if (!root) return [];
 
-  const gitIgnoredPaths = options.respectGitIgnore
-    ? await loadGitIgnoredPaths(root)
-    : new Set<string>();
-  const input = buildSearchInput(options, root, gitIgnoredPaths);
+  const input = buildSearchInput(options, root);
   if (!input) return [];
 
   const exact =
     input.plan.browseExactPath || (input.matchMode === "suffix" && input.plan.isPathQuery)
       ? await findExactEntry(input)
       : null;
-  if (exact && input.limit === 1) return [exact];
+  if (exact && input.limit === 1) {
+    return options.respectGitIgnore
+      ? filterGitIgnoredCandidates(root, [exact], dependencies)
+      : [exact];
+  }
 
   const browsesRoot = input.plan.isPathQuery && !input.plan.normalizedQuery;
   const ranked =
@@ -143,15 +141,16 @@ export async function searchDirectoryEntries(
       ? await searchChildren(input)
       : await searchTree(input);
   const results = sortAndFormat(ranked, input.root, input.pathFormat).slice(0, input.limit);
-  return exact
+  const candidates = exact
     ? [exact, ...results.filter((entry) => !sameEntry(entry, exact))].slice(0, input.limit)
     : results;
+  if (!options.respectGitIgnore) return candidates;
+  return filterGitIgnoredCandidates(root, candidates, dependencies);
 }
 
 function buildSearchInput(
   options: SearchDirectoryEntriesOptions,
   root: string,
-  gitIgnoredPaths: Set<string>,
 ): SearchInput | null {
   const includeDirectories = options.includeDirectories ?? true;
   const includeFiles = options.includeFiles ?? false;
@@ -179,7 +178,6 @@ function buildSearchInput(
     maxDepth: options.maxDepth ?? DEFAULT_MAX_DEPTH,
     maxEntriesScanned: options.maxEntriesScanned ?? DEFAULT_MAX_ENTRIES_SCANNED,
     confidentResultScanThreshold: options.confidentResultScanThreshold,
-    gitIgnoredPaths,
   };
 }
 
@@ -188,7 +186,6 @@ async function findExactEntry(input: SearchInput): Promise<DirectorySuggestionEn
   const visiblePath = path.resolve(input.root, input.plan.normalizedQuery);
   const resolvedPath = await realpath(visiblePath).catch(() => null);
   if (!resolvedPath || !isPathInsideRoot(input.root, resolvedPath)) return null;
-  if (isGitIgnoredPath(resolvedPath, input)) return null;
   const info = await stat(resolvedPath).catch(() => null);
   const kind = getEntryKind(info);
   if (
@@ -212,14 +209,12 @@ interface SearchInput {
   maxDepth: number;
   maxEntriesScanned: number;
   confidentResultScanThreshold: number | undefined;
-  gitIgnoredPaths: Set<string>;
 }
 
 async function searchChildren(input: SearchInput): Promise<RankedEntry[]> {
   const visibleParent = path.resolve(input.root, input.plan.parentPart || ".");
   const parent = await realpath(visibleParent).catch(() => null);
   if (!parent || !isPathInsideRoot(input.root, parent)) return [];
-  if (isGitIgnoredPath(parent, input)) return [];
   const entries = await readChildren(parent);
   return entries.flatMap((entry) => {
     if (!isPathInsideRoot(input.root, entry.resolvedPath) || !shouldDiscover(entry, input))
@@ -315,22 +310,12 @@ async function* roundRobin<T>(branches: Array<AsyncGenerator<T>>): AsyncGenerato
 }
 
 function shouldDiscover(entry: ChildEntry, input: SearchInput): boolean {
-  if (isGitIgnoredPath(entry.resolvedPath, input)) return false;
   if (entry.kind === "file") {
     return input.includeFiles && !entry.name.startsWith(".");
   }
   if (IGNORED_DIRECTORY_NAMES.has(entry.name)) return false;
   if (!entry.name.startsWith(".")) return true;
   return input.hiddenDirectoryNames.has(entry.name);
-}
-
-function isGitIgnoredPath(absolutePath: string, input: SearchInput): boolean {
-  let candidate = absolutePath;
-  while (candidate !== input.root && isPathInsideRoot(input.root, candidate)) {
-    if (input.gitIgnoredPaths.has(candidate)) return true;
-    candidate = path.dirname(candidate);
-  }
-  return false;
 }
 
 function shouldSuggest(entry: TraversedEntry, input: SearchInput): boolean {
@@ -568,44 +553,42 @@ async function readChildren(directory: string): Promise<ChildEntry[]> {
     .sort((left, right) => left.name.localeCompare(right.name));
 }
 
-async function loadGitIgnoredPaths(root: string): Promise<Set<string>> {
-  const now = Date.now();
-  const cached = gitIgnoredPathsCache.get(root);
-  if (cached && cached.expiresAt > now) return cached.paths;
+async function filterGitIgnoredCandidates(
+  root: string,
+  candidates: DirectorySuggestionEntry[],
+  dependencies: DirectorySuggestionDependencies,
+): Promise<DirectorySuggestionEntry[]> {
+  if (candidates.length === 0) return [];
+  const relativePaths = candidates.map((candidate) =>
+    path.isAbsolute(candidate.path) ? normalizeRelativePath(root, candidate.path) : candidate.path,
+  );
+  const commandInput = `${relativePaths.join("\0")}\0`;
 
-  const paths = runGitCommand(["ls-files", "-o", "-i", "--directory", "--exclude-standard", "-z"], {
-    cwd: root,
-    envOverlay: { GIT_OPTIONAL_LOCKS: "0" },
-    timeout: 10_000,
-  })
-    .then(
-      (result) =>
-        new Set(
-          result.stdout
-            .split("\0")
-            .filter(Boolean)
-            .map((relativePath) => path.resolve(root, relativePath.replace(/\/$/, ""))),
-        ),
-    )
-    .catch(() => new Set<string>());
-
-  gitIgnoredPathsCache.set(root, {
-    expiresAt: now + GIT_IGNORED_PATHS_CACHE_TTL_MS,
-    paths,
-  });
-  pruneGitIgnoredPathsCache(now);
-  return paths;
+  try {
+    const result = await dependencies.runGitCommand(["check-ignore", "--stdin", "-z"], {
+      cwd: root,
+      envOverlay: { GIT_OPTIONAL_LOCKS: "0" },
+      timeout: 10_000,
+      acceptExitCodes: [0, 1],
+      input: commandInput,
+      maxOutputBytes: Buffer.byteLength(commandInput),
+    });
+    if (result.truncated) return [];
+    const ignoredPaths = new Set(result.stdout.split("\0").filter(Boolean));
+    return candidates.filter((_, index) => !ignoredPaths.has(relativePaths[index]));
+  } catch {
+    return (await hasGitMetadata(root)) ? [] : candidates;
+  }
 }
 
-function pruneGitIgnoredPathsCache(now: number): void {
-  if (gitIgnoredPathsCache.size <= GIT_IGNORED_PATHS_CACHE_MAX_ENTRIES) return;
-  for (const [key, entry] of gitIgnoredPathsCache) {
-    if (entry.expiresAt <= now) gitIgnoredPathsCache.delete(key);
-  }
-  while (gitIgnoredPathsCache.size > GIT_IGNORED_PATHS_CACHE_MAX_ENTRIES) {
-    const key = gitIgnoredPathsCache.keys().next().value;
-    if (!key) return;
-    gitIgnoredPathsCache.delete(key);
+async function hasGitMetadata(root: string): Promise<boolean> {
+  let current = root;
+  while (true) {
+    const metadata = await stat(path.join(current, ".git")).catch(() => null);
+    if (metadata) return true;
+    const parent = path.dirname(current);
+    if (parent === current) return false;
+    current = parent;
   }
 }
 

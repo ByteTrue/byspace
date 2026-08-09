@@ -914,6 +914,7 @@ export async function createBySpaceDaemon(
     markWorkspaceArchiving: markWorkspaceArchivingExternal,
     clearWorkspaceArchiving: clearWorkspaceArchivingExternal,
     emitWorkspaceUpdatesForWorkspaceIds: emitWorkspaceUpdatesExternal,
+    stopWorkspaceSetup: (workspaceId) => workspaceSetupRuntime.stop(workspaceId),
   });
 
   const createBySpaceWorktreeForTools = async (

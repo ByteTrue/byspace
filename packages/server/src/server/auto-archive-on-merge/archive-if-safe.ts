@@ -34,6 +34,7 @@ export interface AutoArchiveArchiveOptions {
   markWorkspaceArchiving: (workspaceIds: Iterable<string>, archivingAt: string) => void;
   clearWorkspaceArchiving: (workspaceIds: Iterable<string>) => void;
   emitWorkspaceUpdatesForWorkspaceIds: (workspaceIds: Iterable<string>) => Promise<void>;
+  stopWorkspaceSetup: (workspaceId: string) => Promise<void>;
 }
 
 export interface ArchiveIfSafeDependencies {
@@ -144,6 +145,7 @@ export async function archiveIfSafe(input: {
               },
               workspaceIdToKill,
             ),
+          stopWorkspaceSetup: options.stopWorkspaceSetup,
           sessionLogger: log,
         },
         {
