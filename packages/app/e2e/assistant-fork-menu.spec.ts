@@ -1,5 +1,4 @@
-import { expect, test as base, type Page } from "./fixtures";
-import { scrollAgentChatToBottom } from "./helpers/agent-bottom-anchor";
+import { expect, test as base } from "./fixtures";
 import { awaitAssistantMessage } from "./helpers/agent-stream";
 import { expectComposerVisible, submitMessage } from "./helpers/composer";
 import {
@@ -9,6 +8,15 @@ import {
   type MockAgentWorkspace,
 } from "./helpers/mock-agent";
 import { submitNewWorkspaceEmpty } from "./helpers/new-workspace";
+import {
+  expectChatHistoryAttachment,
+  expectInFlightForkAvailable,
+  expectLiveAssistantText,
+  forkInFlightTurnToNewTab,
+  forkMostRecentAssistantTurnToNewTab,
+  forkMostRecentAssistantTurnToNewWorkspace,
+  observeForkAttachment,
+} from "./helpers/assistant-fork";
 
 const test = base.extend<{
   seedForkWorkspace: (options: MockAgentOptions) => Promise<MockAgentWorkspace>;
@@ -23,30 +31,6 @@ const test = base.extend<{
     await Promise.allSettled(sessions.map((session) => session.cleanup()));
   },
 });
-
-async function openAssistantForkMenu(page: Page): Promise<void> {
-  await expect
-    .poll(
-      async () => {
-        await scrollAgentChatToBottom(page);
-        return page.getByTestId("assistant-fork-menu-trigger").count();
-      },
-      { timeout: 30_000 },
-    )
-    .toBeGreaterThan(0);
-  const trigger = page.getByTestId("assistant-fork-menu-trigger").last();
-  await expect(trigger).toBeVisible({ timeout: 30_000 });
-  await trigger.click();
-  await expect(page.getByTestId("assistant-fork-menu-content")).toBeVisible({
-    timeout: 10_000,
-  });
-}
-
-async function expectChatHistoryPill(page: Page): Promise<void> {
-  const pill = page.getByTestId("composer-chat-history-attachment-pill").first();
-  await expect(pill).toBeVisible({ timeout: 30_000 });
-  await expect(pill).toContainText("Chat history");
-}
 
 test.describe("Assistant fork menu", () => {
   test.describe.configure({ timeout: 180_000 });
@@ -68,9 +52,42 @@ test.describe("Assistant fork menu", () => {
       timeout: 30_000,
     });
 
-    await openAssistantForkMenu(page);
-    await page.getByTestId("assistant-fork-menu-new-tab").click();
-    await expectChatHistoryPill(page);
+    await forkMostRecentAssistantTurnToNewTab(page);
+    await expectChatHistoryAttachment(page);
+  });
+
+  test("forks a streaming assistant turn without interrupting it", async ({
+    page,
+    seedForkWorkspace,
+  }) => {
+    const visibleBeforeFork = "where the auto-scroll logic actually lives";
+    const visibleAfterFork = "the first useful step is to read the relevant files";
+    const sourceAgentTitle = "Assistant fork in flight";
+    const forkAttachment = observeForkAttachment(page);
+
+    const session = await seedForkWorkspace({
+      repoPrefix: "assistant-fork-in-flight-",
+      title: sourceAgentTitle,
+      model: "thirty-minute-stream",
+    });
+
+    await openAgentRoute(page, session);
+    await expectComposerVisible(page);
+    await submitMessage(page, "Walk me through the scroll anchor behavior.");
+
+    await expectInFlightForkAvailable(page);
+    await expectLiveAssistantText(page, visibleBeforeFork);
+
+    await forkInFlightTurnToNewTab(page);
+    expect(await forkAttachment.waitForRequestBoundary()).toEqual({
+      cursor: false,
+      messageId: false,
+    });
+    await expectChatHistoryAttachment(page);
+    expect(await forkAttachment.waitForText()).toContain(visibleBeforeFork);
+
+    await page.getByRole("button", { name: sourceAgentTitle }).click();
+    await expectLiveAssistantText(page, visibleAfterFork);
   });
 
   test("focuses a forked assistant turn in a new workspace draft tab", async ({
@@ -96,8 +113,7 @@ test.describe("Assistant fork menu", () => {
     const agentTab = page.getByTestId(`workspace-tab-agent_${session.agentId}`);
     await expect(agentTab).toHaveAttribute("aria-selected", "true");
 
-    await openAssistantForkMenu(page);
-    await page.getByTestId("assistant-fork-menu-new-tab").click();
+    await forkMostRecentAssistantTurnToNewTab(page);
 
     const selectedTab = page
       .getByTestId("workspace-tabs-row")
@@ -107,7 +123,7 @@ test.describe("Assistant fork menu", () => {
       timeout: 30_000,
     });
     await expect(agentTab).toHaveAttribute("aria-selected", "false");
-    await expectChatHistoryPill(page);
+    await expectChatHistoryAttachment(page);
   });
 
   test("keeps the fork attachment after submitting an existing-workspace draft tab", async ({
@@ -126,9 +142,8 @@ test.describe("Assistant fork menu", () => {
     await awaitAssistantMessage(page);
     await session.client.waitForFinish(session.agentId, 45_000);
 
-    await openAssistantForkMenu(page);
-    await page.getByTestId("assistant-fork-menu-new-tab").click();
-    await expectChatHistoryPill(page);
+    await forkMostRecentAssistantTurnToNewTab(page);
+    await expectChatHistoryAttachment(page);
 
     await submitMessage(page, "");
 
@@ -152,9 +167,8 @@ test.describe("Assistant fork menu", () => {
     await awaitAssistantMessage(page);
     await session.client.waitForFinish(session.agentId, 45_000);
 
-    await openAssistantForkMenu(page);
-    await page.getByTestId("assistant-fork-menu-new-workspace").click();
-    await expectChatHistoryPill(page);
+    await forkMostRecentAssistantTurnToNewWorkspace(page);
+    await expectChatHistoryAttachment(page);
 
     await submitNewWorkspaceEmpty(page);
 
