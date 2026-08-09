@@ -301,6 +301,7 @@ export const ar: TranslationResources = {
       aiRefinedTranscript: "نص منسق بالذكاء الاصطناعي",
       originalTranscript: "النص الأصلي",
       useOriginal: "استخدام النص الأصلي",
+      refinementFailed: "فشل تنسيق النص بالذكاء الاصطناعي؛ تم الاحتفاظ بالنص الأصلي. {{error}}",
       useAiRefinement: "استخدام تنسيق الذكاء الاصطناعي",
     },
     question: {

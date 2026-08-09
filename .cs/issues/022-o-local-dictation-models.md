@@ -80,7 +80,7 @@ start/stop flow remains the release blocker.
 - AI refinement is an explicit Host setting and defaults off.
 - When enabled, only the final transcript text—not audio—is sent through the same structured-generation provider resolution and non-persisted internal Agent path used for titles, commit messages, and PR text.
 - It therefore supports the same Provider set instead of adding a dictation-only adapter.
-- Provider or schema failure returns the original transcript. A successful result is labeled as AI-cleaned in the composer, keeps both original and refined drafts behind a direct toggle until the user edits or sends, and is never automatically sent.
+- Provider or schema failure returns the original transcript and exposes the failure reason in a standalone status row above the composer input. A successful result is labeled as AI-cleaned there, keeps both original and refined drafts behind a direct toggle until the user edits or sends, and is never automatically sent.
 - Download responses are stream-capped at the catalog size before archive verification, so a malformed overlong response cannot consume unbounded Host disk.
 
 ### Protocol
@@ -100,7 +100,8 @@ start/stop flow remains the release blocker.
 - The microphone remains visible while unconfigured; activating it explains the requirement and opens that Host's Dictation settings.
 - While recording, the composer keeps the existing draft visible and unchanged.
 - Recording controls replace only the composer toolbar: cancel, volume/duration, and stop/transcribe.
-- After stop, the toolbar shows processing, then appends raw fail-open text or a labeled AI-cleaned draft with `Use original` / `Use AI cleanup` toggling.
+- After stop, the toolbar shows processing, then appends raw fail-open text or an AI-cleaned draft.
+- Refinement success/failure and the `Use original` / `Use AI cleanup` toggle occupy a standalone row above the input surface rather than reducing the editable text area.
 - The same stacked composer structure is retained on desktop and compact browser layouts:
 
 ```text
@@ -142,6 +143,7 @@ start/stop flow remains the release blocker.
 - [x] Cancel discards the recording; stop appends only the final transcript to the existing draft.
 - [x] Desktop and compact browser layouts keep the composer text visible while recording.
 - [x] Active model downloads expose byte and percentage progress; clients retain the indeterminate fallback for older Hosts.
+- [x] AI refinement success/failure feedback renders above the input; failure keeps raw text and shows the server reason.
 - [ ] Human voice-input acceptance of the explicit start/stop, final-only flow.
 
 - Base focused server lifecycle/downloader/worker tests: 21 passed.
@@ -163,6 +165,7 @@ start/stop flow remains the release blocker.
 - Integration review fixed pending-start cancel/unmount settlement, server-side pending-start cancellation, worker shutdown before model deletion, model-selection source-of-truth drift, mutation/refinement error handling, archived-Agent header controls, initial model-list retry, and draft submission before model defaults finish loading.
 - Final regression evidence includes 106 daemon-client tests, 6 stream-sender tests, 8 Dictation hook tests, 2 Dictation settings browser tests, 3 New Workspace Dictation browser tests, 12 stream-manager tests, 10 speech-runtime tests, the real worker-process test, root typecheck/lint/format check, server build, and Web export. Independent re-review closed all High/Medium findings.
 - Model download progress evidence: downloader/runtime/protocol validation tests and focused real-browser progress rendering passed; root typecheck, lint, format, and Web export remained green.
+- Refinement feedback evidence: state tests cover fail-open error retention, protocol/server tests cover optional wire errors, and a focused browser test covers success toggle placement plus visible failure reason.
 - Synthetic quality smoke outputs:
   - English: `please run the type check and rebuild the server before opening the pull`
   - Mandarin: `今天我们修复了终端粘贴和工作区切换的问题请重新运行类型检查`

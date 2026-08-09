@@ -305,6 +305,8 @@ export const fr: TranslationResources = {
       aiRefinedTranscript: "Transcription révisée par l’IA",
       originalTranscript: "Transcription originale",
       useOriginal: "Utiliser l’original",
+      refinementFailed:
+        "Le nettoyage par IA a échoué ; la transcription d’origine a été conservée. {{error}}",
       useAiRefinement: "Utiliser la version IA",
     },
     question: {

@@ -1,6 +1,13 @@
 export interface DictationRefinementMeta {
   requestId: string;
   originalText?: string;
+  error?: string;
+}
+
+export interface DictationRefinementResult {
+  text: string;
+  refined: boolean;
+  error?: string;
 }
 
 import { i18n } from "@/i18n/i18next";
@@ -11,7 +18,7 @@ export interface UseDictationOptions {
   client: import("@bytetrue/byspace-client/internal/daemon-client").DaemonClient | null;
   onTranscript: (text: string, meta: DictationRefinementMeta) => void;
   onError?: (error: Error) => void;
-  refineTranscript?: (text: string) => Promise<{ text: string; refined: boolean }>;
+  refineTranscript?: (text: string) => Promise<DictationRefinementResult>;
   canStart?: () => boolean;
   canConfirm?: () => boolean;
 }

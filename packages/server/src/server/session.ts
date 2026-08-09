@@ -1998,7 +1998,11 @@ export class Session {
       ?.refineTranscript?.({ requestId, text, agentId })
       .catch((error) => {
         this.sessionLogger.warn({ err: error, agentId }, "Dictation transcript refinement failed");
-        return { text, refined: false };
+        return {
+          text,
+          refined: false,
+          error: error instanceof Error ? error.message : String(error),
+        };
       });
     this.emit({
       type: "speech.dictation.refine.response",

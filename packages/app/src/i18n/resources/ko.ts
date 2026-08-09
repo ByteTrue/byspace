@@ -328,6 +328,7 @@ const koTranslations = {
       insertAndSend: "전사 삽입 후 보내기",
       failed: "받아쓰기 실패: {{error}}",
       failedRetry: "받아쓰기에 실패했습니다. 다시 시도하려면 누르세요.",
+      refinementFailed: "AI 정리에 실패하여 원본 받아쓰기를 유지했습니다. {{error}}",
     },
     question: {
       submit: "제출",

@@ -2893,6 +2893,7 @@ export const DictationRefineResponseSchema = z.object({
     requestId: z.string(),
     text: z.string(),
     refined: z.boolean(),
+    error: z.string().optional(),
   }),
 });
 

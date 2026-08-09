@@ -69,7 +69,11 @@ describe("dictation transcript refinement", () => {
     });
     await expect(
       disabled.refine({ requestId: "disabled", text: source, agentId: "agent-1" }),
-    ).resolves.toEqual({ text: source, refined: false });
+    ).resolves.toEqual({
+      text: source,
+      refined: false,
+      error: "AI transcript cleanup is disabled on this Host.",
+    });
     expect(generate).not.toHaveBeenCalled();
 
     const unavailable = createDictationTranscriptRefiner({
@@ -80,7 +84,11 @@ describe("dictation transcript refinement", () => {
     });
     await expect(
       unavailable.refine({ requestId: "unavailable", text: source, agentId: "missing" }),
-    ).resolves.toEqual({ text: source, refined: false });
+    ).resolves.toEqual({
+      text: source,
+      refined: false,
+      error: "The Agent is no longer available.",
+    });
 
     const failed = createDictationTranscriptRefiner({
       agentManager: managerWithAgent(),
@@ -94,6 +102,6 @@ describe("dictation transcript refinement", () => {
     });
     await expect(
       failed.refine({ requestId: "failed", text: source, agentId: "agent-1" }),
-    ).resolves.toEqual({ text: source, refined: false });
+    ).resolves.toEqual({ text: source, refined: false, error: "provider unavailable" });
   });
 });

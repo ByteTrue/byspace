@@ -304,6 +304,7 @@ export const ja: TranslationResources = {
       aiRefinedTranscript: "AIで整えた文字起こし",
       originalTranscript: "元の文字起こし",
       useOriginal: "元の文字起こしを使う",
+      refinementFailed: "AI 整理に失敗したため、元の文字起こしを保持しました。{{error}}",
       useAiRefinement: "AI整形を使う",
     },
     question: {

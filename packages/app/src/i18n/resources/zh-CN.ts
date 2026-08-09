@@ -301,6 +301,7 @@ export const zhCN: TranslationResources = {
       aiRefinedTranscript: "AI 已整理转写",
       originalTranscript: "原始转写",
       useOriginal: "使用原文",
+      refinementFailed: "AI 整理失败，已保留原始转写：{{error}}",
       useAiRefinement: "使用 AI 整理",
     },
     question: {

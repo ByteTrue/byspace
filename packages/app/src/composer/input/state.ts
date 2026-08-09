@@ -32,7 +32,7 @@ export function applyDictationRefinement(
   draft: string,
   transcript: string,
   refinement: DictationRefinementMeta | undefined,
-): { draft: string; choice: DictationRefinementChoice | null } {
+): { draft: string; choice: DictationRefinementChoice | null; error: string | null } {
   const originalDraft = appendDictationTranscript(
     draft,
     refinement?.originalText?.trim() || transcript,
@@ -42,7 +42,11 @@ export function applyDictationRefinement(
     refinement?.originalText && refinedDraft !== originalDraft
       ? { originalDraft, refinedDraft, showingOriginal: false }
       : null;
-  return { draft: choice ? refinedDraft : originalDraft, choice };
+  return {
+    draft: choice ? refinedDraft : originalDraft,
+    choice,
+    error: refinement?.error?.trim() || null,
+  };
 }
 
 export function toggleDictationRefinement(

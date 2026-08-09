@@ -300,6 +300,7 @@ export const en = {
       aiRefinedTranscript: "AI-cleaned transcript",
       originalTranscript: "Original transcript",
       useOriginal: "Use original",
+      refinementFailed: "AI cleanup failed; original transcript kept. {{error}}",
       useAiRefinement: "Use AI cleanup",
     },
     question: {

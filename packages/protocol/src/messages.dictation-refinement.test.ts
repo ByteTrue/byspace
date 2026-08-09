@@ -31,6 +31,18 @@ describe("dictation refinement schemas", () => {
     expect(SessionInboundMessageSchema.parse(request)).toEqual(request);
     expect(DictationRefineResponseSchema.parse(response)).toEqual(response);
     expect(SessionOutboundMessageSchema.parse(response)).toEqual(response);
+
+    const failure = {
+      type: "speech.dictation.refine.response",
+      payload: {
+        requestId: "request-2",
+        text: "先检查两个文件",
+        refined: false,
+        error: "Provider unavailable",
+      },
+    } as const;
+    expect(DictationRefineResponseSchema.parse(failure)).toEqual(failure);
+    expect(SessionOutboundMessageSchema.parse(failure)).toEqual(failure);
   });
 
   test("keeps the capability and config optional for older peers", () => {

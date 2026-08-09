@@ -304,6 +304,7 @@ export const ptBR: TranslationResources = {
       aiRefinedTranscript: "Transcrição revisada por IA",
       originalTranscript: "Transcrição original",
       useOriginal: "Usar original",
+      refinementFailed: "A revisão por IA falhou; a transcrição original foi mantida. {{error}}",
       useAiRefinement: "Usar revisão por IA",
     },
     question: {

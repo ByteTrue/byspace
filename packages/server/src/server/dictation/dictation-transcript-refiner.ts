@@ -12,6 +12,7 @@ const DictationRefinementSchema = z
 export interface DictationTranscriptRefinementResult {
   text: string;
   refined: boolean;
+  error?: string;
 }
 
 interface DictationTranscriptRefinerLogger {
@@ -38,13 +39,16 @@ export function createDictationTranscriptRefiner(
 ): DictationTranscriptRefiner {
   return {
     async refine({ text, agentId }) {
-      if (!options.isEnabled() || text.trim().length === 0) {
+      if (text.trim().length === 0) {
         return rawResult(text);
+      }
+      if (!options.isEnabled()) {
+        return rawResult(text, "AI transcript cleanup is disabled on this Host.");
       }
 
       const agent = options.agentManager.getAgent(agentId);
       if (!agent) {
-        return rawResult(text);
+        return rawResult(text, "The Agent is no longer available.");
       }
 
       try {
@@ -64,7 +68,7 @@ export function createDictationTranscriptRefiner(
         return { text: candidate, refined: candidate !== text };
       } catch (error) {
         options.logger.warn({ agentId, err: error }, "Dictation transcript refinement failed");
-        return rawResult(text);
+        return rawResult(text, error instanceof Error ? error.message : String(error));
       }
     },
   };
@@ -80,6 +84,6 @@ function buildRefinementPrompt(text: string): string {
   ].join("\n\n");
 }
 
-function rawResult(text: string): DictationTranscriptRefinementResult {
-  return { text, refined: false };
+function rawResult(text: string, error?: string): DictationTranscriptRefinementResult {
+  return { text, refined: false, ...(error ? { error } : {}) };
 }

@@ -303,6 +303,7 @@ export const ru: TranslationResources = {
       aiRefinedTranscript: "Текст обработан ИИ",
       originalTranscript: "Исходный текст",
       useOriginal: "Использовать оригинал",
+      refinementFailed: "Обработка ИИ не удалась; исходный текст сохранён. {{error}}",
       useAiRefinement: "Использовать обработку ИИ",
     },
     question: {

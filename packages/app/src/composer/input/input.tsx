@@ -27,7 +27,10 @@ import { useTranslation } from "react-i18next";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
 import { ArrowUp, Mic, CornerDownLeft, Plus } from "lucide-react-native";
 import { useDictation } from "@/hooks/use-dictation";
-import type { DictationRefinementMeta } from "@/hooks/use-dictation.shared";
+import type {
+  DictationRefinementMeta,
+  DictationRefinementResult,
+} from "@/hooks/use-dictation.shared";
 import { useDaemonConfig } from "@/hooks/use-daemon-config";
 import { DictationToolbar } from "@/components/dictation-controls";
 import type { DaemonClient } from "@bytetrue/byspace-client/internal/daemon-client";
@@ -798,31 +801,46 @@ function SendButtonTooltip({
 
 function DictationRefinementNotice({
   choice,
+  error,
   visible,
   onToggle,
 }: {
   choice: DictationRefinementChoice | null;
+  error: string | null;
   visible: boolean;
   onToggle: () => void;
 }) {
   const { t } = useTranslation();
-  if (!visible || !choice) return null;
+  if (!visible || (!choice && !error)) return null;
   return (
-    <View style={styles.dictationRefinementNotice} testID="dictation-refinement-notice">
-      <Text style={styles.dictationRefinementLabel}>
-        {t(
-          choice.showingOriginal
-            ? "message.dictation.originalTranscript"
-            : "message.dictation.aiRefinedTranscript",
-        )}
+    <View
+      accessibilityRole={error ? "alert" : undefined}
+      style={styles.dictationRefinementNotice}
+      testID="dictation-refinement-notice"
+    >
+      <Text
+        style={[
+          styles.dictationRefinementLabel,
+          error ? styles.dictationRefinementError : undefined,
+        ]}
+      >
+        {error
+          ? t("message.dictation.refinementFailed", { error })
+          : t(
+              choice?.showingOriginal
+                ? "message.dictation.originalTranscript"
+                : "message.dictation.aiRefinedTranscript",
+            )}
       </Text>
-      <Button size="xs" variant="ghost" onPress={onToggle} testID="dictation-refinement-toggle">
-        {t(
-          choice.showingOriginal
-            ? "message.dictation.useAiRefinement"
-            : "message.dictation.useOriginal",
-        )}
-      </Button>
+      {choice ? (
+        <Button size="xs" variant="ghost" onPress={onToggle} testID="dictation-refinement-toggle">
+          {t(
+            choice.showingOriginal
+              ? "message.dictation.useAiRefinement"
+              : "message.dictation.useOriginal",
+          )}
+        </Button>
+      ) : null}
     </View>
   );
 }
@@ -834,16 +852,22 @@ function useDictationRefinementChoice(params: {
 }) {
   const { value, valueRef, onChangeText } = params;
   const [choice, setChoice] = useState<DictationRefinementChoice | null>(null);
+  const [errorNotice, setErrorNotice] = useState<{ draft: string; error: string } | null>(null);
 
   useEffect(() => {
     valueRef.current = value;
   }, [value, valueRef]);
 
   useEffect(() => {
-    if (!choice) return;
-    const expectedDraft = choice.showingOriginal ? choice.originalDraft : choice.refinedDraft;
-    if (valueRef.current !== expectedDraft) setChoice(null);
-  }, [choice, value, valueRef]);
+    let expectedDraft = errorNotice?.draft;
+    if (choice) {
+      expectedDraft = choice.showingOriginal ? choice.originalDraft : choice.refinedDraft;
+    }
+    if (expectedDraft && valueRef.current !== expectedDraft) {
+      setChoice(null);
+      setErrorNotice(null);
+    }
+  }, [choice, errorNotice, value, valueRef]);
 
   const applyTranscript = useCallback(
     (text: string, meta: DictationRefinementMeta) => {
@@ -852,6 +876,7 @@ function useDictationRefinementChoice(params: {
       valueRef.current = result.draft;
       onChangeText(result.draft);
       setChoice(result.choice);
+      setErrorNotice(result.error ? { draft: result.draft, error: result.error } : null);
     },
     [onChangeText, valueRef],
   );
@@ -864,8 +889,11 @@ function useDictationRefinementChoice(params: {
     setChoice(result.choice);
   }, [choice, onChangeText, valueRef]);
 
-  const clear = useCallback(() => setChoice(null), []);
-  return { choice, applyTranscript, toggle, clear };
+  const clear = useCallback(() => {
+    setChoice(null);
+    setErrorNotice(null);
+  }, []);
+  return { choice, error: errorNotice?.error ?? null, applyTranscript, toggle, clear };
 }
 
 type PrimaryActionKind = "send" | "active" | "none";
@@ -1143,7 +1171,7 @@ function useDictationTranscriptRefiner(params: {
   agentId: string | undefined;
   serverId: string | undefined;
   supported: boolean;
-}): (text: string) => Promise<{ text: string; refined: boolean }> {
+}): (text: string) => Promise<DictationRefinementResult> {
   const { config } = useDaemonConfig(params.supported ? (params.serverId ?? null) : null);
   const enabled = config?.dictation?.refineWithAgent === true;
 
@@ -1153,7 +1181,7 @@ function useDictationTranscriptRefiner(params: {
         return { text, refined: false };
       }
       const response = await params.client.refineDictationTranscript(text, params.agentId);
-      return { text: response.text, refined: response.refined };
+      return { text: response.text, refined: response.refined, error: response.error };
     },
     [enabled, params.agentId, params.client],
   );
@@ -1246,6 +1274,7 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
     const valueRef = useRef(value);
     const {
       choice: dictationRefinementChoice,
+      error: dictationRefinementError,
       applyTranscript: handleDictationTranscript,
       toggle: handleToggleDictationRefinement,
       clear: clearDictationRefinementChoice,
@@ -1635,7 +1664,17 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
 
     return (
       <View ref={rootRef} style={styles.container} testID="message-input-root">
-        <View ref={inputWrapperRef} style={inputWrapperCombinedStyle}>
+        <DictationRefinementNotice
+          choice={dictationRefinementChoice}
+          error={dictationRefinementError}
+          visible={!showDictationToolbar}
+          onToggle={handleToggleDictationRefinement}
+        />
+        <View
+          ref={inputWrapperRef}
+          style={inputWrapperCombinedStyle}
+          testID="message-input-surface"
+        >
           {attachmentSlot}
           <ComposerTextSurface
             readOnly={readOnly}
@@ -1666,12 +1705,6 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
             focusHintLabel={t("composer.input.focusHint", {
               shortcut: focusInputKeys ? formatShortcut(focusInputKeys[0], getShortcutOs()) : "",
             })}
-          />
-
-          <DictationRefinementNotice
-            choice={dictationRefinementChoice}
-            visible={!showDictationToolbar}
-            onToggle={handleToggleDictationRefinement}
           />
 
           {showDictationToolbar ? (
@@ -1773,12 +1806,19 @@ const styles = StyleSheet.create((theme: Theme) => ({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+    gap: theme.spacing[2],
     minHeight: 28,
-    paddingLeft: theme.spacing[2],
+    marginBottom: theme.spacing[2],
+    paddingHorizontal: theme.spacing[4],
   },
   dictationRefinementLabel: {
+    flex: 1,
+    minWidth: 0,
     color: theme.colors.foregroundMuted,
     fontSize: theme.fontSize.xs,
+  },
+  dictationRefinementError: {
+    color: theme.colors.statusDanger,
   },
   inputWrapperReadOnly: {
     borderStyle: "dotted",

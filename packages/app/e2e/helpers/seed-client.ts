@@ -1,6 +1,7 @@
 import path from "node:path";
 import { readFileSync } from "node:fs";
 import type { TerminalActivity } from "@bytetrue/byspace-protocol/terminal-activity";
+import type { MutableDaemonConfigPatch } from "@bytetrue/byspace-protocol/messages";
 import { connectDaemonClient } from "./daemon-client-loader";
 import { createTempDirectory, createTempGitRepo } from "./workspace";
 
@@ -146,6 +147,7 @@ export interface SeedDaemonClient {
   ): Promise<{ status: string; final?: { lastError?: string | null } | null }>;
   archiveAgent(agentId: string): Promise<{ archivedAt: string }>;
   refreshAgent(agentId: string): Promise<unknown>;
+  patchDaemonConfig(patch: MutableDaemonConfigPatch): Promise<unknown>;
   fetchAgent(options: {
     agentId: string;
   }): Promise<{ agent: { id: string; archivedAt?: string | null } } | null>;

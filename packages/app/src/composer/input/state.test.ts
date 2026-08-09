@@ -78,6 +78,7 @@ describe("dictation refinement choice", () => {
         refinedDraft: "existing draft cleaned transcript",
         showingOriginal: false,
       },
+      error: null,
     });
 
     const original = toggleDictationRefinement(applied.draft, applied.choice!);
@@ -105,7 +106,16 @@ describe("dictation refinement choice", () => {
       applyDictationRefinement("draft", "raw", {
         requestId: "refine-3",
       }),
-    ).toEqual({ draft: "draft raw", choice: null });
+    ).toEqual({ draft: "draft raw", choice: null, error: null });
+  });
+
+  it("keeps the raw transcript and exposes the refinement failure", () => {
+    expect(
+      applyDictationRefinement("draft", "raw", {
+        requestId: "refine-4",
+        error: "Provider unavailable",
+      }),
+    ).toEqual({ draft: "draft raw", choice: null, error: "Provider unavailable" });
   });
 });
 

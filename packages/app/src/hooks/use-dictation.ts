@@ -9,6 +9,7 @@ import {
   DURATION_TICK_MS,
   PCM_DICTATION_FORMAT,
   toError,
+  type DictationRefinementResult,
   type DictationStatus,
   type UseDictationOptions,
   type UseDictationResult,
@@ -140,7 +141,7 @@ export function useDictation(options: UseDictationOptions): UseDictationResult {
   }, [client, reportError, startNewStream]);
 
   const handleStreamingTranscriptionSuccess = useCallback(
-    (text: string, requestId: string, originalText?: string) => {
+    (text: string, requestId: string, originalText?: string, refinementError?: string) => {
       setIsProcessing(false);
       isProcessingRef.current = false;
       setDuration(0);
@@ -155,6 +156,7 @@ export function useDictation(options: UseDictationOptions): UseDictationResult {
       onTranscriptRef.current?.(transcriptText, {
         requestId,
         ...(originalText ? { originalText } : {}),
+        ...(refinementError ? { error: refinementError } : {}),
       });
     },
     [clearStreamingState],
@@ -162,13 +164,14 @@ export function useDictation(options: UseDictationOptions): UseDictationResult {
 
   const completeTranscript = useCallback(
     async (transcriptText: string, attemptId: number) => {
-      const refinement = refineTranscriptRef.current
+      const refinement: DictationRefinementResult = refineTranscriptRef.current
         ? await refineTranscriptRef.current(transcriptText).catch((refinementError) => {
+            const normalized = toError(refinementError);
             console.warn(
               "[useDictation] Transcript refinement failed; using raw transcript",
-              refinementError,
+              normalized,
             );
-            return { text: transcriptText, refined: false };
+            return { text: transcriptText, refined: false, error: normalized.message };
           })
         : { text: transcriptText, refined: false };
       attemptGuardRef.current.assertCurrent(attemptId);
@@ -176,6 +179,7 @@ export function useDictation(options: UseDictationOptions): UseDictationResult {
         refinement.text,
         generateMessageId(),
         refinement.refined ? transcriptText : undefined,
+        refinement.error,
       );
     },
     [handleStreamingTranscriptionSuccess],
