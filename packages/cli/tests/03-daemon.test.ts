@@ -7,7 +7,7 @@
  *
  * Tests:
  * - daemon --help shows subcommands
- * - daemon pair prints a local pairing link without requiring a running daemon
+ * - daemon pair explains how to enable relay when no daemon is running
  * - daemon status reports stopped when daemon not running
  * - daemon status --json outputs valid JSON
  * - daemon stop handles daemon not running gracefully
@@ -15,7 +15,7 @@
  */
 
 import assert from "node:assert";
-import { mkdtemp, rm } from "fs/promises";
+import { mkdtemp, rm, writeFile } from "fs/promises";
 import { tmpdir } from "os";
 import { join } from "path";
 import { runLocalBySpace } from "./helpers/local-cli.ts";
@@ -25,6 +25,11 @@ console.log("=== Daemon Commands ===\n");
 // Keep restart off default 6777 to avoid collisions with any existing daemon.
 const port = 10000 + Math.floor(Math.random() * 50000);
 const byspaceHome = await mkdtemp(join(tmpdir(), "byspace-test-home-"));
+
+await writeFile(
+  join(byspaceHome, "config.json"),
+  `${JSON.stringify({ version: 1, daemon: { listen: `127.0.0.1:${port}`, relay: { enabled: false } } })}\n`,
+);
 
 function daemonCommand(args: string[]) {
   return runLocalBySpace(["daemon", ...args], { BYSPACE_HOME: byspaceHome });
@@ -44,14 +49,20 @@ try {
     console.log("✓ daemon --help shows subcommands\n");
   }
 
-  // Test 2: daemon pair works without daemon process
+  // Test 2: daemon pair reports relay disabled without a daemon process
   {
-    console.log("Test 2: daemon pair prints local pairing URL");
+    console.log("Test 2: daemon pair explains how to enable relay");
     const result = await daemonCommand(["pair"]);
-    assert.strictEqual(result.exitCode, 0, "daemon pair should succeed");
-    assert(result.stdout.includes("Scan to pair:"), "output should include scan header");
-    assert(result.stdout.includes("#offer="), "output should include pairing offer fragment");
-    console.log("✓ daemon pair prints local pairing URL\n");
+    assert.strictEqual(result.exitCode, 1, "daemon pair should report relay disabled");
+    assert(
+      result.stderr.includes("Relay pairing is disabled"),
+      "error should explain that relay pairing is disabled",
+    );
+    assert(
+      result.stderr.includes("byspace daemon pair --relay"),
+      "error should explain how to enable relay",
+    );
+    console.log("✓ daemon pair explains how to enable relay\n");
   }
 
   // Test 3: daemon status reports stopped when daemon not running
@@ -65,16 +76,18 @@ try {
     console.log("✓ daemon status reports stopped when not running\n");
   }
 
-  // Test 4: daemon pair --json outputs valid JSON
+  // Test 4: daemon pair --json reports relay disabled as JSON
   {
-    console.log("Test 4: daemon pair --json outputs JSON");
+    console.log("Test 4: daemon pair --json reports relay disabled");
     const result = await daemonCommand(["pair", "--json"]);
-    assert.strictEqual(result.exitCode, 0, "daemon pair --json should succeed");
-    const pairing = JSON.parse(result.stdout);
-    assert.strictEqual(pairing.relayEnabled, true, "pairing should report relay enabled");
-    assert.match(pairing.url, /#offer=/, "pairing URL should include offer fragment");
-    assert.strictEqual(typeof pairing.qr, "string", "pairing should include QR content");
-    console.log("✓ daemon pair --json outputs valid JSON\n");
+    assert.strictEqual(result.exitCode, 1, "daemon pair --json should report relay disabled");
+    const error = JSON.parse(result.stderr);
+    assert.strictEqual(error.code, "RELAY_DISABLED", "JSON error should identify relay disabled");
+    assert(
+      error.action.includes("byspace daemon pair --relay"),
+      "JSON error should explain how to enable relay",
+    );
+    console.log("✓ daemon pair --json reports relay disabled\n");
   }
 
   // Test 5: daemon status --json outputs valid JSON

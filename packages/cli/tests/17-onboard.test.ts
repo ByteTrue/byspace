@@ -16,12 +16,13 @@ console.log("=== Onboarding Command ===\n");
 
 const byspaceHome = await mkdtemp(join(tmpdir(), "byspace-onboard-home-"));
 const port = await getAvailablePort();
+const relayEndpoint = "127.0.0.1:9";
 const hostedRelease = resolveBySpaceHostedRelease(resolveCliVersion());
 
 try {
-  console.log("Test 1: `byspace` runs blocking onboarding and prints pairing info");
+  console.log("Test 1: `byspace onboard --relay` prints pairing info");
   const onboard =
-    await $`BYSPACE_HOME=${byspaceHome} BYSPACE_LISTEN=127.0.0.1:${port} BYSPACE_PAIRING_QR=0 npx byspace`.nothrow();
+    await $`BYSPACE_HOME=${byspaceHome} BYSPACE_LISTEN=127.0.0.1:${port} BYSPACE_PAIRING_QR=0 BYSPACE_RELAY_ENDPOINT=${relayEndpoint} BYSPACE_RELAY_PUBLIC_ENDPOINT=${relayEndpoint} BYSPACE_RELAY_USE_TLS=false BYSPACE_RELAY_PUBLIC_USE_TLS=false npx byspace onboard --relay`.nothrow();
 
   assert.strictEqual(
     onboard.exitCode,
@@ -56,8 +57,8 @@ try {
   }
   assert.strictEqual(
     parseConnectionOfferFromUrl(pairingUrl)?.relay.endpoint,
-    hostedRelease.relayEndpoint,
-    "pairing offer should use the current CLI release relay",
+    relayEndpoint,
+    "pairing offer should use the local test relay",
   );
   assert(
     onboard.stdout.includes("CLI quick reference"),
