@@ -137,6 +137,7 @@ import {
   type ProjectMutation,
   type ProjectRegistry,
   type WorkspaceMutation,
+  type WorkspaceArchiveContext,
   type WorkspaceRegistry,
 } from "./workspace-registry.js";
 import { wrapSpokenInput } from "./voice-config.js";
@@ -235,6 +236,13 @@ import {
   handleWorkspaceSetupStatusRequest as handleWorkspaceSetupStatusRequestMessage,
 } from "./worktree-session.js";
 import { archiveByScope, type ActiveWorkspaceRef } from "./workspace-archive-service.js";
+import { WorkspaceSetupRuntime } from "./workspace-setup-runtime.js";
+
+function resolveWorkspaceSetupRuntime(
+  runtime: WorkspaceSetupRuntime | undefined,
+): WorkspaceSetupRuntime {
+  return runtime ?? new WorkspaceSetupRuntime();
+}
 import { WorktreeRequestError, toWorktreeWireError } from "./worktree-errors.js";
 import { parseGitRemoteLocation } from "@bytetrue/byspace-protocol/git-remote";
 import {
@@ -486,6 +494,7 @@ export interface SessionOptions {
   serviceProxy?: ServiceProxySubsystem;
   scriptRuntimeStore?: WorkspaceScriptRuntimeStore;
   workspaceSetupSnapshots?: Map<string, WorkspaceSetupSnapshot>;
+  workspaceSetupRuntime?: WorkspaceSetupRuntime;
   onBranchChanged?: (
     workspaceId: string,
     oldBranch: string | null,
@@ -651,6 +660,7 @@ export class Session {
   private inflightRequests = 0;
   private peakInflightRequests = 0;
   private readonly workspaceSetupSnapshots: Map<string, WorkspaceSetupSnapshot>;
+  private readonly workspaceSetupRuntime: WorkspaceSetupRuntime;
   private readonly workspaceGitObserver: WorkspaceGitObserverService;
   private readonly workspaceDirectory: WorkspaceDirectory;
   private readonly voiceSession: VoiceSession;
@@ -705,6 +715,7 @@ export class Session {
       serviceProxy,
       scriptRuntimeStore,
       workspaceSetupSnapshots,
+      workspaceSetupRuntime,
       onBranchChanged,
       getDaemonTcpPort,
       getDaemonTcpHost,
@@ -950,6 +961,7 @@ export class Session {
     this.serviceProxy = serviceProxy ?? null;
     this.scriptRuntimeStore = scriptRuntimeStore ?? null;
     this.workspaceSetupSnapshots = workspaceSetupSnapshots ?? new Map();
+    this.workspaceSetupRuntime = resolveWorkspaceSetupRuntime(workspaceSetupRuntime);
     this.getDaemonTcpPort = getDaemonTcpPort ?? null;
     this.getDaemonTcpHost = getDaemonTcpHost ?? null;
     this.serviceProxyPublicBaseUrl = serviceProxyPublicBaseUrl ?? null;
@@ -1174,8 +1186,11 @@ export class Session {
     });
   }
 
-  async archiveWorkspaceRecordForExternalMutation(workspaceId: string): Promise<void> {
-    await this.archiveWorkspaceRecord(workspaceId);
+  async archiveWorkspaceRecordForExternalMutation(
+    workspaceId: string,
+    context?: WorkspaceArchiveContext,
+  ): Promise<void> {
+    await this.archiveWorkspaceRecord(workspaceId, undefined, context);
   }
 
   markWorkspaceArchivingForExternalMutation(
@@ -4686,12 +4701,17 @@ export class Session {
       }));
   }
 
-  private async archiveWorkspaceRecord(workspaceId: string, archivedAt?: string): Promise<void> {
+  private async archiveWorkspaceRecord(
+    workspaceId: string,
+    archivedAt?: string,
+    context?: WorkspaceArchiveContext,
+  ): Promise<void> {
     const archiveTimestamp = archivedAt ?? new Date().toISOString();
     const existingWorkspace = await archivePersistedWorkspaceRecord({
       workspaceId,
       archivedAt: archiveTimestamp,
       workspaceRegistry: this.workspaceRegistry,
+      context,
     });
     if (!existingWorkspace) {
       this.workspaceGitObserver.removeForWorkspaceId(workspaceId);
@@ -5946,6 +5966,8 @@ export class Session {
           this.workspaceAutoName.scheduleForWorktree(autoNameInput, {
             currentSelection: this.getFocusedAgentSelectionForCwd(autoNameInput.workspace.cwd),
           }),
+        startWorkspaceSetup: (workspaceId, operation) =>
+          this.workspaceSetupRuntime.start(workspaceId, operation),
         emitWorkspaceUpdateForWorkspaceId: (workspaceId) =>
           this.emitWorkspaceUpdateForWorkspaceId(workspaceId),
         cacheWorkspaceSetupSnapshot: (workspaceId, snapshot) => {
@@ -6004,6 +6026,7 @@ export class Session {
           agentManager: this.agentManager,
           agentStorage: this.agentStorage,
           findWorkspaceIdForCwd: (cwd) => this.findWorkspaceIdForCwd(cwd),
+          getWorkspace: (workspaceId) => this.workspaceRegistry.get(workspaceId),
           listActiveWorkspaces: () => this.listActiveWorkspaceRefs(),
           archiveWorkspaceRecord: (workspaceId) => this.archiveWorkspaceRecord(workspaceId),
           emitWorkspaceUpdatesForWorkspaceIds: (workspaceIds) =>
@@ -6013,6 +6036,7 @@ export class Session {
           clearWorkspaceArchiving: (workspaceIds) => this.clearWorkspaceArchiving(workspaceIds),
           killTerminalsForWorkspace: (workspaceId) =>
             this.terminalController.killTerminalsForWorkspace(workspaceId),
+          stopWorkspaceSetup: (workspaceId) => this.workspaceSetupRuntime.stop(workspaceId),
           sessionLogger: this.sessionLogger,
         },
         {

@@ -102,7 +102,7 @@ export function createWorkspaceProvisioningService(deps: {
   serverId?: string;
   workspaceRegistry: WorkspaceRegistry;
   projectRegistry: ProjectRegistry;
-  workspaceGitService: Pick<WorkspaceGitService, "getCheckout" | "peekSnapshot">;
+  workspaceGitService: Pick<WorkspaceGitService, "getCheckout" | "getSnapshot" | "peekSnapshot">;
   isDirectory(path: string): Promise<boolean>;
   logger: Logger;
   lifecycleCoordinator?: WorkspaceLifecycleCoordinator;
@@ -365,6 +365,22 @@ export function createWorkspaceProvisioningService(deps: {
     ).workspaceId;
   }
 
+  async function resolveRestoredAutoArchiveChangeRequestUrl(
+    workspace: PersistedWorkspaceRecord,
+  ): Promise<string | null> {
+    if (!workspace.archivedAt) {
+      return workspace.autoArchivedChangeRequestUrl;
+    }
+    const snapshot = await workspaceGitService.getSnapshot(workspace.cwd, {
+      force: true,
+      includeForge: true,
+      reason: "workspace-restore-auto-archive-latch",
+    });
+    return snapshot.forge.pullRequest?.isMerged
+      ? snapshot.forge.pullRequest.url
+      : workspace.autoArchivedChangeRequestUrl;
+  }
+
   async function ensureWorkspaceRecordUnarchivedInternal(
     workspace: PersistedWorkspaceRecord,
   ): Promise<PersistedWorkspaceRecord> {
@@ -375,6 +391,8 @@ export function createWorkspaceProvisioningService(deps: {
       workspace.archivedAt || project.archivedAt
         ? await workspaceGitService.getCheckout(workspace.cwd)
         : null;
+    const autoArchivedChangeRequestUrl =
+      await resolveRestoredAutoArchiveChangeRequestUrl(workspace);
     let next: PersistedWorkspaceRecord | null = null;
     if (workspace.archivedAt && checkout) {
       const placementUpdate = reconcileWorkspacePlacement({
@@ -385,6 +403,7 @@ export function createWorkspaceProvisioningService(deps: {
       next = {
         ...(placementUpdate?.workspace ?? workspace),
         archivedAt: null,
+        autoArchivedChangeRequestUrl,
         updatedAt: timestamp,
       };
     }

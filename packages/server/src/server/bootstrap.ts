@@ -90,6 +90,7 @@ function formatListenTarget(listenTarget: ListenTarget | null): string | null {
 }
 
 import { VoiceAssistantWebSocketServer } from "./websocket-server.js";
+import { WorkspaceSetupRuntime } from "./workspace-setup-runtime.js";
 import { createGitHubService } from "../services/github-service.js";
 import {
   createBySpaceWorktree as createRegisteredBySpaceWorktree,
@@ -113,7 +114,11 @@ import type { BySpaceToolRuntimeContext } from "./agent/tools/types.js";
 import { ProviderSnapshotManager } from "./agent/provider-snapshot-manager.js";
 import { bootstrapWorkspaceRegistries } from "./workspace-registry-bootstrap.js";
 import { WorkspaceReconciliationService } from "./workspace-reconciliation-service.js";
-import { FileBackedProjectRegistry, FileBackedWorkspaceRegistry } from "./workspace-registry.js";
+import {
+  FileBackedProjectRegistry,
+  FileBackedWorkspaceRegistry,
+  type WorkspaceArchiveContext,
+} from "./workspace-registry.js";
 import { FileBackedChatService } from "./chat/chat-service.js";
 import { CheckoutDiffManager } from "./checkout-diff-manager.js";
 import { LoopService } from "./loop-service.js";
@@ -525,6 +530,7 @@ export async function createBySpaceDaemon(
     publicBaseUrl: serviceProxyPublicBaseUrl,
   });
   const scriptRuntimeStore = new WorkspaceScriptRuntimeStore();
+  const workspaceSetupRuntime = new WorkspaceSetupRuntime();
   const configuredHostnames = config.hostnames ?? config.allowedHosts;
   let wsServer: VoiceAssistantWebSocketServer | null = null;
   let serviceProxyListenTarget: ListenTarget | null = null;
@@ -790,16 +796,20 @@ export async function createBySpaceDaemon(
   await chatService.initialize();
   logger.info({ elapsed: elapsed() }, "Chat service initialized");
   const checkoutDiffManager = new CheckoutDiffManager(workspaceGitService);
-  const archiveWorkspaceRecordExternal = async (workspaceId: string) => {
+  const archiveWorkspaceRecordExternal = async (
+    workspaceId: string,
+    context?: WorkspaceArchiveContext,
+  ) => {
     const session = wsServer?.listActiveSessions()[0];
     if (session) {
-      await session.archiveWorkspaceRecordForExternalMutation(workspaceId);
+      await session.archiveWorkspaceRecordForExternalMutation(workspaceId, context);
       return;
     }
 
     await archivePersistedWorkspaceRecord({
       workspaceId,
       workspaceRegistry,
+      context,
     });
   };
   // external path→workspace adapter, not ownership: archive-by-path requests that
@@ -898,6 +908,8 @@ export async function createBySpaceDaemon(
     logger,
     findWorkspaceIdForCwd: findWorkspaceIdForCwdExternal,
     listActiveWorkspaces: listActiveWorkspacesExternal,
+    getAutoArchivedChangeRequestUrl: async (workspaceId) =>
+      (await workspaceRegistry.get(workspaceId))?.autoArchivedChangeRequestUrl ?? null,
     archiveWorkspaceRecord: archiveWorkspaceRecordExternal,
     markWorkspaceArchiving: markWorkspaceArchivingExternal,
     clearWorkspaceArchiving: clearWorkspaceArchivingExternal,
@@ -938,6 +950,8 @@ export async function createBySpaceDaemon(
           await emitWorkspaceUpdatesExternal([workspaceId]);
         },
         cacheWorkspaceSetupSnapshot: () => {},
+        startWorkspaceSetup: (workspaceId, operation) =>
+          workspaceSetupRuntime.start(workspaceId, operation),
         emit: emitExternalSessionMessage,
         sessionLogger: logger,
         terminalManager,
@@ -1015,6 +1029,7 @@ export async function createBySpaceDaemon(
         agentStorage,
         findWorkspaceIdForCwd: findWorkspaceIdForCwdExternal,
         listActiveWorkspaces: listActiveWorkspacesExternal,
+        getWorkspace: (workspaceIdToGet) => workspaceRegistry.get(workspaceIdToGet),
         archiveWorkspaceRecord: archiveWorkspaceRecordExternal,
         emitWorkspaceUpdatesForWorkspaceIds: emitWorkspaceUpdatesExternal,
         markWorkspaceArchiving: markWorkspaceArchivingExternal,
@@ -1027,6 +1042,7 @@ export async function createBySpaceDaemon(
             },
             workspaceIdToKill,
           ),
+        stopWorkspaceSetup: (workspaceIdToStop) => workspaceSetupRuntime.stop(workspaceIdToStop),
         sessionLogger: logger,
       },
       {
@@ -1402,6 +1418,7 @@ export async function createBySpaceDaemon(
               providerSnapshotManager,
               daemonRuntimeConfig,
               serviceProxyPublicBaseUrl,
+              workspaceSetupRuntime,
             );
 
             relayRuntime = new RelayRuntime({
