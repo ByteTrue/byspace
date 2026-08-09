@@ -7,6 +7,7 @@ import { useTranslation } from "react-i18next";
 import { ProjectIconView } from "@/components/project-icon-view";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { useProjects, type ProjectHostError } from "@/hooks/use-projects";
+import { buildProjectIconRequestTarget } from "@/projects/project-icon-lookup";
 import { useProjectIconDataByProjectKey } from "@/projects/project-icons";
 import { settingsStyles } from "@/styles/settings";
 import { buildProjectSettingsRoute } from "@/utils/host-routes";
@@ -26,11 +27,12 @@ export default function ProjectsScreen({ view }: ProjectsScreenProps) {
         const host = project.hosts[0];
         if (!host) return [];
         return [
-          {
+          buildProjectIconRequestTarget(project.projectKey, {
             serverId: host.serverId,
-            projectKey: project.projectKey,
+            projectId: host.projectId,
             iconWorkingDir: host.repoRoot,
-          },
+            customIconRevision: host.customIconRevision,
+          }),
         ];
       }),
     [projects],

@@ -66,6 +66,16 @@ export const fr: TranslationResources = {
       modelGroupLabel: "Modèle",
       modelSearchKeywords:
         "changer de modèle modifier le modèle définir le modèle sélectionner le modèle",
+      thinkingGroupLabel: "Raisonnement",
+      thinkingSearchKeywords: "raisonnement effort réflexion",
+      modeGroupLabel: "Mode",
+      modeSearchKeywords: "accès permission approbation mode",
+      planModeGroupLabel: "Mode plan",
+      planModeSearchKeywords: "plan planification mode plan",
+      fastModeGroupLabel: "Rapide",
+      fastModeSearchKeywords: "rapide vitesse faible latence",
+      settingOn: "Activé",
+      settingOff: "Désactivé",
     },
   },
   composer: {
@@ -73,9 +83,11 @@ export const fr: TranslationResources = {
       desktop: "Envoyez un message à l'agent, marquez@filesou utilisez/commandset/skills",
       mobile: "Message,@files,/commands",
       fallback: "Message...",
+      terminal: "Prompt",
     },
     input: {
       accessibilityLabel: "Agent de messagerie...",
+      terminalAccessibilityLabel: "Terminal prompt",
       focusHint: "{{shortcut}}pour se concentrer",
       addAttachment: "Ajouter une pièce jointe",
       interruptAgent: "Agent d'interruption",
@@ -169,6 +181,7 @@ export const fr: TranslationResources = {
   agentStream: {
     empty: "Commencez à discuter avec cet agent...",
     scrollToBottom: "Faire défiler vers le bas",
+    historyLoadFailed: "Impossible de charger l’historique de l’agent",
     collapseAllToolCalls: "Réduire tous les appels d’outils",
     permission: {
       plan: "Plan",
@@ -184,7 +197,7 @@ export const fr: TranslationResources = {
     states: {
       notFound: "Agentintrouvable",
       failedToLoad: "Échec du chargement de l'agent",
-      reconnecting: "Reconnexion...",
+      reconnecting: "Reconnexion",
       timelineSyncFailed: "Impossible d’actualiser l’historique de l’agent. Nouvelle tentative…",
       timelineSyncing: "Synchronisation de la progression récente...",
       archivingTitle: "Agent d'archivage...",
@@ -211,8 +224,13 @@ export const fr: TranslationResources = {
   sessions: {
     title: "Historique",
     empty: "Aucune séance pour l'instant",
+    noMatches: "Aucune séance correspondante",
+    tooManyMatches: "Trop de résultats — affinez la recherche",
+    hostLoadFailed: "{{host}} : Impossible de charger l'historique",
+    searchPlaceholder: "Rechercher dans l'historique",
     actions: {
       loadMore: "Charger plus",
+      clearSearch: "Effacer la recherche",
     },
   },
   agentList: {
@@ -344,6 +362,10 @@ export const fr: TranslationResources = {
     },
   },
   workspace: {
+    status: {
+      serviceRunning: "Service {{name}} en cours",
+      serviceUnhealthy: "Service {{name}} en échec",
+    },
     route: {
       loading: "Chargement de l'espace de travail",
       connecting: "De liaison",
@@ -367,6 +389,16 @@ export const fr: TranslationResources = {
     },
     hoverCard: {
       scriptsAccessibility: "ScriptsWorkspace",
+      detailsAccessibility: "Détails de l’espace de travail",
+      agents: "Agents",
+      untitledAgent: "Agent sans titre",
+      agentStatus: {
+        needsInput: "Entrée requise",
+        failed: "Échec",
+        attention: "Prêt à vérifier",
+        running: "En cours",
+        done: "Terminé",
+      },
       copyPath: "Copier le chemin",
       copyBranchName: "Copier le nom de la branche",
       copied: "Copié",
@@ -834,6 +866,14 @@ export const fr: TranslationResources = {
           pullRequest: "Demande de tirage #{{number}}",
           pullRequest_mr: "Demande de fusion !{{number}}",
         },
+        checksSummary: {
+          passedLabel: "Passé",
+          failedLabel: "Échoué",
+          runningLabel: "En cours d'exécution",
+          passedAccessible: "Contrôles réussis",
+          failedAccessible: "Échec des vérifications",
+          runningAccessible: "Contrôles en cours",
+        },
         states: {
           draft: "Brouillon",
           merged: "Fusionné",
@@ -873,6 +913,27 @@ export const fr: TranslationResources = {
       switchTitle: "Changer d'hôte",
       searchPlaceholder: "Rechercher des hôtes...",
     },
+    display: {
+      trigger: "Préférences d'affichage",
+      titleSource: {
+        label: "Titre de l'espace de travail",
+        options: { title: "Titre", branch: "Nom de la succursale" },
+      },
+      show: {
+        label: "Afficher",
+        host: "Hôte",
+        changeRequest: "Demande de tirage",
+        services: "Prestations",
+        checks: "Chèques",
+        diff: "Statistiques de différence",
+        timestamp: "Horodatage",
+      },
+      checks: {
+        label: "Chèques",
+        options: { iconAndText: "Icône et texte", icon: "Icône uniquement", none: "Caché" },
+      },
+      hostFilter: { label: "Hôtes", all: "Tous les hôtes" },
+    },
     actions: {
       addProject: "Ajouter un projet",
       newWorkspace: "Nouvel espace de travail",
@@ -880,6 +941,8 @@ export const fr: TranslationResources = {
       home: "Maison",
       settings: "Paramètres",
       closeSidebar: "Fermer la barre latérale",
+      needsAttentionFilter: "À traiter",
+      emptyAttention: "Rien ne nécessite votre attention",
     },
     help: {
       trigger: "Aide et assistance",
@@ -903,6 +966,7 @@ export const fr: TranslationResources = {
       openProjectSettings: "Ouvrir les paramètres du projet",
     },
     project: {
+      needsAttentionCount: "Espaces de travail à traiter : {{count}}",
       actions: {
         menu: "Actions du projet",
         openSettings: "Ouvrir les paramètres du projet",
@@ -929,6 +993,10 @@ export const fr: TranslationResources = {
       },
     },
     workspace: {
+      agentSummary: {
+        needsAttention: "Agents à traiter : {{count}}",
+        working: "Agents en cours : {{count}}",
+      },
       status: {
         scriptsAvailable: "Scripts disponibles",
         creating: "Création...",
@@ -942,8 +1010,6 @@ export const fr: TranslationResources = {
         copyPath: "Copier le chemin",
         copyBranchName: "Copier le nom de la branche",
         rename: "Renommer l'espace de travail",
-        pin: "Épingler en haut",
-        unpin: "Désépingler",
         archive: "Archive",
         archiveWorkspace: "Archiver l’espace de travail",
         hideFromSidebar: "Masquer de la barre latérale",
@@ -975,6 +1041,17 @@ export const fr: TranslationResources = {
   newWorkspace: {
     title: "Nouvel espace de travail",
     create: "Créer",
+    project: {
+      choose: "Choisir un projet",
+      searchPlaceholder: "Rechercher des projets",
+      title: "Projet",
+      empty: "Aucun projet disponible.",
+    },
+    host: {
+      choose: "Choisir un hôte",
+      label: "Hôte de l’espace de travail",
+      title: "Hôte",
+    },
     isolation: {
       local: "Local",
       worktree: "Nouveau worktree",
@@ -995,6 +1072,22 @@ export const fr: TranslationResources = {
       createWorktreeFailed: "Échec de la création de l'arbre de travail",
       composerStateRequired: "L'état du compositeur est requis",
       selectModel: "Sélectionnez un modèle",
+    },
+    tooltips: {
+      project: "Choose the project",
+      host: "Choose the host",
+      isolation: "Choose the isolation level",
+      startingRef: "Choisissez par où commencer",
+      launch: "Choose what to launch",
+    },
+    launch: {
+      title: "What to launch",
+      chat: "Chat",
+      terminal: "Terminal",
+      manageProfiles: "Manage profiles",
+      submit: "Launch",
+      promptPlaceholder: "Prompt {{name}}",
+      commandPlaceholder: "Run a command, or leave empty for a blank terminal",
     },
     refPicker: {
       startingRef: "Réf de départ",
@@ -1242,6 +1335,8 @@ export const fr: TranslationResources = {
       loadingOffer: "Chargement de l'offre d'association...",
       failedToLoadOffer: "Échec du chargement de l'offre d'association.",
       relayDisabled: "Le relais n'est pas activé. Activer le relais pour coupler un appareil.",
+      enableRelay: "Enable relay",
+      enablingRelay: "Enabling relay...",
       unavailable: "Offre de jumelage indisponible.",
       hint: "Scannez ce codeQRavecBySpacesur votre téléphone ou copiez le lien ci-dessous.",
       qrUnavailable: "CodeQRindisponible.",
@@ -1313,6 +1408,9 @@ export const fr: TranslationResources = {
         saving: "Enregistrement...",
         saveFailed: "Échec de l’enregistrement",
         changedOnDisk: "Le fichier a été modifié sur le disque",
+        deletedTitle: "Fichier supprimé du disque",
+        checkFailedTitle: "Impossible de vérifier le fichier sur le disque",
+        preservedDescription: "La copie ouverte est conservée.",
         vimMode: "Mode Vim {{mode}}",
         cursor: "Ligne {{line}}, colonne {{column}}",
         preview: "Aperçu",
@@ -1489,6 +1587,7 @@ export const fr: TranslationResources = {
           es: "Español",
           fr: "Français",
           ja: "日本語",
+          ko: "한국어",
           ptBR: "Português brasileiro",
           ru: "Русский",
           zhCN: "中文",
@@ -1537,6 +1636,10 @@ export const fr: TranslationResources = {
       },
       detailLevel: {
         title: "Niveau de détail",
+      },
+      chatOutline: {
+        title: "Plan de la discussion",
+        description: "Afficher un plan pour passer d’une requête à l’autre",
       },
       fonts: {
         title: "Polices",
@@ -1631,6 +1734,32 @@ export const fr: TranslationResources = {
     },
     host: {
       notFound: "Hostintrouvable",
+      appearance: {
+        title: "Apparence",
+        color: {
+          label: "Couleur",
+          options: {
+            none: "Aucun",
+            blue: "Bleu",
+            cyan: "Cyan",
+            green: "Vert",
+            lime: "Citron vert",
+            yellow: "Jaune",
+            orange: "Orange",
+            red: "Rouge",
+            pink: "Rose",
+            purple: "Violet",
+          },
+        },
+        badgeDisplay: {
+          label: "Affichage des badges",
+          options: {
+            name: "Nom",
+            icon: "Icône uniquement",
+            hidden: "Caché",
+          },
+        },
+      },
       badges: {
         relay: "Relais",
         local: "Locale",
@@ -1685,14 +1814,9 @@ export const fr: TranslationResources = {
       orchestration: {
         title: "Orchestration",
         unavailable: "Connectez-vous à cet hôte pour gérer l'orchestration",
-        enableTools: {
-          title: "Activer les outilsBySpace",
-          hint: "Les agents pourront gérer les arbres de travail, les agents et les horaires",
-          accessibilityLabel: "Injecter les outilsBySpace",
-        },
         skills: {
           title: "Skills d’orchestration",
-          installHint: "Installe les cinq skills BySpace inclus pour les agents compatibles",
+          installHint: "Installe les skills BySpace inclus pour les agents compatibles",
           installedHint: "Installés et à jour sur cet hôte",
           updateHint: "Les skills installés diffèrent de cette version de BySpace",
           updateHost: "Mettez à jour l’hôte pour gérer les skills d’orchestration",
@@ -1702,10 +1826,10 @@ export const fr: TranslationResources = {
           saving: "Enregistrement...",
           installConfirmTitle: "Installer ou mettre à jour les skills d’orchestration ?",
           installConfirmMessage:
-            "BySpace synchronisera ses cinq skills inclus sur cet hôte. Les autres skills ne seront pas modifiés et les copies en conflit non gérées seront conservées.",
+            "BySpace synchronisera ses skills inclus sur cet hôte. Les autres skills ne seront pas modifiés et les copies en conflit non gérées seront conservées.",
           updateConfirmTitle: "Mettre à jour les skills d’orchestration ?",
           updateConfirmMessage:
-            "BySpace remplacera ses copies gérées par les cinq skills inclus dans cette version. Les autres skills ne seront pas modifiés.",
+            "BySpace remplacera ses copies gérées par les skills inclus dans cette version. Les autres skills ne seront pas modifiés.",
           uninstallConfirmTitle: "Désinstaller les skills d’orchestration ?",
           uninstallConfirmMessage:
             "BySpace supprimera de cet hôte ses copies gérées non modifiées. Les copies modifiées seront conservées.",
@@ -1926,6 +2050,17 @@ export const fr: TranslationResources = {
         transportFallback: "L'hôte n'a pas répondu.",
         failedTitle: "Impossible de charger byspace.json",
         failedDescription: "Rechargez pour réessayer.",
+      },
+      projectSetup: {
+        title: "Configuration du projet",
+        actionTitle: "Configurer avec un agent",
+        description:
+          "Laissez un agent inspecter ce dépôt et recommander la préparation des worktrees, les services et les commandes courantes",
+        configure: "Configurer avec un agent",
+        review: "Réviser avec un agent",
+        updateHost: "Mettez à jour l’hôte pour utiliser la configuration assistée par agent",
+        prompt:
+          "Utilise le skill byspace-project-setup pour inspecter ce dépôt et recommander les plus petits changements étayés par des preuves qui rendent la préparation des worktrees propres reproductible, les commandes courantes faciles à trouver et les services de longue durée sûrs à exécuter en parallèle. Inspecte d’abord et montre-moi les recommandations avant de modifier les fichiers.",
       },
       worktree: {
         title: "Crochets de cycle de vie Worktree",

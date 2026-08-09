@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ProjectHostEntry, ProjectSummary, WorkspaceSummary } from "@/utils/projects";
 import type { ProjectHostError, UseProjectsResult } from "@/hooks/use-projects";
 
-const { theme, projectsState, navigate } = vi.hoisted(() => ({
+const { theme, projectsState, navigate, iconTargets } = vi.hoisted(() => ({
   theme: {
     spacing: { 0: 0, 1: 4, "1.5": 6, 2: 8, 3: 12, 4: 16, 6: 24, 8: 32 },
     iconSize: { sm: 14, md: 20 },
@@ -38,6 +38,7 @@ const { theme, projectsState, navigate } = vi.hoisted(() => ({
     } as UseProjectsResult,
   },
   navigate: vi.fn(),
+  iconTargets: { current: [] as unknown[] },
 }));
 
 vi.mock("react-native", () => {
@@ -202,7 +203,10 @@ vi.mock("@/hooks/use-projects", () => ({
 }));
 
 vi.mock("@/projects/project-icons", () => ({
-  useProjectIconDataByProjectKey: () => new Map(),
+  useProjectIconDataByProjectKey: (input: { projects: unknown[] }) => {
+    iconTargets.current = input.projects;
+    return new Map();
+  },
 }));
 
 import ProjectsScreen from "./projects-screen";
@@ -276,6 +280,7 @@ describe("ProjectsScreen", () => {
     root = createRoot(container);
     setProjectsState({});
     navigate.mockReset();
+    iconTargets.current = [];
   });
 
   afterEach(() => {
@@ -314,6 +319,36 @@ describe("ProjectsScreen", () => {
     expect(container?.textContent).not.toContain("workspace");
     expect(container?.textContent).not.toContain("offline");
     expect(container?.textContent).not.toContain("github.com");
+  });
+
+  it("passes the selected host project identity and icon revision to the icon consumer", () => {
+    setProjectsState({
+      projects: [
+        project({
+          projectKey: "project-key",
+          hosts: [
+            hostEntry({
+              serverId: "host-a",
+              projectId: "project-id",
+              repoRoot: "/home/me/project",
+              customIconRevision: "revision-2",
+            }),
+          ],
+        }),
+      ],
+    });
+
+    render({ kind: "projects" });
+
+    expect(iconTargets.current).toEqual([
+      {
+        serverId: "host-a",
+        projectKey: "project-key",
+        projectId: "project-id",
+        iconWorkingDir: "/home/me/project",
+        customIconRevision: "revision-2",
+      },
+    ]);
   });
 
   it("navigates to the project detail route when the row is pressed", () => {

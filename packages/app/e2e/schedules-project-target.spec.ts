@@ -214,7 +214,9 @@ test.describe("Schedules project target", () => {
     const modelTrigger = page.getByTestId("schedule-model-trigger");
     await expect(modelTrigger).toContainText("Ten second stream");
     await expectSettled(modelTrigger);
-    await expect(page.getByTestId("schedule-thinking-trigger")).toHaveCount(0);
+    const thinkingTrigger = page.getByTestId("schedule-thinking-trigger");
+    await expect(thinkingTrigger).toContainText("Low");
+    await expectSettled(thinkingTrigger);
     await expect(page.getByTestId("schedule-mode-trigger")).toBeVisible();
     await expectSettled(page.getByTestId("schedule-mode-trigger"));
     await expect(page.getByTestId("schedule-isolation-trigger")).toHaveCount(0);
@@ -320,7 +322,11 @@ test.describe("Schedules project target", () => {
     await selectModelByLabel(page, "Ten second stream");
     await expect(modelTrigger).toContainText("Ten second stream");
     await expectSettled(modelTrigger);
-    await expect(thinkingTrigger).toHaveCount(0);
+    await expect(thinkingTrigger).toContainText("Low");
+    await thinkingTrigger.click();
+    await page.getByTestId("schedule-thinking-option-high").click();
+    await expect(thinkingTrigger).toContainText("High");
+    await expectSettled(thinkingTrigger);
     await expect(modeTrigger).toBeVisible();
     await expectSettled(modeTrigger);
 

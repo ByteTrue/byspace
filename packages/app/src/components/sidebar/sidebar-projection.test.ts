@@ -4,25 +4,51 @@ import type {
   SidebarWorkspaceEntry,
   SidebarWorkspacePlacement,
 } from "@/hooks/use-sidebar-workspaces-list";
+import type { WorkspaceAgentSummary } from "@/utils/workspace-agent-summary";
 import { buildSidebarProjection } from "./sidebar-projection";
 
-function makeWorkspace(id: string, statusBucket: SidebarWorkspaceEntry["statusBucket"] = "done") {
+const HOST = {
+  serverId: "srv",
+  iconWorkingDir: "/repo",
+  canCreateWorktree: true,
+};
+
+function makeWorkspace(input: {
+  id: string;
+  projectKey: string;
+  status?: SidebarWorkspaceEntry["statusBucket"];
+  statusEnteredAt?: string;
+  latestActivityAt?: string;
+  needsAttentionCount?: number;
+  workingCount?: number;
+}) {
+  const status = input.status ?? "done";
+  const statusEnteredAt = new Date(input.statusEnteredAt ?? "2026-07-01T00:00:00.000Z");
   const placement: SidebarWorkspacePlacement = {
-    workspaceKey: `srv:${id}`,
+    workspaceKey: `srv:${input.id}`,
     serverId: "srv",
-    workspaceId: id,
-    projectKey: "project",
-    projectName: "Project",
+    workspaceId: input.id,
+    projectKey: input.projectKey,
+    projectName: input.projectKey,
     projectKind: "git",
     workspaceKind: "worktree",
-    name: id,
+    name: input.id,
+  };
+  const agentSummary: WorkspaceAgentSummary = {
+    agents: [],
+    status,
+    statusEnteredAt,
+    needsAttentionCount: input.needsAttentionCount ?? 0,
+    workingCount: input.workingCount ?? 0,
+    oldestAttentionAt: (input.needsAttentionCount ?? 0) > 0 ? statusEnteredAt : null,
+    latestActivityAt: new Date(input.latestActivityAt ?? statusEnteredAt),
   };
   const entry: SidebarWorkspaceEntry = {
     ...placement,
     title: null,
     currentBranch: null,
-    statusBucket,
-    statusEnteredAt: null,
+    statusBucket: status,
+    statusEnteredAt,
     archivingAt: null,
     diffStat: null,
     prHint: null,
@@ -30,86 +56,108 @@ function makeWorkspace(id: string, statusBucket: SidebarWorkspaceEntry["statusBu
     archiveUnpushedCommitCount: null,
     scripts: [],
     hasRunningScripts: false,
+    agentSummary,
   };
   return { placement, entry };
 }
 
-function makeProject(workspaces: SidebarWorkspacePlacement[]): SidebarProjectEntry {
+function makeProject(
+  projectKey: string,
+  workspaces: SidebarWorkspacePlacement[],
+): SidebarProjectEntry {
   return {
-    projectKey: "project",
-    projectName: "Project",
+    projectKey,
+    projectName: projectKey,
     projectKind: "git",
     iconWorkingDir: "/repo",
-    hosts: [
-      {
-        serverId: "srv",
-        iconWorkingDir: "/repo",
-        canCreateWorktree: true,
-      },
-    ],
+    hosts: [HOST],
     workspaces,
   };
 }
 
-function projectionInput(options?: {
-  groupMode?: "project" | "status";
-  pinnedCollapsed?: boolean;
-}) {
-  const pinned = makeWorkspace("pinned", "running");
-  const unpinned = makeWorkspace("unpinned", "needs_input");
-  return {
-    projects: [makeProject([pinned.placement, unpinned.placement])],
-    pinnedKeys: {
-      pinnedWorkspaceKeys: [pinned.placement.workspaceKey],
-      pinnedAtByKey: { [pinned.placement.workspaceKey]: "2026-07-12T12:00:00.000Z" },
-    },
-    workspaceEntriesByKey: new Map([
-      [pinned.entry.workspaceKey, pinned.entry],
-      [unpinned.entry.workspaceKey, unpinned.entry],
-    ]),
-    projectNamesByKey: new Map([["project", "Project"]]),
-    groupMode: options?.groupMode ?? ("project" as const),
-    pinnedCollapsed: options?.pinnedCollapsed ?? false,
-    collapsedProjectKeys: new Set<string>(),
-    collapsedStatusGroupKeys: new Set<string>(),
-  };
+function projectKeys(projects: readonly SidebarProjectEntry[]): string[] {
+  return projects.map((project) => project.projectKey);
 }
 
 describe("buildSidebarProjection", () => {
-  it("uses one pin-aware projection for project rows and shortcut order", () => {
-    const projection = buildSidebarProjection(projectionInput());
+  it("keeps the input order regardless of attention or activity", () => {
+    const waiting = makeWorkspace({
+      id: "waiting",
+      projectKey: "second",
+      status: "attention",
+      statusEnteredAt: "2026-07-01T09:00:00.000Z",
+      needsAttentionCount: 1,
+    });
+    const recent = makeWorkspace({
+      id: "recent",
+      projectKey: "first",
+      latestActivityAt: "2026-07-01T11:00:00.000Z",
+    });
+    const idle = makeWorkspace({
+      id: "idle",
+      projectKey: "first",
+      latestActivityAt: "2026-07-01T08:00:00.000Z",
+    });
 
-    expect(projection.pinnedGroups.pinnedChats.map((entry) => entry.workspaceId)).toEqual([
-      "pinned",
+    const projection = buildSidebarProjection({
+      projects: [
+        makeProject("first", [idle.placement, recent.placement]),
+        makeProject("second", [waiting.placement]),
+        makeProject("empty", []),
+      ],
+      workspaceEntriesByKey: new Map([
+        [waiting.entry.workspaceKey, waiting.entry],
+        [recent.entry.workspaceKey, recent.entry],
+        [idle.entry.workspaceKey, idle.entry],
+      ]),
+      attentionOnly: false,
+    });
+
+    expect(projectKeys(projection.projects)).toEqual(["first", "second", "empty"]);
+    expect(projection.projects[0]?.workspaces.map((row) => row.workspaceId)).toEqual([
+      "idle",
+      "recent",
     ]);
-    const remainingProject = projection.pinnedGroups.unpinnedProjects[0];
-    expect(remainingProject?.workspaces.map((entry) => entry.workspaceId)).toEqual(["unpinned"]);
+    expect(projection.projects.map((project) => project.needsAttentionCount)).toEqual([0, 1, 0]);
+    expect(projection.needsAttentionWorkspaceCount).toBe(1);
+    expect(projection.projects.map((project) => project.statusBucket)).toEqual([
+      "done",
+      "attention",
+      "done",
+    ]);
     expect(projection.shortcutModel.shortcutTargets).toEqual([
-      { serverId: "srv", workspaceId: "pinned" },
-      { serverId: "srv", workspaceId: "unpinned" },
+      { serverId: "srv", workspaceId: "idle" },
+      { serverId: "srv", workspaceId: "recent" },
+      { serverId: "srv", workspaceId: "waiting" },
     ]);
   });
 
-  it("keeps pinned chats above status groups and removes them from those groups", () => {
-    const projection = buildSidebarProjection(projectionInput({ groupMode: "status" }));
+  it("attentionOnly shows only attention workspaces and drops quiet projects", () => {
+    const waiting = makeWorkspace({
+      id: "waiting",
+      projectKey: "mixed",
+      status: "needs_input",
+      needsAttentionCount: 1,
+    });
+    const quiet = makeWorkspace({
+      id: "quiet",
+      projectKey: "mixed",
+    });
 
-    expect(projection.statusGroups.map((group) => group.bucket)).toEqual(["needs_input"]);
-    expect(projection.statusGroups[0]?.rows.map((entry) => entry.workspaceId)).toEqual([
-      "unpinned",
-    ]);
-    expect(projection.shortcutModel.shortcutTargets).toEqual([
-      { serverId: "srv", workspaceId: "pinned" },
-      { serverId: "srv", workspaceId: "unpinned" },
-    ]);
-  });
+    const projection = buildSidebarProjection({
+      projects: [
+        makeProject("mixed", [quiet.placement, waiting.placement]),
+        makeProject("quiet-project", [quiet.placement]),
+      ],
+      workspaceEntriesByKey: new Map([
+        [waiting.entry.workspaceKey, waiting.entry],
+        [quiet.entry.workspaceKey, quiet.entry],
+      ]),
+      attentionOnly: true,
+    });
 
-  it("does not number pinned chats while the pinned section is collapsed", () => {
-    const projection = buildSidebarProjection(
-      projectionInput({ groupMode: "status", pinnedCollapsed: true }),
-    );
-
-    expect(projection.shortcutModel.shortcutTargets).toEqual([
-      { serverId: "srv", workspaceId: "unpinned" },
-    ]);
+    expect(projectKeys(projection.projects)).toEqual(["mixed"]);
+    expect(projection.projects[0]?.workspaces.map((row) => row.workspaceId)).toEqual(["waiting"]);
+    expect(projection.needsAttentionWorkspaceCount).toBe(1);
   });
 });

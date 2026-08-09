@@ -1,17 +1,13 @@
 import { describe, expect, it } from "vitest";
-import type { WorkspaceDescriptor } from "@/stores/session-store";
 import type { WorkspaceStructureProject } from "@/projects/workspace-structure";
 import {
   buildHostProjectList,
-  canCreateWorkspaceForHostProject,
   canCreateWorktreeForProjectKind,
-  filterWorkspaceProjectsForHost,
   getHostProjectSourceDirectory,
+  getWorkspaceCreationHosts,
   hostProjectFromRoute,
-  hostProjectFromWorkspace,
-  resolveInitialWorkspaceProject,
-  resolveInitialWorktreeProject,
   resolveSelectedHostProject,
+  resolveHostProjectWorkspaceIdentity,
   type HostProjectListItem,
 } from "./host-project-model";
 
@@ -49,38 +45,10 @@ function hostProject(input: Partial<HostProjectListItem>): HostProjectListItem {
   };
 }
 
-function workspace(input: Partial<WorkspaceDescriptor>): WorkspaceDescriptor {
-  return {
-    id: input.id ?? "workspace-a",
-    projectId: input.projectId ?? "project-a",
-    projectDisplayName: input.projectDisplayName ?? "Project A",
-    projectRootPath: input.projectRootPath ?? "/repo/a",
-    workspaceDirectory: input.workspaceDirectory ?? "/repo/a",
-    projectKind: input.projectKind ?? "git",
-    workspaceKind: input.workspaceKind ?? "local_checkout",
-    name: input.name ?? "main",
-    status: input.status ?? "done",
-    statusEnteredAt: input.statusEnteredAt ?? null,
-    archivingAt: input.archivingAt ?? null,
-    diffStat: input.diffStat ?? null,
-    scripts: input.scripts ?? [],
-  };
-}
-
 const routeProject = hostProject({
   projectKey: "route-project",
   projectName: "Route Project",
   iconWorkingDir: "/repo/route",
-});
-const lastActiveProject = hostProject({
-  projectKey: "last-project",
-  projectName: "Last Project",
-  iconWorkingDir: "/repo/last",
-});
-const firstProject = hostProject({
-  projectKey: "first-project",
-  projectName: "First Project",
-  iconWorkingDir: "/repo/first",
 });
 
 describe("host project list", () => {
@@ -131,120 +99,26 @@ describe("host project list", () => {
     expect(canCreateWorktreeForProjectKind("directory")).toBe(false);
   });
 
-  it("uses route project before last active project when it can create worktrees", () => {
-    expect(
-      resolveInitialWorktreeProject({
-        routeProject,
-        lastActiveProject,
-        projects: [firstProject],
-      }),
-    ).toEqual(routeProject);
-  });
-
-  it("skips non-worktree route and last-active projects", () => {
-    expect(
-      resolveInitialWorktreeProject({
-        routeProject: {
-          ...routeProject,
-          projectKind: "directory",
-          hosts: [{ serverId: "host-a", iconWorkingDir: "/repo/route", canCreateWorktree: false }],
-        },
-        lastActiveProject: {
-          ...lastActiveProject,
-          projectKind: "directory",
-          hosts: [{ serverId: "host-a", iconWorkingDir: "/repo/last", canCreateWorktree: false }],
-        },
-        projects: [
-          {
-            ...firstProject,
-            projectKind: "directory",
-            hosts: [
-              { serverId: "host-a", iconWorkingDir: "/repo/first", canCreateWorktree: false },
-            ],
-          },
-          hostProject({ projectKey: "git-project", projectName: "Git Project" }),
-        ],
-      }),
-    ).toMatchObject({ projectKey: "git-project" });
-  });
-
-  it("leaves the project empty when no worktree-capable project is available", () => {
-    expect(
-      resolveInitialWorktreeProject({
-        routeProject: null,
-        lastActiveProject: null,
-        projects: [
-          {
-            ...firstProject,
-            projectKind: "directory",
-            hosts: [
-              { serverId: "host-a", iconWorkingDir: "/repo/first", canCreateWorktree: false },
-            ],
-          },
-        ],
-      }),
-    ).toBeNull();
-  });
-
-  it("filters new-workspace projects to the selected host", () => {
-    const hostAOnly = hostProject({
-      projectKey: "host-a-project",
-      hosts: [{ serverId: "host-a", iconWorkingDir: "/repo/a", canCreateWorktree: true }],
-    });
-    const hostBOnly = hostProject({
-      projectKey: "host-b-project",
-      hosts: [{ serverId: "host-b", iconWorkingDir: "/repo/b", canCreateWorktree: true }],
-    });
-
-    expect(
-      filterWorkspaceProjectsForHost({
-        projects: [hostAOnly, hostBOnly],
-        serverId: "host-b",
-        allowAllProjects: false,
-      }).map((project) => project.projectKey),
-    ).toEqual(["host-b-project"]);
-  });
-
-  it("allows directory projects only when workspace multiplicity is supported", () => {
-    const directoryProject = hostProject({
-      projectKey: "directory-project",
+  it("derives eligible creation hosts from each placement capability", () => {
+    const multiHostProject = hostProject({
       projectKind: "directory",
-      hosts: [{ serverId: "host-a", iconWorkingDir: "/repo/directory", canCreateWorktree: false }],
-    });
-
-    expect(
-      canCreateWorkspaceForHostProject({
-        project: directoryProject,
-        serverId: "host-a",
-        allowAllProjects: false,
-      }),
-    ).toBe(false);
-    expect(
-      canCreateWorkspaceForHostProject({
-        project: directoryProject,
-        serverId: "host-a",
-        allowAllProjects: true,
-      }),
-    ).toBe(true);
-  });
-
-  it("falls back when the route project is not available on the selected host", () => {
-    const selectedHostProject = hostProject({
-      projectKey: "selected-host-project",
       hosts: [
-        { serverId: "host-b", iconWorkingDir: "/repo/selected-host", canCreateWorktree: true },
+        { serverId: "host-a", iconWorkingDir: "/repo/a", canCreateWorktree: false },
+        { serverId: "host-b", iconWorkingDir: "/repo/b", canCreateWorktree: false },
+        { serverId: "host-c", iconWorkingDir: "/repo/c", canCreateWorktree: true },
       ],
     });
 
     expect(
-      resolveInitialWorkspaceProject({
-        routeProject,
-        lastActiveProject: null,
-        projects: [selectedHostProject],
-        serverId: "host-b",
-        allowAllProjects: false,
-      }),
-    ).toEqual(selectedHostProject);
+      getWorkspaceCreationHosts({
+        project: multiHostProject,
+        workspaceMultiplicityByServerId: new Map([
+          ["host-a", false],
+          ["host-b", true],
+          ["host-c", false],
+        ]),
+      }).map((host) => host.serverId),
+    ).toEqual(["host-b", "host-c"]);
   });
 
   it("resolves the selected host project source directory", () => {
@@ -259,7 +133,26 @@ describe("host project list", () => {
     expect(getHostProjectSourceDirectory(project, "host-c")).toBeNull();
   });
 
-  it("hydrates host-local route and last-workspace keys to the grouped project", () => {
+  it("resolves workspace keys using the longest opaque Host prefix", () => {
+    const project = hostProject({
+      hosts: [
+        { serverId: "relay", iconWorkingDir: "/repo/relay", canCreateWorktree: true },
+        {
+          serverId: "relay:byspace-host",
+          iconWorkingDir: "/repo/byspace",
+          canCreateWorktree: true,
+        },
+      ],
+    });
+
+    expect(resolveHostProjectWorkspaceIdentity(project, "relay:byspace-host:ws-main")).toEqual({
+      serverId: "relay:byspace-host",
+      workspaceId: "ws-main",
+    });
+    expect(resolveHostProjectWorkspaceIdentity(project, "unknown:ws-main")).toBeNull();
+  });
+
+  it("hydrates a host-local route key to the grouped project", () => {
     const grouped = hostProject({
       projectKey: "remote:https://github.com/acme/app",
       hosts: [
@@ -285,20 +178,10 @@ describe("host project list", () => {
     });
 
     expect(
-      resolveInitialWorkspaceProject({
-        routeProject: localRoute,
-        lastActiveProject: null,
-        projects: [grouped],
-        serverId: "host-b",
-        allowAllProjects: true,
-      }),
-    ).toBe(grouped);
-    expect(
       resolveSelectedHostProject({
         selectedProjectKey: "prj_local_b",
         projects: [grouped],
         routeProject: localRoute,
-        lastActiveProject: null,
       }),
     ).toBe(grouped);
   });
@@ -309,9 +192,20 @@ describe("host project list", () => {
         selectedProjectKey: routeProject.projectKey,
         projects: [],
         routeProject,
-        lastActiveProject: null,
       }),
     ).toEqual(routeProject);
+  });
+
+  it("preserves opaque aggregate project keys during selection", () => {
+    const opaqueProject = hostProject({ projectKey: " project-a " });
+
+    expect(
+      resolveSelectedHostProject({
+        selectedProjectKey: opaqueProject.projectKey,
+        projects: [opaqueProject],
+        routeProject: null,
+      }),
+    ).toBe(opaqueProject);
   });
 
   it("converts route project only when it has a key and source directory", () => {
@@ -338,33 +232,5 @@ describe("host project list", () => {
       workspaceKeys: [],
     });
     expect(hostProjectFromRoute({ serverId: "host-a", projectId: "project-a" })).toBeNull();
-  });
-
-  it("converts last active workspaces with matching worktree capability", () => {
-    expect(hostProjectFromWorkspace({ serverId: "host-a", workspace: workspace({}) })).toEqual({
-      projectKey: "project-a",
-      projectName: "Project A",
-      projectKind: "git",
-      iconWorkingDir: "/repo/a",
-      hosts: [
-        {
-          serverId: "host-a",
-          projectId: "project-a",
-          iconWorkingDir: "/repo/a",
-          canCreateWorktree: true,
-        },
-      ],
-      workspaceKeys: ["host-a:workspace-a"],
-    });
-
-    expect(
-      hostProjectFromWorkspace({
-        serverId: "host-a",
-        workspace: workspace({ projectKind: "directory" }),
-      }),
-    ).toMatchObject({
-      projectKind: "directory",
-      hosts: [{ serverId: "host-a", iconWorkingDir: "/repo/a", canCreateWorktree: false }],
-    });
   });
 });

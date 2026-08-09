@@ -12,6 +12,7 @@ type ModelId = typeof MODEL_ID | typeof SENSEVOICE_MODEL_ID;
 const roots: string[] = [];
 const mocks = vi.hoisted(() => ({
   activeSessions: false,
+  commitError: null as Error | null,
   ensureCalls: 0,
   ensureGate: null as Promise<void> | null,
   ensureError: null as Error | null,
@@ -51,6 +52,7 @@ vi.mock("./providers/local/models.js", () => ({
     await mocks.stageGate;
     return {
       commit: async () => {
+        if (mocks.commitError) throw mocks.commitError;
         mocks.ready = false;
       },
       rollback: async () => {
@@ -69,6 +71,7 @@ vi.mock("./providers/local/worker-client.js", () => ({
       return () => undefined;
     }
     shutdown() {}
+    async shutdownAndWait() {}
   },
   WorkerBackedSpeechToTextProvider: class {
     id = "local-sherpa-onnx";
@@ -103,6 +106,7 @@ async function createRuntime(selected: ModelId | null = null) {
 
 beforeEach(() => {
   mocks.activeSessions = false;
+  mocks.commitError = null;
   mocks.ready = false;
   mocks.ensureCalls = 0;
   mocks.ensureGate = null;
@@ -158,6 +162,19 @@ describe("createSpeechService", () => {
     expect((await runtime.listModels()).selectedModelId).toBeNull();
     expect(runtime.resolveDictationStt()).toBeNull();
 
+    runtime.stop();
+  });
+
+  it("reports physical model cleanup failures", async () => {
+    mocks.ready = true;
+    mocks.commitError = new Error("model files are still locked");
+    const runtime = await createRuntime(MODEL_ID);
+    runtime.start();
+    await runtime.ready;
+
+    await expect(runtime.deleteModel(MODEL_ID)).rejects.toThrow("model files are still locked");
+    expect((await runtime.listModels()).selectedModelId).toBeNull();
+    expect(runtime.resolveDictationStt()).toBeNull();
     runtime.stop();
   });
 

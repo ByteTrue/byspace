@@ -46,6 +46,7 @@ import type { ForgeService } from "../../services/forge-service.js";
 import type { TerminalManager } from "../../terminal/terminal-manager.js";
 import { PARENT_AGENT_ID_LABEL } from "@bytetrue/byspace-protocol/agent-labels";
 import { readBySpaceWorktreeMetadata } from "../../utils/worktree-metadata.js";
+import { WorkspaceSetupRuntime } from "../workspace-setup-runtime.js";
 
 const REPO_CWD = resolvePath("/tmp/repo");
 const TARGET_CWD = resolvePath("/tmp/target");
@@ -673,11 +674,14 @@ function createBySpaceWorktreeForMcpTest(options: {
         sessionLogger: createTestLogger(),
         terminalManager: null,
         archiveWorkspaceRecord: async () => {},
+        archiveWorkspaceRecordAfterSetupSettled: async () => {},
         serviceProxy: null,
         scriptRuntimeStore: null,
         getDaemonTcpPort: null,
         getDaemonTcpHost: null,
         onScriptsChanged: null,
+        startWorkspaceSetup: (workspaceId, operation) =>
+          new WorkspaceSetupRuntime().start(workspaceId, operation),
       },
       input,
       serviceOptions,
@@ -1018,6 +1022,7 @@ describe("create_agent MCP tool", () => {
       emitWorkspaceUpdatesForWorkspaceIds: async () => {},
       markWorkspaceArchiving: () => {},
       clearWorkspaceArchiving: () => {},
+      stopWorkspaceSetup: vi.fn(async () => {}),
       logger,
     });
 
@@ -2200,6 +2205,7 @@ describe("create_agent MCP tool", () => {
         emitWorkspaceUpdatesForWorkspaceIds: async () => {},
         markWorkspaceArchiving: () => {},
         clearWorkspaceArchiving: () => {},
+        stopWorkspaceSetup: vi.fn(async () => {}),
         github: createGitHubServiceStub(),
         logger,
       });
@@ -3219,6 +3225,7 @@ describe("workspace automation MCP tools", () => {
       emitWorkspaceUpdatesForWorkspaceIds: async () => {},
       markWorkspaceArchiving: () => {},
       clearWorkspaceArchiving: () => {},
+      stopWorkspaceSetup: vi.fn(async () => {}),
       logger,
     });
 
@@ -4868,64 +4875,6 @@ describe("provider MCP tools", () => {
     await expect(tool.handler({ provider: "codex", cwd: "~/repo" })).rejects.toThrow(
       "Provider 'codex' is disabled",
     );
-  });
-});
-
-describe("speak MCP tool", () => {
-  const logger = createTestLogger();
-
-  it("invokes registered speak handler for caller agent", async () => {
-    const { agentManager, agentStorage } = createTestDeps();
-    const speak = vi.fn().mockResolvedValue(undefined);
-    const server = await createAgentMcpServer({
-      agentManager,
-      agentStorage,
-      providerSnapshotManager: createOpenCodeManager().manager,
-      callerAgentId: "voice-agent-1",
-      enableVoiceTools: true,
-      resolveSpeakHandler: () => speak,
-      logger,
-    });
-    const tool = registeredTool(server, "speak");
-    expect(tool).toBeDefined();
-
-    await tool.handler({ text: "Hello from voice agent." });
-    expect(speak).toHaveBeenCalledWith(
-      expect.objectContaining({
-        text: "Hello from voice agent.",
-        callerAgentId: "voice-agent-1",
-      }),
-    );
-  });
-
-  it("fails when no speak handler exists", async () => {
-    const { agentManager, agentStorage } = createTestDeps();
-    const server = await createAgentMcpServer({
-      agentManager,
-      agentStorage,
-      providerSnapshotManager: createOpenCodeManager().manager,
-      callerAgentId: "voice-agent-2",
-      enableVoiceTools: true,
-      resolveSpeakHandler: () => null,
-      logger,
-    });
-    const tool = registeredTool(server, "speak");
-    await expect(tool.handler({ text: "Hello." })).rejects.toThrow(
-      "No speak handler registered for your session",
-    );
-  });
-
-  it("does not register speak tool unless voice tools are enabled", async () => {
-    const { agentManager, agentStorage } = createTestDeps();
-    const server = await createAgentMcpServer({
-      agentManager,
-      agentStorage,
-      providerSnapshotManager: createOpenCodeManager().manager,
-      callerAgentId: "agent-no-voice",
-      logger,
-    });
-    const tool = lookupTool(server, "speak");
-    expect(tool).toBeUndefined();
   });
 });
 

@@ -94,6 +94,8 @@ When enabled for a provider, BySpace installs its hook globally:
 - OpenCode gets a self-contained plugin at `$XDG_CONFIG_HOME/opencode/plugins/byspace-terminal-activity.js` (or `~/.config/opencode/plugins/byspace-terminal-activity.js` when XDG is unset; `OPENCODE_CONFIG_DIR` still wins when set).
 - Pi gets a self-contained extension at `~/.pi/agent/extensions/byspace-terminal-activity.ts` (or `PI_CODING_AGENT_DIR/extensions/byspace-terminal-activity.ts`). Pi auto-discovers this documented global extension location; `/reload` activates a newly installed or updated extension in an already running Pi session.
 
+Pi's extension stamps its process with `BYSPACE_PI_TERMINAL_HOOK_OWNER_PID` so descendant Pi processes do not race their parent's activity reports. BySpace removes inherited copies when launching external processes; otherwise a daemon or terminal worker started from Pi can suppress every independent Pi extension it later launches.
+
 Installation is marker-based/idempotent for config hooks and exact-file/idempotent for the OpenCode and Pi extensions. BySpace preserves user hooks, removes only its own marker-matched command hooks or exact managed extension files, and leaves enabled hooks installed across daemon shutdown. Outside a BySpace terminal they are inert because the command or extension requires BySpace's injected terminal identity and activity token.
 
 Provider variation lives in `AGENT_HOOK_PROVIDERS`: provider id, installed events, install strategy, and runtime event-to-activity resolution. Pi's extension source is provider-local because it uses Pi's native extension lifecycle; the generic installer and daemon setting reconciliation remain provider-agnostic.

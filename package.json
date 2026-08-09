@@ -37,7 +37,7 @@
     "dev:app": "cross-env BYSPACE_LISTEN=127.0.0.1:6768 EXPO_PORT=8081 ./scripts/dev-app.sh",
     "postinstall": "node scripts/postinstall-patches.mjs",
     "prepare": "lefthook install --force",
-    "build": "npm run build --workspaces --if-present",
+    "build": "npm run build --workspaces --if-present && npm run build:daemon-web-ui -- --skip-export",
     "build:highlight": "npm run build --workspace=@bytetrue/byspace-highlight",
     "build:highlight:clean": "npm run build:clean --workspace=@bytetrue/byspace-highlight",
     "build:relay": "npm run build --workspace=@bytetrue/byspace-relay",

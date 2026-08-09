@@ -95,7 +95,7 @@ describe("persistence hooks", () => {
     });
   });
 
-  test("buildConfigOverrides drops persisted internal byspace MCP server", () => {
+  test("buildConfigOverrides preserves an explicitly configured BySpace MCP endpoint", () => {
     const record = createRecord({
       config: {
         modeId: "default",
@@ -103,7 +103,7 @@ describe("persistence hooks", () => {
         mcpServers: {
           byspace: {
             type: "http",
-            url: "http://127.0.0.1:6777/mcp/agents?callerAgentId=stale-agent",
+            url: "http://127.0.0.1:6777/mcp/agents?callerAgentId=configured-agent",
           },
           custom: {
             type: "stdio",
@@ -113,12 +113,7 @@ describe("persistence hooks", () => {
       },
     });
 
-    expect(buildConfigOverrides(record).mcpServers).toEqual({
-      custom: {
-        type: "stdio",
-        command: "custom-mcp",
-      },
-    });
+    expect(buildConfigOverrides(record).mcpServers).toEqual(record.config?.mcpServers);
   });
 
   test("buildConfigOverrides preserves user-provided byspace MCP server", () => {

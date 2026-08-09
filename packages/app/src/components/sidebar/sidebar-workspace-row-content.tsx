@@ -1,67 +1,36 @@
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { memo, useCallback, useMemo, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import { Pressable, Text, View, type GestureResponderEvent, type ViewStyle } from "react-native";
+import { Text, View, type ViewStyle } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
-import {
-  CircleAlert,
-  ExternalLink,
-  Folder,
-  FolderGit2,
-  GitPullRequest,
-  Globe,
-  Monitor,
-  SquareTerminal,
-} from "lucide-react-native";
+import { CircleAlert, Folder, FolderGit2, Monitor } from "lucide-react-native";
 import { WorkspaceHoverCard } from "@/components/workspace-hover-card";
 import { SyncedLoader } from "@/components/synced-loader";
 import type { SidebarWorkspaceEntry } from "@/hooks/use-sidebar-workspaces-list";
 import { useAppSettings } from "@/hooks/use-settings";
 import type { Theme } from "@/styles/theme";
-import type { PrHint } from "@/git/use-pr-status-query";
-import { getForgePresentation, normalizeForge } from "@/git/forge";
-import { ForgeBrandIcon } from "@/git/forge-icon";
 import type { SidebarStateBucket } from "@/utils/sidebar-agent-state";
 import { isEmphasizedStatusDotBucket } from "@/utils/status-dot-color";
 import { shouldRenderSyncedStatusLoader } from "@/utils/status-loader";
-import { openExternalUrl } from "@/utils/open-external-url";
 import { resolveSidebarWorkspacePrimaryLabel } from "@/components/sidebar/sidebar-workspace-title";
+import type { HostBadgeModel } from "@/hosts/appearance";
+import { WorkspaceMetaRow, type WorkspaceServiceSummary } from "./workspace-meta-row";
 
 const DEFAULT_STATUS_DOT_SIZE = 7;
 const EMPHASIZED_STATUS_DOT_SIZE = 9;
 const DEFAULT_STATUS_DOT_OFFSET = 0;
 const EMPHASIZED_STATUS_DOT_OFFSET = -1;
 
-const foregroundColorMapping = (theme: Theme) => ({ color: theme.colors.foreground });
 const foregroundMutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
-const amberColorMapping = (theme: Theme) => ({ color: theme.colors.palette.amber[500] });
-const syncedLoaderColorMapping = (theme: Theme) => ({
-  color:
-    theme.colorScheme === "light"
-      ? theme.colors.palette.amber[700]
-      : theme.colors.palette.amber[500],
-});
-const blueColorMapping = (theme: Theme) => ({ color: theme.colors.palette.blue[500] });
-const greenColorMapping = (theme: Theme) => ({ color: theme.colors.palette.green[500] });
-const redColorMapping = (theme: Theme) => ({ color: theme.colors.palette.red[500] });
-const purpleColorMapping = (theme: Theme) => ({ color: theme.colors.palette.purple[500] });
+const amberColorMapping = (theme: Theme) => ({ color: theme.colors.statusWarning });
+const syncedLoaderColorMapping = (theme: Theme) => ({ color: theme.colors.statusWarning });
 
-const ThemedExternalLink = withUnistyles(ExternalLink);
-const ThemedGitPullRequest = withUnistyles(GitPullRequest);
 const ThemedLoadingSpinner = withUnistyles(LoadingSpinner);
 const ThemedCircleAlert = withUnistyles(CircleAlert);
 const ThemedSyncedLoader = withUnistyles(SyncedLoader);
 const ThemedMonitor = withUnistyles(Monitor);
 const ThemedFolder = withUnistyles(Folder);
 const ThemedFolderGit2 = withUnistyles(FolderGit2);
-const ThemedGlobe = withUnistyles(Globe);
-const ThemedSquareTerminal = withUnistyles(SquareTerminal);
-
-function renderChecksBadgeForgeIcon(icon: string) {
-  return <ForgeBrandIcon iconKind={icon} size={10} uniProps={redColorMapping} />;
-}
-
-type SidebarWorkspaceScriptIconKind = "service" | "command";
 
 export function SidebarWorkspaceRowFrame({
   workspace,
@@ -92,8 +61,8 @@ export function SidebarWorkspaceRowFrame({
 
 export const SidebarWorkspaceRowContent = memo(function SidebarWorkspaceRowContent({
   workspace,
-  subtitle,
-  scriptIconKind = null,
+  hostBadge,
+  serviceSummary = null,
   isHovered,
   isLoading,
   isCreating = false,
@@ -103,8 +72,8 @@ export const SidebarWorkspaceRowContent = memo(function SidebarWorkspaceRowConte
   children,
 }: {
   workspace: SidebarWorkspaceEntry;
-  subtitle?: string | null;
-  scriptIconKind?: SidebarWorkspaceScriptIconKind | null;
+  hostBadge?: HostBadgeModel | null;
+  serviceSummary?: WorkspaceServiceSummary | null;
   isHovered: boolean;
   isLoading: boolean;
   isCreating?: boolean;
@@ -121,11 +90,11 @@ export const SidebarWorkspaceRowContent = memo(function SidebarWorkspaceRowConte
   const workspaceBranchTextStyle = useMemo(
     () => [
       styles.workspaceBranchText,
-      scriptIconKind ? styles.workspaceBranchTextWithAccessory : styles.workspaceBranchTextFlexible,
+      styles.workspaceBranchTextFlexible,
       isHovered && styles.workspaceBranchTextHovered,
       isCreating && styles.workspaceBranchTextCreating,
     ],
-    [scriptIconKind, isHovered, isCreating],
+    [isHovered, isCreating],
   );
 
   return (
@@ -143,21 +112,17 @@ export const SidebarWorkspaceRowContent = memo(function SidebarWorkspaceRowConte
               <Text style={workspaceBranchTextStyle} numberOfLines={1}>
                 {workspaceLabel}
               </Text>
-              {scriptIconKind ? <WorkspaceScriptIcon kind={scriptIconKind} /> : null}
             </View>
-            <View style={sidebarWorkspaceRowStyles.rowRight}>{children}</View>
+            <View style={sidebarWorkspaceRowStyles.rowRight}>
+              <WorkspaceAgentSummary workspace={workspace} />
+              {children}
+            </View>
           </View>
-          {subtitle ? (
-            <Text style={styles.workspaceSubtitle} numberOfLines={1}>
-              {subtitle}
-            </Text>
-          ) : null}
-          {workspace.prHint ? (
-            <View style={styles.workspacePrBadgeRow}>
-              <PrBadge hint={workspace.prHint} />
-              <ChecksBadge checks={workspace.prHint.checks} forge={workspace.prHint.forge} />
-            </View>
-          ) : null}
+          <WorkspaceMetaRow
+            hostBadge={hostBadge ?? null}
+            prHint={workspace.prHint}
+            serviceSummary={serviceSummary}
+          />
         </View>
       </View>
       {showShortcutBadge && shortcutNumber !== null ? (
@@ -168,22 +133,6 @@ export const SidebarWorkspaceRowContent = memo(function SidebarWorkspaceRowConte
     </View>
   );
 });
-
-function WorkspaceScriptIcon({ kind }: { kind: SidebarWorkspaceScriptIconKind }) {
-  return (
-    <View
-      style={styles.workspaceTitleAccessory}
-      accessibilityLabel="Scripts available"
-      testID={kind === "service" ? "workspace-globe-icon" : "workspace-terminal-icon"}
-    >
-      {kind === "service" ? (
-        <ThemedGlobe size={12} uniProps={blueColorMapping} />
-      ) : (
-        <ThemedSquareTerminal size={12} uniProps={blueColorMapping} />
-      )}
-    </View>
-  );
-}
 
 function WorkspaceStatusIndicator({
   bucket,
@@ -250,7 +199,11 @@ function WorkspaceStatusIndicator({
       ? EMPHASIZED_STATUS_DOT_OFFSET
       : DEFAULT_STATUS_DOT_OFFSET;
   return (
-    <View style={styles.workspaceStatusDot} testID={`workspace-status-indicator-${bucket}`}>
+    <View
+      style={styles.workspaceStatusDot}
+      accessible
+      testID={`workspace-status-indicator-${bucket}`}
+    >
       <KindIcon size={14} uniProps={foregroundMutedColorMapping} />
       {dotColorStyle ? (
         <StatusDotOverlay
@@ -288,83 +241,6 @@ function StatusDotOverlay({
   return <View style={overlayStyle} />;
 }
 
-function PrBadge({ hint }: { hint: PrHint }) {
-  const { t } = useTranslation();
-  const [isHovered, setIsHovered] = useState(false);
-  const handlePress = useCallback(
-    (event: GestureResponderEvent) => {
-      event.stopPropagation();
-      void openExternalUrl(hint.url);
-    },
-    [hint.url],
-  );
-  const textStyle = useMemo(
-    () => (isHovered ? [prBadgeStyles.text, prBadgeStyles.textHovered] : prBadgeStyles.text),
-    [isHovered],
-  );
-  const iconUniProps = isHovered ? foregroundColorMapping : getPrIconUniMapping(hint.state);
-  const presentation = getForgePresentation(normalizeForge(hint.forge));
-
-  const handlePressIn = useCallback((event: GestureResponderEvent) => event.stopPropagation(), []);
-  const handleHoverIn = useCallback(() => setIsHovered(true), []);
-  const handleHoverOut = useCallback(() => setIsHovered(false), []);
-
-  const pressableStyle = useMemo(
-    () => [prBadgeStyles.badge, isHovered && prBadgeStyles.badgePressed],
-    [isHovered],
-  );
-
-  return (
-    <Pressable
-      accessibilityRole="link"
-      accessibilityLabel={t("workspace.git.pr.accessibility.pullRequest", {
-        number: hint.number,
-        context: presentation.changeRequestContext,
-      })}
-      hitSlop={4}
-      onPressIn={handlePressIn}
-      onPress={handlePress}
-      onHoverIn={handleHoverIn}
-      onHoverOut={handleHoverOut}
-      style={pressableStyle}
-    >
-      {isHovered ? (
-        <ThemedExternalLink size={12} uniProps={iconUniProps} />
-      ) : (
-        <ThemedGitPullRequest size={12} uniProps={iconUniProps} />
-      )}
-      <Text style={textStyle} numberOfLines={1}>
-        {presentation.numberPrefix}
-        {hint.number}
-      </Text>
-    </Pressable>
-  );
-}
-
-function ChecksBadge({ checks, forge }: { checks: PrHint["checks"]; forge: PrHint["forge"] }) {
-  if (!checks || checks.length === 0) return null;
-  const failed = checks.filter((check) => check.status === "failure").length;
-  if (failed === 0) return null;
-  const icon = getForgePresentation(normalizeForge(forge)).icon;
-  return (
-    <View style={checksBadgeStyles.badge}>
-      {renderChecksBadgeForgeIcon(icon)}
-      <Text style={checksBadgeStyles.text}>{failed} failed</Text>
-    </View>
-  );
-}
-
-function getPrIconUniMapping(state: PrHint["state"]) {
-  switch (state) {
-    case "merged":
-      return purpleColorMapping;
-    case "open":
-      return greenColorMapping;
-    case "closed":
-      return redColorMapping;
-  }
-}
-
 function getStatusDotColorStyle(bucket: SidebarStateBucket) {
   switch (bucket) {
     case "needs_input":
@@ -380,39 +256,46 @@ function getStatusDotColorStyle(bucket: SidebarStateBucket) {
   }
 }
 
-const prBadgeStyles = StyleSheet.create((theme) => ({
-  badge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 2,
-  },
-  badgePressed: {
-    opacity: 0.82,
-  },
-  text: {
-    fontSize: theme.fontSize.xs,
-    fontWeight: theme.fontWeight.normal,
-    lineHeight: 14,
-    color: theme.colors.foregroundMuted,
-  },
-  textHovered: {
-    color: theme.colors.foreground,
-  },
-}));
-
-const checksBadgeStyles = StyleSheet.create((theme) => ({
-  badge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 2,
-  },
-  text: {
-    fontSize: theme.fontSize.xs,
-    fontWeight: theme.fontWeight.normal,
-    lineHeight: 14,
-    color: theme.colors.palette.red[500],
-  },
-}));
+function WorkspaceAgentSummary({ workspace }: { workspace: SidebarWorkspaceEntry }) {
+  const { t } = useTranslation();
+  const summary = workspace.agentSummary;
+  if (!summary) return null;
+  if (summary.needsAttentionCount > 0) {
+    return (
+      <View
+        style={sidebarWorkspaceRowStyles.agentSummary}
+        testID="workspace-agent-summary-attention"
+        accessible
+        accessibilityLabel={t("sidebar.workspace.agentSummary.needsAttention", {
+          count: summary.needsAttentionCount,
+        })}
+      >
+        <ThemedCircleAlert size={12} uniProps={amberColorMapping} />
+        <Text style={sidebarWorkspaceRowStyles.agentSummaryAttentionText}>
+          {summary.needsAttentionCount}
+        </Text>
+      </View>
+    );
+  }
+  if (summary.workingCount > 0) {
+    return (
+      <View
+        style={sidebarWorkspaceRowStyles.agentSummary}
+        testID="workspace-agent-summary-working"
+        accessible
+        accessibilityLabel={t("sidebar.workspace.agentSummary.working", {
+          count: summary.workingCount,
+        })}
+      >
+        <View style={sidebarWorkspaceRowStyles.agentSummaryWorkingDot} />
+        <Text style={sidebarWorkspaceRowStyles.agentSummaryWorkingText}>
+          {summary.workingCount}
+        </Text>
+      </View>
+    );
+  }
+  return null;
+}
 
 export const sidebarWorkspaceRowStyles = StyleSheet.create((theme) => ({
   rowRight: {
@@ -420,6 +303,28 @@ export const sidebarWorkspaceRowStyles = StyleSheet.create((theme) => ({
     alignItems: "flex-start",
     gap: theme.spacing[2],
     flexShrink: 0,
+  },
+  agentSummary: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    minHeight: 18,
+  },
+  agentSummaryWorkingDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: theme.colors.statusSuccess,
+  },
+  agentSummaryAttentionText: {
+    color: theme.colors.statusWarning,
+    fontSize: theme.fontSize.xs,
+    fontWeight: theme.fontWeight.medium,
+  },
+  agentSummaryWorkingText: {
+    color: theme.colors.statusSuccess,
+    fontSize: theme.fontSize.xs,
+    fontWeight: theme.fontWeight.medium,
   },
   shortcutBadge: {
     minWidth: 18,
@@ -539,7 +444,7 @@ const styles = StyleSheet.create((theme) => ({
     width: 8,
     height: 8,
     borderRadius: theme.borderRadius.full,
-    backgroundColor: theme.colors.palette.green[500],
+    backgroundColor: theme.colors.statusDotSuccess,
   },
   workspaceBranchText: {
     color: theme.colors.foreground,
@@ -552,46 +457,26 @@ const styles = StyleSheet.create((theme) => ({
   workspaceBranchTextFlexible: {
     flex: 1,
   },
-  workspaceBranchTextWithAccessory: {
-    flexShrink: 1,
-  },
-  workspaceTitleAccessory: {
-    height: 20,
-    flexShrink: 0,
-    alignItems: "center",
-    justifyContent: "center",
-  },
   workspaceBranchTextCreating: {
     opacity: 0.92,
   },
   workspaceBranchTextHovered: {
     opacity: 1,
   },
-  workspaceSubtitle: {
-    color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
-    lineHeight: 14,
-  },
-  workspacePrBadgeRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: theme.spacing[2],
-    marginTop: theme.spacing[1],
-  },
   statusDotNeedsInput: {
-    backgroundColor: theme.colors.palette.amber[500],
+    backgroundColor: theme.colors.statusDotWarning,
     borderColor: theme.colors.surface0,
   },
   statusDotFailed: {
-    backgroundColor: theme.colors.palette.red[500],
+    backgroundColor: theme.colors.statusDotDanger,
     borderColor: theme.colors.surface0,
   },
   statusDotRunning: {
-    backgroundColor: theme.colors.palette.blue[500],
+    backgroundColor: theme.colors.statusDotRunning,
     borderColor: theme.colors.surface0,
   },
   statusDotAttention: {
-    backgroundColor: theme.colors.palette.green[500],
+    backgroundColor: theme.colors.statusDotSuccess,
     borderColor: theme.colors.surface0,
   },
 }));

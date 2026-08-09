@@ -121,7 +121,6 @@ workerSpeechTest(
           type: "session.create",
           config,
           sessionId,
-          kind: "dictationStt",
         },
         () => stderr,
       );

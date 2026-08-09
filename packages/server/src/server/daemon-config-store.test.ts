@@ -63,6 +63,43 @@ describe("DaemonConfigStore", () => {
     }
   });
 
+  test.each([true, false])(
+    "rejects immutable relay=%s patches without persisting the launch override",
+    (enabled) => {
+      const byspaceHome = mkdtempSync(path.join(tmpdir(), "byspace-daemon-config-store-"));
+      tempDirs.push(byspaceHome);
+      writeFileSync(
+        path.join(byspaceHome, "config.json"),
+        `${JSON.stringify({ version: 1, daemon: { relay: { enabled: !enabled } } })}\n`,
+      );
+      const store = new DaemonConfigStore(
+        byspaceHome,
+        {
+          relay: { enabled },
+          mcp: { injectIntoAgents: false },
+          providers: {},
+          metadataGeneration: { providers: [] },
+          autoArchiveAfterMerge: false,
+          enableTerminalAgentHooks: false,
+          appendSystemPrompt: "",
+        },
+        undefined,
+        { relayEnabledMutable: false },
+      );
+
+      expect(store.get().relay?.enabled).toBe(enabled);
+      expect(() => store.patch({ relay: { enabled: !enabled } })).toThrow(
+        "Relay is controlled by a daemon launch override",
+      );
+      store.patch({ appendSystemPrompt: "updated" });
+
+      const persisted = loadPersistedConfig(byspaceHome);
+      expect(store.get().relay?.enabled).toBe(enabled);
+      expect(persisted.daemon?.relay?.enabled).toBe(!enabled);
+      expect(persisted.daemon?.appendSystemPrompt).toBe("updated");
+    },
+  );
+
   test("patch persists provider enabled flags into config.json", () => {
     const byspaceHome = mkdtempSync(path.join(tmpdir(), "byspace-daemon-config-store-"));
     tempDirs.push(byspaceHome);

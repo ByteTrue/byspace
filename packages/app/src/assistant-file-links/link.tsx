@@ -12,9 +12,15 @@ import { Shortcut } from "@/components/ui/shortcut";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useStableEvent } from "@/hooks/use-stable-event";
 import { CODE_SURFACE_DATASET } from "@/styles/code-surface";
+import { markdownCopyDataSet } from "@/assistant-selection-copy/markup";
 import { useAssistantFileLinkResolverContext } from "./provider";
 import type { AssistantFileLinkSource } from "./resolver";
 import { useFileLink } from "./use-file-link";
+
+const MARKDOWN_CODE_LINK_DATASET = {
+  ...CODE_SURFACE_DATASET,
+  ...markdownCopyDataSet.code,
+} as const;
 
 interface AssistantMarkdownLinkProps {
   source: AssistantFileLinkSource;
@@ -54,10 +60,13 @@ export function AssistantMarkdownLink({
     () => [style, hovered && { textDecorationLine: "underline" as const }],
     [style, hovered],
   );
+  const unwrapForMarkdownCopy = source.sourceType === "inline-code" || source.markup === "linkify";
 
   const anchor = (
     <a
+      {...(unwrapForMarkdownCopy ? { "data-byspace-markdown-unwrap": "true" } : {})}
       href={source.href}
+      title={source.title}
       onClickCapture={handleAnchorClickCapture}
       onAuxClickCapture={preventAnchorNavigation}
       style={LINK_ANCHOR_STYLE}
@@ -68,7 +77,10 @@ export function AssistantMarkdownLink({
         onHoverIn={handleHoverIn}
         onHoverOut={handleHoverOut}
       >
-        <Text dataSet={monoSurface ? CODE_SURFACE_DATASET : undefined} style={hoveredTextStyle}>
+        <Text
+          dataSet={monoSurface ? MARKDOWN_CODE_LINK_DATASET : undefined}
+          style={hoveredTextStyle}
+        >
           {children}
         </Text>
       </Pressable>

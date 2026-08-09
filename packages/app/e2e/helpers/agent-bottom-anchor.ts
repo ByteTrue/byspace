@@ -1,4 +1,4 @@
-import { expect, type Page } from "@playwright/test";
+import { expect, type ElementHandle, type Page } from "@playwright/test";
 
 const NEAR_BOTTOM_THRESHOLD_PX = 72;
 const DEFAULT_SCROLL_TOLERANCE_PX = 24;
@@ -8,6 +8,11 @@ export interface ScrollMetrics {
   contentHeight: number;
   viewportHeight: number;
   distanceFromBottom: number;
+}
+
+interface ScrollAnchorBaseline extends ScrollMetrics {
+  anchor: ElementHandle<HTMLElement>;
+  anchorTop: number;
 }
 
 function getVisibleChatScroll(page: Page) {
@@ -105,7 +110,7 @@ export async function waitForScrollableChat(
 export async function scrollChatAwayFromBottom(
   page: Page,
   input: { deltaY: number; minDistanceFromBottom: number },
-): Promise<ScrollMetrics> {
+): Promise<ScrollAnchorBaseline> {
   const scroll = getVisibleChatScroll(page);
   const box = await scroll.boundingBox();
   if (!box) {
@@ -121,30 +126,65 @@ export async function scrollChatAwayFromBottom(
     })
     .toBeGreaterThan(input.minDistanceFromBottom);
 
-  return readScrollMetrics(page);
+  const anchorHandle = await scroll.evaluateHandle((root) => {
+    const rows = Array.from(
+      root.querySelectorAll<HTMLElement>(
+        '[data-testid="user-message"], [data-testid="assistant-message"]',
+      ),
+    );
+    const liveAssistant = rows.findLast((row) => row.dataset.testid === "assistant-message");
+    const viewport = root.getBoundingClientRect();
+    return (
+      rows.find((row) => {
+        if (row === liveAssistant) return false;
+        const bounds = row.getBoundingClientRect();
+        return bounds.height > 0 && bounds.bottom > viewport.top && bounds.top < viewport.bottom;
+      }) ?? null
+    );
+  });
+  const anchor = anchorHandle.asElement() as ElementHandle<HTMLElement> | null;
+  if (!anchor) {
+    await anchorHandle.dispose();
+    throw new Error("Expected a stable visible history row after scrolling away");
+  }
+
+  return {
+    ...(await readScrollMetrics(page)),
+    anchor,
+    anchorTop: await anchor.evaluate((row) => row.getBoundingClientRect().top),
+  };
 }
 
 export async function expectScrollStaysFixed(
   page: Page,
-  baseline: ScrollMetrics,
+  baseline: ScrollAnchorBaseline,
   input?: { durationMs?: number; sampleIntervalMs?: number; tolerancePx?: number },
 ): Promise<void> {
   const durationMs = input?.durationMs ?? 2_000;
   const sampleIntervalMs = input?.sampleIntervalMs ?? 250;
   const tolerancePx = input?.tolerancePx ?? DEFAULT_SCROLL_TOLERANCE_PX;
-  const samples: Array<{ elapsedMs: number; offsetY: number; contentHeight: number }> = [];
+  const samples: Array<{ elapsedMs: number; anchorTop: number; contentHeight: number }> = [];
   const startedAt = Date.now();
   while (Date.now() - startedAt < durationMs) {
     await page.waitForTimeout(sampleIntervalMs);
-    const metrics = await readScrollMetrics(page);
+    const [anchorState, metrics] = await Promise.all([
+      baseline.anchor.evaluate((row) => ({
+        connected: row.isConnected,
+        top: row.getBoundingClientRect().top,
+      })),
+      readScrollMetrics(page),
+    ]);
     samples.push({
       elapsedMs: Date.now() - startedAt,
-      offsetY: metrics.offsetY,
+      anchorTop: anchorState.top,
       contentHeight: metrics.contentHeight,
     });
     expect(
-      metrics.offsetY,
-      JSON.stringify({ baseline, samples: samples.slice(-12) }),
-    ).toBeLessThanOrEqual(baseline.offsetY + tolerancePx);
+      anchorState.connected && Math.abs(anchorState.top - baseline.anchorTop) <= tolerancePx,
+      JSON.stringify({
+        baseline: { ...baseline, anchor: undefined },
+        samples: samples.slice(-12),
+      }),
+    ).toBe(true);
   }
 }

@@ -12,7 +12,6 @@ import {
   clickEditHostLabel,
   expectHostLabelEditMode,
   expectHostConnectionsCard,
-  expectHostInjectMcpCard,
   expectHostActionCards,
   expectHostProvidersCard,
   expectHostNoLocalOnlyRows,
@@ -76,6 +75,51 @@ async function rejectNextConfigWrite(page: Page): Promise<void> {
   });
 }
 
+const TEST_SPEECH_MODELS_LOAD_ERROR = "Synthetic speech-model list failure";
+
+async function rejectNextSpeechModelList(page: Page): Promise<void> {
+  let shouldReject = true;
+  await page.routeWebSocket(daemonWsRoutePattern(), (ws) => {
+    const server = ws.connectToServer();
+    ws.onMessage((message) => {
+      let request: { type?: string; requestId?: string } | undefined;
+      try {
+        const envelope = JSON.parse(message.toString()) as {
+          type?: string;
+          message?: { type?: string; requestId?: string };
+        };
+        if (envelope.type === "session") request = envelope.message;
+      } catch {
+        // Forward non-JSON frames unchanged.
+      }
+      if (
+        shouldReject &&
+        request?.type === "speech.models.list.request" &&
+        typeof request.requestId === "string"
+      ) {
+        shouldReject = false;
+        ws.send(
+          JSON.stringify({
+            type: "session",
+            message: {
+              type: "speech.models.list.response",
+              payload: {
+                requestId: request.requestId,
+                selectedModelId: null,
+                models: [],
+                error: TEST_SPEECH_MODELS_LOAD_ERROR,
+              },
+            },
+          }),
+        );
+        return;
+      }
+      server.send(message);
+    });
+    server.onMessage((message) => ws.send(message));
+  });
+}
+
 test.describe("Settings host page", () => {
   test("connections section shows the seeded connection endpoint", async ({ page }) => {
     const serverId = getServerId();
@@ -105,18 +149,6 @@ test.describe("Settings host page", () => {
     await expect(
       page.getByText("Scan this QR code with BySpace on your phone, or copy the link below."),
     ).toBeVisible();
-  });
-
-  test("agents section shows the inject MCP toggle", async ({ page }) => {
-    const serverId = getServerId();
-
-    await gotoAppShell(page);
-    await openSettings(page);
-    await openSettingsHost(page, serverId);
-
-    await openHostSection(page, serverId, "agents");
-    await expectSettingsHeader(page, "Agents");
-    await expectHostInjectMcpCard(page);
   });
 
   test("providers section shows the providers card", async ({ page }) => {
@@ -262,6 +294,24 @@ test.describe("Settings host page", () => {
     await expect(page.getByTestId("host-dictation-settings")).toContainText("Use original");
     await refinement.click();
     await expect(refinement).toBeChecked();
+  });
+
+  test("dictation model load failure stays visible and can retry", async ({ page }) => {
+    const serverId = getServerId();
+    await rejectNextSpeechModelList(page);
+
+    await gotoAppShell(page);
+    await openSettings(page);
+    await openSettingsHost(page, serverId);
+    await openHostSection(page, serverId, "dictation");
+
+    const section = page.getByTestId("host-dictation-settings");
+    await expect(section).toContainText(TEST_SPEECH_MODELS_LOAD_ERROR);
+    const retry = page.getByTestId("speech-model-retry");
+    await expect(retry).toBeVisible();
+    await retry.click();
+    await expect(page.getByTestId("speech-model-fire-red-asr2-aed-int8")).toBeVisible();
+    await expect(retry).toHaveCount(0);
   });
 
   test("navigating to /settings/hosts/[serverId] redirects to the connections section", async ({

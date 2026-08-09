@@ -16,6 +16,7 @@ import type {
 } from "./workspace-registry.js";
 import { WorkspaceLifecycleCoordinator } from "./workspace-lifecycle-coordinator.js";
 import { WorkspaceReconciliationService } from "./workspace-reconciliation-service.js";
+import { WorkspaceSetupRuntime } from "./workspace-setup-runtime.js";
 import {
   ensureWorkspaceServicePortPlan,
   releaseWorkspaceServicePortPlan,
@@ -203,6 +204,15 @@ function createDeferredPort() {
   return { promise, resolve };
 }
 
+function waitForAbort(signal: AbortSignal): Promise<void> {
+  if (signal.aborted) {
+    return Promise.resolve();
+  }
+  return new Promise<void>((resolve) => {
+    signal.addEventListener("abort", () => resolve(), { once: true });
+  });
+}
+
 describe("WorkspaceReconciliationService", () => {
   const tempDirs: string[] = [];
 
@@ -243,6 +253,7 @@ describe("WorkspaceReconciliationService", () => {
     const service = new WorkspaceReconciliationService({
       projectRegistry,
       workspaceRegistry,
+      stopWorkspaceSetup: async () => {},
       logger: createTestLogger(),
     });
 
@@ -252,6 +263,116 @@ describe("WorkspaceReconciliationService", () => {
     const wsChange = result.changesApplied.find((c) => c.kind === "workspace_archived");
     expect(wsChange).toBeDefined();
     expect(workspaces.get("w1")!.archivedAt).toBeTruthy();
+  });
+
+  test("waits for an active setup run before archiving a missing workspace", async () => {
+    const { projects, workspaces, projectRegistry, workspaceRegistry } = createTestRegistries();
+    projects.set(
+      "p1",
+      createPersistedProjectRecord({
+        projectId: "p1",
+        rootPath: "/tmp/does-not-exist-reconcile-active-setup",
+        kind: "non_git",
+        displayName: "ghost",
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      }),
+    );
+    workspaces.set(
+      "w1",
+      createPersistedWorkspaceRecord({
+        workspaceId: "w1",
+        projectId: "p1",
+        cwd: "/tmp/does-not-exist-reconcile-active-setup",
+        kind: "directory",
+        displayName: "ghost",
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      }),
+    );
+
+    const runtime = new WorkspaceSetupRuntime();
+    let signalStarted!: () => void;
+    const started = new Promise<void>((resolve) => {
+      signalStarted = resolve;
+    });
+    let signalAborted!: () => void;
+    const aborted = new Promise<void>((resolve) => {
+      signalAborted = resolve;
+    });
+    let releaseSetup!: () => void;
+    const setupGate = new Promise<void>((resolve) => {
+      releaseSetup = resolve;
+    });
+    runtime.start("w1", async (signal) => {
+      signalStarted();
+      signal.addEventListener("abort", signalAborted, { once: true });
+      await setupGate;
+    });
+    await started;
+
+    const service = new WorkspaceReconciliationService({
+      projectRegistry,
+      workspaceRegistry,
+      stopWorkspaceSetup: (workspaceId) => runtime.stop(workspaceId),
+      logger: createTestLogger(),
+    });
+    const reconciliation = service.runOnce();
+    await aborted;
+
+    expect(workspaces.get("w1")?.archivedAt).toBeNull();
+    releaseSetup();
+    await reconciliation;
+
+    expect(workspaces.get("w1")?.archivedAt).toBeTruthy();
+  });
+
+  test("fails closed when stopping a setup run fails", async () => {
+    const { projects, workspaces, projectRegistry, workspaceRegistry } = createTestRegistries();
+    projects.set(
+      "p1",
+      createPersistedProjectRecord({
+        projectId: "p1",
+        rootPath: "/tmp/does-not-exist-reconcile-stop-failure",
+        kind: "non_git",
+        displayName: "ghost",
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      }),
+    );
+    workspaces.set(
+      "w1",
+      createPersistedWorkspaceRecord({
+        workspaceId: "w1",
+        projectId: "p1",
+        cwd: "/tmp/does-not-exist-reconcile-stop-failure",
+        kind: "directory",
+        displayName: "ghost",
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      }),
+    );
+    const runtime = new WorkspaceSetupRuntime();
+    let signalStarted!: () => void;
+    const started = new Promise<void>((resolve) => {
+      signalStarted = resolve;
+    });
+    runtime.start("w1", async (signal) => {
+      signalStarted();
+      await waitForAbort(signal);
+      throw new Error("setup did not settle");
+    });
+    await started;
+
+    const service = new WorkspaceReconciliationService({
+      projectRegistry,
+      workspaceRegistry,
+      stopWorkspaceSetup: (workspaceId) => runtime.stop(workspaceId),
+      logger: createTestLogger(),
+    });
+
+    await expect(service.runOnce()).rejects.toThrow("setup did not settle");
+    expect(workspaces.get("w1")?.archivedAt).toBeNull();
   });
 
   test("releases completed and pending dynamic port reservations for missing workspaces", async () => {
@@ -311,6 +432,7 @@ describe("WorkspaceReconciliationService", () => {
       const service = new WorkspaceReconciliationService({
         projectRegistry,
         workspaceRegistry,
+        stopWorkspaceSetup: async () => {},
         logger: createTestLogger(),
       });
       await service.runOnce();
@@ -371,6 +493,7 @@ describe("WorkspaceReconciliationService", () => {
     const service = new WorkspaceReconciliationService({
       projectRegistry,
       workspaceRegistry,
+      stopWorkspaceSetup: async () => {},
       logger: createTestLogger(),
     });
 
@@ -418,6 +541,7 @@ describe("WorkspaceReconciliationService", () => {
     const service = new WorkspaceReconciliationService({
       projectRegistry,
       workspaceRegistry,
+      stopWorkspaceSetup: async () => {},
       logger: createTestLogger(),
       workspaceGitService: createWorkspaceGitServiceStub({
         [resolved]: {
@@ -472,6 +596,7 @@ describe("WorkspaceReconciliationService", () => {
     const service = new WorkspaceReconciliationService({
       projectRegistry,
       workspaceRegistry,
+      stopWorkspaceSetup: async () => {},
       logger: createTestLogger(),
       workspaceGitService: createWorkspaceGitServiceStub({
         [resolved]: {
@@ -517,6 +642,7 @@ describe("WorkspaceReconciliationService", () => {
     const service = new WorkspaceReconciliationService({
       projectRegistry,
       workspaceRegistry,
+      stopWorkspaceSetup: async () => {},
       logger: createTestLogger(),
       lifecycleCoordinator: coordinator,
       workspaceGitService: {
@@ -616,6 +742,7 @@ describe("WorkspaceReconciliationService", () => {
     const service = new WorkspaceReconciliationService({
       projectRegistry,
       workspaceRegistry,
+      stopWorkspaceSetup: async () => {},
       logger: createTestLogger(),
       workspaceGitService: createWorkspaceGitServiceStub({
         [repoDir]: {
@@ -728,6 +855,7 @@ describe("WorkspaceReconciliationService", () => {
     const service = new WorkspaceReconciliationService({
       projectRegistry,
       workspaceRegistry,
+      stopWorkspaceSetup: async () => {},
       logger: createTestLogger(),
       workspaceGitService: createWorkspaceGitServiceStub({
         [dir]: {
@@ -780,6 +908,7 @@ describe("WorkspaceReconciliationService", () => {
     const service = new WorkspaceReconciliationService({
       projectRegistry,
       workspaceRegistry,
+      stopWorkspaceSetup: async () => {},
       logger: createTestLogger(),
       workspaceGitService: createWorkspaceGitServiceStub({
         [dir]: {
@@ -835,6 +964,7 @@ describe("WorkspaceReconciliationService", () => {
     const service = new WorkspaceReconciliationService({
       projectRegistry,
       workspaceRegistry,
+      stopWorkspaceSetup: async () => {},
       logger: createTestLogger(),
       workspaceGitService: createWorkspaceGitServiceStub({
         [dir]: {
@@ -888,6 +1018,7 @@ describe("WorkspaceReconciliationService", () => {
     const service = new WorkspaceReconciliationService({
       projectRegistry,
       workspaceRegistry,
+      stopWorkspaceSetup: async () => {},
       logger: createTestLogger(),
       workspaceGitService: createWorkspaceGitServiceStub({
         [dir]: {
@@ -943,6 +1074,7 @@ describe("WorkspaceReconciliationService", () => {
     const service = new WorkspaceReconciliationService({
       projectRegistry,
       workspaceRegistry,
+      stopWorkspaceSetup: async () => {},
       logger: createTestLogger(),
     });
 
@@ -982,6 +1114,7 @@ describe("WorkspaceReconciliationService", () => {
     const service = new WorkspaceReconciliationService({
       projectRegistry,
       workspaceRegistry,
+      stopWorkspaceSetup: async () => {},
       logger: createTestLogger(),
       onChanges,
     });
@@ -1023,6 +1156,7 @@ describe("WorkspaceReconciliationService", () => {
     const service = new WorkspaceReconciliationService({
       projectRegistry,
       workspaceRegistry,
+      stopWorkspaceSetup: async () => {},
       logger,
     });
 
@@ -1055,6 +1189,7 @@ describe("WorkspaceReconciliationService", () => {
     const service = new WorkspaceReconciliationService({
       projectRegistry,
       workspaceRegistry,
+      stopWorkspaceSetup: async () => {},
       logger,
     });
 

@@ -1,8 +1,9 @@
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 
 const root = resolve(import.meta.dirname, "..");
 const { version } = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
@@ -20,6 +21,18 @@ const installedBinary = join(
   globalBinRoot,
   process.platform === "win32" ? "byspace.cmd" : "byspace",
 );
+const installedServerExportsUrl = pathToFileURL(
+  join(
+    installedPackageRoot,
+    "node_modules",
+    "@bytetrue",
+    "byspace-server",
+    "dist",
+    "server",
+    "server",
+    "exports.js",
+  ),
+).href;
 const nativeLoadCheck = `
   import { createRequire } from "node:module";
   import { pathToFileURL } from "node:url";
@@ -172,6 +185,13 @@ try {
     ...process.env,
     BYSPACE_HOME: home,
     BYSPACE_LISTEN: `127.0.0.1:${port}`,
+    BYSPACE_RELAY_ENABLED: undefined,
+    BYSPACE_RELAY_ENDPOINT: undefined,
+    BYSPACE_RELAY_PUBLIC_ENDPOINT: undefined,
+    BYSPACE_RELAY_USE_TLS: undefined,
+    BYSPACE_RELAY_PUBLIC_USE_TLS: undefined,
+    BYSPACE_APP_BASE_URL: undefined,
+    BYSPACE_CORS_ORIGINS: undefined,
   };
 
   runNpm(["install", "--global", "--prefix", installRoot, "--no-audit", "--no-fund", artifact], {
@@ -188,16 +208,50 @@ try {
     "dist",
     "skills",
   );
-  for (const skillName of [
+  const expectedBundledSkills = [
     "byspace",
     "byspace-advisor",
     "byspace-committee",
     "byspace-handoff",
     "byspace-loop",
-  ]) {
+    "byspace-project-setup",
+  ];
+  const installedBundledSkills = readdirSync(installedSkillsRoot, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => entry.name)
+    .sort();
+  if (JSON.stringify(installedBundledSkills) !== JSON.stringify(expectedBundledSkills)) {
+    throw new Error(
+      `Global install bundled unexpected orchestration skills: ${installedBundledSkills.join(", ")}`,
+    );
+  }
+  for (const skillName of expectedBundledSkills) {
     if (!existsSync(join(installedSkillsRoot, skillName, "SKILL.md"))) {
       throw new Error(`Global install is missing bundled orchestration skill: ${skillName}`);
     }
+  }
+  const forbiddenSkillDirectories = new Set([
+    ".git",
+    ".pi-subagents",
+    ".venv",
+    "evals",
+    "node_modules",
+    "target",
+  ]);
+  const pendingSkillDirectories = [installedSkillsRoot];
+  while (pendingSkillDirectories.length > 0) {
+    const directory = pendingSkillDirectories.pop();
+    if (!directory) break;
+    for (const entry of readdirSync(directory, { withFileTypes: true })) {
+      if (!entry.isDirectory()) continue;
+      if (forbiddenSkillDirectories.has(entry.name)) {
+        throw new Error(`Global install packaged development skill directory: ${entry.name}`);
+      }
+      pendingSkillDirectories.push(join(directory, entry.name));
+    }
+  }
+  if (existsSync(join(installedSkillsRoot, "byspace-project-setup-workspace"))) {
+    throw new Error("Global install packaged sibling skill evaluation workspace");
   }
   const dependencyTree = runNpmResult(
     ["ls", "--global", "--prefix", installRoot, "--all", "--json"],
@@ -225,12 +279,6 @@ try {
     throw new Error("Installed CLI help did not render");
   }
 
-  runBinary(["daemon", "start", "--no-relay"], { env });
-  daemonStarted = true;
-  const status = waitForDaemon(env);
-  if (status.home !== home || status.listen !== `127.0.0.1:${port}`) {
-    throw new Error(`Daemon used unexpected paths: ${JSON.stringify(status)}`);
-  }
   const expectedHostedRelease = version.includes("-")
     ? {
         appBaseUrl: "https://app-beta.byspace.zijieapi.de5.net",
@@ -240,16 +288,64 @@ try {
         appBaseUrl: "https://app.byspace.zijieapi.de5.net",
         relayEndpoint: "relay.byspace.zijieapi.de5.net:443",
       };
-  if (status.relay !== `wss://${expectedHostedRelease.relayEndpoint}`) {
-    throw new Error(`Daemon used unexpected release relay: ${JSON.stringify(status)}`);
-  }
-  const persistedConfig = JSON.parse(readFileSync(join(home, "config.json"), "utf8"));
+  const pairingProbeScript = `
+    const { generateLocalPairingOffer, loadConfig, parseConnectionOfferFromUrl } =
+      await import(${JSON.stringify(installedServerExportsUrl)});
+    const config = loadConfig(${JSON.stringify(home)});
+    const pairing = await generateLocalPairingOffer({
+      byspaceHome: config.byspaceHome,
+      releaseVersion: config.daemonVersion,
+      relayEnabled: true,
+      relayEndpoint: config.relayEndpoint,
+      relayPublicEndpoint: config.relayPublicEndpoint,
+      relayUseTls: config.relayUseTls,
+      relayPublicUseTls: config.relayPublicUseTls,
+      appBaseUrl: config.appBaseUrl,
+      includeQr: false,
+    });
+    const pairingUrl = pairing.url ? new URL(pairing.url) : null;
+    const offer = pairing.url ? parseConnectionOfferFromUrl(pairing.url) : null;
+    if (!pairingUrl || !offer) {
+      throw new Error("Installed server did not generate a relay opt-in offer");
+    }
+    process.stdout.write(JSON.stringify({
+      appBaseUrl: (pairingUrl.origin + pairingUrl.pathname).replace(/\\/$/, ""),
+      relayEndpoint: offer.relay.endpoint,
+      relayUseTls: offer.relay.useTls,
+      relayEnabled: pairing.relayEnabled,
+    }));
+  `;
+  const pairingProbe = JSON.parse(
+    run(process.execPath, ["--input-type=module", "--eval", pairingProbeScript], { env }),
+  );
   if (
-    persistedConfig.app?.baseUrl !== expectedHostedRelease.appBaseUrl ||
-    !persistedConfig.daemon?.cors?.allowedOrigins?.includes(expectedHostedRelease.appBaseUrl)
+    pairingProbe.appBaseUrl !== expectedHostedRelease.appBaseUrl ||
+    pairingProbe.relayEndpoint !== expectedHostedRelease.relayEndpoint ||
+    pairingProbe.relayUseTls !== true ||
+    pairingProbe.relayEnabled !== true
   ) {
     throw new Error(
-      `Daemon persisted unexpected release endpoints: ${JSON.stringify(persistedConfig)}`,
+      `Installed server resolved unexpected hosted defaults: ${JSON.stringify(pairingProbe)}`,
+    );
+  }
+
+  runBinary(["daemon", "start"], { env });
+  daemonStarted = true;
+  const defaultStatus = waitForDaemon(env);
+  if (defaultStatus.home !== home || defaultStatus.listen !== `127.0.0.1:${port}`) {
+    throw new Error(`Daemon used unexpected paths: ${JSON.stringify(defaultStatus)}`);
+  }
+  if (defaultStatus.relay !== "disabled") {
+    throw new Error(`Fresh daemon enabled relay without opt-in: ${JSON.stringify(defaultStatus)}`);
+  }
+  const defaultPersistedConfig = JSON.parse(readFileSync(join(home, "config.json"), "utf8"));
+  if (
+    defaultPersistedConfig.daemon?.relay?.enabled !== false ||
+    defaultPersistedConfig.app?.baseUrl !== expectedHostedRelease.appBaseUrl ||
+    !defaultPersistedConfig.daemon?.cors?.allowedOrigins?.includes(expectedHostedRelease.appBaseUrl)
+  ) {
+    throw new Error(
+      `Daemon persisted unexpected release defaults: ${JSON.stringify(defaultPersistedConfig)}`,
     );
   }
   process.stdout.write(`BySpace ${version} package smoke passed on port ${port}.\n`);

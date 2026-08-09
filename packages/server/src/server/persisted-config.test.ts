@@ -34,7 +34,7 @@ describe("createDefaultPersistedConfig", () => {
     expect(createDefaultPersistedConfig(releaseVersion)).toMatchObject({
       daemon: {
         cors: { allowedOrigins: [hostedRelease.appBaseUrl] },
-        relay: { enabled: true },
+        relay: { enabled: false },
       },
       app: { baseUrl: hostedRelease.appBaseUrl },
     });

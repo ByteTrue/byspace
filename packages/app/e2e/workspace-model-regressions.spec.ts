@@ -77,38 +77,6 @@ async function fetchAgentStatus(seeded: SeededWorkspace, agentId: string): Promi
   return result.entries.find((entry) => entry.agent.id === agentId)?.agent.status ?? null;
 }
 
-async function switchSidebarToStatusGrouping(page: import("@playwright/test").Page) {
-  await page.getByTestId("sidebar-display-preferences-menu").click();
-  await page.getByTestId("sidebar-grouping-status").click();
-  await expect(page.locator('[data-testid^="sidebar-status-group-"]').first()).toBeVisible({
-    timeout: 30_000,
-  });
-}
-
-function statusGroupRows(page: import("@playwright/test").Page, bucket: string) {
-  return page.getByTestId(`sidebar-status-group-rows-${bucket}`);
-}
-
-async function expectWorkspaceRowInStatusBucket(
-  page: import("@playwright/test").Page,
-  input: { rowTestId: string; bucket: string },
-) {
-  await expect(statusGroupRows(page, input.bucket).getByTestId(input.rowTestId)).toBeVisible({
-    timeout: 30_000,
-  });
-}
-
-async function expectWorkspaceRowNotInStatusBuckets(
-  page: import("@playwright/test").Page,
-  input: { rowTestId: string; buckets: string[] },
-) {
-  for (const bucket of input.buckets) {
-    await expect(statusGroupRows(page, bucket).getByTestId(input.rowTestId)).toHaveCount(0, {
-      timeout: 5_000,
-    });
-  }
-}
-
 async function expectWorkspaceRowHasOnlyIndicator(
   page: import("@playwright/test").Page,
   input: { rowTestId: string; indicator: WorkspaceIndicator },
@@ -395,28 +363,6 @@ test.describe("Workspace model regressions", () => {
         rowTestId: createdRowTestId,
         indicator: "running",
       });
-
-      await switchSidebarToStatusGrouping(page);
-      await expectWorkspaceRowInStatusBucket(page, {
-        rowTestId: firstRowTestId,
-        bucket: "running",
-      });
-      await expectWorkspaceRowInStatusBucket(page, {
-        rowTestId: secondRowTestId,
-        bucket: "done",
-      });
-      await expectWorkspaceRowInStatusBucket(page, {
-        rowTestId: createdRowTestId,
-        bucket: "done",
-      });
-      await expectWorkspaceRowNotInStatusBuckets(page, {
-        rowTestId: secondRowTestId,
-        buckets: ["running", "needs_input", "attention"],
-      });
-      await expectWorkspaceRowNotInStatusBuckets(page, {
-        rowTestId: createdRowTestId,
-        buckets: ["running", "needs_input", "attention"],
-      });
     } finally {
       await seeded.cleanup();
     }
@@ -506,28 +452,6 @@ test.describe("Workspace model regressions", () => {
       await expectWorkspaceRowDoesNotShowIndicator(page, {
         rowTestId: createdRowTestId,
         indicator: "needs_input",
-      });
-
-      await switchSidebarToStatusGrouping(page);
-      await expectWorkspaceRowInStatusBucket(page, {
-        rowTestId: firstRowTestId,
-        bucket: "needs_input",
-      });
-      await expectWorkspaceRowInStatusBucket(page, {
-        rowTestId: secondRowTestId,
-        bucket: "done",
-      });
-      await expectWorkspaceRowInStatusBucket(page, {
-        rowTestId: createdRowTestId,
-        bucket: "done",
-      });
-      await expectWorkspaceRowNotInStatusBuckets(page, {
-        rowTestId: secondRowTestId,
-        buckets: ["running", "needs_input", "attention"],
-      });
-      await expectWorkspaceRowNotInStatusBuckets(page, {
-        rowTestId: createdRowTestId,
-        buckets: ["running", "needs_input", "attention"],
       });
     } finally {
       await seeded.cleanup();

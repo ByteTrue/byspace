@@ -64,6 +64,16 @@ export const ru: TranslationResources = {
       home: "Дом",
       modelGroupLabel: "Модель",
       modelSearchKeywords: "сменить модель изменить модель выбрать модель установить модель",
+      thinkingGroupLabel: "Мышление",
+      thinkingSearchKeywords: "рассуждение усилие мышление",
+      modeGroupLabel: "Режим",
+      modeSearchKeywords: "доступ разрешение одобрение режим",
+      planModeGroupLabel: "Режим плана",
+      planModeSearchKeywords: "план планирование режим плана",
+      fastModeGroupLabel: "Быстрый",
+      fastModeSearchKeywords: "быстрый скорость низкая задержка",
+      settingOn: "Вкл",
+      settingOff: "Выкл",
     },
   },
   composer: {
@@ -71,9 +81,11 @@ export const ru: TranslationResources = {
       desktop: "Напишите агенту сообщение, отметьте @files или используйте /commands и /skills.",
       mobile: "Сообщение,@files,/commands",
       fallback: "Сообщение...",
+      terminal: "Prompt",
     },
     input: {
       accessibilityLabel: "Агент сообщений...",
+      terminalAccessibilityLabel: "Terminal prompt",
       focusHint: "{{shortcut}}, чтобы сосредоточиться",
       addAttachment: "Добавить вложение",
       interruptAgent: "Агент прерываний",
@@ -167,6 +179,7 @@ export const ru: TranslationResources = {
   agentStream: {
     empty: "Начните общаться с этим агентом...",
     scrollToBottom: "Прокрутить вниз",
+    historyLoadFailed: "Не удалось загрузить историю агента",
     collapseAllToolCalls: "Свернуть все вызовы инструментов",
     permission: {
       plan: "План",
@@ -182,7 +195,7 @@ export const ru: TranslationResources = {
     states: {
       notFound: "Agent не найден",
       failedToLoad: "Не удалось загрузить агент",
-      reconnecting: "Повторное подключение...",
+      reconnecting: "Повторное подключение",
       timelineSyncFailed: "Не удалось обновить историю агента. Повторная попытка…",
       timelineSyncing: "Синхронизация последнего прогресса...",
       archivingTitle: "Архивный агент...",
@@ -209,8 +222,13 @@ export const ru: TranslationResources = {
   sessions: {
     title: "История",
     empty: "Сеансов пока нет",
+    noMatches: "Нет подходящих сеансов",
+    tooManyMatches: "Слишком много совпадений — уточните запрос",
+    hostLoadFailed: "{{host}}: Не удалось загрузить историю",
+    searchPlaceholder: "Поиск по истории",
     actions: {
       loadMore: "Загрузить больше",
+      clearSearch: "Очистить поиск",
     },
   },
   agentList: {
@@ -342,6 +360,10 @@ export const ru: TranslationResources = {
     },
   },
   workspace: {
+    status: {
+      serviceRunning: "Сервис {{name}} запущен",
+      serviceUnhealthy: "Сервис {{name}} неисправен",
+    },
     route: {
       loading: "Загрузка рабочей области",
       connecting: "Подключение",
@@ -366,6 +388,16 @@ export const ru: TranslationResources = {
     },
     hoverCard: {
       scriptsAccessibility: "Скрипты Workspace",
+      detailsAccessibility: "Сведения о рабочем пространстве",
+      agents: "Агенты",
+      untitledAgent: "Агент без названия",
+      agentStatus: {
+        needsInput: "Требуется ввод",
+        failed: "Ошибка",
+        attention: "Готово к проверке",
+        running: "В работе",
+        done: "Готово",
+      },
       copyPath: "Копировать путь",
       copyBranchName: "Копировать имя ветки",
       copied: "Скопировано",
@@ -825,6 +857,14 @@ export const ru: TranslationResources = {
           pullRequest: "Запрос на извлечение №{{number}}",
           pullRequest_mr: "Запрос на слияние !{{number}}",
         },
+        checksSummary: {
+          passedLabel: "Прошло",
+          failedLabel: "Неуспешный",
+          runningLabel: "Бег",
+          passedAccessible: "Проверки пройдены",
+          failedAccessible: "Проверки не пройдены",
+          runningAccessible: "Проверки выполняются",
+        },
         states: {
           draft: "Черновик",
           merged: "Объединено",
@@ -864,6 +904,27 @@ export const ru: TranslationResources = {
       switchTitle: "Сменить хост",
       searchPlaceholder: "Поиск хостов...",
     },
+    display: {
+      trigger: "Настройки дисплея",
+      titleSource: {
+        label: "Название рабочей области",
+        options: { title: "Заголовок", branch: "Название филиала" },
+      },
+      show: {
+        label: "Показывать",
+        host: "Хозяин",
+        changeRequest: "Запрос на извлечение",
+        services: "Услуги",
+        checks: "Чеки",
+        diff: "Разница в статистике",
+        timestamp: "Метка времени",
+      },
+      checks: {
+        label: "Чеки",
+        options: { iconAndText: "Значок и текст", icon: "Только значок", none: "Скрытый" },
+      },
+      hostFilter: { label: "Хозяева", all: "Все хозяева" },
+    },
     actions: {
       addProject: "Добавить проект",
       newWorkspace: "Новое рабочее пространство",
@@ -871,6 +932,8 @@ export const ru: TranslationResources = {
       home: "Дом",
       settings: "Настройки",
       closeSidebar: "Закрыть боковую панель",
+      needsAttentionFilter: "Требуют внимания",
+      emptyAttention: "Сейчас ничего не требует вашего внимания",
     },
     help: {
       trigger: "Помощь и поддержка",
@@ -894,6 +957,7 @@ export const ru: TranslationResources = {
       openProjectSettings: "Открыть настройки проекта",
     },
     project: {
+      needsAttentionCount: "Рабочие пространства, требующие внимания: {{count}}",
       actions: {
         menu: "Действия проекта",
         openSettings: "Открыть настройки проекта",
@@ -920,6 +984,10 @@ export const ru: TranslationResources = {
       },
     },
     workspace: {
+      agentSummary: {
+        needsAttention: "Агенты, требующие внимания: {{count}}",
+        working: "Агенты в работе: {{count}}",
+      },
       status: {
         scriptsAvailable: "Доступны скрипты",
         creating: "Создание...",
@@ -933,8 +1001,6 @@ export const ru: TranslationResources = {
         copyPath: "Копировать путь",
         copyBranchName: "Скопировать название ветки",
         rename: "Переименовать рабочую область",
-        pin: "Закрепить вверху",
-        unpin: "Открепить",
         archive: "Архив",
         archiveWorkspace: "Архивировать рабочее пространство",
         hideFromSidebar: "Скрыть с боковой панели",
@@ -966,6 +1032,17 @@ export const ru: TranslationResources = {
   newWorkspace: {
     title: "Новое рабочее пространство",
     create: "Создавать",
+    project: {
+      choose: "Выбрать проект",
+      searchPlaceholder: "Поиск проектов",
+      title: "Проект",
+      empty: "Нет доступных проектов.",
+    },
+    host: {
+      choose: "Выбрать хост",
+      label: "Хост рабочего пространства",
+      title: "Хост",
+    },
     isolation: {
       local: "Локально",
       worktree: "Новый worktree",
@@ -986,6 +1063,22 @@ export const ru: TranslationResources = {
       createWorktreeFailed: "Не удалось создать рабочее дерево.",
       composerStateRequired: "Требуется состояние композитора.",
       selectModel: "Выберите модель",
+    },
+    tooltips: {
+      project: "Choose the project",
+      host: "Choose the host",
+      isolation: "Choose the isolation level",
+      startingRef: "Выберите, с чего начать",
+      launch: "Choose what to launch",
+    },
+    launch: {
+      title: "What to launch",
+      chat: "Chat",
+      terminal: "Terminal",
+      manageProfiles: "Manage profiles",
+      submit: "Launch",
+      promptPlaceholder: "Prompt {{name}}",
+      commandPlaceholder: "Run a command, or leave empty for a blank terminal",
     },
     refPicker: {
       startingRef: "Начальная ссылка",
@@ -1234,6 +1327,8 @@ export const ru: TranslationResources = {
       loadingOffer: "Загрузка предложения по сопряжению...",
       failedToLoadOffer: "Не удалось загрузить предложение сопряжения.",
       relayDisabled: "Реле не включено. Включите реле для сопряжения устройства.",
+      enableRelay: "Enable relay",
+      enablingRelay: "Enabling relay...",
       unavailable: "Предложение по сопряжению недоступно.",
       hint: "Отсканируйте этот код QR с помощью BySpace на своем телефоне или скопируйте ссылку ниже.",
       qrUnavailable: "Код QR недоступен.",
@@ -1305,6 +1400,9 @@ export const ru: TranslationResources = {
         saving: "Сохранение...",
         saveFailed: "Не удалось сохранить",
         changedOnDisk: "Файл изменён на диске",
+        deletedTitle: "Файл удалён с диска",
+        checkFailedTitle: "Не удалось проверить файл на диске",
+        preservedDescription: "Открытая копия сохранена.",
         vimMode: "Режим Vim: {{mode}}",
         cursor: "Строка {{line}}, столбец {{column}}",
         preview: "Предпросмотр",
@@ -1481,6 +1579,7 @@ export const ru: TranslationResources = {
           es: "Español",
           fr: "Français",
           ja: "日本語",
+          ko: "한국어",
           ptBR: "Português brasileiro",
           ru: "Русский",
           zhCN: "中文",
@@ -1529,6 +1628,10 @@ export const ru: TranslationResources = {
       },
       detailLevel: {
         title: "Уровень детализации",
+      },
+      chatOutline: {
+        title: "Структура чата",
+        description: "Показывать структуру для перехода между запросами",
       },
       fonts: {
         title: "Шрифты",
@@ -1623,6 +1726,32 @@ export const ru: TranslationResources = {
     },
     host: {
       notFound: "Host не найден",
+      appearance: {
+        title: "Появление",
+        color: {
+          label: "Цвет",
+          options: {
+            none: "Никто",
+            blue: "Синий",
+            cyan: "Голубой",
+            green: "Зеленый",
+            lime: "Лайм",
+            yellow: "Желтый",
+            orange: "Апельсин",
+            red: "Красный",
+            pink: "Розовый",
+            purple: "Фиолетовый",
+          },
+        },
+        badgeDisplay: {
+          label: "Отображение значка",
+          options: {
+            name: "Имя",
+            icon: "Только значок",
+            hidden: "Скрытый",
+          },
+        },
+      },
       badges: {
         relay: "Реле",
         local: "Местный",
@@ -1677,14 +1806,9 @@ export const ru: TranslationResources = {
       orchestration: {
         title: "оркестровка",
         unavailable: "Подключитесь к этому хосту, чтобы управлять оркестрацией.",
-        enableTools: {
-          title: "Включить инструменты BySpace",
-          hint: "Агенты смогут управлять рабочими деревьями, агентами и расписаниями.",
-          accessibilityLabel: "Инструменты внедрения BySpace",
-        },
         skills: {
           title: "Навыки оркестрации",
-          installHint: "Установить пять встроенных навыков BySpace для поддерживаемых агентов",
+          installHint: "Установить встроенные навыки BySpace для поддерживаемых агентов",
           installedHint: "Установлены и актуальны на этом хосте",
           updateHint: "Установленные навыки отличаются от этой версии BySpace",
           updateHost: "Обновите хост, чтобы управлять навыками оркестрации",
@@ -1694,10 +1818,10 @@ export const ru: TranslationResources = {
           saving: "Сохранение...",
           installConfirmTitle: "Установить или обновить навыки оркестрации?",
           installConfirmMessage:
-            "BySpace синхронизирует пять встроенных навыков на этом хосте. Остальные навыки не изменятся, а конфликтующие неуправляемые копии будут сохранены.",
+            "BySpace синхронизирует встроенные навыки на этом хосте. Остальные навыки не изменятся, а конфликтующие неуправляемые копии будут сохранены.",
           updateConfirmTitle: "Обновить навыки оркестрации?",
           updateConfirmMessage:
-            "BySpace заменит управляемые копии пятью навыками из этой версии. Остальные навыки не изменятся.",
+            "BySpace заменит управляемые копии навыками из этой версии. Остальные навыки не изменятся.",
           uninstallConfirmTitle: "Удалить навыки оркестрации?",
           uninstallConfirmMessage:
             "BySpace удалит с этого хоста неизменённые управляемые копии. Изменённые копии будут сохранены.",
@@ -1917,6 +2041,17 @@ export const ru: TranslationResources = {
         transportFallback: "Хозяин не ответил.",
         failedTitle: "Не удалось загрузить byspace.json.",
         failedDescription: "Перезагрузите, чтобы попробовать еще раз.",
+      },
+      projectSetup: {
+        title: "Настройка проекта",
+        actionTitle: "Настроить с помощью агента",
+        description:
+          "Позвольте агенту изучить репозиторий и предложить подготовку worktree, сервисы и часто используемые команды",
+        configure: "Настроить с агентом",
+        review: "Проверить с агентом",
+        updateHost: "Обновите хост для настройки проекта с помощью агента",
+        prompt:
+          "Используй навык byspace-project-setup, чтобы изучить этот репозиторий и предложить минимальные подтверждённые изменения, которые сделают подготовку чистых worktree воспроизводимой, частые команды — доступными, а долго работающие сервисы — безопасными для параллельного запуска. Сначала проведи проверку и покажи рекомендации до изменения файлов.",
       },
       worktree: {
         title: "Перехватчики жизненного цикла Worktree",

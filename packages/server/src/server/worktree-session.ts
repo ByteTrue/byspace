@@ -47,6 +47,10 @@ import {
   createBySpaceWorktreeCommand,
   listBySpaceWorktreesCommand,
 } from "./worktree/commands.js";
+import type {
+  WorkspaceSetupAfterSettled,
+  WorkspaceSetupOperation,
+} from "./workspace-setup-runtime.js";
 
 const SAFE_GIT_REF_PATTERN = /^[A-Za-z0-9._/-]+$/;
 
@@ -103,6 +107,7 @@ interface CreateBySpaceWorktreeInBackgroundDependencies {
   sessionLogger: Logger;
   terminalManager: TerminalManager | null;
   archiveWorkspaceRecord: (workspaceId: string) => Promise<void>;
+  archiveWorkspaceRecordAfterSetupSettled: (workspaceId: string) => Promise<void>;
   serviceProxy: ServiceProxySubsystem | null;
   scriptRuntimeStore: WorkspaceScriptRuntimeStore | null;
   getDaemonTcpPort: (() => number | null) | null;
@@ -123,6 +128,11 @@ interface CreateBySpaceWorktreeWorkflowDependencies extends CreateBySpaceWorktre
     workspace: PersistedWorkspaceRecord;
     firstAgentContext: FirstAgentContext;
   }) => void;
+  startWorkspaceSetup: (
+    workspaceId: string,
+    operation: WorkspaceSetupOperation,
+    afterSettled?: WorkspaceSetupAfterSettled,
+  ) => void;
 }
 
 interface AgentWorktreeSetupContinuationInput {
@@ -582,6 +592,42 @@ export async function handleCreateBySpaceWorktreeRequest(
   }
 }
 
+function waitForNextTurn(signal: AbortSignal): Promise<boolean> {
+  if (signal.aborted) {
+    return Promise.resolve(false);
+  }
+  return new Promise((resolve) => {
+    const finish = (shouldRun: boolean) => {
+      signal.removeEventListener("abort", onAbort);
+      resolve(shouldRun);
+    };
+    const timer = setTimeout(() => finish(!signal.aborted), 0);
+    const onAbort = () => {
+      clearTimeout(timer);
+      finish(false);
+    };
+    signal.addEventListener("abort", onAbort, { once: true });
+  });
+}
+
+function waitForAgentSetupStart(
+  start: Promise<string>,
+  signal: AbortSignal,
+): Promise<string | null> {
+  if (signal.aborted) {
+    return Promise.resolve(null);
+  }
+  return new Promise((resolve) => {
+    const finish = (agentId: string | null) => {
+      signal.removeEventListener("abort", onAbort);
+      resolve(agentId);
+    };
+    const onAbort = () => finish(null);
+    signal.addEventListener("abort", onAbort, { once: true });
+    void start.then((agentId) => finish(signal.aborted ? null : agentId));
+  });
+}
+
 export async function createBySpaceWorktreeWorkflow(
   dependencies: CreateBySpaceWorktreeWorkflowDependencies,
   input: CreateBySpaceWorktreeInput,
@@ -605,7 +651,10 @@ export async function createBySpaceWorktreeWorkflow(
   const workspace = createdWorktree.workspace;
   const setupContinuation = options?.setupContinuation ?? { kind: "workspace" };
 
-  setTimeout(() => {
+  const runDeferredPreparation = async (signal: AbortSignal): Promise<boolean> => {
+    if (!(await waitForNextTurn(signal))) {
+      return false;
+    }
     if (input.firstAgentContext) {
       dependencies.autoNameWorkspaceBranchForFirstAgent({
         workspace,
@@ -618,40 +667,77 @@ export async function createBySpaceWorktreeWorkflow(
         "Failed to warm workspace git data after creating worktree",
       );
     });
-    if (setupContinuation.kind === "workspace") {
-      void runWorktreeSetupInBackground(dependencies, {
-        requestCwd: input.cwd,
-        repoRoot: createdWorktree.repoRoot,
+    return !signal.aborted;
+  };
+
+  if (setupContinuation.kind === "agent") {
+    let startAgentSetup!: (agentId: string) => void;
+    const agentSetupStart = new Promise<string>((resolve) => {
+      startAgentSetup = resolve;
+    });
+    dependencies.startWorkspaceSetup(workspace.workspaceId, async (signal) => {
+      if (!(await runDeferredPreparation(signal))) {
+        return;
+      }
+      const agentId = await waitForAgentSetupStart(agentSetupStart, signal);
+      if (!agentId) {
+        return;
+      }
+      await runAsyncWorktreeBootstrap({
+        agentId,
         workspaceId: workspace.workspaceId,
         worktree: createdWorktree.worktree,
         shouldBootstrap: createdWorktree.created,
-        slug,
-        worktreePath: createdWorktree.worktree.worktreePath,
+        terminalManager: setupContinuation.terminalManager,
+        appendTimelineItem: (item) => setupContinuation.appendTimelineItem({ agentId, item }),
+        emitLiveTimelineItem: (item) => setupContinuation.emitLiveTimelineItem({ agentId, item }),
+        logger: setupContinuation.logger,
+        signal,
       });
-    }
-  }, 0);
-
-  if (setupContinuation.kind === "agent") {
+    });
     return {
       ...createdWorktree,
       setupContinuation: {
         kind: "agent",
-        startAfterAgentCreate: ({ agentId }) => {
-          void runAsyncWorktreeBootstrap({
-            agentId,
-            workspaceId: workspace.workspaceId,
-            worktree: createdWorktree.worktree,
-            shouldBootstrap: createdWorktree.created,
-            terminalManager: setupContinuation.terminalManager,
-            appendTimelineItem: (item) => setupContinuation.appendTimelineItem({ agentId, item }),
-            emitLiveTimelineItem: (item) =>
-              setupContinuation.emitLiveTimelineItem({ agentId, item }),
-            logger: setupContinuation.logger,
-          });
-        },
+        startAfterAgentCreate: ({ agentId }) => startAgentSetup(agentId),
       },
     };
   }
+
+  let archiveWorkspaceAfterSetup = false;
+  let setupSignal: AbortSignal | null = null;
+  dependencies.startWorkspaceSetup(
+    workspace.workspaceId,
+    async (signal) => {
+      setupSignal = signal;
+      if (!(await runDeferredPreparation(signal))) {
+        return;
+      }
+      await runWorktreeSetupInBackground(
+        {
+          ...dependencies,
+          archiveWorkspaceRecord: async () => {
+            archiveWorkspaceAfterSetup = true;
+          },
+        },
+        {
+          requestCwd: input.cwd,
+          repoRoot: createdWorktree.repoRoot,
+          workspaceId: workspace.workspaceId,
+          worktree: createdWorktree.worktree,
+          shouldBootstrap: createdWorktree.created,
+          slug,
+          worktreePath: createdWorktree.worktree.worktreePath,
+        },
+        signal,
+      );
+    },
+    async () => {
+      if (archiveWorkspaceAfterSetup && !setupSignal?.aborted) {
+        await dependencies.archiveWorkspaceRecordAfterSetupSettled(workspace.workspaceId);
+      }
+    },
+  );
 
   return createdWorktree;
 }
@@ -684,6 +770,7 @@ export async function runWorktreeSetupInBackground(
     slug: string;
     worktreePath: string;
   },
+  signal?: AbortSignal,
 ): Promise<void> {
   let worktree: WorktreeConfig = options.worktree;
   let setupResults: WorktreeSetupCommandResult[] = [];
@@ -692,6 +779,9 @@ export async function runWorktreeSetupInBackground(
   const workspaceId = options.workspaceId;
 
   const emitSetupProgress = (status: "running" | "completed" | "failed", error: string | null) => {
+    if (signal?.aborted) {
+      return;
+    }
     const snapshot: WorkspaceSetupSnapshot = {
       status,
       detail: buildWorktreeSetupDetail({
@@ -705,6 +795,9 @@ export async function runWorktreeSetupInBackground(
       error,
     };
     dependencies.cacheWorkspaceSetupSnapshot(workspaceId, snapshot);
+    if (signal?.aborted) {
+      return;
+    }
     dependencies.emit({
       type: "workspace_setup_progress",
       payload: {
@@ -715,66 +808,82 @@ export async function runWorktreeSetupInBackground(
   };
 
   try {
-    try {
-      emitSetupProgress("running", null);
-
-      if (!options.shouldBootstrap) {
-        emitSetupProgress("completed", null);
-      } else {
-        const setupCommands = getWorktreeSetupCommands(worktree.worktreePath);
-        if (setupCommands.length === 0) {
-          setupStarted = true;
-          emitSetupProgress("completed", null);
-        } else {
-          const runtimeEnv = await resolveWorktreeRuntimeEnv({
-            worktreePath: worktree.worktreePath,
-            branchName: worktree.branchName,
-            repoRootPath: options.repoRoot,
-          });
-          dependencies.terminalManager?.registerCwdEnv({
-            cwd: worktree.worktreePath,
-            env: runtimeEnv,
-          });
-          setupStarted = true;
-          setupResults = await runWorktreeSetupCommands({
-            worktreePath: worktree.worktreePath,
-            branchName: worktree.branchName,
-            cleanupOnFailure: false,
-            repoRootPath: options.repoRoot,
-            runtimeEnv,
-            onEvent: (event) => {
-              applyWorktreeSetupProgressEvent(progressAccumulator, event);
-              emitSetupProgress("running", null);
-            },
-          });
-          emitSetupProgress("completed", null);
-        }
-      }
-    } catch (error) {
-      if (error instanceof WorktreeSetupError) {
-        setupResults = error.results;
-      }
-      const message = error instanceof Error ? error.message : String(error);
-      emitSetupProgress("failed", message);
-
-      if (!setupStarted) {
-        await dependencies.archiveWorkspaceRecord(options.workspaceId);
-      }
-
-      dependencies.sessionLogger.error(
-        {
-          err: error,
-          cwd: options.requestCwd,
-          repoRoot: options.repoRoot,
-          worktreeSlug: worktree.branchName,
-          worktreePath: worktree.worktreePath,
-          setupStarted,
-        },
-        "Background worktree setup failed",
-      );
+    if (signal?.aborted) {
       return;
     }
+    emitSetupProgress("running", null);
+
+    if (!options.shouldBootstrap) {
+      emitSetupProgress("completed", null);
+    } else {
+      const setupCommands = getWorktreeSetupCommands(worktree.worktreePath);
+      if (setupCommands.length === 0) {
+        setupStarted = true;
+        emitSetupProgress("completed", null);
+      } else {
+        const runtimeEnv = await resolveWorktreeRuntimeEnv({
+          worktreePath: worktree.worktreePath,
+          branchName: worktree.branchName,
+          repoRootPath: options.repoRoot,
+        });
+        if (signal?.aborted) {
+          return;
+        }
+        dependencies.terminalManager?.registerCwdEnv({
+          cwd: worktree.worktreePath,
+          env: runtimeEnv,
+        });
+        setupStarted = true;
+        setupResults = await runWorktreeSetupCommands({
+          worktreePath: worktree.worktreePath,
+          branchName: worktree.branchName,
+          cleanupOnFailure: false,
+          repoRootPath: options.repoRoot,
+          runtimeEnv,
+          signal,
+          onEvent: (event) => {
+            if (signal?.aborted) {
+              return;
+            }
+            applyWorktreeSetupProgressEvent(progressAccumulator, event);
+            emitSetupProgress("running", null);
+          },
+        });
+        if (signal?.aborted) {
+          return;
+        }
+        emitSetupProgress("completed", null);
+      }
+    }
+  } catch (error) {
+    if (signal?.aborted) {
+      return;
+    }
+    if (error instanceof WorktreeSetupError) {
+      setupResults = error.results;
+    }
+    const message = error instanceof Error ? error.message : String(error);
+    emitSetupProgress("failed", message);
+
+    if (!setupStarted) {
+      await dependencies.archiveWorkspaceRecord(options.workspaceId);
+    }
+
+    dependencies.sessionLogger.error(
+      {
+        err: error,
+        cwd: options.requestCwd,
+        repoRoot: options.repoRoot,
+        worktreeSlug: worktree.branchName,
+        worktreePath: worktree.worktreePath,
+        setupStarted,
+      },
+      "Background worktree setup failed",
+    );
+    return;
   } finally {
-    await dependencies.emitWorkspaceUpdateForWorkspaceId(options.workspaceId);
+    if (!signal?.aborted) {
+      await dependencies.emitWorkspaceUpdateForWorkspaceId(options.workspaceId);
+    }
   }
 }

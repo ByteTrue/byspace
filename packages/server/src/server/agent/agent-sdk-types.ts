@@ -1,7 +1,6 @@
 import type { Options as ClaudeAgentOptions } from "@anthropic-ai/claude-agent-sdk";
 import type { AgentProviderNotice } from "@bytetrue/byspace-protocol/agent-types";
 import type { AgentAttachment } from "@bytetrue/byspace-protocol/messages";
-import type { BySpaceToolCatalog } from "./tools/types.js";
 
 export type { AgentProviderNotice };
 
@@ -75,6 +74,8 @@ export type ProviderStatus = "ready" | "loading" | "error" | "unavailable";
 export interface AgentModelDefinition {
   provider: AgentProvider;
   id: string;
+  aliases?: string[];
+  isSelectable?: boolean;
   label: string;
   description?: string;
   isDefault?: boolean;
@@ -99,6 +100,12 @@ export function normalizeAgentModelDefinition(model: AgentModelDefinition): Agen
     return model;
   }
   return { ...model, defaultThinkingOptionId };
+}
+
+export function filterSelectableAgentModels(
+  models: AgentModelDefinition[] | undefined,
+): AgentModelDefinition[] {
+  return models?.filter((model) => model.isSelectable !== false) ?? [];
 }
 
 export interface ProviderSnapshotEntry {
@@ -172,7 +179,6 @@ export interface AgentCapabilityFlags {
   supportsSessionListing?: boolean;
   supportsDynamicModes: boolean;
   supportsMcpServers: boolean;
-  supportsNativeBySpaceTools?: boolean;
   supportsReasoningStream: boolean;
   supportsToolInvocations: boolean;
   supportsRewindConversation?: boolean;
@@ -587,11 +593,6 @@ export interface AgentSessionConfig {
 export interface AgentLaunchContext {
   agentId?: string;
   env?: Record<string, string>;
-  /**
-   * Runtime-only internal BySpace tools. This must never be persisted into
-   * AgentSessionConfig; providers may adapt it to their native tool surface.
-   */
-  byspaceTools?: BySpaceToolCatalog;
 }
 
 export interface AgentCreateSessionOptions {
@@ -702,6 +703,8 @@ export interface AgentClient {
    * The registry is responsible for merging configured model overrides.
    */
   fetchCatalog(options: FetchCatalogOptions): Promise<ProviderCatalog>;
+  /** Apply provider-owned defaults to a model supplied through provider configuration. */
+  resolveConfiguredModel?(model: AgentModelDefinition): AgentModelDefinition;
   resolveDefaultModeId?(input: ResolveAgentDefaultModeInput): Promise<string | undefined>;
   resolveCreateConfig?(input: ResolveAgentCreateConfigInput): ResolveAgentCreateConfigResult;
   isCreateConfigUnattended?(input: AgentCreateConfigUnattendedInput): boolean;

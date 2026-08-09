@@ -35,10 +35,18 @@ async function seedSecondWorkspace(seeded: SeededWorkspace, title: string): Prom
   return created.workspace.id;
 }
 
+async function workspaceRowOrder(page: Page): Promise<Array<string | null>> {
+  return page.locator('[data-testid^="sidebar-workspace-row-"]').evaluateAll((rows) => {
+    const testIds: Array<string | null> = [];
+    for (const row of rows) testIds.push(row.getAttribute("data-testid"));
+    return testIds;
+  });
+}
+
 test.describe("Model B sidebar shape", () => {
   test.describe.configure({ timeout: 180_000 });
 
-  test("git and non-git projects both render as expandable parents, both show a per-row New workspace icon, and the global button covers both", async ({
+  test("git and non-git projects both render as expandable parents with a per-row New workspace icon", async ({
     page,
   }) => {
     const gitProject = await seedWorkspace({ repoPrefix: "model-b-git-" });
@@ -74,14 +82,101 @@ test.describe("Model B sidebar shape", () => {
         timeout: 30_000,
       });
 
-      // The global new-workspace button is the universal entry — present for both
-      // kinds regardless of their per-row affordance.
-      await expect(page.getByTestId("sidebar-global-new-workspace")).toBeVisible({
-        timeout: 30_000,
-      });
+      await expect(page.getByTestId("sidebar-global-new-workspace")).toBeVisible();
     } finally {
       await gitProject.cleanup();
       await nonGitProject.cleanup();
+    }
+  });
+
+  test("surfaces workspace attention and shows every agent status on hover", async ({ page }) => {
+    const mock = await seedMockAgentWorkspace({
+      repoPrefix: "model-b-attention-",
+      title: "Needs user decision",
+      initialPrompt: "Emit synthetic plan approval.",
+    });
+
+    try {
+      const parked = await mock.client.waitForFinish(mock.agentId, 15_000);
+      expect(parked.status).toBe("permission");
+
+      await gotoAppShell(page);
+      await waitForSidebarHydration(page);
+
+      const row = workspaceRow(page, mock.workspaceId);
+      await expect(row).toBeVisible({ timeout: 30_000 });
+      const attentionSummary = row.getByTestId("workspace-agent-summary-attention");
+      await expect(attentionSummary).toHaveText("1");
+      await expect(attentionSummary).toHaveAccessibleName("Agents needing attention: 1");
+      await expect(page.getByTestId("sidebar-needs-attention-filter")).toContainText("1");
+      await row.hover();
+
+      const hoverCard = page.getByTestId("workspace-hover-card");
+      await expect(hoverCard).toBeVisible({ timeout: 10_000 });
+      await expect(hoverCard).toContainText("Needs user decision");
+      await expect(hoverCard).toContainText("Needs input");
+
+      await row.click();
+      await page.mouse.move(1000, 700);
+      await expect(hoverCard).toHaveCount(0);
+
+      await row.focus();
+      await page.keyboard.press("Shift+Tab");
+      await page.keyboard.press("Tab");
+      await expect(row).toBeFocused();
+      await expect(hoverCard).toBeVisible({ timeout: 10_000 });
+      await page.setViewportSize({ width: 390, height: 844 });
+      if (!(await row.isVisible())) {
+        await page.getByTestId("menu-button").click();
+      }
+      await expect(attentionSummary).toHaveText("1");
+      await expect(hoverCard).toHaveCount(0);
+    } finally {
+      await mock.cleanup();
+    }
+  });
+
+  test("filters to attention workspaces, shows the empty state, and restores order", async ({
+    page,
+  }) => {
+    const quiet = await seedWorkspace({ repoPrefix: "model-b-quiet-" });
+    const mock = await seedMockAgentWorkspace({
+      repoPrefix: "model-b-attention-filter-",
+      title: "Needs user decision",
+      initialPrompt: "Emit synthetic plan approval.",
+    });
+
+    try {
+      const parked = await mock.client.waitForFinish(mock.agentId, 15_000);
+      expect(parked.status).toBe("permission");
+
+      await gotoAppShell(page);
+      await waitForSidebarHydration(page);
+
+      const quietRow = workspaceRow(page, quiet.workspaceId);
+      const attentionRow = workspaceRow(page, mock.workspaceId);
+      await expect(quietRow).toBeVisible({ timeout: 30_000 });
+      await expect(attentionRow).toBeVisible({ timeout: 30_000 });
+
+      const initialOrder = await workspaceRowOrder(page);
+      const filter = page.getByTestId("sidebar-needs-attention-filter");
+
+      await filter.click();
+      await expect(attentionRow).toBeVisible();
+      await expect(quietRow).toHaveCount(0);
+
+      await mock.client.archiveAgent(mock.agentId);
+      await expect(page.getByTestId("sidebar-attention-empty-state")).toBeVisible({
+        timeout: 30_000,
+      });
+
+      await filter.click();
+      await expect(quietRow).toBeVisible({ timeout: 30_000 });
+      await expect(attentionRow).toBeVisible({ timeout: 30_000 });
+      await expect.poll(() => workspaceRowOrder(page)).toEqual(initialOrder);
+    } finally {
+      await mock.cleanup();
+      await quiet.cleanup();
     }
   });
 
@@ -111,65 +206,6 @@ test.describe("Model B sidebar shape", () => {
       await expect(sidebar.locator('[data-testid^="sidebar-terminal-row-"]')).toHaveCount(0);
     } finally {
       await mock.cleanup();
-    }
-  });
-
-  test("status grouping shows only workspace rows and moves a single row when its status changes", async ({
-    page,
-  }) => {
-    const idleProject = await seedWorkspace({ repoPrefix: "model-b-status-idle-" });
-    const activeMock = await seedMockAgentWorkspace({
-      repoPrefix: "model-b-status-active-",
-      title: "Working workspace",
-      initialPrompt: "stay busy",
-    });
-
-    try {
-      await gotoAppShell(page);
-      await waitForSidebarHydration(page);
-      await expect(workspaceRow(page, idleProject.workspaceId)).toBeVisible({ timeout: 30_000 });
-
-      // Switch to status grouping.
-      await page.getByTestId("sidebar-display-preferences-menu").click();
-      await page.getByTestId("sidebar-grouping-status").click();
-
-      const sidebar = page.getByTestId("sidebar-sessions").filter({ visible: true }).first();
-
-      // The idle workspace lands in the Done bucket; the busy mock-agent workspace
-      // lands in the Working bucket. Each workspace is bucketed independently.
-      await expect(page.getByTestId("sidebar-status-group-done")).toBeVisible({ timeout: 30_000 });
-      await expect(page.getByTestId("sidebar-status-group-running")).toBeVisible({
-        timeout: 60_000,
-      });
-      await expect(workspaceRow(page, idleProject.workspaceId).first()).toBeVisible({
-        timeout: 30_000,
-      });
-      await expect(workspaceRow(page, activeMock.workspaceId).first()).toBeVisible({
-        timeout: 60_000,
-      });
-
-      // Only workspace rows are shown — no tab/agent/terminal leaves leak into
-      // the status view.
-      await expect(sidebar.locator('[data-testid^="workspace-tab-"]')).toHaveCount(0);
-
-      // The busy workspace is grouped under Working, the idle one under Done:
-      // changing one workspace's status moved only that row.
-      const workingRows = page.getByTestId("sidebar-status-group-rows-running");
-      const doneRows = page.getByTestId("sidebar-status-group-rows-done");
-      await expect(
-        workingRows.getByTestId(`sidebar-workspace-row-${getServerId()}:${activeMock.workspaceId}`),
-      ).toBeVisible({ timeout: 60_000 });
-      await expect(
-        doneRows.getByTestId(`sidebar-workspace-row-${getServerId()}:${idleProject.workspaceId}`),
-      ).toBeVisible({ timeout: 30_000 });
-      // The busy workspace is NOT also sitting in the Done bucket — only its own
-      // row moved.
-      await expect(
-        doneRows.getByTestId(`sidebar-workspace-row-${getServerId()}:${activeMock.workspaceId}`),
-      ).toHaveCount(0);
-    } finally {
-      await idleProject.cleanup();
-      await activeMock.cleanup();
     }
   });
 });

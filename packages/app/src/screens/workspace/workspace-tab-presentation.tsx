@@ -153,7 +153,11 @@ export function WorkspaceTabIcon({
 
   if (shouldShowLoader) {
     return (
-      <View style={agentIconWrapperStyle}>
+      <View
+        style={agentIconWrapperStyle}
+        accessibilityRole="progressbar"
+        accessibilityLabel="Agent running"
+      >
         <SyncedLoader size={size - 1} color={styles.syncedLoader.color} />
       </View>
     );
@@ -246,16 +250,16 @@ const styles = StyleSheet.create((theme) => ({
     borderColor: theme.colors.surface0,
   },
   statusDotNeedsInput: {
-    color: theme.colors.palette.amber[500],
+    color: theme.colors.statusDotWarning,
   },
   statusDotFailed: {
-    color: theme.colors.palette.red[500],
+    color: theme.colors.statusDotDanger,
   },
   statusDotRunning: {
-    color: theme.colors.palette.blue[500],
+    color: theme.colors.statusDotRunning,
   },
   statusDotAttention: {
-    color: theme.colors.palette.green[500],
+    color: theme.colors.statusDotSuccess,
   },
   iconActive: {
     color: theme.colors.foreground,
@@ -264,10 +268,7 @@ const styles = StyleSheet.create((theme) => ({
     color: theme.colors.foregroundMuted,
   },
   syncedLoader: {
-    color:
-      theme.colorScheme === "light"
-        ? theme.colors.palette.amber[700]
-        : theme.colors.palette.amber[500],
+    color: theme.colors.statusWarning,
   },
   optionRow: {
     flexDirection: "row",

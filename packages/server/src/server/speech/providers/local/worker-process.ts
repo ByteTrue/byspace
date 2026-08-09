@@ -109,12 +109,6 @@ async function handleRequest(message: LocalSpeechWorkerRequest): Promise<void> {
     case "session.clear":
       session?.clear();
       break;
-    case "session.flush":
-      if (session && "flush" in session && typeof session.flush === "function") session.flush();
-      break;
-    case "session.reset":
-      if (session && "reset" in session && typeof session.reset === "function") session.reset();
-      break;
   }
   sendOk(message.requestId);
 }

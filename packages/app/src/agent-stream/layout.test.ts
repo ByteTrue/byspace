@@ -78,7 +78,7 @@ function strategyFor(): StreamStrategy {
 }
 
 function layoutFor(input: {
-  agentStatus?: string;
+  isTurnActive?: boolean;
   tail: StreamItem[];
   head?: StreamItem[];
   timingIds?: string[];
@@ -86,7 +86,7 @@ function layoutFor(input: {
   const strategy = strategyFor();
   return layoutStream({
     strategy,
-    agentStatus: input.agentStatus ?? "idle",
+    isTurnActive: input.isTurnActive ?? false,
     history: orderTailForStreamRenderStrategy({
       strategy,
       streamItems: input.tail,
@@ -144,13 +144,13 @@ describe("layoutStream", () => {
     const secondBlock = assistantMessage("turn:block:1", 3, { groupId: "turn", index: 1 });
     const thirdBlock = assistantMessage("turn:block:2", 4, { groupId: "turn", index: 2 });
     const splitLayout = layoutFor({
-      agentStatus: "running",
+      isTurnActive: true,
       tail: [userMessage("u1", 1), firstBlock],
       head: [secondBlock, thirdBlock],
       timingIds: [firstBlock.id, secondBlock.id, thirdBlock.id],
     });
     const unsplitLayout = layoutFor({
-      agentStatus: "running",
+      isTurnActive: true,
       tail: [userMessage("u1", 1), firstBlock, secondBlock, thirdBlock],
       timingIds: [firstBlock.id, secondBlock.id, thirdBlock.id],
     });
@@ -363,7 +363,7 @@ describe("layoutStream", () => {
     const assistant = assistantMessage("a1", 2);
     const tool = toolCall("tool-1", 3);
     const layout = layoutFor({
-      agentStatus: "running",
+      isTurnActive: true,
       tail: [userMessage("u1", 1), assistant, tool],
       timingIds: [assistant.id],
     });

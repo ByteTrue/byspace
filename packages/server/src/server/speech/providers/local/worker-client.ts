@@ -7,7 +7,6 @@ import type { SpeechToTextProvider, StreamingTranscriptionSession } from "../../
 import { applySherpaLoaderEnv } from "./sherpa/sherpa-runtime-env.js";
 import type {
   LocalSpeechCreateSessionResult,
-  LocalSpeechSessionKind,
   LocalSpeechWorkerConfig,
   LocalSpeechWorkerRequest,
   LocalSpeechWorkerToParentMessage,
@@ -15,6 +14,7 @@ import type {
 import { bufferToWorkerBytes } from "./worker-bytes.js";
 
 const REQUEST_TIMEOUT_MS = 60_000;
+const WORKER_SHUTDOWN_TIMEOUT_MS = 5_000;
 
 type RequestInput = LocalSpeechWorkerRequest extends infer Request
   ? Request extends LocalSpeechWorkerRequest
@@ -100,7 +100,6 @@ export class LocalSpeechWorkerClient {
   }
 
   async createSession(
-    kind: LocalSpeechSessionKind,
     emitter: EventEmitter,
   ): Promise<{ sessionId: string; requiredSampleRate: number }> {
     const sessionId = randomUUID();
@@ -112,7 +111,6 @@ export class LocalSpeechWorkerClient {
         type: "session.create",
         config: this.options.config,
         sessionId,
-        kind,
       });
       return { sessionId, requiredSampleRate: result.requiredSampleRate };
     } catch (error) {
@@ -142,18 +140,6 @@ export class LocalSpeechWorkerClient {
     );
   }
 
-  flushSession(sessionId: string): void {
-    void this.request({ type: "session.flush", sessionId }).catch((error) =>
-      this.emitters.get(sessionId)?.emit("error", error),
-    );
-  }
-
-  resetSession(sessionId: string): void {
-    void this.request({ type: "session.reset", sessionId }).catch((error) =>
-      this.emitters.get(sessionId)?.emit("error", error),
-    );
-  }
-
   closeSession(sessionId: string): void {
     this.activeSessions.delete(sessionId);
     this.emitters.delete(sessionId);
@@ -161,6 +147,12 @@ export class LocalSpeechWorkerClient {
   }
 
   shutdown(): void {
+    void this.shutdownAndWait().catch((error: unknown) => {
+      this.options.logger.warn({ err: error }, "Failed to stop dictation worker");
+    });
+  }
+
+  async shutdownAndWait(): Promise<void> {
     const worker = this.worker;
     this.worker = null;
     for (const pending of this.pending.values()) {
@@ -173,8 +165,20 @@ export class LocalSpeechWorkerClient {
     this.emitters.clear();
     this.activeSessions.clear();
     this.modelMutationInProgress = false;
-    worker?.disconnect();
-    worker?.kill();
+    if (!worker) return;
+
+    await new Promise<void>((resolve, reject) => {
+      const timeout = setTimeout(
+        () => reject(new Error("Timed out waiting for dictation worker to stop")),
+        WORKER_SHUTDOWN_TIMEOUT_MS,
+      );
+      worker.once("close", () => {
+        clearTimeout(timeout);
+        resolve();
+      });
+      worker.disconnect();
+      worker.kill();
+    });
   }
 
   private ensureWorker(): WorkerProcess {
@@ -254,7 +258,7 @@ class WorkerBackedTranscriptionSession
 
   async connect(): Promise<void> {
     if (this.sessionId) return;
-    const created = await this.client.createSession("dictationStt", this);
+    const created = await this.client.createSession(this);
     this.sessionId = created.sessionId;
     this.requiredSampleRate = created.requiredSampleRate;
   }
@@ -269,14 +273,6 @@ class WorkerBackedTranscriptionSession
 
   clear(): void {
     if (this.sessionId) this.client.clearSession(this.sessionId);
-  }
-
-  flush(): void {
-    if (this.sessionId) this.client.flushSession(this.sessionId);
-  }
-
-  reset(): void {
-    if (this.sessionId) this.client.resetSession(this.sessionId);
   }
 
   close(): void {

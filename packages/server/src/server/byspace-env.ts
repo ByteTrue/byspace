@@ -1,6 +1,10 @@
 const BYSPACE_NODE_ENV = "BYSPACE_NODE_ENV";
 
-const RUNTIME_CONTROL_ENV_KEYS = [BYSPACE_NODE_ENV, "BYSPACE_SUPERVISED"] as const;
+const RUNTIME_CONTROL_ENV_KEYS = [
+  BYSPACE_NODE_ENV,
+  "BYSPACE_SUPERVISED",
+  "BYSPACE_PI_TERMINAL_HOOK_OWNER_PID",
+] as const;
 
 export type BySpaceNodeEnv = "development" | "production" | "test";
 export type ProcessEnvRecord = Record<string, string | undefined>;

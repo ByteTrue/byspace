@@ -345,7 +345,7 @@ describe("AgentTimelineSyncOwner", () => {
     world.owner.dispose();
   });
 
-  test("starts a fresh visibility request while initial history is still in flight", async () => {
+  test("fresh visibility catch-up supersedes initial history still in flight", async () => {
     const world = new TimelineOwnerWorld();
     world.owner.setActive(true);
     world.owner.uiBridge.replaceVisibleAgentIds("pane", [agentId]);
@@ -391,13 +391,13 @@ describe("AgentTimelineSyncOwner", () => {
       {
         epoch: "epoch-a",
         startSeq: 1,
-        endSeq: 3,
+        endSeq: 2,
       },
     );
     world.owner.dispose();
   });
 
-  test("applies useful rows from an earlier request that snapshots later", async () => {
+  test("applies an earlier response that returns before a newer forced response", async () => {
     const world = new TimelineOwnerWorld();
     const plan: ProjectedTimelineFetchPlan = {
       direction: "tail",
@@ -406,17 +406,17 @@ describe("AgentTimelineSyncOwner", () => {
     };
     const earlier = world.owner.fetchTimeline(agentId, plan);
     const earlierRequest = world.take();
-    const fresh = world.owner.fetchTimeline(agentId, plan, { force: true });
-    const freshRequest = world.take();
+    const newer = world.owner.fetchTimeline(agentId, plan, { force: true });
+    const newerRequest = world.take();
 
-    freshRequest.resolve(
-      page({ request: freshRequest.request, startSeq: 1, endSeq: 1, text: "first" }),
-    );
-    await fresh;
     earlierRequest.resolve(
-      page({ request: earlierRequest.request, startSeq: 1, endSeq: 2, text: "first then second" }),
+      page({ request: earlierRequest.request, startSeq: 1, endSeq: 1, text: "first" }),
     );
     await earlier;
+    newerRequest.resolve(
+      page({ request: newerRequest.request, startSeq: 1, endSeq: 2, text: "first then second" }),
+    );
+    await newer;
 
     expect(useSessionStore.getState().sessions[serverId]?.agentTimelineCursor.get(agentId)).toEqual(
       {
@@ -425,6 +425,45 @@ describe("AgentTimelineSyncOwner", () => {
         endSeq: 2,
       },
     );
+    world.owner.dispose();
+  });
+
+  test("discards an older forward response after a newer forced response applies", async () => {
+    const world = new TimelineOwnerWorld();
+    const plan: ProjectedTimelineFetchPlan = {
+      direction: "tail",
+      limit: 40,
+      projection: "projected",
+    };
+    const older = world.owner.fetchTimeline(agentId, plan);
+    const olderRequest = world.take();
+    const newer = world.owner.fetchTimeline(agentId, plan, { force: true });
+    const newerRequest = world.take();
+
+    newerRequest.resolve(
+      page({ request: newerRequest.request, startSeq: 1, endSeq: 2, text: "current" }),
+    );
+    await newer;
+    olderRequest.resolve(
+      page({ request: olderRequest.request, startSeq: 1, endSeq: 1, text: "stale" }),
+    );
+    await expect(older).rejects.toThrow("superseded");
+
+    const session = useSessionStore.getState().sessions[serverId];
+    const stream = [
+      ...(session?.agentStreamTail.get(agentId) ?? []),
+      ...(session?.agentStreamHead.get(agentId) ?? []),
+    ];
+    expect(useSessionStore.getState().sessions[serverId]?.agentTimelineCursor.get(agentId)).toEqual(
+      {
+        epoch: "epoch-a",
+        startSeq: 1,
+        endSeq: 2,
+      },
+    );
+    expect(
+      stream.filter((item) => item.kind === "assistant_message").map((item) => item.text),
+    ).toEqual(["current"]);
     world.owner.dispose();
   });
 

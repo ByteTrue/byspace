@@ -125,7 +125,7 @@ async function measureBundle(dir) {
 }
 
 async function main() {
-  await exportBrowserWebApp();
+  if (!process.argv.includes("--skip-export")) await exportBrowserWebApp();
 
   const sourceStat = await stat(SOURCE_DIST).catch(() => null);
   if (!sourceStat?.isDirectory()) {

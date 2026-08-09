@@ -3,6 +3,7 @@ import { gotoAppShell } from "./helpers/app";
 import { addConnectedHostAndReload } from "./helpers/hosts";
 import { startIsolatedHostDaemon } from "./helpers/isolated-host-daemon";
 import { connectSeedClient } from "./helpers/seed-client";
+import { submitNewWorkspaceEmpty } from "./helpers/new-workspace";
 import { getServerId } from "./helpers/server-id";
 import { createTempGitRepo } from "./helpers/workspace";
 import { waitForSidebarHydration } from "./helpers/workspace-ui";
@@ -67,10 +68,65 @@ test.describe("cross-host project identity", () => {
       await groupedRow.hover();
       await page.getByTestId(`sidebar-project-new-worktree-${projectKey}`).click();
       await expect(page.getByTestId("new-workspace-project-picker-trigger")).toBeVisible();
+      const secondaryHostOption = page.getByTestId(
+        "new-workspace-host-picker-option-project-group-secondary",
+      );
+      await expect(secondaryHostOption).toBeVisible();
+      await expect(page.getByTestId("host-picker-trigger")).toHaveAccessibleName("Choose host");
+      await page.keyboard.press("Escape");
+      const composer = page.getByRole("textbox", { name: "Message agent..." });
+      const submit = page.getByTestId("workspace-create-submit");
+      await composer.fill("Keep this draft across hosts");
+      await expect(submit).toBeDisabled();
+      await composer.press("Enter");
+      await expect(composer).toHaveValue(/^Keep this draft across hosts\n?$/);
       await page.getByTestId("host-picker-trigger").click();
-      await page.getByTestId("new-workspace-host-picker-option-project-group-secondary").click();
+      await secondaryHostOption.click();
       await expect(page.getByTestId("host-picker-trigger")).toContainText("Secondary Host");
-      await expect(page.getByTestId("new-workspace-project-picker-trigger")).toBeVisible();
+      await expect(composer).toHaveValue(/^Keep this draft across hosts\n?$/);
+
+      const primaryWorkspaceCountBefore = (
+        await primaryClient.fetchWorkspaces({ filter: { projectId: primaryProjectId } })
+      ).entries.length;
+      const secondaryWorkspaceIdsBefore = new Set(
+        (
+          await secondaryClient.fetchWorkspaces({ filter: { projectId: secondaryProjectId } })
+        ).entries.map((workspace) => workspace.id),
+      );
+      await composer.fill("");
+      await submitNewWorkspaceEmpty(page);
+      await expect(page).toHaveURL(new RegExp(`/h/${secondary.serverId}/workspace/`), {
+        timeout: 30_000,
+      });
+      await expect
+        .poll(
+          async () => {
+            const [primaryWorkspaces, secondaryWorkspaces] = await Promise.all([
+              primaryClient.fetchWorkspaces({ filter: { projectId: primaryProjectId } }),
+              secondaryClient.fetchWorkspaces({ filter: { projectId: secondaryProjectId } }),
+            ]);
+            let created: (typeof secondaryWorkspaces.entries)[number] | undefined;
+            for (const workspace of secondaryWorkspaces.entries) {
+              if (!secondaryWorkspaceIdsBefore.has(workspace.id)) {
+                created = workspace;
+                break;
+              }
+            }
+            return {
+              primaryCount: primaryWorkspaces.entries.length,
+              secondaryCount: secondaryWorkspaces.entries.length,
+              createdProjectId: created?.projectId ?? null,
+              createdProjectRootPath: created?.projectRootPath ?? null,
+            };
+          },
+          { timeout: 30_000 },
+        )
+        .toEqual({
+          primaryCount: primaryWorkspaceCountBefore,
+          secondaryCount: secondaryWorkspaceIdsBefore.size + 1,
+          createdProjectId: secondaryProjectId,
+          createdProjectRootPath: secondaryCreated.workspace.projectRootPath,
+        });
 
       await page.goBack();
       await waitForSidebarHydration(page);

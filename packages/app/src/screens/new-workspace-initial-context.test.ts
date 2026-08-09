@@ -1,18 +1,27 @@
 import { describe, expect, it } from "vitest";
 import type { HostProjectListItem } from "@/projects/host-projects";
 import type { HostRuntimeConnectionStatus } from "@/runtime/host-runtime";
-import {
-  resolveNewWorkspaceAutomaticServerId,
-  resolveNewWorkspaceInitialServerId,
-} from "./new-workspace-initial-context";
+import { resolveNewWorkspaceHostSelection } from "./new-workspace-initial-context";
 
-function projectFor(serverId: string, key = "project"): HostProjectListItem {
+function project(input: {
+  key?: string;
+  hosts: Array<{
+    serverId: string;
+    projectId?: string;
+    canCreateWorktree?: boolean;
+  }>;
+}): HostProjectListItem {
   return {
-    projectKey: key,
-    projectName: key,
+    projectKey: input.key ?? "project",
+    projectName: input.key ?? "project",
     projectKind: "git",
-    iconWorkingDir: `/work/${key}`,
-    hosts: [{ serverId, iconWorkingDir: `/work/${key}`, canCreateWorktree: true }],
+    iconWorkingDir: `/work/${input.key ?? "project"}`,
+    hosts: input.hosts.map((host) => ({
+      serverId: host.serverId,
+      projectId: host.projectId,
+      iconWorkingDir: `/work/${input.key ?? "project"}/${host.serverId}`,
+      canCreateWorktree: host.canCreateWorktree ?? true,
+    })),
     workspaceKeys: [],
   };
 }
@@ -27,257 +36,143 @@ function multiplicity(entries: Record<string, boolean> = {}): ReadonlyMap<string
   return new Map(Object.entries(entries));
 }
 
-describe("resolveNewWorkspaceInitialServerId", () => {
-  it("prefers explicit route host context over online-host fallback", () => {
+function resolve(input: {
+  allServerIds?: string[];
+  routeServerId?: string | null;
+  selectedProject: HostProjectListItem | null;
+  statuses?: Record<string, HostRuntimeConnectionStatus>;
+  multiplicity?: Record<string, boolean>;
+}) {
+  const allServerIds = input.allServerIds ?? ["host-a", "host-b"];
+  return resolveNewWorkspaceHostSelection({
+    allServerIds,
+    routeServerId: input.routeServerId,
+    selectedProject: input.selectedProject,
+    hostConnectionStatusByServerId: statuses(input.statuses ?? {}),
+    workspaceMultiplicityByServerId: multiplicity(input.multiplicity),
+  });
+}
+
+describe("resolveNewWorkspaceHostSelection", () => {
+  it("does not use a remembered project before the user chooses a project", () => {
     expect(
-      resolveNewWorkspaceInitialServerId({
-        allServerIds: ["offline", "online"],
-        routeServerId: "offline",
-        lastActiveProject: null,
-        projects: [projectFor("online")],
-        hostConnectionStatusByServerId: statuses({ offline: "offline", online: "online" }),
-        workspaceMultiplicityByServerId: multiplicity(),
+      resolve({
+        selectedProject: null,
+        statuses: { "host-a": "online", "host-b": "offline" },
       }),
-    ).toBe("offline");
+    ).toEqual({
+      eligibleServerIds: [],
+      selectedServerId: "host-a",
+      requiresHostSelection: false,
+    });
   });
 
-  it("prefers the sole online host over a stale offline project", () => {
+  it("uses an explicit route host when it can create the selected project", () => {
     expect(
-      resolveNewWorkspaceInitialServerId({
-        allServerIds: ["offline", "online"],
-        routeServerId: null,
-        lastActiveProject: projectFor("offline"),
-        projects: [projectFor("offline")],
-        hostConnectionStatusByServerId: statuses({ offline: "offline", online: "online" }),
-        workspaceMultiplicityByServerId: multiplicity(),
-      }),
-    ).toBe("online");
-
-    expect(
-      resolveNewWorkspaceInitialServerId({
-        allServerIds: ["offline", "online"],
-        routeServerId: null,
-        lastActiveProject: null,
-        projects: [projectFor("online")],
-        hostConnectionStatusByServerId: statuses({ offline: "offline", online: "online" }),
-        workspaceMultiplicityByServerId: multiplicity(),
-      }),
-    ).toBe("online");
-  });
-
-  it("uses the last active project when there is no sole online host", () => {
-    expect(
-      resolveNewWorkspaceInitialServerId({
-        allServerIds: ["offline", "other"],
-        routeServerId: null,
-        lastActiveProject: projectFor("offline"),
-        projects: [projectFor("offline")],
-        hostConnectionStatusByServerId: statuses({ offline: "offline", other: "offline" }),
-        workspaceMultiplicityByServerId: multiplicity(),
-      }),
-    ).toBe("offline");
-  });
-
-  it("prefers a connecting project host over a stale offline last active project", () => {
-    expect(
-      resolveNewWorkspaceInitialServerId({
-        allServerIds: ["offline", "connecting"],
-        routeServerId: null,
-        lastActiveProject: projectFor("offline", "remembered"),
-        projects: [projectFor("offline", "remembered"), projectFor("connecting", "current")],
-        hostConnectionStatusByServerId: statuses({
-          offline: "offline",
-          connecting: "connecting",
+      resolve({
+        routeServerId: "host-b",
+        selectedProject: project({
+          hosts: [{ serverId: "host-a" }, { serverId: "host-b" }],
         }),
-        workspaceMultiplicityByServerId: multiplicity(),
+        statuses: { "host-a": "online", "host-b": "online" },
       }),
-    ).toBe("connecting");
+    ).toEqual({
+      eligibleServerIds: ["host-a", "host-b"],
+      selectedServerId: "host-b",
+      requiresHostSelection: false,
+    });
   });
 
-  it("prefers the online last active project over another hydrated online project", () => {
+  it("derives the only eligible host without showing a choice", () => {
     expect(
-      resolveNewWorkspaceInitialServerId({
-        allServerIds: ["host-a", "host-b"],
-        routeServerId: null,
-        lastActiveProject: projectFor("host-b", "remembered"),
-        projects: [projectFor("host-a")],
-        hostConnectionStatusByServerId: statuses({
-          "host-a": "online",
-          "host-b": "online",
+      resolve({
+        selectedProject: project({ hosts: [{ serverId: "host-b" }] }),
+      }),
+    ).toEqual({
+      eligibleServerIds: ["host-b"],
+      selectedServerId: "host-b",
+      requiresHostSelection: false,
+    });
+  });
+
+  it("requires an explicit choice when multiple placements have different connectivity", () => {
+    expect(
+      resolve({
+        selectedProject: project({
+          hosts: [{ serverId: "host-a" }, { serverId: "host-b" }],
         }),
-        workspaceMultiplicityByServerId: multiplicity(),
+        statuses: { "host-a": "offline", "host-b": "online" },
       }),
-    ).toBe("host-b");
+    ).toEqual({
+      eligibleServerIds: ["host-a", "host-b"],
+      selectedServerId: "host-a",
+      requiresHostSelection: true,
+    });
   });
 
-  it("falls back to the only online host even before projects have hydrated", () => {
+  it("requires an explicit choice when multiple hosts remain equally valid", () => {
     expect(
-      resolveNewWorkspaceInitialServerId({
-        allServerIds: ["offline-a", "online", "offline-b"],
-        routeServerId: null,
-        lastActiveProject: null,
-        projects: [],
-        hostConnectionStatusByServerId: statuses({
-          "offline-a": "offline",
-          online: "online",
-          "offline-b": "offline",
+      resolve({
+        selectedProject: project({
+          hosts: [{ serverId: "host-a" }, { serverId: "host-b" }],
         }),
-        workspaceMultiplicityByServerId: multiplicity(),
+        statuses: { "host-a": "online", "host-b": "online" },
       }),
-    ).toBe("online");
+    ).toEqual({
+      eligibleServerIds: ["host-a", "host-b"],
+      selectedServerId: "host-a",
+      requiresHostSelection: true,
+    });
   });
 
-  it("prefers an online host over the only cached offline project", () => {
+  it("uses per-host multiplicity for directory project placements", () => {
     expect(
-      resolveNewWorkspaceInitialServerId({
-        allServerIds: ["offline", "online-a", "online-b"],
-        routeServerId: null,
-        lastActiveProject: projectFor("offline"),
-        projects: [projectFor("offline")],
-        hostConnectionStatusByServerId: statuses({
-          offline: "offline",
-          "online-a": "online",
-          "online-b": "online",
+      resolve({
+        selectedProject: project({
+          hosts: [
+            { serverId: "host-a", canCreateWorktree: false },
+            { serverId: "host-b", canCreateWorktree: false },
+          ],
         }),
-        workspaceMultiplicityByServerId: multiplicity(),
+        multiplicity: { "host-a": false, "host-b": true },
       }),
-    ).toBe("online-a");
+    ).toEqual({
+      eligibleServerIds: ["host-b"],
+      selectedServerId: "host-b",
+      requiresHostSelection: false,
+    });
   });
 
-  it("prefers the first online project host over an empty online host", () => {
+  it("keeps a project unselected from hosts when no placement can create a workspace", () => {
     expect(
-      resolveNewWorkspaceInitialServerId({
-        allServerIds: ["empty-online", "project-online-a", "project-online-b"],
-        routeServerId: null,
-        lastActiveProject: null,
-        projects: [projectFor("project-online-a", "a"), projectFor("project-online-b", "b")],
-        hostConnectionStatusByServerId: statuses({
-          "empty-online": "online",
-          "project-online-a": "online",
-          "project-online-b": "online",
+      resolve({
+        selectedProject: project({
+          hosts: [
+            { serverId: "host-a", canCreateWorktree: false },
+            { serverId: "host-b", canCreateWorktree: false },
+          ],
         }),
-        workspaceMultiplicityByServerId: multiplicity(),
+        multiplicity: { "host-a": false, "host-b": false },
       }),
-    ).toBe("project-online-a");
+    ).toEqual({
+      eligibleServerIds: [],
+      selectedServerId: "host-a",
+      requiresHostSelection: false,
+    });
   });
 
-  it("uses the only host with selectable projects even before runtime status is online", () => {
+  it("requires a host choice while multiple eligible hosts are still connecting", () => {
     expect(
-      resolveNewWorkspaceInitialServerId({
-        allServerIds: ["offline", "connected"],
-        routeServerId: null,
-        lastActiveProject: null,
-        projects: [projectFor("connected")],
-        hostConnectionStatusByServerId: statuses({
-          offline: "offline",
-          connected: "connecting",
+      resolve({
+        selectedProject: project({
+          hosts: [{ serverId: "host-a" }, { serverId: "host-b" }],
         }),
-        workspaceMultiplicityByServerId: multiplicity(),
+        statuses: { "host-a": "connecting", "host-b": "connecting" },
       }),
-    ).toBe("connected");
-  });
-});
-
-describe("resolveNewWorkspaceAutomaticServerId", () => {
-  it("keeps a usable automatic host stable when the computed default changes", () => {
-    expect(
-      resolveNewWorkspaceAutomaticServerId({
-        allServerIds: ["host-a", "host-b"],
-        routeServerId: null,
-        lastActiveProject: null,
-        projects: [projectFor("host-a"), projectFor("host-b")],
-        hostConnectionStatusByServerId: statuses({ "host-a": "online", "host-b": "online" }),
-        workspaceMultiplicityByServerId: multiplicity(),
-        currentServerId: "host-a",
-        nextServerId: "host-b",
-      }),
-    ).toBe("host-a");
-  });
-
-  it("switches to the remembered online host after it hydrates", () => {
-    expect(
-      resolveNewWorkspaceAutomaticServerId({
-        allServerIds: ["host-a", "host-b"],
-        routeServerId: null,
-        lastActiveProject: projectFor("host-b", "remembered"),
-        projects: [projectFor("host-a"), projectFor("host-b", "remembered")],
-        hostConnectionStatusByServerId: statuses({
-          "host-a": "online",
-          "host-b": "online",
-        }),
-        workspaceMultiplicityByServerId: multiplicity(),
-        currentServerId: "host-a",
-        nextServerId: "host-b",
-      }),
-    ).toBe("host-b");
-  });
-
-  it("switches from an offline automatic host to the online default", () => {
-    expect(
-      resolveNewWorkspaceAutomaticServerId({
-        allServerIds: ["offline", "online"],
-        routeServerId: null,
-        lastActiveProject: null,
-        projects: [projectFor("offline")],
-        hostConnectionStatusByServerId: statuses({ offline: "offline", online: "online" }),
-        workspaceMultiplicityByServerId: multiplicity(),
-        currentServerId: "offline",
-        nextServerId: "online",
-      }),
-    ).toBe("online");
-  });
-
-  it("switches from an offline automatic host to a connecting default with projects", () => {
-    expect(
-      resolveNewWorkspaceAutomaticServerId({
-        allServerIds: ["offline", "connecting"],
-        routeServerId: null,
-        lastActiveProject: projectFor("offline", "remembered"),
-        projects: [projectFor("offline", "remembered"), projectFor("connecting", "current")],
-        hostConnectionStatusByServerId: statuses({
-          offline: "offline",
-          connecting: "connecting",
-        }),
-        workspaceMultiplicityByServerId: multiplicity(),
-        currentServerId: "offline",
-        nextServerId: "connecting",
-      }),
-    ).toBe("connecting");
-  });
-
-  it("switches to the default when the current automatic host has no selectable projects", () => {
-    expect(
-      resolveNewWorkspaceAutomaticServerId({
-        allServerIds: ["empty", "with-project"],
-        routeServerId: null,
-        lastActiveProject: null,
-        projects: [projectFor("with-project")],
-        hostConnectionStatusByServerId: statuses({
-          empty: "connecting",
-          "with-project": "connecting",
-        }),
-        workspaceMultiplicityByServerId: multiplicity(),
-        currentServerId: "empty",
-        nextServerId: "with-project",
-      }),
-    ).toBe("with-project");
-  });
-
-  it("does not switch from an online host to an offline cached project", () => {
-    expect(
-      resolveNewWorkspaceAutomaticServerId({
-        allServerIds: ["online-empty", "offline-project"],
-        routeServerId: null,
-        lastActiveProject: null,
-        projects: [projectFor("offline-project")],
-        hostConnectionStatusByServerId: statuses({
-          "online-empty": "online",
-          "offline-project": "offline",
-        }),
-        workspaceMultiplicityByServerId: multiplicity(),
-        currentServerId: "online-empty",
-        nextServerId: "offline-project",
-      }),
-    ).toBe("online-empty");
+    ).toEqual({
+      eligibleServerIds: ["host-a", "host-b"],
+      selectedServerId: "host-a",
+      requiresHostSelection: true,
+    });
   });
 });

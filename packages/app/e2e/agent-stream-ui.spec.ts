@@ -182,17 +182,15 @@ test.describe("Agent stream UI", () => {
     });
     await workspace.navigateTo();
     await clickNewChat(page);
-    await page.getByText("Model defaults are still loading").waitFor({
-      state: "hidden",
-      timeout: 30_000,
-    });
     await expectComposerVisible(page);
     await selectModel(page, "Five minute stream");
 
     const prompt = "Stream for delayed authoritative history scroll-away test.";
     const composer = page.getByRole("textbox", { name: "Message agent..." }).first();
     await composer.fill(prompt);
-    await page.getByRole("button", { name: "Send message" }).click();
+    const sendButton = page.getByRole("button", { name: "Send message" });
+    await expect(sendButton).toBeEnabled({ timeout: 30_000 });
+    await sendButton.click();
     await page.getByText(prompt, { exact: true }).first().waitFor({
       state: "visible",
       timeout: 30_000,
@@ -312,12 +310,15 @@ test.describe("Agent stream UI", () => {
         .filter({ hasNotText: "Thinking" })
         .getByRole("button");
       await expect.poll(() => toolCalls.count()).toBeGreaterThan(0);
-      const firstToolCall = toolCalls.nth(0);
-      await firstToolCall.click();
-      await expect(firstToolCall).toHaveAttribute("aria-expanded", "true");
+      const expandedToolCalls = page
+        .getByTestId("tool-call-badge")
+        .filter({ hasNotText: "Thinking" })
+        .getByRole("button", { expanded: true });
+      await toolCalls.nth(0).click();
+      await expect(expandedToolCalls).toHaveCount(1);
 
       await page.getByRole("button", { name: "Collapse all tool calls" }).click();
-      await expect(firstToolCall).toHaveAttribute("aria-expanded", "false");
+      await expect(expandedToolCalls).toHaveCount(0);
       await expect(firstReasoning).toHaveAttribute("aria-expanded", "false");
       const firstReasoningHandle = await firstReasoning.elementHandle();
       if (!firstReasoningHandle) {
@@ -416,7 +417,8 @@ test.describe("Agent stream UI", () => {
         scroll.append(spacer);
         scroll.dispatchEvent(new Event("scroll", { bubbles: true }));
       });
-      await expect(controls).toHaveCount(0);
+      await expect(controls).toBeVisible();
+      await expect(page.getByRole("button", { name: "Collapse all tool calls" })).toBeVisible();
       await expect(page.getByRole("button", { name: "Scroll to bottom" })).toBeVisible();
     } finally {
       await agent.cleanup();
@@ -494,14 +496,12 @@ test.describe("Agent stream UI", () => {
     const workspace = await withWorkspace({ prefix: "stream-first-app-turn-timer-" });
     await workspace.navigateTo();
     await clickNewChat(page);
-    await page.getByText("Model defaults are still loading").waitFor({
-      state: "hidden",
-      timeout: 30_000,
-    });
     const prompt = "Stream briefly for first app-created turn timer test.";
     const composer = page.getByRole("textbox", { name: "Message agent..." }).first();
     await composer.fill(prompt);
-    await page.getByRole("button", { name: "Send message" }).click();
+    const sendButton = page.getByRole("button", { name: "Send message" });
+    await expect(sendButton).toBeEnabled({ timeout: 30_000 });
+    await sendButton.click();
     await page.getByText(prompt, { exact: true }).first().waitFor({ state: "visible" });
     await awaitAssistantMessage(page);
     await expectInlineWorkingIndicator(page);

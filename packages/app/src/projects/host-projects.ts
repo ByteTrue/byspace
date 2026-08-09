@@ -4,16 +4,13 @@ import { buildHostProjectList, type HostProjectListItem } from "@/projects/host-
 
 export {
   buildHostProjectList,
-  canCreateWorkspaceForHostProject,
   canCreateWorktreeForProjectKind,
-  filterWorkspaceProjectsForHost,
   getHostProjectId,
   getHostProjectSourceDirectory,
+  getWorkspaceCreationHosts,
   hostProjectFromRoute,
-  hostProjectFromWorkspace,
-  resolveInitialWorkspaceProject,
-  resolveInitialWorktreeProject,
   resolveSelectedHostProject,
+  resolveHostProjectWorkspaceIdentity,
   type HostProjectListItem,
   type HostProjectRouteContext,
 } from "@/projects/host-project-model";

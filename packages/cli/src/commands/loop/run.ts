@@ -174,6 +174,7 @@ export async function runLoopRunCommand(
   try {
     client = (await connectToDaemon({
       host: options.host,
+      useAgentCliToken: true,
     })) as unknown as LoopDaemonClient;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

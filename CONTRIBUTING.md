@@ -1,56 +1,83 @@
 # Contributing to BySpace
 
-BySpace is an opinionated product maintained by one person right now.
+Thank you for taking the time to contribute to BySpace.
 
-The product covers the hosted Web app, local daemon and CLI, encrypted relay, and many agent providers.
+## Philosophy
 
-Contributing takes a lot of context that is very hard to transfer. That's why product, design, architecture, and workflow decisions are currently all made by the maintainer.
+BySpace is an opinionated product built around a hosted browser app, a local daemon and CLI, an encrypted relay, and multiple agent providers. Read [the product direction](docs/product.md) before proposing product or design changes.
 
-## Becoming a maintainer
+The project is maintained by one person, so product fit, a focused scope, composability, and a quality bar that can be maintained over time all matter. The `docs/` directory is the source of truth for system and process decisions; a pull request must follow those documents rather than replacing them with a second policy in prose or code comments.
 
-There's no formal process to become a maintainer, if you consistently contribute and help out, you'll become one.
+## Issues and feature requests
 
-Here's the progression:
+Open a [GitHub issue](https://github.com/ByteTrue/byspace/issues) for a bug or feature request. Explain the workflow and problem, not only the requested implementation:
 
-1. Get involved in the community: answer questions in Discord and on GitHub
-2. Triage bugs: replicate and help fix them
-3. Work on maintainer-approved features
+- What are you trying to do?
+- What happens today?
+- Where does BySpace get in the way?
+- What would the flow look like if it worked?
 
-The reason for this progression is so that you can gain all the context you need to take on more responsibility, so that I can see if you have what it takes to be a maintainer.
-
-Learning on the job is fine, I do not care how many years of experience you have, what I care about is that you get the vision and want to contribute.
+For a bug, include reproduction steps, the BySpace version, browser and host OS, agent provider when relevant, and raw evidence such as logs, command output, screenshots, or video. Redact secrets. If an agent helped investigate, include its raw evidence and reproduction steps rather than relying on its diagnosis.
 
 ## Pull requests
 
-✅ Will be accepted
+Anyone can open a pull request, but there is no guarantee that it will be merged. Link the issue first and keep the change focused.
 
-- Keep it to one focused change
-- Link to an issue
-- Explain the problem you're solving
-- Include repro steps if it's a bug
-- Include QA/testing evidence
-- UI changes need screenshots or video for every affected platform: iOS, Android, desktop, and web
-- If you only tested one platform, say that clearly
+Open the pull request as a draft if the work is not ready, if you want to run checks, or if you want early feedback on direction. Mark it ready only when you want maintainer review.
+
+✅ Likely to be accepted
+
+- Fits the product direction and the linked issue
+- Makes one focused change with explicit goals and non-goals
+- Explains the problem in terms of a real user flow
+- Addresses review feedback
+- Includes QA evidence and focused automated tests
+- Includes screenshots or video for UI changes at every affected browser viewport
+- States what was tested and what was not
+- Keeps maintainer edits enabled
 
 ⛔️ Will be rejected
 
-- Bundle unrelated changes
-- Fail basic checks like typecheck, formatting or linting
-- Add a feature or design change that wasn't discussed first
-- Submit no evidence of testing
-- Skip the linked issue
-- Clearly fully AI-generated PR
+- Bundles unrelated changes
+- Fails required checks
+- Ignores review feedback
+- Introduces an unapproved product or design direction
+- Omits the linked issue, QA evidence, or applicable tests
+- Is clearly fully AI-generated and not understood, reviewed, and tested by the contributor
 
-## Requesting features
+A pull request may be narrowed, refactored, redesigned, deferred, or closed without a detailed review. Prior alignment improves the chance of acceptance but does not replace evidence.
 
-If you need a feature implemented, create a Github issue or a thread in Discord.
+## QA evidence
 
-Explain the problem you want to solve: your use case, where BySpace falls short today, and the flow you expect.
+QA evidence is required. Include concrete evidence such as:
+
+- Shell commands with their relevant output
+- Focused tests added or updated, with results
+- Reproduction before the fix and confirmation after it
+- Before-and-after screenshots for static UI
+- Video for interactions, animation, or timing
+- Relevant logs, requests, and responses
+
+Behavior changes and bug fixes need tests that exercise the real behavior. UI changes need evidence at every affected browser viewport. Follow [the testing guide](docs/testing.md) for test shape and local command limits, and [the development guide](docs/development.md) for build and runtime workflows.
+
+## BySpace-specific change policies
+
+Some changes have stricter source-of-truth processes:
+
+- **Upstream synchronization:** follow [the upstream sync process](docs/upstream-sync.md). The pull request must carry its frozen source references, dispositions, focused and full validation, fidelity review, and exact-SHA CI evidence.
+- **Release preparation:** follow [the release playbook](docs/release.md) and [release engineering controls](docs/release-engineering.md). Include exact-SHA CI evidence, the target channel evidence, and proof that the other channel remained unchanged.
+
+Do not duplicate or weaken those policies in a pull request description. Link to the authoritative documents and provide the evidence they require.
 
 ## AI assistance
 
-Using AI to help write code is fine, but you must:
+Using AI to help write code or a pull request description is fine, but you must:
 
-- Ensure your agents read the docs
-- Understand the code you submit
-- Review and test the code yourself
+- Ensure the agents read the relevant docs
+- Understand and review the submitted change
+- Run the checks and verify the evidence yourself
+- Never present generated verification claims as tests you actually ran
+
+## Becoming a maintainer
+
+There is no formal process. Consistently help reproduce bugs, review evidence, answer questions, and implement maintainer-aligned work to build the context required for broader responsibility.

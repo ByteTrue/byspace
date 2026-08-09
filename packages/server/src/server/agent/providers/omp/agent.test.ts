@@ -1,7 +1,8 @@
 import { describe, expect, test } from "vitest";
+import { setImmediate as waitForImmediate } from "node:timers/promises";
 
-import type { BySpaceToolCatalog } from "../../tools/types.js";
 import type { OmpNoTurnScheduler, OmpProviderIdleScheduler } from "./agent.js";
+import type { OmpUsagePollScheduler } from "./usage-poller.js";
 import { OmpHarness } from "./test-utils/omp-harness.js";
 
 class ManualIdleScheduler implements OmpProviderIdleScheduler {
@@ -49,27 +50,32 @@ class ManualNoTurnScheduler implements OmpNoTurnScheduler {
   }
 }
 
-function createToolCatalog(): BySpaceToolCatalog {
-  return {
-    tools: new Map([
-      [
-        "create_agent",
-        {
-          name: "create_agent",
-          description: "Create a BySpace agent.",
-          handler: async () => ({ content: [] }),
-        },
-      ],
-    ]),
-    getTool: () => undefined,
-    executeTool: async () => ({ content: [] }),
-  };
+class ManualUsagePollScheduler implements OmpUsagePollScheduler {
+  private readonly polls: Array<{ active: boolean; callback: () => void }> = [];
+
+  schedulePoll(callback: () => void): () => void {
+    const poll = { active: true, callback };
+    this.polls.push(poll);
+    return () => {
+      poll.active = false;
+    };
+  }
+
+  poll(): void {
+    const poll = this.polls.shift();
+    if (!poll) throw new Error("OMP has not scheduled a context usage poll");
+    if (poll.active) poll.callback();
+  }
+
+  activePollCount(): number {
+    return this.polls.filter((poll) => poll.active).length;
+  }
 }
 
 describe("OMP agent client and session", () => {
-  test("owns launch configuration and registers native host tools", async () => {
+  test("owns launch configuration", async () => {
     const omp = new OmpHarness();
-    await omp.start({ modeId: "ask" }, createToolCatalog());
+    await omp.start({ modeId: "ask" });
 
     expect(omp.launchConfiguration()).toEqual({
       cwd: "/tmp/byspace-omp-agent-test",
@@ -77,12 +83,8 @@ describe("OMP agent client and session", () => {
       modeId: "ask",
       argv: ["omp", "--mode", "rpc-ui", "--approval-mode", "always-ask"],
     });
-    expect(omp.registeredHostTools()).toEqual([
-      [expect.objectContaining({ name: "create_agent" })],
-    ]);
     expect(omp.capabilities()).toMatchObject({
       supportsMcpServers: false,
-      supportsNativeBySpaceTools: true,
     });
   });
 
@@ -107,7 +109,7 @@ describe("OMP agent client and session", () => {
 
   test("passes --thinking when a thinking option is provided", async () => {
     const omp = new OmpHarness();
-    await omp.start({ modeId: "ask", thinkingOptionId: "xhigh" }, createToolCatalog());
+    await omp.start({ modeId: "ask", thinkingOptionId: "xhigh" });
 
     expect(omp.launchConfiguration().argv).toEqual([
       "omp",
@@ -131,6 +133,7 @@ describe("OMP agent client and session", () => {
       { type: "user_message", text: "hello OMP", messageId: "user-1" },
       { type: "assistant_message", text: "hello from OMP", messageId: "omp-assistant-1" },
     ]);
+    expect(omp.eventTypes().slice(0, 2)).toEqual(["turn_started", "timeline"]);
     expect(omp.completedTurnCount()).toBe(1);
   });
 
@@ -146,6 +149,45 @@ describe("OMP agent client and session", () => {
       finalText: "empty terminal payload recovered",
     });
     expect(omp.completedTurnCount()).toBe(1);
+  });
+
+  test("starts and stops context usage polling with the active turn", async () => {
+    const scheduler = new ManualUsagePollScheduler();
+    const omp = new OmpHarness({ usagePollScheduler: scheduler });
+    await omp.start();
+    omp.runtime().stats = {
+      contextUsage: { tokens: 130, contextWindow: 200_000 },
+    };
+    omp.runtime().state.contextUsage = { tokens: 99, contextWindow: 100_000 };
+    await omp.requireStartTurn("keep working");
+    expect(scheduler.activePollCount()).toBe(1);
+    scheduler.poll();
+    await waitForImmediate();
+    expect(omp.usageUpdates()).toEqual([
+      {
+        inputTokens: 0,
+        cachedInputTokens: 0,
+        outputTokens: 0,
+        totalCostUsd: 0,
+        contextWindowMaxTokens: 200_000,
+        contextWindowUsedTokens: 130,
+      },
+    ]);
+    expect(scheduler.activePollCount()).toBe(1);
+    omp.runtime().abortError = new Error("abort unavailable");
+    await expect(omp.interrupt()).rejects.toThrow("abort unavailable");
+    expect(scheduler.activePollCount()).toBe(1);
+    omp.runtime().abortError = null;
+    await omp.interrupt();
+    expect(scheduler.activePollCount()).toBe(0);
+
+    await omp.runPrompt("finish normally", "done");
+    expect(scheduler.activePollCount()).toBe(0);
+
+    await omp.requireStartTurn("close the session");
+    expect(scheduler.activePollCount()).toBe(1);
+    await omp.close();
+    expect(scheduler.activePollCount()).toBe(0);
   });
 
   test("does not accept a follow-up until OMP reports stable idle", async () => {

@@ -8,12 +8,72 @@ export interface FocusClaimStep {
   shouldRequest: boolean;
 }
 
-interface FocusClaimReadiness {
+export interface FocusClaimReadiness {
   isWorkspaceFocused: boolean;
-  isAppVisible: boolean;
+  isPaneFocused: boolean;
+  isAppActivelyVisible: boolean;
   isClientReady: boolean;
   isConnected: boolean;
   isRendererReady: boolean;
+}
+
+interface TerminalSize {
+  rows: number;
+  cols: number;
+}
+
+export function resolveTerminalResizeClaim(input: {
+  size: TerminalSize;
+  previousSentSize: TerminalSize | null;
+  shouldClaim: boolean;
+  forceClaim: boolean;
+  supportsTerminalSizeOwnership: boolean;
+  hasClaimedSize: boolean;
+  readiness: FocusClaimReadiness;
+}): { shouldSend: boolean; intent: "claim" | "update" } {
+  const intent = input.shouldClaim ? "claim" : "update";
+  if (intent === "claim") {
+    if (!canRequestFocusClaim(input.readiness)) {
+      return { shouldSend: false, intent };
+    }
+    if (input.supportsTerminalSizeOwnership) {
+      return { shouldSend: true, intent };
+    }
+    return {
+      shouldSend:
+        input.forceClaim ||
+        input.previousSentSize === null ||
+        input.previousSentSize.rows !== input.size.rows ||
+        input.previousSentSize.cols !== input.size.cols,
+      intent,
+    };
+  }
+
+  if (
+    !input.supportsTerminalSizeOwnership ||
+    !input.hasClaimedSize ||
+    !canRequestOwnedSizeUpdate(input.readiness)
+  ) {
+    return { shouldSend: false, intent };
+  }
+
+  return {
+    shouldSend:
+      input.previousSentSize === null ||
+      input.previousSentSize.rows !== input.size.rows ||
+      input.previousSentSize.cols !== input.size.cols,
+    intent,
+  };
+}
+
+function canRequestOwnedSizeUpdate(input: FocusClaimReadiness): boolean {
+  return (
+    input.isWorkspaceFocused &&
+    input.isAppActivelyVisible &&
+    input.isClientReady &&
+    input.isConnected &&
+    input.isRendererReady
+  );
 }
 
 export const EMPTY_FOCUS_CLAIM_STATE: FocusClaimState = {
@@ -24,28 +84,12 @@ export const EMPTY_FOCUS_CLAIM_STATE: FocusClaimState = {
 export function canRequestFocusClaim(input: FocusClaimReadiness): boolean {
   return (
     input.isWorkspaceFocused &&
-    input.isAppVisible &&
+    input.isPaneFocused &&
+    input.isAppActivelyVisible &&
     input.isClientReady &&
     input.isConnected &&
     input.isRendererReady
   );
-}
-
-/**
- * Whether a measured size has to reach the PTY.
- *
- * A passive refit (the post-mount fit ladder, font metrics settling, the WebGL renderer swap
- * with its own cell dimensions, a window visibility restore) must not take the PTY away from
- * another client, so it arrives with `shouldClaim: false`. But once this client has claimed a
- * size, those refits are the only thing that knows our columns moved: dropping them leaves the
- * PTY — and therefore everything the app paints — narrower or wider than what we render, until
- * some input re-claims.
- */
-export function shouldSendTerminalResize(input: {
-  shouldClaim: boolean;
-  hasClaimedSize: boolean;
-}): boolean {
-  return input.shouldClaim || input.hasClaimedSize;
 }
 
 export function reconcileFocusClaim(
@@ -55,23 +99,19 @@ export function reconcileFocusClaim(
   if (input.key === null) {
     return { state: EMPTY_FOCUS_CLAIM_STATE, shouldRequest: false };
   }
-  if (state.claimedKey === input.key) {
-    return {
-      state: { claimedKey: input.key, requestedKey: null },
-      shouldRequest: false,
-    };
-  }
+  const claimedKey = state.claimedKey === input.key ? input.key : null;
+  const requestedKey = state.requestedKey === input.key ? input.key : null;
   if (!input.canRequest) {
     return {
-      state: { claimedKey: state.claimedKey, requestedKey: null },
+      state: { claimedKey, requestedKey: null },
       shouldRequest: false,
     };
   }
-  if (state.requestedKey === input.key) {
-    return { state, shouldRequest: false };
+  if (requestedKey) {
+    return { state: { claimedKey, requestedKey }, shouldRequest: false };
   }
   return {
-    state: { claimedKey: state.claimedKey, requestedKey: input.key },
+    state: { claimedKey, requestedKey: input.key },
     shouldRequest: true,
   };
 }
@@ -85,6 +125,6 @@ export function settleFocusClaim(
   }
   return {
     claimedKey: input.sent ? input.key : state.claimedKey,
-    requestedKey: null,
+    requestedKey: input.sent ? input.key : null,
   };
 }

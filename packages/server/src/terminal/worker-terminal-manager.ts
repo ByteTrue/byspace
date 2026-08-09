@@ -100,6 +100,7 @@ interface WorkerTerminalManagerOptions {
   requestTimeoutMs?: number;
   forkWorker?: () => TerminalWorkerProcess;
   getTerminalActivityUrl?: () => string | null;
+  agentCliToken?: string;
 }
 
 function createActivityToken(): string {
@@ -712,6 +713,12 @@ export function createWorkerTerminalManager(
           type: "createTerminal",
           options: {
             ...options,
+            env: {
+              ...options.env,
+              ...(managerOptions.agentCliToken
+                ? { BYSPACE_CLI_TOKEN: managerOptions.agentCliToken }
+                : {}),
+            },
             id: terminalId,
             activityToken,
             activityUrl: terminalActivityUrl,

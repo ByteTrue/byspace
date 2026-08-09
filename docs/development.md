@@ -139,6 +139,15 @@ tools. It defaults to the agent-scoped catalog; use
 `-- --scope=top-level` for the unaffiliated `/mcp/agents` shape and `-- --json`
 for machine-readable output.
 
+## Agent-assisted project setup
+
+Project Settings exposes **Configure with agent** when `byspace.json` is absent and
+**Review with agent** when it exists. The action ensures the host's bundled skills are
+current, then opens a project-scoped draft that invokes `byspace-project-setup`. The
+skill inspects repository evidence, recommends only the worktree setup, common commands,
+and long-running services that improve BySpace readiness, and waits for approval before
+editing files. It does not expand into CI/CD, deployment, or general project scaffolding.
+
 ## byspace.json service scripts
 
 `worktree.setup` and `worktree.teardown` accept either a multiline shell script or an array
@@ -213,7 +222,7 @@ Build the artifact for packaging or measurement with:
 npm run build:daemon-web-ui
 ```
 
-This exports the browser Web app and copies it into `packages/server/dist/server/web-ui`, precompressing `.html`, `.js`, `.css`, and JSON assets as `.br` and `.gz`.
+This exports the browser Web app and copies it into `packages/server/dist/server/web-ui`, precompressing `.html`, `.js`, `.css`, and JSON assets as `.br` and `.gz`. The root `npm run build` also refreshes this embedded copy after building every workspace, so a production-style local rebuild cannot retain an older Web UI.
 
 Measured bundle size for a standard Expo web export:
 

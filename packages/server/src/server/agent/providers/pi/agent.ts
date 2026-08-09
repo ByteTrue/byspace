@@ -973,11 +973,15 @@ function readActiveAskUserDialog(toolName: string, args: unknown): ActiveAskUser
   };
 }
 
+function isPiQuestionnaireTool(toolName: string): boolean {
+  return toolName === "ask_user_question" || toolName === "question";
+}
+
 function readPiQuestionnaireQuestions(
   toolName: string,
   args: unknown,
 ): PiQuestionnaireQuestion[] | null {
-  if (toolName !== "ask_user_question" || !isRecord(args) || !Array.isArray(args.questions)) {
+  if (!isPiQuestionnaireTool(toolName) || !isRecord(args) || !Array.isArray(args.questions)) {
     return null;
   }
 
@@ -1020,7 +1024,7 @@ function readPiQuestionnaireQuestions(
       question: rawQuestion.question,
       header,
       options,
-      multiSelect: rawQuestion.multiSelect === true,
+      multiSelect: rawQuestion.multiSelect === true || rawQuestion.multiple === true,
     });
   }
 
@@ -2597,7 +2601,7 @@ export class PiRpcAgentSession implements AgentSession {
       this.activeAskUserDialog = null;
       this.pendingCombinedAskUserResponse = null;
     }
-    if (event.toolName === "ask_user_question") {
+    if (isPiQuestionnaireTool(event.toolName)) {
       if (this.activePiQuestionnaire) {
         this.pendingExtensionUiRequests.delete(this.activePiQuestionnaire.permissionId);
       }
@@ -2645,12 +2649,14 @@ export class PiRpcAgentSession implements AgentSession {
     event: Extract<PiAgentSessionEvent, { type: "message_update" }>,
     turnId: string | undefined,
   ): void {
-    if (event.message.role !== "assistant") {
+    // Pi >= 0.84 strips the cumulative message from message_update (deltas only);
+    // message_start/message_end remain authoritative.
+    if (event.message && event.message.role !== "assistant") {
       return;
     }
     if (event.assistantMessageEvent.type === "text_delta") {
       // Pi-compatible runtimes may emit updates without a preceding message_start.
-      this.activeAssistantMessageId ??= event.message.responseId || randomUUID();
+      this.activeAssistantMessageId ??= event.message?.responseId || randomUUID();
       this.emit({
         type: "timeline",
         provider: this.provider,

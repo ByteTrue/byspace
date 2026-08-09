@@ -1,3 +1,5 @@
+import { HostBadge } from "@/hosts/host-badge";
+import { useHostBadges } from "@/hosts/use-host-badges";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import {
   memo,
@@ -185,6 +187,7 @@ import {
 } from "@/screens/workspace/terminals/use-workspace-terminals";
 import { useDaemonConfig } from "@/hooks/use-daemon-config";
 import {
+  resolveTerminalProfileLaunch,
   getTerminalProfileIcon,
   resolveTerminalProfiles,
 } from "@bytetrue/byspace-protocol/terminal-profiles";
@@ -1003,11 +1006,7 @@ function HeaderMenuProfileItem({
   onCreateTerminalWithProfile,
 }: HeaderMenuProfileItemProps) {
   const handleSelect = useCallback(() => {
-    onCreateTerminalWithProfile({
-      name: profile.name,
-      command: profile.command,
-      args: profile.args,
-    });
+    onCreateTerminalWithProfile(resolveTerminalProfileLaunch(profile, ""));
   }, [onCreateTerminalWithProfile, profile]);
 
   const icon = getTerminalProfileIcon(profile);
@@ -1089,7 +1088,7 @@ function WorkspaceHeaderMenu({
   );
 
   return (
-    <DropdownMenu>
+    <DropdownMenu compactMode="sheet">
       <DropdownMenuTrigger
         testID="workspace-header-menu-trigger"
         style={isMobile ? styles.compactHeaderActionButton : styles.headerActionButton}
@@ -1234,6 +1233,7 @@ function WorkspaceHeaderTitleBar({
   onScriptTerminalStarted,
   onViewScriptTerminal,
 }: WorkspaceHeaderTitleBarProps) {
+  const hostBadge = useHostBadges({ enabled: isMobile }).get(normalizedServerId);
   return (
     <View style={styles.headerTitleContainer}>
       {isLoading ? (
@@ -1254,6 +1254,7 @@ function WorkspaceHeaderTitleBar({
           ) : null}
         </View>
       )}
+      {isMobile && hostBadge ? <HostBadge badge={hostBadge} /> : null}
       <View style={styles.compactHeaderMenuCluster}>
         <WorkspaceHeaderMenu
           normalizedServerId={normalizedServerId}

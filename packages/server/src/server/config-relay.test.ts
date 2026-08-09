@@ -25,6 +25,32 @@ describe("daemon relay config", () => {
     await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
   });
 
+  test("defaults relay off for a new home and keeps legacy homes enabled", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "byspace-config-relay-"));
+    roots.push(root);
+    const newHome = path.join(root, ".byspace");
+    expect(loadConfig(newHome, { env: {} }).relayEnabled).toBe(false);
+
+    const legacyHome = await createBySpaceHome({ version: 1, daemon: {} });
+    expect(loadConfig(legacyHome, { env: {} }).relayEnabled).toBe(true);
+  });
+
+  test.each([
+    { label: "environment true", env: { BYSPACE_RELAY_ENABLED: "true" }, expected: true },
+    { label: "environment false", env: { BYSPACE_RELAY_ENABLED: "false" }, expected: false },
+    { label: "CLI true", env: {}, cli: { relayEnabled: true }, expected: true },
+    { label: "CLI false", env: {}, cli: { relayEnabled: false }, expected: false },
+  ])("applies $label as an immutable relay override", async ({ env, cli, expected }) => {
+    const home = await createBySpaceHome({
+      version: 1,
+      daemon: { relay: { enabled: !expected } },
+    });
+    const config = loadConfig(home, { env, cli });
+
+    expect(config.relayEnabled).toBe(expected);
+    expect(config.relayEnabledMutable).toBe(false);
+  });
+
   test("loads relay TLS from env, persisted config, and hosted relay fallback", async () => {
     const persistedHome = await createBySpaceHome({
       version: 1,

@@ -361,7 +361,7 @@ OMP ships as a first-class built-in provider option. It is disabled by default; 
 }
 ```
 
-Custom OMP profiles should extend `omp`. They inherit the OMP adapter's `rpc-ui` approvals, native BySpace host tools, provider-managed subagents, and import behavior:
+Custom OMP profiles should extend `omp`. They inherit the OMP adapter's `rpc-ui` approvals, provider-managed subagents, and import behavior; orchestration remains available through the shared BySpace skill and CLI:
 
 ```json
 {
@@ -466,7 +466,7 @@ Required fields for ACP providers:
 - `label`
 - `command` — the command to spawn the agent process (must support ACP over stdio)
 
-BySpace tools such as subagent creation come from the shared internal tool catalog. ACP providers receive those tools through the MCP fallback by default because ACP exposes `mcpServers`, not BySpace's native tool catalog. Some ACP adapters cannot create sessions when `mcpServers` is non-empty. Disable injected MCP for those providers with `params.supportsMcpServers: false`:
+BySpace orchestration tools are available through the bundled skill and `byspace tool` CLI, so ACP providers do not need an injected MCP server. `params.supportsMcpServers` controls only user-configured MCP servers. Set it to `false` when an ACP adapter cannot create sessions with non-empty `mcpServers`:
 
 ```json
 {
@@ -584,6 +584,8 @@ When you launch an agent with an ACP provider:
 4. BySpace creates a session and sends prompts through the ACP protocol
 5. The agent streams responses, tool calls, and permission requests back over stdout
 
+Every ACP provider exposes an **Auto Accept** toggle. Enable it per session to let BySpace approve ACP permission requests without surfacing each prompt. If the provider sends no allow option, BySpace leaves the request for you to answer. Unattended agents enable Auto Accept unless you explicitly disable it.
+
 Models and modes are discovered dynamically at runtime from the agent process. If you want to override the model list (e.g., to curate which models appear in the UI), use the `models` field:
 
 ```json
@@ -691,7 +693,7 @@ Each entry in the `models` array:
 
 The built-in `claude` provider appends concrete model IDs from `~/.claude/settings.json` to its first-party Claude model list. BySpace reads the top-level `model` field and these `env` keys: `ANTHROPIC_MODEL`, `ANTHROPIC_SMALL_FAST_MODEL`, `ANTHROPIC_DEFAULT_OPUS_MODEL`, `ANTHROPIC_DEFAULT_SONNET_MODEL`, and `ANTHROPIC_DEFAULT_HAIKU_MODEL`.
 
-This lets users who already configured Claude Code for Bedrock, OpenRouter, ollama, Z.AI, or another Anthropic-compatible gateway select the exact model ID in BySpace. When `agents.providers.claude.models` is set it **replaces** both the hardcoded first-party Claude list and any settings.json-discovered entries; use `agents.providers.claude.additionalModels` to keep the first-party list and append curated entries on top.
+This lets users who already configured Claude Code for Bedrock, OpenRouter, ollama, Z.AI, or another Anthropic-compatible gateway select the exact model ID in BySpace. Explicit model IDs are passed unchanged to Claude Code, even when the same string is a compatibility alias for a built-in model. When `agents.providers.claude.models` is set it **replaces** both the hardcoded first-party Claude list and any settings.json-discovered entries; use `agents.providers.claude.additionalModels` to keep the first-party list and append curated entries on top.
 
 ### Gotcha: `extends: "claude"` with third-party endpoints
 

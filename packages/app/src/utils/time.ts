@@ -112,3 +112,30 @@ export function formatDuration(durationMs: number): string {
   const remMinutes = totalMinutes % 60;
   return remMinutes === 0 ? `${hours}h` : `${hours}h ${remMinutes}m`;
 }
+
+export type RelativeTimeResolution = "minute" | "hour" | "day" | "static";
+
+export interface CompactTimeAgo {
+  label: string;
+  resolution: RelativeTimeResolution;
+}
+
+const COMPACT_MINUTE_MS = 60_000;
+const COMPACT_HOUR_MS = 60 * COMPACT_MINUTE_MS;
+const COMPACT_DAY_MS = 24 * COMPACT_HOUR_MS;
+
+export function describeCompactTimeAgo(date: Date, now: Date = new Date()): CompactTimeAgo {
+  const elapsedMs = now.getTime() - date.getTime();
+  if (elapsedMs < COMPACT_MINUTE_MS) return { label: "now", resolution: "minute" };
+  if (elapsedMs < COMPACT_HOUR_MS) {
+    return { label: `${Math.floor(elapsedMs / COMPACT_MINUTE_MS)}m`, resolution: "minute" };
+  }
+  if (elapsedMs < COMPACT_DAY_MS) {
+    return { label: `${Math.floor(elapsedMs / COMPACT_HOUR_MS)}h`, resolution: "hour" };
+  }
+  if (elapsedMs < 7 * COMPACT_DAY_MS) {
+    return { label: `${Math.floor(elapsedMs / COMPACT_DAY_MS)}d`, resolution: "day" };
+  }
+  const month = date.toLocaleDateString("en-US", { month: "short" });
+  return { label: `${month} ${date.getDate()}`, resolution: "static" };
+}

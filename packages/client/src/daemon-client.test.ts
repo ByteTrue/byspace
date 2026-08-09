@@ -464,6 +464,50 @@ test("passes password as HTTP bearer header and WebSocket subprotocol", async ()
   });
 });
 
+test.each([
+  ["an invalid name", { "Bad Header": "value" }, "Invalid HTTP header name"],
+  ["a CR/LF value", { Foo: "first\r\nsecond" }, "Invalid HTTP header value"],
+  ["a case-insensitive duplicate", { Foo: "first", foo: "second" }, "Duplicate HTTP header name"],
+])("rejects custom headers with %s", (_label, headers, expectedError) => {
+  expect(
+    () =>
+      new DaemonClient({
+        url: "ws://test",
+        clientId: "clsk_unit_test",
+        headers,
+        reconnect: { enabled: false },
+      }),
+  ).toThrow(expectedError);
+});
+
+test("merges custom headers and gives password Authorization precedence", async () => {
+  const logger = createMockLogger();
+  const mock = createMockTransport();
+  const transportFactory = vi.fn(() => mock.transport);
+
+  const client = new DaemonClient({
+    url: "ws://test",
+    clientId: "clsk_unit_test",
+    password: "shared-secret",
+    authHeader: "Bearer legacy-secret",
+    headers: { authorization: "Bearer custom-secret", "X-Custom": "custom-value" },
+    logger,
+    reconnect: { enabled: false },
+    transportFactory,
+  });
+  clients.push(client);
+
+  const connectPromise = client.connect();
+  mock.triggerOpen();
+  await connectPromise;
+
+  expect(transportFactory).toHaveBeenCalledWith({
+    url: "ws://test",
+    headers: { Authorization: "Bearer shared-secret", "X-Custom": "custom-value" },
+    protocols: ["byspace.bearer.shared-secret"],
+  });
+});
+
 test("advertises client capabilities in hello", async () => {
   const logger = createMockLogger();
   const mock = createMockTransport();
@@ -488,6 +532,7 @@ test("advertises client capabilities in hello", async () => {
     clientType: "cli",
     protocolVersion: 1,
     capabilities: {
+      compact_provider_snapshots: true,
       custom_mode_icons: true,
       provider_subagents: true,
       reasoning_merge_enum: true,
@@ -836,6 +881,51 @@ test("honors explicit fetchAgentTimeline timeout below the session RPC default",
 
   await vi.advanceTimersByTimeAsync(1);
   await expect(responsePromise).rejects.toThrow("Timeout waiting for message (2000ms)");
+});
+
+test("lists the full agent prompt index", async () => {
+  const logger = createMockLogger();
+  const mock = createMockTransport();
+  const client = new DaemonClient({
+    url: "ws://test",
+    clientId: "clsk_unit_test",
+    logger,
+    reconnect: { enabled: false },
+    transportFactory: () => mock.transport,
+  });
+  clients.push(client);
+
+  const connectPromise = client.connect();
+  mock.triggerOpen();
+  await connectPromise;
+
+  const responsePromise = client.listAgentTimelinePrompts("agent-1", {
+    requestId: "req-prompts-1",
+  });
+
+  expect(parseSentFrame(mock.sent[0])).toEqual({
+    type: "agent.timeline.list_prompts.request",
+    requestId: "req-prompts-1",
+    agentId: "agent-1",
+  });
+
+  mock.triggerMessage(
+    wrapSessionMessage({
+      type: "agent.timeline.list_prompts.response",
+      payload: {
+        requestId: "req-prompts-1",
+        agentId: "agent-1",
+        epoch: "epoch-1",
+        prompts: [{ seq: 1, timestamp: "2026-01-01T00:00:00.000Z", preview: "First prompt" }],
+        error: null,
+      },
+    }),
+  );
+
+  await expect(responsePromise).resolves.toMatchObject({
+    epoch: "epoch-1",
+    prompts: [{ seq: 1, preview: "First prompt" }],
+  });
 });
 
 test("honors explicit fetchAgents timeout below the session RPC default", async () => {
@@ -3912,6 +4002,36 @@ test("imports an agent by provider handle id", async () => {
   });
 });
 
+test("cancelling a pending dictation start settles it and allows another start", async () => {
+  const logger = createMockLogger();
+  const mock = createMockTransport();
+  const client = new DaemonClient({
+    url: "ws://test",
+    clientId: "clsk_unit_test",
+    logger,
+    reconnect: { enabled: false },
+    transportFactory: () => mock.transport,
+  });
+  clients.push(client);
+
+  const connectPromise = client.connect();
+  mock.triggerOpen();
+  await connectPromise;
+
+  const cancelledStart = client.startDictationStream("dict-cancelled", "pcm16");
+  client.cancelDictationStream("dict-cancelled");
+  await expect(cancelledStart).rejects.toThrow("Dictation start cancelled");
+
+  const nextStart = client.startDictationStream("dict-next", "pcm16");
+  mock.triggerMessage(
+    wrapSessionMessage({
+      type: "dictation_stream_ack",
+      payload: { dictationId: "dict-next", ackSeq: -1 },
+    }),
+  );
+  await expect(nextStart).resolves.toBeUndefined();
+});
+
 test("uses server-provided dictation finish timeout budget", async () => {
   useHeartbeatClock();
   const logger = createMockLogger();
@@ -4092,6 +4212,81 @@ test("lists available providers via RPC", async () => {
     fetchedAt: "2026-02-12T00:00:00.000Z",
     requestId: request.requestId,
   });
+});
+
+test("requests provider snapshots conditionally and expands the compact response", async () => {
+  const mock = createMockTransport();
+  const client = new DaemonClient({
+    url: "ws://test",
+    clientId: "clsk_provider_snapshot_test",
+    reconnect: { enabled: false },
+    transportFactory: () => mock.transport,
+  });
+  clients.push(client);
+
+  const connectPromise = client.connect();
+  mock.triggerOpen();
+  await connectPromise;
+
+  const promise = client.getProvidersSnapshot({ cwd: "/repo", ifNoneMatch: "previous-hash" });
+  const request = parseSentFrame(mock.sent[0]);
+  expect(request).toMatchObject({
+    type: "get_providers_snapshot_request",
+    cwd: "/repo",
+    ifNoneMatch: "previous-hash",
+  });
+
+  mock.triggerMessage(
+    wrapSessionMessage({
+      type: "get_providers_snapshot_response",
+      payload: {
+        entries: [],
+        compactSnapshot: {
+          entries: [
+            {
+              provider: "pi",
+              status: "ready",
+              enabled: true,
+              models: [
+                { id: "model-a", label: "Model A", thinkingSet: 0 },
+                { id: "model-b", label: "Model B", thinkingSet: 0 },
+              ],
+            },
+          ],
+          thinkingSets: [
+            {
+              options: [{ id: "high", label: "High", isDefault: true }],
+              defaultOptionId: "high",
+            },
+          ],
+        },
+        snapshotHash: "next-hash",
+        generatedAt: "2026-08-04T00:00:00.000Z",
+        requestId: request.requestId,
+      },
+    }),
+  );
+
+  const response = await promise;
+  expect(response.entries[0]?.models).toEqual([
+    {
+      provider: "pi",
+      id: "model-a",
+      label: "Model A",
+      thinkingOptions: [{ id: "high", label: "High", isDefault: true }],
+      defaultThinkingOptionId: "high",
+    },
+    {
+      provider: "pi",
+      id: "model-b",
+      label: "Model B",
+      thinkingOptions: [{ id: "high", label: "High", isDefault: true }],
+      defaultThinkingOptionId: "high",
+    },
+  ]);
+  expect(response.entries[0]?.models?.[0]?.thinkingOptions).toBe(
+    response.entries[0]?.models?.[1]?.thinkingOptions,
+  );
 });
 
 test("lists commands with draft config via RPC", async () => {

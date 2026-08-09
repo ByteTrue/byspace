@@ -45,6 +45,14 @@ it("installs only to the shared and Claude skill roots", () => {
   ]);
 });
 
+it("allows test daemons to isolate the shared skill roots", () => {
+  const userHome = path.join(root, "isolated-user-home");
+  expect(resolveOrchestrationSkillsTargets(root, userHome).installDirs).toEqual([
+    path.join(userHome, ".agents", "skills"),
+    path.join(userHome, ".claude", "skills"),
+  ]);
+});
+
 describe("orchestration skills", () => {
   it("reports missing skills, installs all targets, and preserves unrelated skills", async () => {
     await writeSkill(targets.installDirs[0], "user-skill", "keep me");
@@ -62,6 +70,35 @@ describe("orchestration skills", () => {
     expect(
       await fs.readFile(path.join(targets.installDirs[0], "user-skill", "SKILL.md"), "utf8"),
     ).toBe("keep me");
+  });
+
+  it("excludes development artifacts from installed skills and their digest", async () => {
+    const source = path.join(targets.sourceDir, "byspace-project-setup");
+    const ignoredPaths = [
+      ".git/config",
+      "evals/case/output.md",
+      "node_modules/pkg/index.js",
+      "target/debug/cache",
+      ".venv/bin/python",
+      ".pi-subagents/run/log",
+    ];
+    for (const relativePath of ignoredPaths) {
+      const fullPath = path.join(source, relativePath);
+      await fs.mkdir(path.dirname(fullPath), { recursive: true });
+      await fs.writeFile(fullPath, "generated");
+    }
+
+    expect(await setOrchestrationSkillsInstalled(true, targets)).toBe("up-to-date");
+    for (const installDir of targets.installDirs) {
+      for (const relativePath of ignoredPaths) {
+        await expect(
+          fs.stat(path.join(installDir, "byspace-project-setup", relativePath)),
+        ).rejects.toMatchObject({ code: "ENOENT" });
+      }
+    }
+
+    await fs.writeFile(path.join(source, ignoredPaths[0]), "changed generated output");
+    expect(await getOrchestrationSkillsStatus(targets)).toBe("up-to-date");
   });
 
   it("detects edited content and a missing provider copy, then converges on update", async () => {

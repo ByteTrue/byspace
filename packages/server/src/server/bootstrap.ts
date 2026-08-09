@@ -2,9 +2,9 @@ import express from "express";
 import { createServer as createHTTPServer, type IncomingMessage, type ServerResponse } from "http";
 import { constants, existsSync, unlinkSync } from "fs";
 import { open } from "fs/promises";
-import { randomUUID } from "node:crypto";
 import { hostname as getHostname } from "node:os";
 import path from "node:path";
+import { randomBytes } from "node:crypto";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import type { Logger } from "pino";
 import { z } from "zod";
@@ -90,6 +90,7 @@ function formatListenTarget(listenTarget: ListenTarget | null): string | null {
 }
 
 import { VoiceAssistantWebSocketServer } from "./websocket-server.js";
+import { WorkspaceSetupRuntime } from "./workspace-setup-runtime.js";
 import { createGitHubService } from "../services/github-service.js";
 import {
   createBySpaceWorktree as createRegisteredBySpaceWorktree,
@@ -111,7 +112,11 @@ import type { BySpaceToolRuntimeContext } from "./agent/tools/types.js";
 import { ProviderSnapshotManager } from "./agent/provider-snapshot-manager.js";
 import { bootstrapWorkspaceRegistries } from "./workspace-registry-bootstrap.js";
 import { WorkspaceReconciliationService } from "./workspace-reconciliation-service.js";
-import { FileBackedProjectRegistry, FileBackedWorkspaceRegistry } from "./workspace-registry.js";
+import {
+  FileBackedProjectRegistry,
+  FileBackedWorkspaceRegistry,
+  type WorkspaceArchiveContext,
+} from "./workspace-registry.js";
 import { FileBackedChatService } from "./chat/chat-service.js";
 import { CheckoutDiffManager } from "./checkout-diff-manager.js";
 import { LoopService } from "./loop-service.js";
@@ -130,9 +135,8 @@ import { wrapSessionMessage, type SessionOutboundMessage } from "./messages.js";
 import type { TerminalManager } from "../terminal/terminal-manager.js";
 import { createConfiguredTerminalManager } from "../terminal/terminal-manager-factory.js";
 import { applyTerminalAgentHookSetting } from "../terminal/agent-hooks/terminal-agent-hook-setting.js";
-import { createConnectionOfferV2, encodeOfferToFragmentUrl } from "./connection-offer.js";
 import { loadOrCreateDaemonKeyPair } from "./daemon-keypair.js";
-import { startRelayTransport, type RelayTransportController } from "./relay-transport.js";
+import { RelayRuntime } from "./relay-runtime.js";
 import type { PushNotificationSender } from "./push/notifications.js";
 import { getOrCreateServerId } from "./server-id.js";
 import { resolveDaemonVersion } from "./daemon-version.js";
@@ -161,11 +165,7 @@ import {
 } from "./managed-processes/managed-processes.js";
 import { terminateWithTreeKill } from "../utils/tree-kill.js";
 import { isHostnameAllowed, type HostnamesConfig } from "./hostnames.js";
-import {
-  createRequireBearerMiddleware,
-  isAgentMcpRequestAuthorized,
-  type DaemonAuthConfig,
-} from "./auth.js";
+import { createRequireBearerMiddleware, type DaemonAuthConfig } from "./auth.js";
 import { createWebUiMiddleware } from "./web-ui.js";
 import { WorkspaceAutoName } from "./workspace-auto-name.js";
 import { createGitMutationService } from "./session/git-mutation/git-mutation-service.js";
@@ -187,7 +187,7 @@ function formatHostForHttpUrl(host: string): string {
   return host.includes(":") && !host.startsWith("[") ? `[${host}]` : host;
 }
 
-function resolveAgentMcpClientHost(host: string): string {
+function resolveLocalClientHost(host: string): string {
   if (host === "0.0.0.0") {
     return "127.0.0.1";
   }
@@ -197,22 +197,11 @@ function resolveAgentMcpClientHost(host: string): string {
   return host;
 }
 
-function createAgentMcpBaseUrl(listenTarget: ListenTarget | null): string | null {
-  if (!listenTarget || listenTarget.type !== "tcp") {
-    return null;
-  }
-  const host = resolveAgentMcpClientHost(listenTarget.host);
-  return new URL(
-    "/mcp/agents",
-    `http://${formatHostForHttpUrl(host)}:${listenTarget.port}`,
-  ).toString();
-}
-
 function createTerminalActivityUrl(listenTarget: ListenTarget | null): string | null {
   if (!listenTarget || listenTarget.type !== "tcp") {
     return null;
   }
-  const host = resolveAgentMcpClientHost(listenTarget.host);
+  const host = resolveLocalClientHost(listenTarget.host);
   return new URL(
     "/api/terminal-activity",
     `http://${formatHostForHttpUrl(host)}:${listenTarget.port}`,
@@ -342,7 +331,6 @@ export interface BySpaceDaemonConfig {
   hostnames?: HostnamesConfig;
   trustedProxies?: true | string[];
   mcpEnabled?: boolean;
-  mcpInjectIntoAgents?: boolean;
   autoArchiveAfterMerge?: boolean;
   enableTerminalAgentHooks?: boolean;
   terminalAgentHooks?: MutableDaemonConfig["terminalAgentHooks"];
@@ -354,6 +342,7 @@ export interface BySpaceDaemonConfig {
   agentClients: Partial<Record<AgentProvider, AgentClient>>;
   agentStoragePath: string;
   relayEnabled?: boolean;
+  relayEnabledMutable?: boolean;
   relayEndpoint?: string;
   relayPublicEndpoint?: string;
   relayUseTls?: boolean;
@@ -455,7 +444,8 @@ function createInitialMutableDaemonConfig(config: BySpaceDaemonConfig): MutableD
   );
 
   const initialConfig: MutableDaemonConfig = {
-    mcp: { injectIntoAgents: config.mcpInjectIntoAgents ?? true },
+    relay: { enabled: config.relayEnabled ?? true },
+    mcp: { injectIntoAgents: false },
     providers,
     metadataGeneration: {
       providers: config.metadataGeneration?.providers ?? [],
@@ -487,9 +477,12 @@ export async function createBySpaceDaemon(
     config.byspaceHome,
     createInitialMutableDaemonConfig(config),
     logger,
+    { relayEnabledMutable: config.relayEnabledMutable ?? true },
   );
 
   const serverId = getOrCreateServerId(config.byspaceHome, { logger });
+  const agentCliToken = randomBytes(32).toString("base64url");
+  const runtimeAuth = { ...config.auth, agentCliToken };
   const daemonKeyPair = await loadOrCreateDaemonKeyPair(config.byspaceHome, logger);
   const managedProcesses = createBootstrapManagedProcessRegistry(config, logger);
   // Reconcile the helper-process ledger in the background so it never blocks the
@@ -498,7 +491,7 @@ export async function createBySpaceDaemon(
   void reconcileManagedProcessLedger(managedProcesses, logger).catch((error) => {
     logger.warn({ err: error }, "Failed to reconcile managed helper process ledger");
   });
-  let relayTransport: RelayTransportController | null = null;
+  let relayRuntime: RelayRuntime | null = null;
 
   const staticDir = config.staticDir;
   const downloadTokenTtlMs = config.downloadTokenTtlMs ?? 60000;
@@ -506,15 +499,6 @@ export async function createBySpaceDaemon(
   const downloadTokenStore = new DownloadTokenStore({
     ttlMs: downloadTokenTtlMs,
   });
-
-  // Capability token authenticating the daemon's own agents to the loopback
-  // Agent MCP endpoint (/mcp/agents). Random per daemon run, injected only into
-  // local agent configs and the daemon's own MCP client — never sent to remote
-  // clients — so it cannot be replayed off-box. This lets the injected MCP
-  // authenticate even when the daemon password is set via the app (hash only,
-  // no plaintext available). Mirrors the /api/files/download capability-token
-  // pattern.
-  const agentMcpAuthToken = randomUUID();
 
   const listenTarget = parseListenString(config.listen);
 
@@ -524,6 +508,7 @@ export async function createBySpaceDaemon(
   let workspaceRegistry: FileBackedWorkspaceRegistry | null = null;
   const terminalManager = createConfiguredTerminalManager({
     getTerminalActivityUrl: () => createTerminalActivityUrl(boundListenTarget),
+    agentCliToken,
   });
   applyTerminalAgentHookSetting({ store: daemonConfigStore, logger });
 
@@ -535,6 +520,7 @@ export async function createBySpaceDaemon(
     publicBaseUrl: serviceProxyPublicBaseUrl,
   });
   const scriptRuntimeStore = new WorkspaceScriptRuntimeStore();
+  const workspaceSetupRuntime = new WorkspaceSetupRuntime();
   const configuredHostnames = config.hostnames ?? config.allowedHosts;
   let wsServer: VoiceAssistantWebSocketServer | null = null;
   let serviceProxyListenTarget: ListenTarget | null = null;
@@ -624,7 +610,7 @@ export async function createBySpaceDaemon(
   mountWebUi(app, config, logger);
 
   app.use(
-    createRequireBearerMiddleware(config.auth, (context) => {
+    createRequireBearerMiddleware(runtimeAuth, (context) => {
       logger.warn(context, "Rejected HTTP request with invalid daemon password");
     }),
   );
@@ -755,10 +741,7 @@ export async function createBySpaceDaemon(
     providerDefinitions: initialAgentManagerState.providerDefinitions,
     registry: agentStorage,
     appendSystemPrompt: config.appendSystemPrompt,
-    onWorkspaceStateMayHaveChanged: ({ cwd }) => {
-      workspaceGitService.onWorkspaceStateMayHaveChanged(cwd);
-    },
-    mcpAuthToken: agentMcpAuthToken,
+    cliAuthToken: agentCliToken,
     logger,
   });
 
@@ -785,6 +768,7 @@ export async function createBySpaceDaemon(
     workspaceRegistry,
     logger,
     workspaceGitService,
+    stopWorkspaceSetup: (workspaceId) => workspaceSetupRuntime.stop(workspaceId),
   });
   void (async () => {
     try {
@@ -802,22 +786,31 @@ export async function createBySpaceDaemon(
   })();
   await chatService.initialize();
   logger.info({ elapsed: elapsed() }, "Chat service initialized");
-  const checkoutDiffManager = new CheckoutDiffManager({
-    logger,
-    byspaceHome: config.byspaceHome,
-    workspaceGitService,
-  });
-  const archiveWorkspaceRecordExternal = async (workspaceId: string) => {
+  const checkoutDiffManager = new CheckoutDiffManager(workspaceGitService);
+  const archiveWorkspaceRecordExternal = async (
+    workspaceId: string,
+    context?: WorkspaceArchiveContext,
+  ) => {
     const session = wsServer?.listActiveSessions()[0];
     if (session) {
-      await session.archiveWorkspaceRecordForExternalMutation(workspaceId);
+      await session.archiveWorkspaceRecordForExternalMutation(workspaceId, context);
       return;
     }
 
     await archivePersistedWorkspaceRecord({
       workspaceId,
       workspaceRegistry,
+      context,
     });
+  };
+  const archiveWorkspaceRecordAfterSetupSettledExternal = async (workspaceId: string) => {
+    const session = wsServer?.listActiveSessions()[0];
+    if (session) {
+      await session.archiveWorkspaceRecordAfterSetupSettled(workspaceId);
+      return;
+    }
+
+    await archivePersistedWorkspaceRecord({ workspaceId, workspaceRegistry });
   };
   // external path→workspace adapter, not ownership: archive-by-path requests that
   // arrive with a worktree path and no workspaceId (old clients / CLI).
@@ -915,10 +908,13 @@ export async function createBySpaceDaemon(
     logger,
     findWorkspaceIdForCwd: findWorkspaceIdForCwdExternal,
     listActiveWorkspaces: listActiveWorkspacesExternal,
+    getAutoArchivedChangeRequestUrl: async (workspaceId) =>
+      (await workspaceRegistry.get(workspaceId))?.autoArchivedChangeRequestUrl ?? null,
     archiveWorkspaceRecord: archiveWorkspaceRecordExternal,
     markWorkspaceArchiving: markWorkspaceArchivingExternal,
     clearWorkspaceArchiving: clearWorkspaceArchivingExternal,
     emitWorkspaceUpdatesForWorkspaceIds: emitWorkspaceUpdatesExternal,
+    stopWorkspaceSetup: (workspaceId) => workspaceSetupRuntime.stop(workspaceId),
   });
 
   const createBySpaceWorktreeForTools = async (
@@ -955,10 +951,13 @@ export async function createBySpaceDaemon(
           await emitWorkspaceUpdatesExternal([workspaceId]);
         },
         cacheWorkspaceSetupSnapshot: () => {},
+        startWorkspaceSetup: (workspaceId, operation, afterSettled) =>
+          workspaceSetupRuntime.start(workspaceId, operation, afterSettled),
         emit: emitExternalSessionMessage,
         sessionLogger: logger,
         terminalManager,
         archiveWorkspaceRecord: archiveWorkspaceRecordExternal,
+        archiveWorkspaceRecordAfterSetupSettled: archiveWorkspaceRecordAfterSetupSettledExternal,
         serviceProxy,
         scriptRuntimeStore,
         getDaemonTcpPort: () => (boundListenTarget?.type === "tcp" ? boundListenTarget.port : null),
@@ -1032,6 +1031,7 @@ export async function createBySpaceDaemon(
         agentStorage,
         findWorkspaceIdForCwd: findWorkspaceIdForCwdExternal,
         listActiveWorkspaces: listActiveWorkspacesExternal,
+        getWorkspace: (workspaceIdToGet) => workspaceRegistry.get(workspaceIdToGet),
         archiveWorkspaceRecord: archiveWorkspaceRecordExternal,
         emitWorkspaceUpdatesForWorkspaceIds: emitWorkspaceUpdatesExternal,
         markWorkspaceArchiving: markWorkspaceArchivingExternal,
@@ -1044,6 +1044,7 @@ export async function createBySpaceDaemon(
             },
             workspaceIdToKill,
           ),
+        stopWorkspaceSetup: (workspaceIdToStop) => workspaceSetupRuntime.stop(workspaceIdToStop),
         sessionLogger: logger,
       },
       {
@@ -1159,20 +1160,21 @@ export async function createBySpaceDaemon(
     }),
     markWorkspaceArchiving: markWorkspaceArchivingExternal,
     clearWorkspaceArchiving: clearWorkspaceArchivingExternal,
+    stopWorkspaceSetup: (workspaceId) => workspaceSetupRuntime.stop(workspaceId),
     ensureWorkspaceForCreate: createAgentCommandDependencies.ensureWorkspaceForCreate,
     createBySpaceWorktree: createAgentCommandDependencies.createBySpaceWorktree,
     byspaceHome: config.byspaceHome,
     worktreesRoot: config.worktreesRoot,
     callerAgentId: runtime.callerAgentId,
+    callerCwd: runtime.callerCwd,
+    callerWorkspaceId: runtime.callerWorkspaceId,
     logger,
   });
   const createAgentToolCatalog = (runtime: BySpaceToolRuntimeContext) =>
     createBySpaceToolCatalog(createAgentToolHostDependencies(runtime));
   agentManager.setBySpaceToolCatalogFactory(createAgentToolCatalog);
-  agentManager.setBySpaceToolsEnabled(config.mcpInjectIntoAgents !== false);
 
   const mcpEnabled = config.mcpEnabled ?? true;
-  let agentMcpBaseUrl: string | null = null;
   if (mcpEnabled) {
     const agentMcpRoute = "/mcp/agents";
 
@@ -1206,20 +1208,6 @@ export async function createBySpaceDaemon(
       req: express.Request,
       res: express.Response,
     ): Promise<void> => {
-      // This route is exempt from the global daemon-password middleware, so it
-      // authenticates here using the injected capability token (or a valid
-      // daemon password). Without this, a password-protected daemon would be
-      // wide open on its agent control plane.
-      if (
-        !(await isAgentMcpRequestAuthorized({
-          password: config.auth?.password,
-          capabilityToken: agentMcpAuthToken,
-          authorizationHeader: req.header("authorization"),
-        }))
-      ) {
-        res.status(401).json({ error: "Unauthorized" });
-        return;
-      }
       if (config.mcpDebug) {
         logger.debug(
           {
@@ -1330,14 +1318,6 @@ export async function createBySpaceDaemon(
           mainStarted = true;
           const logAndResolve = async () => {
             boundListenTarget = resolveBoundListenTarget(listenTarget, httpServer);
-            const mcpBaseUrl = mcpEnabled ? createAgentMcpBaseUrl(boundListenTarget) : null;
-            agentMcpBaseUrl = config.mcpInjectIntoAgents === false ? null : mcpBaseUrl;
-            agentManager.setMcpBaseUrl(agentMcpBaseUrl);
-            agentManager.setBySpaceToolsEnabled(config.mcpInjectIntoAgents !== false);
-            daemonConfigStore.onFieldChange("mcp.injectIntoAgents", (value) => {
-              agentManager.setMcpBaseUrl(value ? mcpBaseUrl : null);
-              agentManager.setBySpaceToolsEnabled(value !== false);
-            });
             daemonConfigStore.onFieldChange("appendSystemPrompt", (value) => {
               agentManager.setAppendSystemPrompt(typeof value === "string" ? value : "");
             });
@@ -1351,6 +1331,20 @@ export async function createBySpaceDaemon(
                 ? true
                 : relayUseTls);
             const appBaseUrl = config.appBaseUrl ?? hostedRelease.appBaseUrl;
+
+            const daemonRuntimeConfig = {
+              listen: formatListenTarget(boundListenTarget ?? listenTarget),
+              worktreesRoot: config.worktreesRoot,
+              workspaceServicePorts: config.workspaceServicePorts,
+              appBaseUrl,
+              relay: {
+                enabled: relayEnabled,
+                endpoint: relayEndpoint,
+                publicEndpoint: relayPublicEndpoint,
+                useTls: relayUseTls,
+                publicUseTls: relayPublicUseTls,
+              },
+            };
 
             if (boundListenTarget.type === "tcp") {
               logger.info(
@@ -1385,10 +1379,10 @@ export async function createBySpaceDaemon(
               downloadTokenStore,
               config.byspaceHome,
               daemonConfigStore,
-              mcpBaseUrl,
+              null,
               { allowedOrigins, hostnames: configuredHostnames },
               workspaceAutoName,
-              config.auth,
+              runtimeAuth,
               speechService,
               terminalManager,
               {
@@ -1418,49 +1412,37 @@ export async function createBySpaceDaemon(
               github,
               config.pushNotificationSender,
               providerSnapshotManager,
-              {
-                listen: formatListenTarget(boundListenTarget ?? listenTarget),
-                worktreesRoot: config.worktreesRoot,
-                workspaceServicePorts: config.workspaceServicePorts,
-                appBaseUrl,
-                relay: {
-                  enabled: relayEnabled,
-                  endpoint: relayEndpoint,
-                  publicEndpoint: relayPublicEndpoint,
-                  useTls: relayUseTls,
-                  publicUseTls: relayPublicUseTls,
-                },
-              },
+              daemonRuntimeConfig,
               serviceProxyPublicBaseUrl,
+              workspaceSetupRuntime,
             );
 
-            if (relayEnabled) {
-              const offer = await createConnectionOfferV2({
-                serverId,
-                daemonPublicKeyB64: daemonKeyPair.publicKeyB64,
-                relay: {
-                  endpoint: relayPublicEndpoint,
-                  useTls: relayPublicUseTls,
-                },
-              });
-
-              encodeOfferToFragmentUrl({ offer, appBaseUrl });
-
-              relayTransport?.stop().catch(() => undefined);
-              relayTransport = startRelayTransport({
-                logger,
-                attachSocket: (ws, metadata) => {
-                  if (!wsServer) {
-                    throw new Error("WebSocket server not initialized");
-                  }
-                  return wsServer.attachExternalSocket(ws, metadata);
-                },
-                relayEndpoint,
-                relayUseTls,
-                serverId,
-                daemonKeyPair: daemonKeyPair.keyPair,
+            relayRuntime = new RelayRuntime({
+              logger,
+              attachSocket: (ws, metadata) => {
+                if (!wsServer) {
+                  throw new Error("WebSocket server not initialized");
+                }
+                return wsServer.attachExternalSocket(ws, metadata);
+              },
+              relayEndpoint,
+              relayUseTls,
+              serverId,
+              daemonKeyPair: daemonKeyPair.keyPair,
+              initialEnabled: relayEnabled,
+            });
+            if (config.relayEnabledMutable ?? true) {
+              daemonConfigStore.onFieldChange("relay.enabled", (value) => {
+                const enabled = value === true;
+                daemonRuntimeConfig.relay.enabled = enabled;
+                void relayRuntime?.setEnabled(enabled).catch((error) => {
+                  daemonRuntimeConfig.relay.enabled = false;
+                  daemonConfigStore.patch({ relay: { enabled: false } });
+                  logger.error({ err: error }, "Failed to update relay transport");
+                });
               });
             }
+            await relayRuntime.start();
           };
 
           logAndResolve().then(resolve, reject);
@@ -1507,7 +1489,7 @@ export async function createBySpaceDaemon(
     terminalManager.killAll();
     speechService.stop();
     await scheduleService.stop().catch(() => undefined);
-    await relayTransport?.stop().catch(() => undefined);
+    await relayRuntime?.stop().catch(() => undefined);
     if (wsServer) {
       await wsServer.close();
     }

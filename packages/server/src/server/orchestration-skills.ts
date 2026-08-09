@@ -11,6 +11,7 @@ export const BYSPACE_ORCHESTRATION_SKILL_NAMES = [
   "byspace-committee",
   "byspace-handoff",
   "byspace-loop",
+  "byspace-project-setup",
 ] as const;
 
 export type OrchestrationSkillsState = "not-installed" | "up-to-date" | "drift";
@@ -26,11 +27,29 @@ interface OrchestrationSkillsManifest {
   managed: Record<string, string>;
 }
 
-export function resolveOrchestrationSkillsTargets(byspaceHome: string): OrchestrationSkillsTargets {
+const ORCHESTRATION_SKILL_IGNORED_PATH_NAMES = new Set([
+  ".git",
+  ".pi-subagents",
+  ".venv",
+  "evals",
+  "node_modules",
+  "target",
+]);
+
+function isRuntimeSkillPath(relativePath: string): boolean {
+  return relativePath
+    .split(path.sep)
+    .every((part) => !ORCHESTRATION_SKILL_IGNORED_PATH_NAMES.has(part));
+}
+
+export function resolveOrchestrationSkillsTargets(
+  byspaceHome: string,
+  userHome = process.env.BYSPACE_ORCHESTRATION_SKILLS_HOME ?? os.homedir(),
+): OrchestrationSkillsTargets {
   const moduleDir = path.dirname(fileURLToPath(import.meta.url));
   const packagedSourceDir = path.resolve(moduleDir, "../../skills");
   const checkoutSourceDir = path.resolve(moduleDir, "../../../../skills");
-  const home = os.homedir();
+  const home = userHome;
   return {
     sourceDir:
       process.env.BYSPACE_NODE_ENV === "development" ? checkoutSourceDir : packagedSourceDir,
@@ -52,7 +71,9 @@ async function hashDirectory(directory: string): Promise<string | null> {
     entries.sort((a, b) => a.name.localeCompare(b.name));
     for (const entry of entries) {
       const fullPath = path.join(current, entry.name);
-      const relativePath = path.relative(directory, fullPath).split(path.sep).join("/");
+      const relativeFsPath = path.relative(directory, fullPath);
+      if (!isRuntimeSkillPath(relativeFsPath)) continue;
+      const relativePath = relativeFsPath.split(path.sep).join("/");
       if (entry.isDirectory()) {
         await walk(fullPath);
       } else if (entry.isFile()) {
@@ -127,7 +148,12 @@ async function replaceDirectory(source: string, destination: string): Promise<vo
   const staged = path.join(parent, `.${path.basename(destination)}.${suffix}.tmp`);
   const backup = path.join(parent, `.${path.basename(destination)}.${suffix}.bak`);
   await fs.mkdir(parent, { recursive: true });
-  await fs.cp(source, staged, { recursive: true, errorOnExist: true, force: false });
+  await fs.cp(source, staged, {
+    recursive: true,
+    errorOnExist: true,
+    force: false,
+    filter: (sourcePath) => isRuntimeSkillPath(path.relative(source, sourcePath)),
+  });
 
   const destinationExists = (await fs.lstat(destination).catch(() => null)) !== null;
   let originalMoved = false;

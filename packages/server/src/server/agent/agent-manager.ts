@@ -64,10 +64,6 @@ import { AgentRunState, type ForegroundTurnWaiter } from "./agent-run-state.js";
 import { getAgentProviderDefinition } from "@bytetrue/byspace-protocol/provider-manifest";
 import { invokeRewindCapability, type RewindMode } from "./rewind/rewind.js";
 import { isSystemInjectedEnvelope } from "./agent-prompt.js";
-import {
-  stripInternalBySpaceMcpServer,
-  withRuntimeBySpaceMcpServer,
-} from "./runtime-mcp-config.js";
 import { resolveCreateAgentTitles } from "./create-agent-title.js";
 import type { BySpaceToolCatalogFactory } from "./tools/types.js";
 import {
@@ -91,6 +87,16 @@ const STORED_AGENT_CAPABILITIES: AgentCapabilityFlags = {
 };
 
 type TimeoutResult = "completed" | "timed_out";
+
+function submittedPromptText(prompt: AgentPromptInput): string {
+  if (typeof prompt === "string") {
+    return prompt;
+  }
+  return prompt
+    .flatMap((block) => (block.type === "text" && !("mimeType" in block) ? [block.text] : []))
+    .join("\n")
+    .trim();
+}
 
 export class AgentManagerShuttingDownError extends Error {
   constructor() {
@@ -154,7 +160,7 @@ function buildStoredAgentConfig(record: StoredAgentRecord): AgentSessionConfig {
     config.systemPrompt = record.config.systemPrompt;
   }
   if (record.config.mcpServers != null) config.mcpServers = record.config.mcpServers;
-  return stripInternalBySpaceMcpServer(config);
+  return config;
 }
 
 export { AGENT_LIFECYCLE_STATUSES, type AgentLifecycleStatus };
@@ -247,13 +253,9 @@ export interface AgentManagerOptions {
   idFactory?: () => string;
   registry?: AgentStorage;
   onAgentAttention?: AgentAttentionCallback;
-  onWorkspaceStateMayHaveChanged?: (params: { cwd: string }) => void;
   durableTimelineStore?: AgentTimelineStore;
   terminalManager?: TerminalManager | null;
-  mcpBaseUrl?: string;
-  mcpAuthToken?: string;
-  byspaceToolsEnabled?: boolean;
-  byspaceToolCatalogFactory?: BySpaceToolCatalogFactory;
+  cliAuthToken?: string;
   appendSystemPrompt?: string;
   agentStreamCoalesceWindowMs?: number;
   rescueTimeouts?: AgentManagerRescueTimeouts;
@@ -299,6 +301,8 @@ interface StreamEventFlags {
   shouldNotifyWaiters: boolean;
 }
 
+type ActiveTurnTerminalDisposition = "closed_current" | "stale" | "untracked";
+
 interface HandleStreamEventOptions {
   fromHistory?: boolean;
 }
@@ -331,6 +335,8 @@ interface ManagedAgentBase {
   persistence: AgentPersistenceHandle | null;
   historyPrimed: boolean;
   lastUserMessageAt: Date | null;
+  activeTurnId: string | null;
+  activeTurnStartedAt: Date | null;
   lastUsage?: AgentUsage;
   lastError?: string;
   attention: AttentionState;
@@ -418,6 +424,38 @@ type ActiveManagedAgent =
 
 type LiveManagedAgent = ActiveManagedAgent;
 type AgentLabelPatch = Record<string, string | null>;
+
+function attachManagedTurnIdentity(
+  agent: ActiveManagedAgent,
+  event: AgentStreamEvent,
+  fromHistory: boolean,
+): { event: AgentStreamEvent; turnId: string | undefined } {
+  const existingTurnId = getAgentStreamEventTurnId(event);
+  if (fromHistory || existingTurnId !== undefined) {
+    return { event, turnId: existingTurnId };
+  }
+  switch (event.type) {
+    case "turn_started": {
+      const turnId =
+        agent.activeForegroundTurnId ?? agent.activeTurnId ?? `autonomous-${randomUUID()}`;
+      return { event: { ...event, turnId }, turnId };
+    }
+    case "turn_completed":
+    case "turn_failed":
+    case "turn_canceled": {
+      const turnId = agent.activeForegroundTurnId ?? agent.activeTurnId ?? undefined;
+      return turnId ? { event: { ...event, turnId }, turnId } : { event, turnId };
+    }
+    default:
+      return { event, turnId: undefined };
+  }
+}
+
+function limitAgentStreamEventContent(event: AgentStreamEvent): AgentStreamEvent {
+  return event.type === "timeline"
+    ? { ...event, item: limitAgentTimelineItemContent(event.item) }
+    : event;
+}
 
 interface WriteLabelsResult {
   record: StoredAgentRecord | null;
@@ -591,14 +629,11 @@ export class AgentManager {
   private readonly agentLifecycleMutations = new Map<string, Promise<unknown>>();
   private readonly deletingAgents = new Set<string>();
   private readonly agentStreamCoalescer: AgentStreamCoalescer;
-  private mcpBaseUrl: string | null;
-  private readonly mcpAuthToken: string | null;
-  private byspaceToolsEnabled = true;
   private byspaceToolCatalogFactory: BySpaceToolCatalogFactory | null = null;
+  private readonly cliAuthToken: string | undefined;
   private appendSystemPrompt: string;
   private onAgentAttention?: AgentAttentionCallback;
   private onAgentArchived?: AgentArchivedCallback;
-  private onWorkspaceStateMayHaveChanged?: (params: { cwd: string }) => void;
   private logger: Logger;
   private readonly rescueTimeouts: Required<AgentManagerRescueTimeouts>;
   private acceptingAgentRegistrations = true;
@@ -608,10 +643,7 @@ export class AgentManager {
     this.registry = options?.registry;
     this.durableTimelineStore = options?.durableTimelineStore;
     this.onAgentAttention = options?.onAgentAttention;
-    this.onWorkspaceStateMayHaveChanged = options?.onWorkspaceStateMayHaveChanged;
-    this.mcpBaseUrl = options?.mcpBaseUrl ?? null;
-    this.mcpAuthToken = options?.mcpAuthToken ?? null;
-    this.configureBySpaceTools(options);
+    this.cliAuthToken = options.cliAuthToken;
     this.appendSystemPrompt = options.appendSystemPrompt ?? "";
     this.logger = options.logger.child({ module: "agent", component: "agent-manager" });
     this.rescueTimeouts = {
@@ -632,11 +664,6 @@ export class AgentManager {
       providerDefinitions: options.providerDefinitions ?? {},
       clients: options.clients ?? {},
     });
-  }
-
-  private configureBySpaceTools(options: AgentManagerOptions): void {
-    this.byspaceToolsEnabled = options.byspaceToolsEnabled ?? true;
-    this.byspaceToolCatalogFactory = options.byspaceToolCatalogFactory ?? null;
   }
 
   registerClient(provider: AgentProvider, client: AgentClient): void {
@@ -674,30 +701,21 @@ export class AgentManager {
     this.onAgentArchived = callback;
   }
 
-  setMcpBaseUrl(url: string | null): void {
-    this.mcpBaseUrl = url;
-  }
-
   prepareForShutdown(): void {
     this.acceptingAgentRegistrations = false;
-  }
-
-  setBySpaceToolsEnabled(enabled: boolean): void {
-    this.byspaceToolsEnabled = enabled;
   }
 
   setBySpaceToolCatalogFactory(factory: BySpaceToolCatalogFactory | null): void {
     this.byspaceToolCatalogFactory = factory;
   }
 
-  /**
-   * Capability token the daemon's own MCP clients must present to the Agent MCP
-   * endpoint when a daemon password is configured. Read by the per-client
-   * session to authenticate its own MCP connection. Stays in the daemon — never
-   * sent to remote clients.
-   */
-  getMcpAuthToken(): string | null {
-    return this.mcpAuthToken;
+  createBySpaceToolCatalog(
+    runtimeContext: Parameters<BySpaceToolCatalogFactory>[0] = {},
+  ): ReturnType<BySpaceToolCatalogFactory> {
+    if (!this.byspaceToolCatalogFactory) {
+      throw new Error("BySpace orchestration tools are unavailable");
+    }
+    return this.byspaceToolCatalogFactory(runtimeContext);
   }
 
   setAppendSystemPrompt(prompt: string | null | undefined): void {
@@ -933,7 +951,7 @@ export class AgentManager {
   async listDraftFeatures(config: AgentSessionConfig): Promise<AgentFeature[]> {
     const normalizedConfig = await this.normalizeConfig(config, { resolveDefaultModel: false });
     const client = this.requireClient(normalizedConfig.provider);
-    if (!normalizedConfig.model) {
+    if (!normalizedConfig.model && !client.listFeatures) {
       return [];
     }
     const available = await client.isAvailable();
@@ -1035,6 +1053,17 @@ export class AgentManager {
     return this.providerSubagents.list(parentAgentId);
   }
 
+  listProviderSubagentActivity(): ProviderSubagentDescriptor[] {
+    const publicParentIds = new Set(
+      Array.from(this.agents.values())
+        .filter((agent) => !agent.internal)
+        .map((agent) => agent.id),
+    );
+    return this.providerSubagents
+      .listAll()
+      .filter((subagent) => publicParentIds.has(subagent.parentAgentId));
+  }
+
   getProviderSubagent(
     parentAgentId: string,
     subagentId: string,
@@ -1070,24 +1099,19 @@ export class AgentManager {
     if (options.replaceExistingState) {
       await this.deleteAgentState(resolvedAgentId);
     }
-    const { storedConfig, launchConfig } = await this.prepareSessionConfig(
-      config,
-      resolvedAgentId,
-      options?.env,
-    );
+    const { storedConfig, launchConfig } = await this.prepareSessionConfig(config, options?.env);
     this.requireEnabledProvider(storedConfig.provider);
     const client = await this.requireAvailableClient({
       provider: storedConfig.provider,
     });
+    this.assertProviderSupportsConfiguredMcpServers(client, storedConfig);
     const launchContext = await this.buildLaunchContext(
       resolvedAgentId,
-      client,
       storedConfig.cwd,
       options?.env,
     );
-    const providerLaunchConfig = this.resolveProviderLaunchConfig(launchConfig, launchContext);
     const createOptions = this.buildCreateSessionOptions(options);
-    const session = await client.createSession(providerLaunchConfig, launchContext, createOptions);
+    const session = await client.createSession(launchConfig, launchContext, createOptions);
     return this.registerSession(session, storedConfig, resolvedAgentId, {
       labels: options.labels,
       initialTitle: options.initialTitle,
@@ -1147,10 +1171,7 @@ export class AgentManager {
       ...overrides,
       provider: handle.provider,
     } as AgentSessionConfig;
-    const { storedConfig, launchConfig } = await this.prepareSessionConfig(
-      mergedConfig,
-      resolvedAgentId,
-    );
+    const { storedConfig, launchConfig } = await this.prepareSessionConfig(mergedConfig);
 
     const client = this.requireClient(handle.provider);
     const available = await client.isAvailable();
@@ -1159,14 +1180,9 @@ export class AgentManager {
         `Provider '${handle.provider}' is not available. Please ensure the CLI is installed.`,
       );
     }
-    const launchContext = await this.buildLaunchContext(resolvedAgentId, client, storedConfig.cwd);
-    const providerLaunchConfig = this.resolveProviderLaunchConfig(launchConfig, launchContext);
-    const session = await client.resumeSession(
-      handle,
-      providerLaunchConfig,
-      launchContext,
-      resumeOptions,
-    );
+    this.assertProviderSupportsConfiguredMcpServers(client, storedConfig);
+    const launchContext = await this.buildLaunchContext(resolvedAgentId, storedConfig.cwd);
+    const session = await client.resumeSession(handle, launchConfig, launchContext, resumeOptions);
     return this.registerSession(session, storedConfig, resolvedAgentId, {
       ...options,
       persistence: handle,
@@ -1199,27 +1215,21 @@ export class AgentManager {
       throw new Error(`Provider '${input.provider}' does not support importing sessions`);
     }
 
-    const { storedConfig, launchConfig } = await this.prepareSessionConfig(
-      {
-        provider: input.provider,
-        cwd: input.cwd,
-      },
-      resolvedAgentId,
-    );
-    const launchContext = await this.buildLaunchContext(resolvedAgentId, client, storedConfig.cwd);
-    const providerLaunchConfig = this.resolveProviderLaunchConfig(launchConfig, launchContext);
+    const { storedConfig, launchConfig } = await this.prepareSessionConfig({
+      provider: input.provider,
+      cwd: input.cwd,
+    });
+    const launchContext = await this.buildLaunchContext(resolvedAgentId, storedConfig.cwd);
     const imported = await client.importSession(
       {
         providerHandleId: input.providerHandleId,
         cwd: input.cwd,
       },
-      { config: providerLaunchConfig, storedConfig, launchContext },
+      { config: launchConfig, storedConfig, launchContext },
     );
     let handedToRegistration = false;
     try {
-      const importedConfig = await this.normalizeConfig(
-        stripInternalBySpaceMcpServer(imported.config),
-      );
+      const importedConfig = await this.normalizeConfig(imported.config);
       const timelineRows = buildImportedTimelineRows(imported.timeline);
       const initialTitle = resolveImportedAgentTitle(importedConfig, timelineRows);
 
@@ -1271,35 +1281,37 @@ export class AgentManager {
   ): Promise<ManagedAgent> {
     this.assertAcceptingAgentRegistrations();
     let existing = this.requireSessionAgent(agentId);
-    if (this.hasInFlightRun(agentId)) {
-      await this.cancelAgentRunBefore(agentId, "reload");
-      existing = this.requireSessionAgent(agentId);
-    }
     const rehydrateFromDisk = options?.rehydrateFromDisk ?? false;
-    const preservedHistoryPrimed = existing.historyPrimed;
-    const preservedLastUsage = existing.lastUsage;
-    const preservedLastError = existing.lastError;
-    const preservedAttention = existing.attention;
-    const handle = existing.persistence;
-    const provider = handle?.provider ?? existing.provider;
-    const client = this.requireClient(provider);
+    const provider = existing.persistence?.provider ?? existing.provider;
     const refreshConfig = {
       ...existing.config,
       ...overrides,
       provider,
     } as AgentSessionConfig;
-    const { storedConfig, launchConfig } = await this.prepareSessionConfig(refreshConfig, agentId);
-    const launchContext = await this.buildLaunchContext(agentId, client, storedConfig.cwd);
-    const providerLaunchConfig = this.resolveProviderLaunchConfig(launchConfig, launchContext);
+    const { storedConfig, launchConfig } = await this.prepareSessionConfig(refreshConfig);
+    const client = await this.requireAvailableClient({ provider });
+    this.assertProviderSupportsConfiguredMcpServers(client, storedConfig);
+    const launchContext = await this.buildLaunchContext(agentId, storedConfig.cwd);
+
+    if (this.hasInFlightRun(agentId)) {
+      await this.cancelAgentRunBefore(agentId, "reload");
+      existing = this.requireSessionAgent(agentId);
+    }
+    const preservedHistoryPrimed = existing.historyPrimed;
+    const preservedLastUsage = existing.lastUsage;
+    const preservedLastError = existing.lastError;
+    const preservedAttention = existing.attention;
+    const handle = existing.persistence;
 
     const session = handle
-      ? await client.resumeSession(handle, providerLaunchConfig, launchContext)
-      : await client.createSession(providerLaunchConfig, launchContext);
+      ? await client.resumeSession(handle, launchConfig, launchContext)
+      : await client.createSession(launchConfig, launchContext);
 
     let handedToRegistration = false;
     try {
       this.assertAcceptingAgentRegistrations();
 
+      this.cancelRunningProviderSubagents(agentId);
       const closedExisting = this.prepareAgentForClosure(existing, "agent reloaded");
       try {
         await this.persistSnapshot(closedExisting);
@@ -1642,6 +1654,8 @@ export class AgentManager {
         inFlightPermissionResponses: new Set(),
         pendingReplacement: false,
         activeForegroundTurnId: null,
+        activeTurnId: null,
+        activeTurnStartedAt: null,
         foregroundTurnWaiters: new Set(),
         finalizedForegroundTurnIds: new Set(),
         unsubscribeSession: null,
@@ -2061,11 +2075,15 @@ export class AgentManager {
    * emitted by the handler flow through dispatchStream so they persist and
    * broadcast like normal timeline events.
    */
-  tryRunOutOfBand(agentId: string, prompt: AgentPromptInput): boolean {
+  tryRunOutOfBand(agentId: string, prompt: AgentPromptInput, options?: AgentRunOptions): boolean {
     const agent = this.requireSessionAgent(agentId);
     const handler = agent.session.tryHandleOutOfBand?.(prompt);
     if (!handler) {
       return false;
+    }
+    if (options?.clientMessageId) {
+      this.recordSubmittedPrompt(agent, prompt, options.clientMessageId);
+      this.emitState(agent);
     }
     const dispatch = (event: AgentStreamEvent): void => {
       // Persist timeline items so they show up in fetchAgentTimeline; broadcast
@@ -2188,14 +2206,49 @@ export class AgentManager {
         throw error;
       }
 
-      pendingRun.started = true;
-      pendingRun.turnId = turnId;
       if (isReplacement) {
         agent.pendingReplacement = false;
       }
+      const turnStartedAt = new Date();
+      pendingRun.started = true;
+      pendingRun.turnId = turnId;
       agent.activeForegroundTurnId = turnId;
+      this.openActiveTurn(agent, turnId, turnStartedAt);
       agent.lifecycle = "running";
       this.touchUpdatedAt(agent);
+      // AgentManager owns the accepted-turn boundary. Publish liveness before the canonical
+      // prompt so clients can retire optimistic activity without painting an idle frame.
+      // The provider's duplicate start for this turn is suppressed at the ingestion boundary.
+      this.dispatchStream(
+        agent.id,
+        { type: "turn_started", provider: agent.provider, turnId },
+        { timestamp: turnStartedAt.toISOString() },
+      );
+      const stagedSubmittedPromptEcho = options?.clientMessageId
+        ? pendingRun.stagedEvents.find(
+            (event): event is Extract<AgentStreamEvent, { type: "timeline" }> =>
+              event.type === "timeline" &&
+              event.item.type === "user_message" &&
+              event.item.clientMessageId === options.clientMessageId,
+          )
+        : undefined;
+      if (options?.clientMessageId) {
+        this.recordSubmittedPrompt(agent, prompt, options.clientMessageId, {
+          messageId: options.clientMessageId,
+          providerMessageId:
+            stagedSubmittedPromptEcho?.item.type === "user_message"
+              ? stagedSubmittedPromptEcho.item.messageId
+              : undefined,
+        });
+      }
+      for (const stagedEvent of pendingRun.stagedEvents.splice(0)) {
+        const isAcceptedTurnStart =
+          stagedEvent.type === "turn_started" && getAgentStreamEventTurnId(stagedEvent) === turnId;
+        if (isAcceptedTurnStart || stagedEvent === stagedSubmittedPromptEcho) {
+          continue;
+        }
+        this.enqueueSessionEvent(agent.id, stagedEvent);
+      }
       this.emitState(agent);
       this.logger.trace(
         {
@@ -2213,6 +2266,12 @@ export class AgentManager {
       this.runs.addWaiter(agent, turnStream.waiter);
 
       try {
+        const acceptedTurnStartedEvent: AgentStreamEvent = {
+          type: "turn_started",
+          provider: agent.provider,
+          turnId,
+        };
+        yield acceptedTurnStartedEvent;
         for await (const event of turnStream.events(isTurnTerminalEvent)) {
           yield event;
         }
@@ -2236,6 +2295,7 @@ export class AgentManager {
       this.runs.rememberFinalizedTurn(mutableAgent, turnId);
     }
     mutableAgent.activeForegroundTurnId = null;
+    this.applyActiveTurnTerminal(mutableAgent, turnId);
     const terminalError = mutableAgent.lastError;
     const shouldHoldBusyForReplacement = mutableAgent.pendingReplacement && !terminalError;
     let nextLifecycle: "running" | "error" | "idle";
@@ -2271,6 +2331,24 @@ export class AgentManager {
       this.touchUpdatedAt(mutableAgent);
       this.emitState(mutableAgent);
     }
+  }
+
+  private openActiveTurn(agent: ActiveManagedAgent, turnId: string, startedAt: Date): void {
+    agent.activeTurnId = turnId;
+    agent.activeTurnStartedAt = startedAt;
+  }
+
+  private applyActiveTurnTerminal(
+    agent: ActiveManagedAgent,
+    turnId?: string,
+    fromHistory = false,
+  ): ActiveTurnTerminalDisposition {
+    if (fromHistory) return "stale";
+    if (!agent.activeTurnId) return "untracked";
+    if (turnId && agent.activeTurnId !== turnId) return "stale";
+    agent.activeTurnId = null;
+    agent.activeTurnStartedAt = null;
+    return "closed_current";
   }
 
   async replaceAgentRun(
@@ -2561,6 +2639,19 @@ export class AgentManager {
 
   async rewind(agentId: string, messageId: string, mode: RewindMode): Promise<void> {
     const agent = this.requireSessionAgent(agentId);
+    const submittedRow = this.timelineStore
+      .getRows(agentId)
+      .find(
+        (row) =>
+          row.item.type === "user_message" &&
+          row.item.messageId === messageId &&
+          row.item.clientMessageId === messageId,
+      );
+    if (submittedRow && !submittedRow.providerMessageId) {
+      throw new Error("Cannot rewind before the provider acknowledges the submitted prompt");
+    }
+    const providerMessageId = submittedRow?.providerMessageId ?? messageId;
+
     if (this.hasInFlightRun(agentId)) {
       await this.cancelAgentRunBefore(agentId, "rewind");
     }
@@ -2571,7 +2662,7 @@ export class AgentManager {
         { agentId, provider: agent.provider, messageId, mode },
         "agent.rewind.start",
       );
-      await invokeRewindCapability(agent.session, { messageId, mode });
+      await invokeRewindCapability(agent.session, { messageId: providerMessageId, mode });
       if (mode !== "files") {
         await this.hydrateTimelineFromProvider(agentId, { force: true, broadcast: true });
       }
@@ -2953,6 +3044,18 @@ export class AgentManager {
     }
   }
 
+  private assertProviderSupportsConfiguredMcpServers(
+    client: AgentClient,
+    storedConfig: AgentSessionConfig,
+  ): void {
+    if (
+      Object.keys(storedConfig.mcpServers ?? {}).length > 0 &&
+      client.capabilities.supportsMcpServers !== true
+    ) {
+      throw new Error(`Provider '${storedConfig.provider}' does not support MCP servers`);
+    }
+  }
+
   private async initializeAgentTimelineForRegister(params: {
     agentId: string;
     now: Date;
@@ -3031,6 +3134,8 @@ export class AgentManager {
       inFlightPermissionResponses: new Set(),
       pendingReplacement: false,
       activeForegroundTurnId: null,
+      activeTurnId: null,
+      activeTurnStartedAt: null,
       foregroundTurnWaiters: new Set<ForegroundTurnWaiter>(),
       finalizedForegroundTurnIds: new Set<string>(),
       unsubscribeSession: null,
@@ -3085,6 +3190,8 @@ export class AgentManager {
       lifecycle: "closed",
       session: null,
       activeForegroundTurnId: null,
+      activeTurnId: null,
+      activeTurnStartedAt: null,
       pendingPermissions: new Map(),
       bufferedPermissionResolutions: new Map(),
       inFlightPermissionResponses: new Set(),
@@ -3128,6 +3235,11 @@ export class AgentManager {
       },
       "agent.manager.enqueue",
     );
+    const pendingRun = this.runs.getPendingRun(agentId);
+    if (pendingRun && !pendingRun.started) {
+      pendingRun.stagedEvents.push(event);
+      return;
+    }
     const previous = this.sessionEventTails.get(agentId) ?? Promise.resolve();
     const next = previous
       .catch(() => undefined)
@@ -3480,14 +3592,11 @@ export class AgentManager {
     event: AgentStreamEvent,
     options?: HandleStreamEventOptions,
   ): Promise<boolean> {
-    if (event.type === "timeline") {
-      event = {
-        ...event,
-        item: limitAgentTimelineItemContent(event.item),
-      };
-    }
-    const eventTurnId = getAgentStreamEventTurnId(event);
-    const isForegroundEvent = Boolean(eventTurnId && agent.activeForegroundTurnId === eventTurnId);
+    event = limitAgentStreamEventContent(event);
+    const identified = attachManagedTurnIdentity(agent, event, options?.fromHistory === true);
+    event = identified.event;
+    const eventTurnId = identified.turnId;
+    const isForegroundEvent = agent.activeForegroundTurnId === eventTurnId;
     this.traceHandleStreamEventStart(agent, event, eventTurnId, isForegroundEvent);
     if (
       eventTurnId &&
@@ -3507,6 +3616,15 @@ export class AgentManager {
       this.agentStreamCoalescer.flushFor(agent.id);
     }
 
+    let terminalDisposition: ActiveTurnTerminalDisposition = "untracked";
+    if (isTurnTerminalEvent(event)) {
+      terminalDisposition = this.applyActiveTurnTerminal(
+        agent,
+        eventTurnId,
+        options?.fromHistory === true,
+      );
+    }
+
     const flags: StreamEventFlags = { shouldDispatchEvent: true, shouldNotifyWaiters: true };
 
     const dispatchPromise = this.dispatchStreamEventByType({
@@ -3515,21 +3633,24 @@ export class AgentManager {
       options,
       isForegroundEvent,
       eventTurnId,
+      terminalDisposition,
       flags,
     });
     if (dispatchPromise) {
       await dispatchPromise;
     }
 
-    if (!options?.fromHistory && isTurnTerminalEvent(event)) {
-      this.runs.settleTerminalRun(agent.id, eventTurnId);
-      if (isForegroundEvent) {
-        this.finalizeForegroundTurn(agent, eventTurnId);
+    if (!options?.fromHistory) {
+      if (isTurnTerminalEvent(event)) {
+        this.runs.settleTerminalRun(agent.id, eventTurnId);
+        if (isForegroundEvent) {
+          this.finalizeForegroundTurn(agent, eventTurnId);
+        }
       }
-    }
 
-    if (!options?.fromHistory && flags.shouldDispatchEvent) {
-      this.dispatchStream(agent.id, event, { timestamp: new Date().toISOString() });
+      if (flags.shouldDispatchEvent) {
+        this.dispatchStream(agent.id, event, { timestamp: new Date().toISOString() });
+      }
     }
 
     this.traceHandleStreamEventEnd(agent, event, eventTurnId, flags);
@@ -3603,9 +3724,11 @@ export class AgentManager {
     options: HandleStreamEventOptions | undefined;
     isForegroundEvent: boolean;
     eventTurnId: string | undefined;
+    terminalDisposition: ActiveTurnTerminalDisposition;
     flags: StreamEventFlags;
   }): Promise<void> | undefined {
-    const { agent, event, options, isForegroundEvent, eventTurnId, flags } = params;
+    const { agent, event, options, isForegroundEvent, eventTurnId, terminalDisposition, flags } =
+      params;
     switch (event.type) {
       case "thread_started":
         this.onStreamThreadStarted(agent);
@@ -3647,9 +3770,15 @@ export class AgentManager {
         this.emitState(agent);
         return undefined;
       case "timeline":
-        return this.onStreamTimelineEvent({ agent, event, options, isForegroundEvent, flags });
+        return this.onStreamTimelineEvent({ agent, event, options, flags });
       case "turn_completed":
-        this.onStreamTurnCompleted({ agent, event, eventTurnId, isForegroundEvent });
+        this.onStreamTurnCompleted({
+          agent,
+          event,
+          eventTurnId,
+          isForegroundEvent,
+          terminalDisposition,
+        });
         return undefined;
       case "turn_failed":
         return this.onStreamTurnFailed({
@@ -3657,13 +3786,21 @@ export class AgentManager {
           event,
           eventTurnId,
           isForegroundEvent,
+          terminalDisposition,
           options,
         });
       case "turn_canceled":
-        this.onStreamTurnCanceled({ agent, event, eventTurnId, isForegroundEvent, options });
+        this.onStreamTurnCanceled({
+          agent,
+          event,
+          eventTurnId,
+          isForegroundEvent,
+          terminalDisposition,
+          options,
+        });
         return undefined;
       case "turn_started":
-        this.onStreamTurnStarted({ agent, eventTurnId, isForegroundEvent });
+        this.onStreamTurnStarted({ agent, eventTurnId, isForegroundEvent, flags });
         return undefined;
       case "permission_requested":
         this.onStreamPermissionRequested(agent, event);
@@ -3692,12 +3829,21 @@ export class AgentManager {
     agent: ActiveManagedAgent;
     event: Extract<AgentStreamEvent, { type: "timeline" }>;
     options: { fromHistory?: boolean } | undefined;
-    isForegroundEvent: boolean;
     flags: StreamEventFlags;
   }): Promise<void> {
     const { agent, event, options, flags } = params;
 
     if (event.item.type === "user_message" && isSystemInjectedEnvelope(event.item.text)) {
+      flags.shouldDispatchEvent = false;
+      flags.shouldNotifyWaiters = false;
+      return;
+    }
+
+    if (
+      event.item.type === "user_message" &&
+      event.item.clientMessageId &&
+      this.reconcileSubmittedPromptEcho(agent, event.item)
+    ) {
       flags.shouldDispatchEvent = false;
       flags.shouldNotifyWaiters = false;
       return;
@@ -3728,8 +3874,9 @@ export class AgentManager {
     event: Extract<AgentStreamEvent, { type: "turn_completed" }>;
     eventTurnId: string | undefined;
     isForegroundEvent: boolean;
+    terminalDisposition: ActiveTurnTerminalDisposition;
   }): void {
-    const { agent, event, eventTurnId, isForegroundEvent } = params;
+    const { agent, event, eventTurnId, isForegroundEvent, terminalDisposition } = params;
     this.logger.trace(
       {
         agentId: agent.id,
@@ -3741,12 +3888,18 @@ export class AgentManager {
       },
       "agent.manager.turn.completed",
     );
+    if (terminalDisposition === "stale") return;
     if (event.usage) {
       agent.lastUsage = { ...agent.lastUsage, ...event.usage };
     }
     // Preserve streaming usage when a provider omits it from turn_completed.
     agent.lastError = undefined;
-    if (!isForegroundEvent && agent.lifecycle !== "idle" && !agent.pendingReplacement) {
+    if (
+      !isForegroundEvent &&
+      !agent.activeForegroundTurnId &&
+      agent.lifecycle !== "idle" &&
+      !agent.pendingReplacement
+    ) {
       (agent as ActiveManagedAgent).lifecycle = "idle";
       this.emitState(agent);
     }
@@ -3758,9 +3911,10 @@ export class AgentManager {
     event: Extract<AgentStreamEvent, { type: "turn_failed" }>;
     eventTurnId: string | undefined;
     isForegroundEvent: boolean;
+    terminalDisposition: ActiveTurnTerminalDisposition;
     options: { fromHistory?: boolean } | undefined;
   }): Promise<void> {
-    const { agent, event, eventTurnId, isForegroundEvent, options } = params;
+    const { agent, event, eventTurnId, isForegroundEvent, terminalDisposition, options } = params;
     this.logger.warn(
       {
         agentId: agent.id,
@@ -3776,7 +3930,8 @@ export class AgentManager {
       },
       "handleStreamEvent: turn_failed",
     );
-    if (!isForegroundEvent) {
+    if (terminalDisposition === "stale") return;
+    if (!isForegroundEvent && !agent.activeForegroundTurnId) {
       agent.lifecycle = "error";
     }
     agent.lastError = event.error;
@@ -3787,7 +3942,7 @@ export class AgentManager {
       options,
     );
     this.resolvePendingPermissionsForAgent(agent, event.provider, options, "Turn failed");
-    if (!isForegroundEvent) {
+    if (!isForegroundEvent && !agent.activeForegroundTurnId) {
       this.emitState(agent);
     }
   }
@@ -3797,13 +3952,14 @@ export class AgentManager {
     event: Extract<AgentStreamEvent, { type: "turn_canceled" }>;
     eventTurnId: string | undefined;
     isForegroundEvent: boolean;
+    terminalDisposition: ActiveTurnTerminalDisposition;
     options:
       | {
           fromHistory?: boolean;
         }
       | undefined;
   }): void {
-    const { agent, event, eventTurnId, isForegroundEvent, options } = params;
+    const { agent, event, eventTurnId, isForegroundEvent, terminalDisposition, options } = params;
     this.logger.trace(
       {
         agentId: agent.id,
@@ -3816,12 +3972,13 @@ export class AgentManager {
       },
       "agent.manager.turn.canceled",
     );
-    if (!isForegroundEvent && !agent.pendingReplacement) {
+    if (terminalDisposition === "stale") return;
+    if (!isForegroundEvent && !agent.activeForegroundTurnId && !agent.pendingReplacement) {
       agent.lifecycle = "idle";
     }
     agent.lastError = undefined;
     this.resolvePendingPermissionsForAgent(agent, event.provider, options, "Interrupted");
-    if (!isForegroundEvent) {
+    if (!isForegroundEvent && !agent.activeForegroundTurnId) {
       this.emitState(agent);
     }
   }
@@ -3830,8 +3987,9 @@ export class AgentManager {
     agent: ActiveManagedAgent;
     eventTurnId: string | undefined;
     isForegroundEvent: boolean;
+    flags: StreamEventFlags;
   }): void {
-    const { agent, eventTurnId, isForegroundEvent } = params;
+    const { agent, eventTurnId, isForegroundEvent, flags } = params;
     this.logger.trace(
       {
         agentId: agent.id,
@@ -3843,11 +4001,22 @@ export class AgentManager {
       },
       "agent.manager.turn.started",
     );
-    if (!isForegroundEvent) {
-      this.runs.trackAutonomousRun(agent.id, eventTurnId ?? null);
-      agent.lifecycle = "running";
-      this.emitState(agent);
+    if (isForegroundEvent) {
+      flags.shouldDispatchEvent = false;
+      flags.shouldNotifyWaiters = false;
+      return;
     }
+    if (agent.activeForegroundTurnId) {
+      flags.shouldDispatchEvent = false;
+      flags.shouldNotifyWaiters = false;
+      return;
+    }
+    this.runs.trackAutonomousRun(agent.id, eventTurnId ?? null);
+    if (eventTurnId) {
+      this.openActiveTurn(agent, eventTurnId, new Date());
+    }
+    agent.lifecycle = "running";
+    this.emitState(agent);
   }
 
   private onStreamPermissionRequested(
@@ -3902,8 +4071,9 @@ export class AgentManager {
     item: AgentTimelineItem,
     provider: AgentProvider,
     turnId?: string,
+    options?: { providerMessageId?: string },
   ): AgentStreamEvent {
-    const row = this.recordTimeline(agentId, item);
+    const row = this.recordTimeline(agentId, item, options);
     const event: AgentStreamEvent = {
       type: "timeline",
       item,
@@ -3916,19 +4086,46 @@ export class AgentManager {
       timestamp: row.timestamp,
     });
 
-    if (
-      item.type === "tool_call" &&
-      item.status === "completed" &&
-      item.detail?.type === "shell" &&
-      commandMayHaveChangedExternalState(item.detail.command)
-    ) {
-      const agent = this.agents.get(agentId);
-      if (agent) {
-        this.onWorkspaceStateMayHaveChanged?.({ cwd: agent.cwd });
-      }
-    }
-
     return event;
+  }
+
+  private recordSubmittedPrompt(
+    agent: ActiveManagedAgent,
+    prompt: AgentPromptInput,
+    clientMessageId: string,
+    options?: { messageId?: string; providerMessageId?: string },
+  ): void {
+    if (this.timelineStore.getSubmittedUserMessage(agent.id, clientMessageId)) {
+      return;
+    }
+    this.touchUpdatedAt(agent);
+    agent.lastUserMessageAt = new Date();
+    const item: AgentTimelineItem = {
+      type: "user_message",
+      text: submittedPromptText(prompt),
+      clientMessageId,
+      ...(options?.messageId ? { messageId: options.messageId } : {}),
+    };
+    this.recordAndDispatchTimelineItem(agent.id, item, agent.provider, undefined, options);
+  }
+
+  private reconcileSubmittedPromptEcho(
+    agent: ActiveManagedAgent,
+    item: Extract<AgentTimelineItem, { type: "user_message" }>,
+  ): AgentTimelineRow | null {
+    const { clientMessageId, messageId } = item;
+    if (!clientMessageId) return null;
+    const existing = this.timelineStore.getSubmittedUserMessage(agent.id, clientMessageId);
+    if (!existing || existing.item.type !== "user_message") return null;
+    if (messageId) {
+      const enriched = this.timelineStore.enrichSubmittedUserMessage(
+        agent.id,
+        clientMessageId,
+        messageId,
+      );
+      if (enriched) this.enqueueDurableTimelineUpdate(agent.id, enriched);
+    }
+    return existing;
   }
 
   private async appendSystemErrorTimelineMessage(
@@ -3988,7 +4185,7 @@ export class AgentManager {
   private recordTimeline(
     agentId: string,
     item: AgentTimelineItem,
-    options?: { timestamp?: string },
+    options?: { timestamp?: string; providerMessageId?: string },
   ): AgentTimelineRow {
     item = limitAgentTimelineItemContent(item);
     const row = this.timelineStore.append(agentId, item, options);
@@ -4110,6 +4307,17 @@ export class AgentManager {
     this.trackBackgroundTask(task);
   }
 
+  private enqueueDurableTimelineUpdate(agentId: string, row: AgentTimelineRow): void {
+    if (!this.durableTimelineStore) return;
+    const task = this.durableTimelineStore.updateCommittedRow(agentId, row).catch((err) => {
+      this.logger.error(
+        { err, agentId, seq: row.seq, itemType: row.item.type },
+        "Failed to enrich durable timeline row",
+      );
+    });
+    this.trackBackgroundTask(task);
+  }
+
   private trackBackgroundTask(task: Promise<void>): void {
     this.backgroundTasks.add(task);
     void task.finally(() => {
@@ -4178,7 +4386,11 @@ export class AgentManager {
   private dispatchStream(
     agentId: string,
     event: AgentStreamEvent,
-    metadata?: { seq?: number; epoch?: string; timestamp?: string },
+    metadata?: {
+      seq?: number;
+      epoch?: string;
+      timestamp?: string;
+    },
   ): void {
     if (event.type === "timeline") {
       event = {
@@ -4330,18 +4542,10 @@ export class AgentManager {
 
   private async prepareSessionConfig(
     config: AgentSessionConfig,
-    agentId: string,
     env?: Record<string, string>,
   ): Promise<PreparedSessionConfig> {
-    const storedConfig = await this.normalizeConfig(stripInternalBySpaceMcpServer(config), { env });
-    const launchConfig = this.applyDaemonAppendSystemPrompt(
-      withRuntimeBySpaceMcpServer({
-        config: storedConfig,
-        agentId,
-        mcpBaseUrl: this.mcpBaseUrl,
-        mcpAuthToken: this.mcpAuthToken,
-      }),
-    );
+    const storedConfig = await this.normalizeConfig(config, { env });
+    const launchConfig = this.applyDaemonAppendSystemPrompt(storedConfig);
     return { storedConfig, launchConfig };
   }
 
@@ -4360,7 +4564,6 @@ export class AgentManager {
 
   private async buildLaunchContext(
     agentId: string,
-    client: AgentClient,
     cwd: string,
     env?: Record<string, string>,
   ): Promise<AgentLaunchContext> {
@@ -4370,23 +4573,10 @@ export class AgentManager {
         ...env,
         BYSPACE_AGENT_ID: agentId,
         BYSPACE_AGENT_CWD: cwd,
+        ...(this.cliAuthToken ? { BYSPACE_CLI_TOKEN: this.cliAuthToken } : {}),
       },
     };
-    if (
-      this.byspaceToolsEnabled &&
-      client.capabilities.supportsNativeBySpaceTools &&
-      this.byspaceToolCatalogFactory
-    ) {
-      context.byspaceTools = await this.byspaceToolCatalogFactory({ callerAgentId: agentId });
-    }
     return context;
-  }
-
-  private resolveProviderLaunchConfig(
-    launchConfig: AgentSessionConfig,
-    launchContext: AgentLaunchContext,
-  ): AgentSessionConfig {
-    return launchContext.byspaceTools ? stripInternalBySpaceMcpServer(launchConfig) : launchConfig;
   }
 
   private async requireAvailableClient(options: { provider: AgentProvider }): Promise<AgentClient> {
@@ -4489,21 +4679,4 @@ export class AgentManager {
     }
     return agent;
   }
-}
-
-export function commandMayHaveChangedExternalState(command: string): boolean {
-  const normalized = command.toLowerCase();
-  // Commands that operate on remote state and do NOT trigger local file
-  // watchers. Local git mutations (commit, checkout, merge, rebase, reset,
-  // pull) are already caught by watchers on .git/HEAD and refs/heads/.
-  return (
-    // GitHub PR operations (merge, close, create, edit, comment, review)
-    /\bgh\s+pr\s+(merge|close|create|edit|comment|review)\b/.test(normalized) ||
-    // Pushes to remote — local refs unchanged, but remote state (PR checks,
-    // mergeable status) may shift immediately after.
-    /\bgit\s+push\b/.test(normalized) ||
-    // Fetches update refs/remotes/ which our watchers do not watch, so
-    // ahead/behind counts can drift stale until the next refresh.
-    /\bgit\s+fetch\b/.test(normalized)
-  );
 }

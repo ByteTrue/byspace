@@ -1,9 +1,14 @@
 import { describe, expect, it } from "vitest";
 import {
   DEFAULT_TERMINAL_PROFILES,
+  PROMPT_SENTINEL,
+  formatResolvedCommand,
   getTerminalProfileIcon,
   guessTerminalProfileIcon,
+  profileTakesPrompt,
+  resolveTerminalProfileLaunch,
   resolveTerminalProfiles,
+  substitutePrompt,
 } from "./terminal-profiles.js";
 
 describe("resolveTerminalProfiles", () => {
@@ -17,10 +22,9 @@ describe("resolveTerminalProfiles", () => {
     expect(result).toEqual([]);
   });
 
-  it("returns a custom array as-is", () => {
+  it("keeps a custom unknown-command profile unchanged", () => {
     const custom = [{ id: "zsh", name: "Zsh", command: "zsh" }];
-    const result = resolveTerminalProfiles(custom);
-    expect(result).toBe(custom);
+    expect(resolveTerminalProfiles(custom)).toEqual(custom);
   });
 
   it("default profiles include claude, codex, opencode, and pi", () => {
@@ -99,5 +103,66 @@ describe("getTerminalProfileIcon", () => {
   it("returns undefined when no icon is set and command is unknown", () => {
     const profile = { id: "1", name: "Foo", command: "zsh" };
     expect(getTerminalProfileIcon(profile)).toBeUndefined();
+  });
+});
+
+describe("terminal profile prompts", () => {
+  it("ships prompt-taking defaults for every coding-agent profile", () => {
+    expect(DEFAULT_TERMINAL_PROFILES.every(profileTakesPrompt)).toBe(true);
+  });
+
+  it("substitutes every sentinel and drops an empty prompt-only argument", () => {
+    expect(
+      substitutePrompt(
+        { command: "agent", args: ["--prefix", PROMPT_SENTINEL, `--prompt=${PROMPT_SENTINEL}`] },
+        "fix it",
+      ),
+    ).toEqual({ command: "agent", args: ["--prefix", "fix it", "--prompt=fix it"] });
+    expect(substitutePrompt({ command: "agent", args: [PROMPT_SENTINEL] }, "")).toEqual({
+      command: "agent",
+      args: [],
+    });
+  });
+
+  it("resolves every launcher through the shared substitution path", () => {
+    expect(
+      resolveTerminalProfileLaunch(
+        { id: "codex", name: "Codex", command: "codex", args: [PROMPT_SENTINEL] },
+        "review this",
+      ),
+    ).toEqual({ name: "Codex", command: "codex", args: ["review this"] });
+    expect(formatResolvedCommand({ command: "codex", args: ["review this"] })).toBe(
+      "codex review this",
+    );
+  });
+
+  it("adopts the sentinel for legacy bare agent profiles without changing positional forms", () => {
+    expect(
+      resolveTerminalProfiles([
+        { id: "legacy", name: "Codex", command: "codex", args: ["--yolo"] },
+      ]),
+    ).toEqual([
+      { id: "legacy", name: "Codex", command: "codex", args: ["--yolo", PROMPT_SENTINEL] },
+    ]);
+    expect(
+      resolveTerminalProfiles([
+        { id: "login", name: "Codex login", command: "codex", args: ["login"] },
+      ]),
+    ).toEqual([{ id: "login", name: "Codex login", command: "codex", args: ["login"] }]);
+  });
+
+  it("recognizes Windows command wrappers when adopting prompt support", () => {
+    expect(
+      resolveTerminalProfiles([
+        { id: "windows", name: "Claude", command: "C:\\Tools\\claude.cmd" },
+      ]),
+    ).toEqual([
+      {
+        id: "windows",
+        name: "Claude",
+        command: "C:\\Tools\\claude.cmd",
+        args: [PROMPT_SENTINEL],
+      },
+    ]);
   });
 });

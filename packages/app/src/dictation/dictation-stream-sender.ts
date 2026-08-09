@@ -54,14 +54,6 @@ export class DictationStreamSender {
     this.client = client;
   }
 
-  getDictationId(): string | null {
-    return this.dictationId;
-  }
-
-  getSegmentCount(): number {
-    return this.segments.length;
-  }
-
   getFinalSeq(): number {
     return this.segments.length - 1;
   }
@@ -99,7 +91,7 @@ export class DictationStreamSender {
 
     if (!this.dictationId) {
       if (!this.startPromise) {
-        void this.restartStream("enqueue").catch((error) => {
+        void this.restartStream().catch((error) => {
           console.error("[DictationStreamSender] Failed to start stream from enqueue", error);
         });
       }
@@ -132,7 +124,7 @@ export class DictationStreamSender {
     return sent;
   }
 
-  async restartStream(reason: string): Promise<void> {
+  async restartStream(): Promise<void> {
     const client = this.client;
     if (!client?.isConnected) {
       return;
@@ -158,11 +150,12 @@ export class DictationStreamSender {
       this.flush();
     })()
       .catch((error) => {
-        // If starting failed, keep the segments for retry but clear the stream so finish can error cleanly.
-        if (this.startGeneration === generation && this.dictationId === dictationId) {
-          this.dictationId = null;
-          this.streamReady = false;
+        if (this.startGeneration !== generation || this.dictationId !== dictationId) {
+          return;
         }
+        // If starting failed, keep the segments for retry but clear the stream so finish can error cleanly.
+        this.dictationId = null;
+        this.streamReady = false;
         throw error;
       })
       .finally(() => {
@@ -173,7 +166,6 @@ export class DictationStreamSender {
 
     this.startPromise = start;
     await start;
-    void reason;
   }
 
   async finish(finalSeq: number): Promise<DictationFinishResult> {
@@ -186,7 +178,7 @@ export class DictationStreamSender {
     }
 
     if (!this.dictationId) {
-      await this.restartStream("finalize");
+      await this.restartStream();
     }
     if (this.startPromise) {
       await this.startPromise;

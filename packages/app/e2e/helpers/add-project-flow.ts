@@ -112,8 +112,6 @@ export async function expectNewWorkspaceForAddedProject(
   const projectId = url.searchParams.get("projectId");
   expect(projectId).toBe(input.projectId);
   expect(url.searchParams.get("dir")).toBe(input.projectPath);
-  await expect(page.getByRole("button", { name: "Workspace project" })).toContainText(
-    input.projectName,
-    { timeout: 30_000 },
-  );
+  const projectPicker = page.getByTestId("new-workspace-project-picker-trigger");
+  await expect(projectPicker).toContainText(input.projectName, { timeout: 30_000 });
 }

@@ -90,7 +90,10 @@ import {
   type HostSectionSlug,
   type SettingsSectionSlug,
 } from "@/utils/host-routes";
-import { navigateToLastWorkspace } from "@/stores/navigation-active-workspace-store";
+import {
+  navigateToLastWorkspace,
+  useLastWorkspaceSelection,
+} from "@/stores/navigation-active-workspace-store";
 
 // ---------------------------------------------------------------------------
 // View model
@@ -855,8 +858,10 @@ export default function SettingsScreen({ view, openAddHostIntent = null }: Setti
   const insets = useSafeAreaInsets();
   const insetBottomStyle = useMemo(() => ({ paddingBottom: insets.bottom }), [insets.bottom]);
   const hosts = useHosts();
+  const lastWorkspaceSelection = useLastWorkspaceSelection();
+  const routedSettingsHostServerId = view.kind === "host" ? view.serverId : null;
   const [selectedSettingsHostServerId, setSelectedSettingsHostServerId] = useState<string | null>(
-    view.kind === "host" ? view.serverId : null,
+    routedSettingsHostServerId ?? lastWorkspaceSelection?.serverId ?? null,
   );
   const knownSelectedSettingsHostServerId = useMemo(() => {
     if (!selectedSettingsHostServerId) {
@@ -868,10 +873,10 @@ export default function SettingsScreen({ view, openAddHostIntent = null }: Setti
   }, [hosts, selectedSettingsHostServerId]);
 
   useEffect(() => {
-    if (view.kind === "host") {
-      setSelectedSettingsHostServerId(view.serverId);
-    }
-  }, [view]);
+    setSelectedSettingsHostServerId(
+      routedSettingsHostServerId ?? lastWorkspaceSelection?.serverId ?? null,
+    );
+  }, [lastWorkspaceSelection?.serverId, routedSettingsHostServerId]);
 
   // The host the four sections scope to: the host on the active view, otherwise
   // the picker choice, otherwise the first host.

@@ -187,8 +187,7 @@ export async function openNewWorkspaceComposer(
 }
 
 export async function openGlobalNewWorkspaceComposer(page: Page): Promise<void> {
-  await page.getByTestId("sidebar-global-new-workspace").click();
-
+  await page.keyboard.press("ControlOrMeta+N");
   await expect(page).toHaveURL(/\/new(?:\?.*)?$/, {
     timeout: 30_000,
   });
@@ -209,7 +208,7 @@ export async function expectNewWorkspaceProjectSelected(
   page: Page,
   projectDisplayName: string,
 ): Promise<void> {
-  const projectPicker = page.getByRole("button", { name: "Workspace project" });
+  const projectPicker = page.getByTestId("new-workspace-project-picker-trigger");
   await expect(projectPicker).toBeVisible({ timeout: 30_000 });
   await expect(projectPicker).toContainText(projectDisplayName);
 }
@@ -222,11 +221,6 @@ export async function fillNewWorkspaceDraft(page: Page, draft: string): Promise<
 
 export async function expectNewWorkspaceDraft(page: Page, draft: string): Promise<void> {
   await expect(page.getByRole("textbox", { name: "Message agent..." })).toHaveValue(draft);
-}
-
-export async function selectNewWorkspaceHost(page: Page, hostLabel: string): Promise<void> {
-  await page.getByTestId("host-picker-trigger").click();
-  await page.getByText(hostLabel, { exact: true }).click();
 }
 
 export async function submitNewWorkspacePrompt(
@@ -243,23 +237,16 @@ export async function submitNewWorkspacePrompt(
   await createButton.click();
 }
 
-export async function clickNewWorkspaceButton(
-  page: Page,
-  input: { projectKey: string; projectDisplayName: string; prompt?: string },
-): Promise<void> {
-  await openNewWorkspaceComposer(page, input);
-  await submitNewWorkspacePrompt(page, input.prompt);
-}
-
 export async function selectNewWorkspaceProject(
   page: Page,
   input: { projectKey: string; projectDisplayName: string },
 ): Promise<void> {
   const trigger = page.getByTestId("new-workspace-project-picker-trigger");
   await expect(trigger).toBeVisible({ timeout: 30_000 });
-  await trigger.click();
-
   const option = page.getByTestId(`new-workspace-project-picker-option-${input.projectKey}`);
+  if (!(await option.isVisible())) {
+    await trigger.click();
+  }
   await expect(option).toBeVisible({ timeout: 30_000 });
   await option.click();
 

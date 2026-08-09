@@ -27,7 +27,6 @@ import {
   type AgentSlashCommand,
   type AgentStreamEvent,
   type AgentTimelineItem,
-  type AgentUsage,
   type FetchCatalogOptions,
   type ImportableProviderSession,
   type ImportProviderSessionContext,
@@ -36,7 +35,6 @@ import {
   type ProviderCatalog,
   type ToolCallDetail,
 } from "../../agent-sdk-types.js";
-import type { BySpaceToolCatalog } from "../../tools/types.js";
 import { importSessionFromPersistence } from "../../provider-session-import.js";
 import { runProviderTurn } from "../provider-runner.js";
 import {
@@ -80,7 +78,6 @@ import type {
   OmpImageContent,
   OmpModel,
   OmpRuntimeEvent,
-  OmpSessionStats,
   OmpSessionState,
   OmpThinkingLevel,
 } from "./rpc-types.js";
@@ -95,14 +92,9 @@ import { mapOmpAvailableCommandsUpdate, mapOmpRuntimeSlashCommands } from "./com
 import { streamOmpHistory } from "./history.js";
 import { mapOmpTodoReminderEvent, mapOmpTodoState, mapOmpTodoToolResult } from "./todo-mapper.js";
 import { mapOmpRuntimeEventToTimelineItem } from "./event-mapper.js";
-import {
-  clearOmpHostToolState,
-  handleOmpHostToolRuntimeEvent,
-  setOmpHostTools,
-} from "./host-tools.js";
 import { OmpSubagentIndex } from "./subagent-index.js";
 import { mapOmpToolDetail } from "./tool-call-mapper.js";
-import { mapOmpUsage } from "./usage-mapper.js";
+import { OmpUsagePoller, type OmpUsagePollScheduler } from "./usage-poller.js";
 import {
   buildOmpRpcUiPermissionResponse,
   mapOmpRpcUiPermissionRequest,
@@ -137,6 +129,7 @@ export interface OmpAgentClientOptions {
   subagentCardScheduler?: OmpSubagentCardScheduler;
   providerIdleScheduler?: OmpProviderIdleScheduler;
   noTurnScheduler?: OmpNoTurnScheduler;
+  usagePollScheduler?: OmpUsagePollScheduler;
 }
 
 export interface OmpProviderIdleScheduler {
@@ -184,7 +177,7 @@ interface OmpAgentSessionOptions {
   subagentCardScheduler?: OmpSubagentCardScheduler;
   providerIdleScheduler?: OmpProviderIdleScheduler;
   noTurnScheduler?: OmpNoTurnScheduler;
-  byspaceTools?: BySpaceToolCatalog;
+  usagePollScheduler?: OmpUsagePollScheduler;
   /**
    * When false (resumed sessions), replayed session events are dropped until
    * the first prompt or agent_start so history is not re-emitted as live
@@ -303,35 +296,6 @@ function parseAutoCompactMode(value: string | undefined): AutoCompactMode {
     return "toggle";
   }
   return "unknown";
-}
-
-function toAgentUsage(stats: OmpSessionStats): AgentUsage | undefined {
-  const inputTokens = stats.tokens?.input ?? 0;
-  const cachedInputTokens = stats.tokens?.cacheRead ?? 0;
-  const outputTokens = stats.tokens?.output ?? 0;
-  const totalCostUsd = stats.cost ?? 0;
-  const contextWindowMaxTokens = stats.contextUsage?.contextWindow ?? undefined;
-  const contextWindowUsedTokens = stats.contextUsage?.tokens ?? undefined;
-
-  if (
-    inputTokens === 0 &&
-    cachedInputTokens === 0 &&
-    outputTokens === 0 &&
-    totalCostUsd === 0 &&
-    contextWindowMaxTokens === undefined &&
-    contextWindowUsedTokens === undefined
-  ) {
-    return undefined;
-  }
-
-  return {
-    inputTokens,
-    cachedInputTokens,
-    outputTokens,
-    totalCostUsd,
-    ...(typeof contextWindowMaxTokens === "number" ? { contextWindowMaxTokens } : {}),
-    ...(typeof contextWindowUsedTokens === "number" ? { contextWindowUsedTokens } : {}),
-  };
 }
 
 function ompModelSupportsImageInput(model: OmpModel | null | undefined): boolean {
@@ -491,7 +455,6 @@ function withOmpCapabilities(): AgentCapabilityFlags {
   return {
     ...OMP_CORE_CAPABILITIES,
     supportsMcpServers: false,
-    supportsNativeBySpaceTools: true,
   };
 }
 
@@ -898,6 +861,7 @@ export class OmpAgentSession implements AgentSession {
   private readonly currentModeId: string | null;
   private readonly providerIdleScheduler: OmpProviderIdleScheduler;
   private readonly noTurnScheduler: OmpNoTurnScheduler;
+  private readonly usagePoller: OmpUsagePoller;
   private closed = false;
   private live: boolean;
   private readonly emittedUserMessageIds = new Set<string>();
@@ -908,10 +872,24 @@ export class OmpAgentSession implements AgentSession {
     this.state = options.initialState;
     this.currentModeId = options.currentModeId ?? null;
     this.logger = options.logger;
-    this.byspaceTools = options.byspaceTools;
     this.live = options.live ?? true;
     this.providerIdleScheduler = options.providerIdleScheduler ?? createOmpProviderIdleScheduler();
     this.noTurnScheduler = options.noTurnScheduler ?? createOmpNoTurnScheduler();
+    this.usagePoller = new OmpUsagePoller({
+      scheduler: options.usagePollScheduler,
+      readStats: () => this.runtimeSession.getSessionStats(),
+      onUsage: (usage, turnId) => {
+        this.emit({
+          type: "usage_updated",
+          provider: this.provider,
+          usage,
+          ...(turnId === undefined ? {} : { turnId }),
+        });
+      },
+      onPollError: (error) => {
+        this.logger.debug({ err: error }, "OMP context usage poll failed");
+      },
+    });
     this.subagentCardTracker = new OmpSubagentCardTracker({
       scheduler: options.subagentCardScheduler,
     });
@@ -941,7 +919,6 @@ export class OmpAgentSession implements AgentSession {
   private readonly runtimeSession: OmpRuntimeSession;
   private readonly config: AgentSessionConfig;
   private readonly logger: Logger;
-  private readonly byspaceTools?: BySpaceToolCatalog;
 
   get id(): string | null {
     return this.state.sessionId;
@@ -976,6 +953,7 @@ export class OmpAgentSession implements AgentSession {
     this.activePromptRequestId = null;
     this.clearNoTurnBuffers();
     this.activeNoTurnPromptText = payload.text;
+    this.usagePoller.startTurn();
 
     void (async () => {
       try {
@@ -1000,6 +978,7 @@ export class OmpAgentSession implements AgentSession {
         if (this.activeTurnId !== turnId) {
           return;
         }
+        this.usagePoller.stopTurn();
         this.activeTurnId = null;
         this.activeClientMessageId = null;
         this.activeTurnStarted = false;
@@ -1129,12 +1108,10 @@ export class OmpAgentSession implements AgentSession {
 
   async interrupt(): Promise<void> {
     const turnId = this.activeTurnId;
-    try {
-      await this.runtimeSession.abort();
-    } finally {
-      this.terminalizeActiveWork();
-    }
+    await this.runtimeSession.abort();
     if (turnId && this.activeTurnId === turnId) {
+      this.terminalizeActiveWork();
+      this.usagePoller.stopTurn();
       this.activeTurnId = null;
       this.activeClientMessageId = null;
       this.activeTurnStarted = false;
@@ -1169,6 +1146,7 @@ export class OmpAgentSession implements AgentSession {
       return;
     }
     this.closed = true;
+    this.usagePoller.close();
     this.cancelNoTurnPromptCompletion();
     try {
       await this.runtimeSession.close();
@@ -1183,7 +1161,6 @@ export class OmpAgentSession implements AgentSession {
   }
 
   private clearOmpTurnState(): void {
-    clearOmpHostToolState(this.runtimeSession);
     this.subagentCardTracker.clear();
   }
 
@@ -1633,15 +1610,6 @@ export class OmpAgentSession implements AgentSession {
   }
 
   private handleExtraRuntimeEvent(event: OmpRuntimeEvent): boolean {
-    if (
-      handleOmpHostToolRuntimeEvent(event, {
-        runtimeSession: this.runtimeSession,
-        byspaceTools: this.byspaceTools,
-        logger: this.logger,
-      })
-    ) {
-      return true;
-    }
     if (event.type === "subagent_lifecycle") {
       const payload = (event as Extract<OmpRuntimeEvent, { type: "subagent_lifecycle" }>).payload;
       if (payload.parentToolCallId && this.activeToolCalls.has(payload.parentToolCallId)) {
@@ -1786,6 +1754,7 @@ export class OmpAgentSession implements AgentSession {
   }
 
   private handleProcessExit(error: string): void {
+    this.usagePoller.stopTurn();
     this.terminalizeActiveWork();
     this.subagentIndex.clear(this.runtimeSession);
     if (!this.activeTurnId) {
@@ -2137,6 +2106,7 @@ export class OmpAgentSession implements AgentSession {
     this.clearNoTurnBuffers();
     const errorMessage = latestOmpErrorMessage(messages);
     if (typeof errorMessage === "string" && errorMessage.length > 0) {
+      this.usagePoller.stopTurn();
       this.emit({
         type: "turn_failed",
         provider: this.provider,
@@ -2145,12 +2115,13 @@ export class OmpAgentSession implements AgentSession {
       });
       return;
     }
+    const finalUsage = this.usagePoller.completeTurn(turnId);
     this.emit({
       type: "turn_completed",
       provider: this.provider,
       turnId,
     });
-    void this.refreshAfterTurn(turnId);
+    void this.refreshAfterTurn(finalUsage);
   }
 
   private async completeTurnAfterProviderIdle(
@@ -2176,23 +2147,8 @@ export class OmpAgentSession implements AgentSession {
     this.state = await this.runtimeSession.getState();
   }
 
-  private async refreshAfterTurn(turnId: string | undefined): Promise<void> {
-    await this.refreshState().catch(() => undefined);
-    const usage = await this.runtimeSession
-      .getSessionStats()
-      .then((stats) => {
-        const baseUsage = toAgentUsage(stats);
-        return mapOmpUsage({ stats, state: this.state, baseUsage });
-      })
-      .catch(() => undefined);
-    if (usage) {
-      this.emit({
-        type: "usage_updated",
-        provider: this.provider,
-        turnId,
-        usage,
-      });
-    }
+  private async refreshAfterTurn(finalUsage: Promise<void>): Promise<void> {
+    await Promise.all([this.refreshState().catch(() => undefined), finalUsage]);
   }
 }
 
@@ -2207,6 +2163,7 @@ export class OmpAgentClient implements AgentClient {
   private readonly subagentCardScheduler?: OmpSubagentCardScheduler;
   private readonly providerIdleScheduler?: OmpProviderIdleScheduler;
   private readonly noTurnScheduler?: OmpNoTurnScheduler;
+  private readonly usagePollScheduler?: OmpUsagePollScheduler;
   private readonly runtime: OmpRuntime;
 
   constructor(options: OmpAgentClientOptions) {
@@ -2229,17 +2186,8 @@ export class OmpAgentClient implements AgentClient {
     this.subagentCardScheduler = options.subagentCardScheduler;
     this.providerIdleScheduler = options.providerIdleScheduler;
     this.noTurnScheduler = options.noTurnScheduler;
+    this.usagePollScheduler = options.usagePollScheduler;
     this.runtime = options.runtime ?? createRuntime(options.logger, runtimeSettings);
-  }
-
-  private async configureNativeBySpaceTools(
-    runtimeSession: OmpRuntimeSession,
-    catalog: BySpaceToolCatalog | undefined,
-  ): Promise<void> {
-    if (!catalog) {
-      return;
-    }
-    await setOmpHostTools(runtimeSession, catalog);
   }
 
   async createSession(
@@ -2259,7 +2207,6 @@ export class OmpAgentClient implements AgentClient {
       env: launchContext?.env,
     });
     try {
-      await this.configureNativeBySpaceTools(runtimeSession, launchContext?.byspaceTools);
       return new OmpAgentSession({
         runtimeSession,
         config,
@@ -2269,7 +2216,7 @@ export class OmpAgentClient implements AgentClient {
         subagentCardScheduler: this.subagentCardScheduler,
         providerIdleScheduler: this.providerIdleScheduler,
         noTurnScheduler: this.noTurnScheduler,
-        byspaceTools: launchContext?.byspaceTools,
+        usagePollScheduler: this.usagePollScheduler,
       });
     } catch (error) {
       await runtimeSession.close().catch(() => undefined);
@@ -2300,7 +2247,6 @@ export class OmpAgentClient implements AgentClient {
       }),
     );
     try {
-      await this.configureNativeBySpaceTools(runtimeSession, launchContext?.byspaceTools);
       return new OmpAgentSession({
         runtimeSession,
         config: resumeConfig.config,
@@ -2310,7 +2256,7 @@ export class OmpAgentClient implements AgentClient {
         subagentCardScheduler: this.subagentCardScheduler,
         providerIdleScheduler: this.providerIdleScheduler,
         noTurnScheduler: this.noTurnScheduler,
-        byspaceTools: launchContext?.byspaceTools,
+        usagePollScheduler: this.usagePollScheduler,
         live: false,
       });
     } catch (error) {

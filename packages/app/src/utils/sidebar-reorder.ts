@@ -3,8 +3,15 @@ export function mergeWithRemainder(input: {
   reorderedVisibleKeys: string[];
 }): string[] {
   const reorderedSet = new Set(input.reorderedVisibleKeys);
-  const remainder = input.currentOrder.filter((key) => !reorderedSet.has(key));
-  return [...input.reorderedVisibleKeys, ...remainder];
+  let reorderedIndex = 0;
+  const merged = input.currentOrder.map((key) => {
+    if (!reorderedSet.has(key)) return key;
+    const reorderedKey = input.reorderedVisibleKeys[reorderedIndex];
+    if (reorderedKey === undefined) return key;
+    reorderedIndex += 1;
+    return reorderedKey;
+  });
+  return [...merged, ...input.reorderedVisibleKeys.slice(reorderedIndex)];
 }
 
 export function hasVisibleOrderChanged(input: {

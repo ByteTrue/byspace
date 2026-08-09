@@ -57,7 +57,7 @@ Pass through any remaining arguments after the skill name as the skill's own inp
 
 ## Launch and synthesize
 
-Create the advisor agent via BySpace with a `[Advisor] <topic>` title and the briefing as the initial prompt. Wait for it to finish. Read its response. Synthesize for the user — the advisor's verdict + your recommendation.
+Call `create_agent` through `byspace tool call` with a `[Advisor] <topic>` title, the selected provider, and the briefing as `initialPrompt`. In agent scope, use `relationship: { "kind": "subagent" }` and `workspace: { "kind": "current" }`; creation is asynchronous, so wait for its completion notification and call `get_agent_activity`. In terminal scope, follow the base skill's detached/existing-or-create placement rule and omit `background` so the call blocks and returns the answer. Read the actual response before synthesizing; never treat the returned agent ID as the verdict.
 
 ## Persistent advisor
 

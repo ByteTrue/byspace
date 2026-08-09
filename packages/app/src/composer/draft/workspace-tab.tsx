@@ -14,6 +14,7 @@ import { composerWorkspaceAttachment } from "@/composer/attachments/workspace";
 import { useAgentInputDraft } from "@/composer/draft/input-draft";
 import type { CreateAgentInitialValues } from "@/hooks/use-agent-form-state";
 import { useDraftAgentCreateFlow, type DraftCreateAttempt } from "@/composer/draft/create-flow";
+import { resolveTurnPresentation, TURN_LIVENESS_IDLE } from "@/timeline/turn-liveness";
 import { useHostRuntimeClient, useHostRuntimeIsConnected } from "@/runtime/host-runtime";
 import { buildWorkspaceDraftAgentConfig } from "@/screens/workspace/workspace-draft-agent-config";
 import { buildDraftStoreKey } from "@/stores/draft-keys";
@@ -22,6 +23,7 @@ import { useCreateFlowStore } from "@/stores/create-flow-store";
 import type { Agent } from "@/stores/session-store";
 import { useWorkspaceFields } from "@/stores/session-store-hooks";
 import { useWorkspaceDraftSubmissionStore } from "@/stores/workspace-draft-submission-store";
+import { useAgentControlCommandCenterActions } from "@/command-center/agent-control-registration";
 import { encodeImages } from "@/utils/encode-images";
 import type { WorkspaceFileOpenRequest } from "@/workspace/file-open";
 import { shouldAutoFocusWorkspaceDraftComposer } from "@/screens/workspace/workspace-draft-pane-focus";
@@ -241,6 +243,7 @@ function buildDraftAgentSnapshot(input: {
     id: tabId,
     provider,
     status: "running",
+    activeTurn: null,
     createdAt: now,
     updatedAt: now,
     lastUserMessageAt: now,
@@ -373,6 +376,16 @@ export function WorkspaceDraftAgentTab({
   if (!composerState) {
     throw new Error("Workspace draft composer state is required");
   }
+  const draftProvider = composerState.selectedProvider;
+  const draftProviderDefinitions = composerState.providerDefinitions;
+  const draftThinkingOptions = composerState.availableThinkingOptions;
+  const draftSelectedThinkingId = composerState.selectedThinkingOptionId;
+  const draftSetThinkingOption = composerState.setThinkingOptionFromUser;
+  const draftModeOptions = composerState.modeOptions;
+  const draftSelectedMode = composerState.selectedMode;
+  const draftSetMode = composerState.setModeFromUser;
+  const draftFeatures = composerState.agentControls.features;
+  const draftOnSetFeature = composerState.agentControls.onSetFeature;
   const clearDraftInput = draftInput.clear;
   const setDraftText = draftInput.setText;
   const setDraftAttachments = draftInput.setAttachments;
@@ -453,7 +466,8 @@ export function WorkspaceDraftAgentTab({
   const {
     formErrorMessage,
     isSubmitting,
-    optimisticStreamItems,
+    submittedStreamItems,
+    pendingMessageSubmissions,
     draftAgent,
     handleCreateFromInput,
     continueCreateFromAttempt,
@@ -515,7 +529,41 @@ export function WorkspaceDraftAgentTab({
       onCreated(result);
     },
   });
+  useAgentControlCommandCenterActions({
+    sourceId: `draft:${serverId}:${tabId}`,
+    enabled: isPaneFocused && !isSubmitting,
+    controls: {
+      serverId,
+      ownerKey: tabId,
+      provider: draftProvider,
+      providerDefinitions: draftProviderDefinitions,
+      models: {
+        providers: composerState.modelSelectorProviders,
+        selectedProvider: draftProvider,
+        selectedModelId: composerState.effectiveModelId,
+        select: composerState.setProviderAndModelFromUser,
+      },
+      thinking: {
+        options: draftThinkingOptions,
+        selectedId: draftSelectedThinkingId,
+        select: draftSetThinkingOption,
+      },
+      modes: {
+        options: draftModeOptions,
+        selectedId: draftSelectedMode,
+        select: draftSetMode,
+      },
+      features: {
+        list: draftFeatures,
+        set: draftOnSetFeature,
+      },
+    },
+  });
 
+  const turnPresentation = useMemo(
+    () => resolveTurnPresentation(TURN_LIVENESS_IDLE, pendingMessageSubmissions.length > 0),
+    [pendingMessageSubmissions],
+  );
   const isReadyForPendingAutoSubmit = Boolean(
     pendingAutoSubmit &&
     draftInput.isHydrated &&
@@ -682,7 +730,9 @@ export function WorkspaceDraftAgentTab({
               agentId={tabId}
               serverId={serverId}
               context={draftAgent}
-              streamItems={optimisticStreamItems}
+              streamItems={submittedStreamItems}
+              pendingMessageSubmissions={pendingMessageSubmissions}
+              turnPresentation={turnPresentation}
               pendingPermissions={EMPTY_PENDING_PERMISSIONS}
               onOpenWorkspaceFile={onOpenWorkspaceFile}
             />
@@ -715,6 +765,7 @@ export function WorkspaceDraftAgentTab({
           isPaneFocused={isPaneFocused}
           onSubmitMessage={handleCreateFromInput}
           isSubmitLoading={isSubmitting}
+          isSubmitDisabled={composerState.isModelLoading}
           blurOnSubmit={true}
           value={draftInput.text}
           onChangeText={draftInput.setText}

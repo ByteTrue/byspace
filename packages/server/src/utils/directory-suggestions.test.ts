@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import {
   mkdtempSync,
   mkdirSync,
@@ -12,6 +13,7 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { isPlatform } from "../test-utils/platform.js";
 import {
+  type DirectorySuggestionDependencies,
   searchDirectoryEntries,
   WORKSPACE_SEARCH_HIDDEN_DIRECTORIES,
 } from "./directory-suggestions.js";
@@ -115,6 +117,135 @@ describe("searchDirectoryEntries", () => {
         },
       ],
     });
+  });
+
+  it("filters only bounded candidates in a mixed tracked and ignored large directory", async () => {
+    execFileSync("git", ["init", "-q"], { cwd: searchRoot });
+    writeFileSync(
+      path.join(searchRoot, ".gitignore"),
+      "candidate-ignored\ncandidate-tracked\nbulk-ignored/\n",
+    );
+    mkdirSync(path.join(searchRoot, "candidate-ignored"));
+    mkdirSync(path.join(searchRoot, "candidate-tracked"));
+    mkdirSync(path.join(searchRoot, "candidate-visible"));
+    writeFileSync(path.join(searchRoot, "candidate-tracked", ".keep"), "");
+    execFileSync("git", ["add", "-f", "candidate-tracked/.keep"], { cwd: searchRoot });
+    mkdirSync(path.join(searchRoot, "bulk-ignored"));
+    for (let index = 0; index < 1_000; index += 1) {
+      writeFileSync(path.join(searchRoot, "bulk-ignored", `noise-${index}.txt`), "");
+    }
+
+    await expect(
+      searchDirectoryEntries({
+        root: searchRoot,
+        query: "candidate",
+        pathFormat: "relative",
+        includeFiles: false,
+        includeDirectories: true,
+        respectGitIgnore: true,
+      }),
+    ).resolves.toEqual([
+      { path: "candidate-tracked", kind: "directory" },
+      { path: "candidate-visible", kind: "directory" },
+    ]);
+  });
+
+  it("bounds check-ignore stdin to the current candidate limit", async () => {
+    for (let index = 0; index < 50; index += 1) {
+      mkdirSync(path.join(searchRoot, `candidate-${index.toString().padStart(2, "0")}`));
+    }
+    const inputs: string[] = [];
+    const dependencies: DirectorySuggestionDependencies = {
+      runGitCommand: async (args, options) => {
+        expect(args).toEqual(["check-ignore", "--stdin", "-z"]);
+        inputs.push(options.input ?? "");
+        return { stdout: "", stderr: "", truncated: false, exitCode: 1, signal: null };
+      },
+    };
+
+    const results = await searchDirectoryEntries(
+      {
+        root: searchRoot,
+        query: "candidate",
+        pathFormat: "relative",
+        includeFiles: false,
+        includeDirectories: true,
+        respectGitIgnore: true,
+        limit: 7,
+      },
+      dependencies,
+    );
+
+    expect(results).toHaveLength(7);
+    expect(inputs).toHaveLength(1);
+    expect(inputs[0]?.split("\0").filter(Boolean)).toHaveLength(7);
+  });
+
+  it("keeps suggestions in a non-repository when Git ignore checking is unavailable", async () => {
+    mkdirSync(path.join(searchRoot, "candidate-visible"));
+
+    await expect(
+      searchDirectoryEntries({
+        root: searchRoot,
+        query: "candidate",
+        pathFormat: "relative",
+        includeFiles: false,
+        includeDirectories: true,
+        respectGitIgnore: true,
+      }),
+    ).resolves.toEqual([{ path: "candidate-visible", kind: "directory" }]);
+  });
+
+  it("fails closed when check-ignore errors inside a repository", async () => {
+    execFileSync("git", ["init", "-q"], { cwd: searchRoot });
+    mkdirSync(path.join(searchRoot, "candidate-ignored"));
+    const dependencies: DirectorySuggestionDependencies = {
+      runGitCommand: async () => {
+        throw new Error("check-ignore failed");
+      },
+    };
+
+    await expect(
+      searchDirectoryEntries(
+        {
+          root: searchRoot,
+          query: "candidate",
+          pathFormat: "relative",
+          includeFiles: false,
+          includeDirectories: true,
+          respectGitIgnore: true,
+        },
+        dependencies,
+      ),
+    ).resolves.toEqual([]);
+  });
+
+  it("fails closed when check-ignore output is truncated", async () => {
+    execFileSync("git", ["init", "-q"], { cwd: searchRoot });
+    mkdirSync(path.join(searchRoot, "candidate-ignored"));
+    const dependencies: DirectorySuggestionDependencies = {
+      runGitCommand: async () => ({
+        stdout: "",
+        stderr: "",
+        truncated: true,
+        exitCode: null,
+        signal: "SIGKILL",
+      }),
+    };
+
+    await expect(
+      searchDirectoryEntries(
+        {
+          root: searchRoot,
+          query: "candidate",
+          pathFormat: "relative",
+          includeFiles: false,
+          includeDirectories: true,
+          respectGitIgnore: true,
+        },
+        dependencies,
+      ),
+    ).resolves.toEqual([]);
   });
 
   it("configures raw blank queries independently from explicit root aliases", async () => {

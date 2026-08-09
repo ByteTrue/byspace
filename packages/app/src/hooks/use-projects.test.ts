@@ -222,6 +222,7 @@ describe("deriveProjectsFromReplica", () => {
       "totalWorkspaceCount",
     ]);
     expect(Object.keys(result.projects[0]?.hosts[0] ?? {}).sort()).toEqual([
+      "customIconRevision",
       "gitRuntime",
       "githubRuntime",
       "isOnline",

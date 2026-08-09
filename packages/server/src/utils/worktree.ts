@@ -31,8 +31,9 @@ import {
   type BySpaceConfig,
 } from "@bytetrue/byspace-protocol/byspace-config-schema";
 import {
+  createBySpaceWorktreeChangeRequestHint,
   normalizeBaseRefName,
-  type BySpaceWorktreeChangeRequestLookupTarget,
+  type BySpaceWorktreeChangeRequestHint,
   readBySpaceWorktreeMetadata,
   readBySpaceWorktreeRuntimePort,
   writeBySpaceWorktreeMetadata,
@@ -45,6 +46,8 @@ import { createExternalProcessEnv } from "../server/byspace-env.js";
 import { parseGitRevParsePath, resolveGitRevParsePath } from "./git-rev-parse-path.js";
 import { validateBranchSlug } from "@bytetrue/byspace-protocol/branch-slug";
 import { expandTilde, getRealpathAwareRelativePath } from "./path.js";
+
+import { terminateWithTreeKill } from "./tree-kill.js";
 
 export { slugify, validateBranchSlug } from "@bytetrue/byspace-protocol/branch-slug";
 
@@ -457,6 +460,7 @@ async function execSetupCommandStreamed(options: {
   env: NodeJS.ProcessEnv;
   index: number;
   total: number;
+  signal?: AbortSignal;
   onEvent?: (event: WorktreeSetupCommandProgressEvent) => void;
 }): Promise<WorktreeSetupCommandResult> {
   return new Promise((resolvePromise) => {
@@ -464,6 +468,7 @@ async function execSetupCommandStreamed(options: {
     const stdoutChunks: string[] = [];
     const stderrChunks: string[] = [];
     let settled = false;
+    let termination: Promise<unknown> | null = null;
 
     const emitOutput = (stream: "stdout" | "stderr", chunk: string) => {
       const text = stripAnsi(chunk);
@@ -486,11 +491,13 @@ async function execSetupCommandStreamed(options: {
       });
     };
 
-    const finish = (exitCode: number | null) => {
+    const finish = async (exitCode: number | null) => {
       if (settled) {
         return;
       }
       settled = true;
+      options.signal?.removeEventListener("abort", abort);
+      await termination;
       const result: WorktreeSetupCommandResult = {
         command: options.command,
         cwd: options.cwd,
@@ -529,6 +536,18 @@ async function execSetupCommandStreamed(options: {
       stdio: ["ignore", "pipe", "pipe"],
     });
 
+    const abort = () => {
+      termination ??= terminateWithTreeKill(child, {
+        gracefulTimeoutMs: 1000,
+        forceTimeoutMs: 1000,
+      });
+    };
+    if (options.signal?.aborted) {
+      abort();
+    } else {
+      options.signal?.addEventListener("abort", abort, { once: true });
+    }
+
     child.stdout?.on("data", (chunk: Buffer | string) => {
       emitOutput("stdout", chunk.toString());
     });
@@ -539,11 +558,11 @@ async function execSetupCommandStreamed(options: {
 
     child.on("error", (error) => {
       emitOutput("stderr", error instanceof Error ? error.message : String(error));
-      finish(null);
+      void finish(null);
     });
 
     child.on("close", (code) => {
-      finish(typeof code === "number" ? code : null);
+      void finish(typeof code === "number" ? code : null);
     });
   });
 }
@@ -629,8 +648,13 @@ export async function runWorktreeSetupCommands(options: {
   cleanupOnFailure: boolean;
   repoRootPath?: string;
   runtimeEnv?: WorktreeRuntimeEnv;
+  signal?: AbortSignal;
   onEvent?: (event: WorktreeSetupCommandProgressEvent) => void;
 }): Promise<WorktreeSetupCommandResult[]> {
+  if (options.signal?.aborted) {
+    return [];
+  }
+
   // Read byspace.json from the worktree (it will have the same content as the source repo)
   const setupCommands = getWorktreeSetupCommands(options.worktreePath);
   if (setupCommands.length === 0) {
@@ -648,6 +672,9 @@ export async function runWorktreeSetupCommands(options: {
 
   const results: WorktreeSetupCommandResult[] = [];
   for (const [index, cmd] of setupCommands.entries()) {
+    if (options.signal?.aborted) {
+      break;
+    }
     const result = options.onEvent
       ? await execSetupCommandStreamed({
           command: cmd,
@@ -655,6 +682,7 @@ export async function runWorktreeSetupCommands(options: {
           env: setupEnv,
           index: index + 1,
           total: setupCommands.length,
+          signal: options.signal,
           onEvent: options.onEvent,
         })
       : await execSetupCommand(cmd, {
@@ -662,6 +690,10 @@ export async function runWorktreeSetupCommands(options: {
           env: setupEnv,
         });
     results.push(result);
+
+    if (options.signal?.aborted) {
+      break;
+    }
 
     if (result.exitCode !== 0) {
       if (options.cleanupOnFailure) {
@@ -1258,6 +1290,7 @@ export const createWorktree = async ({
 
   writeBySpaceWorktreeMetadata(worktreePath, {
     baseRefName: sourcePlan.metadataBaseRefName,
+    ...(sourcePlan.metadataBaseRef ? { baseRef: sourcePlan.metadataBaseRef } : {}),
     ...(sourcePlan.changeRequestLookupTarget
       ? { changeRequestLookupTarget: sourcePlan.changeRequestLookupTarget }
       : {}),
@@ -1298,8 +1331,12 @@ interface ResolveWorktreeSourcePlanOptions {
 
 interface WorktreeSourcePlan {
   branchName: string;
+  // Display name and exact ref are two different facts. The name cannot round-trip to a
+  // commit — "main" resolves local-first even when the worktree was cut from a fork's
+  // upstream — so comparisons and actions read the ref and the UI reads the name.
   metadataBaseRefName: string;
-  changeRequestLookupTarget?: BySpaceWorktreeChangeRequestLookupTarget;
+  metadataBaseRef?: string;
+  changeRequestLookupTarget?: BySpaceWorktreeChangeRequestHint;
   addArguments: string[];
   pushRemote?: {
     name: string;
@@ -1323,7 +1360,7 @@ async function resolveWorktreeSourcePlan({
       const branchName = source.branchName;
       validateWorktreeBranchName(branchName);
       const normalizedBaseBranch = normalizeRequiredBaseBranch(source.baseBranch);
-      const resolvedBaseBranch = await resolveBaseBranchForWorktree(cwd, normalizedBaseBranch);
+      const resolvedBaseBranch = await resolveBaseBranchForWorktree(cwd, source.baseBranch);
       const branchExists = await localBranchExists(cwd, branchName);
       const base = branchExists ? branchName : resolvedBaseBranch;
       const candidateBranch = branchExists ? desiredSlug : branchName;
@@ -1332,6 +1369,7 @@ async function resolveWorktreeSourcePlan({
       return {
         branchName: newBranchName,
         metadataBaseRefName: normalizedBaseBranch,
+        metadataBaseRef: resolvedBaseBranch,
         addArguments: ["-b", newBranchName, "--no-track", base],
       };
     }
@@ -1407,13 +1445,14 @@ async function resolveWorktreeSourcePlan({
       return {
         branchName: localBranchName,
         metadataBaseRefName: normalizedBaseRefName,
-        changeRequestLookupTarget: {
+        changeRequestLookupTarget: createBySpaceWorktreeChangeRequestHint({
           headRef: source.headRef,
           ...(source.headRepositoryOwner
             ? { headRepositoryOwner: source.headRepositoryOwner }
             : {}),
           changeRequestNumber,
-        },
+          localBranchName,
+        }),
         addArguments: [localBranchName],
         ...remotePlan,
       };
@@ -1612,19 +1651,38 @@ function normalizeRequiredBaseBranch(baseBranch: string): string {
 
 async function resolveBaseBranchForWorktree(
   cwd: string,
-  normalizedBaseBranch: string,
+  requestedBaseBranch: string,
 ): Promise<string> {
-  try {
-    await runGitCommand(["rev-parse", "--verify", `origin/${normalizedBaseBranch}`], { cwd });
-    return `origin/${normalizedBaseBranch}`;
-  } catch {
+  const requested = requestedBaseBranch.trim();
+  const normalized = normalizeRequiredBaseBranch(requested);
+  let exactRef: string | null = null;
+  if (requested.startsWith("refs/")) {
+    exactRef = requested;
+  } else if (requested.startsWith("origin/")) {
+    exactRef = `refs/remotes/${requested}`;
+  }
+
+  if (exactRef) {
     try {
-      await runGitCommand(["rev-parse", "--verify", normalizedBaseBranch], { cwd });
-      return normalizedBaseBranch;
+      await runGitCommand(["rev-parse", "--verify", exactRef], { cwd });
+      return exactRef;
     } catch {
-      throw new Error(`Base branch not found: ${normalizedBaseBranch}`);
+      throw new Error(`Base branch not found: ${normalized}`);
     }
   }
+
+  // Preserve BySpace's origin-first behavior for legacy unqualified bases. New clients send
+  // the configured upstream as an exact ref, and explicit local refs remain exact.
+  const candidates = [`refs/remotes/origin/${requested}`, `refs/heads/${requested}`, requested];
+  for (const candidate of candidates) {
+    try {
+      await runGitCommand(["rev-parse", "--verify", candidate], { cwd });
+      return candidate;
+    } catch {
+      // Try the next unambiguous remote, local, or legacy ref candidate.
+    }
+  }
+  throw new Error(`Base branch not found: ${normalized}`);
 }
 
 async function localBranchExists(cwd: string, branchName: string): Promise<boolean> {

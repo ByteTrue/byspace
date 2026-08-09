@@ -16,16 +16,7 @@ import {
 
 export function useDictation(options: UseDictationOptions): UseDictationResult {
   const { t } = useTranslation();
-  const {
-    client,
-    onTranscript,
-    refineTranscript,
-    onError,
-    onPermanentFailure,
-    canStart,
-    canConfirm,
-    enableDuration = false,
-  } = options;
+  const { client, onTranscript, refineTranscript, onError, canStart, canConfirm } = options;
 
   const [isRecording, setIsRecording] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -47,11 +38,6 @@ export function useDictation(options: UseDictationOptions): UseDictationResult {
   useEffect(() => {
     onErrorRef.current = onError;
   }, [onError]);
-
-  const onPermanentFailureRef = useRef(onPermanentFailure);
-  useEffect(() => {
-    onPermanentFailureRef.current = onPermanentFailure;
-  }, [onPermanentFailure]);
 
   const isRecordingRef = useRef(isRecording);
   useEffect(() => {
@@ -98,23 +84,13 @@ export function useDictation(options: UseDictationOptions): UseDictationResult {
   }, []);
 
   const startDurationTracking = useCallback(() => {
-    if (!enableDuration) {
-      return;
-    }
     if (durationIntervalRef.current) {
       return;
     }
     durationIntervalRef.current = setInterval(() => {
       setDuration((prev) => prev + 1);
     }, DURATION_TICK_MS);
-  }, [enableDuration]);
-
-  useEffect(() => {
-    if (!enableDuration) {
-      stopDurationTracking();
-      setDuration(0);
-    }
-  }, [enableDuration, stopDurationTracking]);
+  }, []);
 
   const reportError = useCallback(
     (err: unknown, context?: string) => {
@@ -137,8 +113,8 @@ export function useDictation(options: UseDictationOptions): UseDictationResult {
     senderRef.current?.clearAll();
   }, []);
 
-  const startNewStream = useCallback(async (reason: string) => {
-    await senderRef.current?.restartStream(reason);
+  const startNewStream = useCallback(async () => {
+    await senderRef.current?.restartStream();
   }, []);
 
   const ensureFinalTranscript = useCallback(async (finalSeq: number): Promise<string> => {
@@ -157,7 +133,7 @@ export function useDictation(options: UseDictationOptions): UseDictationResult {
       if (!isRecordingRef.current) {
         return;
       }
-      void startNewStream("reconnect").catch((err) => {
+      void startNewStream().catch((err) => {
         reportError(err, "Failed to restart dictation stream after reconnect");
       });
     });
@@ -208,7 +184,6 @@ export function useDictation(options: UseDictationOptions): UseDictationResult {
   const handleDictationFailure = useCallback(
     (failure: unknown) => {
       const normalized = toError(failure);
-      const failureId = generateMessageId();
       stopDurationTracking();
       setIsProcessing(false);
       isProcessingRef.current = false;
@@ -217,7 +192,6 @@ export function useDictation(options: UseDictationOptions): UseDictationResult {
 
       if (senderRef.current?.hasSegments()) {
         setStatus("failed");
-        onPermanentFailureRef.current?.(normalized, { requestId: failureId });
       } else {
         setStatus("idle");
       }
@@ -265,6 +239,7 @@ export function useDictation(options: UseDictationOptions): UseDictationResult {
     }
 
     actionGateRef.current.starting = true;
+    const attemptId = attemptGuardRef.current.next();
     setError(null);
     setDuration(0);
     setIsProcessing(false);
@@ -273,16 +248,18 @@ export function useDictation(options: UseDictationOptions): UseDictationResult {
 
     try {
       await audio.start();
+      attemptGuardRef.current.assertCurrent(attemptId);
       isRecordingRef.current = true;
       setIsRecording(true);
-      if (enableDuration) {
-        startDurationTracking();
-      }
+      startDurationTracking();
       if (client?.isConnected) {
-        await startNewStream("start");
+        await startNewStream();
       }
     } catch (err) {
       await audio.stop().catch(() => undefined);
+      if (!attemptGuardRef.current.isCurrent(attemptId)) {
+        return;
+      }
       stopDurationTracking();
       isRecordingRef.current = false;
       setIsRecording(false);
@@ -296,7 +273,6 @@ export function useDictation(options: UseDictationOptions): UseDictationResult {
     canStart,
     clearStreamingState,
     client,
-    enableDuration,
     reportError,
     startDurationTracking,
     startNewStream,
@@ -431,25 +407,16 @@ export function useDictation(options: UseDictationOptions): UseDictationResult {
     clearStreamingState();
   }, [clearStreamingState]);
 
-  const reset = useCallback(() => {
-    attemptGuardRef.current.cancel();
-    actionGateRef.current.confirming = false;
-    setIsRecording(false);
-    isRecordingRef.current = false;
-    setIsProcessing(false);
-    isProcessingRef.current = false;
-    stopDurationTracking();
-    setDuration(0);
-    setError(null);
-    setStatus("idle");
-    clearStreamingState();
-  }, [clearStreamingState, stopDurationTracking]);
-
   useEffect(() => {
     const attemptGuard = attemptGuardRef.current;
     const audioStop = audioStopRef;
     return () => {
       attemptGuard.cancel();
+      try {
+        senderRef.current?.cancel();
+      } catch {
+        // no-op
+      }
       stopDurationTracking();
       void audioStop.current().catch(() => undefined);
     };
@@ -469,7 +436,6 @@ export function useDictation(options: UseDictationOptions): UseDictationResult {
     confirmDictation,
     retryFailedDictation,
     discardFailedDictation,
-    reset,
   };
 }
 

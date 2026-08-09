@@ -30,6 +30,13 @@ import { HEADER_INNER_HEIGHT, MAX_CONTENT_WIDTH, useIsCompactFormFactor } from "
 import { useToast } from "@/contexts/toast-context";
 import { useAgentInputDraft } from "@/composer/draft/input-draft";
 import { useForgeSearchQuery } from "@/git/use-forge-search-query";
+import { useDaemonConfig } from "@/hooks/use-daemon-config";
+import { resolveTerminalProfiles } from "@bytetrue/byspace-protocol/terminal-profiles";
+import type { TerminalProfile } from "@bytetrue/byspace-protocol/messages";
+import { LaunchControl } from "@/new-workspace-launch/launch-control";
+import { resolveLaunchTarget, type LaunchTarget } from "@/new-workspace-launch/target";
+import { useTerminalComposerState } from "@/new-workspace-launch/composer-state";
+import { runCreateTerminalWorkspace } from "./new-workspace-terminal";
 import {
   useHostRuntimeClient,
   useHostRuntimeConnectionStatuses,
@@ -39,12 +46,8 @@ import {
 } from "@/runtime/host-runtime";
 import { useHostFeature, useHostFeatureMap } from "@/runtime/host-features";
 import type { HostProfile } from "@/types/host-connection";
-import {
-  navigateToWorkspace,
-  useLastWorkspaceSelection,
-} from "@/stores/navigation-active-workspace-store";
+import { navigateToWorkspace } from "@/stores/navigation-active-workspace-store";
 import { normalizeWorkspaceDescriptor, useSessionStore } from "@/stores/session-store";
-import { useWorkspace } from "@/stores/session-store-hooks";
 import { buildNewWorkspaceDraftKey, generateDraftId } from "@/stores/draft-keys";
 import { useDraftStore } from "@/stores/draft-store";
 import { useOpenAddProject } from "@/hooks/use-open-add-project";
@@ -63,18 +66,20 @@ import { generateMessageId } from "@/types/stream";
 import { toErrorMessage } from "@/utils/error-messages";
 import { projectIconPlaceholderLabelFromDisplayName } from "@/utils/project-display-name";
 import {
+  getWorkspaceCreationHosts,
   getHostProjectId,
   getHostProjectSourceDirectory,
   hostProjectFromRoute,
-  hostProjectFromWorkspace,
   useHostProjects,
   type HostProjectListItem,
 } from "@/projects/host-projects";
+import { buildProjectIconRequestTarget } from "@/projects/project-icon-lookup";
 import { useProjectIconDataByProjectKey } from "@/projects/project-icons";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
 import type { ComposerAttachment } from "@/attachments/types";
 import { useDraftWorkspaceAttachmentScopeKey } from "@/attachments/workspace-attachments-store";
 import type { MessagePayload } from "@/composer/types";
+import type { UserComposerAttachment } from "@/attachments/types";
 import type { AgentAttachment, ForgeSearchItem } from "@bytetrue/byspace-protocol/messages";
 import type { CreateBySpaceWorktreeInput } from "@bytetrue/byspace-client/internal/daemon-client";
 import type { AgentProvider } from "@bytetrue/byspace-protocol/agent-types";
@@ -84,11 +89,7 @@ import {
   getWorkspaceNamingAttachments,
   remapDraftCwdToWorkspace,
 } from "./new-workspace-fork-context";
-import {
-  pickerItemToCheckoutRequest,
-  type PickerCheckoutRequest,
-  type PickerItem,
-} from "./new-workspace-picker-item";
+import { resolveCheckoutRequest, type PickerItem } from "./new-workspace-picker-item";
 import {
   buildPickerTargetId,
   clearPickerPrAttachmentForTargetChange,
@@ -98,10 +99,7 @@ import {
   restorePickerPrSelection,
   syncPickerPrAttachment,
 } from "./new-workspace-picker-state";
-import {
-  resolveNewWorkspaceAutomaticServerId,
-  resolveNewWorkspaceInitialServerId,
-} from "./new-workspace-initial-context";
+import { resolveNewWorkspaceHostSelection } from "./new-workspace-initial-context";
 import { useNewWorkspaceProjectPicker } from "./new-workspace/project-picker";
 
 const ThemedFolderPlus = withUnistyles(FolderPlus);
@@ -109,19 +107,6 @@ const foregroundMutedColorMapping = (theme: Theme) => ({ color: theme.colors.for
 const addProjectIcon = (
   <ThemedFolderPlus size={ICON_SIZE.sm} uniProps={foregroundMutedColorMapping} />
 );
-
-function resolveCheckoutRequest(
-  selectedItem: PickerItem | null,
-  currentBranch: string | null,
-): PickerCheckoutRequest | undefined {
-  const selectedCheckoutRequest = pickerItemToCheckoutRequest(selectedItem);
-  if (selectedCheckoutRequest) return selectedCheckoutRequest;
-  if (!currentBranch) return undefined;
-  return {
-    action: "branch-off",
-    refName: currentBranch,
-  };
-}
 
 function useIsNewWorkspaceDraftHandoffActive(input: {
   draftId: string | undefined;
@@ -147,8 +132,14 @@ function resolveVisibleDraftContextScopeKeys(input: {
   return [input.draftContextScopeKey];
 }
 
+function resolveCheckoutUpstreamRef(
+  status: { upstreamRef?: string | null } | undefined,
+): string | null {
+  return status?.upstreamRef ?? null;
+}
+
 function isNewWorkspacePending(input: {
-  pendingAction: "chat" | "empty" | null;
+  pendingAction: "chat" | "empty" | "terminal" | null;
   isDraftHandoffActive: boolean;
 }): boolean {
   return input.pendingAction !== null || input.isDraftHandoffActive;
@@ -173,6 +164,7 @@ interface NewWorkspaceScreenProps {
   serverId: string;
   sourceDirectory?: string;
   projectId?: string;
+  projectKey?: string;
   displayName?: string;
   draftId?: string;
 }
@@ -184,7 +176,62 @@ interface PickerOptionData {
 
 const BRANCH_OPTION_PREFIX = "branch:";
 const PR_OPTION_PREFIX = "github-pr:";
+async function runWithNewWorkspaceErrorHandling(
+  action: () => Promise<void>,
+  handleError: (message: string) => void,
+): Promise<void> {
+  try {
+    await action();
+  } catch (error) {
+    handleError(toErrorMessage(error));
+  }
+}
+
+function getTerminalProfileName(profile: TerminalProfile | null): string | undefined {
+  return profile ? profile.name : undefined;
+}
+
+function resolveConfiguredTerminalProfiles(
+  config: { terminalProfiles?: TerminalProfile[] } | null | undefined,
+): readonly TerminalProfile[] {
+  return resolveTerminalProfiles(config?.terminalProfiles);
+}
+
+function resolveRememberedLaunchTarget(
+  manual: LaunchTarget | null,
+  remembered: LaunchTarget | undefined,
+  profiles: readonly TerminalProfile[],
+): LaunchTarget {
+  return resolveLaunchTarget(manual ?? remembered, profiles);
+}
+
+function requireCreatedTerminalId(
+  result: { terminal?: { id: string } | null; error?: string | null },
+  fallbackMessage: string,
+): string {
+  if (!result.terminal) {
+    throw new Error(result.error ?? fallbackMessage);
+  }
+  return result.terminal.id;
+}
+
+const NO_TERMINAL_ATTACHMENTS: UserComposerAttachment[] = [];
+function noopChangeAttachments() {}
+function noopClearDraft() {}
+
 const PROJECT_ICON_FALLBACK_FONT_SIZE = 10;
+const ThemedChevronDown = withUnistyles(ChevronDown);
+const chevronExtraMutedMapping = (theme: Theme) => ({ color: theme.colors.foregroundExtraMuted });
+
+function MetaChevron(): ReactElement {
+  return (
+    <View style={styles.chevronContainer}>
+      <ThemedChevronDown size={ICON_SIZE.sm} uniProps={chevronExtraMutedMapping} />
+    </View>
+  );
+}
+
+const metaChevron = <MetaChevron />;
 const PROJECT_PICK_ACTIONS: readonly KeyboardActionId[] = ["workspace.project.pick"];
 // Height of a single picker-trigger badge. The Base-row spacer reserves exactly
 // this so toggling Isolation to Local hides the row without shifting the form.
@@ -244,6 +291,7 @@ function RefPickerTrigger({
     <Tooltip>
       <TooltipTrigger asChild triggerRefProp="ref">
         <ComboboxTrigger
+          chevron={metaChevron}
           ref={pickerAnchorRef}
           testID="new-workspace-ref-picker-trigger"
           onPress={onPress}
@@ -273,6 +321,7 @@ function ProjectPickerTrigger({
   disabled,
   badgePressableStyle,
   label,
+  tooltipLabel,
   projectKey,
   iconDataUri,
   iconColor,
@@ -283,6 +332,7 @@ function ProjectPickerTrigger({
   disabled: boolean;
   badgePressableStyle: React.ComponentProps<typeof Pressable>["style"];
   label: string;
+  tooltipLabel: string;
   projectKey: string | null;
   iconDataUri: string | null;
   iconColor: string;
@@ -294,13 +344,14 @@ function ProjectPickerTrigger({
     <Tooltip>
       <TooltipTrigger asChild triggerRefProp="ref">
         <ComboboxTrigger
+          chevron={metaChevron}
           ref={pickerAnchorRef}
           testID="new-workspace-project-picker-trigger"
           onPress={onPress}
           disabled={disabled}
           style={badgePressableStyle}
           accessibilityRole="button"
-          accessibilityLabel="Workspace project"
+          accessibilityLabel={projectKey ? `${tooltipLabel}: ${label}` : tooltipLabel}
         >
           <View style={styles.badgeIconBox}>
             {projectKey ? (
@@ -322,7 +373,7 @@ function ProjectPickerTrigger({
         </ComboboxTrigger>
       </TooltipTrigger>
       <TooltipContent side="top" align="center" offset={8}>
-        <Text style={styles.tooltipText}>Choose project</Text>
+        <Text style={styles.tooltipText}>{tooltipLabel}</Text>
       </TooltipContent>
     </Tooltip>
   );
@@ -534,9 +585,7 @@ function NewWorkspaceProjectPickerOption({
   onPress,
   projectByOptionId,
   projectIconDataByProjectKey,
-  selectedServerId,
   isPending,
-  supportsWorkspaceMultiplicity,
 }: {
   option: ComboboxOptionType;
   selected: boolean;
@@ -544,14 +593,11 @@ function NewWorkspaceProjectPickerOption({
   onPress: () => void;
   projectByOptionId: Map<string, HostProjectListItem>;
   projectIconDataByProjectKey: Map<string, string | null>;
-  selectedServerId: string;
   isPending: boolean;
-  supportsWorkspaceMultiplicity: boolean;
 }) {
   const project = projectByOptionId.get(option.id);
   if (!project) return <View key={option.id} />;
-  const sourceDirectory =
-    getHostProjectSourceDirectory(project, selectedServerId) ?? project.iconWorkingDir;
+  const sourceDirectory = project.iconWorkingDir;
 
   return (
     <ProjectOptionItem
@@ -562,10 +608,7 @@ function NewWorkspaceProjectPickerOption({
       description={sourceDirectory}
       selected={selected}
       active={active}
-      disabled={
-        isPending ||
-        (!supportsWorkspaceMultiplicity && !project.hosts.some((host) => host.canCreateWorktree))
-      }
+      disabled={isPending}
       onPress={onPress}
     />
   );
@@ -647,6 +690,7 @@ function IsolationPickerTrigger({
   badgePressableStyle,
   isolation,
   label,
+  tooltipLabel,
   iconColor,
   iconSize,
 }: {
@@ -656,30 +700,39 @@ function IsolationPickerTrigger({
   badgePressableStyle: React.ComponentProps<typeof Pressable>["style"];
   isolation: "local" | "worktree";
   label: string;
+  tooltipLabel: string;
   iconColor: string;
   iconSize: number;
 }) {
   return (
-    <ComboboxTrigger
-      ref={pickerAnchorRef}
-      testID="workspace-create-isolation-trigger"
-      onPress={onPress}
-      disabled={disabled}
-      style={badgePressableStyle}
-      accessibilityRole="button"
-      accessibilityLabel="Workspace isolation"
-    >
-      <View style={styles.badgeIconBox}>
-        {isolation === "worktree" ? (
-          <GitBranch size={iconSize} color={iconColor} />
-        ) : (
-          <Folder size={iconSize} color={iconColor} />
-        )}
-      </View>
-      <Text style={styles.badgeText} numberOfLines={1}>
-        {label}
-      </Text>
-    </ComboboxTrigger>
+    <Tooltip>
+      <TooltipTrigger asChild triggerRefProp="ref">
+        <ComboboxTrigger
+          chevron={metaChevron}
+          ref={pickerAnchorRef}
+          testID="workspace-create-isolation-trigger"
+          onPress={onPress}
+          disabled={disabled}
+          style={badgePressableStyle}
+          accessibilityRole="button"
+          accessibilityLabel="Workspace isolation"
+        >
+          <View style={styles.badgeIconBox}>
+            {isolation === "worktree" ? (
+              <GitBranch size={iconSize} color={iconColor} />
+            ) : (
+              <Folder size={iconSize} color={iconColor} />
+            )}
+          </View>
+          <Text style={styles.badgeText} numberOfLines={1}>
+            {label}
+          </Text>
+        </ComboboxTrigger>
+      </TooltipTrigger>
+      <TooltipContent side="top" align="center" offset={8}>
+        <Text style={styles.tooltipText}>{tooltipLabel}</Text>
+      </TooltipContent>
+    </Tooltip>
   );
 }
 
@@ -814,6 +867,7 @@ async function createMultiplicityWorkspace(input: {
   sourceDirectory: string;
   selectedItem: PickerItem | null;
   currentBranch: string | null;
+  upstreamRef: string | null;
   withInitialAgent: boolean;
   prompt: string;
   attachments: AgentAttachment[];
@@ -828,7 +882,10 @@ async function createMultiplicityWorkspace(input: {
   if (!hostProjectId) throw new Error("Project is not available on the selected host");
   const isWorktree = input.isolation === "worktree";
   const checkoutRequest = isWorktree
-    ? resolveCheckoutRequest(input.selectedItem, input.currentBranch)
+    ? resolveCheckoutRequest(input.selectedItem, {
+        currentBranch: input.currentBranch,
+        upstreamRef: input.upstreamRef,
+      })
     : undefined;
   const firstAgentContext = buildFirstAgentContext({
     prompt: input.prompt,
@@ -1105,104 +1162,74 @@ function submitWorkspaceDraft(input: SubmitDraftInput): void {
 
 function useNewWorkspaceHostSelector(input: {
   initialServerId: string;
-  allServerIds: string[];
-  projects: HostProjectListItem[];
-  lastActiveProject: HostProjectListItem | null;
+  allHosts: HostProfile[];
+  selectedProject: HostProjectListItem | null;
   hostConnectionStatusByServerId: ReadonlyMap<string, HostRuntimeConnectionStatus>;
   workspaceMultiplicityByServerId: ReadonlyMap<string, boolean>;
 }) {
-  const routeServerId = input.initialServerId.trim();
-  const defaultServerId = useMemo(
+  const allServerIds = useMemo(() => input.allHosts.map((host) => host.serverId), [input.allHosts]);
+  const resolution = useMemo(
     () =>
-      resolveNewWorkspaceInitialServerId({
-        allServerIds: input.allServerIds,
+      resolveNewWorkspaceHostSelection({
+        allServerIds,
         routeServerId: input.initialServerId,
-        lastActiveProject: input.lastActiveProject,
-        projects: input.projects,
+        selectedProject: input.selectedProject,
         hostConnectionStatusByServerId: input.hostConnectionStatusByServerId,
         workspaceMultiplicityByServerId: input.workspaceMultiplicityByServerId,
       }),
     [
-      input.allServerIds,
+      allServerIds,
       input.hostConnectionStatusByServerId,
       input.initialServerId,
-      input.lastActiveProject,
-      input.projects,
+      input.selectedProject,
       input.workspaceMultiplicityByServerId,
     ],
   );
-  const [automaticSelection, setAutomaticSelection] = useState(() => ({
-    routeServerId,
-    serverId: defaultServerId,
-  }));
+  const projectKey = input.selectedProject?.projectKey ?? "";
   const [manualSelection, setManualSelection] = useState<{
-    routeServerId: string;
+    projectKey: string;
     serverId: string;
   } | null>(null);
   const [hostPickerOpen, setHostPickerOpen] = useState(false);
-
-  useEffect(() => {
-    setAutomaticSelection((current) => {
-      const nextServerId =
-        current.routeServerId === routeServerId
-          ? resolveNewWorkspaceAutomaticServerId({
-              allServerIds: input.allServerIds,
-              routeServerId: input.initialServerId,
-              lastActiveProject: input.lastActiveProject,
-              projects: input.projects,
-              hostConnectionStatusByServerId: input.hostConnectionStatusByServerId,
-              workspaceMultiplicityByServerId: input.workspaceMultiplicityByServerId,
-              currentServerId: current.serverId,
-              nextServerId: defaultServerId,
-            })
-          : defaultServerId;
-
-      if (current.routeServerId === routeServerId && current.serverId === nextServerId) {
-        return current;
-      }
-
-      return { routeServerId, serverId: nextServerId };
-    });
-  }, [
-    defaultServerId,
-    input.allServerIds,
-    input.hostConnectionStatusByServerId,
-    input.initialServerId,
-    input.lastActiveProject,
-    input.projects,
-    input.workspaceMultiplicityByServerId,
-    routeServerId,
-  ]);
-
-  const automaticServerId =
-    automaticSelection.routeServerId === routeServerId &&
-    input.allServerIds.includes(automaticSelection.serverId)
-      ? automaticSelection.serverId
-      : defaultServerId;
-  const selectedServerId =
-    manualSelection?.routeServerId === routeServerId &&
-    input.allServerIds.includes(manualSelection.serverId)
+  const manualServerId =
+    manualSelection?.projectKey === projectKey &&
+    resolution.eligibleServerIds.includes(manualSelection.serverId)
       ? manualSelection.serverId
-      : automaticServerId;
-
-  const handleSelectHost = useCallback(
-    (id: string) => {
-      setManualSelection({ routeServerId, serverId: id });
-      setHostPickerOpen(false);
-    },
-    [routeServerId],
+      : null;
+  const requiresHostSelection = resolution.requiresHostSelection && manualServerId === null;
+  const selectedServerId = manualServerId ?? resolution.selectedServerId;
+  const availableHosts = useMemo(
+    () => input.allHosts.filter((host) => resolution.eligibleServerIds.includes(host.serverId)),
+    [input.allHosts, resolution.eligibleServerIds],
   );
 
+  useEffect(() => {
+    if (requiresHostSelection) {
+      setHostPickerOpen(true);
+    }
+  }, [projectKey, requiresHostSelection]);
+
+  const handleSelectHost = useCallback(
+    (serverId: string) => {
+      if (!resolution.eligibleServerIds.includes(serverId)) {
+        return;
+      }
+      setManualSelection({ projectKey, serverId });
+      setHostPickerOpen(false);
+    },
+    [projectKey, resolution.eligibleServerIds],
+  );
   const handleHostPickerOpenChange = useCallback((open: boolean) => {
     setHostPickerOpen(open);
   }, []);
-
   const openHostPicker = useCallback(() => {
     setHostPickerOpen(true);
   }, []);
 
   return {
+    availableHosts,
     selectedServerId,
+    requiresHostSelection,
     hostPickerOpen,
     handleSelectHost,
     handleHostPickerOpenChange,
@@ -1212,27 +1239,26 @@ function useNewWorkspaceHostSelector(input: {
 
 interface NewWorkspaceInitialContextState {
   allHosts: HostProfile[];
-  selectedServerId: string;
-  hostPickerOpen: boolean;
-  handleSelectHost: (id: string) => void;
-  handleHostPickerOpenChange: (open: boolean) => void;
-  openHostPicker: () => void;
   projects: HostProjectListItem[];
   routeProject: HostProjectListItem | null;
-  lastActiveProject: HostProjectListItem | null;
+  routeProjectKey: string | null;
+  hostConnectionStatusByServerId: ReadonlyMap<string, HostRuntimeConnectionStatus>;
+  workspaceMultiplicityByServerId: ReadonlyMap<string, boolean>;
 }
 
 function useNewWorkspaceInitialContext({
   serverId,
   sourceDirectory: sourceDirectoryProp,
   projectId,
+  projectKey,
   displayName: displayNameProp,
 }: NewWorkspaceScreenProps): NewWorkspaceInitialContextState {
   const allHosts = useHosts();
-  const allServerIds = useMemo(() => allHosts.map((h) => h.serverId), [allHosts]);
+  const allServerIds = useMemo(() => allHosts.map((host) => host.serverId), [allHosts]);
   const projects = useHostProjects(allServerIds);
   const routeDisplayName = displayNameProp?.trim() ?? "";
-  const routeProject = useMemo(
+  const aggregateProjectKey = projectKey && projectKey.trim() ? projectKey : null;
+  const hostRouteProject = useMemo(
     () =>
       hostProjectFromRoute({
         serverId,
@@ -1242,50 +1268,24 @@ function useNewWorkspaceInitialContext({
       }),
     [projectId, routeDisplayName, serverId, sourceDirectoryProp],
   );
-  const lastWorkspaceSelection = useLastWorkspaceSelection();
-  const lastWorkspaceServerId = useMemo(
+  const routeProject = useMemo(
     () =>
-      lastWorkspaceSelection && allServerIds.includes(lastWorkspaceSelection.serverId)
-        ? lastWorkspaceSelection.serverId
-        : null,
-    [allServerIds, lastWorkspaceSelection],
+      aggregateProjectKey
+        ? (projects.find((project) => project.projectKey === aggregateProjectKey) ?? null)
+        : hostRouteProject,
+    [aggregateProjectKey, hostRouteProject, projects],
   );
-  const lastWorkspaceId = lastWorkspaceServerId ? lastWorkspaceSelection!.workspaceId : null;
-  const lastWorkspace = useWorkspace(lastWorkspaceServerId, lastWorkspaceId);
-  const lastActiveProject = useMemo(
-    () =>
-      lastWorkspaceServerId
-        ? hostProjectFromWorkspace({ serverId: lastWorkspaceServerId, workspace: lastWorkspace })
-        : null,
-    [lastWorkspace, lastWorkspaceServerId],
-  );
+  const routeProjectKey = aggregateProjectKey ?? hostRouteProject?.projectKey ?? null;
   const hostConnectionStatusByServerId = useHostRuntimeConnectionStatuses(allServerIds);
   const workspaceMultiplicityByServerId = useHostFeatureMap(allServerIds, "workspaceMultiplicity");
-  const {
-    selectedServerId,
-    hostPickerOpen,
-    handleSelectHost,
-    handleHostPickerOpenChange,
-    openHostPicker,
-  } = useNewWorkspaceHostSelector({
-    initialServerId: serverId,
-    allServerIds,
-    projects,
-    lastActiveProject,
-    hostConnectionStatusByServerId,
-    workspaceMultiplicityByServerId,
-  });
 
   return {
     allHosts,
-    selectedServerId,
-    hostPickerOpen,
-    handleSelectHost,
-    handleHostPickerOpenChange,
-    openHostPicker,
     projects,
     routeProject,
-    lastActiveProject,
+    routeProjectKey,
+    hostConnectionStatusByServerId,
+    workspaceMultiplicityByServerId,
   };
 }
 
@@ -1314,6 +1314,7 @@ interface NewWorkspaceFormStackInput {
   host: FormPickerControl & {
     allHosts: HostProfile[];
     selectedServerId: string;
+    requiresHostSelection: boolean;
     onSelect: (id: string) => void;
   };
   isolation: FormPickerControl & {
@@ -1335,15 +1336,24 @@ interface NewWorkspaceFormStackInput {
     renderOption: RefPickerRenderOption;
     showRefPicker: boolean;
   };
+  launch: {
+    serverId: string;
+    target: LaunchTarget;
+    onChange: (target: LaunchTarget) => void;
+    profiles: readonly TerminalProfile[];
+    disabled: boolean;
+  };
 }
 
 function useNewWorkspaceFormStack(input: NewWorkspaceFormStackInput): ReactElement {
   const { theme } = useUnistyles();
   const { t } = useTranslation();
-  const { isCompact, isPending, project, host, isolation, base } = input;
+  const { isCompact, isPending, project, host, isolation, base, launch } = input;
 
-  const selectedHostLabel =
-    host.allHosts.find((h) => h.serverId === host.selectedServerId)?.label ?? "Host";
+  const selectedHostLabel = host.requiresHostSelection
+    ? t("newWorkspace.host.choose")
+    : (host.allHosts.find((candidate) => candidate.serverId === host.selectedServerId)?.label ??
+      t("newWorkspace.host.label"));
   const showHostControl = host.allHosts.length > 1;
   const isolationTriggerLabel = isolationLabel(t, isolation.effectiveIsolation);
   const addProjectAction = useMemo(
@@ -1369,6 +1379,7 @@ function useNewWorkspaceFormStack(input: NewWorkspaceFormStackInput): ReactEleme
         disabled={isPending}
         badgePressableStyle={badgePressableStyle}
         label={project.triggerLabel}
+        tooltipLabel={t("newWorkspace.project.choose")}
         projectKey={project.selectedProject?.projectKey ?? null}
         iconDataUri={
           project.selectedProject
@@ -1383,13 +1394,13 @@ function useNewWorkspaceFormStack(input: NewWorkspaceFormStackInput): ReactEleme
         value={project.selectedOptionId}
         onSelect={project.onSelect}
         searchable
-        searchPlaceholder="Search projects"
-        title="Project"
+        searchPlaceholder={t("newWorkspace.project.searchPlaceholder")}
+        title={t("newWorkspace.project.title")}
         open={project.openState}
         onOpenChange={project.onOpenChange}
         desktopPlacement="bottom-start"
         anchorRef={project.anchorRef}
-        emptyText="No projects available."
+        emptyText={t("newWorkspace.project.empty")}
         renderOption={project.renderOption}
         footer={addProjectAction}
       />
@@ -1400,13 +1411,13 @@ function useNewWorkspaceFormStack(input: NewWorkspaceFormStackInput): ReactEleme
     <View>
       <HostPicker
         hosts={host.allHosts}
-        value={host.selectedServerId}
+        value={host.requiresHostSelection ? "" : host.selectedServerId}
         onSelect={host.onSelect}
         open={host.openState}
         onOpenChange={host.onOpenChange}
         anchorRef={host.anchorRef}
         searchable={false}
-        title="Host"
+        title={t("newWorkspace.host.title")}
         desktopPlacement="bottom-start"
         hostOptionTestID={newWorkspaceHostOptionTestID}
       >
@@ -1416,8 +1427,9 @@ function useNewWorkspaceFormStack(input: NewWorkspaceFormStackInput): ReactEleme
           disabled={isPending || host.allHosts.length === 0}
           style={badgePressableStyle}
           testID="host-picker-trigger"
+          accessibilityRole="button"
         >
-          <HostStatusDot serverId={host.selectedServerId} />
+          {host.requiresHostSelection ? null : <HostStatusDot serverId={host.selectedServerId} />}
           <Text style={styles.badgeText} numberOfLines={1}>
             {selectedHostLabel}
           </Text>
@@ -1436,6 +1448,7 @@ function useNewWorkspaceFormStack(input: NewWorkspaceFormStackInput): ReactEleme
         badgePressableStyle={badgePressableStyle}
         isolation={isolation.effectiveIsolation}
         label={isolationTriggerLabel}
+        tooltipLabel={t("newWorkspace.tooltips.isolation")}
         iconColor={theme.colors.foregroundMuted}
         iconSize={theme.iconSize.sm}
       />
@@ -1463,7 +1476,7 @@ function useNewWorkspaceFormStack(input: NewWorkspaceFormStackInput): ReactEleme
         selectedItem={base.selectedItem}
         triggerLabel={base.triggerLabel}
         accessibilityLabel={t("newWorkspace.refPicker.startingRef")}
-        tooltipLabel={t("newWorkspace.refPicker.chooseStart")}
+        tooltipLabel={t("newWorkspace.tooltips.startingRef")}
         iconColor={theme.colors.foregroundMuted}
         iconSize={theme.iconSize.sm}
       />
@@ -1485,6 +1498,17 @@ function useNewWorkspaceFormStack(input: NewWorkspaceFormStackInput): ReactEleme
     </View>
   ) : null;
 
+  const launchControl = (
+    <LaunchControl
+      serverId={launch.serverId}
+      target={launch.target}
+      onChange={launch.onChange}
+      profiles={launch.profiles}
+      disabled={launch.disabled}
+      badgePressableStyle={badgePressableStyle}
+    />
+  );
+
   return isCompact ? (
     <View testID="new-workspace-ref-picker-row" style={styles.formStack}>
       <FormRow>{projectControl}</FormRow>
@@ -1496,6 +1520,7 @@ function useNewWorkspaceFormStack(input: NewWorkspaceFormStackInput): ReactEleme
         <View style={styles.baseSpacer} />
       )}
       {baseControl ? <FormRow>{baseControl}</FormRow> : <View style={styles.baseSpacer} />}
+      <FormRow>{launchControl}</FormRow>
     </View>
   ) : (
     <View testID="new-workspace-ref-picker-row" style={styles.formStackDesktop}>
@@ -1503,6 +1528,8 @@ function useNewWorkspaceFormStack(input: NewWorkspaceFormStackInput): ReactEleme
       {hostControl}
       {isolationControl}
       {baseControl}
+      <View style={styles.launchSpacer} />
+      {launchControl}
     </View>
   );
 }
@@ -1524,10 +1551,65 @@ function canAutoAttachPickerPr(
   return allowAutoPrSelection && targetId !== null;
 }
 
+function hasNewWorkspaceDraftContent(input: {
+  text: string;
+  attachments: readonly unknown[];
+}): boolean {
+  return input.text.length > 0 || input.attachments.length > 0;
+}
+
+function resolveNewWorkspaceFormContext(input: {
+  selectedProject: HostProjectListItem | null;
+  selectedServerId: string;
+  requiresHostSelection: boolean;
+}) {
+  const selectedSourceDirectory =
+    input.selectedProject && !input.requiresHostSelection
+      ? getHostProjectSourceDirectory(input.selectedProject, input.selectedServerId)
+      : null;
+  return {
+    selectedSourceDirectory,
+    preferredAddProjectHostId: input.selectedProject ? input.selectedServerId : undefined,
+    isSubmitDisabled:
+      !input.selectedProject || input.requiresHostSelection || selectedSourceDirectory === null,
+    shouldAutoFocusComposer: Boolean(input.selectedProject) && !input.requiresHostSelection,
+  };
+}
+
+function resolveNewWorkspacePickerAvailability(input: {
+  pickerOpen: boolean;
+  isConnected: boolean;
+  client: unknown;
+  selectedSourceDirectory: string | null;
+}) {
+  const clientReady = input.isConnected && Boolean(input.client);
+  const hasSelectedSourceDirectory = input.selectedSourceDirectory !== null;
+  return {
+    clientReady,
+    hasSelectedSourceDirectory,
+    pickerQueryEnabled: input.pickerOpen && clientReady && hasSelectedSourceDirectory,
+  };
+}
+
+function resolveSelectedProjectIsGit(input: {
+  queriedIsGit: boolean | undefined;
+  project: HostProjectListItem | null;
+  serverId: string;
+}): boolean {
+  return (
+    input.queriedIsGit ??
+    input.project?.hosts.some(
+      (host) => host.serverId === input.serverId && host.canCreateWorktree,
+    ) === true
+  );
+}
+
+// eslint-disable-next-line complexity -- Keep launch-mode rendering explicit so submit handlers cannot invert.
 export function NewWorkspaceScreen({
   serverId,
   sourceDirectory: sourceDirectoryProp,
   projectId,
+  projectKey,
   displayName: displayNameProp,
   draftId,
 }: NewWorkspaceScreenProps) {
@@ -1539,30 +1621,25 @@ export function NewWorkspaceScreen({
   const mergeWorkspaces = useSessionStore((state) => state.mergeWorkspaces);
   const {
     allHosts,
-    selectedServerId,
-    hostPickerOpen,
-    handleSelectHost,
-    handleHostPickerOpenChange,
-    openHostPicker,
     projects,
     routeProject,
-    lastActiveProject,
+    routeProjectKey,
+    hostConnectionStatusByServerId,
+    workspaceMultiplicityByServerId,
   } = useNewWorkspaceInitialContext({
     serverId,
     sourceDirectory: sourceDirectoryProp,
     projectId,
+    projectKey,
     displayName: displayNameProp,
   });
-  // COMPAT(workspaceMultiplicity): added in v0.1.97, drop the gate when floor >= v0.1.97
-  const supportsWorkspaceMultiplicity = useHostFeature(selectedServerId, "workspaceMultiplicity");
-  const supportsForgeSearch = useHostFeature(selectedServerId, "forgeSearch");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [createdWorkspace, setCreatedWorkspace] = useState<ReturnType<
     typeof normalizeWorkspaceDescriptor
   > | null>(null);
-  const [pendingAction, setPendingAction] = useState<"chat" | "empty" | null>(null);
+  const [pendingAction, setPendingAction] = useState<"chat" | "empty" | "terminal" | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
-  const [projectPickerOpen, setProjectPickerOpen] = useState(false);
+  const [projectPickerOpen, setProjectPickerOpen] = useState(() => routeProjectKey === null);
   const openAddProjectPicker = useOpenAddProject();
   const [isolationPickerOpen, setIsolationPickerOpen] = useState(false);
   const [pickerSearchQuery, setPickerSearchQuery] = useState("");
@@ -1571,7 +1648,82 @@ export function NewWorkspaceScreen({
   const projectPickerAnchorRef = useRef<View>(null);
   const isolationPickerAnchorRef = useRef<View>(null);
   const hostPickerAnchorRef = useRef<View | null>(null);
+  const draftKey = buildNewWorkspaceDraftKey(draftId);
+  const preserveMissingProject = useDraftStore((state) => {
+    const record = state.drafts[draftKey];
+    return Boolean(record?.lifecycle === "active" && hasNewWorkspaceDraftContent(record.input));
+  });
+  const {
+    selectedProject,
+    projectPickerOptions,
+    projectByOptionId,
+    selectedProjectOptionId,
+    projectTriggerLabel,
+    handleSelectProjectOption: selectProjectOption,
+  } = useNewWorkspaceProjectPicker({
+    projects,
+    routeProject,
+    routeProjectKey,
+    workspaceMultiplicityByServerId,
+    preserveMissingProject,
+  });
+  const {
+    availableHosts,
+    selectedServerId,
+    requiresHostSelection,
+    hostPickerOpen,
+    handleSelectHost,
+    handleHostPickerOpenChange,
+    openHostPicker,
+  } = useNewWorkspaceHostSelector({
+    initialServerId: serverId,
+    allHosts,
+    selectedProject,
+    hostConnectionStatusByServerId,
+    workspaceMultiplicityByServerId,
+  });
+  // COMPAT(workspaceMultiplicity): added in v0.1.97, drop the gate when floor >= v0.1.97
+  const supportsWorkspaceMultiplicity = useHostFeature(selectedServerId, "workspaceMultiplicity");
+  const supportsForgeSearch = useHostFeature(selectedServerId, "forgeSearch");
+  const {
+    selectedSourceDirectory,
+    preferredAddProjectHostId,
+    isSubmitDisabled,
+    shouldAutoFocusComposer,
+  } = resolveNewWorkspaceFormContext({
+    selectedProject,
+    selectedServerId,
+    requiresHostSelection,
+  });
   const isDraftHandoffActive = useIsNewWorkspaceDraftHandoffActive({ draftId, selectedServerId });
+
+  const { preferences: formPreferences, updatePreferences: updateFormPreferences } =
+    useFormPreferences();
+  const { config: daemonConfig } = useDaemonConfig(selectedServerId);
+  const terminalProfiles: readonly TerminalProfile[] = useMemo(
+    () => resolveConfiguredTerminalProfiles(daemonConfig),
+    [daemonConfig],
+  );
+  const [manualLaunchTarget, setManualLaunchTarget] = useState<LaunchTarget | null>(null);
+  const launchTarget = useMemo(
+    () =>
+      resolveRememberedLaunchTarget(
+        manualLaunchTarget,
+        formPreferences.launchTarget,
+        terminalProfiles,
+      ),
+    [manualLaunchTarget, formPreferences.launchTarget, terminalProfiles],
+  );
+  const [terminalPromptText, setTerminalPromptText] = useState("");
+  const {
+    isTerminalLaunch,
+    selectedTerminalProfile,
+    terminalTakesPrompt,
+    terminalComposerValue,
+    terminalPlaceholder,
+    terminalSubmitLabel,
+    launchFocusKey,
+  } = useTerminalComposerState({ launchTarget, terminalProfiles, terminalPromptText });
 
   useEffect(() => {
     const trimmed = pickerSearchQuery.trim();
@@ -1583,30 +1735,6 @@ export function NewWorkspaceScreen({
   const isPending = isNewWorkspacePending({ pendingAction, isDraftHandoffActive });
   const client = useHostRuntimeClient(selectedServerId);
   const isConnected = useHostRuntimeIsConnected(selectedServerId);
-  const draftKey = buildNewWorkspaceDraftKey(draftId);
-  const preserveMissingProject = useDraftStore((state) => {
-    const record = state.drafts[draftKey];
-    return Boolean(
-      record?.lifecycle === "active" &&
-      (record.input.text.length > 0 || record.input.attachments.length > 0),
-    );
-  });
-  const {
-    selectedProject,
-    selectedSourceDirectory,
-    projectPickerOptions,
-    projectByOptionId,
-    selectedProjectOptionId,
-    projectTriggerLabel,
-    handleSelectProjectOption: selectProjectOption,
-  } = useNewWorkspaceProjectPicker({
-    selectedServerId,
-    projects,
-    routeProject,
-    lastActiveProject,
-    allowAllProjects: supportsWorkspaceMultiplicity,
-    preserveMissingProject,
-  });
   const activePickerTargetId = resolveActivePickerTargetId(
     selectedServerId,
     selectedProject,
@@ -1615,13 +1743,22 @@ export function NewWorkspaceScreen({
   const projectIconTargets = useMemo(
     () =>
       projects.flatMap((project) => {
-        const iconWorkingDir = getHostProjectSourceDirectory(project, selectedServerId)?.trim();
-        if (!iconWorkingDir) {
+        const [placement] = getWorkspaceCreationHosts({
+          project,
+          workspaceMultiplicityByServerId,
+        });
+        const iconWorkingDir = placement?.iconWorkingDir.trim();
+        if (!placement || !iconWorkingDir) {
           return [];
         }
-        return [{ projectKey: project.projectKey, serverId: selectedServerId, iconWorkingDir }];
+        return [
+          buildProjectIconRequestTarget(project.projectKey, {
+            ...placement,
+            iconWorkingDir,
+          }),
+        ];
       }),
-    [projects, selectedServerId],
+    [projects, workspaceMultiplicityByServerId],
   );
 
   const projectIconDataByProjectKey = useProjectIconDataByProjectKey({
@@ -1681,9 +1818,13 @@ export function NewWorkspaceScreen({
     return client;
   }, [client, isConnected, t]);
 
-  const clientReady = isConnected && Boolean(client);
-  const hasSelectedSourceDirectory = selectedSourceDirectory !== null;
-  const pickerQueryEnabled = pickerOpen && clientReady && hasSelectedSourceDirectory;
+  const { clientReady, hasSelectedSourceDirectory, pickerQueryEnabled } =
+    resolveNewWorkspacePickerAvailability({
+      pickerOpen,
+      isConnected,
+      client,
+      selectedSourceDirectory,
+    });
 
   const checkoutStatusQuery = useQuery({
     queryKey: ["checkout-status", selectedServerId, selectedSourceDirectory],
@@ -1702,10 +1843,15 @@ export function NewWorkspaceScreen({
   });
 
   const currentBranch = checkoutStatusQuery.data?.currentBranch ?? null;
+  const upstreamRef = resolveCheckoutUpstreamRef(checkoutStatusQuery.data);
   const { effectiveIsolation, setIsolation, canCreateWorktree, showRefPicker } =
     useWorkspaceIsolation({
       supportsMultiplicity: supportsWorkspaceMultiplicity,
-      selectedIsGit: checkoutStatusQuery.data?.isGit === true,
+      selectedIsGit: resolveSelectedProjectIsGit({
+        queriedIsGit: checkoutStatusQuery.data?.isGit,
+        project: selectedProject,
+        serverId: selectedServerId,
+      }),
     });
 
   const branchSuggestionsQuery = useQuery({
@@ -1825,9 +1971,6 @@ export function NewWorkspaceScreen({
 
   const handleSelectProjectOption = useCallback(
     (id: string) => {
-      // selectProjectOption enforces selectability (worktree-only when
-      // multiplicity is off, any project when it's on); don't re-gate here on
-      // canCreateWorktree or non-git projects become unselectable.
       selectProjectOption(id);
       setProjectPickerOpen(false);
       clearPickerSelectionForTargetChange(selectedProjectOptionId, id);
@@ -1845,8 +1988,8 @@ export function NewWorkspaceScreen({
 
   const handleAddProject = useCallback(() => {
     setProjectPickerOpen(false);
-    openAddProjectPicker(selectedServerId);
-  }, [openAddProjectPicker, selectedServerId]);
+    openAddProjectPicker(preferredAddProjectHostId);
+  }, [openAddProjectPicker, preferredAddProjectHostId]);
 
   const openPicker = useCallback(() => {
     setPickerOpen(true);
@@ -1947,7 +2090,7 @@ export function NewWorkspaceScreen({
       if (!selectedSourceDirectory) {
         throw new Error("Choose a host for this project");
       }
-      const checkoutRequest = resolveCheckoutRequest(selectedItem, currentBranch);
+      const checkoutRequest = resolveCheckoutRequest(selectedItem, { currentBranch, upstreamRef });
       const firstAgentContext = buildFirstAgentContext(input);
       const hostProjectId = getHostProjectId(selectedProject, selectedServerId);
       if (!hostProjectId) throw new Error("Project is not available on the selected host");
@@ -1960,7 +2103,14 @@ export function NewWorkspaceScreen({
         ...checkoutRequest,
       };
     },
-    [currentBranch, selectedItem, selectedProject, selectedServerId, selectedSourceDirectory],
+    [
+      currentBranch,
+      selectedItem,
+      selectedProject,
+      selectedServerId,
+      selectedSourceDirectory,
+      upstreamRef,
+    ],
   );
 
   const ensureWorkspace = useCallback(
@@ -1987,6 +2137,7 @@ export function NewWorkspaceScreen({
             sourceDirectory: selectedSourceDirectory,
             selectedItem,
             currentBranch,
+            upstreamRef,
             withInitialAgent: input.withInitialAgent,
             prompt: input.prompt,
             attachments: input.attachments,
@@ -2008,6 +2159,7 @@ export function NewWorkspaceScreen({
       buildCreateWorktreeInput,
       createdWorkspace,
       currentBranch,
+      upstreamRef,
       effectiveIsolation,
       mergeWorkspaces,
       selectedItem,
@@ -2025,6 +2177,7 @@ export function NewWorkspaceScreen({
       try {
         setErrorMessage(null);
         await composerState?.persistFormPreferences();
+        await updateFormPreferences({ launchTarget });
         if (isEmptyWorkspaceSubmission(payload)) {
           setPendingAction("empty");
           await runCreateEmptyWorkspace({
@@ -2065,10 +2218,68 @@ export function NewWorkspaceScreen({
       draftKey,
       ensureWorkspace,
       forkDraftSetup,
+      launchTarget,
       selectedServerId,
       supportsForgeSearch,
       t,
       toast,
+      updateFormPreferences,
+    ],
+  );
+
+  const handleSubmitTerminalLaunch = useCallback(
+    () =>
+      runWithNewWorkspaceErrorHandling(
+        async () => {
+          setErrorMessage(null);
+          await updateFormPreferences({ launchTarget });
+          setPendingAction("terminal");
+          await runCreateTerminalWorkspace({
+            cwd: selectedSourceDirectory ?? "",
+            prompt: terminalPromptText,
+            profile: selectedTerminalProfile,
+            profileName: getTerminalProfileName(selectedTerminalProfile),
+            ensureWorkspace,
+            createTerminal: async (input) => {
+              const connectedClient = withConnectedClient();
+              const createdTerminal = await connectedClient.createTerminal(
+                input.workspaceDirectory,
+                input.name,
+                undefined,
+                { command: input.command, args: input.args, workspaceId: input.workspaceId },
+              );
+              return {
+                terminalId: requireCreatedTerminalId(
+                  createdTerminal,
+                  t("newWorkspace.errors.createWorktreeFailed"),
+                ),
+              };
+            },
+            sendTerminalInput: (terminalId, data) => {
+              withConnectedClient().sendTerminalInput(terminalId, { type: "input", data });
+            },
+            serverId: selectedServerId,
+            navigate: (targetServerId, workspaceId, target) =>
+              navigateToWorkspace({ serverId: targetServerId, workspaceId, target }),
+          });
+        },
+        (message) => {
+          setPendingAction(null);
+          setErrorMessage(message);
+          toast.error(message);
+        },
+      ),
+    [
+      ensureWorkspace,
+      launchTarget,
+      selectedServerId,
+      selectedSourceDirectory,
+      selectedTerminalProfile,
+      t,
+      terminalPromptText,
+      toast,
+      updateFormPreferences,
+      withConnectedClient,
     ],
   );
 
@@ -2093,18 +2304,10 @@ export function NewWorkspaceScreen({
         {...props}
         projectByOptionId={projectByOptionId}
         projectIconDataByProjectKey={projectIconDataByProjectKey}
-        selectedServerId={selectedServerId}
         isPending={isPending}
-        supportsWorkspaceMultiplicity={supportsWorkspaceMultiplicity}
       />
     ),
-    [
-      isPending,
-      projectByOptionId,
-      projectIconDataByProjectKey,
-      selectedServerId,
-      supportsWorkspaceMultiplicity,
-    ],
+    [isPending, projectByOptionId, projectIconDataByProjectKey],
   );
 
   const contentStyle = useMemo(
@@ -2146,8 +2349,9 @@ export function NewWorkspaceScreen({
       renderOption: renderProjectOption,
     },
     host: {
-      allHosts,
+      allHosts: availableHosts,
       selectedServerId,
+      requiresHostSelection,
       onSelect: handleSelectWorkspaceHost,
       openState: hostPickerOpen,
       onOpenChange: handleHostPickerOpenChange,
@@ -2181,6 +2385,13 @@ export function NewWorkspaceScreen({
       renderOption: renderPickerOption,
       showRefPicker,
     },
+    launch: {
+      serverId: selectedServerId,
+      target: launchTarget,
+      onChange: setManualLaunchTarget,
+      profiles: terminalProfiles,
+      disabled: isPending,
+    },
   });
 
   const composerFooter = useMemo(
@@ -2201,38 +2412,70 @@ export function NewWorkspaceScreen({
             <Text style={styles.composerTitle}>{t("newWorkspace.title")}</Text>
           </View>
           {formStack}
-          <Composer
-            agentId={draftKey}
-            serverId={selectedServerId}
-            isPaneFocused={true}
-            onSubmitMessage={handleSubmitNewWorkspace}
-            placeholder={t(
-              isCompact
-                ? "newWorkspace.promptPlaceholderCompact"
-                : "newWorkspace.promptPlaceholder",
-            )}
-            allowEmptySubmit={true}
-            submitButtonAccessibilityLabel={t("newWorkspace.create")}
-            submitButtonTestID="workspace-create-submit"
-            submitIcon="return"
-            isSubmitLoading={isPending}
-            waitForGithubAutoAttachOnSubmit
-            submitBehavior="preserve-and-lock"
-            blurOnSubmit={true}
-            value={chatDraft.text}
-            onChangeText={chatDraft.setText}
-            attachments={chatDraft.attachments}
-            attachmentScopeKeys={visibleDraftContextScopeKeys}
-            onChangeAttachments={chatDraft.setAttachments}
-            onGithubPrDetected={handleGithubPrDetected}
-            onGithubPrAutoAttach={handleGithubPrAutoAttach}
-            cwd={selectedSourceDirectory ?? ""}
-            clearDraft={handleClearDraft}
-            autoFocus
-            commandDraftConfig={composerState?.commandDraftConfig}
-            agentControls={agentControlsWithDisabled}
-            footer={composerFooter}
-          />
+          {isTerminalLaunch ? (
+            <Composer
+              key="terminal"
+              inputMode="terminal"
+              readOnly={!terminalTakesPrompt}
+              placeholder={terminalPlaceholder}
+              submitLabel={terminalSubmitLabel}
+              agentId={draftKey}
+              serverId={selectedServerId}
+              isPaneFocused={true}
+              onSubmitMessage={handleSubmitTerminalLaunch}
+              allowEmptySubmit={true}
+              submitButtonAccessibilityLabel={t("newWorkspace.launch.submit")}
+              submitButtonTestID="new-workspace-launch-submit"
+              isSubmitLoading={isPending}
+              isSubmitDisabled={isSubmitDisabled}
+              submitBehavior="preserve-and-lock"
+              blurOnSubmit={true}
+              value={terminalComposerValue}
+              onChangeText={setTerminalPromptText}
+              attachments={NO_TERMINAL_ATTACHMENTS}
+              onChangeAttachments={noopChangeAttachments}
+              cwd={selectedSourceDirectory ?? ""}
+              clearDraft={noopClearDraft}
+              autoFocus={terminalTakesPrompt}
+              autoFocusKey={launchFocusKey}
+            />
+          ) : (
+            <Composer
+              key="chat"
+              agentId={draftKey}
+              serverId={selectedServerId}
+              isPaneFocused={true}
+              onSubmitMessage={handleSubmitNewWorkspace}
+              placeholder={t(
+                isCompact
+                  ? "newWorkspace.promptPlaceholderCompact"
+                  : "newWorkspace.promptPlaceholder",
+              )}
+              allowEmptySubmit={true}
+              submitButtonAccessibilityLabel={t("newWorkspace.create")}
+              submitButtonTestID="workspace-create-submit"
+              submitIcon="return"
+              isSubmitLoading={isPending}
+              isSubmitDisabled={isSubmitDisabled}
+              waitForGithubAutoAttachOnSubmit
+              submitBehavior="preserve-and-lock"
+              blurOnSubmit={true}
+              value={chatDraft.text}
+              onChangeText={chatDraft.setText}
+              attachments={chatDraft.attachments}
+              attachmentScopeKeys={visibleDraftContextScopeKeys}
+              onChangeAttachments={chatDraft.setAttachments}
+              onGithubPrDetected={handleGithubPrDetected}
+              onGithubPrAutoAttach={handleGithubPrAutoAttach}
+              cwd={selectedSourceDirectory ?? ""}
+              clearDraft={handleClearDraft}
+              autoFocus={shouldAutoFocusComposer}
+              autoFocusKey={`${selectedProject?.projectKey ?? "none"}:${selectedServerId}:${launchFocusKey}`}
+              commandDraftConfig={composerState?.commandDraftConfig}
+              agentControls={agentControlsWithDisabled}
+              footer={composerFooter}
+            />
+          )}
           {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
         </View>
       </View>
@@ -2286,8 +2529,11 @@ const styles = StyleSheet.create((theme) => ({
     alignItems: "center",
     marginBottom: theme.spacing[8],
     // The badge adds its own left padding; offset it so the project icon's left
-    // edge lands exactly on the "New workspace" title's left edge.
+    // edge lands exactly on the "New workspace" title's left edge. The trailing
+    // inset mirrors it so the launch chip stops on the composer's inner content
+    // rather than running out to the composer's border.
     paddingLeft: theme.spacing[4],
+    paddingRight: theme.spacing[4],
     gap: theme.spacing[2],
   },
   // The row's left inset matches the heading's text x (composerTitleContainer
@@ -2301,6 +2547,12 @@ const styles = StyleSheet.create((theme) => ({
   },
   baseSpacer: {
     height: BADGE_HEIGHT,
+  },
+  // Pushes the launch control to the trailing edge of the desktop meta row,
+  // next to project/host/branch. The row's own right inset (formStackDesktop)
+  // lands it on the composer's inner content, matching the left chips.
+  launchSpacer: {
+    flex: 1,
   },
   badge: {
     flexDirection: "row",
@@ -2330,6 +2582,10 @@ const styles = StyleSheet.create((theme) => ({
   tooltipText: {
     fontSize: theme.fontSize.sm,
     color: theme.colors.popoverForeground,
+  },
+  chevronContainer: {
+    flexShrink: 0,
+    transform: [{ translateY: 1 }],
   },
   badgeIconBox: {
     width: theme.iconSize.md,

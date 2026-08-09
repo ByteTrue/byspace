@@ -95,7 +95,6 @@ interface TerminalEmulatorProps {
   swipeGesturesEnabled?: boolean;
   onSwipeLeft?: () => void;
   onSwipeRight?: () => void;
-  initialSnapshot?: TerminalState | null;
   onInput?: (data: string) => Promise<void> | void;
   onFocus?: () => Promise<void> | void;
   onResize?: (input: { rows: number; cols: number; shouldClaim: boolean }) => Promise<void> | void;
@@ -153,7 +152,6 @@ export default function TerminalEmulator({
   swipeGesturesEnabled = false,
   onSwipeLeft,
   onSwipeRight,
-  initialSnapshot = null,
   onInput,
   onFocus,
   onResize,
@@ -209,8 +207,6 @@ export default function TerminalEmulator({
     onOpenLocalFileLink,
     onSelectionChange,
   };
-  const initialSnapshotRef = useRef(initialSnapshot);
-  initialSnapshotRef.current = initialSnapshot;
   const pendingModifiersRef = useRef(pendingModifiers);
   pendingModifiersRef.current = pendingModifiers;
 
@@ -422,13 +418,15 @@ export default function TerminalEmulator({
     runtime.mount({
       root,
       host,
-      initialSnapshot: initialSnapshotRef.current,
+      initialSnapshot: null,
       scrollback: scrollbackLinesRef.current,
       theme: mountedThemeRef.current,
       fontFamily: fontFamilyRef.current,
       fontSize: fontSizeRef.current,
+      onRendererReady: () => {
+        onRendererReadyChangeRef.current?.({ streamKey, isReady: true });
+      },
     });
-    onRendererReadyChangeRef.current?.({ streamKey, isReady: true });
 
     return () => {
       runtime.unmount();

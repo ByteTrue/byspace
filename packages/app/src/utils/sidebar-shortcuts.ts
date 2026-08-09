@@ -2,7 +2,6 @@ import type {
   SidebarProjectEntry,
   SidebarWorkspacePlacement,
 } from "@/hooks/use-sidebar-workspaces-list";
-import type { StatusGroup } from "@/hooks/sidebar-status-view-model";
 
 export interface SidebarShortcutWorkspaceTarget {
   serverId: string;
@@ -12,11 +11,6 @@ export interface SidebarShortcutWorkspaceTarget {
 export interface SidebarShortcutModel {
   shortcutTargets: SidebarShortcutWorkspaceTarget[];
   shortcutIndexByWorkspaceKey: Map<string, number>;
-}
-
-export interface SidebarShortcutSection {
-  workspaces: readonly SidebarWorkspacePlacement[];
-  collapsed?: boolean;
 }
 
 function createShortcutTarget(
@@ -29,47 +23,15 @@ function createShortcutTarget(
 }
 
 export function buildSidebarShortcutModel(input: {
-  projects: SidebarProjectEntry[];
-  collapsedProjectKeys: ReadonlySet<string>;
-  shortcutLimit?: number;
-}): SidebarShortcutModel {
-  return buildSidebarShortcutSections({
-    sections: input.projects.map((project) => ({
-      workspaces: project.workspaces,
-      collapsed: input.collapsedProjectKeys.has(project.projectKey),
-    })),
-    shortcutLimit: input.shortcutLimit,
-  });
-}
-
-export function buildStatusSidebarShortcutModel(input: {
-  groups: readonly StatusGroup[];
-  collapsedStatusGroupKeys?: ReadonlySet<string>;
-  shortcutLimit?: number;
-}): SidebarShortcutModel {
-  return buildSidebarShortcutSections({
-    sections: input.groups.map((group) => ({
-      workspaces: group.rows,
-      collapsed: input.collapsedStatusGroupKeys?.has(group.bucket),
-    })),
-    shortcutLimit: input.shortcutLimit,
-  });
-}
-
-export function buildSidebarShortcutSections(input: {
-  sections: readonly SidebarShortcutSection[];
+  projects: readonly SidebarProjectEntry[];
   shortcutLimit?: number;
 }): SidebarShortcutModel {
   const maxShortcuts = Math.max(0, Math.floor(input.shortcutLimit ?? 9));
   const shortcutTargets: SidebarShortcutWorkspaceTarget[] = [];
   const shortcutIndexByWorkspaceKey = new Map<string, number>();
 
-  for (const section of input.sections) {
-    if (section.collapsed) {
-      continue;
-    }
-
-    for (const workspace of section.workspaces) {
+  for (const project of input.projects) {
+    for (const workspace of project.workspaces) {
       if (shortcutTargets.length >= maxShortcuts) {
         break;
       }

@@ -9,21 +9,16 @@ export interface LocalSpeechWorkerConfig {
   dictationSttModel: string;
 }
 
-export type LocalSpeechSessionKind = "dictationStt";
-
 export type LocalSpeechWorkerRequest =
   | {
       type: "session.create";
       requestId: string;
       config: LocalSpeechWorkerConfig;
       sessionId: string;
-      kind: LocalSpeechSessionKind;
     }
   | { type: "session.append"; requestId: string; sessionId: string; audio: LocalSpeechWorkerBytes }
   | { type: "session.commit"; requestId: string; sessionId: string }
   | { type: "session.clear"; requestId: string; sessionId: string }
-  | { type: "session.flush"; requestId: string; sessionId: string }
-  | { type: "session.reset"; requestId: string; sessionId: string }
   | { type: "session.close"; requestId: string; sessionId: string };
 
 export type LocalSpeechWorkerResponse =

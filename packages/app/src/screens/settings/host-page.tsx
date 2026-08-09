@@ -1,4 +1,17 @@
 import {
+  HOST_BADGE_DISPLAYS,
+  HOST_COLORS,
+  resolveHostBadgeDisplay,
+  type HostBadgeDisplay,
+  type HostColor,
+} from "@/hosts/appearance";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
   ArrowUpToLine,
   ChevronRight,
   Globe,
@@ -21,6 +34,8 @@ import { Alert as InlineAlert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { useDaemonConfig } from "@/hooks/use-daemon-config";
+import { useLocalDaemonServerId } from "@/hooks/use-is-local-daemon";
+import { useToast } from "@/contexts/toast-context";
 import {
   getHostRuntimeStore,
   isHostRuntimeConnected,
@@ -206,7 +221,6 @@ export function HostAgentsPage({ serverId }: { serverId: string }) {
     <View>
       {isConnected ? (
         <SettingsSection title={t("settings.hostSections.agents")}>
-          <InjectBySpaceToolsCard serverId={serverId} />
           <OrchestrationSkillsCard serverId={serverId} />
           <AppendSystemPromptCard serverId={serverId} />
         </SettingsSection>
@@ -276,6 +290,119 @@ export function HostUsagePage({ serverId }: { serverId: string }) {
   );
 }
 
+function HostAppearanceOption<Value extends string>({
+  value,
+  selected,
+  label,
+  onSelect,
+}: {
+  value: Value;
+  selected: boolean;
+  label: string;
+  onSelect: (value: Value) => void | Promise<void>;
+}) {
+  const handleSelect = useCallback(() => void onSelect(value), [onSelect, value]);
+  return (
+    <DropdownMenuItem selected={selected} onSelect={handleSelect}>
+      {label}
+    </DropdownMenuItem>
+  );
+}
+
+function HostAppearanceSection({ host }: { host: HostProfile }) {
+  const { t } = useTranslation();
+  const { setHostColor, setHostBadgeDisplay } = useHostMutations();
+  const toast = useToast();
+  const localServerId = useLocalDaemonServerId();
+  const color = host.appearance.color;
+  const badgeDisplay =
+    resolveHostBadgeDisplay({
+      appearance: host.appearance,
+      isLocalHost: host.serverId === localServerId,
+    }) ?? "name";
+  const handleColor = useCallback(
+    async (next: HostColor) => {
+      try {
+        await setHostColor(host.serverId, next);
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : t("common.errors.unableToSave"));
+      }
+    },
+    [host.serverId, setHostColor, t, toast],
+  );
+  const handleBadgeDisplay = useCallback(
+    async (next: HostBadgeDisplay) => {
+      try {
+        await setHostBadgeDisplay(host.serverId, next);
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : t("common.errors.unableToSave"));
+      }
+    },
+    [host.serverId, setHostBadgeDisplay, t, toast],
+  );
+
+  return (
+    <SettingsSection title={t("settings.host.appearance.title")}>
+      <View style={settingsStyles.card}>
+        <View style={styles.appearanceRow}>
+          <Text style={styles.appearanceLabel}>{t("settings.host.appearance.color.label")}</Text>
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              style={styles.appearanceTrigger}
+              accessibilityRole="button"
+              accessibilityLabel={t("settings.host.appearance.color.label")}
+            >
+              <Text style={styles.appearanceValue}>
+                {t(`settings.host.appearance.color.options.${color}`)}
+              </Text>
+              <ThemedChevronRight uniProps={chevronProps} />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" width={180}>
+              {HOST_COLORS.map((option) => (
+                <HostAppearanceOption
+                  key={option}
+                  value={option}
+                  selected={option === color}
+                  label={t(`settings.host.appearance.color.options.${option}`)}
+                  onSelect={handleColor}
+                />
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </View>
+        <View style={styles.appearanceRow}>
+          <Text style={styles.appearanceLabel}>
+            {t("settings.host.appearance.badgeDisplay.label")}
+          </Text>
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              style={styles.appearanceTrigger}
+              accessibilityRole="button"
+              accessibilityLabel={t("settings.host.appearance.badgeDisplay.label")}
+            >
+              <Text style={styles.appearanceValue}>
+                {t(`settings.host.appearance.badgeDisplay.options.${badgeDisplay}`)}
+              </Text>
+              <ThemedChevronRight uniProps={chevronProps} />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" width={180}>
+              {HOST_BADGE_DISPLAYS.map((option) => (
+                <HostAppearanceOption
+                  key={option}
+                  value={option}
+                  selected={option === badgeDisplay}
+                  label={t(`settings.host.appearance.badgeDisplay.options.${option}`)}
+                  onSelect={handleBadgeDisplay}
+                />
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </View>
+      </View>
+    </SettingsSection>
+  );
+}
+
 export function HostSettingsPage({
   serverId,
   onHostRemoved,
@@ -299,6 +426,8 @@ export function HostSettingsPage({
       </View>
 
       <HostStatusBadges serverId={serverId} />
+
+      <HostAppearanceSection host={host} />
 
       <UpdateDaemonCard host={host} />
 
@@ -1134,45 +1263,6 @@ function OrchestrationSkillsCard({ serverId }: { serverId: string }) {
   );
 }
 
-function InjectBySpaceToolsCard({ serverId }: { serverId: string }) {
-  const { t } = useTranslation();
-  const isConnected = useHostRuntimeIsConnected(serverId);
-  const { config, patchConfig } = useDaemonConfig(serverId);
-
-  const handleValueChange = useCallback(
-    (next: boolean) => {
-      void patchConfig({
-        mcp: {
-          injectIntoAgents: next,
-        },
-      });
-    },
-    [patchConfig],
-  );
-
-  if (!isConnected) return null;
-
-  return (
-    <View style={settingsStyles.card} testID="host-page-inject-mcp-card">
-      <View style={settingsStyles.row}>
-        <View style={settingsStyles.rowContent}>
-          <Text style={settingsStyles.rowTitle}>
-            {t("settings.host.orchestration.enableTools.title")}
-          </Text>
-          <Text style={settingsStyles.rowHint}>
-            {t("settings.host.orchestration.enableTools.hint")}
-          </Text>
-        </View>
-        <Switch
-          value={config?.mcp.injectIntoAgents !== false}
-          onValueChange={handleValueChange}
-          accessibilityLabel={t("settings.host.orchestration.enableTools.accessibilityLabel")}
-        />
-      </View>
-    </View>
-  );
-}
-
 function AutoArchiveMergedWorkspacesCard({ serverId }: { serverId: string }) {
   const isConnected = useHostRuntimeIsConnected(serverId);
   const { config, patchConfig } = useDaemonConfig(serverId);
@@ -1514,6 +1604,29 @@ const styles = StyleSheet.create((theme) => ({
     flexDirection: "row",
     justifyContent: "flex-end",
     gap: theme.spacing[2],
+  },
+  appearanceRow: {
+    minHeight: 44,
+    paddingHorizontal: theme.spacing[3],
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: theme.spacing[3],
+  },
+  appearanceLabel: {
+    color: theme.colors.foreground,
+    fontSize: theme.fontSize.sm,
+  },
+  appearanceTrigger: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[1],
+    minHeight: 32,
+    paddingHorizontal: theme.spacing[2],
+  },
+  appearanceValue: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.sm,
   },
   emptyCard: {
     padding: theme.spacing[4],

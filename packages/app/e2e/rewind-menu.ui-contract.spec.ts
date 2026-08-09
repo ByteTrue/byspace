@@ -44,6 +44,8 @@ test.describe("Rewind sheet", () => {
       await expectUserMessageVisible(page, secondPrompt);
       await expect(page.getByText("Cycle 1", { exact: true })).toBeVisible();
       await expectUserMessageCount(page, 2);
+      const finish = await session.client.waitForFinish(session.agentId, 30_000);
+      expect(finish.status).toBe("idle");
 
       await userMessage(page, firstPrompt).hover();
       await page.getByTestId("rewind-menu-trigger").first().click();

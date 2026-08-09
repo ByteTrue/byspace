@@ -2,6 +2,7 @@ import type { Dirent, Stats } from "node:fs";
 import { readdir, realpath, stat } from "node:fs/promises";
 import path from "node:path";
 import { isPathInsideRoot } from "./path.js";
+import { runGitCommand } from "./run-git-command.js";
 
 export type DirectorySuggestionKind = "file" | "directory";
 export type DirectorySuggestionPathFormat = "absolute" | "relative";
@@ -29,6 +30,11 @@ export interface SearchDirectoryEntriesOptions {
   maxDepth?: number;
   maxEntriesScanned?: number;
   confidentResultScanThreshold?: number;
+  respectGitIgnore?: boolean;
+}
+
+export interface DirectorySuggestionDependencies {
+  runGitCommand: typeof runGitCommand;
 }
 
 interface QueryPlan {
@@ -69,7 +75,6 @@ interface DirectoryListCacheEntry {
   changedAtMs: number;
   entries: RawChildEntry[];
 }
-
 const DEFAULT_LIMIT = 30;
 const MAX_LIMIT = 100;
 const DEFAULT_MAX_DEPTH = 12;
@@ -108,9 +113,11 @@ const IGNORED_DIRECTORY_NAMES = new Set([
   ".git",
 ]);
 const directoryListCache = new Map<string, DirectoryListCacheEntry>();
+const defaultDependencies: DirectorySuggestionDependencies = { runGitCommand };
 
 export async function searchDirectoryEntries(
   options: SearchDirectoryEntriesOptions,
+  dependencies: DirectorySuggestionDependencies = defaultDependencies,
 ): Promise<DirectorySuggestionEntry[]> {
   const root = await resolveDirectory(options.root);
   if (!root) return [];
@@ -122,7 +129,11 @@ export async function searchDirectoryEntries(
     input.plan.browseExactPath || (input.matchMode === "suffix" && input.plan.isPathQuery)
       ? await findExactEntry(input)
       : null;
-  if (exact && input.limit === 1) return [exact];
+  if (exact && input.limit === 1) {
+    return options.respectGitIgnore
+      ? filterGitIgnoredCandidates(root, [exact], dependencies)
+      : [exact];
+  }
 
   const browsesRoot = input.plan.isPathQuery && !input.plan.normalizedQuery;
   const ranked =
@@ -130,9 +141,11 @@ export async function searchDirectoryEntries(
       ? await searchChildren(input)
       : await searchTree(input);
   const results = sortAndFormat(ranked, input.root, input.pathFormat).slice(0, input.limit);
-  return exact
+  const candidates = exact
     ? [exact, ...results.filter((entry) => !sameEntry(entry, exact))].slice(0, input.limit)
     : results;
+  if (!options.respectGitIgnore) return candidates;
+  return filterGitIgnoredCandidates(root, candidates, dependencies);
 }
 
 function buildSearchInput(
@@ -538,6 +551,45 @@ async function readChildren(directory: string): Promise<ChildEntry[]> {
   return (await Promise.all(rawEntries.map((entry) => resolveChild(directory, entry))))
     .filter((entry): entry is ChildEntry => entry !== null)
     .sort((left, right) => left.name.localeCompare(right.name));
+}
+
+async function filterGitIgnoredCandidates(
+  root: string,
+  candidates: DirectorySuggestionEntry[],
+  dependencies: DirectorySuggestionDependencies,
+): Promise<DirectorySuggestionEntry[]> {
+  if (candidates.length === 0) return [];
+  const relativePaths = candidates.map((candidate) =>
+    path.isAbsolute(candidate.path) ? normalizeRelativePath(root, candidate.path) : candidate.path,
+  );
+  const commandInput = `${relativePaths.join("\0")}\0`;
+
+  try {
+    const result = await dependencies.runGitCommand(["check-ignore", "--stdin", "-z"], {
+      cwd: root,
+      envOverlay: { GIT_OPTIONAL_LOCKS: "0" },
+      timeout: 10_000,
+      acceptExitCodes: [0, 1],
+      input: commandInput,
+      maxOutputBytes: Buffer.byteLength(commandInput),
+    });
+    if (result.truncated) return [];
+    const ignoredPaths = new Set(result.stdout.split("\0").filter(Boolean));
+    return candidates.filter((_, index) => !ignoredPaths.has(relativePaths[index]));
+  } catch {
+    return (await hasGitMetadata(root)) ? [] : candidates;
+  }
+}
+
+async function hasGitMetadata(root: string): Promise<boolean> {
+  let current = root;
+  while (true) {
+    const metadata = await stat(path.join(current, ".git")).catch(() => null);
+    if (metadata) return true;
+    const parent = path.dirname(current);
+    if (parent === current) return false;
+    current = parent;
+  }
 }
 
 function toRawChildEntry(dirent: Dirent): RawChildEntry | null {

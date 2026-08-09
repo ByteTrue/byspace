@@ -230,7 +230,6 @@ in
       '';
 
       environment = {
-        NODE_ENV = "production";
         BYSPACE_HOME = cfg.dataDir;
         BYSPACE_LISTEN = "${cfg.listenAddress}:${toString cfg.port}";
       } // lib.optionalAttrs cfg.inheritUserEnvironment (

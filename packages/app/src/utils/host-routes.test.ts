@@ -240,6 +240,12 @@ describe("global routes", () => {
     ).toBe("/new?serverId=local&dir=%2Frepo%2Fproject&name=Project&projectId=project-1");
   });
 
+  it("buildNewWorkspaceRoute accepts an aggregate project context", () => {
+    expect(buildNewWorkspaceRoute({ projectKey: "remote:github.com/acme/app" })).toBe(
+      "/new?projectKey=remote%3Agithub.com%2Facme%2Fapp",
+    );
+  });
+
   it("buildNewWorkspaceRoute carries a draft context id", () => {
     expect(
       buildNewWorkspaceRoute({

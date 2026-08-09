@@ -59,10 +59,7 @@ npm start
 
 - Terminal control (tmux integration)
 
-**📋 Planned** (Phases 4-9):
-
-- Local dictation
-- UI polish
+**Current:** local-only explicit start/stop dictation with Host-managed FireRedASR2/SenseVoice models and optional text-only AI refinement. Voice conversation/TTS mode has been removed.
 
 See [IMPLEMENTATION_PLAN.md](./IMPLEMENTATION_PLAN.md) for complete details.
 
@@ -70,7 +67,6 @@ See [IMPLEMENTATION_PLAN.md](./IMPLEMENTATION_PLAN.md) for complete details.
 
 ```bash
 BYSPACE_LOCAL_MODELS_DIR=~/.byspace/models/local-speech  # Optional model directory override
-BYSPACE_DICTATION_LOCAL_STT_MODEL=                        # Prefer selecting in Host settings
 BYSPACE_HOME=~/.byspace        # Runtime state directory (agents/, etc.)
 BYSPACE_LISTEN=127.0.0.1:6777  # Listen address (host:port or /path/to/socket)
 ```

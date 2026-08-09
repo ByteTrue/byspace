@@ -78,18 +78,16 @@ state together.
 
 The app chooses one delivery policy from `server_info.features.selectiveAgentTimeline`:
 
-- Selective daemons receive the union of agents visible in every pane. Additions subscribe and
-  catch up immediately. Every visibility-driven removal, including app backgrounding, stays
-  subscribed for a 30-second grace period so brief tab, pane, route, and app switches do not repeatedly
-  unsubscribe. Re-showing a retained timeline still starts an immediate authoritative catch-up; it
-  bypasses identical in-flight request deduplication so an older request cannot delay the visible
-  view. Losing window keyboard focus does not make a selected pane invisible, but returning to the
-  foreground or refocusing the window triggers the same authoritative catch-up even when the
-  subscription survived the grace period; retained membership is not proof that a suspended browser
-  or transport delivered every live event. Disconnecting and disposal clear pending grace because
-  the subscription itself no longer exists.
-  After grace has expired, revisiting a retained timeline displays its cached state immediately and
-  authoritative catch-up advances it to the current tail.
+- Selective daemons receive every agent visible in any pane plus the most recently viewed hidden
+  agents, up to five subscribed agents. Visible agents always win: if more than five are visible,
+  they all remain subscribed and no hidden agent does. Switching and app backgrounding preserve
+  this connection-scoped hot set. Re-showing a retained timeline still starts an immediate
+  authoritative catch-up and bypasses identical in-flight request deduplication, because retained
+  membership is not proof that a suspended browser or transport delivered every live event.
+  Losing window keyboard focus does not make a selected pane invisible. Disconnecting clears hidden
+  hot agents; reconnect restores the currently visible set before authoritative catch-up. Revisiting
+  an evicted retained timeline displays its cached state immediately while authoritative catch-up
+  advances it to the current tail.
 - Legacy daemons keep globally streaming agent timelines. Visibility still triggers the existing
   authoritative catch-up, but the app does not issue selective-subscription RPCs.
 
@@ -110,9 +108,10 @@ The owner keeps independent `forward` and `older` lanes. Every forward control i
 identity across all of its `after` pages; a later focus/resume intent can supersede it without making
 an older continuation current again. Explicit visibility repair bypasses equivalent-request
 deduplication on every page, not only the first page. A current forward response alone may complete
-initialization or visibility readiness. An earlier response from the same connection may still
-contribute canonical rows when the reducer proves they extend the current epoch and sequence range,
-but it cannot complete a newer control intent or overwrite pagination metadata. Fully covered units
+initialization or visibility readiness. A response is not discarded merely because a newer request
+was issued: it may apply while no newer forward intent has applied. Once a newer forward response is
+applied, however, responses from earlier forward intents are discarded so they cannot roll back its
+authoritative snapshot. Fully covered units
 in an overlapping same-epoch page are not replayed, while boundary-spanning projected units remain
 eligible for canonical reconciliation. Older pages may extend `startSeq` and `hasOlder`; they never
 complete forward readiness or move `endSeq` backward. Once an accepted response changes the daemon

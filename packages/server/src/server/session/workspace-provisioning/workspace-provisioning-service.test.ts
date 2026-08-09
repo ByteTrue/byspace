@@ -5,7 +5,10 @@ import { mkdirSync, mkdtempSync, rmSync, symlinkSync } from "node:fs";
 import { afterEach, beforeEach, expect, test } from "vitest";
 
 import { createTestLogger } from "../../../test-utils/test-logger.js";
-import { createNoopWorkspaceGitService } from "../../test-utils/workspace-git-service-stub.js";
+import {
+  createNoGitWorkspaceRuntimeSnapshot,
+  createNoopWorkspaceGitService,
+} from "../../test-utils/workspace-git-service-stub.js";
 import {
   FileBackedProjectRegistry,
   FileBackedWorkspaceRegistry,
@@ -28,6 +31,7 @@ const directorySymlinkType = process.platform === "win32" ? "junction" : "dir";
 
 let tmpDir: string;
 let gitRoots: Set<string>;
+let restoredMergedChangeRequestUrl: string | null;
 let workspaceRegistry: FileBackedWorkspaceRegistry;
 let projectRegistry: FileBackedProjectRegistry;
 let provisioning: WorkspaceProvisioningService;
@@ -52,6 +56,25 @@ class FailingWorkspaceRegistry extends FileBackedWorkspaceRegistry {
 function gitService() {
   return createNoopWorkspaceGitService({
     peekSnapshot: () => null,
+    getSnapshot: async (cwd: string) => {
+      const snapshot = createNoGitWorkspaceRuntimeSnapshot(cwd);
+      if (!restoredMergedChangeRequestUrl) return snapshot;
+      return {
+        ...snapshot,
+        forge: {
+          ...snapshot.forge,
+          featuresEnabled: true,
+          pullRequest: {
+            url: restoredMergedChangeRequestUrl,
+            title: "Merged change request",
+            state: "merged",
+            baseRefName: "main",
+            headRefName: "workspace-archive-latch",
+            isMerged: true,
+          },
+        },
+      };
+    },
     getCheckout: async (cwd: string) => {
       let worktreeRoot: string | null = null;
       for (const root of gitRoots) {
@@ -78,6 +101,7 @@ function gitService() {
 beforeEach(async () => {
   tmpDir = mkdtempSync(path.join(os.tmpdir(), "workspace-provisioning-"));
   gitRoots = new Set();
+  restoredMergedChangeRequestUrl = null;
   workspaceRegistry = new FileBackedWorkspaceRegistry(
     path.join(tmpDir, "projects", "workspaces.json"),
     logger,
@@ -494,3 +518,62 @@ for (const target of ["requested", "untargeted"] as const) {
     expect(liveAgentWorkspaceIds).toEqual([]);
   });
 }
+
+test("restore preserves the consumed auto-archive change request", async () => {
+  const repo = path.join(tmpDir, "restore-preserved-latch");
+  const changeRequestUrl = "https://github.com/acme/repo/pull/2714";
+  gitRoots.add(repo);
+  const created = await provisioning.findOrCreateWorkspaceForDirectory(repo);
+  await workspaceRegistry.archive(created.workspaceId, ARCHIVED_AT, {
+    autoArchivedChangeRequestUrl: changeRequestUrl,
+  });
+  const archivedWorkspace = await workspaceRegistry.get(created.workspaceId);
+
+  const unarchived = await provisioning.ensureWorkspaceRecordUnarchived(archivedWorkspace!);
+
+  expect(unarchived).toMatchObject({
+    archivedAt: null,
+    autoArchivedChangeRequestUrl: changeRequestUrl,
+  });
+  expect(await workspaceRegistry.get(created.workspaceId)).toMatchObject({
+    archivedAt: null,
+    autoArchivedChangeRequestUrl: changeRequestUrl,
+  });
+});
+
+test("restore acknowledges a merged change request for a legacy archive", async () => {
+  const repo = path.join(tmpDir, "restore-legacy-latch");
+  const changeRequestUrl = "https://github.com/acme/repo/pull/2714";
+  gitRoots.add(repo);
+  const created = await provisioning.findOrCreateWorkspaceForDirectory(repo);
+  await workspaceRegistry.archive(created.workspaceId, ARCHIVED_AT);
+  const archivedWorkspace = await workspaceRegistry.get(created.workspaceId);
+  restoredMergedChangeRequestUrl = changeRequestUrl;
+
+  const unarchived = await provisioning.ensureWorkspaceRecordUnarchived(archivedWorkspace!);
+
+  expect(unarchived).toMatchObject({
+    archivedAt: null,
+    autoArchivedChangeRequestUrl: changeRequestUrl,
+  });
+});
+
+test("restore refreshes the latch for a different merged change request", async () => {
+  const repo = path.join(tmpDir, "restore-refreshed-latch");
+  const previousChangeRequestUrl = "https://github.com/acme/repo/pull/2713";
+  const currentChangeRequestUrl = "https://github.com/acme/repo/pull/2714";
+  gitRoots.add(repo);
+  const created = await provisioning.findOrCreateWorkspaceForDirectory(repo);
+  await workspaceRegistry.archive(created.workspaceId, ARCHIVED_AT, {
+    autoArchivedChangeRequestUrl: previousChangeRequestUrl,
+  });
+  const archivedWorkspace = await workspaceRegistry.get(created.workspaceId);
+  restoredMergedChangeRequestUrl = currentChangeRequestUrl;
+
+  const unarchived = await provisioning.ensureWorkspaceRecordUnarchived(archivedWorkspace!);
+
+  expect(unarchived).toMatchObject({
+    archivedAt: null,
+    autoArchivedChangeRequestUrl: currentChangeRequestUrl,
+  });
+});

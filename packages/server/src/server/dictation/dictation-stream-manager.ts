@@ -161,6 +161,7 @@ export class DictationStreamManager {
   private readonly backgroundCommitSeconds: number;
   private readonly debug: DictationDebugPort;
   private readonly streams = new Map<string, DictationStreamState>();
+  private readonly pendingStarts = new Map<string, StreamingTranscriptionSession>();
 
   constructor(params: {
     logger: pino.Logger;
@@ -187,10 +188,14 @@ export class DictationStreamManager {
     for (const dictationId of this.streams.keys()) {
       this.cleanupDictationStream(dictationId);
     }
+    for (const dictationId of this.pendingStarts.keys()) {
+      this.cancelPendingStart(dictationId);
+    }
   }
 
   public async handleStart(dictationId: string, format: string): Promise<void> {
     this.cleanupDictationStream(dictationId);
+    this.cancelPendingStart(dictationId);
 
     const sttProvider = this.resolveStt();
     if (!sttProvider) {
@@ -214,6 +219,8 @@ export class DictationStreamManager {
       this.failDictationStream(dictationId, message, false);
       return;
     }
+
+    this.pendingStarts.set(dictationId, stt);
 
     stt.on("committed", ({ segmentId, previousSegmentId }) => {
       const state = this.streams.get(dictationId);
@@ -268,6 +275,9 @@ export class DictationStreamManager {
     });
 
     stt.on("error", (err) => {
+      if (!this.streams.has(dictationId) && !this.pendingStarts.has(dictationId)) {
+        return;
+      }
       const message = err instanceof Error ? err.message : String(err);
       const state = this.streams.get(dictationId);
       if (state && state.finishRequested && isBufferTooSmallError(message)) {
@@ -283,8 +293,11 @@ export class DictationStreamManager {
     try {
       await stt.connect();
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      this.failDictationStream(dictationId, message, true);
+      if (this.pendingStarts.get(dictationId) === stt) {
+        this.pendingStarts.delete(dictationId);
+        const message = error instanceof Error ? error.message : String(error);
+        this.failDictationStream(dictationId, message, true);
+      }
       try {
         stt.close();
       } catch {
@@ -292,6 +305,16 @@ export class DictationStreamManager {
       }
       return;
     }
+
+    if (this.pendingStarts.get(dictationId) !== stt) {
+      try {
+        stt.close();
+      } catch {
+        // no-op
+      }
+      return;
+    }
+    this.pendingStarts.delete(dictationId);
 
     const inputRate = parsePcmRateFromFormat(format, 16000) ?? 16000;
     if (!Number.isFinite(inputRate) || inputRate <= 0) {
@@ -507,6 +530,7 @@ export class DictationStreamManager {
   }
 
   public handleCancel(dictationId: string): void {
+    this.cancelPendingStart(dictationId);
     this.cleanupDictationStream(dictationId);
   }
 
@@ -581,7 +605,21 @@ export class DictationStreamManager {
         },
       });
     }
+    this.cancelPendingStart(dictationId);
     this.cleanupDictationStream(dictationId);
+  }
+
+  private cancelPendingStart(dictationId: string): void {
+    const stt = this.pendingStarts.get(dictationId);
+    if (!stt) {
+      return;
+    }
+    this.pendingStarts.delete(dictationId);
+    try {
+      stt.close();
+    } catch {
+      // no-op
+    }
   }
 
   private cleanupDictationStream(dictationId: string): void {

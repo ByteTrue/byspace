@@ -19,9 +19,8 @@ const OFFLINE_SERVER_IDS = [
 ];
 
 // New Workspace preselection is a form-context decision, not startup routing.
-// Entry points from a workspace should carry the current project context, and a
-// plain /new must not let a stale remembered offline host steal the initial host
-// when there is exactly one online saved host.
+// Entry points from a workspace carry the current project/host context; a plain
+// /new ignores stale remembered context and asks the user to choose a project.
 
 async function pressNewWorkspaceShortcut(page: import("@playwright/test").Page): Promise<void> {
   const modifier = process.platform === "darwin" ? "Meta" : "Control";
@@ -34,25 +33,9 @@ async function expectProjectPreselectedWithin(
   projectDisplayName: string,
   timeout: number,
 ): Promise<void> {
-  const projectPicker = page.getByRole("button", { name: "Workspace project" });
+  const projectPicker = page.getByTestId("new-workspace-project-picker-trigger");
   await expect(projectPicker).toContainText(projectDisplayName, { timeout });
-}
-
-async function expectAnyProjectPreselectedWithin(
-  page: import("@playwright/test").Page,
-  timeout: number,
-): Promise<void> {
-  const projectPicker = page.getByRole("button", { name: "Workspace project" });
-  await expect(projectPicker).toBeVisible({ timeout });
-  await expect
-    .poll(
-      async () => {
-        const label = ((await projectPicker.textContent()) ?? "").trim();
-        return label || "Choose project";
-      },
-      { timeout },
-    )
-    .not.toBe("Choose project");
+  await expect(projectPicker).toHaveAccessibleName(`Choose project: ${projectDisplayName}`);
 }
 
 async function openColdRestoredWorkspaceWithOfflineHostFirst(
@@ -120,7 +103,12 @@ async function openNewWorkspaceWithStaleOfflineSelection(
   );
 
   await page.goto(buildNewWorkspaceRoute());
-  await expect(page.getByTestId("host-picker-trigger")).toBeVisible({ timeout: 60_000 });
+  const projectSearch = page.getByPlaceholder("Search projects");
+  await expect(projectSearch).toBeVisible({ timeout: 60_000 });
+  await expect(projectSearch).toBeFocused();
+  await expect(page.getByTestId("new-workspace-project-picker-trigger")).toHaveAccessibleName(
+    "Choose project",
+  );
 }
 
 async function seedOfflineHostsWithStaleSelection(
@@ -190,67 +178,25 @@ test.describe("New workspace preselects the open workspace's project", () => {
     await expectNewWorkspaceProjectSelected(page, projectA.projectDisplayName);
   });
 
-  test("New workspace button preselects the project you are looking at", async ({ page }) => {
-    await gotoAppShell(page);
-    await waitForSidebarHydration(page);
-
-    await switchWorkspaceViaSidebar({
-      page,
-      serverId: getServerId(),
-      workspaceId: projectB.workspaceId,
-    });
-    await openGlobalNewWorkspaceComposer(page);
-    await expectNewWorkspaceProjectSelected(page, projectB.projectDisplayName);
-
-    await switchWorkspaceViaSidebar({
-      page,
-      serverId: getServerId(),
-      workspaceId: projectA.workspaceId,
-    });
-    await openGlobalNewWorkspaceComposer(page);
-    await expectNewWorkspaceProjectSelected(page, projectA.projectDisplayName);
-  });
-
-  test("Cmd+N preselects the connected host project when an offline saved host is first", async ({
+  test("Cmd+N keeps the current project when unrelated saved hosts are offline", async ({
     page,
   }) => {
     await openColdRestoredWorkspaceWithOfflineHostFirst(page, projectB);
 
     await pressNewWorkspaceShortcut(page);
 
-    await expect(page.getByTestId("host-picker-trigger")).toContainText("Connected host", {
-      timeout: 8_000,
-    });
+    await expect(page.getByTestId("host-picker-trigger")).toHaveCount(0);
     await expectProjectPreselectedWithin(page, projectB.projectDisplayName, 8_000);
   });
 
-  test("New workspace button preselects the connected host project when an offline saved host is first", async ({
-    page,
-  }) => {
-    await openColdRestoredWorkspaceWithOfflineHostFirst(page, projectB);
-
-    await openGlobalNewWorkspaceComposer(page);
-
-    await expect(page.getByTestId("host-picker-trigger")).toContainText("Connected host", {
-      timeout: 8_000,
-    });
-    await expectProjectPreselectedWithin(page, projectB.projectDisplayName, 8_000);
-  });
-
-  test("plain /new ignores stale remembered offline hosts when only one saved host is connected", async ({
-    page,
-  }) => {
+  test("plain /new ignores stale remembered context and asks for a project", async ({ page }) => {
     await openNewWorkspaceWithStaleOfflineSelection(page);
 
-    await expect(page.getByTestId("host-picker-trigger")).toContainText("Connected host", {
-      timeout: 8_000,
-    });
-    await expectAnyProjectPreselectedWithin(page, 8_000);
+    await expect(page.getByTestId("host-picker-trigger")).toHaveCount(0);
+    await expect(page.getByPlaceholder("Search projects")).toBeFocused();
   });
 
-  test("stale remembered offline host heals after visiting the connected workspace", async ({
-    page,
-  }) => {
+  test("stale remembered hosts cannot override the current workspace context", async ({ page }) => {
     const connectedServerId = getServerId();
     await seedOfflineHostsWithStaleSelection(page);
 
@@ -262,9 +208,7 @@ test.describe("New workspace preselects the open workspace's project", () => {
 
     await openGlobalNewWorkspaceComposer(page);
 
-    await expect(page.getByTestId("host-picker-trigger")).toContainText("Connected host", {
-      timeout: 8_000,
-    });
+    await expect(page.getByTestId("host-picker-trigger")).toHaveCount(0);
     await expectProjectPreselectedWithin(page, projectB.projectDisplayName, 8_000);
   });
 });

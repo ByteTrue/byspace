@@ -362,6 +362,7 @@ function createSessionForTest(options: SessionForTestOptions = {}): Session {
     byspaceHome: options.byspaceHome ?? "/tmp/byspace-home",
     agentManager: asAgentManager({
       listAgents: vi.fn(() => []),
+      listProviderSubagentActivity: vi.fn(() => []),
       subscribe: vi.fn(() => () => {}),
       ...options.agentManager,
     }),
@@ -581,6 +582,7 @@ describe("project command-center RPCs", () => {
               projectKey: "prj_new_project",
               projectDisplayName: "new-project",
               projectCustomName: null,
+              projectCustomIconRevision: null,
               projectRootPath: directoryPath,
               projectKind: "non_git",
             },
@@ -1740,7 +1742,11 @@ describe("session checkout merge handling", () => {
       requestId: "request-1",
     });
 
-    expect(workspaceGitService.getSnapshot).toHaveBeenCalledWith("/tmp/request-worktree");
+    expect(workspaceGitService.getSnapshot).toHaveBeenCalledWith("/tmp/request-worktree", {
+      force: true,
+      includeForge: false,
+      reason: "merge-to-base-preflight",
+    });
     expect(checkoutGitMocks.getCheckoutStatus).not.toHaveBeenCalled();
     expect(checkoutGitMocks.mergeToBase).toHaveBeenCalledWith(
       "/tmp/request-worktree",
@@ -1756,7 +1762,14 @@ describe("session checkout merge handling", () => {
     });
     expect(github.invalidate).toHaveBeenCalledTimes(1);
     expect(github.invalidate).toHaveBeenCalledWith({ cwd: "/tmp/base-worktree" });
-    expect(checkoutDiffManager.scheduleRefreshForCwd).toHaveBeenCalledWith("/tmp/request-worktree");
+    expect(checkoutDiffManager.scheduleRefreshForCwd).toHaveBeenNthCalledWith(
+      1,
+      "/tmp/base-worktree",
+    );
+    expect(checkoutDiffManager.scheduleRefreshForCwd).toHaveBeenNthCalledWith(
+      2,
+      "/tmp/request-worktree",
+    );
     expect(messages).toContainEqual({
       type: "checkout_merge_response",
       payload: {
@@ -1789,7 +1802,11 @@ describe("session checkout merge handling", () => {
       requestId: "request-merge-from-base",
     });
 
-    expect(workspaceGitService.getSnapshot).toHaveBeenCalledWith("/tmp/request-worktree");
+    expect(workspaceGitService.getSnapshot).toHaveBeenCalledWith("/tmp/request-worktree", {
+      force: true,
+      includeForge: false,
+      reason: "merge-from-base-preflight",
+    });
     expect(messages).toContainEqual({
       type: "checkout_merge_from_base_response",
       payload: {
@@ -2848,7 +2865,7 @@ describe("session checkout pull request auto-merge", () => {
               autoMergeRequest: {
                 enabledAt: "2026-05-13T17:00:00Z",
                 mergeMethod: "SQUASH",
-                enabledBy: "moboudra",
+                enabledBy: "test-user",
               },
               viewerCanEnableAutoMerge: false,
               viewerCanDisableAutoMerge: true,
@@ -2875,7 +2892,7 @@ describe("session checkout pull request auto-merge", () => {
           autoMergeRequest: {
             enabledAt: "2026-05-13T17:00:00Z",
             mergeMethod: "SQUASH",
-            enabledBy: "moboudra",
+            enabledBy: "test-user",
           },
           viewerCanEnableAutoMerge: false,
           viewerCanDisableAutoMerge: true,
@@ -3084,7 +3101,7 @@ describe("session checkout pull request auto-merge", () => {
               autoMergeRequest: {
                 enabledAt: "2026-05-13T17:00:00Z",
                 mergeMethod: "SQUASH",
-                enabledBy: "moboudra",
+                enabledBy: "test-user",
               },
               viewerCanEnableAutoMerge: false,
               viewerCanDisableAutoMerge: true,
@@ -3284,6 +3301,7 @@ describe("session checkout status handling", () => {
         aheadBehind: { ahead: 2, behind: 1 },
         aheadOfOrigin: 2,
         behindOfOrigin: 1,
+        upstreamRef: null,
         hasRemote: true,
         remoteUrl: "https://github.com/ByteTrue/byspace.git",
         isBySpaceOwnedWorktree: false,

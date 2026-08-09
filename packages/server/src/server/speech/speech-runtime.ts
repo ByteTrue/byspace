@@ -130,10 +130,11 @@ export function createSpeechService(params: {
     );
   };
 
-  const deactivate = (): void => {
+  const deactivate = async (): Promise<void> => {
+    const currentClient = client;
     provider = null;
-    client?.shutdown();
     client = null;
+    await currentClient?.shutdownAndWait();
   };
 
   const activate = async (
@@ -157,7 +158,7 @@ export function createSpeechService(params: {
         dictationBackgroundCommitSeconds: modelSpec?.dictationBackgroundCommitSeconds,
       });
       if (persist) persistSelection(modelId);
-      deactivate();
+      await deactivate();
       client = nextClient;
       provider = nextProvider;
       selectedModelId = modelId;
@@ -358,21 +359,40 @@ export function createSpeechService(params: {
       const isSelected = selectedModelId === modelId;
       const releaseMutation = client?.beginModelMutation() ?? (() => undefined);
       try {
-        const deletion = await stageSherpaOnnxModelDeletion(modelsDir, modelId);
+        if (isSelected) {
+          await deactivate();
+        }
+        let deletion;
+        try {
+          deletion = await stageSherpaOnnxModelDeletion(modelsDir, modelId);
+        } catch (error) {
+          if (isSelected) {
+            await activate(modelId, false, true).catch((reactivationError: unknown) => {
+              logger.error(
+                { err: reactivationError, modelId },
+                "Failed to reactivate dictation model after delete setup failed",
+              );
+            });
+          }
+          throw error;
+        }
         if (isSelected) {
           try {
             persistSelection(null);
           } catch (error) {
             await deletion.rollback();
+            await activate(modelId, false, true).catch((reactivationError: unknown) => {
+              logger.error(
+                { err: reactivationError, modelId },
+                "Failed to reactivate dictation model after delete rollback",
+              );
+            });
             throw error;
           }
-          deactivate();
           selectedModelId = null;
         }
         jobs.delete(modelId);
-        await deletion.commit().catch((error: unknown) => {
-          logger.warn({ err: error, modelId }, "Failed to clean up deleted speech model files");
-        });
+        await deletion.commit();
         publish();
       } finally {
         releaseMutation();
@@ -416,7 +436,9 @@ export function createSpeechService(params: {
     start,
     stop() {
       stopped = true;
-      deactivate();
+      void deactivate().catch((error: unknown) => {
+        logger.warn({ err: error }, "Failed to stop dictation worker");
+      });
     },
     ready,
   };

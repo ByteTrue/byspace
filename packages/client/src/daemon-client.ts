@@ -62,7 +62,9 @@ import type {
   DirectorySuggestionsResponse,
   BySpaceWorktreeListResponse,
   BySpaceWorktreeArchiveResponse,
+  ProjectIconSource,
   ProjectIconResponse,
+  ProjectIconGetResponse,
   ProjectAddResponse,
   ProjectCreateDirectoryResponse,
   OpenProjectResponseMessage,
@@ -85,6 +87,8 @@ import type {
   DiagnosticsResponse,
   DaemonOrchestrationSkillsGetStatusResponse,
   DaemonOrchestrationSkillsSetInstalledResponse,
+  OrchestrationToolCallResponse,
+  OrchestrationToolsListResponse,
   AgentRewindResponseMessage,
   ListTerminalsResponse,
   CreateTerminalResponse,
@@ -198,6 +202,48 @@ function normalizePassword(value: string | undefined): string | null {
   return value.length > 0 ? value : null;
 }
 
+const HTTP_HEADER_NAME_PATTERN = /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/;
+
+function normalizeCustomHeaders(
+  headers: Record<string, string> | undefined,
+): Record<string, string> | undefined {
+  if (!headers) return undefined;
+
+  const normalized: Record<string, string> = {};
+  const names = new Set<string>();
+  for (const [name, value] of Object.entries(headers)) {
+    if (!HTTP_HEADER_NAME_PATTERN.test(name)) {
+      throw new Error(`Invalid HTTP header name: ${JSON.stringify(name)}`);
+    }
+    if (typeof value !== "string" || /[\r\n]/.test(value)) {
+      throw new Error(`Invalid HTTP header value for ${JSON.stringify(name)}`);
+    }
+
+    const normalizedName = name.toLowerCase();
+    if (names.has(normalizedName)) {
+      throw new Error(`Duplicate HTTP header name: ${JSON.stringify(name)}`);
+    }
+    names.add(normalizedName);
+    normalized[name] = value;
+  }
+
+  return normalized;
+}
+
+function applyAuthoritativeAuthorization(
+  customHeaders: Record<string, string> | undefined,
+  authorization: string | undefined,
+): Record<string, string> {
+  const headers = { ...customHeaders };
+  if (!authorization) return headers;
+
+  for (const name of Object.keys(headers)) {
+    if (name.toLowerCase() === "authorization") delete headers[name];
+  }
+  headers.Authorization = authorization;
+  return headers;
+}
+
 function extractCorrelatedResponseIdentity(input: unknown): CorrelatedResponseIdentity | null {
   if (!input || typeof input !== "object") {
     return null;
@@ -304,6 +350,7 @@ export interface DaemonClientConfig {
   runtimeGeneration?: number | null;
   password?: string;
   authHeader?: string;
+  headers?: Record<string, string>;
   suppressSendErrors?: boolean;
   transportFactory?: DaemonTransportFactory;
   webSocketFactory?: WebSocketFactory;
@@ -559,9 +606,15 @@ export interface FetchAgentTimelineOptions {
   cursor?: FetchAgentTimelineCursor;
   limit?: number;
   projection?: FetchAgentTimelineProjection;
+  mergeWindow?: boolean;
   requestId?: string;
   timeout?: number;
 }
+
+export type AgentTimelinePromptIndexPayload = Extract<
+  SessionOutboundMessage,
+  { type: "agent.timeline.list_prompts.response" }
+>["payload"];
 
 export type ProviderSubagentListPayload = Extract<
   SessionOutboundMessage,
@@ -1097,6 +1150,7 @@ export class DaemonClient {
   private eventListeners: Set<DaemonEventHandler> = new Set();
   private waiters: Set<Waiter<unknown>> = new Set();
   private checkoutStatusInFlight: Map<string, Promise<CheckoutStatusPayload>> = new Map();
+  private dictationStartCancels = new Map<string, (error: Error) => void>();
   private connectionListeners: Set<(status: ConnectionState) => void> = new Set();
   private reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
   private connectTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -1138,8 +1192,11 @@ export class DaemonClient {
   private lastLivenessRttMs: number | null = null;
   private consecutiveLivenessFailures = 0;
 
-  constructor(private config: DaemonClientConfig) {
-    this.logger = config.logger ?? consoleLogger;
+  private config: DaemonClientConfig;
+
+  constructor(config: DaemonClientConfig) {
+    this.config = { ...config, headers: normalizeCustomHeaders(config.headers) };
+    this.logger = this.config.logger ?? consoleLogger;
     this.logConnectionPath = isRelayClientWebSocketUrl(this.config.url) ? "relay" : "direct";
     let parsedUrlForLog: URL | null = null;
     try {
@@ -1223,13 +1280,11 @@ export class DaemonClient {
       return;
     }
 
-    const headers: Record<string, string> = {};
     const password = normalizePassword(this.config.password);
-    if (password) {
-      headers.Authorization = `Bearer ${password}`;
-    } else if (this.config.authHeader) {
-      headers.Authorization = this.config.authHeader;
-    }
+    const headers = applyAuthoritativeAuthorization(
+      this.config.headers,
+      password ? `Bearer ${password}` : this.config.authHeader,
+    );
     const protocols = password ? [`byspace.bearer.${password}`] : undefined;
 
     try {
@@ -2032,6 +2087,7 @@ export class DaemonClient {
       type: "fetch_agent_history_request",
       requestId: resolvedRequestId,
       ...(options?.filter ? { filter: options.filter } : {}),
+      ...(options?.search ? { search: options.search } : {}),
       ...(options?.sort ? { sort: options.sort } : {}),
       ...(options?.page ? { page: options.page } : {}),
     });
@@ -2536,6 +2592,18 @@ export class DaemonClient {
     return { customName: payload.customName };
   }
 
+  async setProjectIcon(
+    projectId: string,
+    source: ProjectIconSource,
+    requestId?: string,
+  ): Promise<void> {
+    const payload = await this.sendNamespacedCorrelatedSessionRequest<"project.icon.set.response">({
+      requestId,
+      message: { type: "project.icon.set.request", projectId, source },
+    });
+    if (!payload.accepted) throw new Error(payload.error ?? "setProjectIcon rejected");
+  }
+
   async removeProject(
     projectId: string,
     requestId?: string,
@@ -2733,6 +2801,7 @@ export class DaemonClient {
       ...(options.cursor ? { cursor: options.cursor } : {}),
       ...(typeof options.limit === "number" ? { limit: options.limit } : {}),
       ...(options.projection ? { projection: options.projection } : {}),
+      ...(options.mergeWindow === true ? { mergeWindow: true } : {}),
     });
 
     const payload = await this.sendRequest({
@@ -2755,6 +2824,33 @@ export class DaemonClient {
       throw new Error(payload.error);
     }
 
+    return payload;
+  }
+
+  async listAgentTimelinePrompts(
+    agentId: string,
+    options: { requestId?: string; timeout?: number } = {},
+  ): Promise<AgentTimelinePromptIndexPayload> {
+    const requestId = this.createRequestId(options.requestId);
+    const message = SessionInboundMessageSchema.parse({
+      type: "agent.timeline.list_prompts.request",
+      agentId,
+      requestId,
+    });
+    const payload = await this.sendRequest({
+      requestId,
+      message,
+      timeout: options.timeout,
+      options: { skipQueue: true },
+      select: (response) =>
+        response.type === "agent.timeline.list_prompts.response" &&
+        response.payload.requestId === requestId
+          ? response.payload
+          : null,
+    });
+    if (payload.error) {
+      throw new Error(payload.error);
+    }
     return payload;
   }
 
@@ -3214,14 +3310,21 @@ export class DaemonClient {
     const errorPromise = streamError.promise.then((payload) => {
       throw new Error(payload.error);
     });
+    const cancelStart = (error: Error) => {
+      ack.cancel(error);
+      streamError.cancel(error);
+    };
+    this.dictationStartCancels.set(dictationId, cancelStart);
 
     const cleanupError = new Error("Cancelled dictation start waiter");
     try {
       this.sendSessionMessageStrict({ type: "dictation_stream_start", dictationId, format });
       await Promise.race([ackPromise, errorPromise]);
     } finally {
-      ack.cancel(cleanupError);
-      streamError.cancel(cleanupError);
+      if (this.dictationStartCancels.get(dictationId) === cancelStart) {
+        this.dictationStartCancels.delete(dictationId);
+      }
+      cancelStart(cleanupError);
       void ackPromise.catch(() => undefined);
       void errorPromise.catch(() => undefined);
     }
@@ -3385,6 +3488,7 @@ export class DaemonClient {
   }
 
   cancelDictationStream(dictationId: string): void {
+    this.dictationStartCancels.get(dictationId)?.(new Error("Dictation start cancelled"));
     this.sendSessionMessageStrict({ type: "dictation_stream_cancel", dictationId });
   }
 
@@ -4255,6 +4359,16 @@ export class DaemonClient {
     });
   }
 
+  async getProjectIcon(
+    projectId: string,
+    requestId?: string,
+  ): Promise<ProjectIconGetResponse["payload"]> {
+    return this.sendNamespacedCorrelatedSessionRequest<"project.icon.get.response">({
+      requestId,
+      message: { type: "project.icon.get.request", projectId },
+    });
+  }
+
   async requestProjectIcon(
     cwd: string,
     requestId?: string,
@@ -4336,6 +4450,7 @@ export class DaemonClient {
 
   async getProvidersSnapshot(options?: {
     cwd?: string;
+    ifNoneMatch?: string;
     requestId?: string;
   }): Promise<GetProvidersSnapshotPayload> {
     const payload = await this.sendCorrelatedSessionRequest({
@@ -4343,6 +4458,7 @@ export class DaemonClient {
       message: {
         type: "get_providers_snapshot_request",
         cwd: options?.cwd,
+        ifNoneMatch: options?.ifNoneMatch,
       },
       responseType: "get_providers_snapshot_response",
     });
@@ -4436,6 +4552,42 @@ export class DaemonClient {
     return this.sendNamespacedCorrelatedSessionRequest({
       requestId,
       message: { type: "daemon.orchestration_skills.set_installed.request", installed },
+    });
+  }
+
+  async listOrchestrationTools(options?: {
+    callerAgentId?: string;
+    requestId?: string;
+  }): Promise<OrchestrationToolsListResponse["payload"]> {
+    return this.sendNamespacedCorrelatedSessionRequest({
+      requestId: options?.requestId,
+      message: {
+        type: "orchestration.tools.list.request",
+        callerAgentId: options?.callerAgentId,
+      },
+    });
+  }
+
+  async callOrchestrationTool(options: {
+    toolName: string;
+    input?: Record<string, unknown>;
+    callerAgentId?: string;
+    callerCwd?: string;
+    callerWorkspaceId?: string;
+    requestId?: string;
+    timeout?: number;
+  }): Promise<OrchestrationToolCallResponse["payload"]> {
+    return this.sendNamespacedCorrelatedSessionRequest({
+      requestId: options.requestId,
+      message: {
+        type: "orchestration.tools.call.request",
+        callerAgentId: options.callerAgentId,
+        callerCwd: options.callerCwd,
+        callerWorkspaceId: options.callerWorkspaceId,
+        toolName: options.toolName,
+        input: options.input,
+      },
+      timeout: options.timeout,
     });
   }
 
@@ -5281,6 +5433,7 @@ export class DaemonClient {
             [CLIENT_CAPS.reasoningMergeEnum]: true,
             [CLIENT_CAPS.terminalReflowableSnapshot]: true,
             [CLIENT_CAPS.providerSubagents]: true,
+            [CLIENT_CAPS.compactProviderSnapshots]: true,
             ...this.config.capabilities,
           },
           ...(this.config.appVersion ? { appVersion: this.config.appVersion } : {}),

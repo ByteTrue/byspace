@@ -2,7 +2,7 @@ import type { CreateBySpaceWorktreeInput } from "@bytetrue/byspace-client/intern
 import type { ForgeSearchItem } from "@bytetrue/byspace-protocol/messages";
 
 export type PickerItem =
-  | { kind: "branch"; name: string }
+  | { kind: "branch"; name: string; refName?: string }
   | {
       kind: "github-pr";
       item: ForgeSearchItem;
@@ -19,7 +19,7 @@ export function pickerItemToCheckoutRequest(
   if (!item) return undefined;
   switch (item.kind) {
     case "branch":
-      return { action: "branch-off", refName: item.name };
+      return { action: "branch-off", refName: item.refName ?? item.name };
     case "github-pr": {
       const headRefName = item.item.headRefName?.trim();
       const forge = item.item.forge ?? "github";
@@ -42,4 +42,34 @@ export function pickerItemToCheckoutRequest(
       };
     }
   }
+}
+
+export interface BaseRefCheckoutStatus {
+  currentBranch: string | null;
+  upstreamRef?: string | null;
+}
+
+function branchNameFromRef(refName: string): string {
+  if (refName.startsWith("refs/heads/")) return refName.slice("refs/heads/".length);
+  if (refName.startsWith("refs/remotes/")) {
+    const remainder = refName.slice("refs/remotes/".length);
+    const separator = remainder.indexOf("/");
+    return separator === -1 ? remainder : remainder.slice(separator + 1);
+  }
+  return refName;
+}
+
+export function defaultBasePickerItem(status: BaseRefCheckoutStatus): PickerItem | null {
+  if (!status.currentBranch) return null;
+  // COMPAT(checkoutUpstreamRef): added in v0.4.0, remove after 2027-02-01 once the daemon
+  // floor sends upstreamRef. Older daemons omit it, which preserves the previous local base.
+  const refName = status.upstreamRef ?? `refs/heads/${status.currentBranch}`;
+  return { kind: "branch", name: branchNameFromRef(refName), refName };
+}
+
+export function resolveCheckoutRequest(
+  selectedItem: PickerItem | null,
+  status: BaseRefCheckoutStatus,
+): PickerCheckoutRequest | undefined {
+  return pickerItemToCheckoutRequest(selectedItem ?? defaultBasePickerItem(status));
 }

@@ -1,6 +1,7 @@
 import { router, usePathname } from "expo-router";
 import {
   CalendarClock,
+  CircleAlert,
   FolderPlus,
   History,
   Home,
@@ -34,35 +35,26 @@ import { Shortcut } from "@/components/ui/shortcut";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { HEADER_INNER_HEIGHT, useIsCompactFormFactor } from "@/constants/layout";
 import { useOpenAddProject } from "@/hooks/use-open-add-project";
+import { useOpenNewWorkspace } from "@/hooks/use-global-new-workspace-action";
 import { useShortcutKeys } from "@/hooks/use-shortcut-keys";
-import { canCreateWorktreeForProjectKind } from "@/projects/host-projects";
-import { useHostFeature } from "@/runtime/host-features";
-import {
-  type SidebarProjectEntry,
-  type SidebarWorkspaceEntry,
-} from "@/hooks/use-sidebar-workspaces-list";
+import type { SidebarWorkspaceEntry } from "@/hooks/use-sidebar-workspaces-list";
+import type { SidebarProjectedProject } from "@/components/sidebar/sidebar-projection";
 import { useSidebarModel } from "@/components/sidebar/sidebar-model";
-import type { PinnedSidebarGroups } from "@/hooks/use-sidebar-pins";
 import { RetainedPanelActivity } from "@/components/retained-panel";
-import type { StatusGroup } from "@/hooks/sidebar-status-view-model";
-import { type SidebarGroupMode, useSidebarViewStore } from "@/stores/sidebar-view-store";
+import { useSidebarViewStore } from "@/stores/sidebar-view-store";
 import { useKeyboardShortcutsStore } from "@/stores/keyboard-shortcuts-store";
 import { useHosts } from "@/runtime/host-runtime";
-import { useActiveWorkspaceSelection } from "@/stores/navigation-active-workspace-store";
-import { useWorkspace } from "@/stores/session-store-hooks";
 import { usePanelStore } from "@/stores/panel-store";
 import { useCloseAgentListGesture } from "@/mobile-panels/gestures";
 import { MobilePanelOverlay } from "@/mobile-panels/presentation";
 import {
   buildOpenProjectRoute,
-  buildNewWorkspaceRoute,
   buildSchedulesRoute,
   buildSessionsRoute,
   buildSettingsAddHostRoute,
   buildSettingsHostSectionRoute,
   buildSettingsRoute,
 } from "@/utils/host-routes";
-import type { ShortcutKey } from "@/utils/format-shortcut";
 import { SidebarAgentListSkeleton } from "./sidebar-agent-list-skeleton";
 import { SidebarCalloutSlot } from "./sidebar-callout-slot";
 import { SidebarWorkspaceList } from "./sidebar-workspace-list";
@@ -71,31 +63,23 @@ type SidebarTheme = ReturnType<typeof useUnistyles>["theme"];
 
 interface SidebarSharedProps {
   theme: SidebarTheme;
-  statusGroups: StatusGroup[];
-  pinnedGroups: PinnedSidebarGroups;
-  projects: SidebarProjectEntry[];
+  projects: SidebarProjectedProject[];
   workspaceEntriesByKey: ReadonlyMap<string, SidebarWorkspaceEntry>;
-  projectNamesByKey: Map<string, string>;
   isInitialLoad: boolean;
   isRevalidating: boolean;
   isManualRefresh: boolean;
-  groupMode: SidebarGroupMode;
-  collapsedProjectKeys: ReadonlySet<string>;
   shortcutIndexByWorkspaceKey: Map<string, number>;
-  toggleProjectCollapsed: (projectKey: string) => void;
   handleRefresh: () => void;
   handleOpenProject: () => void;
   handleHome: () => void;
   handleSettings: () => void;
   labels: SidebarLabels;
-  newWorkspaceKeys: ShortcutKey[][] | null;
   handleAddHost: () => void;
   handleOpenHostSettings: (serverId: string) => void;
 }
 
 interface SidebarLabels {
   addProject: string;
-  newWorkspace: string;
   hosts: string;
   home: string;
   settings: string;
@@ -130,15 +114,9 @@ export const LeftSidebar = memo(function LeftSidebar({ active }: { active: boole
   const {
     projects,
     workspaceEntriesByKey,
-    projectNamesByKey,
     isInitialLoad,
     isRevalidating,
     refreshAll,
-    statusGroups,
-    pinnedGroups,
-    collapsedProjectKeys,
-    toggleProjectCollapsed,
-    groupMode,
     shortcutModel,
   } = useSidebarModel();
   const { shortcutIndexByWorkspaceKey } = shortcutModel;
@@ -214,11 +192,9 @@ export const LeftSidebar = memo(function LeftSidebar({ active }: { active: boole
     router.push(buildSchedulesRoute());
   }, []);
 
-  const newWorkspaceKeys = useShortcutKeys("new-workspace");
   const labels = useMemo(
     (): SidebarLabels => ({
       addProject: t("sidebar.actions.addProject"),
-      newWorkspace: t("sidebar.actions.newWorkspace"),
       hosts: t("sidebar.actions.hosts"),
       home: t("sidebar.actions.home"),
       settings: t("sidebar.actions.settings"),
@@ -232,21 +208,14 @@ export const LeftSidebar = memo(function LeftSidebar({ active }: { active: boole
 
   const sharedProps = {
     theme,
-    statusGroups,
-    pinnedGroups,
     projects,
     workspaceEntriesByKey,
-    projectNamesByKey,
     isInitialLoad,
     isRevalidating,
     isManualRefresh,
-    groupMode,
-    collapsedProjectKeys,
     shortcutIndexByWorkspaceKey,
-    toggleProjectCollapsed,
     handleRefresh,
     labels,
-    newWorkspaceKeys,
   };
 
   if (isCompactLayout) {
@@ -466,61 +435,6 @@ function IconTooltipContent({
   );
 }
 
-const SidebarNewWorkspaceHeaderRow = memo(function SidebarNewWorkspaceHeaderRow({
-  label,
-  testID,
-  variant,
-  shortcutKeys,
-  onBeforeNavigate,
-}: {
-  label: string;
-  testID: string;
-  variant: "header" | "compact";
-  shortcutKeys: ShortcutKey[][] | null;
-  onBeforeNavigate?: () => void;
-}) {
-  const activeWorkspaceSelection = useActiveWorkspaceSelection();
-  const activeWorkspaceServerId = activeWorkspaceSelection?.serverId ?? null;
-  const activeWorkspaceId = activeWorkspaceSelection?.workspaceId ?? null;
-  const activeWorkspace = useWorkspace(activeWorkspaceServerId, activeWorkspaceId);
-  const supportsWorkspaceMultiplicity = useHostFeature(
-    activeWorkspaceServerId,
-    "workspaceMultiplicity",
-  );
-  const canUseActiveWorkspaceContext = Boolean(
-    activeWorkspace &&
-    (supportsWorkspaceMultiplicity || canCreateWorktreeForProjectKind(activeWorkspace.projectKind)),
-  );
-
-  const handlePress = useCallback(() => {
-    onBeforeNavigate?.();
-    router.push(
-      activeWorkspaceServerId
-        ? buildNewWorkspaceRoute(
-            activeWorkspace && canUseActiveWorkspaceContext
-              ? {
-                  serverId: activeWorkspaceServerId,
-                  sourceDirectory: activeWorkspace.projectRootPath,
-                  projectId: activeWorkspace.projectId,
-                }
-              : { serverId: activeWorkspaceServerId },
-          )
-        : buildNewWorkspaceRoute(),
-    );
-  }, [activeWorkspace, activeWorkspaceServerId, canUseActiveWorkspaceContext, onBeforeNavigate]);
-
-  return (
-    <SidebarHeaderRow
-      icon={Plus}
-      label={label}
-      onPress={handlePress}
-      testID={testID}
-      variant={variant}
-      shortcutKeys={shortcutKeys}
-    />
-  );
-});
-
 function SidebarFooter({
   theme,
   handleOpenProject,
@@ -585,20 +499,13 @@ function SidebarFooter({
 
 function MobileSidebar({
   theme,
-  statusGroups,
-  pinnedGroups,
   projects,
   workspaceEntriesByKey,
-  projectNamesByKey,
   isInitialLoad,
   isRevalidating,
   isManualRefresh,
-  groupMode,
-  collapsedProjectKeys,
   shortcutIndexByWorkspaceKey,
-  toggleProjectCollapsed,
   handleRefresh,
-  newWorkspaceKeys,
   handleOpenProject,
   handleHome,
   handleSettings,
@@ -648,13 +555,6 @@ function MobileSidebar({
     >
       <View style={styles.sidebarContent} pointerEvents="auto">
         <View style={styles.sidebarHeaderGroup}>
-          <SidebarNewWorkspaceHeaderRow
-            label={labels.newWorkspace}
-            testID="sidebar-global-new-workspace"
-            variant="compact"
-            shortcutKeys={newWorkspaceKeys}
-            onBeforeNavigate={closeSidebar}
-          />
           <SidebarHeaderRow
             icon={History}
             label={labels.sessions}
@@ -696,15 +596,9 @@ function MobileSidebar({
           <SidebarAgentListSkeleton />
         ) : (
           <SidebarWorkspaceList
-            collapsedProjectKeys={collapsedProjectKeys}
-            onToggleProjectCollapsed={toggleProjectCollapsed}
             shortcutIndexByWorkspaceKey={shortcutIndexByWorkspaceKey}
-            groupMode={groupMode}
-            statusGroups={statusGroups}
-            pinnedGroups={pinnedGroups}
             projects={projects}
             workspaceEntriesByKey={workspaceEntriesByKey}
-            projectNamesByKey={projectNamesByKey}
             isRefreshing={isManualRefresh && isRevalidating}
             onRefresh={handleRefresh}
             onWorkspacePress={handleWorkspacePress}
@@ -730,20 +624,13 @@ function MobileSidebar({
 
 function DesktopSidebar({
   theme,
-  statusGroups,
-  pinnedGroups,
   projects,
   workspaceEntriesByKey,
-  projectNamesByKey,
   isInitialLoad,
   isRevalidating,
   isManualRefresh,
-  groupMode,
-  collapsedProjectKeys,
   shortcutIndexByWorkspaceKey,
-  toggleProjectCollapsed,
   handleRefresh,
-  newWorkspaceKeys,
   handleOpenProject,
   handleHome,
   handleSettings,
@@ -822,12 +709,6 @@ function DesktopSidebar({
       <View style={desktopSidebarBorderStyle}>
         <View style={styles.sidebarDragArea}>
           <View style={styles.sidebarHeaderGroup}>
-            <SidebarNewWorkspaceHeaderRow
-              label={labels.newWorkspace}
-              testID="sidebar-global-new-workspace"
-              variant="compact"
-              shortcutKeys={newWorkspaceKeys}
-            />
             <SidebarHeaderRow
               icon={History}
               label={labels.sessions}
@@ -851,15 +732,9 @@ function DesktopSidebar({
           <SidebarAgentListSkeleton />
         ) : (
           <SidebarWorkspaceList
-            collapsedProjectKeys={collapsedProjectKeys}
-            onToggleProjectCollapsed={toggleProjectCollapsed}
             shortcutIndexByWorkspaceKey={shortcutIndexByWorkspaceKey}
-            groupMode={groupMode}
-            statusGroups={statusGroups}
-            pinnedGroups={pinnedGroups}
             projects={projects}
             workspaceEntriesByKey={workspaceEntriesByKey}
-            projectNamesByKey={projectNamesByKey}
             isRefreshing={isManualRefresh && isRevalidating}
             onRefresh={handleRefresh}
             onAddProject={handleOpenProject}
@@ -891,15 +766,56 @@ function DesktopSidebar({
 
 function WorkspacesSectionHeader() {
   const { theme } = useUnistyles();
+  const { t } = useTranslation();
+  const { canOpenNewWorkspace, openNewWorkspace } = useOpenNewWorkspace();
   const setCommandCenterOpen = useKeyboardShortcutsStore((state) => state.setCommandCenterOpen);
+  const newWorkspaceKeys = useShortcutKeys("new-workspace");
   const commandCenterKeys = useShortcutKeys("toggle-command-center");
+  const attentionOnly = useSidebarViewStore((state) => state.attentionOnly);
+  const setAttentionOnly = useSidebarViewStore((state) => state.setAttentionOnly);
+  const needsAttentionWorkspaceCount = useSidebarModel().needsAttentionWorkspaceCount;
+  const attentionFilterLabel = t("sidebar.actions.needsAttentionFilter");
+  const handleAttentionFilterPress = useCallback(
+    () => setAttentionOnly(!attentionOnly),
+    [attentionOnly, setAttentionOnly],
+  );
+  const attentionAccessibilityState = useMemo(() => ({ selected: attentionOnly }), [attentionOnly]);
+  const attentionIconColor = (hovered: boolean, pressed: boolean) => {
+    if (attentionOnly) {
+      return theme.colors.statusWarning;
+    }
+    if (hovered || pressed) {
+      return theme.colors.foreground;
+    }
+    return theme.colors.foregroundMuted;
+  };
   const handleSearchPress = useCallback(() => setCommandCenterOpen(true), [setCommandCenterOpen]);
-  const searchButtonStyle = useCallback(
+  const headerButtonStyle = useCallback(
     ({ hovered = false, pressed }: PressableStateCallbackType & { hovered?: boolean }) => [
       styles.workspacesHeaderIconButton,
       (hovered || pressed) && styles.workspacesHeaderIconButtonHovered,
     ],
     [],
+  );
+  const attentionButtonStyle = useCallback(
+    ({ hovered = false, pressed }: PressableStateCallbackType & { hovered?: boolean }) => [
+      styles.workspacesHeaderIconButton,
+      (hovered || pressed || attentionOnly) && styles.workspacesHeaderIconButtonHovered,
+    ],
+    [attentionOnly],
+  );
+  const newWorkspaceButtonStyle = useCallback(
+    ({ hovered = false, pressed }: PressableStateCallbackType & { hovered?: boolean }) => [
+      styles.workspacesHeaderIconButton,
+      canOpenNewWorkspace && (hovered || pressed) && styles.workspacesHeaderIconButtonHovered,
+      !canOpenNewWorkspace && styles.workspacesHeaderIconButtonDisabled,
+    ],
+    [canOpenNewWorkspace],
+  );
+  const newWorkspaceLabel = t("sidebar.workspace.actions.newWorkspace");
+  const newWorkspaceAccessibilityState = useMemo(
+    () => ({ disabled: !canOpenNewWorkspace }),
+    [canOpenNewWorkspace],
   );
 
   return (
@@ -910,9 +826,36 @@ function WorkspacesSectionHeader() {
           <TooltipTrigger asChild>
             <Pressable
               accessibilityRole="button"
+              accessibilityLabel={newWorkspaceLabel}
+              accessibilityState={newWorkspaceAccessibilityState}
+              disabled={!canOpenNewWorkspace}
+              testID="sidebar-global-new-workspace"
+              style={newWorkspaceButtonStyle}
+              onPress={openNewWorkspace}
+            >
+              {({ hovered, pressed }) => (
+                <Plus
+                  size={14}
+                  color={
+                    canOpenNewWorkspace && (hovered || pressed)
+                      ? theme.colors.foreground
+                      : theme.colors.foregroundMuted
+                  }
+                />
+              )}
+            </Pressable>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" align="center" offset={8}>
+            <IconTooltipContent label={newWorkspaceLabel} shortcutKeys={newWorkspaceKeys} />
+          </TooltipContent>
+        </Tooltip>
+        <Tooltip delayDuration={300}>
+          <TooltipTrigger asChild>
+            <Pressable
+              accessibilityRole="button"
               accessibilityLabel="Open command center"
               testID="sidebar-command-center-search"
-              style={searchButtonStyle}
+              style={headerButtonStyle}
               onPress={handleSearchPress}
             >
               {({ hovered, pressed }) => (
@@ -927,6 +870,30 @@ function WorkspacesSectionHeader() {
           </TooltipTrigger>
           <TooltipContent side="bottom" align="center" offset={8}>
             <IconTooltipContent label="Search" shortcutKeys={commandCenterKeys} />
+          </TooltipContent>
+        </Tooltip>
+        <Tooltip delayDuration={300}>
+          <TooltipTrigger asChild>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={attentionFilterLabel}
+              accessibilityState={attentionAccessibilityState}
+              testID="sidebar-needs-attention-filter"
+              style={attentionButtonStyle}
+              onPress={handleAttentionFilterPress}
+            >
+              {({ hovered, pressed }) => (
+                <View style={styles.attentionFilterRow}>
+                  <CircleAlert size={14} color={attentionIconColor(Boolean(hovered), pressed)} />
+                  {needsAttentionWorkspaceCount > 0 ? (
+                    <Text style={styles.attentionFilterCount}>{needsAttentionWorkspaceCount}</Text>
+                  ) : null}
+                </View>
+              )}
+            </Pressable>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" align="center" offset={8}>
+            <IconTooltipContent label={attentionFilterLabel} />
           </TooltipContent>
         </Tooltip>
         <Tooltip delayDuration={300}>
@@ -985,9 +952,9 @@ const styles = StyleSheet.create((theme) => ({
     paddingBottom: theme.spacing[1],
   },
   workspacesSectionTitle: {
-    color: theme.colors.foregroundMuted,
+    color: theme.colors.foreground,
     fontSize: theme.fontSize.xs,
-    fontWeight: theme.fontWeight.normal,
+    fontWeight: theme.fontWeight.medium,
   },
   workspacesSectionActions: {
     flexDirection: "row",
@@ -1003,6 +970,19 @@ const styles = StyleSheet.create((theme) => ({
   },
   workspacesHeaderIconButtonHovered: {
     backgroundColor: theme.colors.surfaceSidebarHover,
+  },
+  attentionFilterRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+  },
+  attentionFilterCount: {
+    color: theme.colors.statusWarning,
+    fontSize: theme.fontSize.xs,
+    fontWeight: theme.fontWeight.medium,
+  },
+  workspacesHeaderIconButtonDisabled: {
+    opacity: 0.45,
   },
   sidebarContent: {
     flex: 1,

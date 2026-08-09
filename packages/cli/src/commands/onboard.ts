@@ -1,11 +1,6 @@
 import { cancel, intro, log, note, outro, spinner } from "@clack/prompts";
 import { Command, Option } from "commander";
 import path from "node:path";
-import {
-  generateLocalPairingOffer,
-  loadConfig,
-  type CliConfigOverrides,
-} from "@bytetrue/byspace-server";
 import { resolveBySpaceHostedRelease } from "@bytetrue/byspace-protocol/release-channel";
 import {
   resolveLocalBySpaceHome,
@@ -16,6 +11,11 @@ import {
   type DaemonStartOptions,
 } from "./daemon/local-daemon.js";
 import { tryConnectToDaemon } from "../utils/client.js";
+import {
+  confirmRelayPairing,
+  printDirectConnectionGuidance,
+  resolveLocalPairingOffer,
+} from "./daemon/pair.js";
 import { formatPairingInstructions } from "../output/pairing.js";
 import { resolveCliVersion } from "../version.js";
 
@@ -54,37 +54,6 @@ function parseTimeoutMs(raw: string | undefined): number {
   }
 
   return Math.ceil(seconds * 1000);
-}
-
-function toCliOverrides(options: OnboardOptions): CliConfigOverrides {
-  const cliOverrides: CliConfigOverrides = {};
-
-  if (options.listen) {
-    cliOverrides.listen = options.listen;
-  } else if (options.port) {
-    cliOverrides.listen = `127.0.0.1:${options.port}`;
-  }
-
-  if (options.relay === false) {
-    cliOverrides.relayEnabled = false;
-  }
-
-  if (options.hostnames) {
-    const raw = options.hostnames.trim();
-    cliOverrides.hostnames =
-      raw.toLowerCase() === "true"
-        ? true
-        : raw
-            .split(",")
-            .map((host) => host.trim())
-            .filter(Boolean);
-  }
-
-  if (options.mcp === false) {
-    cliOverrides.mcpEnabled = false;
-  }
-
-  return cliOverrides;
 }
 
 type ProbeResult = { kind: "ready"; listen: string; host: string | null } | { kind: "pending" };
@@ -197,6 +166,7 @@ export function onboardCommand(): Command {
     .option("--listen <listen>", "Listen target (host:port, port, or unix socket path)")
     .option("--port <port>", "Port to listen on (default: 6777)")
     .option("--home <path>", "BySpace home directory (default: ~/.byspace)")
+    .option("--relay", "Enable relay connection without prompting")
     .option("--no-relay", "Disable relay connection")
     .option("--no-mcp", "Disable the Agent MCP HTTP endpoint")
     .option(
@@ -304,8 +274,6 @@ export async function runOnboard(options: OnboardOptions): Promise<void> {
     renderNote(byspaceHome, "BySpace home");
   }
 
-  const config = loadConfig(byspaceHome, { cli: toCliOverrides(options) });
-
   await ensureDaemonStarted(options, richUi);
   await waitForDaemonReadyWithUi({
     home: options.home ?? byspaceHome,
@@ -313,29 +281,33 @@ export async function runOnboard(options: OnboardOptions): Promise<void> {
     richUi,
   });
 
-  if (config.relayEnabled === false) {
-    log.warn("Relay is disabled; pairing offer is unavailable for this daemon.");
-    printNextSteps(null, byspaceHome, config.appBaseUrl ?? CURRENT_RELEASE_APP_BASE_URL, richUi);
-    if (richUi) {
-      outro("BySpace daemon is running.");
-    }
+  if (options.relay === false) {
+    log.message("Relay pairing skipped because --no-relay was provided.");
+    printNextSteps(null, byspaceHome, CURRENT_RELEASE_APP_BASE_URL, richUi);
+    if (richUi) outro("BySpace daemon is running.");
     return;
   }
 
-  const pairing = await generateLocalPairingOffer({
+  let pairing = await resolveLocalPairingOffer({
     byspaceHome,
-    relayEnabled: config.relayEnabled,
-    relayEndpoint: config.relayEndpoint,
-    relayPublicEndpoint: config.relayPublicEndpoint,
-    relayUseTls: config.relayUseTls,
-    relayPublicUseTls: config.relayPublicUseTls,
-    appBaseUrl: config.appBaseUrl,
-    includeQr: true,
+    enableRelay: options.relay === true,
   });
+
+  if (!pairing.relayEnabled) {
+    const shouldEnable = richUi ? await confirmRelayPairing() : false;
+    if (!shouldEnable) {
+      printDirectConnectionGuidance();
+      printNextSteps(null, byspaceHome, CURRENT_RELEASE_APP_BASE_URL, richUi);
+      if (richUi) outro("BySpace daemon is running.");
+      return;
+    }
+    pairing = await resolveLocalPairingOffer({ byspaceHome, enableRelay: true });
+    log.success("Relay enabled");
+  }
 
   if (!pairing.url) {
     log.warn("Relay pairing URL is unavailable for this daemon configuration.");
-    printNextSteps(null, byspaceHome, config.appBaseUrl ?? CURRENT_RELEASE_APP_BASE_URL, richUi);
+    printNextSteps(null, byspaceHome, CURRENT_RELEASE_APP_BASE_URL, richUi);
     if (richUi) {
       outro("BySpace daemon is running.");
     }
@@ -349,12 +321,7 @@ export async function runOnboard(options: OnboardOptions): Promise<void> {
       columns: process.stdout.columns,
     }),
   );
-  printNextSteps(
-    pairing.url,
-    byspaceHome,
-    config.appBaseUrl ?? CURRENT_RELEASE_APP_BASE_URL,
-    richUi,
-  );
+  printNextSteps(pairing.url, byspaceHome, CURRENT_RELEASE_APP_BASE_URL, richUi);
   if (richUi) {
     outro("BySpace is ready!");
   }

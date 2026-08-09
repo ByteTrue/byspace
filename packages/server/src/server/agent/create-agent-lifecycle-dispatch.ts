@@ -6,6 +6,7 @@ import { isBySpaceOwnedWorktreeCwd } from "../../utils/worktree.js";
 import {
   archiveByScope,
   type ActiveWorkspaceRef,
+  type ArchiveDependencies,
   resolveWorkspaceIdAtPath,
 } from "../workspace-archive-service.js";
 import type {
@@ -34,11 +35,12 @@ interface CreateAgentLifecycleDispatchDependencies {
   listActiveWorkspaces: () => Promise<ActiveWorkspaceRef[]>;
   archiveWorkspaceRecord: (workspaceId: string) => Promise<void>;
   emit: (message: SessionOutboundMessage) => void;
-  emitAgentRemove: (agentId: string) => void;
+  emitAgentRemove: (agentId: string) => Promise<void>;
   emitWorkspaceUpdatesForWorkspaceIds: (workspaceIds: Iterable<string>) => Promise<void>;
   markWorkspaceArchiving: (workspaceIds: Iterable<string>, archivingAt: string) => void;
   clearWorkspaceArchiving: (workspaceIds: Iterable<string>) => void;
   killTerminalsForWorkspace: (workspaceId: string) => Promise<void>;
+  stopWorkspaceSetup: ArchiveDependencies["stopWorkspaceSetup"];
   logger: pino.Logger;
 }
 
@@ -234,6 +236,7 @@ export class CreateAgentLifecycleDispatch {
           markWorkspaceArchiving: this.dependencies.markWorkspaceArchiving,
           clearWorkspaceArchiving: this.dependencies.clearWorkspaceArchiving,
           killTerminalsForWorkspace: this.dependencies.killTerminalsForWorkspace,
+          stopWorkspaceSetup: this.dependencies.stopWorkspaceSetup,
           sessionLogger: this.dependencies.logger,
         },
         {
@@ -246,7 +249,7 @@ export class CreateAgentLifecycleDispatch {
     }
 
     if (options.agentId) {
-      this.dependencies.emitAgentRemove(options.agentId);
+      await this.dependencies.emitAgentRemove(options.agentId);
     }
   }
 }

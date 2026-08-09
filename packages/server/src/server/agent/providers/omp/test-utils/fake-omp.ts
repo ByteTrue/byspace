@@ -5,9 +5,6 @@ import type {
   OmpStartSessionInput,
 } from "../runtime.js";
 import type {
-  OmpRpcHostToolDefinition,
-  OmpRpcHostToolResult,
-  OmpRpcHostToolUpdate,
   OmpAgentMessage,
   OmpModel,
   OmpPromptAck,
@@ -107,11 +104,9 @@ export class FakeOmpSession implements OmpRuntimeSession {
   readonly handoffRequests: Array<{ customInstructions?: string }> = [];
   readonly steerRequests: Array<{ message: string; imageCount: number }> = [];
   readonly followUpRequests: Array<{ message: string; imageCount: number }> = [];
-  readonly hostToolSetRequests: OmpRpcHostToolDefinition[][] = [];
-  readonly hostToolResults: OmpRpcHostToolResult[] = [];
-  readonly hostToolUpdates: OmpRpcHostToolUpdate[] = [];
   getStateRequestCount = 0;
   abortRequested = false;
+  abortError: Error | null = null;
   readonly canceledExtensionUiRequests: string[] = [];
   readonly extensionUiResponses: Array<{
     id: string;
@@ -141,7 +136,6 @@ export class FakeOmpSession implements OmpRuntimeSession {
   private readonly subscribers = new Set<(event: OmpRuntimeEvent) => void>();
   private readonly stateReports: OmpSessionState[] = [];
   private readonly stateRequestWaiters: Array<{ count: number; resolve: () => void }> = [];
-  private readonly hostToolResultWaiters: Array<(result: OmpRpcHostToolResult) => void> = [];
   private readonly promptWaiters: Array<() => void> = [];
   private readonly subscriptionWaiters: Array<{ count: number; resolve: () => void }> = [];
   private readonly subagentMessageResults = new Map<string, FakeOmpSubagentMessagesResult[]>();
@@ -238,6 +232,9 @@ export class FakeOmpSession implements OmpRuntimeSession {
   }
 
   async abort(): Promise<void> {
+    if (this.abortError) {
+      throw this.abortError;
+    }
     this.abortRequested = true;
   }
 
@@ -307,11 +304,6 @@ export class FakeOmpSession implements OmpRuntimeSession {
     return new Promise((resolve) => this.subscriptionWaiters.push({ count, resolve }));
   }
 
-  async setHostTools(tools: OmpRpcHostToolDefinition[]): Promise<string[]> {
-    this.hostToolSetRequests.push(tools);
-    return tools.map((tool) => tool.name);
-  }
-
   async branch(entryId: string): Promise<{ text: string }> {
     this.branchRequests.push(entryId);
     if (this.branchResponse.cancelled === true) {
@@ -337,19 +329,6 @@ export class FakeOmpSession implements OmpRuntimeSession {
     images?: Array<{ type: "image"; data: string; mimeType: string }>,
   ): void {
     this.followUpRequests.push({ message, imageCount: images?.length ?? 0 });
-  }
-
-  sendHostToolResult(result: OmpRpcHostToolResult): void {
-    this.hostToolResults.push(result);
-    this.hostToolResultWaiters.shift()?.(result);
-  }
-
-  sendHostToolUpdate(update: OmpRpcHostToolUpdate): void {
-    this.hostToolUpdates.push(update);
-  }
-
-  nextHostToolResult(): Promise<OmpRpcHostToolResult> {
-    return new Promise((resolve) => this.hostToolResultWaiters.push(resolve));
   }
 
   async getSubagents(): Promise<FakeOmpSubagentSnapshot[]> {

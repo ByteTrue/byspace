@@ -9,7 +9,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { getHostRuntimeStore } from "@/runtime/host-runtime";
 import { useKeyboardShortcutsStore } from "@/stores/keyboard-shortcuts-store";
 import { useSessionStore, type WorkspaceDescriptor } from "@/stores/session-store";
-import { useSidebarCollapsedSectionsStore } from "@/stores/sidebar-collapsed-sections-store";
 import { useSidebarOrderStore } from "@/stores/sidebar-order-store";
 import { useSidebarViewStore } from "@/stores/sidebar-view-store";
 import type { HostProfile } from "@/types/host-connection";
@@ -51,6 +50,7 @@ function hostProfile(serverId = "srv"): HostProfile {
     serverId,
     label: "Shortcut Host",
     lifecycle: {},
+    appearance: { color: "none", badgeDisplay: null },
     connections: [],
     preferredConnectionId: null,
     createdAt: now,
@@ -78,17 +78,11 @@ describe("WorkspaceShortcutTargetsSubscriber", () => {
     useKeyboardShortcutsStore.setState({
       sidebarShortcutWorkspaceTargets: [],
     });
-    useSidebarCollapsedSectionsStore.setState({
-      collapsedProjectKeys: new Set(),
-    });
     useSidebarOrderStore.setState({
       projectOrder: [],
       workspaceOrderByProject: {},
     });
-    useSidebarViewStore.setState({
-      groupMode: "project",
-      hostFilters: [],
-    });
+    useSidebarViewStore.setState({ hostFilters: [] });
 
     act(() => {
       setHostProfiles([hostProfile()]);
@@ -136,77 +130,7 @@ describe("WorkspaceShortcutTargetsSubscriber", () => {
     ]);
   });
 
-  it("publishes status-mode shortcut targets in visual status order", async () => {
-    act(() => {
-      useSidebarViewStore.getState().setGroupMode("status");
-      useSessionStore.getState().setWorkspaces(
-        "srv",
-        new Map([
-          [
-            "ws-done",
-            workspaceDescriptor({
-              id: "ws-done",
-              name: "Done",
-              projectId: "project-1",
-              projectDisplayName: "Project 1",
-              status: "done",
-              statusEnteredAt: new Date("2026-01-01T00:00:00.000Z"),
-            }),
-          ],
-          [
-            "ws-running-old",
-            workspaceDescriptor({
-              id: "ws-running-old",
-              name: "Running old",
-              projectId: "project-2",
-              projectDisplayName: "Project 2",
-              status: "running",
-              statusEnteredAt: new Date("2026-02-01T00:00:00.000Z"),
-            }),
-          ],
-          [
-            "ws-needs-input",
-            workspaceDescriptor({
-              id: "ws-needs-input",
-              name: "Needs input",
-              projectId: "project-1",
-              projectDisplayName: "Project 1",
-              status: "needs_input",
-              statusEnteredAt: new Date("2026-01-15T00:00:00.000Z"),
-            }),
-          ],
-          [
-            "ws-running-new",
-            workspaceDescriptor({
-              id: "ws-running-new",
-              name: "Running new",
-              projectId: "project-2",
-              projectDisplayName: "Project 2",
-              status: "running",
-              statusEnteredAt: new Date("2026-03-01T00:00:00.000Z"),
-            }),
-          ],
-        ]),
-      );
-    });
-
-    await act(async () => {
-      root?.render(
-        <SidebarModelProvider>
-          <WorkspaceShortcutTargetsSubscriber enabled={true} />
-        </SidebarModelProvider>,
-      );
-    });
-
-    expect(useKeyboardShortcutsStore.getState().sidebarShortcutWorkspaceTargets).toEqual([
-      { serverId: "srv", workspaceId: "ws-needs-input" },
-      { serverId: "srv", workspaceId: "ws-running-new" },
-      { serverId: "srv", workspaceId: "ws-running-old" },
-      { serverId: "srv", workspaceId: "ws-done" },
-    ]);
-  });
-
-  it("publishes shortcut targets from the visible host filter in project and status modes", async () => {
+  it("publishes shortcut targets from the visible host filter", async () => {
     act(() => {
       setHostProfiles([hostProfile("host-a"), hostProfile("host-b")]);
       useSessionStore.getState().initializeSession("host-a", null as unknown as DaemonClient);
@@ -234,14 +158,6 @@ describe("WorkspaceShortcutTargetsSubscriber", () => {
           <WorkspaceShortcutTargetsSubscriber enabled={true} />
         </SidebarModelProvider>,
       );
-    });
-
-    expect(useKeyboardShortcutsStore.getState().sidebarShortcutWorkspaceTargets).toEqual([
-      { serverId: "host-b", workspaceId: "b-1" },
-    ]);
-
-    await act(async () => {
-      useSidebarViewStore.getState().setGroupMode("status");
     });
 
     expect(useKeyboardShortcutsStore.getState().sidebarShortcutWorkspaceTargets).toEqual([

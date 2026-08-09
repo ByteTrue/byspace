@@ -1,8 +1,9 @@
+import { Buffer } from "buffer";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
 import { Pressable, Text, TextInput, View } from "react-native";
-import { router } from "expo-router";
+import { router, type Href } from "expo-router";
 import { StyleSheet } from "react-native-unistyles";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Check, ChevronDown, MoreVertical, Pencil, Plus, X } from "lucide-react-native";
@@ -32,8 +33,12 @@ import { SettingsSection } from "@/screens/settings/settings-section";
 import { settingsStyles } from "@/styles/settings";
 import { useProjects } from "@/hooks/use-projects";
 import { useProjectIconDataByProjectKey } from "@/projects/project-icons";
+import { useFilePicker } from "@/hooks/use-file-picker";
 import { useHostRuntimeClient, useHostRuntimeSnapshot } from "@/runtime/host-runtime";
+import { useHostFeature } from "@/runtime/host-features";
 import { useToast } from "@/contexts/toast-context";
+import { buildNewWorkspaceDraftKey, generateDraftId } from "@/stores/draft-keys";
+import { useDraftStore } from "@/stores/draft-store";
 import { confirmDialog } from "@/utils/confirm-dialog";
 import {
   applyDraftToConfig,
@@ -44,7 +49,7 @@ import {
   type ProjectConfigDraft,
   type ProjectScriptDraft,
 } from "@/utils/project-config-form";
-import { buildProjectsSettingsRoute } from "@/utils/host-routes";
+import { buildNewWorkspaceRoute, buildProjectsSettingsRoute } from "@/utils/host-routes";
 import type { ProjectHostEntry, ProjectSummary } from "@/utils/projects";
 import { resolveAppHostedRelease } from "@/utils/hosted-release";
 
@@ -212,15 +217,24 @@ function ProjectSettingsBody({
       {
         serverId: selectedHost.serverId,
         projectKey: project.projectKey,
+        projectId: selectedHost.projectId,
         iconWorkingDir: selectedHost.repoRoot,
+        customIconRevision: selectedHost.customIconRevision,
       },
     ],
-    [project.projectKey, selectedHost.repoRoot, selectedHost.serverId],
+    [
+      project.projectKey,
+      selectedHost.customIconRevision,
+      selectedHost.projectId,
+      selectedHost.repoRoot,
+      selectedHost.serverId,
+    ],
   );
   const projectIconDataByKey = useProjectIconDataByProjectKey({
     projects: projectIconTargets,
   });
   const projectIconDataUri = projectIconDataByKey.get(project.projectKey) ?? null;
+  const supportsCustomIcon = useHostFeature(selectedHost.serverId, "projectCustomIcon");
   const loadedConfig: BySpaceConfigRaw | null = data?.ok ? (data.config ?? {}) : null;
   const loadedRevision: BySpaceConfigRevision | null = data?.ok ? data.revision : null;
   const readError: ProjectConfigRpcError | null = data && !data.ok ? data.error : null;
@@ -249,6 +263,14 @@ function ProjectSettingsBody({
             projectCustomName={selectedHost.projectCustomName ?? null}
             client={client}
           />
+          {supportsCustomIcon && selectedHost.projectId ? (
+            <ProjectIconEditor
+              serverId={selectedHost.serverId}
+              projectId={selectedHost.projectId}
+              hasCustomIcon={Boolean(selectedHost.customIconRevision)}
+              client={client}
+            />
+          ) : null}
         </View>
         <HostContext hosts={hosts} selectedHost={selectedHost} onSelectHost={onSelectHost} />
       </View>
@@ -259,6 +281,7 @@ function ProjectSettingsBody({
         loadedRevision,
         readError,
         selectedHost,
+        projectName: selectedHost.projectName ?? project.projectName,
         queryKey,
         client,
         onReload: handleReload,
@@ -275,6 +298,7 @@ interface RenderContentInput {
   loadedRevision: BySpaceConfigRevision | null;
   readError: ProjectConfigRpcError | null;
   selectedHost: ProjectHostEntry;
+  projectName: string;
   queryKey: readonly [string, string, string];
   client: DaemonClient;
   onReload: () => void;
@@ -288,6 +312,7 @@ function renderContent({
   loadedRevision,
   readError,
   selectedHost,
+  projectName,
   queryKey,
   client,
   onReload,
@@ -343,6 +368,8 @@ function renderContent({
       baseConfig={loadedConfig}
       revision={loadedRevision}
       repoRoot={selectedHost.repoRoot}
+      selectedHost={selectedHost}
+      projectName={projectName}
       queryKey={queryKey}
       client={client}
       onReload={onReload}
@@ -428,6 +455,8 @@ interface ProjectConfigFormProps {
   baseConfig: BySpaceConfigRaw;
   revision: BySpaceConfigRevision | null;
   repoRoot: string;
+  selectedHost: ProjectHostEntry;
+  projectName: string;
   queryKey: readonly [string, string, string];
   client: DaemonClient;
   onReload: () => void;
@@ -437,6 +466,8 @@ function ProjectConfigForm({
   baseConfig,
   revision,
   repoRoot,
+  selectedHost,
+  projectName,
   queryKey,
   client,
   onReload,
@@ -639,6 +670,13 @@ function ProjectConfigForm({
 
   return (
     <View>
+      <ProjectSetupAgentCard
+        client={client}
+        hasConfig={revision !== null}
+        projectName={projectName}
+        selectedHost={selectedHost}
+      />
+
       <SettingsGroup
         title={t("settings.project.worktree.title")}
         info={t("settings.project.worktree.info")}
@@ -791,6 +829,158 @@ function ProjectConfigForm({
   );
 }
 
+interface ProjectSetupAgentCardProps {
+  client: DaemonClient;
+  hasConfig: boolean;
+  projectName: string;
+  selectedHost: ProjectHostEntry;
+}
+
+function ProjectSetupAgentCard({
+  client,
+  hasConfig,
+  projectName,
+  selectedHost,
+}: ProjectSetupAgentCardProps) {
+  const { t } = useTranslation();
+  const queryClient = useQueryClient();
+  const isSupported = useHostFeature(selectedHost.serverId, "projectSetupSkill");
+  const actionVersionRef = useRef(0);
+  useEffect(
+    () => () => {
+      actionVersionRef.current += 1;
+    },
+    [selectedHost.serverId],
+  );
+  const statusQueryKey = useMemo(
+    () => ["orchestration-skills-status", selectedHost.serverId] as const,
+    [selectedHost.serverId],
+  );
+  const statusQuery = useQuery({
+    queryKey: statusQueryKey,
+    queryFn: () => client.getOrchestrationSkillsStatus(),
+    enabled: isSupported,
+    retry: false,
+  });
+  const installMutation = useMutation({
+    mutationFn: () => client.setOrchestrationSkillsInstalled(true),
+    onSuccess: (result) => queryClient.setQueryData(statusQueryKey, result),
+  });
+
+  const openAgentDraft = useCallback(() => {
+    const draftId = generateDraftId();
+    useDraftStore.getState().saveDraftInput({
+      draftKey: buildNewWorkspaceDraftKey(draftId),
+      draft: {
+        text: t("settings.project.projectSetup.prompt"),
+        attachments: [],
+      },
+    });
+    router.navigate(
+      buildNewWorkspaceRoute({
+        serverId: selectedHost.serverId,
+        sourceDirectory: selectedHost.repoRoot,
+        displayName: projectName,
+        projectId: selectedHost.projectId,
+        draftId,
+      }) as Href,
+    );
+  }, [projectName, selectedHost, t]);
+
+  const handleAction = useCallback(async () => {
+    const actionVersion = ++actionVersionRef.current;
+    if (statusQuery.isError) {
+      await statusQuery.refetch();
+      return;
+    }
+
+    const state = statusQuery.data?.state;
+    if (!state) return;
+    if (state !== "up-to-date") {
+      const isUpdate = state === "drift";
+      const confirmed = await confirmDialog({
+        title: t(
+          isUpdate
+            ? "settings.host.orchestration.skills.updateConfirmTitle"
+            : "settings.host.orchestration.skills.installConfirmTitle",
+        ),
+        message: t(
+          isUpdate
+            ? "settings.host.orchestration.skills.updateConfirmMessage"
+            : "settings.host.orchestration.skills.installConfirmMessage",
+        ),
+        confirmLabel: t(
+          isUpdate
+            ? "settings.host.orchestration.skills.update"
+            : "settings.host.orchestration.skills.install",
+        ),
+        cancelLabel: t("common.actions.cancel"),
+      });
+      if (!confirmed || actionVersion !== actionVersionRef.current) return;
+      try {
+        await installMutation.mutateAsync();
+      } catch {
+        return;
+      }
+    }
+    if (actionVersion !== actionVersionRef.current) return;
+    openAgentDraft();
+  }, [installMutation, openAgentDraft, statusQuery, t]);
+
+  const actionLabel = hasConfig
+    ? t("settings.project.projectSetup.review")
+    : t("settings.project.projectSetup.configure");
+  const error = statusQuery.error ?? installMutation.error;
+
+  return (
+    <SettingsGroup
+      title={t("settings.project.projectSetup.title")}
+      testID="project-setup-agent-group"
+    >
+      <View style={settingsStyles.card}>
+        <View style={settingsStyles.row}>
+          <View style={settingsStyles.rowContent}>
+            <Text style={settingsStyles.rowTitle}>
+              {t("settings.project.projectSetup.actionTitle")}
+            </Text>
+            <Text style={settingsStyles.rowHint}>
+              {isSupported
+                ? t("settings.project.projectSetup.description")
+                : t("settings.project.projectSetup.updateHost")}
+            </Text>
+          </View>
+          {isSupported ? (
+            <Button
+              variant="outline"
+              size="sm"
+              onPress={handleAction}
+              disabled={statusQuery.isLoading || installMutation.isPending}
+              loading={statusQuery.isLoading || installMutation.isPending}
+              testID="project-setup-agent-action"
+            >
+              {statusQuery.isError ? t("common.actions.retry") : actionLabel}
+            </Button>
+          ) : null}
+        </View>
+        {error ? (
+          <View style={styles.calloutWrap}>
+            <Alert
+              variant="error"
+              title={t("settings.host.orchestration.skills.errorTitle")}
+              description={
+                error instanceof Error
+                  ? error.message
+                  : t("settings.host.orchestration.skills.unknownError")
+              }
+              testID="project-setup-agent-error"
+            />
+          </View>
+        ) : null}
+      </View>
+    </SettingsGroup>
+  );
+}
+
 function ResolveSpinnerColor(): string {
   return styles.spinnerColor.color;
 }
@@ -921,6 +1111,71 @@ function ProjectNameEditor({
       >
         <X size={ICON_SIZE} color={styles.iconColor.color} />
       </Pressable>
+    </View>
+  );
+}
+
+function ProjectIconEditor({
+  serverId,
+  projectId,
+  hasCustomIcon,
+  client,
+}: {
+  serverId: string;
+  projectId: string;
+  hasCustomIcon: boolean;
+  client: DaemonClient;
+}) {
+  const { t } = useTranslation();
+  const queryClient = useQueryClient();
+  const toast = useToast();
+  const { pickFiles } = useFilePicker();
+  const mutation = useMutation({
+    mutationFn: (source: { type: "automatic" } | { type: "upload"; data: string }) =>
+      client.setProjectIcon(projectId, source),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["projects"] });
+      queryClient.invalidateQueries({ queryKey: ["projectIcon", serverId] });
+    },
+    onError: (error) => {
+      toast.show(
+        error instanceof Error ? error.message : t("settings.project.rename.errorFallback"),
+        {
+          variant: "error",
+        },
+      );
+    },
+  });
+  const handleChoose = useCallback(async () => {
+    const file = (await pickFiles())?.[0];
+    if (!file) return;
+    mutation.mutate({ type: "upload", data: Buffer.from(file.bytes).toString("base64") });
+  }, [mutation, pickFiles]);
+  const handleUseAutomatic = useCallback(() => {
+    mutation.mutate({ type: "automatic" });
+  }, [mutation]);
+  return (
+    <View style={styles.nameEditorRow}>
+      <Button
+        testID="project-icon-change-button"
+        variant="outline"
+        size="sm"
+        onPress={handleChoose}
+        disabled={mutation.isPending}
+      >
+        {t("settings.project.scripts.actions.edit")}
+      </Button>
+      {hasCustomIcon ? (
+        <Button
+          testID="project-icon-reset-button"
+          variant="ghost"
+          size="sm"
+          onPress={handleUseAutomatic}
+          disabled={mutation.isPending}
+        >
+          {t("settings.project.rename.reset")}
+        </Button>
+      ) : null}
     </View>
   );
 }

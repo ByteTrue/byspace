@@ -35,11 +35,13 @@ describe("terminal binary frames", () => {
     const payload = encodeTerminalResizePayload({
       rows: 24,
       cols: 80,
+      intent: "update",
     });
 
     expect(decodeTerminalResizePayload(payload)).toEqual({
       rows: 24,
       cols: 80,
+      intent: "update",
     });
   });
 

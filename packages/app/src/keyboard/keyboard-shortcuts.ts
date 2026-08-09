@@ -6,6 +6,7 @@ import type {
   MessageInputKeyboardActionKind,
 } from "@/keyboard/actions";
 import { type KeyCombo, parseChordString } from "@/keyboard/shortcut-string";
+import { chordStringToShortcutKeys } from "@/keyboard/shortcut-string";
 
 export type { KeyCombo } from "@/keyboard/shortcut-string";
 
@@ -283,32 +284,6 @@ const SHORTCUT_BINDINGS: readonly ShortcutBinding[] = [
       section: "projects",
       label: "Archive workspace",
       keys: ["mod", "shift", "Backspace"],
-    },
-  },
-
-  // --- Pin workspace ---
-  {
-    id: "workspace-pin-cmd-shift-p-mac",
-    action: "workspace.pin",
-    combo: "Cmd+Shift+P",
-    when: { mac: true, commandCenter: false },
-    help: {
-      id: "pin-workspace",
-      section: "projects",
-      label: "Pin chat",
-      keys: ["mod", "shift", "P"],
-    },
-  },
-  {
-    id: "workspace-pin-ctrl-shift-p-non-mac",
-    action: "workspace.pin",
-    combo: "Ctrl+Shift+P",
-    when: { mac: false, commandCenter: false, terminal: false },
-    help: {
-      id: "pin-workspace",
-      section: "projects",
-      label: "Pin chat",
-      keys: ["mod", "shift", "P"],
     },
   },
 
@@ -1359,6 +1334,19 @@ export function getDefaultKeysForAction(
     return binding.help.keys;
   }
   return null;
+}
+
+export function resolveShortcutKeysForAction(
+  actionId: string,
+  overrides: Readonly<Record<string, string>>,
+  platform: { isMac: boolean; isDesktop: boolean },
+): ShortcutKey[][] | null {
+  const bindingId = getBindingIdForAction(actionId, platform);
+  if (!bindingId) return null;
+  const override = overrides[bindingId];
+  if (override) return chordStringToShortcutKeys(override);
+  const defaultKeys = getDefaultKeysForAction(actionId, platform);
+  return defaultKeys ? [defaultKeys] : null;
 }
 
 /**

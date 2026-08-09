@@ -72,33 +72,6 @@ async function commitMessage(scenario: ViewedTimelineScenario, agentId: string, 
 }
 
 test.describe("Viewed agent timelines", () => {
-  test("an unsubscribed hidden chat catches up when shown", async ({ page }) => {
-    test.setTimeout(90_000);
-    const subscriptions = observeTimelineSubscriptions(page);
-    const scenario = await seedViewedTimelineScenario();
-    try {
-      await openAgent(page, scenario, scenario.firstAgentId);
-      await selectAgent(page, "Second viewed chat");
-      await subscriptions.waitForSubscribedAgents([scenario.secondAgentId], { timeout: 45_000 });
-      await commitMessage(
-        scenario,
-        scenario.firstAgentId,
-        "Committed after the first chat unsubscribed.",
-      );
-      await expect(
-        page.getByText("Committed after the first chat unsubscribed.", { exact: true }),
-      ).toHaveCount(0);
-      await selectAgent(page, "First viewed chat");
-      await expect(
-        page.getByText("Committed after the first chat unsubscribed.", { exact: true }),
-      ).toBeVisible();
-      await expect(page.getByText("(end of synthetic stream)", { exact: true })).toBeVisible();
-    } finally {
-      await page.close();
-      await scenario.cleanup();
-    }
-  });
-
   test("a hidden retained chat stays current during unsubscribe grace", async ({ page }) => {
     test.setTimeout(60_000);
     const subscriptions = observeTimelineSubscriptions(page);

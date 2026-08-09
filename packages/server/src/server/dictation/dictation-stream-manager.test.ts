@@ -11,6 +11,7 @@ import { DictationStreamManager } from "./dictation-stream-manager.js";
 
 class FakeRealtimeSession extends EventEmitter implements StreamingTranscriptionSession {
   connected = false;
+  connectGate: Promise<void> | null = null;
   appended: Buffer[] = [];
   commitCalls = 0;
   clearCalls = 0;
@@ -19,6 +20,7 @@ class FakeRealtimeSession extends EventEmitter implements StreamingTranscription
   private lastCommittedSegmentId: string | null = null;
 
   async connect(): Promise<void> {
+    await this.connectGate;
     this.connected = true;
   }
 
@@ -156,6 +158,23 @@ describe("DictationStreamManager", () => {
       if (original === undefined) delete process.env.OPENAI_API_KEY;
       else process.env.OPENAI_API_KEY = original;
     }
+  });
+
+  it("cancels an STT session while its connection is still starting", async () => {
+    const session = new FakeRealtimeSession();
+    const connected = createDeferred<void>();
+    session.connectGate = connected.promise;
+    const emitted: EmittedMessage[] = [];
+    const manager = createManager({ session, emitted });
+
+    const start = manager.handleStart("d-cancel-start", "audio/pcm;rate=16000;bits=16");
+    await tick();
+    manager.handleCancel("d-cancel-start");
+    connected.resolve();
+    await start;
+
+    expect(session.closed).toBe(true);
+    expect(emitted).toEqual([]);
   });
 
   it("keeps natural pauses inside one recording and emits only the final transcript", async () => {

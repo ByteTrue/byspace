@@ -155,7 +155,7 @@ Single file, validated with `PersistedConfigSchema`.
     listen: "127.0.0.1:6777",
     hostnames: true | string[],   // legacy alias `allowedHosts` is migrated on load
     trustedProxies: true | string[], // defaults to ["loopback"]; Express proxy names/CIDRs
-    mcp: { enabled: boolean, injectIntoAgents: boolean },
+    mcp: { enabled: boolean, injectIntoAgents: boolean }, // injectIntoAgents is a deprecated, ignored compatibility field
     appendSystemPrompt: string,    // appended to supported provider system/developer prompts
     cors: { allowedOrigins: string[] },
     relay: { enabled: boolean, endpoint: string, publicEndpoint: string, useTls: boolean, publicUseTls: boolean },
@@ -207,11 +207,10 @@ The built-in speech catalog is an allowlist because each entry needs a verified 
 
 Relevant environment overrides are:
 
-| Env var                             | Applies to                           |
-| ----------------------------------- | ------------------------------------ |
-| `BYSPACE_DICTATION_ENABLED`         | Enable or disable composer dictation |
-| `BYSPACE_DICTATION_LOCAL_STT_MODEL` | Explicit selected local model id     |
-| `BYSPACE_LOCAL_MODELS_DIR`          | Host speech-model storage directory  |
+| Env var                     | Applies to                           |
+| --------------------------- | ------------------------------------ |
+| `BYSPACE_DICTATION_ENABLED` | Enable or disable composer dictation |
+| `BYSPACE_LOCAL_MODELS_DIR`  | Host speech-model storage directory  |
 
 ---
 
@@ -419,19 +418,20 @@ emptied duplicate.
 
 Array of workspace records. A workspace is a specific working directory within a project.
 
-| Field         | Type                                            | Description                                                                                                                                                                           |
-| ------------- | ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `workspaceId` | `string`                                        | Opaque stable identifier (`wks_<hex>`), generated independently of the directory. MUST NOT be treated as a path; compare by exact equality. Use the `cwd` field for directory access. |
-| `projectId`   | `string`                                        | FK to Project.projectId                                                                                                                                                               |
-| `cwd`         | `string`                                        | Filesystem path                                                                                                                                                                       |
-| `kind`        | `"local_checkout" \| "worktree" \| "directory"` |                                                                                                                                                                                       |
-| `displayName` | `string`                                        | The human name (the generated/derived title). Decoupled from `branch` by construction.                                                                                                |
-| `title`       | `string \| null`                                | User-set name override layered over `displayName`. Null means "use `displayName`".                                                                                                    |
-| `branch`      | `string \| null`                                | The worktree's git branch. Separate from `displayName`/`title`; only worktree workspaces set it. A branch rename writes this and never the name.                                      |
-| `createdAt`   | `string` (ISO 8601)                             |                                                                                                                                                                                       |
-| `updatedAt`   | `string` (ISO 8601)                             |                                                                                                                                                                                       |
-| `archivedAt`  | `string \| null` (ISO 8601)                     | Soft-delete; required nullable                                                                                                                                                        |
-| `pinnedAt`    | `string \| null` (ISO 8601)                     | Pinned-to-top-of-sidebar timestamp; null means "not pinned"                                                                                                                           |
+| Field                          | Type                                            | Description                                                                                                                                                                           |
+| ------------------------------ | ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `workspaceId`                  | `string`                                        | Opaque stable identifier (`wks_<hex>`), generated independently of the directory. MUST NOT be treated as a path; compare by exact equality. Use the `cwd` field for directory access. |
+| `projectId`                    | `string`                                        | FK to Project.projectId                                                                                                                                                               |
+| `cwd`                          | `string`                                        | Filesystem path                                                                                                                                                                       |
+| `kind`                         | `"local_checkout" \| "worktree" \| "directory"` |                                                                                                                                                                                       |
+| `displayName`                  | `string`                                        | The human name (the generated/derived title). Decoupled from `branch` by construction.                                                                                                |
+| `title`                        | `string \| null`                                | User-set name override layered over `displayName`. Null means "use `displayName`".                                                                                                    |
+| `branch`                       | `string \| null`                                | The worktree's git branch. Separate from `displayName`/`title`; only worktree workspaces set it. A branch rename writes this and never the name.                                      |
+| `createdAt`                    | `string` (ISO 8601)                             |                                                                                                                                                                                       |
+| `updatedAt`                    | `string` (ISO 8601)                             |                                                                                                                                                                                       |
+| `archivedAt`                   | `string \| null` (ISO 8601)                     | Soft-delete; required nullable                                                                                                                                                        |
+| `autoArchivedChangeRequestUrl` | `string \| null`                                | Merged change request whose automatic archive was consumed. Restore updates it to the current merged change request so repeated snapshots do not re-archive the workspace.            |
+| `pinnedAt`                     | `string \| null` (ISO 8601)                     | Pinned-to-top-of-sidebar timestamp; null means "not pinned"                                                                                                                           |
 
 > **Opaque-ID invariant:** `workspaceId` is opaque identity, never a filesystem path. Filesystem and git operations take `cwd`/`workspaceDirectory` only — never the id. Path-derived grouping keys (e.g. `deriveWorkspaceDirectoryKey`, used at bootstrap to group agents into a workspace) are directory keys, not workspace identity, and must not be persisted or compared as ids.
 

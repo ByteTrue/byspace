@@ -5,8 +5,8 @@ import {
   extractWsBearerProtocol,
   extractWsBearerToken,
   hashDaemonPassword,
-  isAgentMcpRequestAuthorized,
   isBearerTokenValidAsync,
+  isAgentCliTokenValid,
   isBearerTokenValid,
   shouldBypassBearerAuth,
 } from "./auth.js";
@@ -17,6 +17,13 @@ describe("daemon bearer validator", () => {
   test("allows any token when no password is configured", () => {
     expect(isBearerTokenValid({ password: undefined, token: null })).toBe(true);
     expect(isBearerTokenValid({ password: undefined, token: "anything" })).toBe(true);
+  });
+
+  test("accepts only the exact daemon-minted agent CLI token", () => {
+    const auth = { agentCliToken: "agent-cli-secret" };
+    expect(isAgentCliTokenValid(auth, "agent-cli-secret")).toBe(true);
+    expect(isAgentCliTokenValid(auth, "wrong")).toBe(false);
+    expect(isAgentCliTokenValid(auth, null)).toBe(false);
   });
 
   test("accepts the plaintext token against the bcrypt hash and rejects missing or wrong tokens", async () => {
@@ -62,62 +69,9 @@ describe("daemon bearer validator", () => {
     expect(shouldBypassBearerAuth("GET", "/api/health")).toBe(true);
     // Guarded by its own single-use download token, not the daemon password.
     expect(shouldBypassBearerAuth("GET", "/api/files/download")).toBe(true);
-    // Guarded by its own per-daemon-run capability token (see
-    // isAgentMcpRequestAuthorized), not the daemon password.
-    expect(shouldBypassBearerAuth("POST", "/mcp/agents")).toBe(true);
+    expect(shouldBypassBearerAuth("POST", "/mcp/agents")).toBe(false);
     // Everything else stays behind the daemon password.
     expect(shouldBypassBearerAuth("GET", "/api/status")).toBe(false);
     expect(shouldBypassBearerAuth("POST", "/api/files/upload")).toBe(false);
-  });
-});
-
-describe("agent MCP request authorizer", () => {
-  const CAPABILITY_TOKEN = "cap-token-abc123";
-
-  test("allows any request when no daemon password is configured", async () => {
-    expect(
-      await isAgentMcpRequestAuthorized({
-        password: undefined,
-        capabilityToken: CAPABILITY_TOKEN,
-        authorizationHeader: undefined,
-      }),
-    ).toBe(true);
-  });
-
-  test("accepts the injected capability token", async () => {
-    expect(
-      await isAgentMcpRequestAuthorized({
-        password: CORRECT_PASSWORD_HASH,
-        capabilityToken: CAPABILITY_TOKEN,
-        authorizationHeader: `Bearer ${CAPABILITY_TOKEN}`,
-      }),
-    ).toBe(true);
-  });
-
-  test("still accepts a valid daemon-password bearer", async () => {
-    expect(
-      await isAgentMcpRequestAuthorized({
-        password: CORRECT_PASSWORD_HASH,
-        capabilityToken: CAPABILITY_TOKEN,
-        authorizationHeader: "Bearer correct-password",
-      }),
-    ).toBe(true);
-  });
-
-  test("rejects requests presenting neither the token nor a valid password", async () => {
-    expect(
-      await isAgentMcpRequestAuthorized({
-        password: CORRECT_PASSWORD_HASH,
-        capabilityToken: CAPABILITY_TOKEN,
-        authorizationHeader: undefined,
-      }),
-    ).toBe(false);
-    expect(
-      await isAgentMcpRequestAuthorized({
-        password: CORRECT_PASSWORD_HASH,
-        capabilityToken: CAPABILITY_TOKEN,
-        authorizationHeader: "Bearer wrong-token",
-      }),
-    ).toBe(false);
   });
 });

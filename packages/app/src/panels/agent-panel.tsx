@@ -27,6 +27,7 @@ import { useRetainedPanelActive } from "@/components/retained-panel";
 import { SidebarCallout } from "@/components/sidebar-callout";
 import { Composer } from "@/composer";
 import { AgentModeControl } from "@/composer/agent-controls/mode-control";
+import { getActiveMessageSubmissions } from "@/composer/submission/model";
 import { RewindComposerRestoreProvider } from "@/components/rewind/composer-restore";
 import { getProviderIcon } from "@/components/provider-icons";
 import {
@@ -54,12 +55,17 @@ import { useArchiveAgent } from "@/hooks/use-archive-agent";
 import { useContainerWidthBelow } from "@/hooks/use-container-width";
 import { reconcileMissingAgentStateWithPresentAgent } from "@/panels/agent-panel-load-state";
 import { buildPaneHeaderActionsPortalName } from "@/panels/pane-header-actions-portal";
+import {
+  reconcileReconnectToastState,
+  type ReconnectToastState,
+} from "@/panels/reconnect-toast-state";
 import { usePaneContext, usePaneFocus } from "@/panels/pane-context";
 import type { PanelDescriptor, PanelRegistration } from "@/panels/panel-registry";
 import { RenderProfile } from "@/utils/render-profiler";
 import { buildDraftPanelDescriptor } from "@/panels/draft-panel-descriptor";
 import {
   type HostRuntimeConnectionStatus,
+  getHostRuntimeConnectionStatusSince,
   useHostRuntimeClient,
   useHostRuntimeConnectionStatus,
   useHostRuntimeIsConnected,
@@ -74,7 +80,12 @@ import { WorkspaceDraftAgentTab } from "@/composer/draft/workspace-tab";
 import { useCreateFlowStore } from "@/stores/create-flow-store";
 import { buildDraftStoreKey, generateDraftId } from "@/stores/draft-keys";
 import { usePanelStore } from "@/stores/panel-store";
-import { type Agent, useSessionStore } from "@/stores/session-store";
+import {
+  selectAgentTimelineState,
+  selectAgentTurnPresentation,
+  type Agent,
+  useSessionStore,
+} from "@/stores/session-store";
 import { useWorkspaceLayoutStore } from "@/stores/workspace-layout-store";
 import { buildWorkspaceTabPersistenceKey } from "@/stores/workspace-tabs-store";
 import type { Theme } from "@/styles/theme";
@@ -95,6 +106,9 @@ import type { WorkspaceFileOpenRequest } from "@/workspace/file-open";
 import { navigateToAgent } from "@/utils/navigate-to-agent";
 import { deriveSidebarStateBucket } from "@/utils/sidebar-agent-state";
 import { buildDraftAgentSetup, type ClientSlashCommand } from "@/client-slash-commands";
+
+const RECONNECT_TOAST_DELAY_MS = 1_000;
+const reconnectToastStateByServerId = new Map<string, ReconnectToastState>();
 
 interface ChatAgentStateShape {
   serverId: string | null;
@@ -322,6 +336,7 @@ function useAgentPanelDescriptor(
         pendingPermissionCount: agent?.pendingPermissions.length ?? 0,
         requiresAttention: agent?.requiresAttention ?? false,
         attentionReason: agent?.attentionReason ?? null,
+        isTurnActive: selectAgentTurnPresentation(session, target.agentId).isActive,
       };
     }),
   );
@@ -336,7 +351,7 @@ function useAgentPanelDescriptor(
     icon,
     statusBucket: descriptorState.status
       ? deriveSidebarStateBucket({
-          status: descriptorState.status,
+          status: descriptorState.isTurnActive ? "running" : descriptorState.status,
           pendingPermissionCount: descriptorState.pendingPermissionCount,
           requiresAttention: descriptorState.requiresAttention,
           attentionReason: descriptorState.attentionReason,
@@ -447,6 +462,7 @@ export function useDraftPanelDescriptor(
 }
 
 const EMPTY_STREAM_ITEMS: StreamItem[] = [];
+const EMPTY_MESSAGE_SUBMISSIONS = [] as const;
 const EMPTY_PENDING_PERMISSIONS = new Map<string, PendingPermission>();
 const EMPTY_PENDING_PERMISSION_LIST: PendingPermission[] = [];
 
@@ -765,7 +781,7 @@ function ChatAgentContent({
   const streamViewRef = useRef<AgentStreamViewHandle>(null);
   const clearOnAgentBlurRef = useRef<() => void>(() => {});
   const wasPaneFocusedRef = useRef(isPaneFocused);
-  const reconnectToastArmedRef = useRef(false);
+  const reconnectToastPresentedRef = useRef(false);
   const initAttemptTokenRef = useRef(0);
   const routeBottomAnchorRequestRef = useRef<{
     routeKey: string;
@@ -795,11 +811,12 @@ function ChatAgentContent({
   const historySyncGeneration = useSessionStore(
     (state) => state.sessions[serverId]?.historySyncGeneration ?? 0,
   );
-  const hasAppliedAuthoritativeHistory = useSessionStore((state) =>
+  const replicaTimelineStatus = useSessionStore((state) =>
     agentId
-      ? state.sessions[serverId]?.agentAuthoritativeHistoryApplied?.get(agentId) === true
-      : false,
+      ? selectAgentTimelineState(state.sessions[serverId], agentId).status
+      : ("cold" as const),
   );
+  const hasAppliedAuthoritativeHistory = replicaTimelineStatus === "synced";
   const agentHistorySyncGeneration = useSessionStore((state) =>
     agentId ? (state.sessions[serverId]?.agentHistorySyncGeneration?.get(agentId) ?? -1) : -1,
   );
@@ -835,7 +852,8 @@ function ChatAgentContent({
     kind: "idle",
   });
 
-  const hasHydratedHistoryBefore = hasAppliedAuthoritativeHistory;
+  const hasHydratedHistoryBefore =
+    hasAppliedAuthoritativeHistory || replicaTimelineStatus === "painted";
 
   const attentionController = useAgentAttentionClear({
     agentId,
@@ -849,25 +867,55 @@ function ChatAgentContent({
     clearOnAgentBlurRef.current = attentionController.clearOnAgentBlur;
   }, [attentionController.clearOnAgentBlur]);
 
+  const shouldPresentReconnectToast =
+    isPaneVisible && connectionStatus !== "online" && connectionStatus !== "idle";
+
   useEffect(() => {
-    if (connectionStatus === "online") {
-      if (reconnectToastArmedRef.current) {
-        reconnectToastArmedRef.current = false;
+    if (connectionStatus === "online" || connectionStatus === "idle") {
+      reconnectToastStateByServerId.delete(serverId);
+    }
+
+    if (!shouldPresentReconnectToast) {
+      if (reconnectToastPresentedRef.current) {
+        reconnectToastPresentedRef.current = false;
         dismissToast();
       }
       return;
     }
-    if (connectionStatus === "idle") {
-      return;
-    }
-    if (!reconnectToastArmedRef.current) {
-      reconnectToastArmedRef.current = true;
+
+    const startedAt = getHostRuntimeConnectionStatusSince(serverId) ?? Date.now();
+    const previousState = reconnectToastStateByServerId.get(serverId);
+    const state = reconcileReconnectToastState(previousState, startedAt);
+    if (state !== previousState) reconnectToastStateByServerId.set(serverId, state);
+
+    const showReconnectToast = () => {
+      reconnectToastPresentedRef.current = true;
       toastApi.show(t("agentPanel.states.reconnecting"), {
         durationMs: null,
+        icon: (
+          <View
+            accessible={false}
+            testID="agent-reconnecting-status-dot"
+            style={styles.reconnectingStatusDot}
+          />
+        ),
         testID: "agent-reconnecting-toast",
       });
+    };
+
+    if (state.presented) {
+      if (!reconnectToastPresentedRef.current) showReconnectToast();
+      return;
     }
-  }, [connectionStatus, dismissToast, toastApi, t]);
+
+    const delayMs = Math.max(0, startedAt + RECONNECT_TOAST_DELAY_MS - Date.now());
+    const timer = setTimeout(() => {
+      if (reconnectToastStateByServerId.get(serverId) !== state) return;
+      state.presented = true;
+      showReconnectToast();
+    }, delayMs);
+    return () => clearTimeout(timer);
+  }, [connectionStatus, dismissToast, serverId, shouldPresentReconnectToast, toastApi, t]);
 
   const isArchivingCurrentAgent = Boolean(agentId && isArchivingAgent({ serverId, agentId }));
 
@@ -1159,7 +1207,6 @@ const ChatAgentReadyContent = memo(function ChatAgentReadyContent({
     workspaceId,
     tabId,
   );
-  const hasActiveComposer = agentState.archivedAt === null && !isArchivingCurrentAgent;
   const [isNearBottom, setIsNearBottom] = useState(true);
   const handleCollapseAll = useCallback(
     () => streamViewRef.current?.collapseAll(),
@@ -1171,7 +1218,7 @@ const ChatAgentReadyContent = memo(function ChatAgentReadyContent({
   );
   const streamHeaderActions = useMemo(
     () =>
-      hasActiveComposer && isPaneVisible ? (
+      isPaneVisible ? (
         <Portal hostName={paneHeaderActionsPortalName}>
           <AgentStreamHeaderControls
             showScrollToBottom={!isNearBottom}
@@ -1183,7 +1230,6 @@ const ChatAgentReadyContent = memo(function ChatAgentReadyContent({
     [
       handleCollapseAll,
       handleScrollToBottom,
-      hasActiveComposer,
       isNearBottom,
       isPaneVisible,
       paneHeaderActionsPortalName,
@@ -1240,7 +1286,6 @@ const ChatAgentReadyContent = memo(function ChatAgentReadyContent({
         hasAppliedAuthoritativeHistory={hasAppliedAuthoritativeHistory}
         toast={toastApi}
         onOpenWorkspaceFile={onOpenWorkspaceFile}
-        hasActiveComposer={hasActiveComposer}
         onNearBottomChange={setIsNearBottom}
       />
     </RenderProfile>
@@ -1326,7 +1371,6 @@ const AgentStreamSection = memo(function AgentStreamSection({
   hasAppliedAuthoritativeHistory,
   toast,
   onOpenWorkspaceFile,
-  hasActiveComposer,
   onNearBottomChange,
 }: {
   streamViewRef: React.RefObject<AgentStreamViewHandle | null>;
@@ -1337,11 +1381,24 @@ const AgentStreamSection = memo(function AgentStreamSection({
   hasAppliedAuthoritativeHistory: boolean;
   toast: ReturnType<typeof useToastHost>["api"];
   onOpenWorkspaceFile?: (request: WorkspaceFileOpenRequest) => void;
-  hasActiveComposer: boolean;
   onNearBottomChange: (isNearBottom: boolean) => void;
 }) {
   const streamItemsRaw = useSessionStore((state) =>
     agentId ? state.sessions[serverId]?.agentStreamTail?.get(agentId) : undefined,
+  );
+  const pendingMessageSubmissions = useSessionStore(
+    useShallow((state) =>
+      agentId
+        ? getActiveMessageSubmissions(state.sessions[serverId]?.messageSubmissions.get(agentId))
+        : EMPTY_MESSAGE_SUBMISSIONS,
+    ),
+  );
+  const turnPresentation = useSessionStore(
+    useShallow((state) =>
+      agentId
+        ? selectAgentTurnPresentation(state.sessions[serverId], agentId)
+        : { isActive: false, isCancelling: false, startedAt: null, turnId: null },
+    ),
   );
   const streamItems = streamItemsRaw ?? EMPTY_STREAM_ITEMS;
   const pendingPermissionList = useStoreWithEqualityFn(
@@ -1382,8 +1439,10 @@ const AgentStreamSection = memo(function AgentStreamSection({
       routeBottomAnchorRequest={routeBottomAnchorRequest}
       isAuthoritativeHistoryReady={hasAppliedAuthoritativeHistory}
       toast={toast}
+      pendingMessageSubmissions={pendingMessageSubmissions}
+      turnPresentation={turnPresentation}
       onOpenWorkspaceFile={onOpenWorkspaceFile}
-      showScrollToBottomButton={!hasActiveComposer}
+      showScrollToBottomButton={false}
       onNearBottomChange={onNearBottomChange}
     />
   );
@@ -1848,6 +1907,12 @@ const styles = StyleSheet.create((theme) => ({
   loadingText: {
     fontSize: theme.fontSize.base,
     color: theme.colors.foregroundMuted,
+  },
+  reconnectingStatusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: theme.colors.statusWarning,
   },
   centerState: {
     flex: 1,

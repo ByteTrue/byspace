@@ -12,10 +12,8 @@ export interface UseDictationOptions {
   onTranscript: (text: string, meta: DictationRefinementMeta) => void;
   onError?: (error: Error) => void;
   refineTranscript?: (text: string) => Promise<{ text: string; refined: boolean }>;
-  onPermanentFailure?: (error: Error, context: { requestId: string }) => void;
   canStart?: () => boolean;
   canConfirm?: () => boolean;
-  enableDuration?: boolean;
 }
 
 export interface UseDictationResult {
@@ -32,7 +30,6 @@ export interface UseDictationResult {
   confirmDictation: () => Promise<void>;
   retryFailedDictation: () => Promise<void>;
   discardFailedDictation: () => void;
-  reset: () => void;
 }
 
 export const DURATION_TICK_MS = 1000;

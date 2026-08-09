@@ -128,7 +128,9 @@ export function HostDictationSettings({ serverId }: { serverId: string }) {
   const [models, setModels] = useState<SpeechModelPayload[]>([]);
   const [selectedModelId, setSelectedModelId] = useState<SpeechModelId | null>(null);
   const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [pendingModelId, setPendingModelId] = useState<SpeechModelId | null>(null);
+  const [refinementPending, setRefinementPending] = useState(false);
 
   const load = useCallback(async () => {
     if (!client || !connected || !supported) return;
@@ -137,14 +139,24 @@ export function HostDictationSettings({ serverId }: { serverId: string }) {
       if (result.error) throw new Error(result.error);
       setModels(result.models);
       setSelectedModelId(result.selectedModelId);
+      setLoadError(null);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : t("settings.host.dictation.loadError"));
+      const message =
+        error instanceof Error ? error.message : t("settings.host.dictation.loadError");
+      setLoadError(message);
+      toast.error(message);
     } finally {
       setLoading(false);
     }
   }, [client, connected, supported, t, toast]);
 
   useEffect(() => {
+    setLoading(true);
+    void load();
+  }, [load]);
+
+  const handleRetry = useCallback(() => {
+    setLoadError(null);
     setLoading(true);
     void load();
   }, [load]);
@@ -184,10 +196,19 @@ export function HostDictationSettings({ serverId }: { serverId: string }) {
   );
 
   const handleRefinementChange = useCallback(
-    (refineWithAgent: boolean) => {
-      void patchConfig({ dictation: { refineWithAgent } });
+    async (refineWithAgent: boolean) => {
+      setRefinementPending(true);
+      try {
+        await patchConfig({ dictation: { refineWithAgent } });
+      } catch (error) {
+        toast.error(
+          error instanceof Error ? error.message : t("settings.host.dictation.operationError"),
+        );
+      } finally {
+        setRefinementPending(false);
+      }
     },
-    [patchConfig],
+    [patchConfig, t, toast],
   );
 
   let content: ReactNode;
@@ -197,6 +218,15 @@ export function HostDictationSettings({ serverId }: { serverId: string }) {
     content = <Text style={styles.emptyText}>{t("settings.host.dictation.disconnected")}</Text>;
   } else if (loading && models.length === 0) {
     content = <Text style={styles.emptyText}>{t("settings.host.dictation.loading")}</Text>;
+  } else if (loadError && models.length === 0) {
+    content = (
+      <View style={styles.errorState}>
+        <Text style={settingsStyles.rowError}>{loadError}</Text>
+        <Button size="sm" variant="outline" testID="speech-model-retry" onPress={handleRetry}>
+          {t("common.actions.retry")}
+        </Button>
+      </View>
+    );
   } else {
     content = models.map((model, index) => (
       <SpeechModelRow
@@ -229,7 +259,7 @@ export function HostDictationSettings({ serverId }: { serverId: string }) {
             </View>
             <Switch
               value={config?.dictation?.refineWithAgent ?? false}
-              disabled={!connected}
+              disabled={!connected || refinementPending}
               onValueChange={handleRefinementChange}
               accessibilityLabel={t("settings.host.dictation.refinement.accessibilityLabel")}
             />
@@ -263,6 +293,10 @@ const styles = StyleSheet.create((theme) => ({
   emptyRow: {
     padding: theme.spacing[4],
     alignItems: "center",
+  },
+  errorState: {
+    alignItems: "center",
+    gap: theme.spacing[3],
   },
   emptyText: {
     color: theme.colors.foregroundMuted,

@@ -54,7 +54,11 @@ export function createGitMutationService(deps: {
 
   async function isWorkingTreeDirty(cwd: string): Promise<boolean> {
     try {
-      const snapshot = await workspaceGitService.getSnapshot(cwd);
+      const snapshot = await workspaceGitService.getSnapshot(cwd, {
+        force: true,
+        includeForge: false,
+        reason: "mutation-preflight",
+      });
       return snapshot.git.isDirty === true;
     } catch (error) {
       throw new Error(`Unable to inspect git status for ${cwd}: ${getErrorMessage(error)}`, {

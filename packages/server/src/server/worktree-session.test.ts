@@ -45,6 +45,15 @@ import {
 import { WorkspaceGitServiceImpl } from "./workspace-git-service.js";
 import type { WorkspaceGitService } from "./workspace-git-service.js";
 import { isPlatform } from "../test-utils/platform.js";
+import { WorkspaceSetupRuntime } from "./workspace-setup-runtime.js";
+
+function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((resolvePromise) => {
+    resolve = resolvePromise;
+  });
+  return { promise, resolve };
+}
 
 interface LegacyCreateWorktreeTestOptions {
   branchName: string;
@@ -111,11 +120,14 @@ function createWorkflowForRequestTest(options: {
         sessionLogger: createLogger(),
         terminalManager: null,
         archiveWorkspaceRecord: async () => {},
+        archiveWorkspaceRecordAfterSetupSettled: async () => {},
         serviceProxy: null,
         scriptRuntimeStore: null,
         getDaemonTcpPort: null,
         getDaemonTcpHost: null,
         onScriptsChanged: null,
+        startWorkspaceSetup: (workspaceId, operation) =>
+          new WorkspaceSetupRuntime().start(workspaceId, operation),
       },
       input,
       { setupContinuation: { kind: "workspace" } },
@@ -434,11 +446,14 @@ describe("create-agent worktree setup boundary", () => {
           sessionLogger: createLogger(),
           terminalManager: null,
           archiveWorkspaceRecord: async () => {},
+          archiveWorkspaceRecordAfterSetupSettled: async () => {},
           serviceProxy: null,
           scriptRuntimeStore: null,
           getDaemonTcpPort: null,
           getDaemonTcpHost: null,
           onScriptsChanged: null,
+          startWorkspaceSetup: (workspaceId, operation) =>
+            new WorkspaceSetupRuntime().start(workspaceId, operation),
         },
         {
           cwd: repoDir,
@@ -483,6 +498,62 @@ describe("create-agent worktree setup boundary", () => {
         });
       });
       expect(liveItems).toEqual([]);
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+  test("pre-bootstrap failure uses the setup-settled record archive entry", async () => {
+    const { tempDir, repoDir } = createGitRepo();
+    const byspaceHome = path.join(tempDir, ".byspace");
+    writeFileSync(path.join(repoDir, "byspace.json"), "{ invalid json\n");
+    execFileSync("git", ["add", "byspace.json"], { cwd: repoDir, stdio: "pipe" });
+    execFileSync("git", ["-c", "commit.gpgsign=false", "commit", "-m", "broken config"], {
+      cwd: repoDir,
+      stdio: "pipe",
+    });
+    const runtime = new WorkspaceSetupRuntime();
+    const publicArchive = vi.fn(async () => {
+      throw new Error("public archive barrier must not run from settlement callback");
+    });
+    const settledArchive = vi.fn(async () => {});
+    let setupCompletion: Promise<void> | null = null;
+
+    try {
+      const result = await createBySpaceWorktreeWorkflow(
+        {
+          byspaceHome,
+          createBySpaceWorktree: createBySpaceWorktreeForTest({ byspaceHome }),
+          warmWorkspaceGitData: async () => {},
+          autoNameWorkspaceBranchForFirstAgent: () => {},
+          emitWorkspaceUpdateForWorkspaceId: async () => {},
+          cacheWorkspaceSetupSnapshot: () => {},
+          emit: () => {},
+          sessionLogger: createLogger(),
+          terminalManager: null,
+          archiveWorkspaceRecord: publicArchive,
+          archiveWorkspaceRecordAfterSetupSettled: settledArchive,
+          serviceProxy: null,
+          scriptRuntimeStore: null,
+          getDaemonTcpPort: null,
+          getDaemonTcpHost: null,
+          onScriptsChanged: null,
+          startWorkspaceSetup: (workspaceId, operation, afterSettled) => {
+            setupCompletion = runtime.start(workspaceId, operation, afterSettled);
+          },
+        },
+        {
+          cwd: repoDir,
+          worktreeSlug: "failed-before-bootstrap",
+          runSetup: false,
+          byspaceHome,
+        },
+        { setupContinuation: { kind: "workspace" } },
+      );
+      expect(setupCompletion).not.toBeNull();
+      await setupCompletion;
+
+      expect(settledArchive).toHaveBeenCalledWith(result.workspace.workspaceId);
+      expect(publicArchive).not.toHaveBeenCalled();
     } finally {
       rmSync(tempDir, { recursive: true, force: true });
     }
@@ -863,6 +934,79 @@ describe("runWorktreeSetupInBackground", () => {
         status: "completed",
         error: null,
       });
+    },
+  );
+
+  // POSIX-only: setup command uses sh and sleep so abort can be observed mid-command.
+  test.skipIf(isPlatform("win32"))(
+    "aborts a running workspace setup command without progress or workspace writeback",
+    async () => {
+      const { tempDir, repoDir } = createGitRepo({
+        byspaceConfig: {
+          worktree: {
+            setup: ["sh -c 'sleep 2; printf wrote > aborted-write.txt'"],
+          },
+        },
+      });
+      cleanupPaths.push(tempDir);
+      const byspaceHome = path.join(tempDir, ".byspace");
+      const createdWorktree = await createLegacyWorktreeForTest({
+        branchName: "feature-aborted-setup",
+        cwd: repoDir,
+        baseBranch: "main",
+        worktreeSlug: "feature-aborted-setup",
+        runSetup: false,
+        byspaceHome,
+      });
+      const emitted: SessionOutboundMessage[] = [];
+      const snapshots = new Map<string, unknown>();
+      const commandStarted = deferred<void>();
+      const emitWorkspaceUpdateForWorkspaceId = vi.fn(async () => {});
+      const archiveWorkspaceRecord = vi.fn(async () => {});
+      const controller = new AbortController();
+      const run = runWorktreeSetupInBackground(
+        {
+          byspaceHome,
+          emitWorkspaceUpdateForWorkspaceId,
+          cacheWorkspaceSetupSnapshot: (workspaceId, snapshot) =>
+            snapshots.set(workspaceId, snapshot),
+          emit: (message) => {
+            emitted.push(message);
+            if (
+              message.type === "workspace_setup_progress" &&
+              message.payload.detail.commands.some((command) => command.status === "running")
+            ) {
+              commandStarted.resolve();
+            }
+          },
+          sessionLogger: createLogger(),
+          terminalManager: null,
+          archiveWorkspaceRecord,
+        },
+        {
+          requestCwd: repoDir,
+          repoRoot: repoDir,
+          workspaceId: "ws-aborted-setup",
+          worktree: {
+            branchName: "feature-aborted-setup",
+            worktreePath: createdWorktree.worktreePath,
+          },
+          shouldBootstrap: true,
+          slug: "feature-aborted-setup",
+          worktreePath: createdWorktree.worktreePath,
+        },
+        controller.signal,
+      );
+      await commandStarted.promise;
+      const emittedAtAbort = emitted.length;
+      controller.abort();
+      await run;
+
+      expect(existsSync(path.join(createdWorktree.worktreePath, "aborted-write.txt"))).toBe(false);
+      expect(emitted).toHaveLength(emittedAtAbort);
+      expect(snapshots.get("ws-aborted-setup")).toMatchObject({ status: "running" });
+      expect(emitWorkspaceUpdateForWorkspaceId).not.toHaveBeenCalled();
+      expect(archiveWorkspaceRecord).not.toHaveBeenCalled();
     },
   );
 
@@ -1787,6 +1931,7 @@ describe("handleBySpaceWorktreeArchiveRequest worktree scope", () => {
         markWorkspaceArchiving: vi.fn(),
         clearWorkspaceArchiving: vi.fn(),
         killTerminalsForWorkspace: vi.fn(async () => {}),
+        stopWorkspaceSetup: vi.fn(async () => {}),
         sessionLogger: createLogger(),
       },
       {
@@ -1862,6 +2007,7 @@ describe("handleBySpaceWorktreeArchiveRequest worktree scope", () => {
         markWorkspaceArchiving: vi.fn(),
         clearWorkspaceArchiving: vi.fn(),
         killTerminalsForWorkspace: vi.fn(async () => {}),
+        stopWorkspaceSetup: vi.fn(async () => {}),
         sessionLogger: createLogger(),
       },
       {
@@ -1938,6 +2084,7 @@ describe("handleBySpaceWorktreeArchiveRequest worktree scope", () => {
         markWorkspaceArchiving: vi.fn(),
         clearWorkspaceArchiving: vi.fn(),
         killTerminalsForWorkspace: vi.fn(async () => {}),
+        stopWorkspaceSetup: vi.fn(async () => {}),
         sessionLogger: createLogger(),
       },
       {
@@ -2010,6 +2157,7 @@ describe("handleBySpaceWorktreeArchiveRequest worktree scope", () => {
       markWorkspaceArchiving: vi.fn(),
       clearWorkspaceArchiving: vi.fn(),
       killTerminalsForWorkspace: vi.fn(async () => {}),
+      stopWorkspaceSetup: vi.fn(async () => {}),
       sessionLogger: createLogger(),
     };
 

@@ -36,6 +36,7 @@ class FakeLocalSpeechWorker extends EventEmitter {
     this.kills++;
     this.killed = true;
     this.connected = false;
+    queueMicrotask(() => this.emit("close", 0, null));
     return true;
   }
 
@@ -144,7 +145,7 @@ describe("LocalSpeechWorkerClient", () => {
     const connect = session.connect();
     expect(client.hasActiveSessions()).toBe(true);
     const createRequest = workers[0].sent[0];
-    expect(createRequest).toMatchObject({ type: "session.create", kind: "dictationStt" });
+    expect(createRequest).toMatchObject({ type: "session.create" });
     workers[0].respond(createRequest, { requiredSampleRate: 16000 });
     await connect;
 

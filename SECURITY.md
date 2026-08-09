@@ -50,6 +50,8 @@ The daemon also supports an optional shared-secret password (set via `auth.passw
 
 Connected clients are trusted operators of the daemon user. File previews follow that authority: a preview request may read any regular file the daemon process can read, while keeping path normalization and symlink checks in the daemon file service. Workspace-relative paths remain a UI convenience, not a security boundary.
 
+Managed agents and BySpace terminals receive an ephemeral `BYSPACE_CLI_TOKEN` so the bundled skill can use the CLI even when the daemon password is enabled. This token grants the full orchestration CLI surface; caller agent/workspace fields select orchestration semantics and are not an authorization boundary. Treat inherited agent and terminal environments as trusted daemon-operator contexts. The token is regenerated on daemon restart and is accepted only for orchestration and loop WebSocket messages.
+
 If you expose the daemon beyond loopback, such as by binding to `0.0.0.0`, forwarding it through a tunnel or reverse proxy, or publishing it from a Docker container, you are responsible for restricting and securing that access. Setting a password is strongly recommended in that case.
 
 In Docker, the official image runs the daemon and agents as the non-root
@@ -74,6 +76,16 @@ BySpace wraps agent CLIs (Claude Code, Codex, OpenCode) but does not manage thei
 
 BySpace only talks to a forge host that is either a known cloud host or one the forge CLI is already authenticated to. It never probes or routes credentials to an unauthenticated, remote-derived host.
 
+## Browser HTML preview isolation
+
+Previewing an `.html` or `.htm` file in the browser file pane renders it as a page, so markup an agent wrote — or markup that arrived with a repository — executes when you open it. The preview is built to contain that, not to trust it.
+
+The document loads with an opaque origin and a policy that permits inline script and style and refuses everything else: no remote script, font, image, or media; no `fetch`, XHR, WebSocket, or beacon; no form posts; no plugins; no nested frames. It has no access to BySpace's DOM, and storage and cookie APIs throw inside it rather than returning anything. It cannot navigate the top window, and it cannot open popups. It cannot read any file but itself.
+
+One gap remains in the browser: a sandboxed document may navigate _itself_, and no CSP directive in current browsers prevents that. `navigate-to` was dropped from CSP Level 3 and is not enforced, and `<meta http-equiv="refresh">` needs no script at all. A hostile page can therefore reach a server by navigating away, carrying data available inside the preview, such as its own contents, browser and device properties, user input inside the page, and your IP address. It cannot read BySpace, another file, storage, or cookies.
+
+If you do not trust a page, read it in `Source`, which executes nothing.
+
 ## Reporting vulnerabilities
 
-If you discover a security vulnerability, please report it privately by emailing hello@moboudra.com. Do not open a public issue.
+Use [GitHub Security Advisories](https://github.com/ByteTrue/byspace/security/advisories/new) to report vulnerabilities privately. Do not open a public issue.

@@ -433,6 +433,7 @@ interface NewWorkspaceRouteOptions {
   sourceDirectory?: string;
   displayName?: string;
   projectId?: string;
+  projectKey?: string;
   draftId?: string;
 }
 
@@ -450,6 +451,9 @@ function buildNewWorkspaceSearch(options: NewWorkspaceRouteOptions): string {
   }
   if (options.projectId) {
     params.set("projectId", options.projectId);
+  }
+  if (options.projectKey) {
+    params.set("projectKey", options.projectKey);
   }
   if (options.draftId) {
     params.set("draftId", options.draftId);

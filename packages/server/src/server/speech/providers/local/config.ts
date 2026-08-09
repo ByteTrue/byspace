@@ -35,10 +35,7 @@ export function resolveLocalSpeechConfig(params: {
     params.env.BYSPACE_LOCAL_MODELS_DIR?.trim() ||
     params.persisted.providers?.local?.modelsDir?.trim() ||
     path.join(params.byspaceHome, "models", "local-speech");
-  const selectedModel = resolveSelectedModel(
-    params.env.BYSPACE_DICTATION_LOCAL_STT_MODEL ??
-      params.persisted.features?.dictation?.stt?.model,
-  );
+  const selectedModel = resolveSelectedModel(params.persisted.features?.dictation?.stt?.model);
   return {
     local: {
       modelsDir,

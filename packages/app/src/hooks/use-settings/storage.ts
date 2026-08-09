@@ -1,6 +1,17 @@
 import type { QueryClient } from "@tanstack/react-query";
 import { parseAppLanguage, type AppLanguage } from "@/i18n/locales";
 import { THEME_TO_UNISTYLES, type ThemeName } from "@/styles/theme";
+import {
+  DEFAULT_SIDEBAR_CHECKS_DISPLAY,
+  parseSidebarChecksDisplay,
+  type SidebarChecksDisplay,
+} from "@/components/sidebar/display-preferences/checks-display";
+import {
+  DEFAULT_SIDEBAR_ROW_ITEMS,
+  isChecksHiddenByLegacyRowItem,
+  parseSidebarRowItems,
+  type SidebarRowItems,
+} from "@/components/sidebar/display-preferences/row-items";
 
 export const APP_SETTINGS_KEY = "@byspace:app-settings";
 export const APP_SETTINGS_QUERY_KEY = ["app-settings"];
@@ -9,11 +20,17 @@ const LEGACY_SETTINGS_KEY = "@byspace:settings";
 export type SendBehavior = "interrupt" | "queue";
 export type ServiceUrlBehavior = "ask" | "in-app" | "external";
 export type WorkspaceTitleSource = "title" | "branch";
+export type SidebarWorkspaceTrailing = "diff" | "timestamp" | "none";
 export type ToolCallDetailLevel = "overview" | "detailed";
 
 const VALID_THEMES = new Set<string>([...Object.keys(THEME_TO_UNISTYLES), "auto"]);
 const VALID_SERVICE_URL_BEHAVIORS = new Set<ServiceUrlBehavior>(["ask", "in-app", "external"]);
 const VALID_WORKSPACE_TITLE_SOURCES = new Set<WorkspaceTitleSource>(["title", "branch"]);
+const VALID_SIDEBAR_WORKSPACE_TRAILINGS = new Set<SidebarWorkspaceTrailing>([
+  "diff",
+  "timestamp",
+  "none",
+]);
 const VALID_TOOL_CALL_DETAIL_LEVELS = new Set<ToolCallDetailLevel>(["overview", "detailed"]);
 export const DEFAULT_TERMINAL_SCROLLBACK_LINES = 10_000;
 export const MIN_TERMINAL_SCROLLBACK_LINES = 0;
@@ -34,14 +51,21 @@ export interface AppSettings {
   uiFontSize: number; // clamped px, default 16
   codeFontSize: number; // clamped px, default 14 (code, diff, and terminal)
   workspaceTitleSource: WorkspaceTitleSource;
+  sidebarWorkspaceTrailing: SidebarWorkspaceTrailing;
+  sidebarRowItems: SidebarRowItems;
+  sidebarChecksDisplay: SidebarChecksDisplay;
   autoExpandReasoning: boolean;
   toolCallDetailLevel: ToolCallDetailLevel;
+  chatOutlineEnabled: boolean;
   vimKeybindings: boolean;
 }
 
 export type Settings = AppSettings;
 
-type StoredAppSettings = Partial<AppSettings> & { compactToolCalls?: unknown };
+type StoredAppSettings = Partial<Omit<AppSettings, "sidebarRowItems">> & {
+  compactToolCalls?: unknown;
+  sidebarRowItems?: unknown;
+};
 
 export const DEFAULT_CLIENT_SETTINGS: AppSettings = {
   theme: "auto",
@@ -52,8 +76,12 @@ export const DEFAULT_CLIENT_SETTINGS: AppSettings = {
   uiFontSize: DEFAULT_UI_FONT_SIZE,
   codeFontSize: DEFAULT_CODE_FONT_SIZE,
   workspaceTitleSource: "title",
+  sidebarWorkspaceTrailing: "diff",
+  sidebarRowItems: DEFAULT_SIDEBAR_ROW_ITEMS,
+  sidebarChecksDisplay: DEFAULT_SIDEBAR_CHECKS_DISPLAY,
   autoExpandReasoning: false,
   toolCallDetailLevel: "detailed",
+  chatOutlineEnabled: true,
   vimKeybindings: false,
 };
 
@@ -139,6 +167,31 @@ function parseToolCallDetailLevel(stored: StoredAppSettings): ToolCallDetailLeve
   return null;
 }
 
+function parseStoredSidebarChecksDisplay(stored: StoredAppSettings): SidebarChecksDisplay | null {
+  const display = parseSidebarChecksDisplay(stored.sidebarChecksDisplay);
+  if (display !== null) return display;
+  // COMPAT(sidebarRowItemsChecks): migrated in v0.5.0, remove after 2027-08-05.
+  return isChecksHiddenByLegacyRowItem(stored.sidebarRowItems) ? "none" : null;
+}
+
+function pickSidebarAppSettings(stored: StoredAppSettings): Partial<AppSettings> {
+  const result: Partial<AppSettings> = {};
+  if (stored.sidebarRowItems !== undefined) {
+    result.sidebarRowItems = parseSidebarRowItems(stored.sidebarRowItems);
+  }
+  const sidebarChecksDisplay = parseStoredSidebarChecksDisplay(stored);
+  if (sidebarChecksDisplay !== null) {
+    result.sidebarChecksDisplay = sidebarChecksDisplay;
+  }
+  if (
+    typeof stored.sidebarWorkspaceTrailing === "string" &&
+    VALID_SIDEBAR_WORKSPACE_TRAILINGS.has(stored.sidebarWorkspaceTrailing)
+  ) {
+    result.sidebarWorkspaceTrailing = stored.sidebarWorkspaceTrailing;
+  }
+  return result;
+}
+
 function pickAppSettings(stored: StoredAppSettings): Partial<AppSettings> {
   const result: Partial<AppSettings> = {};
   if (typeof stored.theme === "string" && VALID_THEMES.has(stored.theme)) {
@@ -178,12 +231,16 @@ function pickAppSettings(stored: StoredAppSettings): Partial<AppSettings> {
   if (typeof stored.vimKeybindings === "boolean") {
     result.vimKeybindings = stored.vimKeybindings;
   }
+  if (typeof stored.chatOutlineEnabled === "boolean") {
+    result.chatOutlineEnabled = stored.chatOutlineEnabled;
+  }
   if (
     typeof stored.workspaceTitleSource === "string" &&
     VALID_WORKSPACE_TITLE_SOURCES.has(stored.workspaceTitleSource)
   ) {
     result.workspaceTitleSource = stored.workspaceTitleSource;
   }
+  Object.assign(result, pickSidebarAppSettings(stored));
   if (typeof stored.autoExpandReasoning === "boolean") {
     result.autoExpandReasoning = stored.autoExpandReasoning;
   }

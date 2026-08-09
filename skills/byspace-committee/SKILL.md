@@ -49,7 +49,7 @@ Write a problem-level prompt:
 - Explicit: "do root cause analysis"
 - Explicit: "state assumptions, ask why three levels deep, check whether you're patching a symptom or removing the problem"
 
-Create both agents in parallel via BySpace with `[Committee] <task>` titles and the same prompt. Wait for both — not just whichever finishes first.
+Call `create_agent` twice through `byspace tool call`, each with a `[Committee] <task>` title, its selected provider, and the same `initialPrompt`. In agent scope, use `relationship: { "kind": "subagent" }`, `workspace: { "kind": "current" }`, and `notifyOnFinish: true`; launch both asynchronous calls, trust both completion notifications, then call `get_agent_activity` for each response. In terminal scope, follow the base skill's detached/existing-or-create placement rule, omit `background`, run the two blocking CLI processes concurrently as shell jobs, wait for both, and parse both JSON results. Do not continue after only one member finishes.
 
 Read both responses. Challenge them — do not accept at face value:
 

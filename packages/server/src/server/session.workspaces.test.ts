@@ -10,6 +10,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { setImmediate as waitForImmediate } from "node:timers/promises";
 import { afterEach, expect, test, vi } from "vitest";
 import { z } from "zod";
 
@@ -23,7 +24,8 @@ import type {
 } from "@bytetrue/byspace-protocol/messages";
 import type { TerminalManager } from "../terminal/terminal-manager.js";
 import { createTerminalManager } from "../terminal/terminal-manager.js";
-import { AgentManager } from "./agent/agent-manager.js";
+import { AgentManager, type AgentManagerEvent, type ManagedAgent } from "./agent/agent-manager.js";
+import type { ProviderSubagentDescriptor } from "./agent/provider-subagents/store.js";
 import { AgentStorage, type StoredAgentRecord } from "./agent/agent-storage.js";
 import type {
   AgentClient,
@@ -70,6 +72,7 @@ import {
 } from "./test-utils/session-stubs.js";
 import { generateProjectId } from "./workspace-registry-model.js";
 import { workspaceLifecycleCoordinator } from "./workspace-lifecycle-coordinator.js";
+import { WorkspaceSetupRuntime } from "./workspace-setup-runtime.js";
 import {
   FileBackedProjectRegistry,
   FileBackedWorkspaceRegistry,
@@ -83,6 +86,14 @@ const REPO_CWD = path.resolve("/tmp/repo");
 const UNREGISTERED_CWD = path.resolve("/tmp/unregistered");
 
 const terminalManagers: TerminalManager[] = [];
+
+function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((resolvePromise) => {
+    resolve = resolvePromise;
+  });
+  return { promise, resolve };
+}
 
 afterEach(async () => {
   while (terminalManagers.length > 0) {
@@ -313,6 +324,7 @@ function makeManagedAgent(input: {
   workspaceId?: string;
   lifecycle: AgentSnapshotPayload["status"];
   updatedAt: string;
+  activeTurn?: { turnId: string; startedAt: string };
 }) {
   const now = new Date(input.updatedAt);
   const snapshot = makeAgent({
@@ -348,6 +360,8 @@ function makeManagedAgent(input: {
     unsubscribeSession: null,
     session: null,
     activeForegroundTurnId: input.lifecycle === "running" ? "turn-1" : null,
+    activeTurnId: input.activeTurn?.turnId ?? null,
+    activeTurnStartedAt: input.activeTurn ? new Date(input.activeTurn.startedAt) : null,
   };
 }
 
@@ -582,10 +596,11 @@ function createSessionForWorkspaceTests(
     onWorkspaceRecovered?: SessionOptions["onWorkspaceRecovered"];
     workspaceGitService?: ReturnType<typeof createNoopWorkspaceGitService>;
     terminalManager?: TerminalManager | null;
-    agentManager?: SessionOptions["agentManager"];
-    agentStorage?: SessionOptions["agentStorage"];
+    agentManager?: { [K in keyof SessionOptions["agentManager"]]?: unknown };
+    agentStorage?: { [K in keyof SessionOptions["agentStorage"]]?: unknown };
     projectRegistry?: SessionOptions["projectRegistry"];
     workspaceRegistry?: SessionOptions["workspaceRegistry"];
+    workspaceSetupRuntime?: WorkspaceSetupRuntime;
     github?: ForgeService;
     byspaceHome?: string;
     worktreesRoot?: string;
@@ -604,18 +619,19 @@ function createSessionForWorkspaceTests(
     warn: vi.fn(),
     error: vi.fn(),
   };
-  const agentManager =
-    options.agentManager ??
-    asAgentManager({
+  const agentManager = asAgentManager(
+    options.agentManager ?? {
       subscribe: () => () => {},
       listAgents: () => [],
+      listProviderSubagentActivity: () => [],
       getAgent: () => null,
       archiveAgent: async () => ({ archivedAt: new Date().toISOString() }),
       archiveSnapshot: async () => ({}),
       unarchiveSnapshot: async () => true,
       clearAgentAttention: async () => {},
       notifyAgentState: () => {},
-    });
+    },
+  );
   const workspaceRegistry: SessionOptions["workspaceRegistry"] = options.workspaceRegistry ?? {
     initialize: async () => {},
     existsOnDisk: async () => true,
@@ -677,9 +693,8 @@ function createSessionForWorkspaceTests(
       byspaceHome: options.byspaceHome ?? "/tmp/byspace-test",
       worktreesRoot: options.worktreesRoot,
       agentManager,
-      agentStorage:
-        options.agentStorage ??
-        asAgentStorage({
+      agentStorage: asAgentStorage(
+        options.agentStorage ?? {
           list: async () => [
             createPersistedWorkspaceRecord({
               workspaceId: "ws-repo-running",
@@ -704,7 +719,8 @@ function createSessionForWorkspaceTests(
                 })
               : null,
           upsert: async () => {},
-        }),
+        },
+      ),
       projectRegistry: options.projectRegistry ?? {
         initialize: async () => {},
         existsOnDisk: async () => true,
@@ -785,10 +801,118 @@ function createSessionForWorkspaceTests(
       tts: null,
       providerSnapshotManager,
       terminalManager: options.terminalManager ?? null,
+      workspaceSetupRuntime: options.workspaceSetupRuntime,
     }),
   );
   return session;
 }
+
+test("agent updates preserve queued live transitions across stored metadata reads", async () => {
+  const running = makeManagedAgent({
+    id: "agent-coherent",
+    cwd: REPO_CWD,
+    workspaceId: "ws-repo-running",
+    lifecycle: "running",
+    updatedAt: "2026-07-31T10:00:01.000Z",
+    activeTurn: {
+      turnId: "turn-running",
+      startedAt: "2026-07-31T10:00:00.500Z",
+    },
+  }) as unknown as ManagedAgent;
+  const idle = makeManagedAgent({
+    id: "agent-coherent",
+    cwd: REPO_CWD,
+    workspaceId: "ws-repo-running",
+    lifecycle: "idle",
+    updatedAt: "2026-07-31T10:00:02.000Z",
+  }) as unknown as ManagedAgent;
+  running.config.model = "running-model";
+  idle.config = running.config;
+  const stored = makeStoredAgent({
+    id: "agent-coherent",
+    cwd: REPO_CWD,
+    updatedAt: "2026-07-31T10:00:03.000Z",
+  });
+  stored.title = "Stored title";
+  const storageReadStarted = deferred<void>();
+  const firstStorageRead = deferred<StoredAgentRecord | null>();
+  const emittedAgentUpdates: Extract<
+    SessionOutboundMessage,
+    { type: "agent_update" }
+  >["payload"][] = [];
+  const twoUpdatesEmitted = deferred<void>();
+  let storageReadCount = 0;
+  let forwardAgentEvent: ((event: AgentManagerEvent) => void) | null = null;
+  const session = createSessionForWorkspaceTests({
+    onMessage: (message) => {
+      if (message.type !== "agent_update") return;
+      emittedAgentUpdates.push(message.payload);
+      if (emittedAgentUpdates.length === 2) twoUpdatesEmitted.resolve();
+    },
+    agentManager: {
+      subscribe: (listener: (event: AgentManagerEvent) => void) => {
+        forwardAgentEvent = listener;
+        return () => {};
+      },
+      getAgent: () => idle,
+    },
+    agentStorage: {
+      get: async () => {
+        storageReadCount += 1;
+        if (storageReadCount === 1) {
+          storageReadStarted.resolve();
+          return firstStorageRead.promise;
+        }
+        return stored;
+      },
+    },
+  });
+  session.projectRegistry.get = async () =>
+    createPersistedProjectRecord({
+      projectId: "proj-repo-running",
+      rootPath: REPO_CWD,
+      kind: "non_git",
+      displayName: "repo",
+      createdAt: "2026-07-31T10:00:00.000Z",
+      updatedAt: "2026-07-31T10:00:00.000Z",
+    });
+  activateAgentUpdatesSubscription(session, "sub-coherent");
+  if (!forwardAgentEvent) throw new Error("Agent event listener was not installed");
+
+  forwardAgentEvent({ type: "agent_state", agent: running });
+  await storageReadStarted.promise;
+  idle.config.model = "idle-model";
+  forwardAgentEvent({ type: "agent_state", agent: idle });
+  idle.config.model = "mutated-after-queue";
+  firstStorageRead.resolve(stored);
+  await twoUpdatesEmitted.promise;
+
+  expect(emittedAgentUpdates).toEqual([
+    expect.objectContaining({
+      kind: "upsert",
+      agent: expect.objectContaining({
+        status: "running",
+        activeTurn: {
+          turnId: "turn-running",
+          startedAt: "2026-07-31T10:00:00.500Z",
+        },
+        updatedAt: "2026-07-31T10:00:03.000Z",
+        model: "running-model",
+        title: "Stored title",
+      }),
+    }),
+    expect.objectContaining({
+      kind: "upsert",
+      agent: expect.objectContaining({
+        status: "idle",
+        activeTurn: null,
+        updatedAt: "2026-07-31T10:00:03.000Z",
+        model: "idle-model",
+        title: "Stored title",
+      }),
+    }),
+  ]);
+});
 
 test("client heartbeat clears attention for the focused terminal", async () => {
   const clearedTerminalIds: string[] = [];
@@ -2871,6 +2995,224 @@ test("fetch_agent_history_request pages archived historical rows separately", as
   expect(session.agentUpdates.hasSubscription()).toBe(false);
 });
 
+test("fetch_agent_history_request ranks a search across the whole history, not one page", async () => {
+  const emitted: SessionOutboundMessage[] = [];
+  const session = createSessionForWorkspaceTests();
+  const historyCwd = path.resolve("/tmp/history-search");
+  const project = createPersistedProjectRecord({
+    projectId: "proj-search",
+    rootPath: historyCwd,
+    kind: "non_git",
+    displayName: "history-search",
+    createdAt: "2026-03-01T12:00:00.000Z",
+    updatedAt: "2026-03-01T12:00:00.000Z",
+  });
+  const workspace = createPersistedWorkspaceRecord({
+    workspaceId: "ws-search",
+    projectId: project.projectId,
+    cwd: historyCwd,
+    kind: "directory",
+    displayName: "history-search",
+    createdAt: "2026-03-01T12:00:00.000Z",
+    updatedAt: "2026-03-01T12:00:00.000Z",
+  });
+
+  session.emit = (message) => {
+    if (isSessionOutboundMessage(message)) emitted.push(message);
+  };
+  session.projectRegistry.get = async () => project;
+  session.workspaceRegistry.list = async () => [workspace];
+  session.workspaceRegistry.get = async () => workspace;
+  const longHistoryTitle = (tail: string) => ["needle", "x".repeat(100_000), tail].join("");
+  session.listAgentPayloads = async () => [
+    // The strong match is the oldest row, so a chronological answer would rank
+    // it last and a first-page-only search would not see it at all.
+    {
+      ...makeAgent({
+        id: "weak",
+        cwd: historyCwd,
+        workspaceId: "ws-search",
+        status: "idle",
+        updatedAt: "2026-03-03T12:00:00.000Z",
+      }),
+      title: "Unbilled usage report",
+    },
+    {
+      ...makeAgent({
+        id: "unrelated",
+        cwd: historyCwd,
+        workspaceId: "ws-search",
+        status: "idle",
+        updatedAt: "2026-03-02T12:00:00.000Z",
+      }),
+      title: "Terminal resize fix",
+    },
+    {
+      ...makeAgent({
+        id: "strong",
+        cwd: historyCwd,
+        workspaceId: "ws-search",
+        status: "idle",
+        updatedAt: "2026-03-01T12:00:00.000Z",
+      }),
+      title: "Add Stripe billing",
+    },
+    {
+      ...makeAgent({
+        id: "long-zulu",
+        cwd: historyCwd,
+        workspaceId: "ws-search",
+        status: "idle",
+        updatedAt: "2026-03-01T12:00:00.000Z",
+      }),
+      title: longHistoryTitle("zulu-tail"),
+    },
+    {
+      ...makeAgent({
+        id: "long-alpha",
+        cwd: historyCwd,
+        workspaceId: "ws-search",
+        status: "idle",
+        updatedAt: "2026-03-01T12:00:00.000Z",
+      }),
+      title: longHistoryTitle("alpha-tail"),
+    },
+  ];
+
+  await session.handleMessage({
+    type: "fetch_agent_history_request",
+    requestId: "req-search-truncated",
+    search: "bill",
+    page: { limit: 1 },
+  });
+
+  const truncated = emitted[0];
+  if (truncated?.type !== "fetch_agent_history_response") {
+    throw new Error(`Expected a history response, got ${truncated?.type}`);
+  }
+  expect(truncated.payload.entries.map((entry) => entry.agent.id)).toEqual(["strong"]);
+  expect(truncated.payload.entries[0].searchScore).toBeTypeOf("number");
+  // More matched than fit. `hasMore` stays false because no page is fetchable;
+  // truncation is its own fact, so a rank offset can never go stale.
+  expect(truncated.payload.searchTruncated).toBe(true);
+  expect(truncated.payload.pageInfo).toEqual({
+    nextCursor: null,
+    prevCursor: null,
+    hasMore: false,
+  });
+
+  await session.handleMessage({
+    type: "fetch_agent_history_request",
+    requestId: "req-search-whole",
+    search: "bill",
+    page: { limit: 25 },
+  });
+
+  const whole = emitted[1];
+  if (whole?.type !== "fetch_agent_history_response") {
+    throw new Error(`Expected a history response, got ${whole?.type}`);
+  }
+  expect(whole.payload.entries.map((entry) => entry.agent.id)).toEqual(["strong", "weak"]);
+  expect(whole.payload.searchTruncated).toBe(false);
+  expect(whole.payload.pageInfo.hasMore).toBe(false);
+  await session.handleMessage({
+    type: "fetch_agent_history_request",
+    requestId: "req-search-title-sort",
+    search: "needle",
+    sort: [{ key: "title", direction: "asc" }],
+    page: { limit: 25 },
+  });
+  const searchedTitleSort = emitted[2];
+  if (searchedTitleSort?.type !== "fetch_agent_history_response") {
+    throw new Error(`Expected a history response, got ${searchedTitleSort?.type}`);
+  }
+  expect(searchedTitleSort.payload.entries.map((entry) => entry.agent.id)).toEqual([
+    "long-alpha",
+    "long-zulu",
+  ]);
+
+  // Unsearched History keeps the pager's existing full-title ordering.
+  await session.handleMessage({
+    type: "fetch_agent_history_request",
+    requestId: "req-title-sort",
+    sort: [{ key: "title", direction: "asc" }],
+    page: { limit: 25 },
+  });
+  const unsearchedTitleSort = emitted[3];
+  if (unsearchedTitleSort?.type !== "fetch_agent_history_response") {
+    throw new Error(`Expected a history response, got ${unsearchedTitleSort?.type}`);
+  }
+  expect(unsearchedTitleSort.payload.entries.map((entry) => entry.agent.id)).toEqual([
+    "strong",
+    "long-alpha",
+    "long-zulu",
+    "unrelated",
+    "weak",
+  ]);
+});
+
+test("fetch_agent_history_request rejects a cursor on a searched request", async () => {
+  const emitted: SessionOutboundMessage[] = [];
+  const session = createSessionForWorkspaceTests();
+  const historyCwd = path.resolve("/tmp/history-cursor");
+  const project = createPersistedProjectRecord({
+    projectId: "proj-cursor",
+    rootPath: historyCwd,
+    kind: "non_git",
+    displayName: "history-cursor",
+    createdAt: "2026-03-01T12:00:00.000Z",
+    updatedAt: "2026-03-01T12:00:00.000Z",
+  });
+  const workspace = createPersistedWorkspaceRecord({
+    workspaceId: "ws-cursor",
+    projectId: project.projectId,
+    cwd: historyCwd,
+    kind: "directory",
+    displayName: "history-cursor",
+    createdAt: "2026-03-01T12:00:00.000Z",
+    updatedAt: "2026-03-01T12:00:00.000Z",
+  });
+
+  session.emit = (message) => {
+    if (isSessionOutboundMessage(message)) emitted.push(message);
+  };
+  session.projectRegistry.get = async () => project;
+  session.workspaceRegistry.list = async () => [workspace];
+  session.workspaceRegistry.get = async () => workspace;
+  session.listAgentPayloads = async () => [
+    {
+      ...makeAgent({
+        id: "match",
+        cwd: historyCwd,
+        workspaceId: "ws-cursor",
+        status: "idle",
+        updatedAt: "2026-03-01T12:00:00.000Z",
+      }),
+      title: "Add Stripe billing",
+    },
+  ];
+
+  // A ranked result set has no pages to walk. Answering with the ranked head
+  // would let a caller believe it had paged, so this fails loudly instead.
+  await session.handleMessage({
+    type: "fetch_agent_history_request",
+    requestId: "req-cursor",
+    search: "billing",
+    page: { limit: 25, cursor: "eyJpZCI6ImFnZW50In0=" },
+  });
+
+  expect(emitted).toEqual([
+    {
+      type: "rpc_error",
+      payload: expect.objectContaining({
+        requestId: "req-cursor",
+        requestType: "fetch_agent_history_request",
+        code: "invalid_cursor",
+      }),
+    },
+  ]);
+});
+
 test("fetch_agent_history_request skips rows whose workspace project record is missing", async () => {
   const emitted: SessionOutboundMessage[] = [];
   const session = createSessionForWorkspaceTests();
@@ -3609,8 +3951,10 @@ test("archiving the last workspace emits a remove carrying the now-empty project
 
 test("project.remove.request archives active workspaces and removes the project record", async () => {
   const emitted: SessionOutboundMessage[] = [];
+  const workspaceSetupRuntime = new WorkspaceSetupRuntime();
   const session = createSessionForWorkspaceTests({
     onMessage: (message) => emitted.push(message),
+    workspaceSetupRuntime,
   });
   const project = createPersistedProjectRecord({
     projectId: "proj-remove-with-workspace",
@@ -3633,6 +3977,18 @@ test("project.remove.request archives active workspaces and removes the project 
   const workspaces = new Map<string, PersistedWorkspaceRecord>([
     [workspace.workspaceId, workspace],
   ]);
+
+  const setupStarted = deferred<void>();
+  const setupAborted = deferred<void>();
+  const releaseSetup = deferred<void>();
+  let setupSettled = false;
+  workspaceSetupRuntime.start(workspace.workspaceId, async (signal) => {
+    setupStarted.resolve();
+    signal.addEventListener("abort", () => setupAborted.resolve(), { once: true });
+    await releaseSetup.promise;
+    setupSettled = true;
+  });
+  await setupStarted.promise;
 
   session.projectRegistry.get = async (projectId: string) => projects.get(projectId) ?? null;
   session.projectRegistry.list = async () => Array.from(projects.values());
@@ -3677,11 +4033,20 @@ test("project.remove.request archives active workspaces and removes the project 
     return descriptors;
   };
 
-  await session.handleMessage({
+  const removal = session.handleMessage({
     type: "project.remove.request",
     projectId: project.projectId,
     requestId: "req-remove-project",
   });
+  await setupAborted.promise;
+
+  expect(setupSettled).toBe(false);
+  expect(projects.has(project.projectId)).toBe(true);
+  expect(workspaces.get(workspace.workspaceId)).toEqual(workspace);
+
+  releaseSetup.resolve();
+  await removal;
+  expect(setupSettled).toBe(true);
 
   expect(projects.has(project.projectId)).toBe(false);
   expect(workspaces.get(workspace.workspaceId)).toEqual({
@@ -4473,7 +4838,7 @@ test("open_project_request does not unarchive an archived parent workspace for a
       projectId: home,
       rootPath: home,
       kind: "non_git",
-      displayName: "moboudra",
+      displayName: "developer",
       createdAt: "2026-04-24T07:00:00.000Z",
       updatedAt: archivedAt,
       archivedAt,
@@ -4486,7 +4851,7 @@ test("open_project_request does not unarchive an archived parent workspace for a
       projectId: home,
       cwd: home,
       kind: "directory",
-      displayName: "moboudra",
+      displayName: "developer",
       createdAt: "2026-04-24T07:00:00.000Z",
       updatedAt: archivedAt,
       archivedAt,
@@ -5796,7 +6161,7 @@ test.skip("opening a new worktree reconciles older local workspaces into the rem
   const mainWorkspaceId = path.join(tempDir, "inkwell");
   const worktreeWorkspaceId = path.join(mainWorkspaceId, ".byspace", "worktrees", "feature-a");
   const localProjectId = mainWorkspaceId;
-  const remoteProjectId = "remote:github.com/zimakki/inkwell";
+  const remoteProjectId = "remote:github.com/acme/inkwell";
 
   mkdirSync(worktreeWorkspaceId, { recursive: true });
 
@@ -5857,12 +6222,12 @@ test.skip("opening a new worktree reconciles older local workspaces into the rem
   };
   session.buildProjectPlacement = async (cwd: string) => ({
     projectKey: remoteProjectId,
-    projectName: "zimakki/inkwell",
+    projectName: "acme/inkwell",
     checkout: {
       cwd,
       isGit: true,
       currentBranch: cwd === mainWorkspaceId ? "main" : "feature-a",
-      remoteUrl: "https://github.com/zimakki/inkwell.git",
+      remoteUrl: "https://github.com/acme/inkwell.git",
       worktreeRoot: cwd,
       isBySpaceOwnedWorktree: cwd !== mainWorkspaceId,
       mainRepoRoot: cwd === mainWorkspaceId ? null : mainWorkspaceId,
@@ -7029,6 +7394,83 @@ test("a workspace leaving a filtered subscription after bootstrap emits a remova
   ]);
 });
 
+test("queued workspace updates are dropped when a new workspace subscription replaces the old one", async () => {
+  const emitted: SessionOutboundMessage[] = [];
+  const session = asTestSession(
+    createSessionForWorkspaceTests({ onMessage: (message) => emitted.push(message) }),
+  );
+  const descriptor = {
+    id: "ws-replaced-subscription",
+    projectId: "proj-replaced-subscription",
+    projectDisplayName: "repo",
+    projectRootPath: REPO_CWD,
+    workspaceDirectory: REPO_CWD,
+    projectKind: "git" as const,
+    workspaceKind: "local_checkout" as const,
+    name: "repo work",
+    status: "done" as const,
+    activityAt: null,
+    diffStat: null,
+  };
+  let currentDescriptor = descriptor;
+  let listCallCount = 0;
+  session.listFetchWorkspacesEntries = async () => {
+    listCallCount += 1;
+    return {
+      entries: listCallCount === 1 ? [descriptor] : [],
+      emptyProjects: [],
+      pageInfo: { nextCursor: null, prevCursor: null, hasMore: false },
+    };
+  };
+
+  const firstBuildStarted = deferred<void>();
+  const releaseFirstBuild = deferred<void>();
+  let buildCount = 0;
+  session.buildWorkspaceDescriptorMap = async () => {
+    buildCount += 1;
+    if (buildCount === 1) {
+      firstBuildStarted.resolve();
+      await releaseFirstBuild.promise;
+    }
+    return new Map([[currentDescriptor.id, currentDescriptor]]);
+  };
+
+  await session.handleMessage({
+    type: "fetch_workspaces_request",
+    requestId: "req-old-workspaces",
+    filter: { query: "repo" },
+    subscribe: { subscriptionId: "sub-old-workspaces" },
+  });
+
+  emitted.length = 0;
+  const queuedUpdate = session.emitWorkspaceUpdatesForWorkspaceIds([descriptor.id]);
+  await firstBuildStarted.promise;
+
+  await session.handleMessage({
+    type: "fetch_workspaces_request",
+    requestId: "req-new-workspaces",
+    filter: { query: "other" },
+    subscribe: { subscriptionId: "sub-new-workspaces" },
+  });
+
+  emitted.length = 0;
+  releaseFirstBuild.resolve();
+  await queuedUpdate;
+  await waitForImmediate();
+
+  expect(filterByType(emitted, "workspace_update")).toEqual([]);
+
+  currentDescriptor = { ...descriptor, name: "other work" };
+  await session.emitWorkspaceUpdatesForWorkspaceIds([descriptor.id]);
+
+  expect(filterByType(emitted, "workspace_update")).toEqual([
+    {
+      type: "workspace_update",
+      payload: { kind: "upsert", workspace: currentDescriptor },
+    },
+  ]);
+});
+
 test("project.rename.request stores customName and emits an updated workspace descriptor", async () => {
   const emitted: SessionOutboundMessage[] = [];
   const session = asTestSession(
@@ -7489,6 +7931,110 @@ async function waitForWorkspaceUpdate(
   }
   throw new Error(`Timed out waiting for workspace_update: ${description}`);
 }
+
+test("overlapping workspace rebuilds publish the newest provider subagent status", async () => {
+  const emitted: SessionOutboundMessage[] = [];
+  const parent = makeManagedAgent({
+    id: "provider-parent",
+    cwd: REPO_CWD,
+    workspaceId: "ws-repo-running",
+    lifecycle: "idle",
+    updatedAt: "2026-08-01T10:00:00.000Z",
+  }) as unknown as ManagedAgent;
+  const providerSubagents: ProviderSubagentDescriptor[] = [];
+  let listener: ((event: AgentManagerEvent) => void) | null = null;
+  const session = createSessionForWorkspaceTests({
+    onMessage: (message) => emitted.push(message),
+    agentStorage: { list: async () => [] },
+    agentManager: {
+      subscribe: (nextListener: (event: AgentManagerEvent) => void) => {
+        listener = nextListener;
+        return () => {};
+      },
+      listAgents: () => [parent],
+      listProviderSubagentActivity: () => providerSubagents,
+      getAgent: (agentId: string) => (agentId === parent.id ? parent : null),
+    },
+  });
+
+  const initialWorkspace = {
+    id: "ws-repo-running",
+    projectId: "proj-repo-running",
+    projectDisplayName: "repo",
+    projectRootPath: REPO_CWD,
+    workspaceDirectory: REPO_CWD,
+    projectKind: "git" as const,
+    workspaceKind: "local_checkout" as const,
+    name: "repo",
+    status: "done" as const,
+    activityAt: null,
+    diffStat: null,
+  };
+  session.listFetchWorkspacesEntries = async () => ({
+    entries: [initialWorkspace],
+    emptyProjects: [],
+    pageInfo: { nextCursor: null, prevCursor: null, hasMore: false },
+  });
+  session.reconcileAndEmitWorkspaceUpdates = async () => undefined;
+
+  await session.handleMessage({
+    type: "fetch_workspaces_request",
+    requestId: "provider-subagent-workspace-status",
+    subscribe: { subscriptionId: "provider-subagent-workspace-status" },
+  });
+  expect(findByType(emitted, "fetch_workspaces_response")?.payload.entries).toEqual([
+    initialWorkspace,
+  ]);
+  const firstBuildStarted = deferred<void>();
+  const releaseFirstBuild = deferred<void>();
+  let buildCount = 0;
+  session.buildWorkspaceDescriptorMap = async () => {
+    buildCount += 1;
+    const status = providerSubagents.some((subagent) => subagent.status === "running")
+      ? "running"
+      : "done";
+    if (buildCount === 1) {
+      firstBuildStarted.resolve();
+      await releaseFirstBuild.promise;
+    }
+    return new Map([[initialWorkspace.id, { ...initialWorkspace, status }]]);
+  };
+  emitted.length = 0;
+
+  const runningSubagent: ProviderSubagentDescriptor = {
+    id: "native-child",
+    parentAgentId: parent.id,
+    provider: "codex",
+    title: "Native child",
+    description: null,
+    status: "running",
+    createdAt: "2026-08-01T10:01:00.000Z",
+    updatedAt: "2026-08-01T10:01:00.000Z",
+    toolCallId: null,
+    cwd: REPO_CWD,
+    subtitle: null,
+  };
+  providerSubagents.push(runningSubagent);
+  listener?.({ type: "provider_subagent", event: { type: "upsert", subagent: runningSubagent } });
+  await firstBuildStarted.promise;
+
+  const completedSubagent = {
+    ...runningSubagent,
+    status: "completed" as const,
+    updatedAt: "2026-08-01T10:02:00.000Z",
+  };
+  providerSubagents[0] = completedSubagent;
+  listener?.({ type: "provider_subagent", event: { type: "upsert", subagent: completedSubagent } });
+  await waitForImmediate();
+  releaseFirstBuild.resolve();
+  await vi.waitFor(() => expect(buildCount).toBe(2));
+  await waitForImmediate();
+
+  const statuses = filterByType(emitted, "workspace_update").flatMap((message) =>
+    message.payload.kind === "upsert" ? [message.payload.workspace.status] : [],
+  );
+  expect(statuses).toEqual(["running", "done"]);
+});
 
 test("title-only terminal change does not build workspace descriptors or emit workspace_update", async () => {
   const emitted: SessionOutboundMessage[] = [];

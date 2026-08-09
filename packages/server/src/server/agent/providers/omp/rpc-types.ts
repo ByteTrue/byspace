@@ -165,56 +165,6 @@ export const OmpRpcSlashCommandSchema = z
   })
   .passthrough();
 
-export const OmpAgentToolResultSchema = z
-  .object({
-    content: z.array(z.object({ type: z.string(), text: z.string().optional() }).passthrough()),
-    details: z.unknown().optional(),
-    isError: z.boolean().optional(),
-  })
-  .passthrough();
-
-export const OmpRpcHostToolDefinitionSchema = z
-  .object({
-    name: z.string(),
-    label: z.string().optional(),
-    description: z.string(),
-    loadMode: z.enum(["essential", "discoverable"]).optional(),
-    parameters: z.record(z.string(), z.unknown()),
-    hidden: z.boolean().optional(),
-  })
-  .passthrough();
-export const OmpRpcHostToolCallRequestSchema = z
-  .object({
-    type: z.literal("host_tool_call"),
-    id: z.string(),
-    toolCallId: z.string(),
-    toolName: z.string(),
-    arguments: z.record(z.string(), z.unknown()),
-  })
-  .passthrough();
-export const OmpRpcHostToolCancelRequestSchema = z
-  .object({
-    type: z.literal("host_tool_cancel"),
-    id: z.string(),
-    targetId: z.string(),
-  })
-  .passthrough();
-export const OmpRpcHostToolUpdateSchema = z
-  .object({
-    type: z.literal("host_tool_update"),
-    id: z.string(),
-    partialResult: OmpAgentToolResultSchema,
-  })
-  .passthrough();
-export const OmpRpcHostToolResultSchema = z
-  .object({
-    type: z.literal("host_tool_result"),
-    id: z.string(),
-    result: OmpAgentToolResultSchema,
-    isError: z.boolean().optional(),
-  })
-  .passthrough();
-
 export const OmpSubagentSubscriptionLevelSchema = z.enum(["off", "progress", "events"]);
 export const OmpSubagentStatusSchema = z.enum([
   "pending",
@@ -491,9 +441,6 @@ export const OmpRuntimeEventSchema = z.discriminatedUnion("type", [
   OmpAutoCompactionStartEventSchema,
   OmpAutoCompactionEndEventSchema,
   OmpAvailableCommandsUpdateEventSchema,
-  OmpRpcHostToolCallRequestSchema,
-  OmpRpcHostToolCancelRequestSchema,
-  OmpRpcHostToolUpdateSchema,
 ]);
 
 const OmpCommandBase = { id: z.string().optional() };
@@ -532,11 +479,6 @@ export const OmpRpcCommandSchema = z.discriminatedUnion("type", [
     type: z.literal("set_subagent_subscription"),
     level: OmpSubagentSubscriptionLevelSchema,
   }),
-  z.object({
-    ...OmpCommandBase,
-    type: z.literal("set_host_tools"),
-    tools: z.array(OmpRpcHostToolDefinitionSchema),
-  }),
   z.object({ ...OmpCommandBase, type: z.literal("branch"), entryId: z.string() }),
   z.object({ ...OmpCommandBase, type: z.literal("get_branch_messages") }),
   z.object({
@@ -559,9 +501,6 @@ export const OmpModelsResultSchema = z
 export const OmpCommandsResultSchema = z
   .object({ commands: z.array(OmpRpcSlashCommandSchema).optional() })
   .passthrough();
-export const OmpHostToolsResultSchema = z
-  .object({ toolNames: z.array(z.string()).optional() })
-  .passthrough();
 export const OmpBranchResultSchema = z
   .object({ text: z.string().optional(), cancelled: z.boolean().optional() })
   .passthrough();
@@ -583,11 +522,6 @@ export type OmpModelThinking = z.infer<typeof OmpModelThinkingSchema>;
 export type OmpSessionState = z.infer<typeof OmpSessionStateSchema>;
 export type OmpSessionStats = z.infer<typeof OmpSessionStatsSchema>;
 export type OmpRpcSlashCommand = z.infer<typeof OmpRpcSlashCommandSchema>;
-export type OmpAgentToolResult = z.infer<typeof OmpAgentToolResultSchema>;
-export type OmpRpcHostToolDefinition = z.infer<typeof OmpRpcHostToolDefinitionSchema>;
-export type OmpRpcHostToolCallRequest = z.infer<typeof OmpRpcHostToolCallRequestSchema>;
-export type OmpRpcHostToolUpdate = z.infer<typeof OmpRpcHostToolUpdateSchema>;
-export type OmpRpcHostToolResult = z.infer<typeof OmpRpcHostToolResultSchema>;
 export type OmpSubagentSubscriptionLevel = z.infer<typeof OmpSubagentSubscriptionLevelSchema>;
 export type OmpSubagentStatus = z.infer<typeof OmpSubagentStatusSchema>;
 export type OmpSubagentLifecyclePayload = z.infer<typeof OmpSubagentLifecyclePayloadSchema>;

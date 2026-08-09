@@ -64,6 +64,16 @@ export const ja: TranslationResources = {
       home: "ホーム",
       modelGroupLabel: "モデル",
       modelSearchKeywords: "モデルを切り替え モデルを変更 モデルを設定 モデルを選択",
+      thinkingGroupLabel: "思考",
+      thinkingSearchKeywords: "推論 思考レベル 考える",
+      modeGroupLabel: "モード",
+      modeSearchKeywords: "アクセス 権限 承認 モード",
+      planModeGroupLabel: "プランモード",
+      planModeSearchKeywords: "プラン 計画 プランモード",
+      fastModeGroupLabel: "高速",
+      fastModeSearchKeywords: "高速 速度 低遅延",
+      settingOn: "オン",
+      settingOff: "オフ",
     },
   },
   composer: {
@@ -71,9 +81,11 @@ export const ja: TranslationResources = {
       desktop: "エージェントにメッセージ、@ファイル、/コマンドや/スキルを入力",
       mobile: "メッセージ、@ファイル、/コマンド",
       fallback: "メッセージ...",
+      terminal: "Prompt",
     },
     input: {
       accessibilityLabel: "エージェントにメッセージ...",
+      terminalAccessibilityLabel: "Terminal prompt",
       focusHint: "{{shortcut}}でフォーカス",
       addAttachment: "添付ファイルを追加",
       interruptAgent: "エージェントを中断",
@@ -167,6 +179,7 @@ export const ja: TranslationResources = {
   agentStream: {
     empty: "このエージェントとチャットを始めましょう...",
     scrollToBottom: "下にスクロール",
+    historyLoadFailed: "エージェントの履歴を読み込めませんでした",
     collapseAllToolCalls: "すべてのツール呼び出しを折りたたむ",
     permission: {
       plan: "プラン",
@@ -182,7 +195,7 @@ export const ja: TranslationResources = {
     states: {
       notFound: "エージェントが見つかりません",
       failedToLoad: "エージェントの読み込みに失敗しました",
-      reconnecting: "再接続中...",
+      reconnecting: "再接続中",
       timelineSyncFailed: "エージェントの履歴を更新できませんでした。再試行しています…",
       timelineSyncing: "最新の進捗を同期中...",
       archivingTitle: "エージェントをアーカイブ中...",
@@ -210,8 +223,13 @@ export const ja: TranslationResources = {
   sessions: {
     title: "履歴",
     empty: "セッションがまだありません",
+    noMatches: "一致するセッションはありません",
+    tooManyMatches: "一致が多すぎます — 検索条件を絞ってください",
+    hostLoadFailed: "{{host}}: 履歴を読み込めませんでした",
+    searchPlaceholder: "履歴を検索",
     actions: {
       loadMore: "さらに読み込む",
+      clearSearch: "検索をクリア",
     },
   },
   agentList: {
@@ -343,6 +361,10 @@ export const ja: TranslationResources = {
     },
   },
   workspace: {
+    status: {
+      serviceRunning: "サービス {{name}} 実行中",
+      serviceUnhealthy: "サービス {{name}} 異常",
+    },
     route: {
       loading: "ワークスペースを読み込み中",
       connecting: "接続中",
@@ -367,6 +389,16 @@ export const ja: TranslationResources = {
     },
     hoverCard: {
       scriptsAccessibility: "ワークスペーススクリプト",
+      detailsAccessibility: "ワークスペースの詳細",
+      agents: "エージェント",
+      untitledAgent: "無題のエージェント",
+      agentStatus: {
+        needsInput: "入力待ち",
+        failed: "失敗",
+        attention: "レビュー待ち",
+        running: "作業中",
+        done: "完了",
+      },
       copyPath: "パスをコピー",
       copyBranchName: "ブランチ名をコピー",
       copied: "コピーしました",
@@ -815,6 +847,14 @@ export const ja: TranslationResources = {
           pullRequest: "プルリクエスト#{{number}}",
           pullRequest_mr: "マージリクエスト !{{number}}",
         },
+        checksSummary: {
+          passedLabel: "合格",
+          failedLabel: "失敗した",
+          runningLabel: "ランニング",
+          passedAccessible: "チェックに合格しました",
+          failedAccessible: "チェックに失敗しました",
+          runningAccessible: "実行中のチェック",
+        },
         states: {
           draft: "ドラフト",
           merged: "マージ済み",
@@ -854,6 +894,27 @@ export const ja: TranslationResources = {
       switchTitle: "ホストを切り替え",
       searchPlaceholder: "ホストを検索...",
     },
+    display: {
+      trigger: "表示設定",
+      titleSource: {
+        label: "ワークスペースのタイトル",
+        options: { title: "タイトル", branch: "支店名" },
+      },
+      show: {
+        label: "表示",
+        host: "ホスト",
+        changeRequest: "プルリクエスト",
+        services: "サービス",
+        checks: "小切手",
+        diff: "差分統計",
+        timestamp: "タイムスタンプ",
+      },
+      checks: {
+        label: "小切手",
+        options: { iconAndText: "アイコンとテキスト", icon: "アイコンのみ", none: "隠れた" },
+      },
+      hostFilter: { label: "ホスト", all: "すべてのホスト" },
+    },
     actions: {
       addProject: "プロジェクトを追加",
       newWorkspace: "新しいワークスペース",
@@ -861,6 +922,8 @@ export const ja: TranslationResources = {
       home: "ホーム",
       settings: "設定",
       closeSidebar: "サイドバーを閉じる",
+      needsAttentionFilter: "対応が必要",
+      emptyAttention: "現在対応が必要な会話はありません",
     },
     help: {
       trigger: "ヘルプとサポート",
@@ -884,6 +947,7 @@ export const ja: TranslationResources = {
       openProjectSettings: "プロジェクト設定を開く",
     },
     project: {
+      needsAttentionCount: "対応が必要なワークスペース: {{count}}",
       actions: {
         menu: "プロジェクトアクション",
         openSettings: "プロジェクト設定を開く",
@@ -910,6 +974,10 @@ export const ja: TranslationResources = {
       },
     },
     workspace: {
+      agentSummary: {
+        needsAttention: "対応が必要なエージェント: {{count}}",
+        working: "作業中のエージェント: {{count}}",
+      },
       status: {
         scriptsAvailable: "スクリプトが利用可能",
         creating: "作成中...",
@@ -923,8 +991,6 @@ export const ja: TranslationResources = {
         copyPath: "パスをコピー",
         copyBranchName: "ブランチ名をコピー",
         rename: "ワークスペースの名前を変更",
-        pin: "上部に固定",
-        unpin: "固定解除",
         archive: "アーカイブ",
         archiveWorkspace: "ワークスペースをアーカイブ",
         hideFromSidebar: "サイドバーから非表示",
@@ -956,6 +1022,17 @@ export const ja: TranslationResources = {
   newWorkspace: {
     title: "新しいワークスペース",
     create: "作成",
+    project: {
+      choose: "プロジェクトを選択",
+      searchPlaceholder: "プロジェクトを検索",
+      title: "プロジェクト",
+      empty: "利用可能なプロジェクトがありません。",
+    },
+    host: {
+      choose: "ホストを選択",
+      label: "ワークスペースのホスト",
+      title: "ホスト",
+    },
     isolation: {
       local: "ローカル",
       worktree: "新しいワークツリー",
@@ -976,6 +1053,22 @@ export const ja: TranslationResources = {
       createWorktreeFailed: "ワークツリーの作成に失敗しました",
       composerStateRequired: "コンポーザーの状態が必要です",
       selectModel: "モデルを選択してください",
+    },
+    tooltips: {
+      project: "Choose the project",
+      host: "Choose the host",
+      isolation: "Choose the isolation level",
+      startingRef: "開始点を選択",
+      launch: "Choose what to launch",
+    },
+    launch: {
+      title: "What to launch",
+      chat: "Chat",
+      terminal: "Terminal",
+      manageProfiles: "Manage profiles",
+      submit: "Launch",
+      promptPlaceholder: "Prompt {{name}}",
+      commandPlaceholder: "Run a command, or leave empty for a blank terminal",
     },
     refPicker: {
       startingRef: "開始Ref",
@@ -1222,6 +1315,8 @@ export const ja: TranslationResources = {
       failedToLoadOffer: "ペアリングオファーの読み込みに失敗しました。",
       relayDisabled:
         "リレーが有効になっていません。デバイスをペアリングするにはリレーを有効にしてください。",
+      enableRelay: "Enable relay",
+      enablingRelay: "Enabling relay...",
       unavailable: "ペアリングオファーが利用できません。",
       hint: "スマートフォンのBySpaceでこのQRコードをスキャンするか、以下のリンクをコピーしてください。",
       qrUnavailable: "QRコードが利用できません。",
@@ -1293,6 +1388,9 @@ export const ja: TranslationResources = {
         saving: "保存中...",
         saveFailed: "保存に失敗しました",
         changedOnDisk: "ディスク上で変更されました",
+        deletedTitle: "ファイルはディスク上から削除されました",
+        checkFailedTitle: "ディスク上のファイルを確認できませんでした",
+        preservedDescription: "開いているコピーは保持されています。",
         vimMode: "Vim モード {{mode}}",
         cursor: "{{line}} 行、{{column}} 列",
         preview: "プレビュー",
@@ -1467,6 +1565,7 @@ export const ja: TranslationResources = {
           es: "スペイン語",
           fr: "フランス語",
           ja: "日本語",
+          ko: "韓国語",
           ptBR: "ブラジルポルトガル語",
           ru: "ロシア語",
           zhCN: "簡体字中国語",
@@ -1515,6 +1614,10 @@ export const ja: TranslationResources = {
       },
       detailLevel: {
         title: "詳細レベル",
+      },
+      chatOutline: {
+        title: "チャットのアウトライン",
+        description: "プロンプト間を移動するためのアウトラインを表示します",
       },
       fonts: {
         title: "フォント",
@@ -1609,6 +1712,32 @@ export const ja: TranslationResources = {
     },
     host: {
       notFound: "ホストが見つかりません",
+      appearance: {
+        title: "外観",
+        color: {
+          label: "色",
+          options: {
+            none: "なし",
+            blue: "青",
+            cyan: "シアン",
+            green: "緑",
+            lime: "ライム",
+            yellow: "黄色",
+            orange: "オレンジ",
+            red: "赤",
+            pink: "ピンク",
+            purple: "紫",
+          },
+        },
+        badgeDisplay: {
+          label: "バッジ表示",
+          options: {
+            name: "名前",
+            icon: "アイコンのみ",
+            hidden: "隠れた",
+          },
+        },
+      },
       badges: {
         relay: "リレー",
         local: "ローカル",
@@ -1661,15 +1790,10 @@ export const ja: TranslationResources = {
       orchestration: {
         title: "オーケストレーション",
         unavailable: "オーケストレーションを管理するにはこのホストに接続してください",
-        enableTools: {
-          title: "BySpaceツールを有効にする",
-          hint: "エージェントがワークツリー、エージェント、スケジュールを管理できるようになります",
-          accessibilityLabel: "BySpaceツールを有効にする",
-        },
         skills: {
           title: "オーケストレーションスキル",
           installHint:
-            "対応するコーディングエージェント向けに、BySpace同梱の5つのスキルをインストールします",
+            "対応するコーディングエージェント向けに、BySpace同梱のスキルをインストールします",
           installedHint: "このホストにインストール済みで、最新です",
           updateHint: "インストール済みのスキルが現在のBySpaceバージョンと異なります",
           updateHost: "オーケストレーションスキルを管理するにはホストを更新してください",
@@ -1679,10 +1803,10 @@ export const ja: TranslationResources = {
           saving: "保存中...",
           installConfirmTitle: "オーケストレーションスキルをインストールまたは更新しますか？",
           installConfirmMessage:
-            "BySpace同梱の5つのスキルをこのホストに同期します。ほかのスキルは変更せず、BySpaceが管理していない同名の競合コピーは保持します。",
+            "BySpace同梱のスキルをこのホストに同期します。ほかのスキルは変更せず、BySpaceが管理していない同名の競合コピーは保持します。",
           updateConfirmTitle: "オーケストレーションスキルを更新しますか？",
           updateConfirmMessage:
-            "BySpaceが管理するコピーを、このバージョンに同梱された5つのスキルで置き換えます。ほかのスキルは変更しません。",
+            "BySpaceが管理するコピーを、このバージョンに同梱されたスキルで置き換えます。ほかのスキルは変更しません。",
           uninstallConfirmTitle: "オーケストレーションスキルをアンインストールしますか？",
           uninstallConfirmMessage:
             "このホストから未変更の管理対象コピーを削除します。変更されたコピーは保持します。",
@@ -1904,6 +2028,17 @@ export const ja: TranslationResources = {
         transportFallback: "ホストが応答しませんでした。",
         failedTitle: "byspace.jsonを読み込めませんでした",
         failedDescription: "再読み込みして再試行してください。",
+      },
+      projectSetup: {
+        title: "プロジェクトのセットアップ",
+        actionTitle: "エージェントでセットアップ",
+        description:
+          "エージェントがこのリポジトリを調べ、ワークツリーの準備、サービス、よく使うコマンドを提案します",
+        configure: "エージェントで設定",
+        review: "エージェントでレビュー",
+        updateHost: "エージェント支援のプロジェクト設定を使うにはホストを更新してください",
+        prompt:
+          "byspace-project-setup スキルを使ってこのリポジトリを調べ、クリーンなワークツリーを再現可能に準備でき、よく使うコマンドを見つけやすくし、長時間実行サービスを安全に並列実行できる、根拠のある最小限の変更を提案してください。まず調査し、ファイルを変更する前に提案を見せてください。",
       },
       worktree: {
         title: "ワークツリーライフサイクルフック",

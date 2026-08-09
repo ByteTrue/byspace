@@ -62,6 +62,16 @@ export const en = {
       home: "Home",
       modelGroupLabel: "Model",
       modelSearchKeywords: "switch model change model set model select model",
+      thinkingGroupLabel: "Thinking",
+      thinkingSearchKeywords: "reasoning effort thinking think",
+      modeGroupLabel: "Mode",
+      modeSearchKeywords: "access permission approval mode",
+      planModeGroupLabel: "Plan mode",
+      planModeSearchKeywords: "plan planning plan mode",
+      fastModeGroupLabel: "Fast",
+      fastModeSearchKeywords: "fast speed low latency",
+      settingOn: "On",
+      settingOff: "Off",
     },
   },
   composer: {
@@ -69,9 +79,11 @@ export const en = {
       desktop: "Message the agent, tag @files, or use /commands and /skills",
       mobile: "Message, @files, /commands",
       fallback: "Message...",
+      terminal: "Enter a terminal prompt...",
     },
     input: {
       accessibilityLabel: "Message agent...",
+      terminalAccessibilityLabel: "Terminal prompt...",
       focusHint: "{{shortcut}} to focus",
       addAttachment: "Add attachment",
       interruptAgent: "Interrupt agent",
@@ -165,6 +177,7 @@ export const en = {
   agentStream: {
     empty: "Start chatting with this agent...",
     scrollToBottom: "Scroll to bottom",
+    historyLoadFailed: "Couldn't load agent history",
     collapseAllToolCalls: "Collapse all tool calls",
     permission: {
       plan: "Plan",
@@ -180,7 +193,7 @@ export const en = {
     states: {
       notFound: "Agent not found",
       failedToLoad: "Failed to load agent",
-      reconnecting: "Reconnecting...",
+      reconnecting: "Reconnecting",
       timelineSyncFailed: "Couldn't refresh agent history. Retrying…",
       timelineSyncing: "Syncing latest progress...",
       archivingTitle: "Archiving agent...",
@@ -206,8 +219,13 @@ export const en = {
   sessions: {
     title: "History",
     empty: "No sessions yet",
+    noMatches: "No sessions match",
+    tooManyMatches: "Too many matches — narrow your search",
+    hostLoadFailed: "{{host}}: Could not load history",
+    searchPlaceholder: "Search history",
     actions: {
       loadMore: "Load more",
+      clearSearch: "Clear search",
     },
   },
   agentList: {
@@ -339,6 +357,10 @@ export const en = {
     },
   },
   workspace: {
+    status: {
+      serviceRunning: "Service {{name}} running",
+      serviceUnhealthy: "Service {{name}} unhealthy",
+    },
     route: {
       loading: "Loading workspace",
       connecting: "Connecting",
@@ -362,6 +384,16 @@ export const en = {
     },
     hoverCard: {
       scriptsAccessibility: "Workspace scripts",
+      detailsAccessibility: "Workspace details",
+      agents: "Agents",
+      untitledAgent: "Untitled agent",
+      agentStatus: {
+        needsInput: "Needs input",
+        failed: "Failed",
+        attention: "Ready to review",
+        running: "Working",
+        done: "Done",
+      },
       copyPath: "Copy path",
       copyBranchName: "Copy branch name",
       copied: "Copied",
@@ -814,6 +846,14 @@ export const en = {
           pullRequest: "Pull request #{{number}}",
           pullRequest_mr: "Merge request !{{number}}",
         },
+        checksSummary: {
+          passedLabel: "Passed",
+          failedLabel: "Failed",
+          runningLabel: "Running",
+          passedAccessible: "Checks passed",
+          failedAccessible: "Checks failed",
+          runningAccessible: "Checks running",
+        },
         states: {
           draft: "Draft",
           merged: "Merged",
@@ -853,6 +893,27 @@ export const en = {
       switchTitle: "Switch host",
       searchPlaceholder: "Search hosts...",
     },
+    display: {
+      trigger: "Display preferences",
+      titleSource: {
+        label: "Workspace title",
+        options: { title: "Title", branch: "Branch name" },
+      },
+      show: {
+        label: "Show",
+        host: "Host",
+        changeRequest: "Pull request",
+        services: "Services",
+        checks: "Checks",
+        diff: "Diff stat",
+        timestamp: "Timestamp",
+      },
+      checks: {
+        label: "Checks",
+        options: { iconAndText: "Icon and text", icon: "Icon only", none: "Hidden" },
+      },
+      hostFilter: { label: "Hosts", all: "All hosts" },
+    },
     actions: {
       addProject: "Add project",
       newWorkspace: "New workspace",
@@ -860,6 +921,8 @@ export const en = {
       home: "Home",
       settings: "Settings",
       closeSidebar: "Close sidebar",
+      needsAttentionFilter: "Needs attention",
+      emptyAttention: "Nothing needs your attention",
     },
     help: {
       trigger: "Help and support",
@@ -883,6 +946,7 @@ export const en = {
       openProjectSettings: "Open project settings",
     },
     project: {
+      needsAttentionCount: "Workspaces needing attention: {{count}}",
       actions: {
         menu: "Project actions",
         openSettings: "Open project settings",
@@ -909,6 +973,10 @@ export const en = {
       },
     },
     workspace: {
+      agentSummary: {
+        needsAttention: "Agents needing attention: {{count}}",
+        working: "Agents working: {{count}}",
+      },
       status: {
         scriptsAvailable: "Scripts available",
         creating: "Creating...",
@@ -922,8 +990,6 @@ export const en = {
         copyPath: "Copy path",
         copyBranchName: "Copy branch name",
         rename: "Rename workspace",
-        pin: "Pin to top",
-        unpin: "Unpin",
         archive: "Archive",
         archiveWorkspace: "Archive workspace",
         hideFromSidebar: "Hide from sidebar",
@@ -955,6 +1021,17 @@ export const en = {
   newWorkspace: {
     title: "New workspace",
     create: "Create",
+    project: {
+      choose: "Choose project",
+      searchPlaceholder: "Search projects",
+      title: "Project",
+      empty: "No projects available.",
+    },
+    host: {
+      choose: "Choose host",
+      label: "Workspace host",
+      title: "Host",
+    },
     isolation: {
       local: "Local",
       worktree: "New worktree",
@@ -969,6 +1046,22 @@ export const en = {
     promptPlaceholder:
       "Message the agent (optional); press Enter or click ↵ to create the workspace",
     promptPlaceholderCompact: "Message the agent (optional); click ↵ to create the workspace",
+    launch: {
+      title: "Launch",
+      chat: "Chat",
+      terminal: "Terminal",
+      commandPlaceholder: "Run a command",
+      promptPlaceholder: "Prompt {{name}}",
+      submit: "Launch",
+      manageProfiles: "Manage terminal profiles",
+    },
+    tooltips: {
+      project: "Choose project",
+      host: "Choose host",
+      isolation: "Choose isolation",
+      startingRef: "Choose where to start from",
+      launch: "Choose what to launch",
+    },
     errors: {
       hostDisconnected: "Host is not connected",
       createWorktreeFailed: "Failed to create worktree",
@@ -1219,6 +1312,8 @@ export const en = {
       loadingOffer: "Loading pairing offer...",
       failedToLoadOffer: "Failed to load pairing offer.",
       relayDisabled: "Relay is not enabled. Enable relay to pair a device.",
+      enableRelay: "Enable relay",
+      enablingRelay: "Enabling relay...",
       unavailable: "Pairing offer unavailable.",
       hint: "Scan this QR code with BySpace on your phone, or copy the link below.",
       qrUnavailable: "QR code unavailable.",
@@ -1289,7 +1384,10 @@ export const en = {
         unsavedChanges: "Unsaved changes",
         saving: "Saving...",
         saveFailed: "Save failed",
-        changedOnDisk: "Changed on disk",
+        changedOnDisk: "File changed on disk",
+        deletedTitle: "File deleted on disk",
+        checkFailedTitle: "Couldn't check file on disk",
+        preservedDescription: "The open copy is preserved.",
         vimMode: "Vim mode {{mode}}",
         cursor: "Line {{line}}, column {{column}}",
         preview: "Preview",
@@ -1464,6 +1562,7 @@ export const en = {
           es: "Spanish",
           fr: "French",
           ja: "Japanese",
+          ko: "Korean",
           ptBR: "Brazilian Portuguese",
           ru: "Russian",
           zhCN: "Simplified Chinese",
@@ -1512,6 +1611,10 @@ export const en = {
       },
       detailLevel: {
         title: "Detail level",
+      },
+      chatOutline: {
+        title: "Chat outline",
+        description: "Show an outline for jumping between prompts",
       },
       fonts: {
         title: "Fonts",
@@ -1605,6 +1708,32 @@ export const en = {
     },
     host: {
       notFound: "Host not found",
+      appearance: {
+        title: "Appearance",
+        color: {
+          label: "Color",
+          options: {
+            none: "None",
+            blue: "Blue",
+            cyan: "Cyan",
+            green: "Green",
+            lime: "Lime",
+            yellow: "Yellow",
+            orange: "Orange",
+            red: "Red",
+            pink: "Pink",
+            purple: "Purple",
+          },
+        },
+        badgeDisplay: {
+          label: "Badge display",
+          options: {
+            name: "Name",
+            icon: "Icon only",
+            hidden: "Hidden",
+          },
+        },
+      },
       badges: {
         relay: "Relay",
         local: "Local",
@@ -1658,14 +1787,9 @@ export const en = {
       orchestration: {
         title: "Orchestration",
         unavailable: "Connect to this host to manage orchestration",
-        enableTools: {
-          title: "Enable BySpace tools",
-          hint: "Agents will be able to manage worktrees, agents and schedules",
-          accessibilityLabel: "Inject BySpace tools",
-        },
         skills: {
           title: "Orchestration skills",
-          installHint: "Install the five bundled BySpace skills for supported coding agents",
+          installHint: "Install bundled BySpace skills for supported coding agents",
           installedHint: "Installed and up to date on this host",
           updateHint: "Installed skills differ from this BySpace version",
           updateHost: "Update the host to manage orchestration skills",
@@ -1675,10 +1799,10 @@ export const en = {
           saving: "Saving...",
           installConfirmTitle: "Install or update orchestration skills?",
           installConfirmMessage:
-            "BySpace will sync its five bundled skills on this host. Unrelated skills are not changed, and conflicting unowned copies are preserved.",
+            "BySpace will sync its bundled skills on this host. Unrelated skills are not changed, and conflicting unowned copies are preserved.",
           updateConfirmTitle: "Update orchestration skills?",
           updateConfirmMessage:
-            "BySpace will replace its managed copies with the five skills bundled in this version. Unrelated skills are not changed.",
+            "BySpace will replace its managed copies with the skills bundled in this version. Unrelated skills are not changed.",
           uninstallConfirmTitle: "Uninstall orchestration skills?",
           uninstallConfirmMessage:
             "BySpace will remove its unmodified managed copies from this host. Modified copies are preserved.",
@@ -1897,6 +2021,17 @@ export const en = {
         transportFallback: "The host didn't respond.",
         failedTitle: "Couldn't load byspace.json",
         failedDescription: "Reload to try again.",
+      },
+      projectSetup: {
+        title: "Project setup",
+        actionTitle: "Set up with an agent",
+        description:
+          "Let an agent inspect this repository and recommend worktree setup, services, and common commands",
+        configure: "Configure with agent",
+        review: "Review with agent",
+        updateHost: "Update the host to use agent-assisted project setup",
+        prompt:
+          "Use the byspace-project-setup skill to inspect this repository and recommend the smallest evidence-based changes that make clean worktrees repeatable, common commands discoverable, and long-running services safe to run in parallel. Inspect first and show me the recommendations before changing files.",
       },
       worktree: {
         title: "Worktree lifecycle hooks",

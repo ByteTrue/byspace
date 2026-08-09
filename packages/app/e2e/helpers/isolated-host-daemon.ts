@@ -90,6 +90,7 @@ export async function startIsolatedHostDaemon(serverId: string): Promise<Isolate
     env: withDisabledE2ESpeechEnv({
       ...process.env,
       BYSPACE_HOME: byspaceHome,
+      BYSPACE_ORCHESTRATION_SKILLS_HOME: byspaceHome,
       BYSPACE_SERVER_ID: serverId,
       BYSPACE_LISTEN: `127.0.0.1:${port}`,
       BYSPACE_CORS_ORIGINS: `http://localhost:${metroPort}`,

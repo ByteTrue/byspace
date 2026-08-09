@@ -15,13 +15,18 @@ $.verbose = false;
 console.log("=== Onboarding Command ===\n");
 
 const byspaceHome = await mkdtemp(join(tmpdir(), "byspace-onboard-home-"));
+const bareByspaceHome = await mkdtemp(join(tmpdir(), "byspace-onboard-bare-home-"));
+const noRelayByspaceHome = await mkdtemp(join(tmpdir(), "byspace-onboard-no-relay-home-"));
 const port = await getAvailablePort();
+const barePort = await getAvailablePort();
+const noRelayPort = await getAvailablePort();
+const relayEndpoint = "127.0.0.1:9";
 const hostedRelease = resolveBySpaceHostedRelease(resolveCliVersion());
 
 try {
-  console.log("Test 1: `byspace` runs blocking onboarding and prints pairing info");
+  console.log("Test 1: `byspace onboard --relay` prints pairing info");
   const onboard =
-    await $`BYSPACE_HOME=${byspaceHome} BYSPACE_LISTEN=127.0.0.1:${port} BYSPACE_PAIRING_QR=0 npx byspace`.nothrow();
+    await $`BYSPACE_HOME=${byspaceHome} BYSPACE_LISTEN=127.0.0.1:${port} BYSPACE_PAIRING_QR=0 BYSPACE_RELAY_ENDPOINT=${relayEndpoint} BYSPACE_RELAY_PUBLIC_ENDPOINT=${relayEndpoint} BYSPACE_RELAY_USE_TLS=false BYSPACE_RELAY_PUBLIC_USE_TLS=false npx byspace onboard --relay`.nothrow();
 
   assert.strictEqual(
     onboard.exitCode,
@@ -56,8 +61,8 @@ try {
   }
   assert.strictEqual(
     parseConnectionOfferFromUrl(pairingUrl)?.relay.endpoint,
-    hostedRelease.relayEndpoint,
-    "pairing offer should use the current CLI release relay",
+    relayEndpoint,
+    "pairing offer should use the local test relay",
   );
   assert(
     onboard.stdout.includes("CLI quick reference"),
@@ -112,9 +117,59 @@ try {
     "daemon should not attempt local speech model setup during onboarding",
   );
   console.log("✓ non-interactive run left dictation model selection empty\n");
+
+  console.log("Test 3: bare non-interactive onboarding keeps relay opt-in");
+  const bareOnboard =
+    await $`BYSPACE_HOME=${bareByspaceHome} BYSPACE_LISTEN=127.0.0.1:${barePort} BYSPACE_PAIRING_QR=0 BYSPACE_RELAY_ENDPOINT=${relayEndpoint} BYSPACE_RELAY_PUBLIC_ENDPOINT=${relayEndpoint} BYSPACE_RELAY_USE_TLS=false BYSPACE_RELAY_PUBLIC_USE_TLS=false npx byspace`.nothrow();
+
+  assert.strictEqual(
+    bareOnboard.exitCode,
+    0,
+    `bare onboarding should succeed:\nstdout:\n${bareOnboard.stdout}\nstderr:\n${bareOnboard.stderr}`,
+  );
+  assert(
+    !bareOnboard.stdout.includes("#offer="),
+    "bare onboarding should not print a pairing offer",
+  );
+  assert(
+    bareOnboard.stdout.includes("Daemon is running with relay off."),
+    "bare onboarding should explain that relay remains off",
+  );
+  assert(
+    bareOnboard.stdout.includes("connect another device directly"),
+    "bare onboarding should print direct connection guidance",
+  );
+  console.log("✓ bare non-interactive onboarding keeps relay opt-in\n");
+
+  console.log("Test 4: `byspace onboard --no-relay` suppresses pairing");
+  const noRelayOnboard =
+    await $`BYSPACE_HOME=${noRelayByspaceHome} BYSPACE_LISTEN=127.0.0.1:${noRelayPort} BYSPACE_PAIRING_QR=0 BYSPACE_RELAY_ENDPOINT=${relayEndpoint} BYSPACE_RELAY_PUBLIC_ENDPOINT=${relayEndpoint} BYSPACE_RELAY_USE_TLS=false BYSPACE_RELAY_PUBLIC_USE_TLS=false npx byspace onboard --no-relay`.nothrow();
+
+  assert.strictEqual(
+    noRelayOnboard.exitCode,
+    0,
+    `--no-relay onboarding should succeed:\nstdout:\n${noRelayOnboard.stdout}\nstderr:\n${noRelayOnboard.stderr}`,
+  );
+  assert(
+    !noRelayOnboard.stdout.includes("#offer="),
+    "--no-relay onboarding should not print a pairing offer",
+  );
+  assert(
+    noRelayOnboard.stdout.includes("Relay pairing skipped because --no-relay was provided."),
+    "--no-relay onboarding should explain why pairing was skipped",
+  );
+  console.log("✓ --no-relay onboarding suppresses pairing\n");
 } finally {
-  await $`BYSPACE_HOME=${byspaceHome} npx byspace daemon stop --home ${byspaceHome} --force`.nothrow();
-  await rm(byspaceHome, { recursive: true, force: true });
+  await Promise.all([
+    $`BYSPACE_HOME=${byspaceHome} npx byspace daemon stop --home ${byspaceHome} --force`.nothrow(),
+    $`BYSPACE_HOME=${bareByspaceHome} npx byspace daemon stop --home ${bareByspaceHome} --force`.nothrow(),
+    $`BYSPACE_HOME=${noRelayByspaceHome} npx byspace daemon stop --home ${noRelayByspaceHome} --force`.nothrow(),
+  ]);
+  await Promise.all([
+    rm(byspaceHome, { recursive: true, force: true }),
+    rm(bareByspaceHome, { recursive: true, force: true }),
+    rm(noRelayByspaceHome, { recursive: true, force: true }),
+  ]);
 }
 
 console.log("=== Onboarding tests passed ===");

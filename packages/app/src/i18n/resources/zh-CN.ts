@@ -64,6 +64,16 @@ export const zhCN: TranslationResources = {
       home: "首页",
       modelGroupLabel: "模型",
       modelSearchKeywords: "切换模型 更改模型 设置模型 选择模型",
+      thinkingGroupLabel: "思考",
+      thinkingSearchKeywords: "推理 努力 思考",
+      modeGroupLabel: "模式",
+      modeSearchKeywords: "访问 权限 批准 模式",
+      planModeGroupLabel: "计划模式",
+      planModeSearchKeywords: "计划 规划 计划模式",
+      fastModeGroupLabel: "快速",
+      fastModeSearchKeywords: "快速 速度 低延迟",
+      settingOn: "开",
+      settingOff: "关",
     },
   },
   composer: {
@@ -71,9 +81,11 @@ export const zhCN: TranslationResources = {
       desktop: "给 Agent 发消息，标记 @files，或使用 /commands 和 /skills",
       mobile: "发消息，@files，/commands",
       fallback: "输入消息...",
+      terminal: "Prompt",
     },
     input: {
       accessibilityLabel: "给 Agent 发消息...",
+      terminalAccessibilityLabel: "Terminal prompt",
       focusHint: "{{shortcut}} 聚焦",
       addAttachment: "添加附件",
       interruptAgent: "中断 Agent",
@@ -167,6 +179,7 @@ export const zhCN: TranslationResources = {
   agentStream: {
     empty: "开始和这个 Agent 对话...",
     scrollToBottom: "滚动到底部",
+    historyLoadFailed: "无法加载智能体历史记录",
     collapseAllToolCalls: "收起所有工具调用",
     permission: {
       plan: "Plan",
@@ -182,7 +195,7 @@ export const zhCN: TranslationResources = {
     states: {
       notFound: "未找到 Agent",
       failedToLoad: "加载 Agent 失败",
-      reconnecting: "正在重连...",
+      reconnecting: "正在重连",
       timelineSyncFailed: "无法刷新代理历史记录。正在重试…",
       timelineSyncing: "正在同步最新进度...",
       archivingTitle: "正在归档 Agent...",
@@ -207,8 +220,13 @@ export const zhCN: TranslationResources = {
   sessions: {
     title: "历史",
     empty: "还没有会话",
+    noMatches: "没有匹配的会话",
+    tooManyMatches: "匹配过多 — 请缩小搜索范围",
+    hostLoadFailed: "{{host}}：无法加载历史",
+    searchPlaceholder: "搜索历史",
     actions: {
       loadMore: "加载更多",
+      clearSearch: "清除搜索",
     },
   },
   agentList: {
@@ -340,6 +358,10 @@ export const zhCN: TranslationResources = {
     },
   },
   workspace: {
+    status: {
+      serviceRunning: "服务 {{name}} 运行中",
+      serviceUnhealthy: "服务 {{name}} 异常",
+    },
     route: {
       loading: "正在加载 workspace",
       connecting: "正在连接",
@@ -363,6 +385,16 @@ export const zhCN: TranslationResources = {
     },
     hoverCard: {
       scriptsAccessibility: "Workspace scripts",
+      detailsAccessibility: "Workspace 详情",
+      agents: "Agent",
+      untitledAgent: "未命名 Agent",
+      agentStatus: {
+        needsInput: "需要输入",
+        failed: "失败",
+        attention: "待检查",
+        running: "工作中",
+        done: "已完成",
+      },
       copyPath: "复制路径",
       copyBranchName: "复制分支名称",
       copied: "已复制",
@@ -796,6 +828,14 @@ export const zhCN: TranslationResources = {
           pullRequest: "Pull request #{{number}}",
           pullRequest_mr: "合并请求 !{{number}}",
         },
+        checksSummary: {
+          passedLabel: "通过",
+          failedLabel: "失败的",
+          runningLabel: "跑步",
+          passedAccessible: "检查通过",
+          failedAccessible: "检查失败",
+          runningAccessible: "检查运行",
+        },
         states: {
           draft: "Draft",
           merged: "已 merge",
@@ -835,6 +875,27 @@ export const zhCN: TranslationResources = {
       switchTitle: "切换 Host",
       searchPlaceholder: "搜索 Hosts...",
     },
+    display: {
+      trigger: "显示首选项",
+      titleSource: {
+        label: "工作区标题",
+        options: { title: "标题", branch: "分行名称" },
+      },
+      show: {
+        label: "展示",
+        host: "主持人",
+        changeRequest: "拉取请求",
+        services: "服务",
+        checks: "检查",
+        diff: "差异统计",
+        timestamp: "时间戳",
+      },
+      checks: {
+        label: "检查",
+        options: { iconAndText: "图标和文本", icon: "仅图标", none: "隐" },
+      },
+      hostFilter: { label: "主持人", all: "所有主机" },
+    },
     actions: {
       addProject: "添加 project",
       newWorkspace: "新建工作区",
@@ -842,6 +903,8 @@ export const zhCN: TranslationResources = {
       home: "首页",
       settings: "设置",
       closeSidebar: "关闭侧边栏",
+      needsAttentionFilter: "待处理",
+      emptyAttention: "当前没有需要你处理的会话",
     },
     help: {
       trigger: "帮助与支持",
@@ -864,6 +927,7 @@ export const zhCN: TranslationResources = {
       openProjectSettings: "打开 project 设置",
     },
     project: {
+      needsAttentionCount: "需要处理的 Workspace：{{count}}",
       actions: {
         menu: "Project 操作",
         openSettings: "打开 project 设置",
@@ -889,6 +953,10 @@ export const zhCN: TranslationResources = {
       },
     },
     workspace: {
+      agentSummary: {
+        needsAttention: "需要处理的 Agent：{{count}}",
+        working: "工作中的 Agent：{{count}}",
+      },
       status: {
         scriptsAvailable: "有可用 scripts",
         creating: "正在创建...",
@@ -902,8 +970,6 @@ export const zhCN: TranslationResources = {
         copyPath: "复制路径",
         copyBranchName: "复制分支名称",
         rename: "重命名 workspace",
-        pin: "置顶",
-        unpin: "取消置顶",
         archive: "归档",
         archiveWorkspace: "归档工作区",
         hideFromSidebar: "从侧边栏隐藏",
@@ -934,6 +1000,17 @@ export const zhCN: TranslationResources = {
   newWorkspace: {
     title: "新建 workspace",
     create: "创建",
+    project: {
+      choose: "选择项目",
+      searchPlaceholder: "搜索项目",
+      title: "项目",
+      empty: "没有可用的项目。",
+    },
+    host: {
+      choose: "选择 Host",
+      label: "Workspace Host",
+      title: "Host",
+    },
     isolation: {
       local: "本地",
       worktree: "新建 worktree",
@@ -952,6 +1029,22 @@ export const zhCN: TranslationResources = {
       createWorktreeFailed: "创建 worktree 失败",
       composerStateRequired: "Composer 状态必填",
       selectModel: "请选择模型",
+    },
+    tooltips: {
+      project: "Choose the project",
+      host: "Choose the host",
+      isolation: "Choose the isolation level",
+      startingRef: "选择起始位置",
+      launch: "Choose what to launch",
+    },
+    launch: {
+      title: "What to launch",
+      chat: "Chat",
+      terminal: "Terminal",
+      manageProfiles: "Manage profiles",
+      submit: "Launch",
+      promptPlaceholder: "Prompt {{name}}",
+      commandPlaceholder: "Run a command, or leave empty for a blank terminal",
     },
     refPicker: {
       startingRef: "起始 ref",
@@ -1194,6 +1287,8 @@ export const zhCN: TranslationResources = {
       loadingOffer: "正在加载配对 offer...",
       failedToLoadOffer: "加载配对 offer 失败。",
       relayDisabled: "Relay 未启用。启用 relay 后才能配对设备。",
+      enableRelay: "Enable relay",
+      enablingRelay: "Enabling relay...",
       unavailable: "配对 offer 不可用。",
       hint: "用手机上的 BySpace 扫描此二维码，或复制下方链接。",
       qrUnavailable: "二维码不可用。",
@@ -1265,6 +1360,9 @@ export const zhCN: TranslationResources = {
         saving: "正在保存...",
         saveFailed: "保存失败",
         changedOnDisk: "磁盘上的文件已更改",
+        deletedTitle: "文件已从磁盘删除",
+        checkFailedTitle: "无法检查磁盘上的文件",
+        preservedDescription: "打开的副本已保留。",
         vimMode: "Vim 模式 {{mode}}",
         cursor: "第 {{line}} 行，第 {{column}} 列",
         preview: "预览",
@@ -1439,6 +1537,7 @@ export const zhCN: TranslationResources = {
           es: "Español",
           fr: "Français",
           ja: "日本語",
+          ko: "한국어",
           ptBR: "Português brasileiro",
           ru: "Русский",
           zhCN: "简体中文",
@@ -1487,6 +1586,10 @@ export const zhCN: TranslationResources = {
       },
       detailLevel: {
         title: "详细程度",
+      },
+      chatOutline: {
+        title: "聊天大纲",
+        description: "显示用于在提示词之间跳转的大纲",
       },
       fonts: {
         title: "字体",
@@ -1580,6 +1683,32 @@ export const zhCN: TranslationResources = {
     },
     host: {
       notFound: "Host 未找到",
+      appearance: {
+        title: "外貌",
+        color: {
+          label: "颜色",
+          options: {
+            none: "没有任何",
+            blue: "蓝色的",
+            cyan: "青色",
+            green: "绿色的",
+            lime: "酸橙",
+            yellow: "黄色的",
+            orange: "橙子",
+            red: "红色的",
+            pink: "粉色的",
+            purple: "紫色的",
+          },
+        },
+        badgeDisplay: {
+          label: "徽章显示",
+          options: {
+            name: "姓名",
+            icon: "仅图标",
+            hidden: "隐",
+          },
+        },
+      },
       badges: {
         relay: "Relay",
         local: "本地",
@@ -1632,14 +1761,9 @@ export const zhCN: TranslationResources = {
       orchestration: {
         title: "编排",
         unavailable: "连接到这个 Host 以管理编排",
-        enableTools: {
-          title: "启用 BySpace tools",
-          hint: "Agent 将能够管理 worktree、Agent 和计划",
-          accessibilityLabel: "注入 BySpace tools",
-        },
         skills: {
           title: "编排 Skills",
-          installHint: "为受支持的编程 Agent 安装 BySpace 内置的五个 Skill",
+          installHint: "为受支持的编程 Agent 安装 BySpace 内置 Skills",
           installedHint: "已安装，且与此 Host 上的版本一致",
           updateHint: "已安装的 Skill 与当前 BySpace 版本不同",
           updateHost: "更新 Host 后即可管理编排 Skills",
@@ -1649,10 +1773,10 @@ export const zhCN: TranslationResources = {
           saving: "保存中...",
           installConfirmTitle: "安装或更新编排 Skills？",
           installConfirmMessage:
-            "BySpace 将在此 Host 上同步五个内置 Skill。其他 Skill 不会更改，未由 BySpace 管理的同名冲突副本会被保留。",
+            "BySpace 将在此 Host 上同步内置 Skills。其他 Skill 不会更改，未由 BySpace 管理的同名冲突副本会被保留。",
           updateConfirmTitle: "更新编排 Skills？",
           updateConfirmMessage:
-            "BySpace 将用当前版本内置的五个 Skill 替换托管副本。其他 Skill 不会更改。",
+            "BySpace 将用当前版本内置的 Skills 替换托管副本。其他 Skill 不会更改。",
           uninstallConfirmTitle: "卸载编排 Skills？",
           uninstallConfirmMessage:
             "BySpace 将移除此 Host 上未修改的托管副本。已修改的副本会被保留。",
@@ -1866,6 +1990,16 @@ export const zhCN: TranslationResources = {
         transportFallback: "Host 没有响应。",
         failedTitle: "无法加载 byspace.json",
         failedDescription: "重新加载以重试。",
+      },
+      projectSetup: {
+        title: "Project 设置",
+        actionTitle: "通过 Agent 设置",
+        description: "让 Agent 检查此仓库，并推荐 worktree 准备、服务和常用命令",
+        configure: "通过 Agent 配置",
+        review: "通过 Agent 检查",
+        updateHost: "更新 Host 后即可使用 Agent 辅助的 Project 设置",
+        prompt:
+          "使用 byspace-project-setup Skill 检查此仓库，并提出让干净 worktree 可重复准备、高频命令易于发现、长期服务可安全并行运行的最小且有证据支持的改动。先检查并向我展示建议，不要直接修改文件。",
       },
       worktree: {
         title: "Worktree 生命周期 hooks",

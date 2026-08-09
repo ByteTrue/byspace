@@ -89,63 +89,6 @@ async function createMcpClient(url: string, authToken?: string): Promise<McpClie
   return { callTool: boundCallTool, close: () => rawClient.close() };
 }
 
-interface LaunchRecorder {
-  recordedLaunches: AgentSessionConfig[];
-}
-
-class RecordingAgentClient implements AgentClient {
-  readonly provider: AgentClient["provider"];
-  readonly capabilities: AgentClient["capabilities"];
-
-  constructor(
-    private readonly inner: AgentClient,
-    private readonly recorder: LaunchRecorder,
-  ) {
-    this.provider = inner.provider;
-    this.capabilities = {
-      ...inner.capabilities,
-      supportsMcpServers: true,
-      supportsNativeBySpaceTools: false,
-    };
-  }
-
-  async createSession(
-    ...args: Parameters<AgentClient["createSession"]>
-  ): ReturnType<AgentClient["createSession"]> {
-    this.recorder.recordedLaunches.push(args[0]);
-    return this.inner.createSession(...args);
-  }
-
-  async resumeSession(
-    ...args: Parameters<AgentClient["resumeSession"]>
-  ): ReturnType<AgentClient["resumeSession"]> {
-    return this.inner.resumeSession(...args);
-  }
-
-  async fetchCatalog(
-    ...args: Parameters<AgentClient["fetchCatalog"]>
-  ): ReturnType<AgentClient["fetchCatalog"]> {
-    return this.inner.fetchCatalog(...args);
-  }
-
-  async isAvailable(): Promise<boolean> {
-    return this.inner.isAvailable();
-  }
-}
-
-function createMcpRecordingAgentClients(recorder: LaunchRecorder) {
-  const clients = createTestAgentClients();
-  const claude = clients.claude;
-  if (!claude) {
-    throw new Error("Fake Claude client is not configured");
-  }
-
-  return {
-    ...clients,
-    claude: new RecordingAgentClient(claude, recorder),
-  };
-}
-
 async function assertAgentNotRunning(options: {
   client: McpClient;
   agentId: string;
@@ -235,7 +178,7 @@ describe("agent MCP end-to-end (offline)", () => {
     }
   }, 30_000);
 
-  test("password-protected daemon authorizes the agent MCP via the capability token", async () => {
+  test("password-protected daemon authorizes the MCP endpoint with the daemon password", async () => {
     const byspaceHome = await mkdtemp(path.join(os.tmpdir(), "byspace-home-"));
     const staticDir = await mkdtemp(path.join(os.tmpdir(), "byspace-static-"));
     const agentCwd = await mkdtemp(path.join(os.tmpdir(), "byspace-agent-cwd-"));
@@ -258,8 +201,6 @@ describe("agent MCP end-to-end (offline)", () => {
     await daemon.start();
 
     const mcpUrl = `http://127.0.0.1:${port}/mcp/agents`;
-    const capabilityToken = daemon.agentManager.getMcpAuthToken();
-    expect(typeof capabilityToken).toBe("string");
 
     let agentId: string | null = null;
     let client: McpClient | null = null;
@@ -273,12 +214,7 @@ describe("agent MCP end-to-end (offline)", () => {
       });
       expect(unauthorized.status).toBe(401);
 
-      // The injected capability token authenticates the full MCP handshake:
-      // creating (and connecting) the client and driving a tool call both go
-      // through the password-gated /mcp/agents route. (The exact bearer header
-      // injected into a child agent's config is covered by the
-      // runtime-mcp-config unit test.)
-      client = await createMcpClient(mcpUrl, capabilityToken!);
+      client = await createMcpClient(mcpUrl, "daemon-secret");
       const result = await client.callTool({
         name: "create_agent",
         args: {
@@ -298,182 +234,6 @@ describe("agent MCP end-to-end (offline)", () => {
         await client?.callTool({ name: "kill_agent", args: { agentId } });
       }
       await client?.close();
-      await daemon.stop();
-      await rm(byspaceHome, { recursive: true, force: true });
-      await rm(staticDir, { recursive: true, force: true });
-      await rm(agentCwd, { recursive: true, force: true });
-    }
-  }, 30_000);
-
-  test("create_agent auto-injects byspace MCP by default and can be disabled", async () => {
-    const byspaceHome = await mkdtemp(path.join(os.tmpdir(), "byspace-home-"));
-    const staticDir = await mkdtemp(path.join(os.tmpdir(), "byspace-static-"));
-    const agentCwd = await mkdtemp(path.join(os.tmpdir(), "byspace-agent-cwd-"));
-    const port = await getAvailablePort();
-    const recorder: LaunchRecorder = { recordedLaunches: [] };
-
-    const daemonConfig: BySpaceDaemonConfig = {
-      listen: `127.0.0.1:${port}`,
-      byspaceHome,
-      corsAllowedOrigins: [],
-      hostnames: true,
-      mcpEnabled: true,
-      staticDir,
-      mcpDebug: false,
-      agentClients: createMcpRecordingAgentClients(recorder),
-      agentStoragePath: path.join(byspaceHome, "agents"),
-    };
-
-    const daemon = await createBySpaceDaemon(daemonConfig, pino({ level: "silent" }));
-    await daemon.start();
-
-    const client = await createMcpClient(`http://127.0.0.1:${port}/mcp/agents`);
-
-    const disabledBySpaceHome = await mkdtemp(path.join(os.tmpdir(), "byspace-home-disabled-"));
-    const disabledStaticDir = await mkdtemp(path.join(os.tmpdir(), "byspace-static-disabled-"));
-    const disabledAgentCwd = await mkdtemp(path.join(os.tmpdir(), "byspace-agent-cwd-disabled-"));
-    const disabledPort = await getAvailablePort();
-    const disabledRecorder: LaunchRecorder = { recordedLaunches: [] };
-    const disabledDaemonConfig: BySpaceDaemonConfig = {
-      listen: `127.0.0.1:${disabledPort}`,
-      byspaceHome: disabledBySpaceHome,
-      corsAllowedOrigins: [],
-      hostnames: true,
-      mcpEnabled: true,
-      mcpInjectIntoAgents: false,
-      staticDir: disabledStaticDir,
-      mcpDebug: false,
-      agentClients: createMcpRecordingAgentClients(disabledRecorder),
-      agentStoragePath: path.join(disabledBySpaceHome, "agents"),
-    };
-    const disabledDaemon = await createBySpaceDaemon(
-      disabledDaemonConfig,
-      pino({ level: "silent" }),
-    );
-    await disabledDaemon.start();
-
-    const disabledClient = await createMcpClient(`http://127.0.0.1:${disabledPort}/mcp/agents`);
-
-    let agentId: string | null = null;
-    let disabledAgentId: string | null = null;
-    try {
-      const result = await client.callTool({
-        name: "create_agent",
-        args: {
-          cwd: agentCwd,
-          title: "Injected MCP",
-          provider: "claude/claude-test-model",
-          mode: "bypassPermissions",
-          initialPrompt: "reply with done and stop",
-          background: true,
-        },
-      });
-      const payload = getStructuredContent(result);
-      agentId = typeof payload?.agentId === "string" ? payload.agentId : null;
-      expect(agentId).toBeTruthy();
-
-      expect(recorder.recordedLaunches.at(-1)?.mcpServers).toMatchObject({
-        byspace: {
-          type: "http",
-          url: `http://127.0.0.1:${port}/mcp/agents?callerAgentId=${agentId!}`,
-        },
-      });
-      const injectedAgent = daemon.agentManager.getAgent(agentId!);
-      expect(injectedAgent?.config.mcpServers?.byspace).toBeUndefined();
-
-      const disabledResult = await disabledClient.callTool({
-        name: "create_agent",
-        args: {
-          cwd: disabledAgentCwd,
-          title: "No injected MCP",
-          provider: "claude/claude-test-model",
-          mode: "bypassPermissions",
-          initialPrompt: "reply with done and stop",
-          background: true,
-        },
-      });
-      const disabledPayload = getStructuredContent(disabledResult);
-      disabledAgentId =
-        typeof disabledPayload?.agentId === "string" ? disabledPayload.agentId : null;
-      expect(disabledAgentId).toBeTruthy();
-
-      expect(disabledRecorder.recordedLaunches.at(-1)?.mcpServers?.byspace).toBeUndefined();
-      const disabledAgent = disabledDaemon.agentManager.getAgent(disabledAgentId!);
-      expect(disabledAgent?.config.mcpServers?.byspace).toBeUndefined();
-    } finally {
-      if (agentId) {
-        await client.callTool({ name: "kill_agent", args: { agentId } });
-      }
-      if (disabledAgentId) {
-        await disabledClient.callTool({ name: "kill_agent", args: { agentId: disabledAgentId } });
-      }
-      await disabledClient.close();
-      await disabledDaemon.stop();
-      await rm(disabledBySpaceHome, { recursive: true, force: true });
-      await rm(disabledStaticDir, { recursive: true, force: true });
-      await rm(disabledAgentCwd, { recursive: true, force: true });
-      await client.close();
-      await daemon.stop();
-      await rm(byspaceHome, { recursive: true, force: true });
-      await rm(staticDir, { recursive: true, force: true });
-      await rm(agentCwd, { recursive: true, force: true });
-    }
-  }, 30_000);
-
-  test("create_agent injects a loopback MCP URL when the daemon listens on all interfaces", async () => {
-    const byspaceHome = await mkdtemp(path.join(os.tmpdir(), "byspace-home-"));
-    const staticDir = await mkdtemp(path.join(os.tmpdir(), "byspace-static-"));
-    const agentCwd = await mkdtemp(path.join(os.tmpdir(), "byspace-agent-cwd-"));
-    const port = await getAvailablePort();
-    const recorder: LaunchRecorder = { recordedLaunches: [] };
-
-    const daemonConfig: BySpaceDaemonConfig = {
-      listen: `0.0.0.0:${port}`,
-      byspaceHome,
-      corsAllowedOrigins: [],
-      hostnames: true,
-      mcpEnabled: true,
-      staticDir,
-      mcpDebug: false,
-      agentClients: createMcpRecordingAgentClients(recorder),
-      agentStoragePath: path.join(byspaceHome, "agents"),
-    };
-
-    const daemon = await createBySpaceDaemon(daemonConfig, pino({ level: "silent" }));
-    await daemon.start();
-
-    const client = await createMcpClient(`http://127.0.0.1:${port}/mcp/agents`);
-
-    let agentId: string | null = null;
-    try {
-      const result = await client.callTool({
-        name: "create_agent",
-        args: {
-          cwd: agentCwd,
-          title: "Wildcard MCP",
-          provider: "claude/claude-test-model",
-          mode: "bypassPermissions",
-          initialPrompt: "reply with done and stop",
-          background: true,
-        },
-      });
-      const payload = getStructuredContent(result);
-      agentId = typeof payload?.agentId === "string" ? payload.agentId : null;
-      expect(agentId).toBeTruthy();
-
-      expect(recorder.recordedLaunches.at(-1)?.mcpServers).toMatchObject({
-        byspace: {
-          type: "http",
-          url: `http://127.0.0.1:${port}/mcp/agents?callerAgentId=${agentId!}`,
-        },
-      });
-      const injectedAgent = daemon.agentManager.getAgent(agentId!);
-      expect(injectedAgent?.config.mcpServers?.byspace).toBeUndefined();
-    } finally {
-      if (agentId) {
-        await client.callTool({ name: "kill_agent", args: { agentId } });
-      }
-      await client.close();
       await daemon.stop();
       await rm(byspaceHome, { recursive: true, force: true });
       await rm(staticDir, { recursive: true, force: true });

@@ -33,6 +33,51 @@
         }
       );
 
+      checks = forAllSystems (
+        system:
+        let
+          pkgs = pkgsFor system;
+          byspace = pkgs.callPackage ./nix/package.nix { };
+          source = byspace.src;
+        in
+        {
+          package = byspace;
+          source-filter = pkgs.runCommand "byspace-nix-source-filter" { } ''
+            for path in \
+              package.json \
+              package-lock.json \
+              nix/package.nix \
+              patches/react-native-gesture-handler+2.28.0.patch \
+              scripts/build-daemon-web-ui.mjs \
+              scripts/trace-daemon.mjs \
+              skills/byspace/SKILL.md \
+              packages/app/public/index.html \
+              packages/app/src/app/_layout.tsx \
+              packages/server/src/server/orchestration-skills.ts
+            do
+              test -e "${source}/$path" || { echo "missing required source: $path" >&2; exit 1; }
+            done
+
+            for path in \
+              docs \
+              .github \
+              .agents \
+              .claude \
+              .codex \
+              docker \
+              AGENTS.md \
+              CONTRIBUTING.md \
+              README.md \
+              SECURITY.md
+            do
+              test ! -e "${source}/$path" || { echo "unexpected source: $path" >&2; exit 1; }
+            done
+
+            touch $out
+          '';
+        }
+      );
+
       nixosModules.default = self.nixosModules.byspace;
       nixosModules.byspace =
         { pkgs, lib, ... }:

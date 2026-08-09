@@ -33,6 +33,7 @@ import type { TerminalActivity } from "@bytetrue/byspace-protocol/terminal-activ
 import type { HostnamesConfig } from "./hostnames.js";
 import { isHostnameAllowed } from "./hostnames.js";
 import { Session, type SessionLifecycleIntent, type SessionRuntimeMetrics } from "./session.js";
+import { WorkspaceSetupRuntime } from "./workspace-setup-runtime.js";
 import type { AgentProvider } from "./agent/agent-sdk-types.js";
 import { ProviderSnapshotManager } from "./agent/provider-snapshot-manager.js";
 import type {
@@ -72,6 +73,7 @@ import type { ForgeService } from "../services/forge-service.js";
 import {
   extractWsBearerProtocol,
   extractWsBearerToken,
+  isAgentCliTokenValid,
   isBearerTokenValid,
   type DaemonAuthConfig,
 } from "./auth.js";
@@ -195,6 +197,7 @@ function createFallbackWorkspaceGitSnapshot(cwd: string): WorkspaceGitRuntimeSna
       isDirty: null,
       baseRef: null,
       aheadBehind: null,
+      upstreamRef: null,
       aheadOfOrigin: null,
       behindOfOrigin: null,
       hasRemote: false,
@@ -250,26 +253,12 @@ function createFallbackWorkspaceGitService(): WorkspaceGitService {
     resolveRepoRoot: async (cwd: string) => cwd,
     resolveDefaultBranch: async () => "main",
     resolveRepoRemoteUrl: async () => null,
-    refresh: async () => {},
-    requestWorkingTreeWatch: async () => ({
-      repoRoot: null,
-      unsubscribe: () => {},
-    }),
-    scheduleRefreshForCwd: () => {},
-    onWorkspaceStateMayHaveChanged: () => {},
     invalidateForge: () => {},
     getMetrics: () => ({
       workspaceTargetCount: 0,
       workspaceListenerCount: 0,
-      repositoryTargetCount: 0,
-      repositoryWorkspaceLinkCount: 0,
-      workingTreeWatchTargetCount: 0,
-      workingTreeWatchListenerCount: 0,
-      workspaceObservationSetupInFlightCount: 0,
-      workingTreeWatchSetupInFlightCount: 0,
       workspaceRefreshInFlightCount: 0,
       workspaceRefreshQueuedCount: 0,
-      fetchInFlightCount: 0,
       snapshotUpdatedListenerCount: 0,
     }),
     dispose: () => {},
@@ -460,6 +449,7 @@ export class VoiceAssistantWebSocketServer {
   private readonly pendingConnections: Map<WebSocketLike, PendingConnection> = new Map();
   private readonly sessions: Map<WebSocketLike, SessionConnection> = new Map();
   private readonly socketIdentities: Map<WebSocketLike, WebSocketConnectionIdentity> = new Map();
+  private readonly agentCliSockets = new WeakSet<WebSocketLike>();
   private readonly externalSessionsByKey: Map<string, SessionConnection> = new Map();
   private readonly serverId: string;
   private readonly daemonVersion: string;
@@ -495,6 +485,7 @@ export class VoiceAssistantWebSocketServer {
     finalTimeoutMs?: number;
   } | null;
   private readonly workspaceSetupSnapshots = new Map<string, WorkspaceSetupSnapshot>();
+  private readonly workspaceSetupRuntime: WorkspaceSetupRuntime;
   private readonly providerSnapshotManager: ProviderSnapshotManager;
   private onLifecycleIntent!: ((intent: SessionLifecycleIntent) => void) | null;
   private onBranchChanged!:
@@ -555,8 +546,10 @@ export class VoiceAssistantWebSocketServer {
     providerSnapshotManager?: ProviderSnapshotManager,
     daemonRuntimeConfig?: DaemonRuntimeConfig,
     serviceProxyPublicBaseUrl?: string | null,
+    workspaceSetupRuntime: WorkspaceSetupRuntime = new WorkspaceSetupRuntime(),
   ) {
     this.logger = logger.child({ module: "websocket-server" });
+    this.workspaceSetupRuntime = workspaceSetupRuntime;
     this.serverId = serverId;
     if (typeof daemonVersion !== "string" || daemonVersion.trim().length === 0) {
       throw new MissingDaemonVersionError();
@@ -729,7 +722,7 @@ export class VoiceAssistantWebSocketServer {
       },
     });
     wss.on("connection", (ws, request) => {
-      void this.attachAuthenticatedSocket(ws, request, password);
+      void this.attachAuthenticatedSocket(ws, request, auth);
     });
     return wss;
   }
@@ -811,13 +804,14 @@ export class VoiceAssistantWebSocketServer {
   private async attachAuthenticatedSocket(
     ws: WebSocket,
     request: IncomingMessage,
-    password: string | undefined,
+    auth: DaemonAuthConfig | undefined,
   ): Promise<void> {
-    if (password) {
-      const requestMetadata = extractSocketRequestMetadata(request);
-      const protocol = extractWsBearerProtocol(request.headers["sec-websocket-protocol"]);
-      const token = extractWsBearerToken(protocol);
-      const isAuthorized = isBearerTokenValid({ password, token });
+    const requestMetadata = extractSocketRequestMetadata(request);
+    const protocol = extractWsBearerProtocol(request.headers["sec-websocket-protocol"]);
+    const token = extractWsBearerToken(protocol);
+    const isAgentCli = isAgentCliTokenValid(auth, token);
+    if (auth?.password && !isAgentCli) {
+      const isAuthorized = isBearerTokenValid({ password: auth.password, token });
       if (!isAuthorized) {
         const reason = token === null ? "Password required" : "Incorrect password";
         this.logger.warn(
@@ -828,6 +822,7 @@ export class VoiceAssistantWebSocketServer {
         return;
       }
     }
+    if (isAgentCli) this.agentCliSockets.add(ws);
 
     await this.attachSocket(ws, request);
   }
@@ -1225,6 +1220,7 @@ export class VoiceAssistantWebSocketServer {
       serviceProxy: this.serviceProxy ?? undefined,
       scriptRuntimeStore: this.scriptRuntimeStore ?? undefined,
       workspaceSetupSnapshots: this.workspaceSetupSnapshots,
+      workspaceSetupRuntime: this.workspaceSetupRuntime,
       onBranchChanged: this.onBranchChanged ?? undefined,
       getDaemonTcpPort: this.getDaemonTcpPort ?? undefined,
       getDaemonTcpHost: this.getDaemonTcpHost ?? undefined,
@@ -1404,18 +1400,30 @@ export class VoiceAssistantWebSocketServer {
         forgeSearch: true,
         // COMPAT(daemonStatusRpc): added in v0.1.76, remove gate after 2026-11-18.
         daemonStatusRpc: true,
+        // COMPAT(relayConfig): added in v0.5.0, remove gate after 2027-02-08.
+        relayConfig: true,
         // COMPAT(terminalRestoreModes): added in v0.1.81, remove gate after 2026-11-23.
         "terminal-restore-modes": true,
+        // COMPAT(terminalSizeOwnership): added in v0.5.0, remove gate after 2027-02-08.
+        "terminal-size-ownership": true,
+        // COMPAT(agentTimelinePromptIndex): added in v0.5.0, remove gate after 2027-02-08.
+        agentTimelinePromptIndex: true,
+        // COMPAT(agentHistorySearch): added in v0.5.0, remove gate after 2027-02-07.
+        agentHistorySearch: true,
         // COMPAT(terminalAgentHookProviders): added in v0.2.0, remove gate after 2027-01-21.
         terminalAgentHookProviders: true,
         // COMPAT(orchestrationSkills): added in v0.2.0-beta.5, remove gate after 2027-01-22.
         orchestrationSkills: true,
+        // COMPAT(projectSetupSkill): added in v0.5.0, remove gate after 2027-02-05.
+        projectSetupSkill: true,
         // COMPAT(rewind): added in v0.1.X, drop the gate when floor >= v0.1.X.
         rewind: true,
         // COMPAT(checkoutRefresh): added in v0.1.86, remove gate after 2026-11-29.
         checkoutRefresh: true,
         // COMPAT(cliCallerAgentContext): added in v0.2.0, remove after 2027-01-25.
         cliCallerAgentContext: true,
+        // COMPAT(cliOrchestrationTools): added in v0.5.0, remove after 2027-02-07.
+        cliOrchestrationTools: true,
         // COMPAT(workspaceMultiplicity): added in v0.1.97, drop the gate when floor >= v0.1.97
         workspaceMultiplicity: true,
         // COMPAT(projectRemove): added in v0.1.97, drop the gate when floor >= v0.1.97.
@@ -1424,6 +1432,8 @@ export class VoiceAssistantWebSocketServer {
         projectAdd: true,
         // COMPAT(projectList): added in v0.2.5, remove gate after 2027-01-31.
         projectList: true,
+        // COMPAT(projectCustomIcon): added in v0.5.0, remove after 2027-02-08.
+        projectCustomIcon: true,
         // COMPAT(stableProjectIdentity): added in v0.2.0, remove gate after 2027-01-23.
         stableProjectIdentity: true,
         // COMPAT(workspaceScriptManagement): added in v0.2.2, remove after 2027-01-29.
@@ -1470,6 +1480,8 @@ export class VoiceAssistantWebSocketServer {
         forgeProviders: true,
         // COMPAT(selectiveAgentTimeline): added in v0.1.106, remove after 2027-01-12.
         selectiveAgentTimeline: true,
+        // COMPAT(canonicalSubmittedPrompts): added in v0.2.6, remove gate after 2027-01-30.
+        canonicalSubmittedPrompts: true,
       },
     };
   }
@@ -1830,6 +1842,15 @@ export class VoiceAssistantWebSocketServer {
 
       const message = parsedMessage.data;
       this.recordInboundMessageType(message.type);
+
+      if (this.agentCliSockets.has(ws) && !isAgentCliMessageAllowed(message)) {
+        this.logger.warn(
+          { messageType: message.type },
+          "Rejected non-orchestration agent CLI request",
+        );
+        ws.close(1008, "Agent CLI token only permits orchestration requests");
+        return;
+      }
 
       if (message.type === "ping") {
         this.applicationSocketLease.claim(ws);
@@ -2444,6 +2465,15 @@ export function isWebSocketSameOrigin(
   }
 
   return isLoopbackAlias(originUrl.hostname) && isLoopbackAlias(requestAuthority.hostname);
+}
+
+function isAgentCliMessageAllowed(message: WSInboundMessage): boolean {
+  if (message.type === "hello" || message.type === "ping") return true;
+  if (message.type !== "session") return false;
+  return (
+    message.message.type.startsWith("orchestration.tools.") ||
+    message.message.type.startsWith("loop.")
+  );
 }
 
 function selectWebSocketProtocol(

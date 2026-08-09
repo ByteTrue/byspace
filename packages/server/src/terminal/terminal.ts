@@ -163,6 +163,10 @@ function resolveInitialTitleMode(presetTitle: string | undefined): "auto" | "man
   return presetTitle?.trim() ? "manual" : "auto";
 }
 
+function isTerminalActivityInterruptInput(data: string): boolean {
+  return data === "\x03" || data === "\x1b";
+}
+
 interface BuildTerminalEnvironmentInput {
   shell: string;
   env: Record<string, string>;
@@ -257,13 +261,29 @@ export function resolveDefaultTerminalShell(
 
 export interface ResolvedTerminalCommand {
   command: string;
-  args: string[];
+  // Batch shims need a pre-escaped cmd.exe command line so node-pty does not quote it twice.
+  args: string[] | string;
 }
 
 export interface ResolveTerminalSpawnCommandOptions {
   platform?: NodeJS.Platform;
   env?: Record<string, string | undefined>;
   resolveExecutable?: (name: string) => Promise<string | null>;
+}
+
+const CMD_EXE_METACHAR_PATTERN = /([()%!^"`<>&|;, *?])/g;
+
+function escapeCmdExeMetaChars(text: string): string {
+  return text.replace(CMD_EXE_METACHAR_PATTERN, "^$1");
+}
+
+function escapeCmdExeArgument(rawArg: string): string {
+  const arg = rawArg.replace(/\r\n|\r|\n/g, " ");
+  let escaped = arg.replace(/(\\*)"/g, '$1$1\\"');
+  escaped = escaped.replace(/(\\*)$/, "$1$1");
+  escaped = `"${escaped}"`;
+  // npm command shims forward %*, adding a second cmd.exe parse.
+  return escapeCmdExeMetaChars(escapeCmdExeMetaChars(escaped));
 }
 
 /**
@@ -307,7 +327,13 @@ export async function resolveTerminalSpawnCommand(
   if (extension === ".cmd" || extension === ".bat") {
     const env = options.env ?? process.env;
     const comSpec = env.ComSpec || env.COMSPEC || "C:\\Windows\\System32\\cmd.exe";
-    return { command: comSpec, args: ["/c", resolved, ...args] };
+    const commandLine = [
+      "/d",
+      "/s",
+      "/c",
+      `"${[escapeCmdExeMetaChars(resolved), ...args.map(escapeCmdExeArgument)].join(" ")}"`,
+    ].join(" ");
+    return { command: comSpec, args: commandLine };
   }
 
   return { command: resolved, args };
@@ -1232,6 +1258,9 @@ export async function createTerminal(options: CreateTerminalOptions): Promise<Te
 
     switch (msg.type) {
       case "input": {
+        if (isTerminalActivityInterruptInput(msg.data)) {
+          activityTracker.interrupt();
+        }
         pendingInput += msg.data;
         scheduleInputFlush();
         break;

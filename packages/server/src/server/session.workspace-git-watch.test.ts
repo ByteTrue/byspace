@@ -56,6 +56,15 @@ type WorkspaceUpdatePayload = Extract<
   { type: "workspace_update" }
 >["payload"];
 
+function getWorkspaceUpdates(
+  emitted: Array<{ type: string; payload: unknown }>,
+): Array<{ type: "workspace_update"; payload: WorkspaceUpdatePayload }> {
+  return emitted.filter((message) => message.type === "workspace_update") as Array<{
+    type: "workspace_update";
+    payload: WorkspaceUpdatePayload;
+  }>;
+}
+
 const REPO_CWD = path.resolve("/tmp/repo");
 const REPO_SUBSCRIPTION_REQUEST_ID = `subscription:${REPO_CWD}`;
 
@@ -129,9 +138,6 @@ function createSessionForWorkspaceGitWatchTests(options?: {
     registerWorkspace: ReturnType<typeof vi.fn>;
     peekSnapshot: ReturnType<typeof vi.fn>;
     getSnapshot: ReturnType<typeof vi.fn>;
-    refresh: ReturnType<typeof vi.fn>;
-    requestWorkingTreeWatch: ReturnType<typeof vi.fn>;
-    scheduleRefreshForCwd: ReturnType<typeof vi.fn>;
     dispose: ReturnType<typeof vi.fn>;
   };
   subscriptions: Array<{
@@ -171,12 +177,6 @@ function createSessionForWorkspaceGitWatchTests(options?: {
     }),
     peekSnapshot: vi.fn((cwd: string) => createWorkspaceRuntimeSnapshot(cwd)),
     getSnapshot: vi.fn(async (cwd: string) => createWorkspaceRuntimeSnapshot(cwd)),
-    refresh: vi.fn(async () => {}),
-    requestWorkingTreeWatch: vi.fn(async (cwd: string) => ({
-      repoRoot: cwd,
-      unsubscribe: vi.fn(),
-    })),
-    scheduleRefreshForCwd: vi.fn(),
     dispose: vi.fn(),
   };
 
@@ -238,8 +238,6 @@ function createSessionForWorkspaceGitWatchTests(options?: {
         unsubscribe: () => {},
       }),
       scheduleRefreshForCwd: () => {},
-      onWorkspaceStateMayHaveChanged: () => {},
-      invalidateForge: () => {},
       getMetrics: () => ({
         checkoutDiffTargetCount: 0,
         checkoutDiffSubscriptionCount: 0,
@@ -362,12 +360,9 @@ describe("workspace git watch targets", () => {
       }),
     );
 
-    await Promise.resolve();
-    await Promise.resolve();
+    await vi.waitFor(() => expect(getWorkspaceUpdates(emitted)).toHaveLength(1));
 
-    const workspaceUpdates = emitted.filter(
-      (message) => message.type === "workspace_update",
-    ) as Array<{ type: "workspace_update"; payload: WorkspaceUpdatePayload }>;
+    const workspaceUpdates = getWorkspaceUpdates(emitted);
     expect(workspaceUpdates).toHaveLength(1);
     expect(workspaceUpdates[0]?.payload).toMatchObject({
       kind: "upsert",
@@ -535,7 +530,7 @@ describe("workspace git watch targets", () => {
     await session.cleanup();
   });
 
-  test("archiving a workspace releases its git watch subscription for the directory", async () => {
+  test("archiving a workspace releases its git subscription for the directory", async () => {
     const { session, projects, workspaces, subscriptions } =
       createSessionForWorkspaceGitWatchTests();
     const sessionAny = asInternals<
@@ -768,7 +763,6 @@ describe("workspace git watch targets", () => {
       requestId: "req-pr-cached",
     });
 
-    expect(workspaceGitService.refresh).not.toHaveBeenCalled();
     expect(workspaceGitService.getSnapshot).toHaveBeenCalledWith(REPO_CWD);
     expect(emitted.find((message) => message.type === "checkout_pr_status_response")).toBeDefined();
   });

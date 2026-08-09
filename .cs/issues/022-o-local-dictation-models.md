@@ -148,7 +148,7 @@ start/stop flow remains the release blocker.
 - Real daemon-client dictation tests: 3 passed for FireRed PCM transcription, baseline similarity, and missing-chunk failure.
 - FireRed provider tests: 5 passed for segment sequencing, control-token removal, official AED lowercase output, quiet nonzero PCM, and all-zero PCM.
 - Real FireRed worker process test passed with the packaged sherpa-onnx 1.13.4 binding; a mixed-language fixture scaled to PCM peak 299 also transcribed successfully instead of being discarded as silence.
-- Final-only app tests: composer state 20 passed, stream sender 5 passed, and i18n resources 29 passed; the hook/control integration and Dictation settings passed real-browser checks.
+- Final-only app tests: composer state 20 passed, stream sender 6 passed, and i18n resources 29 passed; the hook/control integration and Dictation settings passed real-browser checks.
 - Manual real-browser verification used the actual FireRed model: desktop and 390px compact composers kept the draft visible, stop inserted only the final transcript, and cancel preserved the original draft.
 - A 23.3-second real-time-paced FireRed manager run emitted no partials, matched the repeated fixture at 1.0 word similarity, and returned the final transcript about 1.8 seconds after stop. Fifteen-second internal commits also preserved a real 11.1-second mixed-language whole-buffer transcript exactly; an eight-second boundary had introduced a spurious token.
 - SenseVoice benchmark: ~163 MB archive; 11.5 seconds of audio decoded in ~0.5 seconds at ~0.95 GB peak RSS versus FireRed at ~4.2 seconds and ~4.0 GB. A 60-second whole-buffer run decoded in ~1.7 seconds at ~1.18 GB; the production path uses a 30-second invisible cap to reduce hard-boundary count while bounding long-input behavior.
@@ -158,6 +158,9 @@ start/stop flow remains the release blocker.
 - Protocol validation tests, model/refinement tests, client correlation tests, and Dictation settings Playwright acceptance passed.
 - Root typecheck, lint, format check, server build, and Web export passed.
 - Final independent review found no unresolved High/Medium correctness or data-loss issue after replacing the Claude-only adapter with the existing all-Provider structured-generation path and retaining the stream-size cap.
+- PR #25 integration merged the latest `main` and resolved all eight text/modify-delete conflicts while preserving current orchestration, active-turn, input-mode, Relay onboarding, and package semantics.
+- Integration review fixed pending-start cancel/unmount settlement, server-side pending-start cancellation, worker shutdown before model deletion, model-selection source-of-truth drift, mutation/refinement error handling, archived-Agent header controls, initial model-list retry, and draft submission before model defaults finish loading.
+- Final regression evidence includes 106 daemon-client tests, 6 stream-sender tests, 8 Dictation hook tests, 2 Dictation settings browser tests, 3 New Workspace Dictation browser tests, 12 stream-manager tests, 10 speech-runtime tests, the real worker-process test, root typecheck/lint/format check, server build, and Web export. Independent re-review closed all High/Medium findings.
 - Synthetic quality smoke outputs:
   - English: `please run the type check and rebuild the server before opening the pull`
   - Mandarin: `今天我们修复了终端粘贴和工作区切换的问题请重新运行类型检查`

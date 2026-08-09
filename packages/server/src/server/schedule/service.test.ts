@@ -140,6 +140,7 @@ function createScheduleService(options: TestScheduleServiceOptions): ScheduleSer
           markWorkspaceArchiving: () => {},
           clearWorkspaceArchiving: () => {},
           killTerminalsForWorkspace: async () => {},
+          stopWorkspaceSetup: async () => {},
           sessionLogger: options.logger,
         },
         {
@@ -239,6 +240,7 @@ async function createRegistryBackedScheduleWorkspaceDeps(rootDir: string): Promi
               markWorkspaceArchiving: () => {},
               clearWorkspaceArchiving: () => {},
               killTerminalsForWorkspace: async () => {},
+              stopWorkspaceSetup: async () => {},
               sessionLogger: logger,
             },
             {
@@ -1771,7 +1773,7 @@ describe("ScheduleService", () => {
     }
     clients.claude = {
       provider: claudeClient.provider,
-      capabilities: claudeClient.capabilities,
+      capabilities: { ...claudeClient.capabilities, supportsMcpServers: true },
       createSession: async (...args) => {
         createdConfigs.push(args[0]);
         return claudeClient.createSession(...args);

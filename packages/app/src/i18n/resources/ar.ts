@@ -64,6 +64,16 @@ export const ar: TranslationResources = {
       home: "بيت",
       modelGroupLabel: "النموذج",
       modelSearchKeywords: "تبديل النموذج تغيير النموذج تعيين النموذج اختيار النموذج",
+      thinkingGroupLabel: "التفكير",
+      thinkingSearchKeywords: "الاستدلال الجهد التفكير",
+      modeGroupLabel: "الوضع",
+      modeSearchKeywords: "الوصول الإذن الموافقة الوضع",
+      planModeGroupLabel: "وضع التخطيط",
+      planModeSearchKeywords: "التخطيط خطة وضع التخطيط",
+      fastModeGroupLabel: "سريع",
+      fastModeSearchKeywords: "سريع سرعة زمن انتقال منخفض",
+      settingOn: "تشغيل",
+      settingOff: "إيقاف",
     },
   },
   composer: {
@@ -71,9 +81,11 @@ export const ar: TranslationResources = {
       desktop: "أرسل رسالة إلى الوكيل أو ضع علامة على @files أو استخدم /commands و /skills",
       mobile: "الرسالة، @files ، /commands",
       fallback: "رسالة...",
+      terminal: "Prompt",
     },
     input: {
       accessibilityLabel: "وكيل الرسائل...",
+      terminalAccessibilityLabel: "Terminal prompt",
       focusHint: "{{shortcut}}للتركيز",
       addAttachment: "إضافة مرفق",
       interruptAgent: "عامل المقاطعة",
@@ -167,6 +179,7 @@ export const ar: TranslationResources = {
   agentStream: {
     empty: "ابدأ الدردشة مع هذا الوكيل...",
     scrollToBottom: "قم بالتمرير إلى الأسفل",
+    historyLoadFailed: "تعذر تحميل سجل الوكيل",
     collapseAllToolCalls: "طي جميع استدعاءات الأدوات",
     permission: {
       plan: "يخطط",
@@ -182,7 +195,7 @@ export const ar: TranslationResources = {
     states: {
       notFound: "لم يتم العثور على Agent",
       failedToLoad: "فشل تحميل الوكيل",
-      reconnecting: "جارٍ إعادة الاتصال...",
+      reconnecting: "جارٍ إعادة الاتصال",
       timelineSyncFailed: "تعذر تحديث سجل الوكيل. جارٍ إعادة المحاولة…",
       timelineSyncing: "جارٍ مزامنة أحدث تقدم...",
       archivingTitle: "وكيل الارشيف...",
@@ -207,8 +220,13 @@ export const ar: TranslationResources = {
   sessions: {
     title: "السجل",
     empty: "لا توجد جلسات بعد",
+    noMatches: "لا توجد جلسات مطابقة",
+    tooManyMatches: "نتائج كثيرة جدًا — ضيّق نطاق البحث",
+    hostLoadFailed: "{{host}}: تعذر تحميل السجل",
+    searchPlaceholder: "البحث في السجل",
     actions: {
       loadMore: "تحميل المزيد",
+      clearSearch: "مسح البحث",
     },
   },
   agentList: {
@@ -340,6 +358,10 @@ export const ar: TranslationResources = {
     },
   },
   workspace: {
+    status: {
+      serviceRunning: "الخدمة {{name}} قيد التشغيل",
+      serviceUnhealthy: "الخدمة {{name}} غير سليمة",
+    },
     route: {
       loading: "جارٍ تحميل مساحة العمل",
       connecting: "الاتصال",
@@ -363,6 +385,16 @@ export const ar: TranslationResources = {
     },
     hoverCard: {
       scriptsAccessibility: "البرامج النصية Workspace",
+      detailsAccessibility: "تفاصيل مساحة العمل",
+      agents: "الوكلاء",
+      untitledAgent: "وكيل بلا عنوان",
+      agentStatus: {
+        needsInput: "بحاجة إلى إدخال",
+        failed: "فشل",
+        attention: "جاهز للمراجعة",
+        running: "قيد العمل",
+        done: "مكتمل",
+      },
       copyPath: "نسخ المسار",
       copyBranchName: "نسخ اسم الفرع",
       copied: "تم النسخ",
@@ -804,6 +836,14 @@ export const ar: TranslationResources = {
           pullRequest: "سحب الطلب #{{number}}",
           pullRequest_mr: "طلب دمج !{{number}}",
         },
+        checksSummary: {
+          passedLabel: "تم الاجتياز",
+          failedLabel: "فشل",
+          runningLabel: "قيد التشغيل",
+          passedAccessible: "تم اجتياز الشيكات",
+          failedAccessible: "فشلت عمليات التحقق",
+          runningAccessible: "الشيكات قيد التشغيل",
+        },
         states: {
           draft: "مسودة",
           merged: "تم الدمج",
@@ -843,6 +883,27 @@ export const ar: TranslationResources = {
       switchTitle: "تبديل المضيف",
       searchPlaceholder: "بحث عن المضيفين...",
     },
+    display: {
+      trigger: "تفضيلات العرض",
+      titleSource: {
+        label: "عنوان مساحة العمل",
+        options: { title: "العنوان", branch: "اسم الفرع" },
+      },
+      show: {
+        label: "عرض",
+        host: "المضيف",
+        changeRequest: "سحب الطلب",
+        services: "الخدمات",
+        checks: "الشيكات",
+        diff: "الإحصائيات المختلفة",
+        timestamp: "الطابع الزمني",
+      },
+      checks: {
+        label: "الشيكات",
+        options: { iconAndText: "الأيقونة والنص", icon: "أيقونة فقط", none: "مخفي" },
+      },
+      hostFilter: { label: "المضيفون", all: "جميع المضيفين" },
+    },
     actions: {
       addProject: "إضافة مشروع",
       newWorkspace: "مساحة عمل جديدة",
@@ -850,6 +911,8 @@ export const ar: TranslationResources = {
       home: "بيت",
       settings: "إعدادات",
       closeSidebar: "إغلاق الشريط الجانبي",
+      needsAttentionFilter: "بحاجة إلى انتباهك",
+      emptyAttention: "لا يوجد ما يحتاج إلى انتباهك حالياً",
     },
     help: {
       trigger: "المساعدة والدعم",
@@ -873,6 +936,7 @@ export const ar: TranslationResources = {
       openProjectSettings: "افتح إعدادات المشروع",
     },
     project: {
+      needsAttentionCount: "مساحات العمل التي تحتاج إلى انتباه: {{count}}",
       actions: {
         menu: "إجراءات المشروع",
         openSettings: "افتح إعدادات المشروع",
@@ -899,6 +963,10 @@ export const ar: TranslationResources = {
       },
     },
     workspace: {
+      agentSummary: {
+        needsAttention: "الوكلاء الذين يحتاجون إلى انتباه: {{count}}",
+        working: "الوكلاء قيد العمل: {{count}}",
+      },
       status: {
         scriptsAvailable: "البرامج النصية المتاحة",
         creating: "جارٍ الإنشاء...",
@@ -912,8 +980,6 @@ export const ar: TranslationResources = {
         copyPath: "نسخ المسار",
         copyBranchName: "انسخ اسم الفرع",
         rename: "إعادة تسمية مساحة العمل",
-        pin: "تثبيت في الأعلى",
-        unpin: "إلغاء التثبيت",
         archive: "أرشيف",
         archiveWorkspace: "أرشفة مساحة العمل",
         hideFromSidebar: "إخفاء من الشريط الجانبي",
@@ -945,6 +1011,17 @@ export const ar: TranslationResources = {
   newWorkspace: {
     title: "مساحة عمل جديدة",
     create: "يخلق",
+    project: {
+      choose: "اختر مشروعًا",
+      searchPlaceholder: "البحث في المشاريع",
+      title: "المشروع",
+      empty: "لا توجد مشاريع متاحة.",
+    },
+    host: {
+      choose: "اختر مضيفًا",
+      label: "مضيف مساحة العمل",
+      title: "المضيف",
+    },
     isolation: {
       local: "محلي",
       worktree: "شجرة عمل جديدة",
@@ -963,6 +1040,22 @@ export const ar: TranslationResources = {
       createWorktreeFailed: "فشل في إنشاء شجرة العمل",
       composerStateRequired: "حالة الملحن مطلوبة",
       selectModel: "اختر نموذجا",
+    },
+    tooltips: {
+      project: "Choose the project",
+      host: "Choose the host",
+      isolation: "Choose the isolation level",
+      startingRef: "اختر من أين تبدأ",
+      launch: "Choose what to launch",
+    },
+    launch: {
+      title: "What to launch",
+      chat: "Chat",
+      terminal: "Terminal",
+      manageProfiles: "Manage profiles",
+      submit: "Launch",
+      promptPlaceholder: "Prompt {{name}}",
+      commandPlaceholder: "Run a command, or leave empty for a blank terminal",
     },
     refPicker: {
       startingRef: "بدء المرجع",
@@ -1208,6 +1301,8 @@ export const ar: TranslationResources = {
       loadingOffer: "جارٍ تحميل عرض الإقران...",
       failedToLoadOffer: "فشل تحميل عرض الاقتران.",
       relayDisabled: "لم يتم تمكين التتابع. تمكين التتابع لإقران جهاز.",
+      enableRelay: "Enable relay",
+      enablingRelay: "Enabling relay...",
       unavailable: "عرض الاقتران غير متاح.",
       hint: "قم بمسح رمز QR هذا باستخدام BySpace على هاتفك، أو انسخ الرابط أدناه.",
       qrUnavailable: "رمز QR غير متاح.",
@@ -1279,6 +1374,9 @@ export const ar: TranslationResources = {
         saving: "جارٍ الحفظ...",
         saveFailed: "فشل الحفظ",
         changedOnDisk: "تغيّر الملف على القرص",
+        deletedTitle: "تم حذف الملف من القرص",
+        checkFailedTitle: "تعذّر التحقق من الملف على القرص",
+        preservedDescription: "تم الاحتفاظ بالنسخة المفتوحة.",
         vimMode: "وضع Vim: {{mode}}",
         cursor: "السطر {{line}}، العمود {{column}}",
         preview: "معاينة",
@@ -1454,6 +1552,7 @@ export const ar: TranslationResources = {
           es: "Español",
           fr: "Français",
           ja: "日本語",
+          ko: "한국어",
           ptBR: "Português brasileiro",
           ru: "Русский",
           zhCN: "中文",
@@ -1502,6 +1601,10 @@ export const ar: TranslationResources = {
       },
       detailLevel: {
         title: "مستوى التفاصيل",
+      },
+      chatOutline: {
+        title: "مخطط المحادثة",
+        description: "عرض مخطط للتنقل بين المطالبات",
       },
       fonts: {
         title: "الخطوط",
@@ -1595,6 +1698,32 @@ export const ar: TranslationResources = {
     },
     host: {
       notFound: "لم يتم العثور على Host",
+      appearance: {
+        title: "المظهر",
+        color: {
+          label: "اللون",
+          options: {
+            none: "لا شيء",
+            blue: "أزرق",
+            cyan: "سماوي",
+            green: "أخضر",
+            lime: "ليموني",
+            yellow: "أصفر",
+            orange: "برتقالي",
+            red: "أحمر",
+            pink: "وردي",
+            purple: "أرجواني",
+          },
+        },
+        badgeDisplay: {
+          label: "عرض الشارة",
+          options: {
+            name: "الاسم",
+            icon: "الأيقونة فقط",
+            hidden: "مخفي",
+          },
+        },
+      },
       badges: {
         relay: "تتابع",
         local: "محلي",
@@ -1648,14 +1777,9 @@ export const ar: TranslationResources = {
       orchestration: {
         title: "التنسيق",
         unavailable: "اتصل بهذا المضيف لإدارة التنسيق",
-        enableTools: {
-          title: "تمكين أدوات BySpace",
-          hint: "سيتمكن الوكلاء من إدارة أشجار العمل والوكلاء والجداول الزمنية",
-          accessibilityLabel: "حقن أدوات BySpace",
-        },
         skills: {
           title: "مهارات التنسيق",
-          installHint: "تثبيت مهارات BySpace الخمس المضمنة للوكلاء المدعومين",
+          installHint: "تثبيت مهارات BySpace المضمنة للوكلاء المدعومين",
           installedHint: "مثبتة ومحدّثة على هذا المضيف",
           updateHint: "تختلف المهارات المثبتة عن إصدار BySpace الحالي",
           updateHost: "حدّث المضيف لإدارة مهارات التنسيق",
@@ -1665,10 +1789,10 @@ export const ar: TranslationResources = {
           saving: "جارٍ الحفظ...",
           installConfirmTitle: "تثبيت مهارات التنسيق أو تحديثها؟",
           installConfirmMessage:
-            "سيزامن BySpace مهاراته الخمس المضمنة على هذا المضيف. لن تتغير المهارات الأخرى، وستُحفظ النسخ المتعارضة غير المُدارة.",
+            "سيزامن BySpace مهاراته المضمنة على هذا المضيف. لن تتغير المهارات الأخرى، وستُحفظ النسخ المتعارضة غير المُدارة.",
           updateConfirmTitle: "تحديث مهارات التنسيق؟",
           updateConfirmMessage:
-            "سيستبدل BySpace نسخه المُدارة بالمهارات الخمس المضمنة في هذا الإصدار. لن تتغير المهارات الأخرى.",
+            "سيستبدل BySpace نسخه المُدارة بالمهارات المضمنة في هذا الإصدار. لن تتغير المهارات الأخرى.",
           uninstallConfirmTitle: "إلغاء تثبيت مهارات التنسيق؟",
           uninstallConfirmMessage:
             "سيزيل BySpace النسخ المُدارة غير المعدّلة من هذا المضيف. وستُحفظ النسخ المعدّلة.",
@@ -1886,6 +2010,16 @@ export const ar: TranslationResources = {
         transportFallback: "المضيف لم يستجب.",
         failedTitle: "تعذر تحميل byspace.json",
         failedDescription: "أعد التحميل للمحاولة مرة أخرى.",
+      },
+      projectSetup: {
+        title: "إعداد المشروع",
+        actionTitle: "الإعداد بمساعدة وكيل",
+        description: "دع وكيلاً يفحص هذا المستودع ويقترح إعداد شجرة العمل والخدمات والأوامر الشائعة",
+        configure: "الإعداد باستخدام وكيل",
+        review: "المراجعة باستخدام وكيل",
+        updateHost: "حدّث المضيف لاستخدام إعداد المشروع بمساعدة وكيل",
+        prompt:
+          "استخدم مهارة byspace-project-setup لفحص هذا المستودع واقتراح أقل تغييرات مدعومة بالأدلة تجعل إعداد أشجار العمل النظيفة قابلاً للتكرار، والأوامر الشائعة سهلة الاكتشاف، والخدمات طويلة التشغيل آمنة للعمل بالتوازي. افحص أولاً واعرض التوصيات قبل تغيير الملفات.",
       },
       worktree: {
         title: "خطافات دورة حياة شجرة العمل",

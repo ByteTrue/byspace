@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef } from "react";
 import { usePathname, useRouter } from "expo-router";
 import { useKeyboardShortcutsStore } from "@/stores/keyboard-shortcuts-store";
+import { usePanelStore } from "@/stores/panel-store";
 import { setCommandCenterFocusRestoreElement } from "@/utils/command-center-focus-restore";
 import { navigateToWorkspace } from "@/stores/navigation-active-workspace-store";
 import { keyboardActionDispatcher } from "@/keyboard/keyboard-action-dispatcher";
@@ -168,11 +169,16 @@ export function useKeyboardShortcuts({
           shortcutsDialogOpen: store.shortcutsDialogOpen,
         },
       );
-      return performShortcutAction(
+      const handled = performShortcutAction(
         shortcutAction,
         input.domEvent,
         input.browserFocusRestoreElement,
       );
+      const panelState = usePanelStore.getState();
+      if (handled && panelState.desktop.focusModeEnabled && input.action.startsWith("sidebar.")) {
+        panelState.toggleFocusMode();
+      }
+      return handled;
     };
 
     const resolveAndPerformShortcut = (input: {

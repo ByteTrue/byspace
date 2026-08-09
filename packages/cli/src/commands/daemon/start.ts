@@ -20,10 +20,10 @@ export function startCommand(): Command {
     .option("--port <port>", "Port to listen on (default: 6777)")
     .option("--home <path>", "BySpace home directory (default: ~/.byspace)")
     .option("--foreground", "Run in foreground (don't daemonize)")
+    .option("--relay", "Enable relay connection")
     .option("--no-relay", "Disable relay connection")
     .option("--relay-use-tls", "Use wss:// for the relay connection and pairing offers")
     .option("--no-mcp", "Disable the Agent MCP HTTP endpoint")
-    .option("--no-inject-mcp", "Disable auto-injecting the BySpace MCP into created agents")
     .option("--web-ui", "Enable the bundled daemon web UI (default)")
     .option("--no-web-ui", "Disable the bundled daemon web UI")
     .option(

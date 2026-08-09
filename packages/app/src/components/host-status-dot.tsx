@@ -1,31 +1,35 @@
-import { useMemo } from "react";
 import { View } from "react-native";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { StyleSheet } from "react-native-unistyles";
 import {
   type HostRuntimeConnectionStatus,
   useHostRuntimeConnectionStatus,
 } from "@/runtime/host-runtime";
-import type { Theme } from "@/styles/theme";
 
-function hostStatusDotColor(status: HostRuntimeConnectionStatus, theme: Theme) {
-  if (status === "online") return theme.colors.palette.green[400];
-  if (status === "connecting") return theme.colors.palette.amber[500];
-  return theme.colors.palette.red[500];
+function getStatusStyle(status: HostRuntimeConnectionStatus) {
+  if (status === "online") return styles.online;
+  if (status === "connecting") return styles.connecting;
+  return styles.offline;
 }
 
 export function HostStatusDot({ serverId }: { serverId: string }) {
-  const { theme } = useUnistyles();
   const status = useHostRuntimeConnectionStatus(serverId);
-  const backgroundColor = hostStatusDotColor(status, theme);
-  const dotStyle = useMemo(() => [styles.dot, { backgroundColor }], [backgroundColor]);
-
-  return <View style={dotStyle} />;
+  return (
+    <View
+      style={[styles.dot, getStatusStyle(status)]}
+      accessible
+      accessibilityLabel={`Host ${status}`}
+      testID={`host-status-${status}`}
+    />
+  );
 }
 
-const styles = StyleSheet.create(() => ({
+const styles = StyleSheet.create((theme) => ({
   dot: {
     width: 8,
     height: 8,
     borderRadius: 4,
   },
+  online: { backgroundColor: theme.colors.statusSuccess },
+  connecting: { backgroundColor: theme.colors.statusWarning },
+  offline: { backgroundColor: theme.colors.statusDanger },
 }));

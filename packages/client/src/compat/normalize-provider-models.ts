@@ -3,6 +3,7 @@ import type {
   ProviderSnapshotEntry,
 } from "@bytetrue/byspace-protocol/agent-types";
 import { normalizeAgentModelDefinition } from "@bytetrue/byspace-protocol/agent-types";
+import { expandProviderSnapshot } from "@bytetrue/byspace-protocol/provider-snapshot-codec";
 import type {
   GetProvidersSnapshotResponseMessage,
   ListProviderModelsResponseMessage,
@@ -62,7 +63,9 @@ export function normalizeListProviderModelsPayload(
 export function normalizeProvidersSnapshotPayload<
   T extends GetProvidersSnapshotPayload | ProvidersSnapshotUpdatePayload,
 >(payload: T): T {
-  const entries = normalizeProviderSnapshotEntries(payload.entries);
+  const entries = payload.compactSnapshot
+    ? expandProviderSnapshot(payload.compactSnapshot)
+    : normalizeProviderSnapshotEntries(payload.entries);
   return entries === payload.entries ? payload : { ...payload, entries };
 }
 

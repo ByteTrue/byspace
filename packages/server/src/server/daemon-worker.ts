@@ -70,10 +70,18 @@ function writeWorkerLifecycleLog(
   }
 }
 
+function resolveCliRelayEnabled(argv: readonly string[]): boolean | undefined {
+  if (argv.includes("--no-relay")) return false;
+  if (argv.includes("--relay")) return true;
+  return undefined;
+}
+
 function bootstrapFromEnvironment(): BootstrapResult {
   try {
     const byspaceHome = resolveBySpaceHome();
-    const config = loadConfig(byspaceHome);
+    const config = loadConfig(byspaceHome, {
+      cli: { relayEnabled: resolveCliRelayEnabled(process.argv) },
+    });
     const logger = createRootLogger({ log: config.log }, { byspaceHome, file: false });
     return { byspaceHome, logger, config };
   } catch (err) {
@@ -84,17 +92,11 @@ function bootstrapFromEnvironment(): BootstrapResult {
 }
 
 function applyCliFlagOverrides(config: ReturnType<typeof loadConfig>): void {
-  if (process.argv.includes("--no-relay")) {
-    config.relayEnabled = false;
-  }
   if (process.argv.includes("--relay-use-tls")) {
     config.relayUseTls = true;
   }
   if (process.argv.includes("--no-mcp")) {
     config.mcpEnabled = false;
-  }
-  if (process.argv.includes("--no-inject-mcp")) {
-    config.mcpInjectIntoAgents = false;
   }
   if (process.argv.includes("--web-ui")) {
     config.webUi = { ...(config.webUi ?? { distDir: null }), enabled: true };

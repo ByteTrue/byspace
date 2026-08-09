@@ -23,6 +23,13 @@ import {
 } from "./worktree";
 import type { BySpaceConfig } from "@bytetrue/byspace-protocol/byspace-config-schema";
 import { getBySpaceWorktreeMetadataPath } from "./worktree-metadata.js";
+import {
+  getCheckoutDiff,
+  getCheckoutStatus,
+  listCheckoutCommits,
+  mergeFromBase,
+  mergeToBase,
+} from "./checkout-git.js";
 import { execFileSync } from "child_process";
 import { isPlatform } from "../test-utils/platform.js";
 import {
@@ -443,6 +450,161 @@ describe.skipIf(isPlatform("win32"))("worktree POSIX-only", () => {
       });
 
       expect(readFileSync(join(result.worktreePath, "file.txt"), "utf8")).toBe("from-origin\n");
+    });
+
+    it("preserves an explicitly qualified local base when origin also exists", async () => {
+      const remoteDir = join(tempDir, "explicit-local-remote.git");
+      const remoteCloneDir = join(tempDir, "explicit-local-remote-clone");
+      execFileSync("git", ["init", "--bare", remoteDir]);
+      execFileSync("git", ["remote", "add", "origin", remoteDir], { cwd: repoDir });
+      execFileSync("git", ["push", "-u", "origin", "main"], { cwd: repoDir });
+      execFileSync("git", ["clone", "--branch", "main", remoteDir, remoteCloneDir]);
+      execFileSync("git", ["config", "user.email", "test@test.com"], { cwd: remoteCloneDir });
+      execFileSync("git", ["config", "user.name", "Test"], { cwd: remoteCloneDir });
+      writeFileSync(join(remoteCloneDir, "file.txt"), "from-origin\n");
+      execFileSync("git", ["add", "file.txt"], { cwd: remoteCloneDir });
+      execFileSync("git", ["-c", "commit.gpgsign=false", "commit", "-m", "advance origin main"], {
+        cwd: remoteCloneDir,
+      });
+      execFileSync("git", ["push", "origin", "main"], { cwd: remoteCloneDir });
+      writeFileSync(join(repoDir, "file.txt"), "from-local\n");
+      execFileSync("git", ["add", "file.txt"], { cwd: repoDir });
+      execFileSync("git", ["-c", "commit.gpgsign=false", "commit", "-m", "advance local main"], {
+        cwd: repoDir,
+      });
+      execFileSync("git", ["fetch", "origin"], { cwd: repoDir });
+
+      const result = await createLegacyWorktreeForTest({
+        branchName: "explicit-local-feature",
+        cwd: repoDir,
+        baseBranch: "refs/heads/main",
+        worktreeSlug: "explicit-local-feature",
+        runSetup: false,
+        byspaceHome,
+      });
+
+      expect(readFileSync(join(result.worktreePath, "file.txt"), "utf8")).toBe("from-local\n");
+      expect(
+        JSON.parse(readFileSync(getBySpaceWorktreeMetadataPath(result.worktreePath), "utf8")),
+      ).toMatchObject({ baseRefName: "main", baseRef: "refs/heads/main" });
+      const status = await getCheckoutStatus(result.worktreePath, { byspaceHome });
+      expect(status.isGit && status.aheadBehind).toEqual({ ahead: 0, behind: 0 });
+      await expect(
+        getCheckoutDiff(result.worktreePath, { mode: "base", baseRef: "main" }, { byspaceHome }),
+      ).resolves.toMatchObject({ diff: "" });
+    });
+
+    it("records the exact base when it is on a remote other than origin", async () => {
+      const forkDir = join(tempDir, "fork.git");
+      const forkCloneDir = join(tempDir, "fork-clone");
+      execFileSync("git", ["init", "--bare", forkDir]);
+      execFileSync("git", ["remote", "add", "upstream", forkDir], { cwd: repoDir });
+      execFileSync("git", ["push", "-u", "upstream", "main"], { cwd: repoDir });
+
+      execFileSync("git", ["clone", "--branch", "main", forkDir, forkCloneDir]);
+      execFileSync("git", ["config", "user.email", "test@test.com"], { cwd: forkCloneDir });
+      execFileSync("git", ["config", "user.name", "Test"], { cwd: forkCloneDir });
+      writeFileSync(join(forkCloneDir, "file.txt"), "from-upstream\n");
+      execFileSync("git", ["add", "file.txt"], { cwd: forkCloneDir });
+      execFileSync("git", ["-c", "commit.gpgsign=false", "commit", "-m", "advance upstream main"], {
+        cwd: forkCloneDir,
+      });
+      execFileSync("git", ["push", "origin", "main"], { cwd: forkCloneDir });
+      execFileSync("git", ["fetch", "upstream"], { cwd: repoDir });
+      const localMainHead = execFileSync("git", ["rev-parse", "refs/heads/main"], { cwd: repoDir })
+        .toString()
+        .trim();
+
+      const result = await createLegacyWorktreeForTest({
+        branchName: "fork-base-feature",
+        cwd: repoDir,
+        baseBranch: "refs/remotes/upstream/main",
+        worktreeSlug: "fork-base-feature",
+        runSetup: false,
+        byspaceHome,
+      });
+
+      expect(readFileSync(join(result.worktreePath, "file.txt"), "utf8")).toBe("from-upstream\n");
+      expect(
+        JSON.parse(readFileSync(getBySpaceWorktreeMetadataPath(result.worktreePath), "utf8")),
+      ).toMatchObject({ baseRefName: "main", baseRef: "refs/remotes/upstream/main" });
+      const status = await getCheckoutStatus(result.worktreePath, { byspaceHome });
+      expect(status.isGit && status.baseRef).toBe("main");
+      expect(status.isGit && status.aheadBehind).toEqual({ ahead: 0, behind: 0 });
+      await expect(
+        getCheckoutDiff(
+          result.worktreePath,
+          { mode: "base", baseRef: "refs/remotes/origin/main" },
+          { byspaceHome },
+        ),
+      ).rejects.toThrow(
+        "Base ref mismatch: stored refs/remotes/upstream/main, requested refs/remotes/origin/main",
+      );
+      await expect(
+        getCheckoutDiff(result.worktreePath, { mode: "base", baseRef: "main" }, { byspaceHome }),
+      ).resolves.toMatchObject({ diff: "" });
+      const history = await listCheckoutCommits({
+        cwd: result.worktreePath,
+        context: { byspaceHome },
+      });
+      expect(history.commits.every((commit) => commit.isOnBase)).toBe(true);
+      await expect(
+        mergeToBase(result.worktreePath, { baseRef: "main" }, { byspaceHome }),
+      ).rejects.toThrow(
+        "No local merge target is recorded for base ref refs/remotes/upstream/main",
+      );
+      expect(
+        execFileSync("git", ["rev-parse", "refs/heads/main"], { cwd: repoDir }).toString().trim(),
+      ).toBe(localMainHead);
+
+      writeFileSync(join(forkCloneDir, "later.txt"), "later\n");
+      execFileSync("git", ["add", "later.txt"], { cwd: forkCloneDir });
+      execFileSync("git", ["-c", "commit.gpgsign=false", "commit", "-m", "advance again"], {
+        cwd: forkCloneDir,
+      });
+      execFileSync("git", ["push", "origin", "main"], { cwd: forkCloneDir });
+      execFileSync("git", ["fetch", "upstream"], { cwd: result.worktreePath });
+      await mergeFromBase(result.worktreePath, { baseRef: "main" }, { byspaceHome });
+      expect(readFileSync(join(result.worktreePath, "later.txt"), "utf8")).toBe("later\n");
+
+      execFileSync("git", ["update-ref", "-d", "refs/remotes/upstream/main"], {
+        cwd: result.worktreePath,
+      });
+      await expect(
+        getCheckoutDiff(result.worktreePath, { mode: "base", baseRef: "main" }, { byspaceHome }),
+      ).rejects.toThrow("Base ref not found: refs/remotes/upstream/main");
+      await expect(
+        mergeFromBase(result.worktreePath, { baseRef: "main" }, { byspaceHome }),
+      ).rejects.toThrow("Base ref not found: refs/remotes/upstream/main");
+      await expect(
+        listCheckoutCommits({ cwd: result.worktreePath, context: { byspaceHome } }),
+      ).rejects.toThrow("Base ref not found: refs/remotes/upstream/main");
+    });
+
+    it("records Git-valid characters in a remote base branch", async () => {
+      const upstreamDir = join(tempDir, "upstream.git");
+      execFileSync("git", ["init", "--bare", upstreamDir]);
+      execFileSync("git", ["remote", "add", "upstream", upstreamDir], { cwd: repoDir });
+      execFileSync("git", ["push", "upstream", "refs/heads/main:refs/heads/release+hotfix"], {
+        cwd: repoDir,
+      });
+      execFileSync("git", ["fetch", "upstream"], { cwd: repoDir });
+
+      const result = await createLegacyWorktreeForTest({
+        branchName: "release-hotfix-feature",
+        cwd: repoDir,
+        baseBranch: "refs/remotes/upstream/release+hotfix",
+        worktreeSlug: "release-hotfix-feature",
+        runSetup: false,
+        byspaceHome,
+      });
+
+      expect(
+        JSON.parse(readFileSync(getBySpaceWorktreeMetadataPath(result.worktreePath), "utf8")),
+      ).toMatchObject({
+        baseRefName: "release+hotfix",
+        baseRef: "refs/remotes/upstream/release+hotfix",
+      });
     });
 
     it("falls back to local {branch} when origin/{branch} does not exist", async () => {
