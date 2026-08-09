@@ -13,6 +13,7 @@ For testing rules, see [testing.md](testing.md).
 - **`function` declarations** over arrow function assignments.
 - **`interface`** over `type` when both work.
 - **No `index.ts` barrel files** that only re-export — they create indirection and circular-dep risk. Import from the source.
+- **Portable shell entrypoints** — use `#!/usr/bin/env bash` rather than a fixed Bash path so scripts work wherever Bash is installed.
 
 ## Comments and noise
 

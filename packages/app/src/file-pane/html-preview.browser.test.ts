@@ -46,4 +46,12 @@ describe("HTML preview parsing", () => {
     if (!result) throw new Error("Expected CSP probe result");
     await waitForText(result, "connect-src");
   });
+
+  it("preserves a malicious quoted doctype after the trusted prologue", async () => {
+    const source = `<!doctype html "'><p id="result">preserved</p>`;
+    const frame = await mountPreview(source);
+
+    expect(frame.srcdoc.endsWith(source)).toBe(true);
+    expect(frame.contentDocument?.querySelector("#result")?.textContent).toBe("preserved");
+  });
 });

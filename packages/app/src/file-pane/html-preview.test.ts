@@ -9,40 +9,26 @@ describe("createHtmlPreviewDocument", () => {
     expect(createHtmlPreviewDocument("<h1>Plan</h1>")).toBe(`${EXPECTED_PROLOGUE}<h1>Plan</h1>`);
   });
 
-  it("strips a leading BOM, HTML ASCII whitespace, and source doctype", () => {
-    expect(createHtmlPreviewDocument("\uFEFF\t\n\f\r <!doctype html><h1>Plan</h1>")).toBe(
-      `${EXPECTED_PROLOGUE}<h1>Plan</h1>`,
-    );
+  it("drops only a leading BOM and otherwise preserves the complete source", () => {
+    const source = "\t\n\f\r <!doctype html><h1>Plan</h1>";
+
+    expect(createHtmlPreviewDocument(`\uFEFF${source}`)).toBe(`${EXPECTED_PROLOGUE}${source}`);
   });
 
   it.each([
     "<!DOCTYPE HTML><h1>case</h1>",
     "<!doctype html PUBLIC \"quoted>identifier\" 'single>identifier'><h1>quoted</h1>",
-  ])("strips a case-insensitive, quote-aware leading doctype from %s", (source) => {
-    expect(createHtmlPreviewDocument(source)).toMatch(
-      new RegExp(`^${EXPECTED_PROLOGUE.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}<h1>`),
-    );
-  });
-
-  it.each([
+    "\u00A0<!-- untrusted --!><!doctype html \"'><script>location='https://example.com'</script>",
     "<!doctypehtml><h1>missing separator</h1>",
     '<!doctype html "unterminated><h1>malformed</h1>',
-  ])("preserves a malformed leading doctype after the trusted prologue", (source) => {
-    expect(createHtmlPreviewDocument(source)).toBe(`${EXPECTED_PROLOGUE}${source}`);
+    "<!-- comment --><!doctype html><h1>Comment first</h1>",
+    "<h1>Headless document</h1>",
+  ])("places the trusted prologue before the original source for %s", (source) => {
+    const output = createHtmlPreviewDocument(source);
+
+    expect(output).toBe(`${EXPECTED_PROLOGUE}${source}`);
+    expect(output.endsWith(source)).toBe(true);
   });
-
-  it("does not treat NBSP as HTML parser whitespace", () => {
-    const source = "\u00A0<!doctype html><h1>Plan</h1>";
-
-    expect(createHtmlPreviewDocument(source)).toBe(`${EXPECTED_PROLOGUE}${source}`);
-  });
-
-  it.each(["<!-- comment --><!doctype html><h1>Comment first</h1>", "<h1>Headless document</h1>"])(
-    "keeps non-doctype document content intact for %s",
-    (source) => {
-      expect(createHtmlPreviewDocument(source)).toBe(`${EXPECTED_PROLOGUE}${source}`);
-    },
-  );
 });
 
 describe("isHtmlPreviewPath", () => {
