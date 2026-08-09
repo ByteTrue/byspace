@@ -1,43 +1,63 @@
 <!--
-Please follow this template. The PR template applies whether you opened the PR via the web UI, `gh pr create`, or any other tool.
+You MUST read CONTRIBUTING.md before sending a PR. This template applies whether you open the PR through the web UI, `gh pr create`, or another tool.
 
-If you're fixing an objective bug or a small focused issue, this should be quick. Big PRs without a prior issue or design discussion are likely to be closed or scoped down. See CONTRIBUTING.md.
+Open a draft PR to run checks or request early feedback. Mark it ready only when the change and its evidence are ready for review.
 -->
 
 ### Linked issue
 
 Closes #
 
-<!-- Bug fixes and behavior changes should reference an issue. Pure docs and refactors can skip this. -->
-
 ### Type of change
 
 - [ ] Bug fix
-- [ ] New feature (with prior issue + design alignment)
-- [ ] Refactor / code improvement
+- [ ] New feature
+- [ ] Enhancement
+- [ ] Refactor
 - [ ] Docs
 
-### What does this PR do
+### Reasoning
 
-<!-- A short description of the change in your own words. What was wrong, what you changed, why it works. If you can't explain this briefly, the PR is probably too big. -->
+<!-- Explain what was wrong and how this change addresses it. Ground the explanation in a real BySpace user flow. If it cannot be explained briefly, the PR is probably too broad. -->
 
-### How did you verify it
+### Goals
+
+<!-- List the requirements and acceptance criteria this PR intends to satisfy. -->
+
+### Non-goals
+
+<!-- List what this PR intentionally does not address, including deliberate trade-offs. -->
+
+### QA
 
 <!--
-This is the section I read most carefully. I need to see that *you* tested this, not that the diff looks plausible.
+Include evidence from verification you actually performed.
 
-- For UI changes: a screenshot or short video at every affected browser viewport. UI claims without visual proof are not enough.
-- For behavior changes: the actual steps you ran, and what you observed.
-- For bug fixes: how you reproduced the bug before, and confirmed it's fixed after.
+- UI: screenshots or video at every affected browser viewport.
+- Behavior: exact steps or commands, relevant output, and what you observed.
+- Bug fix: reproduction before the change and confirmation after it.
+- Tests: focused tests added or updated and their results.
 
-AI-generated PR descriptions are fine in principle. AI-generated *verification claims* with no actual testing behind them are not, and they're easy to spot.
+Do not present AI-generated verification claims as executed evidence.
+-->
+
+### BySpace-specific evidence
+
+<!--
+If this is an upstream sync, include the evidence required by docs/upstream-sync.md.
+If this is a release change, include the exact-SHA and channel evidence required by docs/release.md and docs/release-engineering.md.
+Otherwise, write "Not applicable."
 -->
 
 ### Checklist
 
-- [ ] One focused change. Unrelated cleanups split out.
+- [ ] I read `CONTRIBUTING.md` and the relevant `docs/` source-of-truth files
+- [ ] This PR links its issue and contains one focused change
+- [ ] Goals, non-goals, and intentional trade-offs are explicit
 - [ ] `npm run typecheck` passes
 - [ ] `npm run lint` passes
-- [ ] `npm run format` ran (Biome)
-- [ ] UI changes include screenshots or video for every affected browser viewport
-- [ ] Tests added or updated where it made sense
+- [ ] `npm run format` passes
+- [ ] QA evidence is included
+- [ ] Focused tests were added or updated where applicable
+- [ ] UI changes include screenshots or video at every affected browser viewport
+- [ ] Upstream-sync or release evidence is included when applicable
