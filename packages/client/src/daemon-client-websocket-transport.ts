@@ -5,23 +5,25 @@ import type {
 } from "./daemon-client-transport-types.js";
 import { extractRelayMessage } from "./daemon-client-transport-utils.js";
 
+type GlobalWebSocketConstructor = new (url: string, protocols?: string | string[]) => WebSocketLike;
+
+function getGlobalWebSocket(): GlobalWebSocketConstructor {
+  const globalWs = (globalThis as { WebSocket?: GlobalWebSocketConstructor }).WebSocket;
+  if (!globalWs) {
+    throw new Error("WebSocket is not available in this runtime");
+  }
+  return globalWs;
+}
+
 export function defaultWebSocketFactory(
   url: string,
   options?: { headers?: Record<string, string>; protocols?: string[] },
 ): WebSocketLike {
-  const globalWs = (
-    globalThis as {
-      WebSocket?: new (
-        url: string,
-        protocols?: string | string[],
-        options?: { headers?: Record<string, string> },
-      ) => WebSocketLike;
-    }
-  ).WebSocket;
-  if (!globalWs) {
-    throw new Error("WebSocket is not available in this runtime");
+  const globalWs = getGlobalWebSocket();
+  if (options?.protocols === undefined) {
+    return new globalWs(url);
   }
-  return new globalWs(url, options?.protocols, { headers: options?.headers });
+  return new globalWs(url, options.protocols);
 }
 
 export function createWebSocketTransportFactory(factory: WebSocketFactory): DaemonTransportFactory {
