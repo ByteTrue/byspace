@@ -1,10 +1,9 @@
 import { describe, expect, it } from "vitest";
+import { formatAgentModeLabel, formatThinkingOptionLabel } from "@/agent-controls/labels";
 import {
-  formatAgentModeLabel,
   getFeatureHighlightColor,
   getFeatureTooltip,
   getAgentControlHintKey,
-  formatThinkingOptionLabel,
   normalizeModelId,
   resolveAgentModelSelection,
 } from "./utils";

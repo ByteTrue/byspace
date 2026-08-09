@@ -64,6 +64,16 @@ export const ptBR: TranslationResources = {
       home: "Início",
       modelGroupLabel: "Modelo",
       modelSearchKeywords: "trocar modelo mudar modelo definir modelo selecionar modelo",
+      thinkingGroupLabel: "Raciocínio",
+      thinkingSearchKeywords: "raciocínio esforço pensamento",
+      modeGroupLabel: "Modo",
+      modeSearchKeywords: "acesso permissão aprovação modo",
+      planModeGroupLabel: "Modo plano",
+      planModeSearchKeywords: "plano planejamento modo plano",
+      fastModeGroupLabel: "Rápido",
+      fastModeSearchKeywords: "rápido velocidade baixa latência",
+      settingOn: "Ligado",
+      settingOff: "Desligado",
     },
   },
   composer: {
@@ -220,8 +230,13 @@ export const ptBR: TranslationResources = {
   sessions: {
     title: "Histórico de agentes",
     empty: "Nenhuma sessão ainda",
+    noMatches: "Nenhuma sessão corresponde",
+    tooManyMatches: "Muitos resultados — refine a busca",
+    hostLoadFailed: "{{host}}: Não foi possível carregar o histórico",
+    searchPlaceholder: "Buscar no histórico",
     actions: {
       loadMore: "Carregar mais",
+      clearSearch: "Limpar busca",
     },
   },
   agentList: {
@@ -1573,6 +1588,7 @@ export const ptBR: TranslationResources = {
           es: "Espanhol",
           fr: "Francês",
           ja: "Japonês",
+          ko: "Coreano",
           ptBR: "Português brasileiro",
           ru: "Russo",
           zhCN: "Chinês simplificado",

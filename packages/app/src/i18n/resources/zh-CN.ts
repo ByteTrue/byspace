@@ -64,6 +64,16 @@ export const zhCN: TranslationResources = {
       home: "首页",
       modelGroupLabel: "模型",
       modelSearchKeywords: "切换模型 更改模型 设置模型 选择模型",
+      thinkingGroupLabel: "思考",
+      thinkingSearchKeywords: "推理 努力 思考",
+      modeGroupLabel: "模式",
+      modeSearchKeywords: "访问 权限 批准 模式",
+      planModeGroupLabel: "计划模式",
+      planModeSearchKeywords: "计划 规划 计划模式",
+      fastModeGroupLabel: "快速",
+      fastModeSearchKeywords: "快速 速度 低延迟",
+      settingOn: "开",
+      settingOff: "关",
     },
   },
   composer: {
@@ -217,8 +227,13 @@ export const zhCN: TranslationResources = {
   sessions: {
     title: "历史",
     empty: "还没有会话",
+    noMatches: "没有匹配的会话",
+    tooManyMatches: "匹配过多 — 请缩小搜索范围",
+    hostLoadFailed: "{{host}}：无法加载历史",
+    searchPlaceholder: "搜索历史",
     actions: {
       loadMore: "加载更多",
+      clearSearch: "清除搜索",
     },
   },
   agentList: {
@@ -1532,6 +1547,7 @@ export const zhCN: TranslationResources = {
           es: "Español",
           fr: "Français",
           ja: "日本語",
+          ko: "한국어",
           ptBR: "Português brasileiro",
           ru: "Русский",
           zhCN: "简体中文",

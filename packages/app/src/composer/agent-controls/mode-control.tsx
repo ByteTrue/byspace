@@ -1,27 +1,11 @@
-import {
-  memo,
-  useCallback,
-  useMemo,
-  useRef,
-  useState,
-  type ComponentType,
-  type ReactElement,
-} from "react";
+import { memo, useCallback, useMemo, useRef, useState, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import { Text, View, type PressableStateCallbackType } from "react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { useShallow } from "zustand/shallow";
 import { useStoreWithEqualityFn } from "zustand/traditional";
-import {
-  Bot,
-  Shield,
-  ShieldAlert,
-  ShieldCheck,
-  ShieldEllipsis,
-  ShieldOff,
-  ShieldPlus,
-  ShieldQuestionMark,
-} from "lucide-react-native";
+import { getAgentModeIcon, getAgentModeOptionIcon } from "@/agent-controls/icons";
+import { formatAgentModeLabel } from "@/agent-controls/labels";
 import { ComboboxTrigger } from "@/components/ui/combobox-trigger";
 import { type SheetHeader } from "@/components/adaptive-modal-sheet";
 import { Combobox, ComboboxItem, type ComboboxOption } from "@/components/ui/combobox";
@@ -35,39 +19,20 @@ import { useToast } from "@/contexts/toast-context";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { toErrorMessage } from "@/utils/error-messages";
 import { showProviderNoticeToast } from "@/utils/provider-notice-toast";
-import { formatAgentModeLabel, getAgentControlHintKey } from "@/composer/agent-controls/utils";
+import { getAgentControlHintKey } from "@/composer/agent-controls/utils";
 import { useShortcutKeys } from "@/hooks/use-shortcut-keys";
 import { useKeyboardActionHandler } from "@/hooks/use-keyboard-action-handler";
 import type { KeyboardActionDefinition } from "@/keyboard/keyboard-action-dispatcher";
 import { resolveNextAgentModeId } from "@/composer/agent-controls/mode";
 import { useComposerKeyboardScope } from "@/composer/keyboard-scope";
 import type { AgentMode, AgentProvider } from "@bytetrue/byspace-protocol/agent-types";
-import {
-  getModeVisuals,
-  type AgentProviderDefinition,
-} from "@bytetrue/byspace-protocol/provider-manifest";
+import type { AgentProviderDefinition } from "@bytetrue/byspace-protocol/provider-manifest";
 
 export type AgentModeControlPlacement = "toolbar" | "footer";
 
 function shouldRenderForPlacement(placement: AgentModeControlPlacement, isCompact: boolean) {
   return placement === "footer" ? isCompact : !isCompact;
 }
-
-interface ModeIconProps {
-  size?: number;
-  color?: string;
-}
-
-const MODE_ICONS: Record<string, ComponentType<ModeIconProps>> = {
-  Bot,
-  Shield,
-  ShieldCheck,
-  ShieldAlert,
-  ShieldEllipsis,
-  ShieldOff,
-  ShieldPlus,
-  ShieldQuestionMark,
-};
 
 interface ModeComboboxOptionProps {
   option: ComboboxOption;
@@ -88,8 +53,7 @@ function ModeComboboxOption({
   providerDefinitions,
   iconColor,
 }: ModeComboboxOptionProps) {
-  const visuals = getModeVisuals(provider, option.id, providerDefinitions);
-  const IconComponent = visuals?.icon ? MODE_ICONS[visuals.icon] : undefined;
+  const IconComponent = getAgentModeOptionIcon(provider, option.id, providerDefinitions);
   const leadingSlot = useMemo(
     () => (IconComponent ? <IconComponent size={16} color={iconColor} /> : null),
     [IconComponent, iconColor],
@@ -105,7 +69,7 @@ function ModeComboboxOption({
   );
 }
 
-interface AgentModeControlViewProps {
+export interface AgentModeControlValue {
   provider: string;
   providerDefinitions: AgentProviderDefinition[];
   modeOptions: AgentMode[];
@@ -125,7 +89,7 @@ function AgentModeControlView({
   selectedModeId,
   onSelectMode,
   disabled = false,
-}: AgentModeControlViewProps) {
+}: AgentModeControlValue) {
   const { theme } = useUnistyles();
   const { t } = useTranslation();
   const { isActiveComposer } = useComposerKeyboardScope();
@@ -140,10 +104,7 @@ function AgentModeControlView({
     return modeOptions.find((m) => m.id === selectedModeId) ?? modeOptions[0];
   }, [modeOptions, selectedModeId]);
 
-  const visuals = selectedMode
-    ? getModeVisuals(provider, selectedMode.id, providerDefinitions)
-    : undefined;
-  const Icon = visuals?.icon ? MODE_ICONS[visuals.icon] : undefined;
+  const Icon = getAgentModeIcon(provider, selectedMode?.id ?? "", providerDefinitions);
   const iconColor = theme.colors.foregroundMuted;
   const selectedModeLabel = selectedMode ? formatAgentModeLabel(selectedMode) : "";
 
@@ -292,14 +253,10 @@ interface AgentModeControlProps {
   isCompactLayout?: boolean;
 }
 
-export const AgentModeControl = memo(function AgentModeControl({
-  serverId,
-  agentId,
-  placement,
-  isCompactLayout,
-}: AgentModeControlProps) {
-  const isCompactFormFactor = useIsCompactFormFactor();
-  const isCompact = isCompactLayout ?? isCompactFormFactor;
+export function useLiveAgentModeControl(
+  serverId: string,
+  agentId: string,
+): AgentModeControlValue | null {
   const slice = useSessionStore(
     useShallow((state) => {
       const agent = state.sessions[serverId]?.agents?.get(agentId);
@@ -334,9 +291,7 @@ export const AgentModeControl = memo(function AgentModeControl({
         mergeProviderPreferences({
           preferences: current,
           provider: slice.provider,
-          updates: {
-            mode: modeId || undefined,
-          },
+          updates: { mode: modeId || undefined },
         }),
       ).catch((error) => {
         console.warn("[AgentModeControl] persist mode preference failed", error);
@@ -352,19 +307,30 @@ export const AgentModeControl = memo(function AgentModeControl({
     [agentId, client, slice?.provider, toast, updatePreferences],
   );
 
-  if (!slice || availableModes.length === 0) return null;
-  if (!shouldRenderForPlacement(placement, isCompact)) return null;
+  return useMemo(() => {
+    if (!slice || availableModes.length === 0) return null;
+    return {
+      provider: slice.provider,
+      providerDefinitions,
+      modeOptions: availableModes,
+      selectedModeId: slice.currentModeId,
+      onSelectMode: handleSelectMode,
+      disabled: !client,
+    };
+  }, [availableModes, client, handleSelectMode, providerDefinitions, slice]);
+}
 
-  return (
-    <AgentModeControlView
-      provider={slice.provider}
-      providerDefinitions={providerDefinitions}
-      modeOptions={availableModes}
-      selectedModeId={slice.currentModeId}
-      onSelectMode={handleSelectMode}
-      disabled={!client}
-    />
-  );
+export const AgentModeControl = memo(function AgentModeControl({
+  serverId,
+  agentId,
+  placement,
+  isCompactLayout,
+}: AgentModeControlProps) {
+  const isCompactFormFactor = useIsCompactFormFactor();
+  const isCompact = isCompactLayout ?? isCompactFormFactor;
+  const control = useLiveAgentModeControl(serverId, agentId);
+  if (!control || !shouldRenderForPlacement(placement, isCompact)) return null;
+  return <AgentModeControlView {...control} />;
 });
 
 export interface DraftAgentModeControlProps {

@@ -24,7 +24,7 @@ import { useHostRuntimeClient, useHostRuntimeIsConnected } from "@/runtime/host-
 import { settingsStyles } from "@/styles/settings";
 import { resolveProviderLabel } from "@/utils/provider-definitions";
 import { formatTimeAgo } from "@/utils/time";
-import { compareMatchScores, scoreTextFields } from "@/utils/score-match";
+import { compareMatchScores, scoreTextFields } from "@bytetrue/byspace-protocol/search/text-match";
 import type { AgentModelDefinition, AgentProvider } from "@bytetrue/byspace-protocol/agent-types";
 import type { ProviderProfileModel } from "@bytetrue/byspace-protocol/provider-config";
 import {

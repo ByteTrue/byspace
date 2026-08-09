@@ -62,6 +62,16 @@ export const en = {
       home: "Home",
       modelGroupLabel: "Model",
       modelSearchKeywords: "switch model change model set model select model",
+      thinkingGroupLabel: "Thinking",
+      thinkingSearchKeywords: "reasoning effort thinking think",
+      modeGroupLabel: "Mode",
+      modeSearchKeywords: "access permission approval mode",
+      planModeGroupLabel: "Plan mode",
+      planModeSearchKeywords: "plan planning plan mode",
+      fastModeGroupLabel: "Fast",
+      fastModeSearchKeywords: "fast speed low latency",
+      settingOn: "On",
+      settingOff: "Off",
     },
   },
   composer: {
@@ -216,8 +226,13 @@ export const en = {
   sessions: {
     title: "History",
     empty: "No sessions yet",
+    noMatches: "No sessions match",
+    tooManyMatches: "Too many matches — narrow your search",
+    hostLoadFailed: "{{host}}: Could not load history",
+    searchPlaceholder: "Search history",
     actions: {
       loadMore: "Load more",
+      clearSearch: "Clear search",
     },
   },
   agentList: {
@@ -1557,6 +1572,7 @@ export const en = {
           es: "Spanish",
           fr: "French",
           ja: "Japanese",
+          ko: "Korean",
           ptBR: "Brazilian Portuguese",
           ru: "Russian",
           zhCN: "Simplified Chinese",

@@ -6,7 +6,7 @@ import type {
 } from "@bytetrue/byspace-protocol/agent-types";
 import type { ScheduleCadence, ScheduleSummary } from "@bytetrue/byspace-protocol/schedule/types";
 import type { FormPreferences } from "@/create-agent-preferences/preferences";
-import { formatThinkingOptionLabel } from "@/composer/agent-controls/utils";
+import { formatThinkingOptionLabel } from "@/agent-controls/labels";
 import {
   buildSelectableProviderSelectorProviders,
   type ProviderSelectorProvider,

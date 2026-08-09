@@ -64,6 +64,16 @@ export const ru: TranslationResources = {
       home: "Дом",
       modelGroupLabel: "Модель",
       modelSearchKeywords: "сменить модель изменить модель выбрать модель установить модель",
+      thinkingGroupLabel: "Мышление",
+      thinkingSearchKeywords: "рассуждение усилие мышление",
+      modeGroupLabel: "Режим",
+      modeSearchKeywords: "доступ разрешение одобрение режим",
+      planModeGroupLabel: "Режим плана",
+      planModeSearchKeywords: "план планирование режим плана",
+      fastModeGroupLabel: "Быстрый",
+      fastModeSearchKeywords: "быстрый скорость низкая задержка",
+      settingOn: "Вкл",
+      settingOff: "Выкл",
     },
   },
   composer: {
@@ -219,8 +229,13 @@ export const ru: TranslationResources = {
   sessions: {
     title: "История",
     empty: "Сеансов пока нет",
+    noMatches: "Нет подходящих сеансов",
+    tooManyMatches: "Слишком много совпадений — уточните запрос",
+    hostLoadFailed: "{{host}}: Не удалось загрузить историю",
+    searchPlaceholder: "Поиск по истории",
     actions: {
       loadMore: "Загрузить больше",
+      clearSearch: "Очистить поиск",
     },
   },
   agentList: {
@@ -1574,6 +1589,7 @@ export const ru: TranslationResources = {
           es: "Español",
           fr: "Français",
           ja: "日本語",
+          ko: "한국어",
           ptBR: "Português brasileiro",
           ru: "Русский",
           zhCN: "中文",

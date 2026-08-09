@@ -64,6 +64,16 @@ export const ar: TranslationResources = {
       home: "بيت",
       modelGroupLabel: "النموذج",
       modelSearchKeywords: "تبديل النموذج تغيير النموذج تعيين النموذج اختيار النموذج",
+      thinkingGroupLabel: "التفكير",
+      thinkingSearchKeywords: "الاستدلال الجهد التفكير",
+      modeGroupLabel: "الوضع",
+      modeSearchKeywords: "الوصول الإذن الموافقة الوضع",
+      planModeGroupLabel: "وضع التخطيط",
+      planModeSearchKeywords: "التخطيط خطة وضع التخطيط",
+      fastModeGroupLabel: "سريع",
+      fastModeSearchKeywords: "سريع سرعة زمن انتقال منخفض",
+      settingOn: "تشغيل",
+      settingOff: "إيقاف",
     },
   },
   composer: {
@@ -217,8 +227,13 @@ export const ar: TranslationResources = {
   sessions: {
     title: "السجل",
     empty: "لا توجد جلسات بعد",
+    noMatches: "لا توجد جلسات مطابقة",
+    tooManyMatches: "نتائج كثيرة جدًا — ضيّق نطاق البحث",
+    hostLoadFailed: "{{host}}: تعذر تحميل السجل",
+    searchPlaceholder: "البحث في السجل",
     actions: {
       loadMore: "تحميل المزيد",
+      clearSearch: "مسح البحث",
     },
   },
   agentList: {
@@ -1547,6 +1562,7 @@ export const ar: TranslationResources = {
           es: "Español",
           fr: "Français",
           ja: "日本語",
+          ko: "한국어",
           ptBR: "Português brasileiro",
           ru: "Русский",
           zhCN: "中文",

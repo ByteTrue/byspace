@@ -64,6 +64,16 @@ export const ja: TranslationResources = {
       home: "ホーム",
       modelGroupLabel: "モデル",
       modelSearchKeywords: "モデルを切り替え モデルを変更 モデルを設定 モデルを選択",
+      thinkingGroupLabel: "思考",
+      thinkingSearchKeywords: "推論 思考レベル 考える",
+      modeGroupLabel: "モード",
+      modeSearchKeywords: "アクセス 権限 承認 モード",
+      planModeGroupLabel: "プランモード",
+      planModeSearchKeywords: "プラン 計画 プランモード",
+      fastModeGroupLabel: "高速",
+      fastModeSearchKeywords: "高速 速度 低遅延",
+      settingOn: "オン",
+      settingOff: "オフ",
     },
   },
   composer: {
@@ -220,8 +230,13 @@ export const ja: TranslationResources = {
   sessions: {
     title: "履歴",
     empty: "セッションがまだありません",
+    noMatches: "一致するセッションはありません",
+    tooManyMatches: "一致が多すぎます — 検索条件を絞ってください",
+    hostLoadFailed: "{{host}}: 履歴を読み込めませんでした",
+    searchPlaceholder: "履歴を検索",
     actions: {
       loadMore: "さらに読み込む",
+      clearSearch: "検索をクリア",
     },
   },
   agentList: {
@@ -1560,6 +1575,7 @@ export const ja: TranslationResources = {
           es: "スペイン語",
           fr: "フランス語",
           ja: "日本語",
+          ko: "韓国語",
           ptBR: "ブラジルポルトガル語",
           ru: "ロシア語",
           zhCN: "簡体字中国語",

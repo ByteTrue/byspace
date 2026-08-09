@@ -64,6 +64,16 @@ export const es: TranslationResources = {
       home: "Hogar",
       modelGroupLabel: "Modelo",
       modelSearchKeywords: "cambiar modelo modificar modelo establecer modelo seleccionar modelo",
+      thinkingGroupLabel: "Razonamiento",
+      thinkingSearchKeywords: "razonamiento esfuerzo pensamiento",
+      modeGroupLabel: "Modo",
+      modeSearchKeywords: "acceso permiso aprobación modo",
+      planModeGroupLabel: "Modo plan",
+      planModeSearchKeywords: "plan planificación modo plan",
+      fastModeGroupLabel: "Rápido",
+      fastModeSearchKeywords: "rápido velocidad baja latencia",
+      settingOn: "Activado",
+      settingOff: "Desactivado",
     },
   },
   composer: {
@@ -220,8 +230,13 @@ export const es: TranslationResources = {
   sessions: {
     title: "Historial",
     empty: "Aún no hay sesiones",
+    noMatches: "No hay sesiones que coincidan",
+    tooManyMatches: "Demasiadas coincidencias: acota la búsqueda",
+    hostLoadFailed: "{{host}}: No se pudo cargar el historial",
+    searchPlaceholder: "Buscar en el historial",
     actions: {
       loadMore: "Cargar más",
+      clearSearch: "Borrar búsqueda",
     },
   },
   agentList: {
@@ -1583,6 +1598,7 @@ export const es: TranslationResources = {
           es: "Español",
           fr: "Français",
           ja: "日本語",
+          ko: "한국어",
           ptBR: "Português brasileiro",
           ru: "Русский",
           zhCN: "中文",

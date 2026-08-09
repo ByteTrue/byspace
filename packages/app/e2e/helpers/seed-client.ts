@@ -133,6 +133,7 @@ export interface SeedDaemonClient {
     }>;
   }>;
   updateAgent(agentId: string, updates: { name?: string }): Promise<void>;
+  setAgentMode(agentId: string, modeId: string): Promise<unknown>;
   waitForAgentUpsert(
     agentId: string,
     predicate: (snapshot: { status: string }) => boolean,
@@ -207,12 +208,13 @@ export async function seedWorkspace(options: {
   repo?: Parameters<typeof createTempGitRepo>[1];
   /** Set to false to seed a plain non-git directory instead of a git repo. */
   git?: boolean;
+  port?: number;
 }): Promise<SeededWorkspace> {
   const project =
     options.git === false
       ? await createTempDirectory(options.repoPrefix)
       : await createTempGitRepo(options.repoPrefix, options.repo);
-  const client = await connectSeedClient();
+  const client = await connectSeedClient({ port: options.port });
   try {
     const created = await client.createWorkspace({
       source: { kind: "directory", path: project.path },
