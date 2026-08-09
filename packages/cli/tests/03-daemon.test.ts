@@ -54,6 +54,7 @@ try {
     console.log("Test 2: daemon pair explains how to enable relay");
     const result = await daemonCommand(["pair"]);
     assert.strictEqual(result.exitCode, 1, "daemon pair should report relay disabled");
+    assert(!result.stdout.includes("#offer="), "stdout should not include a pairing offer");
     assert(
       result.stderr.includes("Relay pairing is disabled"),
       "error should explain that relay pairing is disabled",
@@ -81,6 +82,7 @@ try {
     console.log("Test 4: daemon pair --json reports relay disabled");
     const result = await daemonCommand(["pair", "--json"]);
     assert.strictEqual(result.exitCode, 1, "daemon pair --json should report relay disabled");
+    assert(!result.stdout.includes("#offer="), "JSON stdout should not include a pairing offer");
     const error = JSON.parse(result.stderr);
     assert.strictEqual(error.code, "RELAY_DISABLED", "JSON error should identify relay disabled");
     assert(
