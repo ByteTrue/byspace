@@ -8,6 +8,7 @@ import React, {
   useState,
   useSyncExternalStore,
 } from "react";
+import type { CSSProperties } from "react";
 import type { DaemonClient, FileReadResult } from "@bytetrue/byspace-client/internal/daemon-client";
 import { Image as RNImage, ScrollView as RNScrollView, Text, View } from "react-native";
 import { StyleSheet, UnistylesRuntime, withUnistyles } from "react-native-unistyles";
@@ -48,6 +49,7 @@ import { confirmDialog } from "@/utils/confirm-dialog";
 import { usePublishPanelInstanceAttributes } from "@/panels/panel-instance-attributes";
 import { AppearanceStyleBoundary } from "@/components/appearance-style-boundary";
 import type { Theme } from "@/styles/theme";
+import { createHtmlPreviewDocument, isHtmlPreviewPath } from "@/file-pane/html-preview";
 
 const ThemedLoadingSpinner = withUnistyles(LoadingSpinner);
 const foregroundMutedColorMapping = (theme: Theme) => ({
@@ -68,9 +70,29 @@ interface FilePreviewBodyProps {
   location: WorkspaceFileLocation;
   navigationRevision: number;
   imagePreviewUri: string | null;
+  mode?: "preview" | "source";
 }
 
 type TextExplorerFile = ExplorerFile & { kind: "text" };
+
+const HTML_PREVIEW_FRAME_STYLE: CSSProperties = {
+  width: "100%",
+  height: "100%",
+  border: 0,
+  backgroundColor: "white",
+};
+
+function resolveRenderedTextPreview(input: {
+  path: string;
+  isText: boolean;
+  mode?: "preview" | "source";
+  lineStart?: number;
+}): "markdown" | "html" | "source" {
+  if (!input.isText || input.mode === "source" || input.lineStart) return "source";
+  if (isRenderedMarkdownFile(input.path)) return "markdown";
+  if (isWeb && isHtmlPreviewPath(input.path)) return "html";
+  return "source";
+}
 
 function trimNonEmpty(value: string | null | undefined): string | null {
   if (typeof value !== "string") {
@@ -219,22 +241,29 @@ function FilePreviewBody({
   location,
   navigationRevision,
   imagePreviewUri,
+  mode,
 }: FilePreviewBodyProps) {
   const theme = UnistylesRuntime.getTheme();
   const { t } = useTranslation();
   const filePath = location.path;
-  const isMarkdownFile =
-    preview?.kind === "text" && isRenderedMarkdownFile(filePath) && !location.lineStart;
+  const renderedTextPreview = resolveRenderedTextPreview({
+    path: filePath,
+    isText: preview?.kind === "text",
+    mode,
+    lineStart: location.lineStart,
+  });
+  const isMarkdownFile = renderedTextPreview === "markdown";
+  const isHtmlFile = renderedTextPreview === "html";
 
   const previewScrollRef = useRef<RNScrollView>(null);
 
   const highlightedLines = useMemo(() => {
-    if (!preview || preview.kind !== "text" || isMarkdownFile) {
+    if (!preview || preview.kind !== "text" || isMarkdownFile || isHtmlFile) {
       return null;
     }
 
     return highlightCode(preview.content ?? "", filePath);
-  }, [isMarkdownFile, preview, filePath]);
+  }, [isHtmlFile, isMarkdownFile, preview, filePath]);
 
   const gutterWidth = useMemo(() => {
     if (!highlightedLines) return 0;
@@ -288,6 +317,19 @@ function FilePreviewBody({
   }
 
   if (preview.kind === "text") {
+    if (isHtmlFile) {
+      return (
+        <iframe
+          data-testid="file-html-preview"
+          sandbox="allow-scripts"
+          srcDoc={createHtmlPreviewDocument(preview.content ?? "")}
+          referrerPolicy="no-referrer"
+          style={HTML_PREVIEW_FRAME_STYLE}
+          title={`${t("panels.file.editor.preview")}: ${getFileNameFromPath(filePath) ?? filePath}`}
+        />
+      );
+    }
+
     if (isMarkdownFile) {
       return (
         <View style={styles.previewScrollContainer}>
@@ -400,7 +442,7 @@ export function FilePane({
 }) {
   const { t } = useTranslation();
   const isMobile = useIsCompactFormFactor();
-  const [markdownMode, setMarkdownMode] = useState<"preview" | "source">("preview");
+  const [fileMode, setFileMode] = useState<"preview" | "source">("preview");
   const [resolvedPreview, setResolvedPreview] = useState<{
     key: string | null;
     file: ExplorerFile | null;
@@ -459,7 +501,10 @@ export function FilePane({
     };
   }, [liveFile.file, readTarget]);
 
-  useEffect(() => setMarkdownMode("preview"), [readTarget?.path]);
+  useEffect(
+    () => setFileMode(location.lineStart ? "source" : "preview"),
+    [location.lineStart, readTarget?.path],
+  );
 
   const previewKey = readTarget ? `${readTarget.cwd}:${readTarget.path}` : null;
   const preview = resolvedPreview.key === previewKey ? resolvedPreview.file : null;
@@ -467,11 +512,12 @@ export function FilePane({
     resolvedPreview.key === previewKey ? resolvedPreview.imageAttachment : null,
   );
   const isMarkdown = isMarkdownPreview(preview, location.path);
+  const isHtml = isHtmlPreview(preview, location.path);
   const editable = isEditableTextFile({
     preview,
     supportsEditing,
   });
-  const canToggleMarkdownMode = isMarkdown && editable;
+  const canToggleFileMode = canToggleFilePreviewMode({ isMarkdown, isHtml, editable });
   const lineCount =
     preview?.kind === "text" ? (preview.content ?? "").split("\n").length : undefined;
   const errorMessage = getFileErrorMessage(liveFile.error, t("panels.file.failedToLoad"));
@@ -487,8 +533,8 @@ export function FilePane({
       retryingRead={liveFile.isRetrying}
       retryLabel={t("common.actions.retry")}
       filename={getFileNameFromPath(location.path) ?? location.path}
-      markdownMode={canToggleMarkdownMode ? markdownMode : undefined}
-      onMarkdownModeChange={canToggleMarkdownMode ? setMarkdownMode : undefined}
+      markdownMode={canToggleFileMode ? fileMode : undefined}
+      onMarkdownModeChange={canToggleFileMode ? setFileMode : undefined}
       lineCount={lineCount}
       editable={editable}
       disconnectedMessage={t("workspace.terminal.hostDisconnected")}
@@ -504,6 +550,18 @@ export function FilePane({
 
 function isMarkdownPreview(preview: ExplorerFile | null, path: string): boolean {
   return preview?.kind === "text" && isRenderedMarkdownFile(path);
+}
+
+function isHtmlPreview(preview: ExplorerFile | null, path: string): boolean {
+  return isWeb && preview?.kind === "text" && isHtmlPreviewPath(path);
+}
+
+function canToggleFilePreviewMode(input: {
+  isMarkdown: boolean;
+  isHtml: boolean;
+  editable: boolean;
+}): boolean {
+  return input.isHtml || (input.isMarkdown && input.editable);
 }
 
 function getFileErrorMessage(error: unknown, fallback: string): string | null {
@@ -630,6 +688,7 @@ function FilePanePresentation({
           location={location}
           navigationRevision={navigationRevision}
           imagePreviewUri={imagePreviewUri}
+          mode={markdownMode}
         />
       </AppearanceStyleBoundary>
     </View>
@@ -817,6 +876,7 @@ function EditableFilePane({
             location={location}
             navigationRevision={navigationRevision}
             imagePreviewUri={null}
+            mode="preview"
           />
         </AppearanceStyleBoundary>
       )}
