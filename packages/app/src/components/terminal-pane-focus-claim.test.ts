@@ -85,8 +85,8 @@ describe("terminal pane focus claim", () => {
     expect(ordinarySameSizeMeasurement).toEqual({ shouldSend: true, intent: "claim" });
   });
 
-  it("keeps a claimed terminal's passive resize ownership after pane focus moves", () => {
-    const key = "ws:term-1";
+  it("keeps a claimed terminal's passive resize ownership after pane focus moves in one connection epoch", () => {
+    const key = "7:ws:term-1";
     const requested = reconcileFocusClaim(EMPTY_FOCUS_CLAIM_STATE, {
       key,
       canRequest: true,
@@ -113,6 +113,25 @@ describe("terminal pane focus claim", () => {
 
     expect(blurred).toEqual({ claimedKey: key, requestedKey: null });
     expect(ownerUpdate).toEqual({ shouldSend: true, intent: "update" });
+  });
+
+  it("invalidates a blurred claim across disconnect and a new connection epoch", () => {
+    const firstConnectionKey = "7:ws:term-1";
+    const requested = reconcileFocusClaim(EMPTY_FOCUS_CLAIM_STATE, {
+      key: firstConnectionKey,
+      canRequest: true,
+    });
+    const claimed = settleFocusClaim(requested.state, { key: firstConnectionKey, sent: true });
+    const blurred = request(claimed, { key: firstConnectionKey, canRequest: false });
+    const disconnected = request(blurred, { key: null, canRequest: false });
+    const reconnected = reconcileFocusClaim(disconnected, {
+      key: "8:ws:term-1",
+      canRequest: false,
+    });
+
+    expect(blurred.claimedKey).toBe(firstConnectionKey);
+    expect(disconnected).toEqual(EMPTY_FOCUS_CLAIM_STATE);
+    expect(reconnected).toEqual({ state: EMPTY_FOCUS_CLAIM_STATE, shouldRequest: false });
   });
 
   it("keeps passive resizes from an unclaimed unfocused terminal local", () => {

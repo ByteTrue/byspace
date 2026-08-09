@@ -6,7 +6,11 @@ import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { encodeTerminalKeyInput } from "@bytetrue/byspace-protocol/terminal-key-input";
 import type { TerminalInputModeState } from "@bytetrue/byspace-protocol/terminal-input-mode";
 import { useTranslation } from "react-i18next";
-import { useHostRuntimeClient, useHostRuntimeIsConnected } from "@/runtime/host-runtime";
+import {
+  useHostRuntimeClient,
+  useHostRuntimeConnectionEpoch,
+  useHostRuntimeIsConnected,
+} from "@/runtime/host-runtime";
 import { useAppActivelyVisible } from "@/hooks/use-app-visible";
 import { useStableEvent } from "@/hooks/use-stable-event";
 import { useToast } from "@/contexts/toast-context";
@@ -191,6 +195,7 @@ export function TerminalPane({
 
   const client = useHostRuntimeClient(serverId);
   const isConnected = useHostRuntimeIsConnected(serverId);
+  const connectionEpoch = useHostRuntimeConnectionEpoch(serverId);
   const supportsTerminalRestoreModes = useSessionStore(
     (state) => state.sessions[serverId]?.serverInfo?.features?.["terminal-restore-modes"] === true,
   );
@@ -202,6 +207,7 @@ export function TerminalPane({
 
   const scopeKey = useMemo(() => terminalScopeKey({ serverId, cwd }), [serverId, cwd]);
   const terminalStreamKey = useMemo(() => `${scopeKey}:${terminalId}`, [scopeKey, terminalId]);
+  const focusClaimIdentity = isConnected ? `${connectionEpoch}:${terminalStreamKey}` : null;
   const isPaneVisible = useRetainedPanelActive();
   const isTerminalStreamActive = isWorkspaceFocused && isPaneVisible;
   // Keep the latest measured size for whichever client currently owns the pane,
@@ -310,9 +316,10 @@ export function TerminalPane({
     }
   }, [isMobile, isPaneFocused, isWorkspaceFocused, requestTerminalFocus, scopeKey, terminalId]);
 
+  // Keep this before the stream-controller effect so reconnect attach cannot observe a prior epoch's claim.
   useEffect(() => {
     const step = reconcileFocusClaim(paneFocusResizeClaimRef.current, {
-      key: terminalId ? terminalStreamKey : null,
+      key: terminalId ? focusClaimIdentity : null,
       canRequest: canClaimTerminalSize,
     });
     paneFocusResizeClaimRef.current = step.state;
@@ -320,7 +327,7 @@ export function TerminalPane({
       lastSentTerminalSizeRef.current = null;
       requestTerminalReflow();
     }
-  }, [canClaimTerminalSize, requestTerminalReflow, terminalId, terminalStreamKey]);
+  }, [canClaimTerminalSize, focusClaimIdentity, requestTerminalReflow, terminalId]);
 
   const handleTerminalFocus = useCallback(() => {
     if (isWorkspaceFocused && isPaneFocused) {
@@ -395,7 +402,7 @@ export function TerminalPane({
 
     const canUseMeasuredTerminalSize = () =>
       canClaimTerminalSizeRef.current ||
-      paneFocusResizeClaimRef.current.claimedKey === terminalStreamKey;
+      paneFocusResizeClaimRef.current.claimedKey === focusClaimIdentity;
     const controller = new TerminalStreamController({
       client,
       // Attach may carry final renderer geometry, but that also resizes the PTY. A new pane may
@@ -466,6 +473,7 @@ export function TerminalPane({
     };
   }, [
     client,
+    focusClaimIdentity,
     handleStreamControllerStatus,
     isConnected,
     isTerminalStreamActive,
@@ -664,7 +672,7 @@ export function TerminalPane({
         shouldClaim: input.shouldClaim,
         forceClaim: false,
         supportsTerminalSizeOwnership,
-        hasClaimedSize: paneFocusResizeClaimRef.current.claimedKey === terminalStreamKey,
+        hasClaimedSize: paneFocusResizeClaimRef.current.claimedKey === focusClaimIdentity,
         readiness: {
           isWorkspaceFocused,
           isPaneFocused,

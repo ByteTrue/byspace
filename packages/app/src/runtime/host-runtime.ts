@@ -2301,6 +2301,15 @@ export function useHostRuntimeIsConnected(serverId: string): boolean {
   );
 }
 
+export function useHostRuntimeConnectionEpoch(serverId: string): number {
+  const store = getHostRuntimeStore();
+  return useSyncExternalStore(
+    (onStoreChange) => store.subscribe(serverId, onStoreChange),
+    () => store.getSnapshot(serverId)?.connectionEpoch ?? 0,
+    () => store.getSnapshot(serverId)?.connectionEpoch ?? 0,
+  );
+}
+
 export function useHostRuntimeConnectionStatus(serverId: string): HostRuntimeConnectionStatus {
   const store = getHostRuntimeStore();
   return useSyncExternalStore(
