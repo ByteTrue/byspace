@@ -1194,6 +1194,12 @@ export class Session {
     await this.archiveWorkspaceRecord(workspaceId, undefined, context);
   }
 
+  // Internal settlement callback entry: setup has left its operation phase, so this
+  // must not re-enter the public stop/await barrier for the same runtime run.
+  async archiveWorkspaceRecordAfterSetupSettled(workspaceId: string): Promise<void> {
+    await this.archiveWorkspaceRecord(workspaceId);
+  }
+
   markWorkspaceArchivingForExternalMutation(
     workspaceIds: Iterable<string>,
     archivingAt: string,
@@ -5986,6 +5992,8 @@ export class Session {
         sessionLogger: this.sessionLogger,
         terminalManager: this.terminalManager,
         archiveWorkspaceRecord: (workspaceId) => this.archiveWorkspaceRecord(workspaceId),
+        archiveWorkspaceRecordAfterSetupSettled: (workspaceId) =>
+          this.archiveWorkspaceRecordAfterSetupSettled(workspaceId),
         serviceProxy: this.serviceProxy,
         scriptRuntimeStore: this.scriptRuntimeStore,
         getDaemonTcpPort: this.getDaemonTcpPort,

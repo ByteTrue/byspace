@@ -107,6 +107,7 @@ interface CreateBySpaceWorktreeInBackgroundDependencies {
   sessionLogger: Logger;
   terminalManager: TerminalManager | null;
   archiveWorkspaceRecord: (workspaceId: string) => Promise<void>;
+  archiveWorkspaceRecordAfterSetupSettled: (workspaceId: string) => Promise<void>;
   serviceProxy: ServiceProxySubsystem | null;
   scriptRuntimeStore: WorkspaceScriptRuntimeStore | null;
   getDaemonTcpPort: (() => number | null) | null;
@@ -733,7 +734,7 @@ export async function createBySpaceWorktreeWorkflow(
     },
     async () => {
       if (archiveWorkspaceAfterSetup && !setupSignal?.aborted) {
-        await dependencies.archiveWorkspaceRecord(workspace.workspaceId);
+        await dependencies.archiveWorkspaceRecordAfterSetupSettled(workspace.workspaceId);
       }
     },
   );

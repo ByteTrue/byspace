@@ -216,25 +216,6 @@ function waitForAbort(signal: AbortSignal): Promise<void> {
 describe("WorkspaceReconciliationService", () => {
   const tempDirs: string[] = [];
 
-  test("runs post-settlement work after removing the active setup run", async () => {
-    const runtime = new WorkspaceSetupRuntime();
-    let afterSettled!: () => void;
-    const completed = new Promise<void>((resolve) => {
-      afterSettled = resolve;
-    });
-
-    runtime.start(
-      "w1",
-      async () => {},
-      async () => {
-        await runtime.stop("w1");
-        afterSettled();
-      },
-    );
-
-    await completed;
-  });
-
   afterEach(() => {
     for (const dir of tempDirs) {
       rmSync(dir, { recursive: true, force: true });

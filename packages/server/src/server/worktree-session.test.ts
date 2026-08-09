@@ -120,6 +120,7 @@ function createWorkflowForRequestTest(options: {
         sessionLogger: createLogger(),
         terminalManager: null,
         archiveWorkspaceRecord: async () => {},
+        archiveWorkspaceRecordAfterSetupSettled: async () => {},
         serviceProxy: null,
         scriptRuntimeStore: null,
         getDaemonTcpPort: null,
@@ -445,6 +446,7 @@ describe("create-agent worktree setup boundary", () => {
           sessionLogger: createLogger(),
           terminalManager: null,
           archiveWorkspaceRecord: async () => {},
+          archiveWorkspaceRecordAfterSetupSettled: async () => {},
           serviceProxy: null,
           scriptRuntimeStore: null,
           getDaemonTcpPort: null,
@@ -496,6 +498,62 @@ describe("create-agent worktree setup boundary", () => {
         });
       });
       expect(liveItems).toEqual([]);
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+  test("pre-bootstrap failure uses the setup-settled record archive entry", async () => {
+    const { tempDir, repoDir } = createGitRepo();
+    const byspaceHome = path.join(tempDir, ".byspace");
+    writeFileSync(path.join(repoDir, "byspace.json"), "{ invalid json\n");
+    execFileSync("git", ["add", "byspace.json"], { cwd: repoDir, stdio: "pipe" });
+    execFileSync("git", ["-c", "commit.gpgsign=false", "commit", "-m", "broken config"], {
+      cwd: repoDir,
+      stdio: "pipe",
+    });
+    const runtime = new WorkspaceSetupRuntime();
+    const publicArchive = vi.fn(async () => {
+      throw new Error("public archive barrier must not run from settlement callback");
+    });
+    const settledArchive = vi.fn(async () => {});
+    let setupCompletion: Promise<void> | null = null;
+
+    try {
+      const result = await createBySpaceWorktreeWorkflow(
+        {
+          byspaceHome,
+          createBySpaceWorktree: createBySpaceWorktreeForTest({ byspaceHome }),
+          warmWorkspaceGitData: async () => {},
+          autoNameWorkspaceBranchForFirstAgent: () => {},
+          emitWorkspaceUpdateForWorkspaceId: async () => {},
+          cacheWorkspaceSetupSnapshot: () => {},
+          emit: () => {},
+          sessionLogger: createLogger(),
+          terminalManager: null,
+          archiveWorkspaceRecord: publicArchive,
+          archiveWorkspaceRecordAfterSetupSettled: settledArchive,
+          serviceProxy: null,
+          scriptRuntimeStore: null,
+          getDaemonTcpPort: null,
+          getDaemonTcpHost: null,
+          onScriptsChanged: null,
+          startWorkspaceSetup: (workspaceId, operation, afterSettled) => {
+            setupCompletion = runtime.start(workspaceId, operation, afterSettled);
+          },
+        },
+        {
+          cwd: repoDir,
+          worktreeSlug: "failed-before-bootstrap",
+          runSetup: false,
+          byspaceHome,
+        },
+        { setupContinuation: { kind: "workspace" } },
+      );
+      expect(setupCompletion).not.toBeNull();
+      await setupCompletion;
+
+      expect(settledArchive).toHaveBeenCalledWith(result.workspace.workspaceId);
+      expect(publicArchive).not.toHaveBeenCalled();
     } finally {
       rmSync(tempDir, { recursive: true, force: true });
     }

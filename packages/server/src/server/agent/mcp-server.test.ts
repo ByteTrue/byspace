@@ -674,6 +674,7 @@ function createBySpaceWorktreeForMcpTest(options: {
         sessionLogger: createTestLogger(),
         terminalManager: null,
         archiveWorkspaceRecord: async () => {},
+        archiveWorkspaceRecordAfterSetupSettled: async () => {},
         serviceProxy: null,
         scriptRuntimeStore: null,
         getDaemonTcpPort: null,

@@ -509,6 +509,29 @@ function terminalHasOutput(state: ReturnType<TerminalSession["getState"]>): bool
   return false;
 }
 
+function createWorktreeTerminalCleanupError(error: unknown, cleanupError: unknown): AggregateError {
+  return new AggregateError(
+    [error, cleanupError],
+    "Worktree terminal bootstrap and cleanup failed",
+    { cause: cleanupError },
+  );
+}
+
+async function cleanupFailedWorktreeBootstrapTerminal(input: {
+  terminalManager: TerminalManager;
+  terminalId: string;
+  error: unknown;
+  createdTerminalIds: Set<string>;
+}): Promise<void> {
+  input.createdTerminalIds.delete(input.terminalId);
+  try {
+    await input.terminalManager.killTerminalAndWait(input.terminalId);
+  } catch (cleanupError) {
+    input.createdTerminalIds.add(input.terminalId);
+    throw createWorktreeTerminalCleanupError(input.error, cleanupError);
+  }
+}
+
 async function runWorktreeTerminalBootstrap(
   options: RunAsyncWorktreeBootstrapOptions,
   runtimeEnv: WorktreeRuntimeEnv,
@@ -551,9 +574,16 @@ async function runWorktreeTerminalBootstrap(
   const createdTerminalIds = new Set<string>();
   const cleanupCreatedTerminals = async () => {
     const terminalIds = [...createdTerminalIds];
-    createdTerminalIds.clear();
     await Promise.all(
-      terminalIds.map((terminalId) => terminalManager.killTerminalAndWait(terminalId)),
+      terminalIds.map(async (terminalId) => {
+        createdTerminalIds.delete(terminalId);
+        try {
+          await terminalManager.killTerminalAndWait(terminalId);
+        } catch (error) {
+          createdTerminalIds.add(terminalId);
+          throw error;
+        }
+      }),
     );
   };
   let abortCleanup: Promise<void> = Promise.resolve();
@@ -605,11 +635,15 @@ async function runWorktreeTerminalBootstrap(
             error: null,
           };
         } catch (error) {
+          if (terminal) {
+            await cleanupFailedWorktreeBootstrapTerminal({
+              terminalManager,
+              terminalId: terminal.id,
+              error,
+              createdTerminalIds,
+            });
+          }
           if (options.signal?.aborted) {
-            if (terminal) {
-              createdTerminalIds.delete(terminal.id);
-              await terminalManager.killTerminalAndWait(terminal.id);
-            }
             return null;
           }
           const message = error instanceof Error ? error.message : String(error);
@@ -634,7 +668,7 @@ async function runWorktreeTerminalBootstrap(
     const results = pendingResults.filter(
       (result): result is WorktreeBootstrapTerminalResult => result !== null,
     );
-    await options.appendTimelineItem(
+    const completed = await options.appendTimelineItem(
       buildTerminalTimelineItem({
         callId,
         status: "completed",
@@ -643,6 +677,20 @@ async function runWorktreeTerminalBootstrap(
         errorMessage: null,
       }),
     );
+    if (!completed) {
+      await cleanupCreatedTerminals();
+    }
+  } catch (error) {
+    try {
+      await cleanupCreatedTerminals();
+    } catch (cleanupError) {
+      options.logger?.warn(
+        { agentId: options.agentId, err: cleanupError },
+        "Failed to clean up worktree bootstrap terminals",
+      );
+      throw createWorktreeTerminalCleanupError(error, cleanupError);
+    }
+    throw error;
   } finally {
     options.signal?.removeEventListener("abort", abort);
     if (options.signal?.aborted) {

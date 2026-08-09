@@ -813,6 +813,15 @@ export async function createBySpaceDaemon(
       context,
     });
   };
+  const archiveWorkspaceRecordAfterSetupSettledExternal = async (workspaceId: string) => {
+    const session = wsServer?.listActiveSessions()[0];
+    if (session) {
+      await session.archiveWorkspaceRecordAfterSetupSettled(workspaceId);
+      return;
+    }
+
+    await archivePersistedWorkspaceRecord({ workspaceId, workspaceRegistry });
+  };
   // external path→workspace adapter, not ownership: archive-by-path requests that
   // arrive with a worktree path and no workspaceId (old clients / CLI).
   const findWorkspaceIdForCwdExternal = async (cwd: string): Promise<string | null> => {
@@ -958,6 +967,7 @@ export async function createBySpaceDaemon(
         sessionLogger: logger,
         terminalManager,
         archiveWorkspaceRecord: archiveWorkspaceRecordExternal,
+        archiveWorkspaceRecordAfterSetupSettled: archiveWorkspaceRecordAfterSetupSettledExternal,
         serviceProxy,
         scriptRuntimeStore,
         getDaemonTcpPort: () => (boundListenTarget?.type === "tcp" ? boundListenTarget.port : null),
