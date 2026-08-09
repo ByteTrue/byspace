@@ -13,11 +13,37 @@
 // node_modules populated (the Nix build invokes this post-configHook).
 
 import { nodeFileTrace } from "@vercel/nft";
-import { glob } from "node:fs/promises";
+import { glob, stat } from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 
 const REPO_ROOT = path.resolve(import.meta.dirname, "..");
+
+async function expandGlobFiles(pattern, cwd = REPO_ROOT) {
+  const files = [];
+
+  for await (const entry of glob(pattern, { cwd, withFileTypes: true })) {
+    const absolutePath = path.join(entry.parentPath, entry.name);
+    if (entry.isFile()) {
+      files.push(path.relative(cwd, absolutePath).split(path.sep).join("/"));
+      continue;
+    }
+
+    // The install loop uses `cp -a`, so retain links to regular files without
+    // following directory links and reintroducing recursive copy behavior.
+    if (entry.isSymbolicLink()) {
+      try {
+        if ((await stat(absolutePath)).isFile()) {
+          files.push(path.relative(cwd, absolutePath).split(path.sep).join("/"));
+        }
+      } catch (error) {
+        if (error?.code !== "ENOENT") throw error;
+      }
+    }
+  }
+
+  return files;
+}
 
 const { sherpaPlatformPackageName } = await import(
   pathToFileURL(
@@ -45,6 +71,8 @@ const additionalInputs = [
   "packages/server/dist/server/terminal/shell-integration/**",
   // Silero VAD ONNX model (sherpa speech provider)
   "packages/server/dist/server/server/speech/providers/local/sherpa/assets/silero_vad.onnx",
+  // Bundled orchestration skills are loaded through filesystem paths.
+  "packages/server/dist/skills/**",
   // Server runtime config files (read by path, not require)
   "packages/server/.env.example",
   // CLI shebang script wrapping dist/index.js
@@ -99,7 +127,7 @@ for (const w of warnings) {
 const expanded = new Set(fileList);
 for (const pattern of additionalInputs) {
   if (pattern.includes("*")) {
-    for await (const file of glob(pattern, { cwd: REPO_ROOT })) {
+    for (const file of await expandGlobFiles(pattern)) {
       expanded.add(file);
     }
   } else {

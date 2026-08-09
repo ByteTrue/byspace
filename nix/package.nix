@@ -30,8 +30,20 @@ buildNpmPackage rec {
         baseName = builtins.baseNameOf path;
         relPath = lib.removePrefix (toString ./..) path;
       in
-      # Exclude test fixtures and debug files
-      !(lib.hasSuffix ".test.ts" baseName)
+      # Documentation, CI definitions and agent/editor configuration do not
+      # reach the build. Keeping them out prevents docs-only changes from
+      # rebuilding an otherwise byte-identical package.
+      !(lib.hasPrefix "/docs" relPath)
+      && !(lib.hasPrefix "/.github" relPath)
+      && !(lib.hasPrefix "/.agents" relPath)
+      && !(lib.hasPrefix "/.claude" relPath)
+      && !(lib.hasPrefix "/.codex" relPath)
+      && !(lib.hasPrefix "/docker" relPath)
+      # Exclude only top-level prose. Nested Markdown can be a runtime asset,
+      # including skills/*/SKILL.md copied into the packaged daemon.
+      && builtins.match "/[^/]+\\.md" relPath == null
+      # Exclude test fixtures and debug files.
+      && !(lib.hasSuffix ".test.ts" baseName)
       && !(lib.hasSuffix ".e2e.test.ts" baseName)
       && baseName != "node_modules"
       && baseName != ".git"
@@ -107,9 +119,11 @@ buildNpmPackage rec {
 
     # Create wrapper for the server entry point (for systemd / direct use)
     mkdir -p $out/bin
+    # Keep BySpace's runtime mode separate from NODE_ENV, which belongs to
+    # spawned agents and terminals.
     makeWrapper ${nodejs}/bin/node $out/bin/byspace-server \
       --add-flags "$out/lib/byspace/packages/server/dist/scripts/supervisor-entrypoint.js" \
-      --set NODE_ENV production
+      --set BYSPACE_NODE_ENV production
 
     # Create wrapper for the CLI
     makeWrapper ${nodejs}/bin/node $out/bin/byspace \
