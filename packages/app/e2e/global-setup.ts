@@ -752,6 +752,7 @@ function startDaemon(args: DaemonSpawnArgs): ChildProcess {
     BYSPACE_E2E_EDITOR_RECORD_PATH: args.editorRecordPath,
     BYSPACE_SERVER_ID: "srv_e2e_test_daemon",
     BYSPACE_LISTEN: `0.0.0.0:${args.port}`,
+    BYSPACE_RELAY_ENABLED: "1",
     BYSPACE_RELAY_ENDPOINT: `127.0.0.1:${args.relayPort}`,
     BYSPACE_CORS_ORIGINS: `http://localhost:${args.metroPort}`,
     BYSPACE_NODE_ENV: "development",
