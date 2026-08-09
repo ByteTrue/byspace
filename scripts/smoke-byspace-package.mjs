@@ -3,6 +3,7 @@ import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from "node
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 
 const root = resolve(import.meta.dirname, "..");
 const { version } = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
@@ -20,6 +21,18 @@ const installedBinary = join(
   globalBinRoot,
   process.platform === "win32" ? "byspace.cmd" : "byspace",
 );
+const installedServerExportsUrl = pathToFileURL(
+  join(
+    installedPackageRoot,
+    "node_modules",
+    "@bytetrue",
+    "byspace-server",
+    "dist",
+    "server",
+    "server",
+    "exports.js",
+  ),
+).href;
 const nativeLoadCheck = `
   import { createRequire } from "node:module";
   import { pathToFileURL } from "node:url";
@@ -275,6 +288,47 @@ try {
         appBaseUrl: "https://app.byspace.zijieapi.de5.net",
         relayEndpoint: "relay.byspace.zijieapi.de5.net:443",
       };
+  const pairingProbeScript = `
+    const { generateLocalPairingOffer, loadConfig, parseConnectionOfferFromUrl } =
+      await import(${JSON.stringify(installedServerExportsUrl)});
+    const config = loadConfig(${JSON.stringify(home)});
+    const pairing = await generateLocalPairingOffer({
+      byspaceHome: config.byspaceHome,
+      releaseVersion: config.daemonVersion,
+      relayEnabled: true,
+      relayEndpoint: config.relayEndpoint,
+      relayPublicEndpoint: config.relayPublicEndpoint,
+      relayUseTls: config.relayUseTls,
+      relayPublicUseTls: config.relayPublicUseTls,
+      appBaseUrl: config.appBaseUrl,
+      includeQr: false,
+    });
+    const pairingUrl = pairing.url ? new URL(pairing.url) : null;
+    const offer = pairing.url ? parseConnectionOfferFromUrl(pairing.url) : null;
+    if (!pairingUrl || !offer) {
+      throw new Error("Installed server did not generate a relay opt-in offer");
+    }
+    process.stdout.write(JSON.stringify({
+      appBaseUrl: (pairingUrl.origin + pairingUrl.pathname).replace(/\\/$/, ""),
+      relayEndpoint: offer.relay.endpoint,
+      relayUseTls: offer.relay.useTls,
+      relayEnabled: pairing.relayEnabled,
+    }));
+  `;
+  const pairingProbe = JSON.parse(
+    run(process.execPath, ["--input-type=module", "--eval", pairingProbeScript], { env }),
+  );
+  if (
+    pairingProbe.appBaseUrl !== expectedHostedRelease.appBaseUrl ||
+    pairingProbe.relayEndpoint !== expectedHostedRelease.relayEndpoint ||
+    pairingProbe.relayUseTls !== true ||
+    pairingProbe.relayEnabled !== true
+  ) {
+    throw new Error(
+      `Installed server resolved unexpected hosted defaults: ${JSON.stringify(pairingProbe)}`,
+    );
+  }
+
   runBinary(["daemon", "start"], { env });
   daemonStarted = true;
   const defaultStatus = waitForDaemon(env);
@@ -292,37 +346,6 @@ try {
   ) {
     throw new Error(
       `Daemon persisted unexpected release defaults: ${JSON.stringify(defaultPersistedConfig)}`,
-    );
-  }
-
-  const pairing = JSON.parse(runBinary(["daemon", "pair", "--relay", "--json"], { env }));
-  const pairingUrl = typeof pairing.url === "string" ? new URL(pairing.url) : null;
-  const encodedOffer = pairingUrl
-    ? new URLSearchParams(pairingUrl.hash.slice(1)).get("offer")
-    : null;
-  const pairingOffer = encodedOffer
-    ? JSON.parse(Buffer.from(encodedOffer, "base64url").toString("utf8"))
-    : null;
-  if (
-    pairing.relayEnabled !== true ||
-    !pairingUrl ||
-    `${pairingUrl.origin}${pairingUrl.pathname}` !== `${expectedHostedRelease.appBaseUrl}/` ||
-    pairingOffer?.relay?.endpoint !== expectedHostedRelease.relayEndpoint ||
-    pairingOffer?.relay?.useTls !== true
-  ) {
-    throw new Error(`Daemon produced an unexpected relay opt-in offer: ${JSON.stringify(pairing)}`);
-  }
-  const optedInStatus = waitForDaemon(env);
-  if (optedInStatus.relay !== `wss://${expectedHostedRelease.relayEndpoint}`) {
-    throw new Error(`Daemon used unexpected release relay: ${JSON.stringify(optedInStatus)}`);
-  }
-  const optedInPersistedConfig = JSON.parse(readFileSync(join(home, "config.json"), "utf8"));
-  if (
-    optedInPersistedConfig.daemon?.relay?.enabled !== true ||
-    optedInPersistedConfig.daemon.relay.endpoint !== undefined
-  ) {
-    throw new Error(
-      `Daemon persisted unexpected relay opt-in config: ${JSON.stringify(optedInPersistedConfig)}`,
     );
   }
   process.stdout.write(`BySpace ${version} package smoke passed on port ${port}.\n`);
