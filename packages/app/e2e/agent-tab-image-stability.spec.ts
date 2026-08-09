@@ -1,6 +1,7 @@
 import { writeFile } from "node:fs/promises";
 import path from "node:path";
 import { test, expect } from "./fixtures";
+import { readScrollMetrics, scrollChatAwayFromBottom } from "./helpers/agent-bottom-anchor";
 import { createIdleAgent } from "./helpers/archive-tab";
 import { openAgentRoute } from "./helpers/mock-agent";
 import { seedWorkspace } from "./helpers/seed-client";
@@ -60,47 +61,53 @@ test("near-tail reload stays stable when an assistant image grows after load", a
 
     await page.reload();
     await expect(rendered).toBeVisible({ timeout: 30_000 });
-    const result = await rendered.evaluate(async (element) => {
-      const image = element instanceof HTMLImageElement ? element : element.querySelector("img");
-      const scroll = document.querySelector(
-        '[data-testid="agent-chat-scroll"]:not([aria-hidden="true"])',
-      );
-      if (!image || !scroll) throw new Error("Expected assistant image and transcript scroll");
-      const load = async (src: string) => {
+    const load = async (src: string) => {
+      await rendered.evaluate(async (element, nextSrc) => {
+        const image = element instanceof HTMLImageElement ? element : element.querySelector("img");
+        if (!image || !(element instanceof HTMLElement)) {
+          throw new Error("Expected assistant image surface");
+        }
         await new Promise<void>((resolve, reject) => {
           image.addEventListener("load", () => resolve(), { once: true });
           image.addEventListener("error", () => reject(new Error("Test image failed to load")), {
             once: true,
           });
-          image.src = src;
+          image.src = nextSrc;
         });
-        if (!(element instanceof HTMLElement)) throw new Error("Expected assistant image surface");
         element.style.aspectRatio = `${image.naturalWidth} / ${image.naturalHeight}`;
-      };
-
-      await load(
-        "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='100'%3E%3C/svg%3E",
-      );
-      scroll.scrollTop = Math.max(0, scroll.scrollHeight - scroll.clientHeight - 180);
-      const before = {
-        bottomDistance: scroll.scrollHeight - scroll.clientHeight - scroll.scrollTop,
-        imageHeight: image.getBoundingClientRect().height,
-        scrollHeight: scroll.scrollHeight,
-      };
-      await load(
-        "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='400'%3E%3C/svg%3E",
-      );
-      await new Promise(requestAnimationFrame);
-      await new Promise(requestAnimationFrame);
+      }, src);
+    };
+    const readLayout = async () => {
+      const [scroll, imageHeight] = await Promise.all([
+        readScrollMetrics(page),
+        rendered.evaluate((element) => {
+          const image =
+            element instanceof HTMLImageElement ? element : element.querySelector("img");
+          if (!image) throw new Error("Expected assistant image");
+          return image.getBoundingClientRect().height;
+        }),
+      ]);
       return {
-        before,
-        after: {
-          bottomDistance: scroll.scrollHeight - scroll.clientHeight - scroll.scrollTop,
-          imageHeight: image.getBoundingClientRect().height,
-          scrollHeight: scroll.scrollHeight,
-        },
+        bottomDistance: scroll.distanceFromBottom,
+        imageHeight,
+        scrollHeight: scroll.contentHeight,
       };
+    };
+
+    await load(
+      "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='100'%3E%3C/svg%3E",
+    );
+    await scrollChatAwayFromBottom(page, {
+      deltaY: -180,
+      minDistanceFromBottom: 150,
     });
+    const before = await readLayout();
+    await load(
+      "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='400'%3E%3C/svg%3E",
+    );
+    await page.evaluate(() => new Promise(requestAnimationFrame));
+    await page.evaluate(() => new Promise(requestAnimationFrame));
+    const result = { before, after: await readLayout() };
 
     expect(result.before.bottomDistance).toBeGreaterThan(150);
     expect(result.before.bottomDistance).toBeLessThan(220);

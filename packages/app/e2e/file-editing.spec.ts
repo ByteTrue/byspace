@@ -149,7 +149,6 @@ test.describe("workspace file editing", () => {
     await replaceEditorText(page, "const localWins = 5;\n");
     await writeFile(sourcePath, "const diskLoses = 6;\n", "utf8");
     await expect(page.getByTestId("file-conflict-alert")).toBeVisible();
-    page.once("dialog", (dialog) => dialog.accept());
     await page.getByRole("button", { name: "Overwrite", exact: true }).click();
     await expect.poll(() => readFile(sourcePath, "utf8")).toBe("const localWins = 5;\n");
 
