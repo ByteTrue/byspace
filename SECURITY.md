@@ -88,4 +88,4 @@ If you do not trust a page, read it in `Source`, which executes nothing.
 
 ## Reporting vulnerabilities
 
-If you discover a security vulnerability, please report it privately by emailing hello@moboudra.com. Do not open a public issue.
+Use [GitHub Security Advisories](https://github.com/ByteTrue/byspace/security/advisories/new) to report vulnerabilities privately. Do not open a public issue.

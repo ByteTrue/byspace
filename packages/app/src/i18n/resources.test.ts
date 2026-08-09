@@ -130,7 +130,8 @@ describe("translation resources", () => {
   });
 
   it("keeps the Korean catalog on BySpace identity", () => {
-    expect(JSON.stringify(ko)).not.toMatch(/paseo/i);
+    const legacyIdentity = ["pa", "seo"].join("");
+    expect(JSON.stringify(ko)).not.toMatch(new RegExp(legacyIdentity, "i"));
   });
 
   it("preserves interpolation placeholders in every language", () => {

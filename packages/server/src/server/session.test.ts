@@ -582,6 +582,7 @@ describe("project command-center RPCs", () => {
               projectKey: "prj_new_project",
               projectDisplayName: "new-project",
               projectCustomName: null,
+              projectCustomIconRevision: null,
               projectRootPath: directoryPath,
               projectKind: "non_git",
             },
@@ -2864,7 +2865,7 @@ describe("session checkout pull request auto-merge", () => {
               autoMergeRequest: {
                 enabledAt: "2026-05-13T17:00:00Z",
                 mergeMethod: "SQUASH",
-                enabledBy: "moboudra",
+                enabledBy: "test-user",
               },
               viewerCanEnableAutoMerge: false,
               viewerCanDisableAutoMerge: true,
@@ -2891,7 +2892,7 @@ describe("session checkout pull request auto-merge", () => {
           autoMergeRequest: {
             enabledAt: "2026-05-13T17:00:00Z",
             mergeMethod: "SQUASH",
-            enabledBy: "moboudra",
+            enabledBy: "test-user",
           },
           viewerCanEnableAutoMerge: false,
           viewerCanDisableAutoMerge: true,
@@ -3100,7 +3101,7 @@ describe("session checkout pull request auto-merge", () => {
               autoMergeRequest: {
                 enabledAt: "2026-05-13T17:00:00Z",
                 mergeMethod: "SQUASH",
-                enabledBy: "moboudra",
+                enabledBy: "test-user",
               },
               viewerCanEnableAutoMerge: false,
               viewerCanDisableAutoMerge: true,

@@ -4838,7 +4838,7 @@ test("open_project_request does not unarchive an archived parent workspace for a
       projectId: home,
       rootPath: home,
       kind: "non_git",
-      displayName: "moboudra",
+      displayName: "developer",
       createdAt: "2026-04-24T07:00:00.000Z",
       updatedAt: archivedAt,
       archivedAt,
@@ -4851,7 +4851,7 @@ test("open_project_request does not unarchive an archived parent workspace for a
       projectId: home,
       cwd: home,
       kind: "directory",
-      displayName: "moboudra",
+      displayName: "developer",
       createdAt: "2026-04-24T07:00:00.000Z",
       updatedAt: archivedAt,
       archivedAt,
@@ -6161,7 +6161,7 @@ test.skip("opening a new worktree reconciles older local workspaces into the rem
   const mainWorkspaceId = path.join(tempDir, "inkwell");
   const worktreeWorkspaceId = path.join(mainWorkspaceId, ".byspace", "worktrees", "feature-a");
   const localProjectId = mainWorkspaceId;
-  const remoteProjectId = "remote:github.com/zimakki/inkwell";
+  const remoteProjectId = "remote:github.com/acme/inkwell";
 
   mkdirSync(worktreeWorkspaceId, { recursive: true });
 
@@ -6222,12 +6222,12 @@ test.skip("opening a new worktree reconciles older local workspaces into the rem
   };
   session.buildProjectPlacement = async (cwd: string) => ({
     projectKey: remoteProjectId,
-    projectName: "zimakki/inkwell",
+    projectName: "acme/inkwell",
     checkout: {
       cwd,
       isGit: true,
       currentBranch: cwd === mainWorkspaceId ? "main" : "feature-a",
-      remoteUrl: "https://github.com/zimakki/inkwell.git",
+      remoteUrl: "https://github.com/acme/inkwell.git",
       worktreeRoot: cwd,
       isBySpaceOwnedWorktree: cwd !== mainWorkspaceId,
       mainRepoRoot: cwd === mainWorkspaceId ? null : mainWorkspaceId,

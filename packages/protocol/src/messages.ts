@@ -148,7 +148,7 @@ const MutableRelayConfigSchema = z
 
 export const MutableDaemonConfigSchema = z
   .object({
-    // COMPAT(relayConfig): added in v0.3.0, remove after 2027-02-08 when old daemons are unsupported.
+    // COMPAT(relayConfig): added in v0.5.0, remove after 2027-02-08 when old daemons are unsupported.
     relay: MutableRelayConfigSchema.optional(),
     mcp: z
       .object({
@@ -2857,15 +2857,15 @@ export const ServerInfoStatusPayloadSchema = z
         forgeSearch: z.boolean().optional(),
         // COMPAT(daemonStatusRpc): added in v0.1.76, remove gate after 2026-11-18.
         daemonStatusRpc: z.boolean().optional(),
-        // COMPAT(relayConfig): added in v0.3.0, remove gate after 2027-02-08.
+        // COMPAT(relayConfig): added in v0.5.0, remove gate after 2027-02-08.
         relayConfig: z.boolean().optional(),
         // COMPAT(terminalRestoreModes): added in v0.1.81, remove gate after 2026-11-23.
         "terminal-restore-modes": z.boolean().optional(),
-        // COMPAT(terminalSizeOwnership): added in v0.3.0, remove after 2027-02-08.
+        // COMPAT(terminalSizeOwnership): added in v0.5.0, remove after 2027-02-08.
         "terminal-size-ownership": z.boolean().optional(),
-        // COMPAT(agentTimelinePromptIndex): added in v0.3.0, remove gate after 2027-02-08.
+        // COMPAT(agentTimelinePromptIndex): added in v0.5.0, remove gate after 2027-02-08.
         agentTimelinePromptIndex: z.boolean().optional(),
-        // COMPAT(agentHistorySearch): added in v0.3.0, remove gate after 2027-02-07.
+        // COMPAT(agentHistorySearch): added in v0.5.0, remove gate after 2027-02-07.
         agentHistorySearch: z.boolean().optional(),
         // COMPAT(terminalAgentHookProviders): added in v0.2.0, remove gate after 2027-01-21.
         terminalAgentHookProviders: z.boolean().optional(),
@@ -2919,7 +2919,7 @@ export const ServerInfoStatusPayloadSchema = z
         projectCreateDirectory: z.boolean().optional(),
         // COMPAT(projectList): added in v0.2.5, remove gate after 2027-01-31.
         projectList: z.boolean().optional(),
-        // COMPAT(projectCustomIcon): added in v0.3.0, remove after 2027-02-08.
+        // COMPAT(projectCustomIcon): added in v0.5.0, remove after 2027-02-08.
         projectCustomIcon: z.boolean().optional(),
         // COMPAT(commitsList): added in v0.1.110, remove gate after 2027-01-16.
         commitsList: z.boolean().optional(),
@@ -3216,11 +3216,11 @@ export const WorkspaceDescriptorPayloadSchema = z
     // value (customName) and projectCustomName mirrors the raw override so the
     // settings UI can prefill its input and offer a "reset" action.
     projectCustomName: z.string().nullable().optional(),
-    // COMPAT(projectCustomIcon): added in v0.3.0, remove after 2027-02-08.
+    // COMPAT(projectCustomIcon): added in v0.5.0, remove after 2027-02-08.
     projectCustomIconRevision: z.string().nullable().optional(),
     projectRootPath: z.string(),
     workspaceDirectory: z.string().optional(),
-    // COMPAT(worktreeSlug): added in v0.3.0, remove after 2027-02-08.
+    // COMPAT(worktreeSlug): added in v0.5.0, remove after 2027-02-08.
     // Present only for BySpace-owned worktrees; this is the basename of their root directory.
     worktreeSlug: z.string().optional(),
     projectKind: z.enum(["git", "non_git", "directory"]),
@@ -3388,7 +3388,7 @@ export const WorkspaceProjectDescriptorPayloadSchema = z.object({
   projectGroupingKey: z.string().optional(),
   projectDisplayName: z.string(),
   projectCustomName: z.string().nullable().optional(),
-  // COMPAT(projectCustomIcon): added in v0.3.0, remove after 2027-02-08.
+  // COMPAT(projectCustomIcon): added in v0.5.0, remove after 2027-02-08.
   projectCustomIconRevision: z.string().nullable().optional(),
   projectRootPath: z.string(),
   projectKind: z.enum(["git", "non_git", "directory"]),

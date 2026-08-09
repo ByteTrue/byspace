@@ -1403,15 +1403,15 @@ export class VoiceAssistantWebSocketServer {
         forgeSearch: true,
         // COMPAT(daemonStatusRpc): added in v0.1.76, remove gate after 2026-11-18.
         daemonStatusRpc: true,
-        // COMPAT(relayConfig): added in v0.3.0, remove gate after 2027-02-08.
+        // COMPAT(relayConfig): added in v0.5.0, remove gate after 2027-02-08.
         relayConfig: true,
         // COMPAT(terminalRestoreModes): added in v0.1.81, remove gate after 2026-11-23.
         "terminal-restore-modes": true,
-        // COMPAT(terminalSizeOwnership): added in v0.3.0, remove gate after 2027-02-08.
+        // COMPAT(terminalSizeOwnership): added in v0.5.0, remove gate after 2027-02-08.
         "terminal-size-ownership": true,
-        // COMPAT(agentTimelinePromptIndex): added in v0.3.0, remove gate after 2027-02-08.
+        // COMPAT(agentTimelinePromptIndex): added in v0.5.0, remove gate after 2027-02-08.
         agentTimelinePromptIndex: true,
-        // COMPAT(agentHistorySearch): added in v0.3.0, remove gate after 2027-02-07.
+        // COMPAT(agentHistorySearch): added in v0.5.0, remove gate after 2027-02-07.
         agentHistorySearch: true,
         // COMPAT(terminalAgentHookProviders): added in v0.2.0, remove gate after 2027-01-21.
         terminalAgentHookProviders: true,
@@ -1435,7 +1435,7 @@ export class VoiceAssistantWebSocketServer {
         projectAdd: true,
         // COMPAT(projectList): added in v0.2.5, remove gate after 2027-01-31.
         projectList: true,
-        // COMPAT(projectCustomIcon): added in v0.3.0, remove after 2027-02-08.
+        // COMPAT(projectCustomIcon): added in v0.5.0, remove after 2027-02-08.
         projectCustomIcon: true,
         // COMPAT(stableProjectIdentity): added in v0.2.0, remove gate after 2027-01-23.
         stableProjectIdentity: true,

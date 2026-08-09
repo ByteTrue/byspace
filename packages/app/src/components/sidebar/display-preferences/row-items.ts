@@ -24,7 +24,7 @@ export function parseSidebarRowItems(value: unknown): SidebarRowItems {
   }
   const stored = value as Record<string, unknown>;
   const result = { ...DEFAULT_SIDEBAR_ROW_ITEMS };
-  // COMPAT(sidebarRowItemsScripts): migrated in v0.3.0, remove after 2027-08-05.
+  // COMPAT(sidebarRowItemsScripts): migrated in v0.5.0, remove after 2027-08-05.
   if (stored.scripts === false) result.services = false;
   for (const [key, entry] of Object.entries(stored)) {
     if (isSidebarRowItem(key) && typeof entry === "boolean") result[key] = entry;

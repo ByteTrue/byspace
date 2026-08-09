@@ -46,7 +46,7 @@ export const CLAUDE_MODEL_MANIFEST = [
   },
   {
     id: "claude-fable-5",
-    // COMPAT(claudeFable5OneMillionId): added in v0.3.0, remove after 2027-02-06 once pre-v0.3.0 app preferences are outside support.
+    // COMPAT(claudeFable5OneMillionId): added in v0.5.0, remove after 2027-02-06 once pre-v0.5.0 app preferences are outside support.
     aliases: ["claude-fable-5[1m]"],
     label: "Fable 5",
     description: "Fable 5 · Most powerful model",
@@ -212,7 +212,7 @@ export function getClaudeManifestModels(claudeCodeVersion?: string): AgentModelD
     if (!("aliases" in model) || !model.aliases) {
       continue;
     }
-    // COMPAT(claudeFable5LegacyCatalogEntry): added in v0.3.0, remove after 2027-02-06 once pre-v0.3.0 apps are outside support.
+    // COMPAT(claudeFable5LegacyCatalogEntry): added in v0.5.0, remove after 2027-02-06 once pre-v0.5.0 apps are outside support.
     for (const alias of model.aliases) {
       definitions.push({
         ...definition,

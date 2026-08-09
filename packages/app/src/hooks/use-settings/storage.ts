@@ -170,7 +170,7 @@ function parseToolCallDetailLevel(stored: StoredAppSettings): ToolCallDetailLeve
 function parseStoredSidebarChecksDisplay(stored: StoredAppSettings): SidebarChecksDisplay | null {
   const display = parseSidebarChecksDisplay(stored.sidebarChecksDisplay);
   if (display !== null) return display;
-  // COMPAT(sidebarRowItemsChecks): migrated in v0.3.0, remove after 2027-08-05.
+  // COMPAT(sidebarRowItemsChecks): migrated in v0.5.0, remove after 2027-08-05.
   return isChecksHiddenByLegacyRowItem(stored.sidebarRowItems) ? "none" : null;
 }
 

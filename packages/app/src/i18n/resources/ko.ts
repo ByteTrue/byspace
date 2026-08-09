@@ -467,43 +467,6 @@ const koTranslations = {
         noOutput: "출력 없음",
       },
     },
-    browser: {
-      unavailable: {
-        title: "브라우저는 데스크톱 전용입니다",
-        subtitle: "내장 브라우저를 사용하려면 이 워크스페이스를 Electron에서 여세요.",
-      },
-      session: "브라우저 세션 {{browserId}}",
-      controls: {
-        back: "뒤로",
-        forward: "앞으로",
-        stopLoading: "로딩 중지",
-        refresh: "새로고침",
-        browserUrl: "브라우저 URL",
-        enterUrl: "URL 입력",
-        openDevTools: "브라우저 개발자 도구 열기",
-        cancelSelector: "요소 선택기 취소",
-        annotateElement: "요소에 주석 달기",
-        screenshotElement: "요소 스크린샷",
-        screenshotCopied: "스크린샷을 클립보드에 복사했습니다.",
-        elementCopied: "요소를 클립보드에 복사했습니다.",
-        screenshotFailed: "스크린샷을 복사할 수 없습니다.",
-      },
-      annotate: {
-        title: "요소에 주석 달기",
-        placeholder: "이 요소에 관해 에이전트에게 보낼 메시지…",
-        submit: "첨부",
-        cancel: "취소",
-      },
-      devices: {
-        label: "장치 크기",
-        responsive: "반응형",
-      },
-      errors: {
-        failedToLoad: "페이지를 불러오지 못했습니다",
-        invalidUrl: "잘못된 브라우저 URL",
-        unsupportedProtocol: "지원되지 않는 브라우저 URL을 차단했습니다: {{protocol}}",
-      },
-    },
     terminal: {
       hostDisconnected: "호스트가 연결되어 있지 않습니다",
       updateHost: "기본 터미널 렌더러를 사용하도록 호스트를 업데이트합니다.",

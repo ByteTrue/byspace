@@ -1501,9 +1501,9 @@ describe("HostRuntimeStore", () => {
     const host = makeHost({
       connections: [
         {
-          id: "direct:lan:6767",
+          id: "direct:lan:6777",
           type: "directTcp",
-          endpoint: "lan:6767",
+          endpoint: "lan:6777",
         },
       ],
     });

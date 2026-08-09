@@ -194,7 +194,7 @@ export function TerminalPane({
   const supportsTerminalRestoreModes = useSessionStore(
     (state) => state.sessions[serverId]?.serverInfo?.features?.["terminal-restore-modes"] === true,
   );
-  // COMPAT(terminalSizeOwnership): added in v0.3.0, drop the gate when the daemon floor is v0.3.0 after 2027-02-08.
+  // COMPAT(terminalSizeOwnership): added in v0.5.0, drop the gate when the daemon floor is v0.5.0 after 2027-02-08.
   const supportsTerminalSizeOwnership = useSessionStore(
     (state) => state.sessions[serverId]?.serverInfo?.features?.["terminal-size-ownership"] === true,
   );

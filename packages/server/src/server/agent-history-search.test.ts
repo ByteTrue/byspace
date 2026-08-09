@@ -34,7 +34,7 @@ function candidate(input: {
         currentBranch: branch,
         remoteUrl: null,
         worktreeRoot: "/tmp/repo",
-        isPaseoOwnedWorktree: false,
+        isBySpaceOwnedWorktree: false,
         mainRepoRoot: null,
       },
     },
