@@ -117,6 +117,7 @@ export interface BySpaceToolHostDependencies {
   workspaceScripts?: Pick<WorkspaceScriptsService, "list" | "launch" | "stop">;
   markWorkspaceArchiving?: ArchiveDependencies["markWorkspaceArchiving"];
   clearWorkspaceArchiving?: ArchiveDependencies["clearWorkspaceArchiving"];
+  stopWorkspaceSetup?: ArchiveDependencies["stopWorkspaceSetup"];
   createBySpaceWorktree?: CreateBySpaceWorktreeWorkflowFn;
   // Mints a fresh directory workspace for a cwd and returns its id.
   ensureWorkspaceForCreate?: (
@@ -3131,6 +3132,9 @@ function archiveWorktreeDependencies(
   if (!options.clearWorkspaceArchiving) {
     throw new Error("Workspace archiving clearer is required to archive worktrees");
   }
+  if (!options.stopWorkspaceSetup) {
+    throw new Error("Workspace setup runtime is required to archive worktrees");
+  }
   return {
     byspaceHome: options.byspaceHome,
     byspaceWorktreesBaseRoot: options.worktreesRoot,
@@ -3152,6 +3156,7 @@ function archiveWorktreeDependencies(
         },
         workspaceId,
       ),
+    stopWorkspaceSetup: options.stopWorkspaceSetup,
     sessionLogger: context.logger,
   };
 }

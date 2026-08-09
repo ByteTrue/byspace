@@ -6,6 +6,7 @@ import { isBySpaceOwnedWorktreeCwd } from "../../utils/worktree.js";
 import {
   archiveByScope,
   type ActiveWorkspaceRef,
+  type ArchiveDependencies,
   resolveWorkspaceIdAtPath,
 } from "../workspace-archive-service.js";
 import type {
@@ -39,6 +40,7 @@ interface CreateAgentLifecycleDispatchDependencies {
   markWorkspaceArchiving: (workspaceIds: Iterable<string>, archivingAt: string) => void;
   clearWorkspaceArchiving: (workspaceIds: Iterable<string>) => void;
   killTerminalsForWorkspace: (workspaceId: string) => Promise<void>;
+  stopWorkspaceSetup: ArchiveDependencies["stopWorkspaceSetup"];
   logger: pino.Logger;
 }
 
@@ -234,6 +236,7 @@ export class CreateAgentLifecycleDispatch {
           markWorkspaceArchiving: this.dependencies.markWorkspaceArchiving,
           clearWorkspaceArchiving: this.dependencies.clearWorkspaceArchiving,
           killTerminalsForWorkspace: this.dependencies.killTerminalsForWorkspace,
+          stopWorkspaceSetup: this.dependencies.stopWorkspaceSetup,
           sessionLogger: this.dependencies.logger,
         },
         {

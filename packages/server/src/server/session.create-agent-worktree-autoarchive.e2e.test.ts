@@ -42,6 +42,27 @@ function createGitRepo(): string {
   return repoDir;
 }
 
+function configureDelayedSetup(repoDir: string, markerPrefix: string, delayMs = 500) {
+  const startedPath = path.join(repoDir, `${markerPrefix}-started`);
+  const finishedPath = path.join(repoDir, `${markerPrefix}-finished`);
+  writeFileSync(
+    path.join(repoDir, "byspace.json"),
+    JSON.stringify({
+      worktree: {
+        setup: [
+          `node -e "const fs=require('fs'),path=require('path'),source=process.env.BYSPACE_SOURCE_CHECKOUT_PATH;fs.writeFileSync(path.join(source,'${markerPrefix}-started'),'started');setTimeout(()=>fs.writeFileSync(path.join(source,'${markerPrefix}-finished'),'finished'),${delayMs})"`,
+        ],
+      },
+    }),
+  );
+  execFileSync("git", ["add", "byspace.json"], { cwd: repoDir, stdio: "pipe" });
+  execFileSync("git", ["-c", "commit.gpgsign=false", "commit", "-m", `add ${markerPrefix} setup`], {
+    cwd: repoDir,
+    stdio: "pipe",
+  });
+  return { startedPath, finishedPath };
+}
+
 async function expectAgentAbsentFromActiveList(agentId: string): Promise<void> {
   await expect
     .poll(
@@ -105,6 +126,7 @@ async function createAgentInBranchOffWorktree(options?: {
 
 test("create_agent_request creates a worktree and auto-archives both after the first turn", async () => {
   const repoDir = createGitRepo();
+  const setupMarkers = configureDelayedSetup(repoDir, "auto-archive-setup", 5000);
   const worktree: CreateAgentWorktreeTarget = {
     mode: "branch-off",
     newBranch: "agent-lifecycle-dispatch-test",
@@ -140,6 +162,7 @@ test("create_agent_request creates a worktree and auto-archives both after the f
   // last-reference worktree directory is gone.
   await expectAgentAbsentFromActiveList(created.id);
   await expect.poll(() => existsSync(created.cwd), { timeout: 10000, interval: 100 }).toBe(false);
+  expect(existsSync(setupMarkers.finishedPath)).toBe(false);
 }, 30000);
 
 test("create_agent_request with autoArchive archives only the agent when no worktree was created", async () => {
@@ -284,3 +307,52 @@ test("create_agent_request fails cleanly when worktree creation cannot resolve t
   await expectActiveAgentListEmpty();
   await expectWorktreeListEmpty(repoDir);
 });
+
+test.skipIf(process.platform === "win32")(
+  "create then immediate archive settles setup before removing the worktree",
+  async () => {
+    const repoDir = createGitRepo();
+    const markers = configureDelayedSetup(repoDir, "immediate-archive-setup");
+    const created = await ctx.client.createAgent({
+      config: { ...getFullAccessConfig("codex"), cwd: repoDir },
+      worktree: { mode: "branch-off", newBranch: "immediate-archive", base: "main" },
+    });
+
+    const archive = await ctx.client.archiveBySpaceWorktree({ worktreePath: created.cwd });
+    const setupHadStartedWhenCleanupFinished = existsSync(markers.startedPath);
+
+    expect(archive.success).toBe(true);
+    expect(existsSync(created.cwd)).toBe(false);
+    await new Promise((resolve) => setTimeout(resolve, 650));
+    expect(existsSync(markers.startedPath)).toBe(setupHadStartedWhenCleanupFinished);
+    expect(existsSync(markers.finishedPath)).toBe(false);
+  },
+  30000,
+);
+
+test.skipIf(process.platform === "win32")(
+  "failed create aborts registered setup before cleaning up its worktree",
+  async () => {
+    const repoDir = createGitRepo();
+    const markers = configureDelayedSetup(repoDir, "failed-create-setup");
+
+    await expect(
+      ctx.client.createAgent({
+        config: {
+          ...getFullAccessConfig("codex"),
+          cwd: repoDir,
+          mcpServers: { unsupported: { type: "http", url: "http://127.0.0.1:1" } },
+        },
+        worktree: { mode: "branch-off", newBranch: "failed-create", base: "main" },
+      }),
+    ).rejects.toThrow("does not support MCP servers");
+
+    await expectActiveAgentListEmpty();
+    await expectWorktreeListEmpty(repoDir);
+    const setupHadStartedWhenCleanupFinished = existsSync(markers.startedPath);
+    await new Promise((resolve) => setTimeout(resolve, 650));
+    expect(existsSync(markers.startedPath)).toBe(setupHadStartedWhenCleanupFinished);
+    expect(existsSync(markers.finishedPath)).toBe(false);
+  },
+  30000,
+);

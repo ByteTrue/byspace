@@ -124,7 +124,7 @@ interface CreateBySpaceWorktreeWorkflowDependencies extends CreateBySpaceWorktre
     workspace: PersistedWorkspaceRecord;
     firstAgentContext: FirstAgentContext;
   }) => void;
-  startWorkspaceSetup?: (workspaceId: string, operation: WorkspaceSetupOperation) => void;
+  startWorkspaceSetup: (workspaceId: string, operation: WorkspaceSetupOperation) => void;
 }
 
 interface AgentWorktreeSetupContinuationInput {
@@ -584,6 +584,42 @@ export async function handleCreateBySpaceWorktreeRequest(
   }
 }
 
+function waitForNextTurn(signal: AbortSignal): Promise<boolean> {
+  if (signal.aborted) {
+    return Promise.resolve(false);
+  }
+  return new Promise((resolve) => {
+    const finish = (shouldRun: boolean) => {
+      signal.removeEventListener("abort", onAbort);
+      resolve(shouldRun);
+    };
+    const timer = setTimeout(() => finish(!signal.aborted), 0);
+    const onAbort = () => {
+      clearTimeout(timer);
+      finish(false);
+    };
+    signal.addEventListener("abort", onAbort, { once: true });
+  });
+}
+
+function waitForAgentSetupStart(
+  start: Promise<string>,
+  signal: AbortSignal,
+): Promise<string | null> {
+  if (signal.aborted) {
+    return Promise.resolve(null);
+  }
+  return new Promise((resolve) => {
+    const finish = (agentId: string | null) => {
+      signal.removeEventListener("abort", onAbort);
+      resolve(agentId);
+    };
+    const onAbort = () => finish(null);
+    signal.addEventListener("abort", onAbort, { once: true });
+    void start.then((agentId) => finish(signal.aborted ? null : agentId));
+  });
+}
+
 export async function createBySpaceWorktreeWorkflow(
   dependencies: CreateBySpaceWorktreeWorkflowDependencies,
   input: CreateBySpaceWorktreeInput,
@@ -607,7 +643,10 @@ export async function createBySpaceWorktreeWorkflow(
   const workspace = createdWorktree.workspace;
   const setupContinuation = options?.setupContinuation ?? { kind: "workspace" };
 
-  setTimeout(() => {
+  const runDeferredPreparation = async (signal: AbortSignal): Promise<boolean> => {
+    if (!(await waitForNextTurn(signal))) {
+      return false;
+    }
     if (input.firstAgentContext) {
       dependencies.autoNameWorkspaceBranchForFirstAgent({
         workspace,
@@ -620,50 +659,61 @@ export async function createBySpaceWorktreeWorkflow(
         "Failed to warm workspace git data after creating worktree",
       );
     });
-    if (setupContinuation.kind === "workspace") {
-      const runSetup = (signal: AbortSignal) =>
-        runWorktreeSetupInBackground(
-          dependencies,
-          {
-            requestCwd: input.cwd,
-            repoRoot: createdWorktree.repoRoot,
-            workspaceId: workspace.workspaceId,
-            worktree: createdWorktree.worktree,
-            shouldBootstrap: createdWorktree.created,
-            slug,
-            worktreePath: createdWorktree.worktree.worktreePath,
-          },
-          signal,
-        );
-      if (dependencies.startWorkspaceSetup) {
-        dependencies.startWorkspaceSetup(workspace.workspaceId, runSetup);
-      } else {
-        void runSetup(new AbortController().signal);
-      }
-    }
-  }, 0);
+    return !signal.aborted;
+  };
 
   if (setupContinuation.kind === "agent") {
+    let startAgentSetup!: (agentId: string) => void;
+    const agentSetupStart = new Promise<string>((resolve) => {
+      startAgentSetup = resolve;
+    });
+    dependencies.startWorkspaceSetup(workspace.workspaceId, async (signal) => {
+      if (!(await runDeferredPreparation(signal))) {
+        return;
+      }
+      const agentId = await waitForAgentSetupStart(agentSetupStart, signal);
+      if (!agentId) {
+        return;
+      }
+      await runAsyncWorktreeBootstrap({
+        agentId,
+        workspaceId: workspace.workspaceId,
+        worktree: createdWorktree.worktree,
+        shouldBootstrap: createdWorktree.created,
+        terminalManager: setupContinuation.terminalManager,
+        appendTimelineItem: (item) => setupContinuation.appendTimelineItem({ agentId, item }),
+        emitLiveTimelineItem: (item) => setupContinuation.emitLiveTimelineItem({ agentId, item }),
+        logger: setupContinuation.logger,
+        signal,
+      });
+    });
     return {
       ...createdWorktree,
       setupContinuation: {
         kind: "agent",
-        startAfterAgentCreate: ({ agentId }) => {
-          void runAsyncWorktreeBootstrap({
-            agentId,
-            workspaceId: workspace.workspaceId,
-            worktree: createdWorktree.worktree,
-            shouldBootstrap: createdWorktree.created,
-            terminalManager: setupContinuation.terminalManager,
-            appendTimelineItem: (item) => setupContinuation.appendTimelineItem({ agentId, item }),
-            emitLiveTimelineItem: (item) =>
-              setupContinuation.emitLiveTimelineItem({ agentId, item }),
-            logger: setupContinuation.logger,
-          });
-        },
+        startAfterAgentCreate: ({ agentId }) => startAgentSetup(agentId),
       },
     };
   }
+
+  dependencies.startWorkspaceSetup(workspace.workspaceId, async (signal) => {
+    if (!(await runDeferredPreparation(signal))) {
+      return;
+    }
+    await runWorktreeSetupInBackground(
+      dependencies,
+      {
+        requestCwd: input.cwd,
+        repoRoot: createdWorktree.repoRoot,
+        workspaceId: workspace.workspaceId,
+        worktree: createdWorktree.worktree,
+        shouldBootstrap: createdWorktree.created,
+        slug,
+        worktreePath: createdWorktree.worktree.worktreePath,
+      },
+      signal,
+    );
+  });
 
   return createdWorktree;
 }

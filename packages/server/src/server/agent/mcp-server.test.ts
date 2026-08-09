@@ -46,6 +46,7 @@ import type { ForgeService } from "../../services/forge-service.js";
 import type { TerminalManager } from "../../terminal/terminal-manager.js";
 import { PARENT_AGENT_ID_LABEL } from "@bytetrue/byspace-protocol/agent-labels";
 import { readBySpaceWorktreeMetadata } from "../../utils/worktree-metadata.js";
+import { WorkspaceSetupRuntime } from "../workspace-setup-runtime.js";
 
 const REPO_CWD = resolvePath("/tmp/repo");
 const TARGET_CWD = resolvePath("/tmp/target");
@@ -678,6 +679,8 @@ function createBySpaceWorktreeForMcpTest(options: {
         getDaemonTcpPort: null,
         getDaemonTcpHost: null,
         onScriptsChanged: null,
+        startWorkspaceSetup: (workspaceId, operation) =>
+          new WorkspaceSetupRuntime().start(workspaceId, operation),
       },
       input,
       serviceOptions,
@@ -1018,6 +1021,7 @@ describe("create_agent MCP tool", () => {
       emitWorkspaceUpdatesForWorkspaceIds: async () => {},
       markWorkspaceArchiving: () => {},
       clearWorkspaceArchiving: () => {},
+      stopWorkspaceSetup: vi.fn(async () => {}),
       logger,
     });
 
@@ -2200,6 +2204,7 @@ describe("create_agent MCP tool", () => {
         emitWorkspaceUpdatesForWorkspaceIds: async () => {},
         markWorkspaceArchiving: () => {},
         clearWorkspaceArchiving: () => {},
+        stopWorkspaceSetup: vi.fn(async () => {}),
         github: createGitHubServiceStub(),
         logger,
       });
@@ -3219,6 +3224,7 @@ describe("workspace automation MCP tools", () => {
       emitWorkspaceUpdatesForWorkspaceIds: async () => {},
       markWorkspaceArchiving: () => {},
       clearWorkspaceArchiving: () => {},
+      stopWorkspaceSetup: vi.fn(async () => {}),
       logger,
     });
 

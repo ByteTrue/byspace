@@ -955,6 +955,7 @@ export class Session {
       clearWorkspaceArchiving: (workspaceIds) => this.clearWorkspaceArchiving(workspaceIds),
       killTerminalsForWorkspace: (workspaceId) =>
         this.terminalController.killTerminalsForWorkspace(workspaceId),
+      stopWorkspaceSetup: (workspaceId) => this.workspaceSetupRuntime.stop(workspaceId),
       logger: this.sessionLogger,
     });
     this.providerSnapshotManager = providerSnapshotManager;
@@ -3941,6 +3942,7 @@ export class Session {
         clearWorkspaceArchiving: (workspaceIds) => this.clearWorkspaceArchiving(workspaceIds),
         killTerminalsForWorkspace: (workspaceId) =>
           this.terminalController.killTerminalsForWorkspace(workspaceId),
+        stopWorkspaceSetup: (workspaceId) => this.workspaceSetupRuntime.stop(workspaceId),
         sessionLogger: this.sessionLogger,
       },
       msg,

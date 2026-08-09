@@ -57,7 +57,7 @@ export interface ArchiveDependencies {
   markWorkspaceArchiving: (workspaceIds: Iterable<string>, archivingAt: string) => void;
   clearWorkspaceArchiving: (workspaceIds: Iterable<string>) => void;
   killTerminalsForWorkspace: (workspaceId: string) => Promise<void>;
-  stopWorkspaceSetup?: (workspaceId: string) => Promise<void>;
+  stopWorkspaceSetup: (workspaceId: string) => Promise<void>;
   sessionLogger?: Logger;
   lifecycleCoordinator?: WorkspaceLifecycleCoordinator;
 }
@@ -138,7 +138,7 @@ async function archiveByScopeUnlocked(
     request.byspaceWorktreesBaseRoot,
   );
 
-  await stopWorkspaceSetups(dependencies, setupWorkspaceIds, request.requestId);
+  await stopWorkspaceSetups(dependencies, setupWorkspaceIds);
 
   if (targetWorkspaceIds.length > 0) {
     dependencies.markWorkspaceArchiving(targetWorkspaceIds, new Date().toISOString());
@@ -246,20 +246,10 @@ async function resolveArchiveTargets(
 async function stopWorkspaceSetups(
   dependencies: ArchiveDependencies,
   workspaceIds: string[],
-  requestId: string,
 ): Promise<void> {
-  if (!dependencies.stopWorkspaceSetup) return;
-  const results = await Promise.allSettled(
-    workspaceIds.map((workspaceId) => dependencies.stopWorkspaceSetup!(workspaceId)),
+  await Promise.all(
+    workspaceIds.map((workspaceId) => dependencies.stopWorkspaceSetup(workspaceId)),
   );
-  for (const [index, result] of results.entries()) {
-    if (result?.status === "rejected") {
-      dependencies.sessionLogger?.warn(
-        { err: result.reason, workspaceId: workspaceIds[index], requestId },
-        "Failed to stop workspace setup during archive; continuing",
-      );
-    }
-  }
 }
 
 async function archiveTargetRecords(

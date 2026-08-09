@@ -1162,6 +1162,7 @@ export async function createBySpaceDaemon(
     }),
     markWorkspaceArchiving: markWorkspaceArchivingExternal,
     clearWorkspaceArchiving: clearWorkspaceArchivingExternal,
+    stopWorkspaceSetup: (workspaceId) => workspaceSetupRuntime.stop(workspaceId),
     ensureWorkspaceForCreate: createAgentCommandDependencies.ensureWorkspaceForCreate,
     createBySpaceWorktree: createAgentCommandDependencies.createBySpaceWorktree,
     byspaceHome: config.byspaceHome,

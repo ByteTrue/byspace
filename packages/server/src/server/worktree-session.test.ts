@@ -45,6 +45,7 @@ import {
 import { WorkspaceGitServiceImpl } from "./workspace-git-service.js";
 import type { WorkspaceGitService } from "./workspace-git-service.js";
 import { isPlatform } from "../test-utils/platform.js";
+import { WorkspaceSetupRuntime } from "./workspace-setup-runtime.js";
 
 interface LegacyCreateWorktreeTestOptions {
   branchName: string;
@@ -116,6 +117,8 @@ function createWorkflowForRequestTest(options: {
         getDaemonTcpPort: null,
         getDaemonTcpHost: null,
         onScriptsChanged: null,
+        startWorkspaceSetup: (workspaceId, operation) =>
+          new WorkspaceSetupRuntime().start(workspaceId, operation),
       },
       input,
       { setupContinuation: { kind: "workspace" } },
@@ -439,6 +442,8 @@ describe("create-agent worktree setup boundary", () => {
           getDaemonTcpPort: null,
           getDaemonTcpHost: null,
           onScriptsChanged: null,
+          startWorkspaceSetup: (workspaceId, operation) =>
+            new WorkspaceSetupRuntime().start(workspaceId, operation),
         },
         {
           cwd: repoDir,
@@ -1787,6 +1792,7 @@ describe("handleBySpaceWorktreeArchiveRequest worktree scope", () => {
         markWorkspaceArchiving: vi.fn(),
         clearWorkspaceArchiving: vi.fn(),
         killTerminalsForWorkspace: vi.fn(async () => {}),
+        stopWorkspaceSetup: vi.fn(async () => {}),
         sessionLogger: createLogger(),
       },
       {
@@ -1862,6 +1868,7 @@ describe("handleBySpaceWorktreeArchiveRequest worktree scope", () => {
         markWorkspaceArchiving: vi.fn(),
         clearWorkspaceArchiving: vi.fn(),
         killTerminalsForWorkspace: vi.fn(async () => {}),
+        stopWorkspaceSetup: vi.fn(async () => {}),
         sessionLogger: createLogger(),
       },
       {
@@ -1938,6 +1945,7 @@ describe("handleBySpaceWorktreeArchiveRequest worktree scope", () => {
         markWorkspaceArchiving: vi.fn(),
         clearWorkspaceArchiving: vi.fn(),
         killTerminalsForWorkspace: vi.fn(async () => {}),
+        stopWorkspaceSetup: vi.fn(async () => {}),
         sessionLogger: createLogger(),
       },
       {
@@ -2010,6 +2018,7 @@ describe("handleBySpaceWorktreeArchiveRequest worktree scope", () => {
       markWorkspaceArchiving: vi.fn(),
       clearWorkspaceArchiving: vi.fn(),
       killTerminalsForWorkspace: vi.fn(async () => {}),
+      stopWorkspaceSetup: vi.fn(async () => {}),
       sessionLogger: createLogger(),
     };
 

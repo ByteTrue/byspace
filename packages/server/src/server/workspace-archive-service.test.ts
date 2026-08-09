@@ -123,6 +123,7 @@ interface ArchiveDepsInput {
   activeWorkspaces: ActiveWorkspaceRef[];
   byspaceWorktreesBaseRoot?: string;
   findWorkspaceIdForCwd?: (cwd: string) => Promise<string | null>;
+  stopWorkspaceSetup?: (workspaceId: string) => Promise<void>;
 }
 
 interface ArchiveTestDependencies extends ArchiveDependencies {
@@ -172,6 +173,7 @@ function createArchiveDeps(input: ArchiveDepsInput): ArchiveTestDependencies {
     markWorkspaceArchiving: vi.fn(),
     clearWorkspaceArchiving: vi.fn(),
     killTerminalsForWorkspace: vi.fn(async () => {}),
+    stopWorkspaceSetup: input.stopWorkspaceSetup ?? vi.fn(async () => {}),
     sessionLogger: createLogger(),
     activeWorkspaces: active,
     archivedAgentIds,
@@ -219,6 +221,39 @@ describe("archiveByScope", () => {
       archivedWorkspaceIds: [workspaceId],
       removedDirectory: true,
     });
+    expect(existsSync(worktree.worktreePath)).toBe(false);
+  });
+
+  test("waits for workspace setup to settle before cleanup", async () => {
+    const { tempDir, repoDir } = createGitRepo();
+    const byspaceHome = path.join(tempDir, ".byspace");
+    const worktree = await createBySpaceOwnedWorktree(repoDir, byspaceHome, "setup-barrier");
+    const workspaceId = "ws-setup-barrier";
+    let releaseSetup!: () => void;
+    const setupSettled = new Promise<void>((resolve) => {
+      releaseSetup = resolve;
+    });
+    const stopWorkspaceSetup = vi.fn(async () => setupSettled);
+    const dependencies = createArchiveDeps({
+      byspaceHome,
+      activeWorkspaces: [{ workspaceId, cwd: worktree.worktreePath, kind: "worktree" }],
+      stopWorkspaceSetup,
+    });
+
+    const archive = archiveByScope(dependencies, {
+      scope: { kind: "workspace", workspaceId },
+      repoRoot: repoDir,
+      requestId: "req-setup-barrier",
+    });
+    await vi.waitFor(() => expect(stopWorkspaceSetup).toHaveBeenCalledWith(workspaceId));
+
+    expect(dependencies.activeWorkspaces).toHaveLength(1);
+    expect(existsSync(worktree.worktreePath)).toBe(true);
+
+    releaseSetup();
+    await archive;
+
+    expect(dependencies.activeWorkspaces).toHaveLength(0);
     expect(existsSync(worktree.worktreePath)).toBe(false);
   });
 

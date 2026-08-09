@@ -51,6 +51,7 @@ export interface RunAsyncWorktreeBootstrapOptions {
   appendTimelineItem: (item: AgentTimelineItem) => Promise<boolean>;
   emitLiveTimelineItem?: (item: AgentTimelineItem) => Promise<boolean>;
   logger?: Logger;
+  signal?: AbortSignal;
 }
 
 const MAX_WORKTREE_SETUP_COMMAND_OUTPUT_BYTES = 64 * 1024;
@@ -590,7 +591,7 @@ async function runWorktreeTerminalBootstrap(
 export async function runAsyncWorktreeBootstrap(
   options: RunAsyncWorktreeBootstrapOptions,
 ): Promise<void> {
-  if (options.shouldBootstrap === false) {
+  if (options.shouldBootstrap === false || options.signal?.aborted) {
     return;
   }
 
@@ -633,6 +634,9 @@ export async function runAsyncWorktreeBootstrap(
       worktreePath: options.worktree.worktreePath,
       branchName: options.worktree.branchName,
     });
+    if (options.signal?.aborted) {
+      return;
+    }
     options.terminalManager?.registerCwdEnv({
       cwd: options.worktree.worktreePath,
       env: runtimeEnv,
@@ -643,12 +647,16 @@ export async function runAsyncWorktreeBootstrap(
       branchName: options.worktree.branchName,
       cleanupOnFailure: false,
       runtimeEnv,
+      signal: options.signal,
       onEvent: (event) => {
         applyWorktreeSetupProgressEvent(progressAccumulator, event);
         queueLiveRunningEmit();
       },
     });
     await liveEmitQueue;
+    if (options.signal?.aborted) {
+      return;
+    }
 
     const completed = await options.appendTimelineItem(
       buildSetupTimelineItem({
@@ -668,6 +676,9 @@ export async function runAsyncWorktreeBootstrap(
       setupResults = error.results;
     }
     await liveEmitQueue;
+    if (options.signal?.aborted) {
+      return;
+    }
     const message = error instanceof Error ? error.message : String(error);
     await options.appendTimelineItem(
       buildSetupTimelineItem({
@@ -682,6 +693,9 @@ export async function runAsyncWorktreeBootstrap(
     return;
   }
 
+  if (options.signal?.aborted) {
+    return;
+  }
   await runWorktreeTerminalBootstrap(options, runtimeEnv);
 }
 
