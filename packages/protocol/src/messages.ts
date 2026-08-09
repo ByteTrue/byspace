@@ -4039,6 +4039,13 @@ const CheckoutStatusCommonSchema = z.object({
   error: CheckoutErrorSchema.nullable(),
   requestId: z.string(),
   commitsVersion: z.string().optional(),
+  // The full ref currentBranch tracks, as git resolves `<branch>@{upstream}`:
+  // "refs/remotes/origin/main", "refs/remotes/upstream/main" on a fork, or a
+  // "refs/heads/..." ref for a branch tracking a local branch. Null when there is no
+  // upstream. Clients use it verbatim — the remote is not necessarily origin and the
+  // upstream branch name is not necessarily currentBranch, so composing one is wrong.
+  // aheadOfOrigin/behindOfOrigin are measured against exactly this ref.
+  upstreamRef: z.string().nullable().optional(),
 });
 
 const CheckoutStatusNotGitSchema = CheckoutStatusCommonSchema.extend({

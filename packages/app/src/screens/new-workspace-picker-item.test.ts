@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type { ForgeSearchItem } from "@bytetrue/byspace-protocol/messages";
-import { pickerItemToCheckoutRequest, type PickerItem } from "./new-workspace-picker-item";
+import {
+  defaultBasePickerItem,
+  pickerItemToCheckoutRequest,
+  resolveCheckoutRequest,
+  type PickerItem,
+} from "./new-workspace-picker-item";
 
 const prItem: ForgeSearchItem = {
   kind: "change_request",
@@ -79,6 +84,37 @@ describe("pickerItemToCheckoutRequest", () => {
         number: 21,
         projectPath: "acme/repo",
       },
+    });
+  });
+});
+
+describe("default worktree base", () => {
+  it("defaults to the configured upstream ref", () => {
+    expect(
+      defaultBasePickerItem({
+        currentBranch: "local-main",
+        upstreamRef: "refs/remotes/upstream/main",
+      }),
+    ).toEqual({
+      kind: "branch",
+      name: "main",
+      refName: "refs/remotes/upstream/main",
+    });
+  });
+
+  it("keeps an explicit selected ref ahead of the default", () => {
+    expect(
+      resolveCheckoutRequest(
+        { kind: "branch", name: "release", refName: "refs/remotes/origin/release" },
+        { currentBranch: "local-main", upstreamRef: "refs/remotes/upstream/main" },
+      ),
+    ).toEqual({ action: "branch-off", refName: "refs/remotes/origin/release" });
+  });
+
+  it("falls back to the local ref when an older daemon omits upstreamRef", () => {
+    expect(resolveCheckoutRequest(null, { currentBranch: "main" })).toEqual({
+      action: "branch-off",
+      refName: "refs/heads/main",
     });
   });
 });

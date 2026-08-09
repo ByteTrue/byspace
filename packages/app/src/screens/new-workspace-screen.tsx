@@ -81,11 +81,7 @@ import {
   getWorkspaceNamingAttachments,
   remapDraftCwdToWorkspace,
 } from "./new-workspace-fork-context";
-import {
-  pickerItemToCheckoutRequest,
-  type PickerCheckoutRequest,
-  type PickerItem,
-} from "./new-workspace-picker-item";
+import { resolveCheckoutRequest, type PickerItem } from "./new-workspace-picker-item";
 import {
   buildPickerTargetId,
   clearPickerPrAttachmentForTargetChange,
@@ -103,19 +99,6 @@ const foregroundMutedColorMapping = (theme: Theme) => ({ color: theme.colors.for
 const addProjectIcon = (
   <ThemedFolderPlus size={ICON_SIZE.sm} uniProps={foregroundMutedColorMapping} />
 );
-
-function resolveCheckoutRequest(
-  selectedItem: PickerItem | null,
-  currentBranch: string | null,
-): PickerCheckoutRequest | undefined {
-  const selectedCheckoutRequest = pickerItemToCheckoutRequest(selectedItem);
-  if (selectedCheckoutRequest) return selectedCheckoutRequest;
-  if (!currentBranch) return undefined;
-  return {
-    action: "branch-off",
-    refName: currentBranch,
-  };
-}
 
 function useIsNewWorkspaceDraftHandoffActive(input: {
   draftId: string | undefined;
@@ -139,6 +122,12 @@ function resolveVisibleDraftContextScopeKeys(input: {
     return [];
   }
   return [input.draftContextScopeKey];
+}
+
+function resolveCheckoutUpstreamRef(
+  status: { upstreamRef?: string | null } | undefined,
+): string | null {
+  return status?.upstreamRef ?? null;
 }
 
 function isNewWorkspacePending(input: {
@@ -803,6 +792,7 @@ async function createMultiplicityWorkspace(input: {
   sourceDirectory: string;
   selectedItem: PickerItem | null;
   currentBranch: string | null;
+  upstreamRef: string | null;
   withInitialAgent: boolean;
   prompt: string;
   attachments: AgentAttachment[];
@@ -817,7 +807,10 @@ async function createMultiplicityWorkspace(input: {
   if (!hostProjectId) throw new Error("Project is not available on the selected host");
   const isWorktree = input.isolation === "worktree";
   const checkoutRequest = isWorktree
-    ? resolveCheckoutRequest(input.selectedItem, input.currentBranch)
+    ? resolveCheckoutRequest(input.selectedItem, {
+        currentBranch: input.currentBranch,
+        upstreamRef: input.upstreamRef,
+      })
     : undefined;
   const firstAgentContext = buildFirstAgentContext({
     prompt: input.prompt,
@@ -1724,6 +1717,7 @@ export function NewWorkspaceScreen({
   });
 
   const currentBranch = checkoutStatusQuery.data?.currentBranch ?? null;
+  const upstreamRef = resolveCheckoutUpstreamRef(checkoutStatusQuery.data);
   const { effectiveIsolation, setIsolation, canCreateWorktree, showRefPicker } =
     useWorkspaceIsolation({
       supportsMultiplicity: supportsWorkspaceMultiplicity,
@@ -1970,7 +1964,7 @@ export function NewWorkspaceScreen({
       if (!selectedSourceDirectory) {
         throw new Error("Choose a host for this project");
       }
-      const checkoutRequest = resolveCheckoutRequest(selectedItem, currentBranch);
+      const checkoutRequest = resolveCheckoutRequest(selectedItem, { currentBranch, upstreamRef });
       const firstAgentContext = buildFirstAgentContext(input);
       const hostProjectId = getHostProjectId(selectedProject, selectedServerId);
       if (!hostProjectId) throw new Error("Project is not available on the selected host");
@@ -1983,7 +1977,14 @@ export function NewWorkspaceScreen({
         ...checkoutRequest,
       };
     },
-    [currentBranch, selectedItem, selectedProject, selectedServerId, selectedSourceDirectory],
+    [
+      currentBranch,
+      selectedItem,
+      selectedProject,
+      selectedServerId,
+      selectedSourceDirectory,
+      upstreamRef,
+    ],
   );
 
   const ensureWorkspace = useCallback(
@@ -2010,6 +2011,7 @@ export function NewWorkspaceScreen({
             sourceDirectory: selectedSourceDirectory,
             selectedItem,
             currentBranch,
+            upstreamRef,
             withInitialAgent: input.withInitialAgent,
             prompt: input.prompt,
             attachments: input.attachments,
@@ -2031,6 +2033,7 @@ export function NewWorkspaceScreen({
       buildCreateWorktreeInput,
       createdWorkspace,
       currentBranch,
+      upstreamRef,
       effectiveIsolation,
       mergeWorkspaces,
       selectedItem,
