@@ -1604,6 +1604,7 @@ function resolveSelectedProjectIsGit(input: {
   );
 }
 
+// eslint-disable-next-line complexity -- Keep launch-mode rendering explicit so submit handlers cannot invert.
 export function NewWorkspaceScreen({
   serverId,
   sourceDirectory: sourceDirectoryProp,
@@ -2411,71 +2412,70 @@ export function NewWorkspaceScreen({
             <Text style={styles.composerTitle}>{t("newWorkspace.title")}</Text>
           </View>
           {formStack}
-          {
-            [
-              <Composer
-                key="terminal"
-                inputMode="terminal"
-                readOnly={!terminalTakesPrompt}
-                placeholder={terminalPlaceholder}
-                submitLabel={terminalSubmitLabel}
-                agentId={draftKey}
-                serverId={selectedServerId}
-                isPaneFocused={true}
-                onSubmitMessage={handleSubmitTerminalLaunch}
-                allowEmptySubmit={true}
-                submitButtonAccessibilityLabel={t("newWorkspace.launch.submit")}
-                submitButtonTestID="new-workspace-launch-submit"
-                isSubmitLoading={isPending}
-                isSubmitDisabled={isSubmitDisabled}
-                submitBehavior="preserve-and-lock"
-                blurOnSubmit={true}
-                value={terminalComposerValue}
-                onChangeText={setTerminalPromptText}
-                attachments={NO_TERMINAL_ATTACHMENTS}
-                onChangeAttachments={noopChangeAttachments}
-                cwd={selectedSourceDirectory ?? ""}
-                clearDraft={noopClearDraft}
-                autoFocus={terminalTakesPrompt}
-                autoFocusKey={launchFocusKey}
-              />,
-              <Composer
-                key="chat"
-                agentId={draftKey}
-                serverId={selectedServerId}
-                isPaneFocused={true}
-                onSubmitMessage={handleSubmitNewWorkspace}
-                placeholder={t(
-                  isCompact
-                    ? "newWorkspace.promptPlaceholderCompact"
-                    : "newWorkspace.promptPlaceholder",
-                )}
-                allowEmptySubmit={true}
-                submitButtonAccessibilityLabel={t("newWorkspace.create")}
-                submitButtonTestID="workspace-create-submit"
-                submitIcon="return"
-                isSubmitLoading={isPending}
-                isSubmitDisabled={isSubmitDisabled}
-                waitForGithubAutoAttachOnSubmit
-                submitBehavior="preserve-and-lock"
-                blurOnSubmit={true}
-                value={chatDraft.text}
-                onChangeText={chatDraft.setText}
-                attachments={chatDraft.attachments}
-                attachmentScopeKeys={visibleDraftContextScopeKeys}
-                onChangeAttachments={chatDraft.setAttachments}
-                onGithubPrDetected={handleGithubPrDetected}
-                onGithubPrAutoAttach={handleGithubPrAutoAttach}
-                cwd={selectedSourceDirectory ?? ""}
-                clearDraft={handleClearDraft}
-                autoFocus={shouldAutoFocusComposer}
-                autoFocusKey={`${selectedProject?.projectKey ?? "none"}:${selectedServerId}:${launchFocusKey}`}
-                commandDraftConfig={composerState?.commandDraftConfig}
-                agentControls={agentControlsWithDisabled}
-                footer={composerFooter}
-              />,
-            ][Number(isTerminalLaunch)]
-          }
+          {isTerminalLaunch ? (
+            <Composer
+              key="terminal"
+              inputMode="terminal"
+              readOnly={!terminalTakesPrompt}
+              placeholder={terminalPlaceholder}
+              submitLabel={terminalSubmitLabel}
+              agentId={draftKey}
+              serverId={selectedServerId}
+              isPaneFocused={true}
+              onSubmitMessage={handleSubmitTerminalLaunch}
+              allowEmptySubmit={true}
+              submitButtonAccessibilityLabel={t("newWorkspace.launch.submit")}
+              submitButtonTestID="new-workspace-launch-submit"
+              isSubmitLoading={isPending}
+              isSubmitDisabled={isSubmitDisabled}
+              submitBehavior="preserve-and-lock"
+              blurOnSubmit={true}
+              value={terminalComposerValue}
+              onChangeText={setTerminalPromptText}
+              attachments={NO_TERMINAL_ATTACHMENTS}
+              onChangeAttachments={noopChangeAttachments}
+              cwd={selectedSourceDirectory ?? ""}
+              clearDraft={noopClearDraft}
+              autoFocus={terminalTakesPrompt}
+              autoFocusKey={launchFocusKey}
+            />
+          ) : (
+            <Composer
+              key="chat"
+              agentId={draftKey}
+              serverId={selectedServerId}
+              isPaneFocused={true}
+              onSubmitMessage={handleSubmitNewWorkspace}
+              placeholder={t(
+                isCompact
+                  ? "newWorkspace.promptPlaceholderCompact"
+                  : "newWorkspace.promptPlaceholder",
+              )}
+              allowEmptySubmit={true}
+              submitButtonAccessibilityLabel={t("newWorkspace.create")}
+              submitButtonTestID="workspace-create-submit"
+              submitIcon="return"
+              isSubmitLoading={isPending}
+              isSubmitDisabled={isSubmitDisabled}
+              waitForGithubAutoAttachOnSubmit
+              submitBehavior="preserve-and-lock"
+              blurOnSubmit={true}
+              value={chatDraft.text}
+              onChangeText={chatDraft.setText}
+              attachments={chatDraft.attachments}
+              attachmentScopeKeys={visibleDraftContextScopeKeys}
+              onChangeAttachments={chatDraft.setAttachments}
+              onGithubPrDetected={handleGithubPrDetected}
+              onGithubPrAutoAttach={handleGithubPrAutoAttach}
+              cwd={selectedSourceDirectory ?? ""}
+              clearDraft={handleClearDraft}
+              autoFocus={shouldAutoFocusComposer}
+              autoFocusKey={`${selectedProject?.projectKey ?? "none"}:${selectedServerId}:${launchFocusKey}`}
+              commandDraftConfig={composerState?.commandDraftConfig}
+              agentControls={agentControlsWithDisabled}
+              footer={composerFooter}
+            />
+          )}
           {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
         </View>
       </View>

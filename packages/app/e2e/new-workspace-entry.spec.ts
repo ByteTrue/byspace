@@ -75,6 +75,30 @@ test.describe("New workspace entry points", () => {
     }
   });
 
+  test("renders the submit control for the selected launch target", async ({ page }) => {
+    const seeded: SeededWorkspace = await seedWorkspace({ repoPrefix: "entry-launch-target-" });
+
+    try {
+      await gotoAppShell(page);
+      await waitForSidebarHydration(page);
+      await openNewWorkspaceComposer(page, {
+        projectKey: seeded.projectKey,
+        projectDisplayName: seeded.projectDisplayName,
+      });
+
+      await expect(page.getByTestId("workspace-create-submit")).toBeVisible();
+      await expect(page.getByTestId("new-workspace-launch-submit")).toHaveCount(0);
+
+      await page.getByTestId("new-workspace-launch-trigger").click();
+      await page.getByTestId("new-workspace-launch-option-blank").click();
+
+      await expect(page.getByTestId("new-workspace-launch-submit")).toBeVisible();
+      await expect(page.getByTestId("workspace-create-submit")).toHaveCount(0);
+    } finally {
+      await seeded.cleanup();
+    }
+  });
+
   test("Ctrl+P opens the project picker with search focused", async ({ page }) => {
     const seeded: SeededWorkspace = await seedWorkspace({ repoPrefix: "entry-shortcut-" });
 
