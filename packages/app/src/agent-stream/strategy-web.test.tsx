@@ -705,8 +705,14 @@ describe("createWebStreamStrategy", () => {
 
     Object.defineProperty(scrollContainer, "scrollTop", { configurable: true, value: 991 });
     act(() => {
+      viewportRef.current?.prepareForViewportChange();
       scrollContainer.dispatchEvent(new WheelEvent("wheel", { deltaY: -900 }));
     });
+    await act(async () => {
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+    });
+    expect(scrollTo).not.toHaveBeenCalled();
+
     Object.defineProperty(scrollContainer, "scrollTop", { configurable: true, value: 91 });
     act(() => {
       scrollContainer.dispatchEvent(new Event("scroll"));
@@ -836,7 +842,7 @@ describe("createWebStreamStrategy", () => {
     expect(scrollTo).toHaveBeenCalled();
   });
 
-  it("keeps following output after geometry, nested-scroll, and zoom wheel events", () => {
+  it("keeps following output after geometry, nested-scroll, and zoom wheel events", async () => {
     const scrollTo = vi.fn(function (this: HTMLElement, options?: ScrollToOptions | number) {
       const top = typeof options === "object" ? (options.top ?? 0) : 0;
       Object.defineProperty(this, "scrollTop", { configurable: true, value: top });
@@ -926,6 +932,9 @@ describe("createWebStreamStrategy", () => {
     Object.defineProperty(scrollContainer, "clientHeight", { configurable: true, value: 700 });
     Object.defineProperty(scrollContainer, "scrollTop", { configurable: true, value: 800 });
     act(() => scrollContainer.dispatchEvent(new Event("scroll")));
+    await act(async () => {
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+    });
     scrollTo.mockClear();
 
     const nestedScroller = document.createElement("div");
@@ -935,13 +944,30 @@ describe("createWebStreamStrategy", () => {
     Object.defineProperty(nestedScroller, "scrollTop", { configurable: true, value: 100 });
     scrollContainer.append(nestedScroller);
     act(() => {
+      viewportRef.current?.prepareForViewportChange();
       nestedScroller.dispatchEvent(new WheelEvent("wheel", { bubbles: true, deltaY: -100 }));
-      Object.defineProperty(scrollContainer, "scrollTop", { configurable: true, value: 700 });
-      scrollContainer.dispatchEvent(new Event("scroll"));
+    });
+    await act(async () => {
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+    });
+    expect(scrollTo).toHaveBeenCalledWith({ top: 1500, behavior: "auto" });
+    scrollTo.mockClear();
+    Object.defineProperty(scrollContainer, "scrollTop", { configurable: true, value: 800 });
+
+    act(() => {
+      viewportRef.current?.prepareForViewportChange();
       scrollContainer.dispatchEvent(
         new WheelEvent("wheel", { bubbles: true, ctrlKey: true, deltaY: -100 }),
       );
     });
+    await act(async () => {
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+    });
+    expect(scrollTo).toHaveBeenCalledWith({ top: 1500, behavior: "auto" });
+    scrollTo.mockClear();
+
+    Object.defineProperty(scrollContainer, "scrollTop", { configurable: true, value: 700 });
+    act(() => scrollContainer.dispatchEvent(new Event("scroll")));
     Object.defineProperty(scrollContainer, "scrollHeight", { configurable: true, value: 1800 });
     act(() => {
       root?.render(

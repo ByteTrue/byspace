@@ -711,7 +711,7 @@ export function TerminalPane({
       }
       const nextSize = { rows: Math.floor(rows), cols: Math.floor(cols) };
       measuredTerminalSizeRef.current = nextSize;
-      if (input.shouldClaim) {
+      if (input.shouldClaim && canClaimTerminalSizeRef.current) {
         clearPassiveResizeTimer();
         sendTerminalResize({ size: nextSize, shouldClaim: true });
         return;

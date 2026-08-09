@@ -844,6 +844,7 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
     }
 
     const markUpwardViewportInput = () => {
+      cancelPendingStickToBottom();
       markUpwardInputEvidence();
       if (scrollContainer.scrollTop <= USER_SCROLL_DELTA_EPSILON) {
         rearmHistoryStartFromUserIntent();
@@ -975,6 +976,7 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
       clearUpwardInputEvidence();
     };
   }, [
+    cancelPendingStickToBottom,
     clearMouseScrollGesture,
     clearUpwardInputEvidence,
     handleDomScroll,
