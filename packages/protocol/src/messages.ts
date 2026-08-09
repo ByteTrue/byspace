@@ -1291,6 +1291,7 @@ export const SpeechModelPayloadSchema = z.object({
   description: z.string(),
   sizeBytes: z.number().int().nonnegative(),
   state: SpeechModelStateSchema,
+  downloadedBytes: z.number().int().nonnegative().optional(),
   error: z.string().optional(),
 });
 

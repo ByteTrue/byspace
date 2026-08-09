@@ -58,6 +58,23 @@ function SpeechModelRow({
   const download = useCallback(() => void onAction(model.id, "download"), [model.id, onAction]);
   const remove = useCallback(() => void onAction(model.id, "delete"), [model.id, onAction]);
   const downloadable = model.state === "not_downloaded" || model.state === "error";
+  const downloadedBytes =
+    model.state === "downloading" && model.downloadedBytes !== undefined && model.sizeBytes > 0
+      ? Math.min(model.downloadedBytes, model.sizeBytes)
+      : null;
+  const progressPercent =
+    downloadedBytes === null
+      ? null
+      : Math.min(100, Math.round((downloadedBytes / model.sizeBytes) * 100));
+  const status = statusLabel(model, selected, t);
+  const statusText =
+    downloadedBytes === null || progressPercent === null
+      ? `${formatSize(model.sizeBytes)} · ${status}`
+      : `${progressPercent}% · ${formatSize(downloadedBytes)} / ${formatSize(model.sizeBytes)} · ${status}`;
+  const progressFillStyle = useMemo(
+    () => [styles.progressFill, { width: `${progressPercent ?? 0}%` as `${number}%` }],
+    [progressPercent],
+  );
 
   return (
     <View
@@ -66,9 +83,19 @@ function SpeechModelRow({
     >
       <View style={settingsStyles.rowContent}>
         <Text style={settingsStyles.rowTitle}>{model.label}</Text>
-        <Text style={selected ? styles.selectedStatus : styles.meta}>
-          {formatSize(model.sizeBytes)} · {statusLabel(model, selected, t)}
-        </Text>
+        <Text style={selected ? styles.selectedStatus : styles.meta}>{statusText}</Text>
+        {progressPercent !== null ? (
+          <View
+            style={styles.progressTrack}
+            testID={`speech-model-progress-${model.id}`}
+            accessibilityRole="progressbar"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={progressPercent}
+          >
+            <View style={progressFillStyle} />
+          </View>
+        ) : null}
         <Text style={settingsStyles.rowHint}>{modelDescription(model, t)}</Text>
         {model.error ? <Text style={settingsStyles.rowError}>{model.error}</Text> : null}
       </View>
@@ -284,6 +311,18 @@ const styles = StyleSheet.create((theme) => ({
     marginTop: theme.spacing[1],
     fontSize: theme.fontSize.xs,
     color: theme.colors.statusSuccess,
+  },
+  progressTrack: {
+    height: 4,
+    marginTop: theme.spacing[2],
+    overflow: "hidden",
+    backgroundColor: theme.colors.surface3,
+    borderRadius: theme.borderRadius.full,
+  },
+  progressFill: {
+    height: "100%",
+    backgroundColor: theme.colors.primary,
+    borderRadius: theme.borderRadius.full,
   },
   actions: {
     flexDirection: "row",

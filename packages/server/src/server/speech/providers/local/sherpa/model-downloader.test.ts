@@ -57,6 +57,23 @@ describe("sherpa model downloader", () => {
     }
   });
 
+  test("reports downloaded bytes as chunks are written", async () => {
+    const outputPath = path.join(makeTmpDir(), "model.tar.bz2");
+    const progress: number[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("123456")),
+    );
+    try {
+      await downloadToFile("https://example.test/model", outputPath, 6, (downloadedBytes) => {
+        progress.push(downloadedBytes);
+      });
+      expect(progress.at(-1)).toBe(6);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   test("getSherpaOnnxModelDir maps modelId to extractedDir", () => {
     const modelsDir = "/tmp/models";
     expect(getSherpaOnnxModelDir(modelsDir, "fire-red-asr2-aed-int8")).toContain(

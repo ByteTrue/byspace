@@ -81,7 +81,10 @@ export function createSpeechService(params: {
   let provider: SpeechToTextProvider | null = null;
   let started = false;
   let stopped = false;
-  const jobs = new Map<LocalSttModelId, { state: "downloading" | "error"; error?: string }>();
+  const jobs = new Map<
+    LocalSttModelId,
+    { state: "downloading" | "error"; downloadedBytes?: number; error?: string }
+  >();
   const listeners = new Set<(snapshot: SpeechReadinessSnapshot) => void>();
   let lastFingerprint = "";
   let resolveReady!: () => void;
@@ -170,9 +173,11 @@ export function createSpeechService(params: {
 
   const modelState = async (
     modelId: LocalSttModelId,
-  ): Promise<{ state: SpeechModelState; error?: string }> => {
+  ): Promise<{ state: SpeechModelState; downloadedBytes?: number; error?: string }> => {
     const job = jobs.get(modelId);
-    if (job?.state === "downloading") return { state: "downloading" };
+    if (job?.state === "downloading") {
+      return { state: "downloading", downloadedBytes: job.downloadedBytes };
+    }
     if (job?.state === "error") {
       return { state: "error", error: job.error ?? "Download failed" };
     }
@@ -300,14 +305,22 @@ export function createSpeechService(params: {
       try {
         persistSelection(modelId);
         selectedModelId = modelId;
-        jobs.set(modelId, { state: "downloading" });
+        jobs.set(modelId, { state: "downloading", downloadedBytes: 0 });
         publish();
       } catch (error) {
         releaseMutation();
         throw error;
       }
 
-      void ensureSherpaOnnxModel({ modelsDir, modelId, logger })
+      void ensureSherpaOnnxModel({
+        modelsDir,
+        modelId,
+        logger,
+        onProgress: (downloadedBytes) => {
+          const job = jobs.get(modelId);
+          if (job?.state === "downloading") job.downloadedBytes = downloadedBytes;
+        },
+      })
         .then(
           () =>
             runMutation(async () => {

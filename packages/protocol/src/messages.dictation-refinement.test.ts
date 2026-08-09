@@ -7,6 +7,7 @@ import {
   ServerInfoStatusPayloadSchema,
   SessionInboundMessageSchema,
   SessionOutboundMessageSchema,
+  SpeechModelsListResponseSchema,
 } from "./messages.js";
 
 describe("dictation refinement schemas", () => {
@@ -46,5 +47,28 @@ describe("dictation refinement schemas", () => {
     expect(MutableDaemonConfigPatchSchema.parse({ dictation: { refineWithAgent: true } })).toEqual({
       dictation: { refineWithAgent: true },
     });
+  });
+
+  test("accepts model download progress in list responses", () => {
+    const response = {
+      type: "speech.models.list.response",
+      payload: {
+        requestId: "request-2",
+        selectedModelId: "sensevoice-small-int8",
+        models: [
+          {
+            id: "sensevoice-small-int8",
+            label: "SenseVoice Small",
+            description: "Fast multilingual local transcription",
+            sizeBytes: 100,
+            state: "downloading",
+            downloadedBytes: 50,
+          },
+        ],
+      },
+    } as const;
+
+    expect(SpeechModelsListResponseSchema.parse(response)).toEqual(response);
+    expect(SessionOutboundMessageSchema.parse(response)).toEqual(response);
   });
 });

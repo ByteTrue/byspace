@@ -38,6 +38,7 @@ export async function downloadToFile(
   url: string,
   outputPath: string,
   maxBytes: number,
+  onProgress?: (downloadedBytes: number) => void,
 ): Promise<void> {
   const response = await fetch(url);
   if (!response.ok) {
@@ -62,6 +63,7 @@ export async function downloadToFile(
         callback(new Error(`Downloaded model exceeds expected size of ${maxBytes} bytes`));
         return;
       }
+      onProgress?.(downloadedBytes);
       callback(null, chunk);
     },
   });
@@ -107,6 +109,7 @@ export async function ensureSherpaOnnxModel(options: {
   modelsDir: string;
   modelId: SherpaOnnxModelId;
   logger: pino.Logger;
+  onProgress?: (downloadedBytes: number) => void;
 }): Promise<string> {
   const { modelsDir, modelId } = options;
   const spec = getSherpaOnnxModelSpec(modelId);
@@ -127,9 +130,10 @@ export async function ensureSherpaOnnxModel(options: {
   try {
     logger.info({ sizeBytes: spec.archiveSizeBytes }, "Downloading speech model");
     if (!(await pathIsPresent(archivePath))) {
-      await downloadToFile(spec.archiveUrl, archivePath, spec.archiveSizeBytes);
+      await downloadToFile(spec.archiveUrl, archivePath, spec.archiveSizeBytes, options.onProgress);
     }
     await verifyModelArchive(archivePath, spec.archiveSizeBytes, spec.archiveSha256);
+    options.onProgress?.(spec.archiveSizeBytes);
     await extractArchive(archivePath, installRoot);
 
     const extractedDir = path.join(installRoot, spec.extractedDir);

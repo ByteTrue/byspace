@@ -52,7 +52,7 @@ start/stop flow remains the release blocker.
 - SenseVoice is downloaded only on explicit user action, retains its bundled FunASR Model License file, and is attributed to Alibaba FunASR in the catalog and public documentation.
 - Qwen3-ASR 0.6B is deferred: sherpa-onnx publishes the model, but its latest stable Node binding does not expose the Qwen3 recognizer configuration required by the daemon.
 - Catalog IDs are allowlisted and validated again for every operation.
-- Model metadata includes display label, language/quality description, download size, runtime status, and optional error.
+- Model metadata includes display label, language/quality description, download size, runtime status, optional in-flight downloaded bytes, and optional error.
 - No arbitrary URL/model path, Python runtime, CUDA requirement, or cloud provider is accepted.
 - sherpa-onnx Node is pinned to 1.13.4: 1.12.28 fails the real FireRed worker path because it does not export a constructible `OfflineRecognizer`.
 
@@ -96,7 +96,7 @@ start/stop flow remains the release blocker.
 - Host settings add a compact Dictation section using the shared settings rows.
 - The section shows each model's purpose, size, state, and only the actions install/use, switch, and delete.
 - A separate `Refine with AI` switch defaults off and discloses the text-only extra model call plus the reversible original/refined draft behavior.
-- Download state is refreshed while a job is active.
+- Download state is refreshed while a job is active. New Hosts expose downloaded bytes so the row shows percentage, transferred/total size, and an accessible progress bar; older Hosts retain the indeterminate downloading state.
 - The microphone remains visible while unconfigured; activating it explains the requirement and opens that Host's Dictation settings.
 - While recording, the composer keeps the existing draft visible and unchanged.
 - Recording controls replace only the composer toolbar: cancel, volume/duration, and stop/transcribe.
@@ -141,6 +141,7 @@ start/stop flow remains the release blocker.
 - [x] Fixed-duration background commits assemble in causal order and final output emits only after stop.
 - [x] Cancel discards the recording; stop appends only the final transcript to the existing draft.
 - [x] Desktop and compact browser layouts keep the composer text visible while recording.
+- [x] Active model downloads expose byte and percentage progress; clients retain the indeterminate fallback for older Hosts.
 - [ ] Human voice-input acceptance of the explicit start/stop, final-only flow.
 
 - Base focused server lifecycle/downloader/worker tests: 21 passed.
@@ -161,6 +162,7 @@ start/stop flow remains the release blocker.
 - PR #25 integration merged the latest `main` and resolved all eight text/modify-delete conflicts while preserving current orchestration, active-turn, input-mode, Relay onboarding, and package semantics.
 - Integration review fixed pending-start cancel/unmount settlement, server-side pending-start cancellation, worker shutdown before model deletion, model-selection source-of-truth drift, mutation/refinement error handling, archived-Agent header controls, initial model-list retry, and draft submission before model defaults finish loading.
 - Final regression evidence includes 106 daemon-client tests, 6 stream-sender tests, 8 Dictation hook tests, 2 Dictation settings browser tests, 3 New Workspace Dictation browser tests, 12 stream-manager tests, 10 speech-runtime tests, the real worker-process test, root typecheck/lint/format check, server build, and Web export. Independent re-review closed all High/Medium findings.
+- Model download progress evidence: downloader/runtime/protocol validation tests and focused real-browser progress rendering passed; root typecheck, lint, format, and Web export remained green.
 - Synthetic quality smoke outputs:
   - English: `please run the type check and rebuild the server before opening the pull`
   - Mandarin: `今天我们修复了终端粘贴和工作区切换的问题请重新运行类型检查`

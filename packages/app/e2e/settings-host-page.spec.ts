@@ -77,8 +77,12 @@ async function rejectNextConfigWrite(page: Page): Promise<void> {
 
 const TEST_SPEECH_MODELS_LOAD_ERROR = "Synthetic speech-model list failure";
 
-async function rejectNextSpeechModelList(page: Page): Promise<void> {
-  let shouldReject = true;
+async function mockSpeechModelList(
+  page: Page,
+  payload: { selectedModelId: string | null; models: unknown[]; error?: string },
+  once = false,
+): Promise<void> {
+  let active = true;
   await page.routeWebSocket(daemonWsRoutePattern(), (ws) => {
     const server = ws.connectToServer();
     ws.onMessage((message) => {
@@ -93,22 +97,17 @@ async function rejectNextSpeechModelList(page: Page): Promise<void> {
         // Forward non-JSON frames unchanged.
       }
       if (
-        shouldReject &&
+        active &&
         request?.type === "speech.models.list.request" &&
         typeof request.requestId === "string"
       ) {
-        shouldReject = false;
+        if (once) active = false;
         ws.send(
           JSON.stringify({
             type: "session",
             message: {
               type: "speech.models.list.response",
-              payload: {
-                requestId: request.requestId,
-                selectedModelId: null,
-                models: [],
-                error: TEST_SPEECH_MODELS_LOAD_ERROR,
-              },
+              payload: { requestId: request.requestId, ...payload },
             },
           }),
         );
@@ -118,6 +117,18 @@ async function rejectNextSpeechModelList(page: Page): Promise<void> {
     });
     server.onMessage((message) => ws.send(message));
   });
+}
+
+async function rejectNextSpeechModelList(page: Page): Promise<void> {
+  await mockSpeechModelList(
+    page,
+    {
+      selectedModelId: null,
+      models: [],
+      error: TEST_SPEECH_MODELS_LOAD_ERROR,
+    },
+    true,
+  );
 }
 
 test.describe("Settings host page", () => {
@@ -294,6 +305,33 @@ test.describe("Settings host page", () => {
     await expect(page.getByTestId("host-dictation-settings")).toContainText("Use original");
     await refinement.click();
     await expect(refinement).toBeChecked();
+  });
+
+  test("dictation model download shows byte and percentage progress", async ({ page }) => {
+    const serverId = getServerId();
+    await mockSpeechModelList(page, {
+      selectedModelId: "sensevoice-small-int8",
+      models: [
+        {
+          id: "sensevoice-small-int8",
+          label: "SenseVoice Small",
+          description: "Fast multilingual local transcription",
+          sizeBytes: 100 * 1024 * 1024,
+          state: "downloading",
+          downloadedBytes: 50 * 1024 * 1024,
+        },
+      ],
+    });
+
+    await gotoAppShell(page);
+    await openSettings(page);
+    await openSettingsHost(page, serverId);
+    await openHostSection(page, serverId, "dictation");
+
+    const row = page.getByTestId("speech-model-sensevoice-small-int8");
+    await expect(row).toContainText("50% · 50 MB / 100 MB");
+    const progress = page.getByTestId("speech-model-progress-sensevoice-small-int8");
+    await expect(progress).toHaveAttribute("aria-valuenow", "50");
   });
 
   test("dictation model load failure stays visible and can retry", async ({ page }) => {

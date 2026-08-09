@@ -41,12 +41,15 @@ vi.mock("./providers/local/models.js", () => ({
   ],
   recoverSherpaOnnxModelDeletion: vi.fn(async () => undefined),
   isSherpaOnnxModelReady: vi.fn(async () => mocks.ready),
-  ensureSherpaOnnxModel: vi.fn(async () => {
-    mocks.ensureCalls += 1;
-    await mocks.ensureGate;
-    if (mocks.ensureError) throw mocks.ensureError;
-    mocks.ready = true;
-  }),
+  ensureSherpaOnnxModel: vi.fn(
+    async (options?: { onProgress?: (downloadedBytes: number) => void }) => {
+      mocks.ensureCalls += 1;
+      options?.onProgress?.(25);
+      await mocks.ensureGate;
+      if (mocks.ensureError) throw mocks.ensureError;
+      mocks.ready = true;
+    },
+  ),
   stageSherpaOnnxModelDeletion: vi.fn(async () => {
     mocks.stageCalls += 1;
     await mocks.stageGate;
@@ -204,6 +207,26 @@ describe("createSpeechService", () => {
     await expect(runtime.selectModel(MODEL_ID)).rejects.toThrow(
       "Wait for the model download to finish",
     );
+    releaseDownload();
+    await vi.waitFor(() => expect(runtime.resolveDictationStt()).not.toBeNull());
+    runtime.stop();
+  });
+
+  it("reports in-flight download bytes", async () => {
+    let releaseDownload!: () => void;
+    mocks.ensureGate = new Promise<void>((resolve) => {
+      releaseDownload = resolve;
+    });
+    const runtime = await createRuntime();
+    runtime.start();
+    await runtime.ready;
+
+    await runtime.downloadModel(MODEL_ID);
+    expect((await runtime.listModels()).models[0]).toMatchObject({
+      state: "downloading",
+      downloadedBytes: 25,
+    });
+
     releaseDownload();
     await vi.waitFor(() => expect(runtime.resolveDictationStt()).not.toBeNull());
     runtime.stop();
