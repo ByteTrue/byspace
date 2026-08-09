@@ -48,12 +48,22 @@ export function abandonHistoryStartPaginationRequest(
   return { status: "latched" };
 }
 
+function evaluateDormantHistoryStartPagination(
+  state: Extract<HistoryStartPaginationState, { status: "dormant" }>,
+  input: HistoryStartPaginationInput,
+): HistoryStartPaginationTransition {
+  if (!input.isReady || input.distanceFromHistoryStart > HISTORY_START_THRESHOLD_PX) {
+    return { state, shouldLoad: false };
+  }
+  return evaluateHistoryStartPagination({ status: "ready" }, input);
+}
+
 export function evaluateHistoryStartPagination(
   state: HistoryStartPaginationState,
   input: HistoryStartPaginationInput,
 ): HistoryStartPaginationTransition {
   if (state.status === "dormant") {
-    return { state, shouldLoad: false };
+    return evaluateDormantHistoryStartPagination(state, input);
   }
   if (state.status === "loading") {
     if (input.progressKey !== null && input.progressKey !== state.requestedProgressKey) {

@@ -67,6 +67,7 @@ export class AgentTimelineSyncOwner {
   private readonly replica: AgentTimelineReplica;
   private readonly inFlight = new Map<string, InFlightRequest>();
   private readonly latestForwardIntent = new Map<string, number>();
+  private readonly lastAppliedForwardIntent = new Map<string, number>();
   private readonly viewedForwardIntents = new Map<
     string,
     { generation: number; intentSerial: number }
@@ -121,6 +122,7 @@ export class AgentTimelineSyncOwner {
     this.connectionGeneration += 1;
     this.inFlight.clear();
     this.latestForwardIntent.clear();
+    this.lastAppliedForwardIntent.clear();
     this.viewedForwardIntents.clear();
     this.epochVersions.clear();
     this.observedEpochs.clear();
@@ -314,6 +316,12 @@ export class AgentTimelineSyncOwner {
 
   private applyPage(agentId: string, page: AgentTimelinePage, context: RequestContext): boolean {
     if (!this.isCurrent(context)) return false;
+    if (
+      context.lane === "forward" &&
+      context.forwardIntentSerial < (this.lastAppliedForwardIntent.get(agentId) ?? 0)
+    ) {
+      return false;
+    }
     this.replica.flushAgent(agentId);
     const currentCursor = this.readCursor(agentId);
     const payload = this.resolvePagePayload(agentId, page, context, currentCursor);
@@ -324,6 +332,9 @@ export class AgentTimelineSyncOwner {
       context.lane !== "older" || this.requestStillTargetsReplica(context, currentCursor);
     const epochBefore = currentCursor?.epoch;
     this.replica.applyTimelineResponse(payload, maySettleInitialization, mayUpdatePagination);
+    if (context.lane === "forward") {
+      this.lastAppliedForwardIntent.set(agentId, context.forwardIntentSerial);
+    }
     if (this.hasAuthoritativeHistory(agentId)) this.initializationAgentIds.delete(agentId);
     const epochAfter = this.readCursor(agentId)?.epoch;
     if (epochAfter) this.observedEpochs.set(agentId, epochAfter);

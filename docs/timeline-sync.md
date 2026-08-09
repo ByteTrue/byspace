@@ -108,9 +108,10 @@ The owner keeps independent `forward` and `older` lanes. Every forward control i
 identity across all of its `after` pages; a later focus/resume intent can supersede it without making
 an older continuation current again. Explicit visibility repair bypasses equivalent-request
 deduplication on every page, not only the first page. A current forward response alone may complete
-initialization or visibility readiness. An earlier response from the same connection may still
-contribute canonical rows when the reducer proves they extend the current epoch and sequence range,
-but it cannot complete a newer control intent or overwrite pagination metadata. Fully covered units
+initialization or visibility readiness. A response is not discarded merely because a newer request
+was issued: it may apply while no newer forward intent has applied. Once a newer forward response is
+applied, however, responses from earlier forward intents are discarded so they cannot roll back its
+authoritative snapshot. Fully covered units
 in an overlapping same-epoch page are not replayed, while boundary-spanning projected units remain
 eligible for canonical reconciliation. Older pages may extend `startSeq` and `hasOlder`; they never
 complete forward readiness or move `endSeq` backward. Once an accepted response changes the daemon
