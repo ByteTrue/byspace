@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { describe, expect, test } from "vitest";
 import {
+  AGENT_HISTORY_SEARCH_MAX_LENGTH,
   ProjectPlacementPayloadSchema,
   RecentProviderSessionDescriptorPayloadSchema,
   SessionInboundMessageSchema,
@@ -191,6 +192,25 @@ describe("workspace message schemas", () => {
 
     expect(request.type).toBe("fetch_agent_history_request");
     expect(response.type).toBe("fetch_agent_history_response");
+  });
+
+  test("bounds agent history search queries", () => {
+    const request = {
+      type: "fetch_agent_history_request",
+      requestId: "req-history-search-bound",
+    } as const;
+    expect(
+      SessionInboundMessageSchema.safeParse({
+        ...request,
+        search: "x".repeat(AGENT_HISTORY_SEARCH_MAX_LENGTH),
+      }).success,
+    ).toBe(true);
+    expect(
+      SessionInboundMessageSchema.safeParse({
+        ...request,
+        search: "x".repeat(AGENT_HISTORY_SEARCH_MAX_LENGTH + 1),
+      }).success,
+    ).toBe(false);
   });
 
   test("parses recent provider session descriptors without legacy handle fields", () => {

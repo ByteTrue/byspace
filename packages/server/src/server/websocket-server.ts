@@ -1411,6 +1411,8 @@ export class VoiceAssistantWebSocketServer {
         "terminal-size-ownership": true,
         // COMPAT(agentTimelinePromptIndex): added in v0.3.0, remove gate after 2027-02-08.
         agentTimelinePromptIndex: true,
+        // COMPAT(agentHistorySearch): added in v0.3.0, remove gate after 2027-02-07.
+        agentHistorySearch: true,
         // COMPAT(terminalAgentHookProviders): added in v0.2.0, remove gate after 2027-01-21.
         terminalAgentHookProviders: true,
         // COMPAT(orchestrationSkills): added in v0.2.0-beta.5, remove gate after 2027-01-22.
