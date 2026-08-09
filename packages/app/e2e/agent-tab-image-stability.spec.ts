@@ -66,20 +66,27 @@ test("near-tail reload stays stable when an assistant image grows after load", a
         '[data-testid="agent-chat-scroll"]:not([aria-hidden="true"])',
       );
       if (!image || !scroll) throw new Error("Expected assistant image and transcript scroll");
-      const load = (src: string) =>
-        new Promise<void>((resolve, reject) => {
+      const load = async (src: string) => {
+        await new Promise<void>((resolve, reject) => {
           image.addEventListener("load", () => resolve(), { once: true });
           image.addEventListener("error", () => reject(new Error("Test image failed to load")), {
             once: true,
           });
           image.src = src;
         });
+        if (!(element instanceof HTMLElement)) throw new Error("Expected assistant image surface");
+        element.style.aspectRatio = `${image.naturalWidth} / ${image.naturalHeight}`;
+      };
 
       await load(
-        "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1' height='1'%3E%3C/svg%3E",
+        "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='100'%3E%3C/svg%3E",
       );
       scroll.scrollTop = Math.max(0, scroll.scrollHeight - scroll.clientHeight - 180);
-      const before = scroll.scrollHeight - scroll.clientHeight - scroll.scrollTop;
+      const before = {
+        bottomDistance: scroll.scrollHeight - scroll.clientHeight - scroll.scrollTop,
+        imageHeight: image.getBoundingClientRect().height,
+        scrollHeight: scroll.scrollHeight,
+      };
       await load(
         "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='400'%3E%3C/svg%3E",
       );
@@ -87,15 +94,21 @@ test("near-tail reload stays stable when an assistant image grows after load", a
       await new Promise(requestAnimationFrame);
       return {
         before,
-        after: scroll.scrollHeight - scroll.clientHeight - scroll.scrollTop,
-        imageHeight: image.getBoundingClientRect().height,
+        after: {
+          bottomDistance: scroll.scrollHeight - scroll.clientHeight - scroll.scrollTop,
+          imageHeight: image.getBoundingClientRect().height,
+          scrollHeight: scroll.scrollHeight,
+        },
       };
     });
 
-    expect(result.before).toBeGreaterThan(150);
-    expect(result.before).toBeLessThan(220);
-    expect(result.imageHeight).toBeGreaterThan(300);
-    expect(Math.abs(result.after - result.before)).toBeLessThanOrEqual(2);
+    expect(result.before.bottomDistance).toBeGreaterThan(150);
+    expect(result.before.bottomDistance).toBeLessThan(220);
+    expect(result.after.imageHeight - result.before.imageHeight).toBeGreaterThan(200);
+    expect(result.after.scrollHeight - result.before.scrollHeight).toBeGreaterThan(200);
+    expect(
+      Math.abs(result.after.bottomDistance - result.before.bottomDistance),
+    ).toBeLessThanOrEqual(2);
   } finally {
     await workspace.cleanup();
   }

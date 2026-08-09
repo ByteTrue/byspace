@@ -38,7 +38,6 @@ import {
 } from "@/utils/connection-selection";
 import { useSessionStore } from "@/stores/session-store";
 import { useWorkspaceSetupStore } from "@/stores/workspace-setup-store";
-import { createAppWebSocketFactory } from "./websocket-factory";
 import { invalidateCheckoutGitQueriesForServer } from "@/git/query-keys";
 import { queryClient } from "@/data/query-client";
 import {
@@ -445,7 +444,6 @@ const APP_CLIENT_CAPABILITIES = {
 export function createDefaultDeps(): HostRuntimeControllerDeps {
   return {
     createClient: ({ host, connection, clientId, runtimeGeneration }) => {
-      const webSocketFactory = createAppWebSocketFactory();
       const base = {
         suppressSendErrors: true,
         clientId,
@@ -457,7 +455,6 @@ export function createDefaultDeps(): HostRuntimeControllerDeps {
       if (connection.type === "directTcp") {
         return new DaemonClient({
           ...base,
-          webSocketFactory,
           url: buildDaemonWebSocketUrl(connection.endpoint, {
             useTls: connection.useTls ?? false,
           }),
@@ -467,7 +464,6 @@ export function createDefaultDeps(): HostRuntimeControllerDeps {
       }
       return new DaemonClient({
         ...base,
-        webSocketFactory,
         url: buildRelayWebSocketUrl({
           endpoint: connection.relayEndpoint,
           useTls: connection.useTls ?? shouldUseTlsForDefaultHostedRelay(connection.relayEndpoint),

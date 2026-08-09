@@ -1,5 +1,5 @@
 import { describe, expect, inject, test } from "vitest";
-import { createAppWebSocketFactory } from "./websocket-factory";
+import { defaultWebSocketFactory } from "@bytetrue/byspace-client/internal/daemon-client-websocket-transport";
 
 declare module "vitest" {
   interface ProvidedContext {
@@ -8,7 +8,7 @@ declare module "vitest" {
 }
 
 function openPasswordlessRelayConnection(url: string): Promise<WebSocket> {
-  const socket = createAppWebSocketFactory()(url, { headers: {}, protocols: undefined });
+  const socket = defaultWebSocketFactory(url, { headers: {}, protocols: undefined });
 
   return new Promise((resolve, reject) => {
     const timeout = setTimeout(() => {
