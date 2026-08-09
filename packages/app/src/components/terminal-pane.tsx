@@ -312,7 +312,7 @@ export function TerminalPane({
 
   useEffect(() => {
     const step = reconcileFocusClaim(paneFocusResizeClaimRef.current, {
-      key: !isPaneFocused || !terminalId ? null : `${scopeKey}:${terminalId}`,
+      key: terminalId ? terminalStreamKey : null,
       canRequest: canClaimTerminalSize,
     });
     paneFocusResizeClaimRef.current = step.state;
@@ -320,7 +320,7 @@ export function TerminalPane({
       lastSentTerminalSizeRef.current = null;
       requestTerminalReflow();
     }
-  }, [canClaimTerminalSize, isPaneFocused, requestTerminalReflow, scopeKey, terminalId]);
+  }, [canClaimTerminalSize, requestTerminalReflow, terminalId, terminalStreamKey]);
 
   const handleTerminalFocus = useCallback(() => {
     if (isWorkspaceFocused && isPaneFocused) {
@@ -664,6 +664,7 @@ export function TerminalPane({
         shouldClaim: input.shouldClaim,
         forceClaim: false,
         supportsTerminalSizeOwnership,
+        hasClaimedSize: paneFocusResizeClaimRef.current.claimedKey === terminalStreamKey,
         readiness: {
           isWorkspaceFocused,
           isPaneFocused,

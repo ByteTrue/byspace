@@ -31,6 +31,7 @@ describe("terminal pane focus claim", () => {
         shouldClaim: true,
         forceClaim: false,
         supportsTerminalSizeOwnership: true,
+        hasClaimedSize: false,
         readiness: { ...readiness, isPaneFocused: false },
       }),
       resolveTerminalResizeClaim({
@@ -39,6 +40,7 @@ describe("terminal pane focus claim", () => {
         shouldClaim: true,
         forceClaim: false,
         supportsTerminalSizeOwnership: true,
+        hasClaimedSize: false,
         readiness: { ...readiness, isPaneFocused: true },
       }),
     ];
@@ -66,6 +68,7 @@ describe("terminal pane focus claim", () => {
       shouldClaim: false,
       forceClaim: false,
       supportsTerminalSizeOwnership: true,
+      hasClaimedSize: true,
       readiness,
     });
     const ordinarySameSizeMeasurement = resolveTerminalResizeClaim({
@@ -74,6 +77,7 @@ describe("terminal pane focus claim", () => {
       shouldClaim: true,
       forceClaim: false,
       supportsTerminalSizeOwnership: true,
+      hasClaimedSize: true,
       readiness,
     });
 
@@ -81,24 +85,59 @@ describe("terminal pane focus claim", () => {
     expect(ordinarySameSizeMeasurement).toEqual({ shouldSend: true, intent: "claim" });
   });
 
-  it("lets the current owner update after pane focus moves without transferring ownership", () => {
-    expect(
-      resolveTerminalResizeClaim({
-        size: { rows: 20, cols: 100 },
-        previousSentSize: { rows: 40, cols: 100 },
-        shouldClaim: false,
-        forceClaim: false,
-        supportsTerminalSizeOwnership: true,
-        readiness: {
-          isWorkspaceFocused: true,
-          isPaneFocused: false,
-          isAppActivelyVisible: true,
-          isClientReady: true,
-          isConnected: true,
-          isRendererReady: true,
-        },
-      }),
-    ).toEqual({ shouldSend: true, intent: "update" });
+  it("keeps a claimed terminal's passive resize ownership after pane focus moves", () => {
+    const key = "ws:term-1";
+    const requested = reconcileFocusClaim(EMPTY_FOCUS_CLAIM_STATE, {
+      key,
+      canRequest: true,
+    });
+    const claimed = settleFocusClaim(requested.state, { key, sent: true });
+    const blurred = request(claimed, { key, canRequest: false });
+
+    const ownerUpdate = resolveTerminalResizeClaim({
+      size: { rows: 20, cols: 100 },
+      previousSentSize: { rows: 40, cols: 100 },
+      shouldClaim: false,
+      forceClaim: false,
+      supportsTerminalSizeOwnership: true,
+      hasClaimedSize: blurred.claimedKey === key,
+      readiness: {
+        isWorkspaceFocused: true,
+        isPaneFocused: false,
+        isAppActivelyVisible: true,
+        isClientReady: true,
+        isConnected: true,
+        isRendererReady: true,
+      },
+    });
+
+    expect(blurred).toEqual({ claimedKey: key, requestedKey: null });
+    expect(ownerUpdate).toEqual({ shouldSend: true, intent: "update" });
+  });
+
+  it("keeps passive resizes from an unclaimed unfocused terminal local", () => {
+    const key = "ws:term-1";
+    const blurred = request(EMPTY_FOCUS_CLAIM_STATE, { key, canRequest: false });
+
+    const passiveResize = resolveTerminalResizeClaim({
+      size: { rows: 20, cols: 100 },
+      previousSentSize: null,
+      shouldClaim: false,
+      forceClaim: false,
+      supportsTerminalSizeOwnership: true,
+      hasClaimedSize: blurred.claimedKey === key,
+      readiness: {
+        isWorkspaceFocused: true,
+        isPaneFocused: false,
+        isAppActivelyVisible: true,
+        isClientReady: true,
+        isConnected: true,
+        isRendererReady: true,
+      },
+    });
+
+    expect(blurred).toEqual(EMPTY_FOCUS_CLAIM_STATE);
+    expect(passiveResize).toEqual({ shouldSend: false, intent: "update" });
   });
 
   it("keeps passive refits local against legacy daemons", () => {
@@ -109,6 +148,7 @@ describe("terminal pane focus claim", () => {
         shouldClaim: false,
         forceClaim: false,
         supportsTerminalSizeOwnership: false,
+        hasClaimedSize: true,
         readiness: {
           isWorkspaceFocused: true,
           isPaneFocused: true,
@@ -143,11 +183,14 @@ describe("terminal pane focus claim", () => {
     });
     const sent = settleFocusClaim(firstRequest.state, { key: "ws:term-1", sent: true });
     const repeated = reconcileFocusClaim(sent, { key: "ws:term-1", canRequest: true });
-    const blurred = request(sent, { key: null, canRequest: true });
+    const blurred = request(sent, { key: "ws:term-1", canRequest: false });
     const refocused = reconcileFocusClaim(blurred, { key: "ws:term-1", canRequest: true });
 
     expect(firstRequest.shouldRequest).toBe(true);
     expect(repeated.shouldRequest).toBe(false);
+    expect(blurred.claimedKey).toBe("ws:term-1");
     expect(refocused.shouldRequest).toBe(true);
+    expect(request(sent, { key: "ws:term-2", canRequest: false })).toEqual(EMPTY_FOCUS_CLAIM_STATE);
+    expect(request(sent, { key: null, canRequest: false })).toEqual(EMPTY_FOCUS_CLAIM_STATE);
   });
 });
