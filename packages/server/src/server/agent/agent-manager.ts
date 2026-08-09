@@ -1281,26 +1281,27 @@ export class AgentManager {
   ): Promise<ManagedAgent> {
     this.assertAcceptingAgentRegistrations();
     let existing = this.requireSessionAgent(agentId);
-    if (this.hasInFlightRun(agentId)) {
-      await this.cancelAgentRunBefore(agentId, "reload");
-      existing = this.requireSessionAgent(agentId);
-    }
     const rehydrateFromDisk = options?.rehydrateFromDisk ?? false;
-    const preservedHistoryPrimed = existing.historyPrimed;
-    const preservedLastUsage = existing.lastUsage;
-    const preservedLastError = existing.lastError;
-    const preservedAttention = existing.attention;
-    const handle = existing.persistence;
-    const provider = handle?.provider ?? existing.provider;
-    const client = this.requireClient(provider);
+    const provider = existing.persistence?.provider ?? existing.provider;
     const refreshConfig = {
       ...existing.config,
       ...overrides,
       provider,
     } as AgentSessionConfig;
     const { storedConfig, launchConfig } = await this.prepareSessionConfig(refreshConfig);
+    const client = await this.requireAvailableClient({ provider });
     this.assertProviderSupportsConfiguredMcpServers(client, storedConfig);
     const launchContext = await this.buildLaunchContext(agentId, storedConfig.cwd);
+
+    if (this.hasInFlightRun(agentId)) {
+      await this.cancelAgentRunBefore(agentId, "reload");
+      existing = this.requireSessionAgent(agentId);
+    }
+    const preservedHistoryPrimed = existing.historyPrimed;
+    const preservedLastUsage = existing.lastUsage;
+    const preservedLastError = existing.lastError;
+    const preservedAttention = existing.attention;
+    const handle = existing.persistence;
 
     const session = handle
       ? await client.resumeSession(handle, launchConfig, launchContext)

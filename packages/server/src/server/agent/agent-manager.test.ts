@@ -3474,6 +3474,7 @@ test("reloadAgentSession cancels active run and resumes existing session once th
   class DelayedPersistenceSession extends TestAgentSession {
     private persistenceReady = false;
     private delayedInterrupted = false;
+    interruptCalls = 0;
     private releaseGate: (() => void) | null = null;
     private readonly gate = new Promise<void>((resolve) => {
       this.releaseGate = resolve;
@@ -3537,6 +3538,7 @@ test("reloadAgentSession cancels active run and resumes existing session once th
     }
 
     override async interrupt(): Promise<void> {
+      this.interruptCalls += 1;
       this.delayedInterrupted = true;
       this.releaseGate?.();
     }
@@ -3620,6 +3622,8 @@ test("reloadAgentSession cancels active run and resumes existing session once th
   expect(client.createSessionCalls).toBe(1);
   expect(client.resumeSessionCalls).toBe(1);
   expect(reloaded.persistence?.sessionId).toBe("delayed-session-1");
+  expect(active?.session).not.toBe(reloaded.session);
+  expect(active?.session).toMatchObject({ interruptCalls: 1 });
 
   // Drain stream after cancellation to ensure clean shutdown.
   while (true) {
@@ -9004,35 +9008,152 @@ test("resumeAgentFromPersistence rejects unsupported MCP config before resuming"
   }
 });
 
-test("reloadAgentSession preserves the live session when MCP preflight fails", async () => {
-  const workdir = mkdtempSync(join(tmpdir(), "agent-manager-test-"));
-  const original = new TestAgentSession({ provider: "codex", cwd: workdir });
-  class UnsupportedReloadClient extends TestAgentClient {
-    override async createSession(): Promise<AgentSession> {
-      return original;
-    }
+class ReloadPreflightClient extends TestAgentClient {
+  available = true;
+
+  constructor(private readonly original: AgentSession) {
+    super();
   }
-  const client = new UnsupportedReloadClient();
+
+  override async isAvailable(): Promise<boolean> {
+    return this.available;
+  }
+
+  override async createSession(config: AgentSessionConfig): Promise<AgentSession> {
+    this.createdConfigs.push(config);
+    return this.original;
+  }
+}
+
+class McpCapableReloadPreflightClient extends ReloadPreflightClient {
+  override readonly capabilities = { ...TEST_CAPABILITIES, supportsMcpServers: true };
+}
+
+async function createRunningReloadPreflightFixture(options: {
+  name: string;
+  agentId: string;
+  turnId: string;
+  supportsMcpServers: boolean;
+}) {
+  const workdir = mkdtempSync(join(tmpdir(), `agent-manager-${options.name}-`));
+  const session = new ControlledInterruptSession(
+    { provider: "codex", cwd: workdir },
+    options.turnId,
+    async (activeSession) => {
+      activeSession.pushEvent({
+        type: "turn_canceled",
+        provider: "codex",
+        turnId: options.turnId,
+        reason: "interrupted",
+      });
+    },
+  );
+  const client = options.supportsMcpServers
+    ? new McpCapableReloadPreflightClient(session)
+    : new ReloadPreflightClient(session);
   const manager = new AgentManager({
     clients: { codex: client },
     registry: new AgentStorage(join(workdir, "agents"), logger),
     logger,
+    idFactory: () => options.agentId,
+  });
+  const created = await manager.createAgent({ provider: "codex", cwd: workdir }, undefined, {
+    workspaceId: undefined,
+  });
+  const events: AgentStreamEvent[] = [];
+  const stream = manager.streamAgent(created.id, "keep running during reload preflight");
+  const drain = (async () => {
+    for await (const event of stream) {
+      events.push(event);
+    }
+  })();
+  await manager.waitForAgentRunStart(created.id);
+
+  return {
+    client,
+    created,
+    events,
+    manager,
+    session,
+    async cleanup() {
+      if (manager.getAgent(created.id)?.lifecycle === "running") {
+        session.pushEvent({ type: "turn_completed", provider: "codex", turnId: options.turnId });
+      }
+      await drain;
+      rmSync(workdir, { recursive: true, force: true });
+    },
+  };
+}
+
+test("reloadAgentSession preserves an active run when MCP preflight fails", async () => {
+  const fixture = await createRunningReloadPreflightFixture({
+    name: "reload-unsupported-mcp",
+    agentId: "00000000-0000-4000-8000-000000000109",
+    turnId: "reload-unsupported-mcp-turn",
+    supportsMcpServers: false,
   });
 
   try {
-    const created = await manager.createAgent(
-      { provider: "codex", cwd: workdir },
-      "00000000-0000-4000-8000-000000000109",
-      { workspaceId: undefined },
-    );
     await expect(
-      manager.reloadAgentSession(created.id, {
+      fixture.manager.reloadAgentSession(fixture.created.id, {
         mcpServers: { custom: { type: "http", url: "https://example.com/mcp" } },
       }),
     ).rejects.toThrow("Provider 'codex' does not support MCP servers");
-    expect(client.resumeOverrides).toEqual([]);
-    expect(manager.getAgent(created.id)?.session).toBe(original);
+
+    const live = fixture.manager.getAgent(fixture.created.id);
+    expect(fixture.client.createdConfigs).toHaveLength(1);
+    expect(fixture.client.resumeOverrides).toEqual([]);
+    expect(fixture.session.interruptCalled).toBe(false);
+    expect(fixture.events.some((event) => event.type === "turn_canceled")).toBe(false);
+    expect(live?.session).toBe(fixture.session);
+    expect(live?.lifecycle).toBe("running");
+    expect(live?.activeForegroundTurnId).toBe("reload-unsupported-mcp-turn");
+    expect(live?.config.mcpServers).toBeUndefined();
   } finally {
-    rmSync(workdir, { recursive: true, force: true });
+    await fixture.cleanup();
   }
 });
+
+test.each([
+  ["unsupported MCP", false],
+  ["supported MCP", true],
+])(
+  "reloadAgentSession reports provider unavailable before %s preflight without disturbing the active run",
+  async (_configKind, supportsMcpServers) => {
+    const fixture = await createRunningReloadPreflightFixture({
+      name: `reload-unavailable-${supportsMcpServers ? "supported" : "unsupported"}`,
+      agentId: supportsMcpServers
+        ? "00000000-0000-4000-8000-000000000110"
+        : "00000000-0000-4000-8000-000000000111",
+      turnId: supportsMcpServers
+        ? "reload-unavailable-supported-turn"
+        : "reload-unavailable-unsupported-turn",
+      supportsMcpServers,
+    });
+    fixture.client.available = false;
+
+    try {
+      await expect(
+        fixture.manager.reloadAgentSession(fixture.created.id, {
+          mcpServers: { custom: { type: "http", url: "https://example.com/mcp" } },
+        }),
+      ).rejects.toThrow("Provider 'codex' is not available.");
+
+      const live = fixture.manager.getAgent(fixture.created.id);
+      expect(fixture.client.createdConfigs).toHaveLength(1);
+      expect(fixture.client.resumeOverrides).toEqual([]);
+      expect(fixture.session.interruptCalled).toBe(false);
+      expect(fixture.events.some((event) => event.type === "turn_canceled")).toBe(false);
+      expect(live?.session).toBe(fixture.session);
+      expect(live?.lifecycle).toBe("running");
+      expect(live?.activeForegroundTurnId).toBe(
+        supportsMcpServers
+          ? "reload-unavailable-supported-turn"
+          : "reload-unavailable-unsupported-turn",
+      );
+      expect(live?.config.mcpServers).toBeUndefined();
+    } finally {
+      await fixture.cleanup();
+    }
+  },
+);
