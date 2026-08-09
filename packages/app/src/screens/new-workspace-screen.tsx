@@ -30,6 +30,13 @@ import { HEADER_INNER_HEIGHT, MAX_CONTENT_WIDTH, useIsCompactFormFactor } from "
 import { useToast } from "@/contexts/toast-context";
 import { useAgentInputDraft } from "@/composer/draft/input-draft";
 import { useForgeSearchQuery } from "@/git/use-forge-search-query";
+import { useDaemonConfig } from "@/hooks/use-daemon-config";
+import { resolveTerminalProfiles } from "@bytetrue/byspace-protocol/terminal-profiles";
+import type { TerminalProfile } from "@bytetrue/byspace-protocol/messages";
+import { LaunchControl } from "@/new-workspace-launch/launch-control";
+import { resolveLaunchTarget, type LaunchTarget } from "@/new-workspace-launch/target";
+import { useTerminalComposerState } from "@/new-workspace-launch/composer-state";
+import { runCreateTerminalWorkspace } from "./new-workspace-terminal";
 import {
   useHostRuntimeClient,
   useHostRuntimeConnectionStatuses,
@@ -72,6 +79,7 @@ import { ICON_SIZE, type Theme } from "@/styles/theme";
 import type { ComposerAttachment } from "@/attachments/types";
 import { useDraftWorkspaceAttachmentScopeKey } from "@/attachments/workspace-attachments-store";
 import type { MessagePayload } from "@/composer/types";
+import type { UserComposerAttachment } from "@/attachments/types";
 import type { AgentAttachment, ForgeSearchItem } from "@bytetrue/byspace-protocol/messages";
 import type { CreateBySpaceWorktreeInput } from "@bytetrue/byspace-client/internal/daemon-client";
 import type { AgentProvider } from "@bytetrue/byspace-protocol/agent-types";
@@ -131,7 +139,7 @@ function resolveCheckoutUpstreamRef(
 }
 
 function isNewWorkspacePending(input: {
-  pendingAction: "chat" | "empty" | null;
+  pendingAction: "chat" | "empty" | "terminal" | null;
   isDraftHandoffActive: boolean;
 }): boolean {
   return input.pendingAction !== null || input.isDraftHandoffActive;
@@ -168,7 +176,62 @@ interface PickerOptionData {
 
 const BRANCH_OPTION_PREFIX = "branch:";
 const PR_OPTION_PREFIX = "github-pr:";
+async function runWithNewWorkspaceErrorHandling(
+  action: () => Promise<void>,
+  handleError: (message: string) => void,
+): Promise<void> {
+  try {
+    await action();
+  } catch (error) {
+    handleError(toErrorMessage(error));
+  }
+}
+
+function getTerminalProfileName(profile: TerminalProfile | null): string | undefined {
+  return profile ? profile.name : undefined;
+}
+
+function resolveConfiguredTerminalProfiles(
+  config: { terminalProfiles?: TerminalProfile[] } | null | undefined,
+): readonly TerminalProfile[] {
+  return resolveTerminalProfiles(config?.terminalProfiles);
+}
+
+function resolveRememberedLaunchTarget(
+  manual: LaunchTarget | null,
+  remembered: LaunchTarget | undefined,
+  profiles: readonly TerminalProfile[],
+): LaunchTarget {
+  return resolveLaunchTarget(manual ?? remembered, profiles);
+}
+
+function requireCreatedTerminalId(
+  result: { terminal?: { id: string } | null; error?: string | null },
+  fallbackMessage: string,
+): string {
+  if (!result.terminal) {
+    throw new Error(result.error ?? fallbackMessage);
+  }
+  return result.terminal.id;
+}
+
+const NO_TERMINAL_ATTACHMENTS: UserComposerAttachment[] = [];
+function noopChangeAttachments() {}
+function noopClearDraft() {}
+
 const PROJECT_ICON_FALLBACK_FONT_SIZE = 10;
+const ThemedChevronDown = withUnistyles(ChevronDown);
+const chevronExtraMutedMapping = (theme: Theme) => ({ color: theme.colors.foregroundExtraMuted });
+
+function MetaChevron(): ReactElement {
+  return (
+    <View style={styles.chevronContainer}>
+      <ThemedChevronDown size={ICON_SIZE.sm} uniProps={chevronExtraMutedMapping} />
+    </View>
+  );
+}
+
+const metaChevron = <MetaChevron />;
 const PROJECT_PICK_ACTIONS: readonly KeyboardActionId[] = ["workspace.project.pick"];
 // Height of a single picker-trigger badge. The Base-row spacer reserves exactly
 // this so toggling Isolation to Local hides the row without shifting the form.
@@ -228,6 +291,7 @@ function RefPickerTrigger({
     <Tooltip>
       <TooltipTrigger asChild triggerRefProp="ref">
         <ComboboxTrigger
+          chevron={metaChevron}
           ref={pickerAnchorRef}
           testID="new-workspace-ref-picker-trigger"
           onPress={onPress}
@@ -280,6 +344,7 @@ function ProjectPickerTrigger({
     <Tooltip>
       <TooltipTrigger asChild triggerRefProp="ref">
         <ComboboxTrigger
+          chevron={metaChevron}
           ref={pickerAnchorRef}
           testID="new-workspace-project-picker-trigger"
           onPress={onPress}
@@ -625,6 +690,7 @@ function IsolationPickerTrigger({
   badgePressableStyle,
   isolation,
   label,
+  tooltipLabel,
   iconColor,
   iconSize,
 }: {
@@ -634,30 +700,39 @@ function IsolationPickerTrigger({
   badgePressableStyle: React.ComponentProps<typeof Pressable>["style"];
   isolation: "local" | "worktree";
   label: string;
+  tooltipLabel: string;
   iconColor: string;
   iconSize: number;
 }) {
   return (
-    <ComboboxTrigger
-      ref={pickerAnchorRef}
-      testID="workspace-create-isolation-trigger"
-      onPress={onPress}
-      disabled={disabled}
-      style={badgePressableStyle}
-      accessibilityRole="button"
-      accessibilityLabel="Workspace isolation"
-    >
-      <View style={styles.badgeIconBox}>
-        {isolation === "worktree" ? (
-          <GitBranch size={iconSize} color={iconColor} />
-        ) : (
-          <Folder size={iconSize} color={iconColor} />
-        )}
-      </View>
-      <Text style={styles.badgeText} numberOfLines={1}>
-        {label}
-      </Text>
-    </ComboboxTrigger>
+    <Tooltip>
+      <TooltipTrigger asChild triggerRefProp="ref">
+        <ComboboxTrigger
+          chevron={metaChevron}
+          ref={pickerAnchorRef}
+          testID="workspace-create-isolation-trigger"
+          onPress={onPress}
+          disabled={disabled}
+          style={badgePressableStyle}
+          accessibilityRole="button"
+          accessibilityLabel="Workspace isolation"
+        >
+          <View style={styles.badgeIconBox}>
+            {isolation === "worktree" ? (
+              <GitBranch size={iconSize} color={iconColor} />
+            ) : (
+              <Folder size={iconSize} color={iconColor} />
+            )}
+          </View>
+          <Text style={styles.badgeText} numberOfLines={1}>
+            {label}
+          </Text>
+        </ComboboxTrigger>
+      </TooltipTrigger>
+      <TooltipContent side="top" align="center" offset={8}>
+        <Text style={styles.tooltipText}>{tooltipLabel}</Text>
+      </TooltipContent>
+    </Tooltip>
   );
 }
 
@@ -1261,12 +1336,19 @@ interface NewWorkspaceFormStackInput {
     renderOption: RefPickerRenderOption;
     showRefPicker: boolean;
   };
+  launch: {
+    serverId: string;
+    target: LaunchTarget;
+    onChange: (target: LaunchTarget) => void;
+    profiles: readonly TerminalProfile[];
+    disabled: boolean;
+  };
 }
 
 function useNewWorkspaceFormStack(input: NewWorkspaceFormStackInput): ReactElement {
   const { theme } = useUnistyles();
   const { t } = useTranslation();
-  const { isCompact, isPending, project, host, isolation, base } = input;
+  const { isCompact, isPending, project, host, isolation, base, launch } = input;
 
   const selectedHostLabel = host.requiresHostSelection
     ? t("newWorkspace.host.choose")
@@ -1366,6 +1448,7 @@ function useNewWorkspaceFormStack(input: NewWorkspaceFormStackInput): ReactEleme
         badgePressableStyle={badgePressableStyle}
         isolation={isolation.effectiveIsolation}
         label={isolationTriggerLabel}
+        tooltipLabel={t("newWorkspace.tooltips.isolation")}
         iconColor={theme.colors.foregroundMuted}
         iconSize={theme.iconSize.sm}
       />
@@ -1393,7 +1476,7 @@ function useNewWorkspaceFormStack(input: NewWorkspaceFormStackInput): ReactEleme
         selectedItem={base.selectedItem}
         triggerLabel={base.triggerLabel}
         accessibilityLabel={t("newWorkspace.refPicker.startingRef")}
-        tooltipLabel={t("newWorkspace.refPicker.chooseStart")}
+        tooltipLabel={t("newWorkspace.tooltips.startingRef")}
         iconColor={theme.colors.foregroundMuted}
         iconSize={theme.iconSize.sm}
       />
@@ -1415,6 +1498,17 @@ function useNewWorkspaceFormStack(input: NewWorkspaceFormStackInput): ReactEleme
     </View>
   ) : null;
 
+  const launchControl = (
+    <LaunchControl
+      serverId={launch.serverId}
+      target={launch.target}
+      onChange={launch.onChange}
+      profiles={launch.profiles}
+      disabled={launch.disabled}
+      badgePressableStyle={badgePressableStyle}
+    />
+  );
+
   return isCompact ? (
     <View testID="new-workspace-ref-picker-row" style={styles.formStack}>
       <FormRow>{projectControl}</FormRow>
@@ -1426,6 +1520,7 @@ function useNewWorkspaceFormStack(input: NewWorkspaceFormStackInput): ReactEleme
         <View style={styles.baseSpacer} />
       )}
       {baseControl ? <FormRow>{baseControl}</FormRow> : <View style={styles.baseSpacer} />}
+      <FormRow>{launchControl}</FormRow>
     </View>
   ) : (
     <View testID="new-workspace-ref-picker-row" style={styles.formStackDesktop}>
@@ -1433,6 +1528,8 @@ function useNewWorkspaceFormStack(input: NewWorkspaceFormStackInput): ReactEleme
       {hostControl}
       {isolationControl}
       {baseControl}
+      <View style={styles.launchSpacer} />
+      {launchControl}
     </View>
   );
 }
@@ -1539,7 +1636,7 @@ export function NewWorkspaceScreen({
   const [createdWorkspace, setCreatedWorkspace] = useState<ReturnType<
     typeof normalizeWorkspaceDescriptor
   > | null>(null);
-  const [pendingAction, setPendingAction] = useState<"chat" | "empty" | null>(null);
+  const [pendingAction, setPendingAction] = useState<"chat" | "empty" | "terminal" | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [projectPickerOpen, setProjectPickerOpen] = useState(() => routeProjectKey === null);
   const openAddProjectPicker = useOpenAddProject();
@@ -1598,6 +1695,34 @@ export function NewWorkspaceScreen({
     requiresHostSelection,
   });
   const isDraftHandoffActive = useIsNewWorkspaceDraftHandoffActive({ draftId, selectedServerId });
+
+  const { preferences: formPreferences, updatePreferences: updateFormPreferences } =
+    useFormPreferences();
+  const { config: daemonConfig } = useDaemonConfig(selectedServerId);
+  const terminalProfiles: readonly TerminalProfile[] = useMemo(
+    () => resolveConfiguredTerminalProfiles(daemonConfig),
+    [daemonConfig],
+  );
+  const [manualLaunchTarget, setManualLaunchTarget] = useState<LaunchTarget | null>(null);
+  const launchTarget = useMemo(
+    () =>
+      resolveRememberedLaunchTarget(
+        manualLaunchTarget,
+        formPreferences.launchTarget,
+        terminalProfiles,
+      ),
+    [manualLaunchTarget, formPreferences.launchTarget, terminalProfiles],
+  );
+  const [terminalPromptText, setTerminalPromptText] = useState("");
+  const {
+    isTerminalLaunch,
+    selectedTerminalProfile,
+    terminalTakesPrompt,
+    terminalComposerValue,
+    terminalPlaceholder,
+    terminalSubmitLabel,
+    launchFocusKey,
+  } = useTerminalComposerState({ launchTarget, terminalProfiles, terminalPromptText });
 
   useEffect(() => {
     const trimmed = pickerSearchQuery.trim();
@@ -2051,6 +2176,7 @@ export function NewWorkspaceScreen({
       try {
         setErrorMessage(null);
         await composerState?.persistFormPreferences();
+        await updateFormPreferences({ launchTarget });
         if (isEmptyWorkspaceSubmission(payload)) {
           setPendingAction("empty");
           await runCreateEmptyWorkspace({
@@ -2091,10 +2217,68 @@ export function NewWorkspaceScreen({
       draftKey,
       ensureWorkspace,
       forkDraftSetup,
+      launchTarget,
       selectedServerId,
       supportsForgeSearch,
       t,
       toast,
+      updateFormPreferences,
+    ],
+  );
+
+  const handleSubmitTerminalLaunch = useCallback(
+    () =>
+      runWithNewWorkspaceErrorHandling(
+        async () => {
+          setErrorMessage(null);
+          await updateFormPreferences({ launchTarget });
+          setPendingAction("terminal");
+          await runCreateTerminalWorkspace({
+            cwd: selectedSourceDirectory ?? "",
+            prompt: terminalPromptText,
+            profile: selectedTerminalProfile,
+            profileName: getTerminalProfileName(selectedTerminalProfile),
+            ensureWorkspace,
+            createTerminal: async (input) => {
+              const connectedClient = withConnectedClient();
+              const createdTerminal = await connectedClient.createTerminal(
+                input.workspaceDirectory,
+                input.name,
+                undefined,
+                { command: input.command, args: input.args, workspaceId: input.workspaceId },
+              );
+              return {
+                terminalId: requireCreatedTerminalId(
+                  createdTerminal,
+                  t("newWorkspace.errors.createWorktreeFailed"),
+                ),
+              };
+            },
+            sendTerminalInput: (terminalId, data) => {
+              withConnectedClient().sendTerminalInput(terminalId, { type: "input", data });
+            },
+            serverId: selectedServerId,
+            navigate: (targetServerId, workspaceId, target) =>
+              navigateToWorkspace({ serverId: targetServerId, workspaceId, target }),
+          });
+        },
+        (message) => {
+          setPendingAction(null);
+          setErrorMessage(message);
+          toast.error(message);
+        },
+      ),
+    [
+      ensureWorkspace,
+      launchTarget,
+      selectedServerId,
+      selectedSourceDirectory,
+      selectedTerminalProfile,
+      t,
+      terminalPromptText,
+      toast,
+      updateFormPreferences,
+      withConnectedClient,
     ],
   );
 
@@ -2200,6 +2384,13 @@ export function NewWorkspaceScreen({
       renderOption: renderPickerOption,
       showRefPicker,
     },
+    launch: {
+      serverId: selectedServerId,
+      target: launchTarget,
+      onChange: setManualLaunchTarget,
+      profiles: terminalProfiles,
+      disabled: isPending,
+    },
   });
 
   const composerFooter = useMemo(
@@ -2220,40 +2411,71 @@ export function NewWorkspaceScreen({
             <Text style={styles.composerTitle}>{t("newWorkspace.title")}</Text>
           </View>
           {formStack}
-          <Composer
-            agentId={draftKey}
-            serverId={selectedServerId}
-            isPaneFocused={true}
-            onSubmitMessage={handleSubmitNewWorkspace}
-            placeholder={t(
-              isCompact
-                ? "newWorkspace.promptPlaceholderCompact"
-                : "newWorkspace.promptPlaceholder",
-            )}
-            allowEmptySubmit={true}
-            submitButtonAccessibilityLabel={t("newWorkspace.create")}
-            submitButtonTestID="workspace-create-submit"
-            submitIcon="return"
-            isSubmitLoading={isPending}
-            isSubmitDisabled={isSubmitDisabled}
-            waitForGithubAutoAttachOnSubmit
-            submitBehavior="preserve-and-lock"
-            blurOnSubmit={true}
-            value={chatDraft.text}
-            onChangeText={chatDraft.setText}
-            attachments={chatDraft.attachments}
-            attachmentScopeKeys={visibleDraftContextScopeKeys}
-            onChangeAttachments={chatDraft.setAttachments}
-            onGithubPrDetected={handleGithubPrDetected}
-            onGithubPrAutoAttach={handleGithubPrAutoAttach}
-            cwd={selectedSourceDirectory ?? ""}
-            clearDraft={handleClearDraft}
-            autoFocus={shouldAutoFocusComposer}
-            autoFocusKey={`${selectedProject?.projectKey ?? "none"}:${selectedServerId}`}
-            commandDraftConfig={composerState?.commandDraftConfig}
-            agentControls={agentControlsWithDisabled}
-            footer={composerFooter}
-          />
+          {
+            [
+              <Composer
+                key="terminal"
+                inputMode="terminal"
+                readOnly={!terminalTakesPrompt}
+                placeholder={terminalPlaceholder}
+                submitLabel={terminalSubmitLabel}
+                agentId={draftKey}
+                serverId={selectedServerId}
+                isPaneFocused={true}
+                onSubmitMessage={handleSubmitTerminalLaunch}
+                allowEmptySubmit={true}
+                submitButtonAccessibilityLabel={t("newWorkspace.launch.submit")}
+                submitButtonTestID="new-workspace-launch-submit"
+                isSubmitLoading={isPending}
+                isSubmitDisabled={isSubmitDisabled}
+                submitBehavior="preserve-and-lock"
+                blurOnSubmit={true}
+                value={terminalComposerValue}
+                onChangeText={setTerminalPromptText}
+                attachments={NO_TERMINAL_ATTACHMENTS}
+                onChangeAttachments={noopChangeAttachments}
+                cwd={selectedSourceDirectory ?? ""}
+                clearDraft={noopClearDraft}
+                autoFocus={terminalTakesPrompt}
+                autoFocusKey={launchFocusKey}
+              />,
+              <Composer
+                key="chat"
+                agentId={draftKey}
+                serverId={selectedServerId}
+                isPaneFocused={true}
+                onSubmitMessage={handleSubmitNewWorkspace}
+                placeholder={t(
+                  isCompact
+                    ? "newWorkspace.promptPlaceholderCompact"
+                    : "newWorkspace.promptPlaceholder",
+                )}
+                allowEmptySubmit={true}
+                submitButtonAccessibilityLabel={t("newWorkspace.create")}
+                submitButtonTestID="workspace-create-submit"
+                submitIcon="return"
+                isSubmitLoading={isPending}
+                isSubmitDisabled={isSubmitDisabled}
+                waitForGithubAutoAttachOnSubmit
+                submitBehavior="preserve-and-lock"
+                blurOnSubmit={true}
+                value={chatDraft.text}
+                onChangeText={chatDraft.setText}
+                attachments={chatDraft.attachments}
+                attachmentScopeKeys={visibleDraftContextScopeKeys}
+                onChangeAttachments={chatDraft.setAttachments}
+                onGithubPrDetected={handleGithubPrDetected}
+                onGithubPrAutoAttach={handleGithubPrAutoAttach}
+                cwd={selectedSourceDirectory ?? ""}
+                clearDraft={handleClearDraft}
+                autoFocus={shouldAutoFocusComposer}
+                autoFocusKey={`${selectedProject?.projectKey ?? "none"}:${selectedServerId}:${launchFocusKey}`}
+                commandDraftConfig={composerState?.commandDraftConfig}
+                agentControls={agentControlsWithDisabled}
+                footer={composerFooter}
+              />,
+            ][Number(isTerminalLaunch)]
+          }
           {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
         </View>
       </View>
@@ -2307,8 +2529,11 @@ const styles = StyleSheet.create((theme) => ({
     alignItems: "center",
     marginBottom: theme.spacing[8],
     // The badge adds its own left padding; offset it so the project icon's left
-    // edge lands exactly on the "New workspace" title's left edge.
+    // edge lands exactly on the "New workspace" title's left edge. The trailing
+    // inset mirrors it so the launch chip stops on the composer's inner content
+    // rather than running out to the composer's border.
     paddingLeft: theme.spacing[4],
+    paddingRight: theme.spacing[4],
     gap: theme.spacing[2],
   },
   // The row's left inset matches the heading's text x (composerTitleContainer
@@ -2322,6 +2547,12 @@ const styles = StyleSheet.create((theme) => ({
   },
   baseSpacer: {
     height: BADGE_HEIGHT,
+  },
+  // Pushes the launch control to the trailing edge of the desktop meta row,
+  // next to project/host/branch. The row's own right inset (formStackDesktop)
+  // lands it on the composer's inner content, matching the left chips.
+  launchSpacer: {
+    flex: 1,
   },
   badge: {
     flexDirection: "row",
@@ -2351,6 +2582,10 @@ const styles = StyleSheet.create((theme) => ({
   tooltipText: {
     fontSize: theme.fontSize.sm,
     color: theme.colors.popoverForeground,
+  },
+  chevronContainer: {
+    flexShrink: 0,
+    transform: [{ translateY: 1 }],
   },
   badgeIconBox: {
     width: theme.iconSize.md,

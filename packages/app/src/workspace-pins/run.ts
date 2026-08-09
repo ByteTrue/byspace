@@ -1,3 +1,4 @@
+import { resolveTerminalProfileLaunch } from "@bytetrue/byspace-protocol/terminal-profiles";
 import type { TerminalProfile } from "@bytetrue/byspace-protocol/messages";
 import type { TerminalProfileInput } from "@/screens/workspace/terminals/use-workspace-terminals";
 import type { PinnedTabTarget } from "@/workspace-pins/target";
@@ -25,9 +26,5 @@ export function runPinnedTabTarget(
   if (!profile) {
     return;
   }
-  handlers.createTerminalWithProfile({
-    name: profile.name,
-    command: profile.command,
-    args: profile.args,
-  });
+  handlers.createTerminalWithProfile(resolveTerminalProfileLaunch(profile, ""));
 }

@@ -69,9 +69,11 @@ export const en = {
       desktop: "Message the agent, tag @files, or use /commands and /skills",
       mobile: "Message, @files, /commands",
       fallback: "Message...",
+      terminal: "Enter a terminal prompt...",
     },
     input: {
       accessibilityLabel: "Message agent...",
+      terminalAccessibilityLabel: "Terminal prompt...",
       focusHint: "{{shortcut}} to focus",
       addAttachment: "Add attachment",
       interruptAgent: "Interrupt agent",
@@ -1033,6 +1035,22 @@ export const en = {
     promptPlaceholder:
       "Message the agent (optional); press Enter or click ↵ to create the workspace",
     promptPlaceholderCompact: "Message the agent (optional); click ↵ to create the workspace",
+    launch: {
+      title: "Launch",
+      chat: "Chat",
+      terminal: "Terminal",
+      commandPlaceholder: "Run a command",
+      promptPlaceholder: "Prompt {{name}}",
+      submit: "Launch",
+      manageProfiles: "Manage terminal profiles",
+    },
+    tooltips: {
+      project: "Choose project",
+      host: "Choose host",
+      isolation: "Choose isolation",
+      startingRef: "Choose where to start from",
+      launch: "Choose what to launch",
+    },
     errors: {
       hostDisconnected: "Host is not connected",
       createWorktreeFailed: "Failed to create worktree",

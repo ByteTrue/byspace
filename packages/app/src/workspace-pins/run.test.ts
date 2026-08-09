@@ -39,7 +39,7 @@ describe("runPinnedTabTarget", () => {
     const { launches, handlers } = recordingHandlers();
     runPinnedTabTarget({ kind: "profile", profileId: "claude" }, PROFILES, handlers);
     expect(launches).toEqual([
-      { action: "profile", profile: { name: "Claude Code", command: "claude" } },
+      { action: "profile", profile: { name: "Claude Code", command: "claude", args: [] } },
     ]);
   });
 

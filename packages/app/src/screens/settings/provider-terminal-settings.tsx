@@ -3,6 +3,7 @@ import type {
   TerminalProfile,
 } from "@bytetrue/byspace-protocol/messages";
 import {
+  DEFAULT_TERMINAL_PROFILES,
   getTerminalProfileIcon,
   resolveTerminalProfiles,
 } from "@bytetrue/byspace-protocol/terminal-profiles";
@@ -203,8 +204,10 @@ export function TerminalProfilesPanel({
     draft: ProfileDraft;
   } | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
+  // Settings edits the persisted list, not the read-time adopted view. Resolving here would
+  // persist prompt sentinels when the user next edits or reorders an existing profile.
   const allProfiles = useMemo(
-    () => (config ? [...resolveTerminalProfiles(config.terminalProfiles)] : null),
+    () => (config ? [...(config.terminalProfiles ?? DEFAULT_TERMINAL_PROFILES)] : null),
     [config],
   );
   const profiles = useMemo(

@@ -20,8 +20,8 @@ import {
   EMPTY_FOCUS_CLAIM_STATE,
   canRequestFocusClaim,
   reconcileFocusClaim,
+  resolveTerminalResizeClaim,
   settleFocusClaim,
-  shouldSendTerminalResize,
 } from "./terminal-pane-focus-claim";
 import {
   TerminalStreamController,
@@ -194,6 +194,10 @@ export function TerminalPane({
   const supportsTerminalRestoreModes = useSessionStore(
     (state) => state.sessions[serverId]?.serverInfo?.features?.["terminal-restore-modes"] === true,
   );
+  // COMPAT(terminalSizeOwnership): added in v0.3.0, drop the gate when the daemon floor is v0.3.0 after 2027-02-08.
+  const supportsTerminalSizeOwnership = useSessionStore(
+    (state) => state.sessions[serverId]?.serverInfo?.features?.["terminal-size-ownership"] === true,
+  );
   const setFocusedTerminalId = useSessionStore((state) => state.setFocusedTerminalId);
 
   const scopeKey = useMemo(() => terminalScopeKey({ serverId, cwd }), [serverId, cwd]);
@@ -214,15 +218,14 @@ export function TerminalPane({
   const [streamError, setStreamError] = useState<string | null>(null);
   const [rendererReadyStreamKey, setRendererReadyStreamKey] = useState<string | null>(null);
   const isTerminalRendererReady = rendererReadyStreamKey === terminalStreamKey;
-  const canClaimTerminalSize =
-    isPaneFocused &&
-    canRequestFocusClaim({
-      isWorkspaceFocused,
-      isAppVisible,
-      isClientReady: client !== null,
-      isConnected,
-      isRendererReady: isTerminalRendererReady,
-    });
+  const canClaimTerminalSize = canRequestFocusClaim({
+    isWorkspaceFocused,
+    isPaneFocused,
+    isAppActivelyVisible: isAppVisible,
+    isClientReady: client !== null,
+    isConnected,
+    isRendererReady: isTerminalRendererReady,
+  });
   const shouldAttachTerminalStream = isTerminalStreamActive && isTerminalRendererReady;
   const [modifiers, setModifiers] = useState<ModifierState>(EMPTY_MODIFIERS);
   const [focusRequestToken, setFocusRequestToken] = useState(0);
@@ -430,9 +433,13 @@ export function TerminalPane({
       },
       getRestoreOptions: () => {
         const anchor = resumeAnchorRef.current;
+        const restoreSize = canUseMeasuredTerminalSize() ? measuredTerminalSizeRef.current : null;
+        if (restoreSize) {
+          lastSentTerminalSizeRef.current = restoreSize;
+        }
         return resolveTerminalRestoreOptions({
           supportsTerminalRestoreModes,
-          size: canUseMeasuredTerminalSize() ? measuredTerminalSizeRef.current : null,
+          size: restoreSize,
           // Only this renderer, still holding this terminal's stream, can be
           // resumed. A reload builds a new one while the daemon session (and
           // its record of what it sent) survives, and that renderer needs the
@@ -649,35 +656,43 @@ export function TerminalPane({
     ],
   );
 
-  const sendTerminalResize = useStableEvent((size: { rows: number; cols: number }) => {
-    let sent = false;
-    const canSend = canRequestFocusClaim({
-      isWorkspaceFocused,
-      isAppVisible,
-      isClientReady: client !== null,
-      isConnected,
-      isRendererReady: true,
-    });
-    if (client && terminalId && canSend) {
-      const previousSent = lastSentTerminalSizeRef.current;
-      if (!previousSent || previousSent.rows !== size.rows || previousSent.cols !== size.cols) {
-        lastSentTerminalSizeRef.current = size;
+  const sendTerminalResize = useStableEvent(
+    (input: { size: { rows: number; cols: number }; shouldClaim: boolean }) => {
+      const claim = resolveTerminalResizeClaim({
+        size: input.size,
+        previousSentSize: lastSentTerminalSizeRef.current,
+        shouldClaim: input.shouldClaim,
+        forceClaim: false,
+        supportsTerminalSizeOwnership,
+        readiness: {
+          isWorkspaceFocused,
+          isPaneFocused,
+          isAppActivelyVisible: isAppVisible,
+          isClientReady: client !== null,
+          isConnected,
+          isRendererReady: isTerminalRendererReady,
+        },
+      });
+      let sent = false;
+      if (client && terminalId && claim.shouldSend) {
+        lastSentTerminalSizeRef.current = input.size;
         client.sendTerminalInput(terminalId, {
           type: "resize",
-          rows: size.rows,
-          cols: size.cols,
+          rows: input.size.rows,
+          cols: input.size.cols,
+          intent: claim.intent,
+        });
+        sent = true;
+      }
+      const requestedKey = paneFocusResizeClaimRef.current.requestedKey;
+      if (requestedKey && claim.intent === "claim") {
+        paneFocusResizeClaimRef.current = settleFocusClaim(paneFocusResizeClaimRef.current, {
+          key: requestedKey,
+          sent,
         });
       }
-      sent = true;
-    }
-    const requestedKey = paneFocusResizeClaimRef.current.requestedKey;
-    if (requestedKey) {
-      paneFocusResizeClaimRef.current = settleFocusClaim(paneFocusResizeClaimRef.current, {
-        key: requestedKey,
-        sent,
-      });
-    }
-  });
+    },
+  );
 
   const handleTerminalResize = useStableEvent(
     (input: { rows: number; cols: number; shouldClaim: boolean }) => {
@@ -687,30 +702,17 @@ export function TerminalPane({
       }
       const nextSize = { rows: Math.floor(rows), cols: Math.floor(cols) };
       measuredTerminalSizeRef.current = nextSize;
-      if (
-        !shouldSendTerminalResize({
-          shouldClaim: input.shouldClaim,
-          hasClaimedSize: lastSentTerminalSizeRef.current !== null,
-        })
-      ) {
-        return;
-      }
       if (input.shouldClaim) {
         clearPassiveResizeTimer();
-        sendTerminalResize(nextSize);
+        sendTerminalResize({ size: nextSize, shouldClaim: true });
         return;
       }
-      // Passive refits arrive as a burst: the post-mount fit ladder, font metrics settling and
-      // the WebGL renderer swap each land within a few hundred ms of a remount, and every
-      // distinct size would resize the PTY and make the app repaint its whole screen — costly
-      // over Relay. Correcting drift is not latency-critical, so only the last one goes out.
-      // Explicit claims (focus, click, reflow token, drag) still send immediately.
       clearPassiveResizeTimer();
       passiveResizeTimerRef.current = setTimeout(() => {
         passiveResizeTimerRef.current = null;
         const settledSize = measuredTerminalSizeRef.current;
         if (settledSize) {
-          sendTerminalResize(settledSize);
+          sendTerminalResize({ size: settledSize, shouldClaim: false });
         }
       }, PASSIVE_TERMINAL_RESIZE_COALESCE_MS);
     },

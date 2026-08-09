@@ -75,6 +75,7 @@ import {
 } from "@/runtime/host-runtime";
 import { deleteAttachments, persistAttachmentFromBlob } from "@/attachments/service";
 import { resolveAgentControlsMode } from "@/composer/agent-controls/mode";
+import { resolveComposerInputMode, type ComposerInputMode } from "@/composer/input-mode";
 import { useKeyboardActionHandler } from "@/hooks/use-keyboard-action-handler";
 import type { KeyboardActionDefinition } from "@/keyboard/keyboard-action-dispatcher";
 import type { MessageInputKeyboardActionKind } from "@/keyboard/actions";
@@ -161,7 +162,21 @@ function resolveCompactLayout(override: boolean | undefined, formFactor: boolean
   return override ?? formFactor;
 }
 
-function resolveMessagePlaceholder(isDesktopWebBreakpoint: boolean, t: TFunction): string {
+function resolveMessagePlaceholder(
+  inputMode: ComposerInputMode,
+  isDesktopWebBreakpoint: boolean,
+  t: TFunction,
+  override: string | undefined,
+): string {
+  // A terminal placeholder names what it launches ("Prompt Codex", "Run a
+  // command"), which depends on the selected profile. Only the caller knows
+  // that, so it wins when supplied.
+  if (override !== undefined) {
+    return override;
+  }
+  if (inputMode === "terminal") {
+    return t("composer.placeholders.terminal");
+  }
   return isDesktopWebBreakpoint
     ? t("composer.placeholders.desktop")
     : t("composer.placeholders.mobile");
@@ -259,10 +274,12 @@ interface RenderLeftContentArgs {
   focusInput: () => void;
   isCompactLayout: boolean;
   isPaneFocused: boolean;
+  showAgentControls: boolean;
 }
 
-function renderLeftContent(args: RenderLeftContentArgs): ReactElement {
+function renderLeftContent(args: RenderLeftContentArgs): ReactElement | null {
   const { agentControls, agentId, serverId, focusInput, isCompactLayout, isPaneFocused } = args;
+  if (!args.showAgentControls) return null;
   if (resolveAgentControlsMode(agentControls) === "draft" && agentControls) {
     return <DraftAgentControls {...agentControls} isCompactLayout={isCompactLayout} />;
   }
@@ -856,6 +873,9 @@ interface ComposerProps {
   sideControls?: ReactNode;
   /** Optional panel/container layout breakpoint. Defaults to the screen breakpoint. */
   isCompactLayout?: boolean;
+  inputMode?: ComposerInputMode;
+  readOnly?: boolean;
+  submitLabel?: string;
 }
 
 const MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024;
@@ -940,6 +960,7 @@ interface ComposerRightControlsSlotProps extends ComposerVoiceModeButtonProps {
   isAgentRunning: boolean;
   hasSendableContent: boolean;
   isCompact: boolean;
+  showVoice: boolean;
 }
 
 function ComposerRightControlsSlot({
@@ -948,11 +969,12 @@ function ComposerRightControlsSlot({
   isAgentRunning,
   hasSendableContent,
   isCompact,
+  showVoice,
   ...voiceProps
 }: ComposerRightControlsSlotProps) {
   const hideVoiceForCompactInput = isCompact && hasSendableContent;
   const showVoiceModeButton =
-    !isVoiceModeForAgent && hasAgent && !isAgentRunning && !hideVoiceForCompactInput;
+    showVoice && !isVoiceModeForAgent && hasAgent && !isAgentRunning && !hideVoiceForCompactInput;
   if (!showVoiceModeButton) return null;
   return (
     <View style={styles.rightControls}>
@@ -1044,7 +1066,11 @@ export function Composer({
   footer,
   sideControls,
   isCompactLayout: isCompactLayoutOverride,
+  inputMode = "chat",
+  readOnly = false,
+  submitLabel,
 }: ComposerProps) {
+  const mode = resolveComposerInputMode(inputMode);
   const { t } = useTranslation();
   const buttonIconSize = resolveComposerButtonIconSize();
   const client = useHostRuntimeClient(serverId);
@@ -1077,7 +1103,7 @@ export function Composer({
   const isCompactLayout = resolveCompactLayout(isCompactLayoutOverride, isCompactFormFactor);
   const isDesktopWebBreakpoint = resolveIsDesktopWebBreakpoint(isCompactFormFactor);
   const isDesktopLayout = resolveIsDesktopWebBreakpoint(isCompactLayout);
-  const messagePlaceholder = placeholder ?? resolveMessagePlaceholder(isDesktopLayout, t);
+  const messagePlaceholder = resolveMessagePlaceholder(inputMode, isDesktopLayout, t, placeholder);
   const userInput = value;
   const setUserInput = onChangeText;
   const workspaceAttachments = useWorkspaceAttachmentsForScopes(attachmentScopeKeys);
@@ -1720,6 +1746,7 @@ export function Composer({
         isAgentRunning={isAgentRunning}
         hasSendableContent={hasSendableContent}
         isCompact={isCompactLayout}
+        showVoice={mode.showVoice}
         buttonIconSize={buttonIconSize}
         handleToggleRealtimeVoice={handleToggleRealtimeVoice}
         isConnected={isConnected}
@@ -1739,6 +1766,7 @@ export function Composer({
       isCompactLayout,
       isVoiceModeForAgent,
       isVoiceSwitching,
+      mode.showVoice,
       realtimeVoiceButtonStyle,
       t,
       voiceToggleKeys,
@@ -1888,8 +1916,17 @@ export function Composer({
         focusInput,
         isCompactLayout,
         isPaneFocused,
+        showAgentControls: mode.showAgentControls,
       }),
-    [agentControls, agentId, focusInput, isCompactLayout, isPaneFocused, serverId],
+    [
+      agentControls,
+      agentId,
+      focusInput,
+      isCompactLayout,
+      isPaneFocused,
+      mode.showAgentControls,
+      serverId,
+    ],
   );
 
   const handleAttachButtonRef = useCallback((node: View | null) => {
@@ -2017,7 +2054,7 @@ export function Composer({
   const githubEmptyText = githubSearchResultsQuery.isFetching
     ? t("composer.github.searching")
     : t("composer.github.noResults");
-  const autocompleteVisible = autocomplete.isVisible && isPaneFocused;
+  const autocompleteVisible = autocomplete.isVisible && isPaneFocused && mode.showAutocomplete;
 
   return (
     <ComposerKeyboardScopeProvider isActiveComposer={isPaneFocused}>
@@ -2084,6 +2121,9 @@ export function Composer({
                 onHeightChange={onComposerHeightChange}
                 inputWrapperStyle={inputWrapperStyle}
                 attachmentSlot={attachmentTray}
+                inputMode={inputMode}
+                readOnly={readOnly}
+                submitLabel={submitLabel}
               />
               <Combobox
                 options={githubSearchOptions}
