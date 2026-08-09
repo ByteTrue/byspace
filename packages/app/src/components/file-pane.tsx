@@ -1,3 +1,4 @@
+import { Button } from "@/components/ui/button";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import React, {
   useCallback,
@@ -8,7 +9,6 @@ import React, {
   useSyncExternalStore,
 } from "react";
 import type { DaemonClient, FileReadResult } from "@bytetrue/byspace-client/internal/daemon-client";
-import type { FileVersion } from "@bytetrue/byspace-protocol/messages";
 import { Image as RNImage, ScrollView as RNScrollView, Text, View } from "react-native";
 import { StyleSheet, UnistylesRuntime, withUnistyles } from "react-native-unistyles";
 import { useTranslation } from "react-i18next";
@@ -33,10 +33,17 @@ import { useAppActivelyVisible } from "@/hooks/use-app-visible";
 import { useAppSettings } from "@/hooks/use-settings";
 import { isFileQueryEnabled } from "@/components/file-pane-enabled";
 import { isWeb } from "@/constants/platform";
-import { useLiveFile } from "@/file-pane/live-file";
+import { useLiveFile } from "@/file-pane/live-file/hook";
 import { FilePanelBar } from "@/file-pane/bar";
-import { FileEditorModel, type FileEditorFile } from "@/file-pane/editor/model";
+import {
+  FileEditorModel,
+  getFileConflictCallout,
+  type FileConflictCallout,
+} from "@/file-pane/editor/model";
+import { createFileObservationSource } from "@/file-pane/editor/observation-source";
 import { FileEditorView } from "@/file-pane/editor/view";
+import type { FileConflictAlertState } from "@/file-pane/conflict-alert";
+import type { LiveFileModel } from "@/file-pane/live-file/model";
 import { confirmDialog } from "@/utils/confirm-dialog";
 import { usePublishPanelInstanceAttributes } from "@/panels/panel-instance-attributes";
 import { AppearanceStyleBoundary } from "@/components/appearance-style-boundary";
@@ -431,9 +438,8 @@ export function FilePane({
     isTabActive: isActive,
     isAppVisible,
   });
-  const { query, version } = useLiveFile({
+  const liveFile = useLiveFile({
     client,
-    serverId,
     cwd: readTarget?.cwd ?? null,
     path: readTarget?.path ?? null,
     enabled,
@@ -441,17 +447,17 @@ export function FilePane({
   });
 
   useEffect(() => {
-    if (!query.data && query.error) return;
+    if (!liveFile.file) return;
     let active = true;
     const key = readTarget ? `${readTarget.cwd}:${readTarget.path}` : null;
     void (async () => {
-      const nextPreview = await createFilePanePreview(query.data ?? null);
+      const nextPreview = await createFilePanePreview(liveFile.file);
       if (active) setResolvedPreview({ key, ...nextPreview });
     })();
     return () => {
       active = false;
     };
-  }, [query.data, query.error, readTarget]);
+  }, [liveFile.file, readTarget]);
 
   useEffect(() => setMarkdownMode("preview"), [readTarget?.path]);
 
@@ -468,7 +474,7 @@ export function FilePane({
   const canToggleMarkdownMode = isMarkdown && editable;
   const lineCount =
     preview?.kind === "text" ? (preview.content ?? "").split("\n").length : undefined;
-  const errorMessage = getFileErrorMessage(query.error, t("panels.file.failedToLoad"));
+  const errorMessage = getFileErrorMessage(liveFile.error, t("panels.file.failedToLoad"));
 
   return (
     <FilePanePresentation
@@ -476,7 +482,10 @@ export function FilePane({
       client={retainedClient}
       readTarget={readTarget}
       preview={preview}
-      version={version}
+      liveFile={liveFile.model}
+      onRetryRead={liveFile.refresh}
+      retryingRead={liveFile.isRetrying}
+      retryLabel={t("common.actions.retry")}
       filename={getFileNameFromPath(location.path) ?? location.path}
       markdownMode={canToggleMarkdownMode ? markdownMode : undefined}
       onMarkdownModeChange={canToggleMarkdownMode ? setMarkdownMode : undefined}
@@ -484,7 +493,7 @@ export function FilePane({
       editable={editable}
       disconnectedMessage={t("workspace.terminal.hostDisconnected")}
       errorMessage={errorMessage}
-      isLoading={query.isFetching}
+      isLoading={liveFile.isFetching}
       isMobile={isMobile}
       location={location}
       navigationRevision={navigationRevision}
@@ -499,6 +508,7 @@ function isMarkdownPreview(preview: ExplorerFile | null, path: string): boolean 
 
 function getFileErrorMessage(error: unknown, fallback: string): string | null {
   if (!error) return null;
+  if (typeof error === "string") return error;
   return error instanceof Error ? error.message : fallback;
 }
 
@@ -519,7 +529,10 @@ function FilePanePresentation({
   client,
   readTarget,
   preview,
-  version,
+  liveFile,
+  onRetryRead,
+  retryingRead,
+  retryLabel,
   filename,
   markdownMode,
   onMarkdownModeChange,
@@ -537,7 +550,10 @@ function FilePanePresentation({
   client: DaemonClient | null;
   readTarget: { cwd: string; path: string } | null;
   preview: ExplorerFile | null;
-  version: FileVersion | null;
+  liveFile: LiveFileModel;
+  onRetryRead: () => void;
+  retryingRead: boolean;
+  retryLabel: string;
   filename: string;
   markdownMode?: "preview" | "source";
   onMarkdownModeChange?: (mode: "preview" | "source") => void;
@@ -551,6 +567,16 @@ function FilePanePresentation({
   navigationRevision: number;
   imagePreviewUri: string | null;
 }) {
+  if (!client && readTarget) {
+    return (
+      <View style={styles.container} testID="workspace-file-pane">
+        <View style={styles.centerState}>
+          <Text style={styles.errorText}>{disconnectedMessage}</Text>
+        </View>
+      </View>
+    );
+  }
+
   if (editable && client && readTarget && preview?.kind === "text") {
     return (
       <ThemedEditableFilePane
@@ -559,7 +585,9 @@ function FilePanePresentation({
         cwd={readTarget.cwd}
         path={readTarget.path}
         preview={preview as TextExplorerFile}
-        version={version}
+        liveFile={liveFile}
+        onRetryRead={onRetryRead}
+        retryingRead={retryingRead}
         filename={filename}
         mode={markdownMode}
         onModeChange={onMarkdownModeChange}
@@ -571,21 +599,14 @@ function FilePanePresentation({
     );
   }
 
-  if (!client && readTarget) {
-    return (
-      <View style={styles.container} testID="workspace-file-pane">
-        <View style={styles.centerState}>
-          <Text style={styles.errorText}>{disconnectedMessage}</Text>
-        </View>
-      </View>
-    );
-  }
-
   if (errorMessage) {
     return (
       <View style={styles.container} testID="workspace-file-pane">
         <View style={styles.centerState}>
           <Text style={styles.errorText}>{errorMessage}</Text>
+          <Button variant="outline" size="sm" onPress={onRetryRead} loading={retryingRead}>
+            {retryLabel}
+          </Button>
         </View>
       </View>
     );
@@ -620,7 +641,9 @@ function EditableFilePane({
   cwd,
   path,
   preview,
-  version,
+  liveFile,
+  onRetryRead,
+  retryingRead,
   filename,
   mode,
   onModeChange,
@@ -634,7 +657,9 @@ function EditableFilePane({
   cwd: string;
   path: string;
   preview: TextExplorerFile;
-  version: FileVersion | null;
+  liveFile: LiveFileModel;
+  onRetryRead: () => void;
+  retryingRead: boolean;
   filename: string;
   mode?: "preview" | "source";
   onModeChange?: (mode: "preview" | "source") => void;
@@ -644,57 +669,42 @@ function EditableFilePane({
   navigationRevision: number;
   appearanceTheme?: Theme;
 }) {
-  const { t } = useTranslation();
   const { settings } = useAppSettings();
+  const { t } = useTranslation();
   const [cursor, setCursor] = useState({ line: 1, column: 1 });
-  const [vimMode, setVimMode] = useState<string | null>(null);
+  const [vimMode, setVimMode] = useState<string | null>(settings.vimKeybindings ? "NORMAL" : null);
   const session = useMemo(
     () => ({
-      async read(): Promise<FileEditorFile> {
-        const file = await client.readFile(cwd, path);
-        const decodedFile = explorerFileFromReadResult(file);
-        if (decodedFile.kind !== "text" || decodedFile.content === undefined) {
-          throw new Error("File is no longer text.");
-        }
-        return {
-          content: decodedFile.content,
-          hasBom: decodedFile.hasBom,
-          version: {
-            status: "ready",
-            cwd,
-            path,
-            size: file.size,
-            modifiedAt: file.modifiedAt,
-            revision: file.revision,
-          },
-        };
-      },
       write(input: { content: string; expectedModifiedAt: string; expectedRevision?: string }) {
         return client.writeFile({ cwd, path, ...input });
       },
     }),
     [client, cwd, path],
   );
-  const [model] = useState(
-    () =>
-      new FileEditorModel({
-        file: {
-          content: preview.content ?? "",
-          hasBom: preview.hasBom,
-          version: {
-            status: "ready",
-            cwd,
-            path,
-            size: preview.size,
-            modifiedAt: preview.modifiedAt,
-            revision: preview.revision,
-          },
+  const [model] = useState(() => {
+    return new FileEditorModel({
+      file: {
+        content: preview.content ?? "",
+        hasBom: preview.hasBom,
+        version: {
+          status: "ready",
+          cwd,
+          path,
+          size: preview.size,
+          modifiedAt: preview.modifiedAt,
+          revision: preview.revision,
         },
-        session,
-      }),
-  );
-  const snapshot = useSyncExternalStore(model.subscribe, model.getSnapshot, model.getSnapshot);
+      },
+      session,
+    });
+  });
   useEffect(() => model.updateSession(session), [model, session]);
+  useEffect(() => {
+    const source = createFileObservationSource(liveFile);
+    model.connectFileObservations(source);
+    return () => model.disconnectFileObservations();
+  }, [liveFile, model]);
+  const snapshot = useSyncExternalStore(model.subscribe, model.getSnapshot, model.getSnapshot);
   useEffect(() => {
     if (!snapshot.modified || typeof window === "undefined") return;
     const handleBeforeUnload = (event: BeforeUnloadEvent) => {
@@ -735,11 +745,12 @@ function EditableFilePane({
   );
 
   useEffect(() => () => model.dispose(), [model]);
-  useEffect(() => {
-    if (version) model.receiveFileVersion(version);
-  }, [model, version]);
 
   const handleReload = useCallback(() => {
+    if (!snapshot.modified) {
+      void model.reload();
+      return;
+    }
     void (async () => {
       const confirmed = await confirmDialog({
         title: t("panels.file.editor.reloadTitle"),
@@ -749,18 +760,15 @@ function EditableFilePane({
       });
       if (confirmed) void model.reload();
     })();
-  }, [model, t]);
-  const handleOverwrite = useCallback(() => {
-    void (async () => {
-      const confirmed = await confirmDialog({
-        title: t("panels.file.editor.changedOnDisk"),
-        message: t("panels.file.editor.conflictDescription"),
-        confirmLabel: t("panels.file.editor.overwrite"),
-        destructive: true,
-      });
-      if (confirmed) void model.overwrite();
-    })();
-  }, [model, t]);
+  }, [model, snapshot.modified, t]);
+  const handleOverwrite = useCallback(() => void model.overwrite(), [model]);
+  const conflict = fileConflictAlertState({
+    callout: getFileConflictCallout(snapshot),
+    onOverwrite: handleOverwrite,
+    onReload: handleReload,
+    onRetry: onRetryRead,
+    retrying: retryingRead,
+  });
   const handleVimModeChange = useCallback((nextMode: string | null) => setVimMode(nextMode), []);
   const renderedPreview = useMemo<ExplorerFile>(
     () => ({
@@ -785,9 +793,7 @@ function EditableFilePane({
         editorStatus={snapshot.status}
         cursor={showSource ? cursor : undefined}
         vimMode={showSource ? vimMode : null}
-        conflictUnavailable={snapshot.observedVersion.status !== "ready"}
-        onOverwrite={handleOverwrite}
-        onReload={handleReload}
+        conflict={conflict}
         mode={mode}
         onModeChange={onModeChange}
       />
@@ -816,6 +822,26 @@ function EditableFilePane({
       )}
     </View>
   );
+}
+
+function fileConflictAlertState(input: {
+  callout: FileConflictCallout | null;
+  onOverwrite(): void;
+  onReload(): void;
+  onRetry(): void;
+  retrying: boolean;
+}): FileConflictAlertState | undefined {
+  if (!input.callout) return undefined;
+  if (input.callout.kind === "deleted") return { kind: "deleted" };
+  if (input.callout.kind === "checkFailed") {
+    return { kind: "checkFailed", retrying: input.retrying, onRetry: input.onRetry };
+  }
+  return {
+    kind: "changed",
+    canOverwrite: input.callout.canOverwrite,
+    onReload: input.onReload,
+    onOverwrite: input.onOverwrite,
+  };
 }
 
 const editorAppearanceMapping = (theme: Theme) => ({ appearanceTheme: theme });
