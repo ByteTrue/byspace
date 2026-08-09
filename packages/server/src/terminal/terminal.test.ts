@@ -235,8 +235,29 @@ describe("createTerminal", () => {
 
     expect(resolved).toEqual({
       command: "C:\\Windows\\System32\\cmd.exe",
-      args: ["/c", "C:\\npm\\claude.cmd", "--foo"],
+      args: '/d /s /c "C:\\npm\\claude.cmd ^^^"--foo^^^""',
     });
+  });
+
+  it("escapes Windows batch-shim metacharacters and quotes", async () => {
+    const resolved = await resolveTerminalSpawnCommand("claude", ['say "hello" & %PATH%'], {
+      platform: "win32",
+      env: { ComSpec: "C:\\Windows\\System32\\cmd.exe" },
+      resolveExecutable: async () => "C:\\npm\\claude.cmd",
+    });
+
+    expect(resolved.args).toBe(
+      '/d /s /c "C:\\npm\\claude.cmd ^^^"say^^^ \\^^^"hello\\^^^"^^^ ^^^&^^^ ^^^%PATH^^^%^^^""',
+    );
+  });
+
+  it("normalizes Windows batch-shim newlines instead of executing them", async () => {
+    const resolved = await resolveTerminalSpawnCommand("claude", ["line one\r\nline two"], {
+      platform: "win32",
+      resolveExecutable: async () => "C:\\npm\\claude.bat",
+    });
+
+    expect(resolved.args).toBe('/d /s /c "C:\\npm\\claude.bat ^^^"line^^^ one^^^ line^^^ two^^^""');
   });
 
   it("uses the resolved .exe path directly on Windows", async () => {
@@ -1083,5 +1104,42 @@ describe("mouse events", () => {
     // Should not throw
     session.send({ type: "mouse", row: 0, col: 0, button: 0, action: "down" });
     session.send({ type: "mouse", row: 0, col: 0, button: 0, action: "up" });
+  });
+});
+
+describe("terminal activity interruption", () => {
+  it.each([
+    ["Ctrl-C", "\x03"],
+    ["Escape", "\x1b"],
+  ])("clears working activity when %s is sent", async (_name, data) => {
+    const session = trackSession(
+      await createTerminal({
+        workspaceId: "ws-test",
+        cwd: realpathSync(tmpdir()),
+      }),
+    );
+    session.setActivity("working");
+
+    session.send({ type: "input", data });
+
+    expect(session.getActivity()).toBeNull();
+  });
+
+  it.each([
+    ["an arrow sequence", "\x1b[A"],
+    ["pasted text containing Ctrl-C", "before\x03after"],
+    ["ordinary input", "hello"],
+  ])("keeps a working terminal active for %s", async (_name, data) => {
+    const session = trackSession(
+      await createTerminal({
+        workspaceId: "ws-test",
+        cwd: realpathSync(tmpdir()),
+      }),
+    );
+    session.setActivity("working");
+
+    session.send({ type: "input", data });
+
+    expect(session.getActivity()).toMatchObject({ state: "working" });
   });
 });

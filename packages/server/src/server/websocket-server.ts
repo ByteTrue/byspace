@@ -1407,6 +1407,8 @@ export class VoiceAssistantWebSocketServer {
         relayConfig: true,
         // COMPAT(terminalRestoreModes): added in v0.1.81, remove gate after 2026-11-23.
         "terminal-restore-modes": true,
+        // COMPAT(terminalSizeOwnership): added in v0.3.0, remove gate after 2027-02-08.
+        "terminal-size-ownership": true,
         // COMPAT(agentTimelinePromptIndex): added in v0.3.0, remove gate after 2027-02-08.
         agentTimelinePromptIndex: true,
         // COMPAT(terminalAgentHookProviders): added in v0.2.0, remove gate after 2027-01-21.

@@ -2479,7 +2479,12 @@ export const UnsubscribeTerminalRequestSchema = z.object({
 
 const TerminalClientMessageSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("input"), data: z.string() }),
-  z.object({ type: z.literal("resize"), rows: z.number(), cols: z.number() }),
+  z.object({
+    type: z.literal("resize"),
+    rows: z.number(),
+    cols: z.number(),
+    intent: z.enum(["claim", "update"]).optional(),
+  }),
   z.object({
     type: z.literal("mouse"),
     row: z.number(),
@@ -2850,6 +2855,8 @@ export const ServerInfoStatusPayloadSchema = z
         relayConfig: z.boolean().optional(),
         // COMPAT(terminalRestoreModes): added in v0.1.81, remove gate after 2026-11-23.
         "terminal-restore-modes": z.boolean().optional(),
+        // COMPAT(terminalSizeOwnership): added in v0.3.0, remove after 2027-02-08.
+        "terminal-size-ownership": z.boolean().optional(),
         // COMPAT(agentTimelinePromptIndex): added in v0.3.0, remove gate after 2027-02-08.
         agentTimelinePromptIndex: z.boolean().optional(),
         // COMPAT(terminalAgentHookProviders): added in v0.2.0, remove gate after 2027-01-21.
