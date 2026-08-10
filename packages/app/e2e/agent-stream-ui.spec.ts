@@ -468,7 +468,7 @@ test.describe("Agent stream UI", () => {
     }
   });
 
-  test("unconfigured microphone explains the requirement and opens Dictation settings", async ({
+  test("missing default dictation model explains the requirement and opens settings", async ({
     page,
   }) => {
     const agent = await seedMockAgentWorkspace({
@@ -483,7 +483,7 @@ test.describe("Agent stream UI", () => {
 
       await page.waitForURL(/\/settings\/hosts\/[^/]+\/dictation$/);
       await expect(page.getByTestId("dictation-model-required-toast")).toContainText(
-        "Choose and download a dictation model",
+        "The selected dictation model is not installed.",
       );
       await expect(page.getByTestId("host-dictation-settings")).toBeVisible();
     } finally {
