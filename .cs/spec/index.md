@@ -7,8 +7,14 @@ BySpace 是一个 Web + CLI 环境，用于从浏览器或命令行监控和控�
 ## 发行边界
 
 - 支持：浏览器 Web/PWA、`byspace` CLI、本地 daemon、Cloudflare encrypted relay。
-- 保留：Paseo `v0.2.0` 中的直接 Provider、ACP、自定义 Provider、Terminal、Git/worktree、Voice、Schedule、Loop 与 MCP 能力。
+- 保留：Paseo `v0.2.0` 中的直接 Provider、ACP、自定义 Provider、Terminal、Git/worktree、Schedule、Loop 与 MCP 能力；Voice conversation/TTS 已由本地 Dictation 取代。
 - 不支持：Electron、原生 iOS/Android、app-store/APK、marketing website、Electron Browser automation。
+
+## Dictation
+
+语音输入只提供显式开始/停止的本地 Dictation，不提供 Voice conversation、TTS、VAD、实时预览或自动发送。录音期间现有草稿保持可见且不变，停止后只追加一次最终转写；取消不会改动草稿。
+
+Host 通过设置页显式下载、选择或删除 allowlist 中的 FireRedASR2-AED 与 SenseVoice Small 模型；默认不选择、不下载任何模型。模型选择与文件均属于 Host，浏览器不持有模型状态。可选 AI refinement 默认关闭，只把最终文本交给现有 structured-generation Provider 路径；音频永不发送，失败回退原文，成功结果仍可在 Composer 中切回原文。
 
 ## Terminal
 

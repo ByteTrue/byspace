@@ -328,6 +328,7 @@ const koTranslations = {
       insertAndSend: "전사 삽입 후 보내기",
       failed: "받아쓰기 실패: {{error}}",
       failedRetry: "받아쓰기에 실패했습니다. 다시 시도하려면 누르세요.",
+      refinementFailed: "AI 정리에 실패하여 원본 받아쓰기를 유지했습니다. {{error}}",
     },
     question: {
       submit: "제출",
@@ -2047,6 +2048,10 @@ const koTranslations = {
           title: "BySpace 도구 활성화",
           hint: "에이전트가 워크트리, 에이전트, 일정을 관리할 수 있습니다",
           accessibilityLabel: "BySpace 도구 주입",
+        },
+        aiOperationsModel: {
+          title: "AI 작업 모델",
+          hint: "워크스페이스 제목, Git 문구 및 받아쓰기 정리에 사용됩니다",
         },
         systemPrompt: {
           title: "시스템 프롬프트",

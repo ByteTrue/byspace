@@ -1,8 +1,6 @@
 import type { ServerCapabilityState } from "@bytetrue/byspace-protocol/messages";
 import type { DaemonServerInfo } from "@/stores/session-store";
 
-export type VoiceReadinessMode = "dictation" | "voice";
-
 export function getServerCapabilities(params: {
   serverInfo: DaemonServerInfo | null | undefined;
 }): DaemonServerInfo["capabilities"] | null {
@@ -13,29 +11,16 @@ export function getServerCapabilities(params: {
   return capabilities;
 }
 
-export function getVoiceReadinessState(params: {
+export function getDictationReadinessState(params: {
   serverInfo: DaemonServerInfo | null | undefined;
-  mode: VoiceReadinessMode;
 }): ServerCapabilityState | null {
-  const capabilities = getServerCapabilities({ serverInfo: params.serverInfo });
-  const voice = capabilities?.voice;
-  if (!voice) {
-    return null;
-  }
-  if (params.mode === "dictation") {
-    return voice.dictation;
-  }
-  return voice.voice;
+  return getServerCapabilities({ serverInfo: params.serverInfo })?.voice?.dictation ?? null;
 }
 
-export function resolveVoiceUnavailableMessage(params: {
+export function resolveDictationUnavailableMessage(params: {
   serverInfo: DaemonServerInfo | null | undefined;
-  mode: VoiceReadinessMode;
 }): string | null {
-  const readiness = getVoiceReadinessState({
-    serverInfo: params.serverInfo,
-    mode: params.mode,
-  });
+  const readiness = getDictationReadinessState(params);
   if (!readiness) {
     return null;
   }

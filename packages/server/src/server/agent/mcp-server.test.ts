@@ -4878,64 +4878,6 @@ describe("provider MCP tools", () => {
   });
 });
 
-describe("speak MCP tool", () => {
-  const logger = createTestLogger();
-
-  it("invokes registered speak handler for caller agent", async () => {
-    const { agentManager, agentStorage } = createTestDeps();
-    const speak = vi.fn().mockResolvedValue(undefined);
-    const server = await createAgentMcpServer({
-      agentManager,
-      agentStorage,
-      providerSnapshotManager: createOpenCodeManager().manager,
-      callerAgentId: "voice-agent-1",
-      enableVoiceTools: true,
-      resolveSpeakHandler: () => speak,
-      logger,
-    });
-    const tool = registeredTool(server, "speak");
-    expect(tool).toBeDefined();
-
-    await tool.handler({ text: "Hello from voice agent." });
-    expect(speak).toHaveBeenCalledWith(
-      expect.objectContaining({
-        text: "Hello from voice agent.",
-        callerAgentId: "voice-agent-1",
-      }),
-    );
-  });
-
-  it("fails when no speak handler exists", async () => {
-    const { agentManager, agentStorage } = createTestDeps();
-    const server = await createAgentMcpServer({
-      agentManager,
-      agentStorage,
-      providerSnapshotManager: createOpenCodeManager().manager,
-      callerAgentId: "voice-agent-2",
-      enableVoiceTools: true,
-      resolveSpeakHandler: () => null,
-      logger,
-    });
-    const tool = registeredTool(server, "speak");
-    await expect(tool.handler({ text: "Hello." })).rejects.toThrow(
-      "No speak handler registered for your session",
-    );
-  });
-
-  it("does not register speak tool unless voice tools are enabled", async () => {
-    const { agentManager, agentStorage } = createTestDeps();
-    const server = await createAgentMcpServer({
-      agentManager,
-      agentStorage,
-      providerSnapshotManager: createOpenCodeManager().manager,
-      callerAgentId: "agent-no-voice",
-      logger,
-    });
-    const tool = lookupTool(server, "speak");
-    expect(tool).toBeUndefined();
-  });
-});
-
 describe("agent snapshot MCP serialization", () => {
   const logger = createTestLogger();
 

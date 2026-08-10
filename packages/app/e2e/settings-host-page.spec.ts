@@ -75,6 +75,62 @@ async function rejectNextConfigWrite(page: Page): Promise<void> {
   });
 }
 
+const TEST_SPEECH_MODELS_LOAD_ERROR = "Synthetic speech-model list failure";
+
+async function mockSpeechModelList(
+  page: Page,
+  payload: { selectedModelId: string | null; models: unknown[]; error?: string },
+  once = false,
+): Promise<void> {
+  let active = true;
+  await page.routeWebSocket(daemonWsRoutePattern(), (ws) => {
+    const server = ws.connectToServer();
+    ws.onMessage((message) => {
+      let request: { type?: string; requestId?: string } | undefined;
+      try {
+        const envelope = JSON.parse(message.toString()) as {
+          type?: string;
+          message?: { type?: string; requestId?: string };
+        };
+        if (envelope.type === "session") request = envelope.message;
+      } catch {
+        // Forward non-JSON frames unchanged.
+      }
+      if (
+        active &&
+        request?.type === "speech.models.list.request" &&
+        typeof request.requestId === "string"
+      ) {
+        if (once) active = false;
+        ws.send(
+          JSON.stringify({
+            type: "session",
+            message: {
+              type: "speech.models.list.response",
+              payload: { requestId: request.requestId, ...payload },
+            },
+          }),
+        );
+        return;
+      }
+      server.send(message);
+    });
+    server.onMessage((message) => ws.send(message));
+  });
+}
+
+async function rejectNextSpeechModelList(page: Page): Promise<void> {
+  await mockSpeechModelList(
+    page,
+    {
+      selectedModelId: null,
+      models: [],
+      error: TEST_SPEECH_MODELS_LOAD_ERROR,
+    },
+    true,
+  );
+}
+
 test.describe("Settings host page", () => {
   test("connections section shows the seeded connection endpoint", async ({ page }) => {
     const serverId = getServerId();
@@ -219,6 +275,89 @@ test.describe("Settings host page", () => {
     await openSettings(page);
 
     await expectRetiredSidebarSectionsAbsent(page);
+  });
+
+  test("dictation section offers local models and opt-in Agent cleanup", async ({ page }) => {
+    const serverId = getServerId();
+
+    await gotoAppShell(page);
+    await openSettings(page);
+    await openSettingsHost(page, serverId);
+    await openHostSection(page, serverId, "dictation");
+
+    await expectSettingsHeader(page, "Dictation");
+    await expect(page.getByTestId("host-dictation-settings")).toBeVisible();
+    const modelRows = page.locator(
+      '[data-testid="speech-model-sensevoice-small-int8"], [data-testid="speech-model-fire-red-asr2-aed-int8"]',
+    );
+    await expect(modelRows).toHaveCount(2);
+    await expect(modelRows.first()).toHaveAttribute(
+      "data-testid",
+      "speech-model-sensevoice-small-int8",
+    );
+    const fireRedRow = page.getByTestId("speech-model-fire-red-asr2-aed-int8");
+    await expect(fireRedRow).toContainText("FireRedASR2-AED");
+    await expect(page.getByTestId("speech-model-action-fire-red-asr2-aed-int8")).toHaveText(
+      "Download & use",
+    );
+    expect((await fireRedRow.boundingBox())?.height).toBeLessThan(120);
+
+    const senseVoiceRow = page.getByTestId("speech-model-sensevoice-small-int8");
+    await expect(senseVoiceRow).toContainText("SenseVoice Small");
+    await expect(page.getByTestId("speech-model-action-sensevoice-small-int8")).toHaveText(
+      "Download & use",
+    );
+
+    const refinement = page.getByRole("switch", { name: "Clean up dictation with AI" });
+    await expect(refinement).not.toBeChecked();
+    await expect(page.getByTestId("host-dictation-settings")).toContainText("Use original");
+    await refinement.click();
+    await expect(refinement).toBeChecked();
+  });
+
+  test("dictation model download shows byte and percentage progress", async ({ page }) => {
+    const serverId = getServerId();
+    await mockSpeechModelList(page, {
+      selectedModelId: "sensevoice-small-int8",
+      models: [
+        {
+          id: "sensevoice-small-int8",
+          label: "SenseVoice Small",
+          description: "Fast multilingual local transcription",
+          sizeBytes: 100 * 1024 * 1024,
+          state: "downloading",
+          downloadedBytes: 50 * 1024 * 1024,
+        },
+      ],
+    });
+
+    await gotoAppShell(page);
+    await openSettings(page);
+    await openSettingsHost(page, serverId);
+    await openHostSection(page, serverId, "dictation");
+
+    const row = page.getByTestId("speech-model-sensevoice-small-int8");
+    await expect(row).toContainText("50% · 50 MB / 100 MB");
+    const progress = page.getByTestId("speech-model-progress-sensevoice-small-int8");
+    await expect(progress).toHaveAttribute("aria-valuenow", "50");
+  });
+
+  test("dictation model load failure stays visible and can retry", async ({ page }) => {
+    const serverId = getServerId();
+    await rejectNextSpeechModelList(page);
+
+    await gotoAppShell(page);
+    await openSettings(page);
+    await openSettingsHost(page, serverId);
+    await openHostSection(page, serverId, "dictation");
+
+    const section = page.getByTestId("host-dictation-settings");
+    await expect(section).toContainText(TEST_SPEECH_MODELS_LOAD_ERROR);
+    const retry = page.getByTestId("speech-model-retry");
+    await expect(retry).toBeVisible();
+    await retry.click();
+    await expect(page.getByTestId("speech-model-fire-red-asr2-aed-int8")).toBeVisible();
+    await expect(retry).toHaveCount(0);
   });
 
   test("navigating to /settings/hosts/[serverId] redirects to the connections section", async ({

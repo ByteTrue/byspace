@@ -69,8 +69,6 @@ const entries = [
 const additionalInputs = [
   // Shell integration scripts loaded by the terminal manager
   "packages/server/dist/server/terminal/shell-integration/**",
-  // Silero VAD ONNX model (sherpa speech provider)
-  "packages/server/dist/server/server/speech/providers/local/sherpa/assets/silero_vad.onnx",
   // Bundled orchestration skills are loaded through filesystem paths.
   "packages/server/dist/skills/**",
   // Server runtime config files (read by path, not require)

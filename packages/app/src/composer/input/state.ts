@@ -1,41 +1,67 @@
 import type { DaemonClient } from "@bytetrue/byspace-client/internal/daemon-client";
 import type { MessagePayload } from "@/composer/types";
+import type { DictationRefinementMeta } from "@/hooks/use-dictation.shared";
 import type { MessageInputKeyboardActionKind } from "@/keyboard/actions";
+
+const CJK_BOUNDARY_START_RE = /^[\p{Script=Han}，。！？、；：“‘「『【（]/u;
+const CJK_BOUNDARY_END_RE = /[\p{Script=Han}，。！？、；：”’」』】）]$/u;
+const CJK_NO_LEADING_SPACE_RE = /^[，。！？、；：”’」』】）]/u;
 
 export type SendBehavior = "interrupt" | "queue";
 
-interface ComposerSurfaceState {
-  opacity: 0 | 1;
-  pointerEvents: "auto" | "none";
+export function appendDictationTranscript(draft: string, transcript: string): string {
+  if (!transcript) {
+    return draft;
+  }
+  const joinsWithoutSpace =
+    !draft ||
+    /\s$/.test(draft) ||
+    /^\s/.test(transcript) ||
+    CJK_NO_LEADING_SPACE_RE.test(transcript) ||
+    (CJK_BOUNDARY_END_RE.test(draft) && CJK_BOUNDARY_START_RE.test(transcript));
+  return `${draft}${joinsWithoutSpace ? "" : " "}${transcript}`;
 }
 
-export interface ComposerSurfacePresentation {
-  input: ComposerSurfaceState;
-  overlay: ComposerSurfaceState;
+export interface DictationRefinementChoice {
+  originalDraft: string;
+  refinedDraft: string;
+  showingOriginal: boolean;
 }
 
-const INPUT_PRESENTATION: ComposerSurfacePresentation = {
-  input: { opacity: 1, pointerEvents: "auto" },
-  overlay: { opacity: 0, pointerEvents: "none" },
-};
-
-const OVERLAY_PRESENTATION: ComposerSurfacePresentation = {
-  input: { opacity: 0, pointerEvents: "none" },
-  overlay: { opacity: 1, pointerEvents: "auto" },
-};
-
-export function resolveComposerSurfacePresentation(
-  showOverlay: boolean,
-): ComposerSurfacePresentation {
-  return showOverlay ? OVERLAY_PRESENTATION : INPUT_PRESENTATION;
+export function applyDictationRefinement(
+  draft: string,
+  transcript: string,
+  refinement: DictationRefinementMeta | undefined,
+): { draft: string; choice: DictationRefinementChoice | null; error: string | null } {
+  const originalDraft = appendDictationTranscript(
+    draft,
+    refinement?.originalText?.trim() || transcript,
+  );
+  const refinedDraft = appendDictationTranscript(draft, transcript);
+  const choice =
+    refinement?.originalText && refinedDraft !== originalDraft
+      ? { originalDraft, refinedDraft, showingOriginal: false }
+      : null;
+  return {
+    draft: choice ? refinedDraft : originalDraft,
+    choice,
+    error: refinement?.error?.trim() || null,
+  };
 }
 
-interface StopRealtimeVoiceContext {
-  voice: { stopVoice: () => Promise<unknown> } | null | undefined;
-  isRealtimeVoiceForCurrentAgent: boolean;
-  isAgentRunning: boolean;
-  client: { cancelAgent: (agentId: string) => Promise<unknown> } | null;
-  voiceAgentId: string | undefined;
+export function toggleDictationRefinement(
+  draft: string,
+  choice: DictationRefinementChoice,
+): { draft: string; choice: DictationRefinementChoice | null } {
+  const expectedDraft = choice.showingOriginal ? choice.originalDraft : choice.refinedDraft;
+  if (draft !== expectedDraft) {
+    return { draft, choice: null };
+  }
+  const showingOriginal = !choice.showingOriginal;
+  return {
+    draft: showingOriginal ? choice.originalDraft : choice.refinedDraft,
+    choice: { ...choice, showingOriginal },
+  };
 }
 
 interface SendActionContext {
@@ -46,54 +72,13 @@ interface SendActionContext {
   handleQueueMessage: () => void;
 }
 
-interface DictationTranscriptContext {
-  value: string;
-  defaultSendBehavior: SendBehavior;
-  isAgentRunning: boolean;
-  onQueue: ((payload: MessagePayload) => void) | undefined;
-  onSubmit: (payload: MessagePayload) => void;
-  onChangeText: (text: string) => void;
-  attachments: MessagePayload["attachments"];
-  cwd: string;
-  autoSend: boolean;
-}
-
-export function applyDictationTranscript(text: string, ctx: DictationTranscriptContext): void {
-  if (!text) return;
-  const shouldPad = ctx.value.length > 0 && !/\s$/.test(ctx.value);
-  const nextValue = `${ctx.value}${shouldPad ? " " : ""}${text}`;
-
-  if (!ctx.autoSend) {
-    ctx.onChangeText(nextValue);
-    return;
-  }
-
-  ctx.onChangeText(nextValue);
-
-  if (ctx.defaultSendBehavior === "queue" && ctx.isAgentRunning && ctx.onQueue) {
-    ctx.onQueue({ text: nextValue, attachments: ctx.attachments, cwd: ctx.cwd });
-    ctx.onChangeText("");
-    return;
-  }
-
-  ctx.onSubmit({
-    text: nextValue,
-    attachments: ctx.attachments,
-    cwd: ctx.cwd,
-    forceSend: ctx.isAgentRunning || undefined,
-  });
-}
-
 interface MessageInputKeyboardActions {
   focusInput: () => void;
   isDictationRecording: () => boolean;
-  markTranscriptForSend: () => void;
+  isDictationActive: () => boolean;
   confirmDictation: () => void | Promise<void>;
   cancelDictation: () => void | Promise<void>;
   startDictation: () => void | Promise<void>;
-  toggleRealtimeVoice: () => void;
-  isRealtimeVoiceActive: boolean;
-  toggleRealtimeVoiceMute: () => void;
 }
 
 export function computeCanStartDictation(input: {
@@ -137,24 +122,13 @@ export function runMessageInputKeyboardAction(
   }
   if (action === "send" || action === "dictation-confirm") {
     if (actions.isDictationRecording()) {
-      actions.markTranscriptForSend();
       void actions.confirmDictation();
       return true;
     }
-    return false;
-  }
-  if (action === "voice-toggle") {
-    actions.toggleRealtimeVoice();
-    return true;
-  }
-  if (action === "voice-mute-toggle") {
-    if (actions.isRealtimeVoiceActive) {
-      actions.toggleRealtimeVoiceMute();
-    }
-    return true;
+    return actions.isDictationActive();
   }
   if (action === "dictation-cancel") {
-    if (actions.isDictationRecording()) {
+    if (actions.isDictationActive()) {
       void actions.cancelDictation();
       return true;
     }
@@ -162,25 +136,11 @@ export function runMessageInputKeyboardAction(
   }
   if (action === "dictation-toggle") {
     if (actions.isDictationRecording()) {
-      actions.markTranscriptForSend();
       void actions.confirmDictation();
-    } else {
+    } else if (!actions.isDictationActive()) {
       void actions.startDictation();
     }
     return true;
   }
   return false;
-}
-
-export async function stopRealtimeVoice(ctx: StopRealtimeVoiceContext): Promise<void> {
-  if (!ctx.voice || !ctx.isRealtimeVoiceForCurrentAgent) return;
-
-  if (ctx.isAgentRunning) {
-    if (!ctx.client || !ctx.voiceAgentId) {
-      throw new Error("Cannot stop the running voice agent while the host is unavailable");
-    }
-    await ctx.client.cancelAgent(ctx.voiceAgentId);
-  }
-
-  await ctx.voice.stopVoice();
 }

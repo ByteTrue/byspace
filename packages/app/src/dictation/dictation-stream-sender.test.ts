@@ -21,12 +21,14 @@ interface FakeChunk {
 class FakeDaemonClient {
   isConnected = true;
   starts: FakeStart[] = [];
+  startGate: Promise<void> | null = null;
   chunks: FakeChunk[] = [];
   finishes: FakeFinish[] = [];
   cancels: string[] = [];
 
   async startDictationStream(dictationId: string, format: string): Promise<void> {
     this.starts.push({ dictationId, format });
+    await this.startGate;
   }
 
   sendDictationStreamChunk(dictationId: string, seq: number, audio: string, format: string): void {
@@ -86,7 +88,7 @@ describe("DictationStreamSender", () => {
     sender.enqueueSegment("seg1");
     await tick();
 
-    await sender.restartStream("reconnect");
+    await sender.restartStream();
 
     expect(client.starts.map((s) => s.dictationId)).toEqual(["d1", "d2"]);
     const d2Chunks = client.chunks.filter((c) => c.dictationId === "d2");
@@ -133,7 +135,7 @@ describe("DictationStreamSender", () => {
     expect(client.chunks).toHaveLength(0);
 
     client.isConnected = true;
-    await sender.restartStream("reconnect");
+    await sender.restartStream();
 
     expect(client.chunks.map((c) => c.seq)).toEqual([0, 1]);
   });
@@ -162,5 +164,27 @@ describe("DictationStreamSender", () => {
       text: "ok",
     });
     expect(client.finishes).toEqual([{ dictationId: "d1", finalSeq: 479 }]);
+  });
+
+  it("cancels a stream whose start acknowledgement is still pending", async () => {
+    let resolveStart!: () => void;
+    const client = new FakeDaemonClient();
+    client.startGate = new Promise<void>((resolve) => {
+      resolveStart = resolve;
+    });
+    const sender = new DictationStreamSender({
+      client: client as unknown as DaemonClient,
+      format: "audio/pcm;rate=16000;bits=16",
+      createDictationId: () => "d1",
+    });
+
+    const start = sender.restartStream();
+    await tick();
+    sender.cancel();
+    resolveStart();
+
+    await expect(start).resolves.toBeUndefined();
+    expect(client.cancels).toEqual(["d1"]);
+    expect(client.chunks).toEqual([]);
   });
 });

@@ -22,6 +22,7 @@ import {
 } from "lucide-react-native";
 import type { TFunction } from "i18next";
 import type { OrchestrationSkillsState } from "@bytetrue/byspace-protocol/messages";
+import type { AgentProvider } from "@bytetrue/byspace-protocol/agent-types";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Alert, Pressable, Text, View } from "react-native";
@@ -33,6 +34,7 @@ import { SettingsTextAreaCard } from "@/components/settings-textarea";
 import { Alert as InlineAlert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
+import { CombinedModelSelector } from "@/components/combined-model-selector";
 import { useDaemonConfig } from "@/hooks/use-daemon-config";
 import { useLocalDaemonServerId } from "@/hooks/use-is-local-daemon";
 import { useToast } from "@/contexts/toast-context";
@@ -50,6 +52,9 @@ import { OtherTerminalProfilesSection } from "@/screens/settings/provider-termin
 import { ProviderUsageSettingsSection } from "@/provider-usage/settings-section";
 import { useProviderUsage } from "@/provider-usage/use-provider-usage";
 import { SettingsSection } from "@/screens/settings/settings-section";
+import { HostDictationSettings } from "@/screens/settings/host-dictation-settings";
+import { buildSelectableProviderSelectorProviders } from "@/provider-selection/provider-selection";
+import { useProvidersSnapshot } from "@/hooks/use-providers-snapshot";
 import { useSessionStore } from "@/stores/session-store";
 import { settingsStyles } from "@/styles/settings";
 import type { HostConnection, HostProfile } from "@/types/host-connection";
@@ -221,6 +226,7 @@ export function HostAgentsPage({ serverId }: { serverId: string }) {
       {isConnected ? (
         <SettingsSection title={t("settings.hostSections.agents")}>
           <OrchestrationSkillsCard serverId={serverId} />
+          <AiOperationsModelCard serverId={serverId} />
           <AppendSystemPromptCard serverId={serverId} />
         </SettingsSection>
       ) : (
@@ -433,6 +439,10 @@ export function HostSettingsPage({
       <RemoveHostSection host={host} onRemoved={onHostRemoved} />
     </View>
   );
+}
+
+export function HostDictationPage({ serverId }: { serverId: string }) {
+  return <HostDictationSettings serverId={serverId} />;
 }
 
 export function HostRenameButton({ host }: { host: HostProfile }) {
@@ -1254,6 +1264,58 @@ function OrchestrationSkillsCard({ serverId }: { serverId: string }) {
           />
         </View>
       ) : null}
+    </View>
+  );
+}
+
+function AiOperationsModelCard({ serverId }: { serverId: string }) {
+  const { t } = useTranslation();
+  const toast = useToast();
+  const { entries, isLoading: providersLoading, refetchIfStale } = useProvidersSnapshot(serverId);
+  const { config, isLoading: configLoading, patchConfig } = useDaemonConfig(serverId);
+  const [isSaving, setIsSaving] = useState(false);
+  const providers = useMemo(() => buildSelectableProviderSelectorProviders(entries), [entries]);
+  const configured = config?.metadataGeneration?.providers?.[0];
+  const handleOpen = useCallback(
+    () => refetchIfStale(configured?.provider),
+    [configured?.provider, refetchIfStale],
+  );
+
+  const handleSelect = useCallback(
+    (provider: AgentProvider, model: string) => {
+      setIsSaving(true);
+      void patchConfig({ metadataGeneration: { providers: [{ provider, model }] } })
+        .catch((error) => {
+          toast.error(error instanceof Error ? error.message : t("common.errors.unableToSave"));
+        })
+        .finally(() => setIsSaving(false));
+    },
+    [patchConfig, t, toast],
+  );
+
+  return (
+    <View style={settingsStyles.card} testID="host-page-ai-operations-model-card">
+      <View style={settingsStyles.row}>
+        <View style={settingsStyles.rowContent}>
+          <Text style={settingsStyles.rowTitle}>
+            {t("settings.host.orchestration.aiOperationsModel.title")}
+          </Text>
+          <Text style={settingsStyles.rowHint}>
+            {t("settings.host.orchestration.aiOperationsModel.hint")}
+          </Text>
+        </View>
+        <CombinedModelSelector
+          providers={providers}
+          selectedProvider={configured?.provider ?? ""}
+          selectedModel={configured?.model ?? ""}
+          onSelect={handleSelect}
+          isLoading={providersLoading || configLoading}
+          onOpen={handleOpen}
+          disabled={isSaving || configLoading}
+          serverId={serverId}
+          desktopPlacement="bottom-start"
+        />
+      </View>
     </View>
   );
 }

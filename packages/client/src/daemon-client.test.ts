@@ -4002,6 +4002,36 @@ test("imports an agent by provider handle id", async () => {
   });
 });
 
+test("cancelling a pending dictation start settles it and allows another start", async () => {
+  const logger = createMockLogger();
+  const mock = createMockTransport();
+  const client = new DaemonClient({
+    url: "ws://test",
+    clientId: "clsk_unit_test",
+    logger,
+    reconnect: { enabled: false },
+    transportFactory: () => mock.transport,
+  });
+  clients.push(client);
+
+  const connectPromise = client.connect();
+  mock.triggerOpen();
+  await connectPromise;
+
+  const cancelledStart = client.startDictationStream("dict-cancelled", "pcm16");
+  client.cancelDictationStream("dict-cancelled");
+  await expect(cancelledStart).rejects.toThrow("Dictation start cancelled");
+
+  const nextStart = client.startDictationStream("dict-next", "pcm16");
+  mock.triggerMessage(
+    wrapSessionMessage({
+      type: "dictation_stream_ack",
+      payload: { dictationId: "dict-next", ackSeq: -1 },
+    }),
+  );
+  await expect(nextStart).resolves.toBeUndefined();
+});
+
 test("uses server-provided dictation finish timeout budget", async () => {
   useHeartbeatClock();
   const logger = createMockLogger();
@@ -5407,4 +5437,49 @@ test("waitForFinish with timeout=0 omits timeoutMs and has no client deadline", 
   } finally {
     vi.useRealTimers();
   }
+});
+
+test("refines a dictation transcript through a correlated request", async () => {
+  const logger = createMockLogger();
+  const mock = createMockTransport();
+  const client = new DaemonClient({
+    url: "ws://test",
+    clientId: "clsk_unit_test",
+    logger,
+    reconnect: { enabled: false },
+    transportFactory: () => mock.transport,
+  });
+  clients.push(client);
+
+  const connectPromise = client.connect();
+  mock.triggerOpen();
+  await connectPromise;
+
+  const promise = client.refineDictationTranscript(
+    "先检查 src/app.ts 然后运行 2 个测试",
+    "77777777-7777-4777-8777-777777777777",
+  );
+  const request = parseSentFrame(mock.sent[0]);
+  expect(request).toMatchObject({
+    type: "speech.dictation.refine.request",
+    agentId: "77777777-7777-4777-8777-777777777777",
+    text: "先检查 src/app.ts 然后运行 2 个测试",
+  });
+
+  mock.triggerMessage(
+    wrapSessionMessage({
+      type: "speech.dictation.refine.response",
+      payload: {
+        requestId: request.requestId,
+        text: "先检查 src/app.ts，然后运行 2 个测试。",
+        refined: true,
+      },
+    }),
+  );
+
+  await expect(promise).resolves.toEqual({
+    requestId: request.requestId,
+    text: "先检查 src/app.ts，然后运行 2 个测试。",
+    refined: true,
+  });
 });

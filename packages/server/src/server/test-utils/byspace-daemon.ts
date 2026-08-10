@@ -33,9 +33,6 @@ interface TestBySpaceDaemonOptions {
   cleanup?: boolean;
   openai?: BySpaceOpenAIConfig;
   speech?: BySpaceSpeechConfig;
-  voiceLlmProvider?: BySpaceDaemonConfig["voiceLlmProvider"];
-  voiceLlmProviderExplicit?: boolean;
-  voiceLlmModel?: string | null;
   dictationFinalTimeoutMs?: number;
   auth?: BySpaceDaemonConfig["auth"];
   pushNotificationSender?: PushNotificationSender;
@@ -180,10 +177,14 @@ async function prepareTestDaemonConfig(
     webUi: options.webUi,
     trustedProxies: options.trustedProxies,
     openai: options.openai,
-    speech: options.speech,
-    voiceLlmProvider: options.voiceLlmProvider ?? null,
-    voiceLlmProviderExplicit: options.voiceLlmProviderExplicit ?? false,
-    voiceLlmModel: options.voiceLlmModel ?? null,
+    speech: options.speech ?? {
+      enabled: true,
+      sttLanguage: "auto",
+      local: {
+        modelsDir: path.join(byspaceHome, "models", "local-speech"),
+        models: { dictationStt: null },
+      },
+    },
     dictationFinalTimeoutMs: options.dictationFinalTimeoutMs,
     downloadTokenTtlMs: options.downloadTokenTtlMs,
   };

@@ -1,17 +1,17 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 
-import { STTManager } from "../src/server/agent/stt-manager.js";
-import { createRootLogger } from "../src/server/logger.js";
 import { resolveBySpaceHome } from "../src/server/byspace-home.js";
+import { createRootLogger } from "../src/server/logger.js";
 import {
-  DEFAULT_LOCAL_STT_MODEL,
-  DEFAULT_LOCAL_TTS_MODEL,
+  isSherpaOnnxModelReady,
+  listLocalSpeechModels,
   LocalSttModelIdSchema,
   type LocalSttModelId,
 } from "../src/server/speech/providers/local/models.js";
-import { initializeLocalSpeechServices } from "../src/server/speech/providers/local/runtime.js";
-import type { RequestedSpeechProviders } from "../src/server/speech/speech-types.js";
+import { SherpaOfflineRecognizerEngine } from "../src/server/speech/providers/local/sherpa/sherpa-offline-recognizer.js";
+import { SherpaOfflineSTT } from "../src/server/speech/providers/local/sherpa/sherpa-offline-stt.js";
+import { resolveSherpaOfflineRecognizerConfig } from "../src/server/speech/providers/local/sherpa/model-catalog.js";
 
 interface CliOptions {
   wavPath: string;
@@ -21,16 +21,7 @@ interface CliOptions {
 }
 
 function usage(): string {
-  return [
-    "Usage: npm run speech:transcribe:local -- <wavPath> [--out <outPath>] [--model <modelId>] [--models-dir <dir>]",
-    "",
-    "Examples:",
-    "  npm run speech:transcribe:local -- ./sample.wav",
-    "  npm run speech:transcribe:local -- ./sample.wav --out ./tmp/sample.transcript.txt",
-    "",
-    "Env fallbacks:",
-    "  BYSPACE_LOCAL_MODELS_DIR",
-  ].join("\n");
+  return "Usage: npm run speech:transcribe:local -- <wavPath> [--out <path>] [--model <id>] [--models-dir <dir>]";
 }
 
 function parseArgs(argv: string[]): CliOptions {
@@ -38,64 +29,26 @@ function parseArgs(argv: string[]): CliOptions {
     process.stdout.write(`${usage()}\n`);
     process.exit(0);
   }
+  if (argv.length === 0) throw new Error(`Missing <wavPath>\n\n${usage()}`);
 
-  if (argv.length === 0) {
-    throw new Error(`Missing <wavPath>\n\n${usage()}`);
-  }
-
-  const byspaceHome = resolveBySpaceHome();
-  const defaultModelsDir =
-    process.env.BYSPACE_LOCAL_MODELS_DIR ?? path.join(byspaceHome, "models", "local-speech");
-
-  const positional: string[] = [];
+  const defaultModel = listLocalSpeechModels()[0]?.id;
+  if (!defaultModel) throw new Error("No local speech models are registered");
+  let model = defaultModel;
+  let modelsDir =
+    process.env.BYSPACE_LOCAL_MODELS_DIR ??
+    path.join(resolveBySpaceHome(), "models", "local-speech");
   let outPath: string | undefined;
-  let model = LocalSttModelIdSchema.parse(DEFAULT_LOCAL_STT_MODEL);
-  let modelsDir = defaultModelsDir;
+  const positional: string[] = [];
 
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
-
-    if (arg === "--out") {
-      const next = argv[i + 1];
-      if (!next) {
-        throw new Error("--out requires a value");
-      }
-      outPath = path.resolve(next);
-      i += 1;
-      continue;
-    }
-
-    if (arg === "--model") {
-      const next = argv[i + 1];
-      if (!next) {
-        throw new Error("--model requires a value");
-      }
-      model = LocalSttModelIdSchema.parse(next);
-      i += 1;
-      continue;
-    }
-
-    if (arg === "--models-dir") {
-      const next = argv[i + 1];
-      if (!next) {
-        throw new Error("--models-dir requires a value");
-      }
-      modelsDir = path.resolve(next);
-      i += 1;
-      continue;
-    }
-
-    if (arg.startsWith("-")) {
-      throw new Error(`Unknown option: ${arg}`);
-    }
-
-    positional.push(arg);
+    if (arg === "--out") outPath = path.resolve(argv[++i] ?? "");
+    else if (arg === "--model") model = LocalSttModelIdSchema.parse(argv[++i]);
+    else if (arg === "--models-dir") modelsDir = path.resolve(argv[++i] ?? "");
+    else if (arg.startsWith("-")) throw new Error(`Unknown option: ${arg}`);
+    else positional.push(arg);
   }
-
-  if (positional.length === 0) {
-    throw new Error(`Missing <wavPath>\n\n${usage()}`);
-  }
-
+  if (!positional[0]) throw new Error(`Missing <wavPath>\n\n${usage()}`);
   return {
     wavPath: path.resolve(positional[0]),
     ...(outPath ? { outPath } : {}),
@@ -104,70 +57,66 @@ function parseArgs(argv: string[]): CliOptions {
   };
 }
 
-async function main(): Promise<void> {
-  let options: CliOptions;
-
-  try {
-    options = parseArgs(process.argv.slice(2));
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    process.stderr.write(`${message}\n`);
-    process.exit(2);
-    return;
+function readPcm16MonoWav(wav: Buffer): Buffer {
+  if (wav.toString("ascii", 0, 4) !== "RIFF" || wav.toString("ascii", 8, 12) !== "WAVE") {
+    throw new Error("Expected a PCM WAV file");
   }
-
-  const logger = createRootLogger({ level: "info", format: "pretty" });
-
-  const providers: RequestedSpeechProviders = {
-    dictationStt: { provider: "local", explicit: true },
-    voiceStt: { provider: "local", explicit: true },
-    // Not used here, but required by the shared runtime config shape.
-    voiceTts: { provider: "openai", explicit: false },
-  };
-
-  const runtime = await initializeLocalSpeechServices({
-    providers,
-    speechConfig: {
-      providers,
-      local: {
-        modelsDir: options.modelsDir,
-        models: {
-          dictationStt: options.model,
-          voiceStt: options.model,
-          voiceTts: DEFAULT_LOCAL_TTS_MODEL,
-        },
-      },
-    },
-    logger,
-  });
-
-  try {
-    if (!runtime.sttService) {
-      throw new Error(
-        "Local STT service is unavailable. Check model files or run `npm run speech:download -- --model " +
-          options.model +
-          "`.",
-      );
+  let format: { encoding: number; channels: number; sampleRate: number; bits: number } | null =
+    null;
+  let pcm: Buffer | null = null;
+  for (let offset = 12; offset + 8 <= wav.length; ) {
+    const id = wav.toString("ascii", offset, offset + 4);
+    const size = wav.readUInt32LE(offset + 4);
+    const start = offset + 8;
+    if (id === "fmt " && size >= 16) {
+      format = {
+        encoding: wav.readUInt16LE(start),
+        channels: wav.readUInt16LE(start + 2),
+        sampleRate: wav.readUInt32LE(start + 4),
+        bits: wav.readUInt16LE(start + 14),
+      };
+    } else if (id === "data") {
+      pcm = wav.subarray(start, start + size);
     }
-
-    const audio = await readFile(options.wavPath);
-    const manager = new STTManager("dev-local-wav-transcribe", logger, runtime.sttService);
-    const result = await manager.transcribe(audio, "audio/wav", {
-      label: "dev-local-wav-transcribe",
-    });
-
-    const transcript = result.text.trim();
-
-    if (options.outPath) {
-      await mkdir(path.dirname(options.outPath), { recursive: true });
-      await writeFile(options.outPath, `${transcript}\n`, "utf8");
-      logger.info({ outPath: options.outPath }, "Wrote transcript");
-    }
-
-    process.stdout.write(`${transcript}\n`);
-  } finally {
-    runtime.cleanup();
+    offset = start + size + (size % 2);
   }
+  if (!format || format.encoding !== 1 || format.channels !== 1 || format.bits !== 16) {
+    throw new Error("Expected mono 16-bit PCM WAV audio");
+  }
+  if (format.sampleRate !== 16_000) throw new Error("Expected 16 kHz WAV audio");
+  if (!pcm) throw new Error("WAV file has no data chunk");
+  return pcm;
 }
 
-await main();
+const options = parseArgs(process.argv.slice(2));
+const logger = createRootLogger({ level: "info", format: "pretty" });
+if (!(await isSherpaOnnxModelReady(options.modelsDir, options.model))) {
+  throw new Error(`Model ${options.model} is not installed. Run npm run speech:download first.`);
+}
+
+const engine = new SherpaOfflineRecognizerEngine(
+  resolveSherpaOfflineRecognizerConfig(options.modelsDir, options.model),
+  logger,
+);
+try {
+  const provider = new SherpaOfflineSTT({ engine }, logger);
+  const session = provider.createSession({ logger, language: "auto" });
+  const transcript = new Promise<string>((resolve, reject) => {
+    session.on("transcript", (event) => {
+      if (event.isFinal) resolve(event.transcript.trim());
+    });
+    session.on("error", reject);
+  });
+  await session.connect();
+  session.appendPcm16(readPcm16MonoWav(await readFile(options.wavPath)));
+  session.commit();
+  const result = await transcript;
+  session.close();
+  if (options.outPath) {
+    await mkdir(path.dirname(options.outPath), { recursive: true });
+    await writeFile(options.outPath, `${result}\n`, "utf8");
+  }
+  process.stdout.write(`${result}\n`);
+} finally {
+  engine.free();
+}

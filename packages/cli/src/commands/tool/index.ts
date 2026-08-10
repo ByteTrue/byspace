@@ -13,9 +13,7 @@ import type {
 } from "../../output/index.js";
 import { withOutput } from "../../output/index.js";
 
-interface ToolCommandOptions extends CommandOptions {
-  voice?: boolean;
-}
+type ToolCommandOptions = CommandOptions;
 
 interface ToolCallOptions extends ToolCommandOptions {
   input?: string;
@@ -96,7 +94,6 @@ async function listTools(
   try {
     const response = await client.listOrchestrationTools({
       callerAgentId: callerAgentId(),
-      includeVoice: options.voice,
     });
     if (!response.success) {
       throw { code: "TOOL_LIST_FAILED", message: response.error ?? "Failed to list tools" };
@@ -137,7 +134,6 @@ async function callTool(
       callerAgentId: callerAgentId(),
       callerCwd: process.cwd(),
       callerWorkspaceId: process.env.BYSPACE_WORKSPACE_ID?.trim() || undefined,
-      includeVoice: options.voice,
       timeout: timeoutSeconds * 1000,
     });
     if (!response.success || !response.result) {
@@ -154,10 +150,7 @@ async function callTool(
 }
 
 function addToolContextOptions(command: Command): Command {
-  return addJsonAndDaemonHostOptions(command).option(
-    "--voice",
-    "include the caller-scoped speak tool",
-  );
+  return addJsonAndDaemonHostOptions(command);
 }
 
 export function createToolCommand(): Command {

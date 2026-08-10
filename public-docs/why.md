@@ -19,7 +19,7 @@ BySpace is a self-hostable platform for running and orchestrating coding agents.
 ## Providers
 
 - Bring your own. Use your Claude subscription, your OpenAI account, your own API keys, a self-hosted endpoint. BySpace doesn't proxy model calls.
-- Local voice stack. Speech-to-text and text-to-speech run on-device by default. OpenAI providers are configurable if you want cloud quality.
+- Local dictation. Speech-to-text runs on the Host with a model you explicitly install and select.
 - Open source. No telemetry on your code.
 
 ## Where agents run

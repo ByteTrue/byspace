@@ -38,16 +38,7 @@ describe("byspace daemon bootstrap", () => {
   });
 
   test("starts and serves health endpoint", async () => {
-    const daemonHandle = await createTestBySpaceDaemon({
-      openai: { stt: { apiKey: "test-openai-api-key" }, tts: { apiKey: "test-openai-api-key" } },
-      speech: {
-        providers: {
-          dictationStt: { provider: "openai", explicit: true },
-          voiceStt: { provider: "openai", explicit: true },
-          voiceTts: { provider: "openai", explicit: true },
-        },
-      },
-    });
+    const daemonHandle = await createTestBySpaceDaemon();
     try {
       const response = await fetch(`http://127.0.0.1:${daemonHandle.port}/api/health`, {
         headers: daemonHandle.agentMcpAuthHeader
@@ -368,75 +359,20 @@ describe("byspace daemon bootstrap", () => {
     }
   });
 
-  test("starts when OpenAI speech provider is configured without credentials", async () => {
-    const byspaceHomeRoot = await mkdtemp(path.join(os.tmpdir(), "byspace-openai-config-"));
-    const byspaceHome = path.join(byspaceHomeRoot, ".byspace");
-    const staticDir = await mkdtemp(path.join(os.tmpdir(), "byspace-static-"));
-    await mkdir(byspaceHome, { recursive: true });
-
-    const config: BySpaceDaemonConfig = {
-      listen: "127.0.0.1:0",
-      byspaceHome,
-      corsAllowedOrigins: [],
-      hostnames: true,
-      mcpEnabled: false,
-      staticDir,
-      mcpDebug: false,
-      agentClients: createTestAgentClients(),
-      agentStoragePath: path.join(byspaceHome, "agents"),
-      relayEnabled: false,
-      appBaseUrl: "https://byspace.pages.dev",
-      openai: undefined,
-      speech: {
-        providers: {
-          dictationStt: { provider: "openai", explicit: true },
-          voiceStt: { provider: "openai", explicit: true },
-          voiceTts: { provider: "openai", explicit: true },
-        },
-      },
-    };
-
-    try {
-      const daemon = await createBySpaceDaemon(config, pino({ level: "silent" }));
-      try {
-        await daemon.start();
-        expect(daemon.getListenTarget()).toBeDefined();
-        // Must also stop without throwing
-      } finally {
-        await daemon.stop();
-      }
-    } finally {
-      await rm(byspaceHomeRoot, { recursive: true, force: true });
-      await rm(staticDir, { recursive: true, force: true });
-    }
-  });
-
-  test("does not block daemon start on local speech model downloads", async () => {
+  test("does not download a configured missing speech model during daemon start", async () => {
     const originalFetch = globalThis.fetch;
-    let releaseFetch: ((value: Response) => void) | null = null;
-    const fetchGate = new Promise<Response>((resolve) => {
-      releaseFetch = resolve;
+    const downloadFetch = vi.fn(() => {
+      throw new Error("daemon start must not download speech models");
     });
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(() => fetchGate),
-    );
+    vi.stubGlobal("fetch", downloadFetch);
 
     const daemonHandle = await createTestBySpaceDaemon({
       speech: {
-        providers: {
-          dictationStt: { provider: "local", explicit: true, enabled: true },
-          voiceTurnDetection: { provider: "local", explicit: true, enabled: false },
-          voiceStt: { provider: "local", explicit: true, enabled: false },
-          voiceTts: { provider: "local", explicit: true, enabled: false },
-        },
+        enabled: true,
+        sttLanguage: "auto",
         local: {
           modelsDir: path.join(os.tmpdir(), `byspace-missing-models-${Date.now()}`),
-          models: {
-            dictationStt: "parakeet-tdt-0.6b-v2-int8",
-            voiceStt: "parakeet-tdt-0.6b-v2-int8",
-            voiceTts: "kokoro-en-v0_19",
-          },
+          models: { dictationStt: "fire-red-asr2-aed-int8" },
         },
       },
     });
@@ -444,13 +380,8 @@ describe("byspace daemon bootstrap", () => {
     try {
       const response = await originalFetch(`http://127.0.0.1:${daemonHandle.port}/api/health`);
       expect(response.ok).toBe(true);
+      expect(downloadFetch).not.toHaveBeenCalled();
     } finally {
-      releaseFetch?.(
-        new Response(null, {
-          status: 500,
-          statusText: "test cleanup",
-        }),
-      );
       vi.unstubAllGlobals();
       globalThis.fetch = originalFetch;
       await daemonHandle.close();

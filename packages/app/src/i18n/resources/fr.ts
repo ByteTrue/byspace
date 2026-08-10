@@ -103,16 +103,9 @@ export const fr: TranslationResources = {
       interrupt: "Interrompre",
     },
     voice: {
-      enableVoiceMode: "Activer le mode vocal",
-      voiceMode: "Mode vocal",
-      unmuteVoiceMode: "Activer le mode vocal",
-      muteVoiceMode: "Mode voix muette",
       stopDictation: "Arrêter la dictée",
       startDictation: "Démarrer la dictée",
-      unmuteVoice: "Réactiver la voix",
-      muteVoice: "Voix muette",
       dictation: "Dictée",
-      interruptBeforeVoice: "Interrompre l'agent avant de démarrer le mode vocal",
     },
     attachments: {
       addImage: "Ajouter une image",
@@ -304,12 +297,17 @@ export const fr: TranslationResources = {
     },
     dictation: {
       start: "Démarrer la dictée vocale",
+      stop: "Arrêter et transcrire",
       cancel: "Annuler la dictée",
       retry: "Réessayer la dictée",
-      insert: "Insérer la transcription",
-      insertAndSend: "Insérer la transcription et envoyer",
       failed: "Échec de la dictée:{{error}}",
       failedRetry: "La dictée a échoué. Appuyez sur réessayer.",
+      aiRefinedTranscript: "Transcription révisée par l’IA",
+      originalTranscript: "Transcription originale",
+      useOriginal: "Utiliser l’original",
+      refinementFailed:
+        "Le nettoyage par IA a échoué ; la transcription d’origine a été conservée. {{error}}",
+      useAiRefinement: "Utiliser la version IA",
     },
     question: {
       submit: "Soumettre",
@@ -1349,13 +1347,6 @@ export const fr: TranslationResources = {
       copied: "Copié",
     },
   },
-  realtimeVoice: {
-    actions: {
-      mute: "Couper la voix en temps réel",
-      unmute: "Réactiver la voix en temps réel",
-      stop: "Arrêtez la voix en temps réel et interrompez le tour",
-    },
-  },
   rewind: {
     tooltip: "Revenez à ce message",
     warning: "Cette action ne peut pas être annulée",
@@ -1534,6 +1525,7 @@ export const fr: TranslationResources = {
     },
     hostSections: {
       connections: "Relations",
+      dictation: "Dictée",
       agents: "Agents",
       workspaces: "Workspaces",
       providers: "Fournisseurs",
@@ -1717,12 +1709,10 @@ export const fr: TranslationResources = {
         cycleTheme: "Thème du cycle",
         focusMessageInput: "Saisie du message de focus",
         cycleAgentMode: "Parcourir les modes de l'agent",
-        toggleVoiceMode: "Changer le mode vocal",
         startStopDictation: "Démarrer la dictée/stop",
         interruptAgent: "Agent d'interruption",
         sendMessage: "Envoyer un message",
         queueMessage: "Message de file d'attente",
-        muteUnmuteVoiceMode: "Mode vocal/unmutemuet",
       },
       helpNotes: {
         showKeyboardShortcuts:
@@ -1776,6 +1766,39 @@ export const fr: TranslationResources = {
         relay: "Relais",
         local: "Locale",
       },
+      dictation: {
+        title: "Dictée",
+        description:
+          "La voix est transcrite localement sur cet Host et n’est envoyée à aucune API.",
+        updateHost: "Mettez à jour l’Host pour choisir un modèle de dictée.",
+        disconnected: "Connectez-vous à cet Host pour gérer les modèles de dictée.",
+        loading: "Chargement des modèles…",
+        loadError: "Impossible de charger les modèles de dictée",
+        operationError: "Échec de l’opération sur le modèle de dictée",
+        refinement: {
+          title: "Nettoyer avec l’IA",
+          hint: "Après la transcription locale, envoie uniquement le texte via le même chemin de fournisseurs LLM que les titres et le texte Git. Utilise un appel supplémentaire, revient au texte brut en cas d’échec et conserve l’option Utiliser l’original.",
+          accessibilityLabel: "Nettoyer la dictée avec l’IA",
+        },
+        status: {
+          inUse: "Utilisé",
+          downloading: "Téléchargement…",
+          downloaded: "Téléchargé",
+          failed: "Échec du téléchargement",
+          notDownloaded: "Non téléchargé",
+        },
+        actions: {
+          use: "Utiliser",
+          downloadAndUse: "Télécharger et utiliser",
+          delete: "Supprimer {{model}}",
+        },
+        models: {
+          fireRedDescription:
+            "Optimisé pour le mandarin ; prend en charge l’anglais, le mélange mandarin-anglais et plus de 20 dialectes chinois.",
+          senseVoiceDescription:
+            "Alibaba FunASR SenseVoice Small ; reconnaissance rapide du mandarin, de l’anglais, du cantonais, du japonais et du coréen avec ponctuation. Sous FunASR Model License.",
+        },
+      },
       connections: {
         title: "Relations",
         removeTitle: "Supprimer la connexion",
@@ -1793,6 +1816,10 @@ export const fr: TranslationResources = {
       orchestration: {
         title: "Orchestration",
         unavailable: "Connectez-vous à cet hôte pour gérer l'orchestration",
+        aiOperationsModel: {
+          title: "Modèle des opérations IA",
+          hint: "Utilisé pour les titres d’espaces de travail, le texte Git et la mise au propre des dictées",
+        },
         skills: {
           title: "Skills d’orchestration",
           installHint: "Installe les skills BySpace inclus pour les agents compatibles",

@@ -16,21 +16,36 @@ import {
 } from "../../../audio.js";
 import { SherpaOfflineRecognizerEngine } from "./sherpa-offline-recognizer.js";
 
-export interface SherpaParakeetSttConfig {
+export interface SherpaOfflineSttConfig {
   engine: SherpaOfflineRecognizerEngine;
-  silencePeakThreshold?: number;
 }
 
-export class SherpaOnnxParakeetSTT implements SpeechToTextProvider {
+const FIRE_RED_CONTROL_TOKEN_PATTERN = /<[a-z0-9_]+>/gi;
+
+export function normalizeFireRedTranscript(text: string): string {
+  return text
+    .replace(FIRE_RED_CONTROL_TOKEN_PATTERN, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+}
+
+export function normalizeSherpaTranscript(
+  modelKind: SherpaOfflineRecognizerEngine["modelKind"],
+  text: string,
+): string {
+  if (modelKind === "fire_red_asr") return normalizeFireRedTranscript(text);
+  return text.replace(/\s+/g, " ").trim();
+}
+
+export class SherpaOfflineSTT implements SpeechToTextProvider {
   private readonly engine: SherpaOfflineRecognizerEngine;
-  private readonly silencePeakThreshold: number;
   private readonly logger: pino.Logger;
   public readonly id = "local" as const;
 
-  constructor(config: SherpaParakeetSttConfig, logger: pino.Logger) {
+  constructor(config: SherpaOfflineSttConfig, logger: pino.Logger) {
     this.engine = config.engine;
-    this.silencePeakThreshold = config.silencePeakThreshold ?? 300;
-    this.logger = logger.child({ module: "speech", provider: "local", component: "parakeet-stt" });
+    this.logger = logger.child({ module: "speech", provider: "local", component: "offline-stt" });
   }
 
   public createSession(params: {
@@ -39,7 +54,7 @@ export class SherpaOnnxParakeetSTT implements SpeechToTextProvider {
     prompt?: string;
   }): StreamingTranscriptionSession {
     const emitter = new EventEmitter();
-    const logger = params.logger.child({ provider: "local", component: "parakeet-stt-session" });
+    const logger = params.logger.child({ provider: "local", component: "offline-stt-session" });
     const requiredSampleRate = this.engine.sampleRate;
     let connected = false;
     let segmentId = uuidv4();
@@ -90,7 +105,7 @@ export class SherpaOnnxParakeetSTT implements SpeechToTextProvider {
           } catch (err) {
             emitter.emit("error", err);
           } finally {
-            logger.debug({ bytes: committedPcm16.length }, "Parakeet session reset");
+            logger.debug({ bytes: committedPcm16.length }, "STT session reset");
           }
         })();
       },
@@ -123,12 +138,7 @@ export class SherpaOnnxParakeetSTT implements SpeechToTextProvider {
       inputRate = parsePcmRateFromFormat(format, this.engine.sampleRate) ?? this.engine.sampleRate;
       pcm16 = audioBuffer;
     } else {
-      throw new Error(`Unsupported audio format for sherpa Parakeet STT: ${format}`);
-    }
-
-    const peak = pcm16lePeakAbs(pcm16);
-    if (peak < this.silencePeakThreshold) {
-      return { text: "", duration: Date.now() - start, isLowConfidence: true };
+      throw new Error(`Unsupported audio format for local STT: ${format}`);
     }
 
     let pcmForModel = pcm16;
@@ -139,6 +149,9 @@ export class SherpaOnnxParakeetSTT implements SpeechToTextProvider {
     }
 
     const peakForModel = pcm16lePeakAbs(pcmForModel);
+    if (peakForModel === 0) {
+      return { text: "", duration: Date.now() - start, isLowConfidence: true };
+    }
     const peakFloat = peakForModel / 32768.0;
     const targetPeak = 0.6;
     const maxGain = 50;
@@ -151,13 +164,14 @@ export class SherpaOnnxParakeetSTT implements SpeechToTextProvider {
       this.engine.acceptWaveform(stream, inputRate, floatSamples);
       this.engine.recognizer.decode(stream);
       const result = this.engine.recognizer.getResult(stream);
-      const text = String(
+      const rawText = String(
         (typeof result === "object" && result && "text" in result ? result.text : undefined) ??
           result ??
           "",
-      ).trim();
+      );
+      const text = normalizeSherpaTranscript(this.engine.modelKind, rawText);
       const duration = Date.now() - start;
-      this.logger.debug({ duration, textLength: text.length }, "Parakeet transcription complete");
+      this.logger.debug({ duration, textLength: text.length }, "Local transcription complete");
       return { text, duration, ...(text.length === 0 ? { isLowConfidence: true } : {}) };
     } finally {
       try {

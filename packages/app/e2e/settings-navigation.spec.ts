@@ -40,6 +40,7 @@ import {
 } from "./helpers/settings";
 import { getServerId } from "./helpers/server-id";
 import { expectAppRoute } from "./helpers/route-assertions";
+import { connectSeedClient } from "./helpers/seed-client";
 
 async function openWorkspace(
   page: import("@playwright/test").Page,
@@ -68,12 +69,32 @@ test.describe("Settings sidebar navigation", () => {
     await verifyLegacyHostSettingsRedirect(page);
   });
 
-  test("host Agents exposes orchestration skill management", async ({ page }) => {
-    await gotoAppShell(page);
-    await openSettings(page);
-    await openSettingsHostSection(page, getServerId(), "agents");
+  test("host Agents configures one shared model for background AI operations", async ({ page }) => {
+    const client = await connectSeedClient();
+    try {
+      await client.patchDaemonConfig({ metadataGeneration: { providers: [] } });
+      await gotoAppShell(page);
+      await openSettings(page);
+      await openSettingsHostSection(page, getServerId(), "agents");
 
-    await expect(page.getByTestId("host-orchestration-skills-card")).toBeVisible();
+      await expect(page.getByTestId("host-orchestration-skills-card")).toBeVisible();
+      const card = page.getByTestId("host-page-ai-operations-model-card");
+      const selector = card.getByTestId("combined-model-selector");
+      await expect(selector).toContainText("Select model");
+      await selector.click();
+      await page.getByText("Mock Load Test", { exact: true }).click();
+      await page.getByText("Ten second stream", { exact: true }).click();
+
+      await expect(selector).toContainText("Ten second stream");
+      await page.reload();
+      await expect(card).toBeVisible();
+      await expect(selector).toContainText("Ten second stream");
+    } finally {
+      await client
+        .patchDaemonConfig({ metadataGeneration: { providers: [] } })
+        .catch(() => undefined);
+      await client.close().catch(() => undefined);
+    }
   });
 
   test("the + Add host button opens the add-host method modal", async ({ page }) => {

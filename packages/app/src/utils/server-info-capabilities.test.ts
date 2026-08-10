@@ -2,117 +2,58 @@ import { describe, expect, it } from "vitest";
 import type { ServerCapabilities } from "@bytetrue/byspace-protocol/messages";
 import type { DaemonServerInfo } from "@/stores/session-store";
 import {
+  getDictationReadinessState,
   getServerCapabilities,
-  getVoiceReadinessState,
-  resolveVoiceUnavailableMessage,
+  resolveDictationUnavailableMessage,
 } from "./server-info-capabilities";
 
-function buildServerInfo(capabilities?: ServerCapabilities): DaemonServerInfo {
+function buildServerInfo(serverCapabilities?: ServerCapabilities): DaemonServerInfo {
   return {
     serverId: "srv-1",
     hostname: "test-host",
     version: "0.1.0",
-    ...(capabilities ? { capabilities } : {}),
+    ...(serverCapabilities ? { capabilities: serverCapabilities } : {}),
+  };
+}
+
+function capabilities(dictation: { enabled: boolean; reason: string }): ServerCapabilities {
+  return {
+    voice: {
+      dictation,
+      // COMPAT(voiceMode): old daemons and protocol schemas still include this field.
+      voice: { enabled: false, reason: "Voice mode has been removed." },
+    },
   };
 }
 
 describe("server-info-capabilities", () => {
-  it("returns null capabilities when server_info does not include capability metadata", () => {
+  it("returns null when server_info omits capability metadata", () => {
     const serverInfo = buildServerInfo();
     expect(getServerCapabilities({ serverInfo })).toBeNull();
+    expect(getDictationReadinessState({ serverInfo })).toBeNull();
   });
 
-  it("returns the matching voice capability state by mode", () => {
-    const capabilities: ServerCapabilities = {
-      voice: {
-        dictation: {
-          enabled: true,
-          reason: "Dictation is warming up.",
-        },
-        voice: {
-          enabled: false,
-          reason: "Voice is disabled in daemon config.",
-        },
-      },
-    };
-    const serverInfo = buildServerInfo(capabilities);
-
-    expect(
-      getVoiceReadinessState({
-        serverInfo,
-        mode: "dictation",
-      }),
-    ).toEqual(capabilities.voice?.dictation);
-    expect(
-      getVoiceReadinessState({
-        serverInfo,
-        mode: "voice",
-      }),
-    ).toEqual(capabilities.voice?.voice);
+  it("returns dictation readiness", () => {
+    const value = capabilities({ enabled: true, reason: "Dictation is warming up." });
+    expect(getDictationReadinessState({ serverInfo: buildServerInfo(value) })).toEqual(
+      value.voice?.dictation,
+    );
   });
 
-  it("returns null when capability is enabled and has no reason", () => {
-    const serverInfo = buildServerInfo({
-      voice: {
-        dictation: {
-          enabled: true,
-          reason: "",
-        },
-        voice: {
-          enabled: true,
-          reason: "",
-        },
-      },
-    });
-
+  it("returns the nonblank unavailable reason", () => {
     expect(
-      resolveVoiceUnavailableMessage({
-        serverInfo,
-        mode: "dictation",
+      resolveDictationUnavailableMessage({
+        serverInfo: buildServerInfo(capabilities({ enabled: false, reason: "Select a model." })),
+      }),
+    ).toBe("Select a model.");
+    expect(
+      resolveDictationUnavailableMessage({
+        serverInfo: buildServerInfo(capabilities({ enabled: true, reason: "" })),
       }),
     ).toBeNull();
-  });
-
-  it("returns capability reason when present", () => {
-    const serverInfo = buildServerInfo({
-      voice: {
-        dictation: {
-          enabled: true,
-          reason: "Dictation models are still downloading.",
-        },
-        voice: {
-          enabled: true,
-          reason: "",
-        },
-      },
-    });
-
     expect(
-      resolveVoiceUnavailableMessage({
-        serverInfo,
-        mode: "dictation",
-      }),
-    ).toBe("Dictation models are still downloading.");
-  });
-
-  it("returns null when capability reason is blank", () => {
-    const serverInfo = buildServerInfo({
-      voice: {
-        dictation: {
-          enabled: false,
-          reason: "   ",
-        },
-        voice: {
-          enabled: true,
-          reason: "",
-        },
-      },
-    });
-
-    expect(
-      resolveVoiceUnavailableMessage({
-        serverInfo,
-        mode: "dictation",
+      resolveDictationUnavailableMessage({
+        serverInfo: buildServerInfo(capabilities({ enabled: false, reason: "   " })),
       }),
     ).toBeNull();
   });

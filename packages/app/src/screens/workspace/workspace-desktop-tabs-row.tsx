@@ -34,6 +34,7 @@ import {
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { useTranslation } from "react-i18next";
 import { useRouter, type Href } from "expo-router";
+import { PortalHost } from "@gorhom/portal";
 import { SortableInlineList } from "@/components/sortable-inline-list";
 import type {
   DraggableListDragHandleProps,
@@ -76,6 +77,7 @@ import {
 import type { WorkspaceTabDescriptor } from "@/screens/workspace/workspace-tabs-types";
 import type { Theme } from "@/styles/theme";
 import { RenderProfile } from "@/utils/render-profiler";
+import { buildPaneHeaderActionsPortalName } from "@/panels/pane-header-actions-portal";
 import { useDaemonConfig } from "@/hooks/use-daemon-config";
 import {
   getTerminalProfileIcon,
@@ -886,6 +888,11 @@ export function WorkspaceDesktopTabsRow({
   }, [normalizedServerId, router]);
 
   const terminalDisabled = disableCreateTerminal || isWaitingOnTerminalReadiness;
+  const activeTab = tabs.find((item) => item.isActive)?.tab ?? null;
+  const paneHeaderActionsPortalName =
+    activeTab?.target.kind === "agent"
+      ? buildPaneHeaderActionsPortalName(normalizedServerId, normalizedWorkspaceId, activeTab.tabId)
+      : null;
 
   const renderTab = useCallback(
     ({
@@ -1028,6 +1035,11 @@ export function WorkspaceDesktopTabsRow({
         />
       </ScrollView>
       <View style={styles.tabsActions} onLayout={handleTabsActionsLayout}>
+        {paneHeaderActionsPortalName ? (
+          <View style={styles.paneHeaderActions} testID="pane-header-actions">
+            <PortalHost name={paneHeaderActionsPortalName} />
+          </View>
+        ) : null}
         <WorkspaceTabRowExtras
           onCreateAgentTab={handleCreateAgentTab}
           onCreateTerminal={handleCreateTerminal}
@@ -1227,6 +1239,11 @@ const styles = StyleSheet.create((theme) => ({
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: theme.spacing[2],
+  },
+  paneHeaderActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingRight: theme.spacing[1],
   },
   exitFocusModeSlot: {
     alignSelf: "stretch",

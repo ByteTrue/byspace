@@ -2,7 +2,7 @@ import { useCallback } from "react";
 
 import type { HostRuntimeAgentDirectoryStatus } from "@/runtime/host-runtime";
 import { useSessionStore } from "@/stores/session-store";
-import { getVoiceReadinessState } from "@/utils/server-info-capabilities";
+import { getDictationReadinessState } from "@/utils/server-info-capabilities";
 
 function isLegacyDictationReady(agentDirectoryStatus: HostRuntimeAgentDirectoryStatus): boolean {
   return (
@@ -25,12 +25,7 @@ export function useIsDictationReady({
     useCallback(
       (state) => {
         const serverInfo = state.sessions[serverId]?.serverInfo ?? null;
-        return (
-          getVoiceReadinessState({
-            serverInfo,
-            mode: "dictation",
-          })?.enabled ?? null
-        );
+        return getDictationReadinessState({ serverInfo })?.enabled ?? null;
       },
       [serverId],
     ),

@@ -156,7 +156,13 @@ async function installDictationFailureHarness(page: Page) {
 async function dictateAndSend(page: Page, waitForAudio: () => Promise<void>): Promise<void> {
   await page.getByRole("button", { name: "Start dictation" }).click();
   await waitForAudio();
-  await page.getByRole("button", { name: "Insert transcription and send" }).click();
+  await page.getByRole("button", { name: "Stop and transcribe" }).click();
+
+  const composer = page.getByRole("textbox", { name: "Message agent..." });
+  await expect(composer).toHaveValue(TRANSCRIPT);
+  const createButton = page.getByRole("button", { name: "Create" });
+  await expect(createButton).toBeEnabled();
+  await createButton.click();
 }
 
 test.describe("New Workspace dictation submit", () => {

@@ -105,6 +105,12 @@ import type {
   BySpaceConfigRevision,
   WorkspaceCreateRequest,
   WorkspaceRecoveryState,
+  SpeechModelId,
+  SpeechModelsListResponse,
+  SpeechModelDownloadResponse,
+  SpeechModelSelectResponse,
+  SpeechModelDeleteResponse,
+  DictationRefineResponse,
 } from "@bytetrue/byspace-protocol/messages";
 import type {
   AgentPermissionRequest,
@@ -511,10 +517,6 @@ interface ListCommandsOptions {
   draftConfig?: ListCommandsDraftConfig;
 }
 type LegacyListCommandsOptions = Omit<ListCommandsOptions, "agentId">;
-type SetVoiceModePayload = Extract<
-  SessionOutboundMessage,
-  { type: "set_voice_mode_response" }
->["payload"];
 type DictationFinishAcceptedPayload = Extract<
   SessionOutboundMessage,
   { type: "dictation_stream_finish_accepted" }
@@ -1148,6 +1150,7 @@ export class DaemonClient {
   private eventListeners: Set<DaemonEventHandler> = new Set();
   private waiters: Set<Waiter<unknown>> = new Set();
   private checkoutStatusInFlight: Map<string, Promise<CheckoutStatusPayload>> = new Map();
+  private dictationStartCancels = new Map<string, (error: Error) => void>();
   private connectionListeners: Set<(status: ConnectionState) => void> = new Set();
   private reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
   private connectTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -3270,44 +3273,8 @@ export class DaemonClient {
   }
 
   // ============================================================================
-  // Audio / Voice
+  // Dictation
   // ============================================================================
-
-  async setVoiceMode(enabled: boolean, agentId?: string): Promise<SetVoiceModePayload> {
-    const requestId = this.createRequestId();
-    const message = SessionInboundMessageSchema.parse({
-      type: "set_voice_mode",
-      enabled,
-      ...(agentId ? { agentId } : {}),
-      requestId,
-    });
-    const response = await this.sendRequest({
-      requestId,
-      message,
-      select: (msg) => {
-        if (msg.type !== "set_voice_mode_response") {
-          return null;
-        }
-        if (msg.payload.requestId !== requestId) {
-          return null;
-        }
-        return msg.payload;
-      },
-    });
-    if (!response.accepted) {
-      const codeSuffix =
-        typeof response.reasonCode === "string" && response.reasonCode.trim().length > 0
-          ? ` (${response.reasonCode})`
-          : "";
-      throw new Error((response.error ?? "Failed to set voice mode") + codeSuffix);
-    }
-    return response;
-  }
-
-  async sendVoiceAudioChunk(audio: string, format: string, isLast = false): Promise<void> {
-    this.sendSessionMessage({ type: "voice_audio_chunk", audio, format, isLast });
-  }
-
   async startDictationStream(dictationId: string, format: string): Promise<void> {
     const ack = this.waitForWithCancel(
       (msg) => {
@@ -3343,14 +3310,21 @@ export class DaemonClient {
     const errorPromise = streamError.promise.then((payload) => {
       throw new Error(payload.error);
     });
+    const cancelStart = (error: Error) => {
+      ack.cancel(error);
+      streamError.cancel(error);
+    };
+    this.dictationStartCancels.set(dictationId, cancelStart);
 
     const cleanupError = new Error("Cancelled dictation start waiter");
     try {
       this.sendSessionMessageStrict({ type: "dictation_stream_start", dictationId, format });
       await Promise.race([ackPromise, errorPromise]);
     } finally {
-      ack.cancel(cleanupError);
-      streamError.cancel(cleanupError);
+      if (this.dictationStartCancels.get(dictationId) === cancelStart) {
+        this.dictationStartCancels.delete(dictationId);
+      }
+      cancelStart(cleanupError);
       void ackPromise.catch(() => undefined);
       void errorPromise.catch(() => undefined);
     }
@@ -3514,6 +3488,7 @@ export class DaemonClient {
   }
 
   cancelDictationStream(dictationId: string): void {
+    this.dictationStartCancels.get(dictationId)?.(new Error("Dictation start cancelled"));
     this.sendSessionMessageStrict({ type: "dictation_stream_cancel", dictationId });
   }
 
@@ -4490,6 +4465,54 @@ export class DaemonClient {
     return normalizeProvidersSnapshotPayload(payload);
   }
 
+  async listSpeechModels(requestId?: string): Promise<SpeechModelsListResponse["payload"]> {
+    return this.sendNamespacedCorrelatedSessionRequest({
+      requestId,
+      message: { type: "speech.models.list.request" },
+    });
+  }
+
+  async downloadSpeechModel(
+    modelId: SpeechModelId,
+    requestId?: string,
+  ): Promise<SpeechModelDownloadResponse["payload"]> {
+    return this.sendNamespacedCorrelatedSessionRequest({
+      requestId,
+      message: { type: "speech.models.download.request", modelId },
+    });
+  }
+
+  async selectSpeechModel(
+    modelId: SpeechModelId,
+    requestId?: string,
+  ): Promise<SpeechModelSelectResponse["payload"]> {
+    return this.sendNamespacedCorrelatedSessionRequest({
+      requestId,
+      message: { type: "speech.models.select.request", modelId },
+    });
+  }
+
+  async deleteSpeechModel(
+    modelId: SpeechModelId,
+    requestId?: string,
+  ): Promise<SpeechModelDeleteResponse["payload"]> {
+    return this.sendNamespacedCorrelatedSessionRequest({
+      requestId,
+      message: { type: "speech.models.delete.request", modelId },
+    });
+  }
+
+  async refineDictationTranscript(
+    text: string,
+    agentId: string,
+    requestId?: string,
+  ): Promise<DictationRefineResponse["payload"]> {
+    return this.sendNamespacedCorrelatedSessionRequest({
+      requestId,
+      message: { type: "speech.dictation.refine.request", text, agentId },
+    });
+  }
+
   async getDaemonConfig(
     requestId?: string,
   ): Promise<{ requestId: string; config: MutableDaemonConfig }> {
@@ -4534,7 +4557,6 @@ export class DaemonClient {
 
   async listOrchestrationTools(options?: {
     callerAgentId?: string;
-    includeVoice?: boolean;
     requestId?: string;
   }): Promise<OrchestrationToolsListResponse["payload"]> {
     return this.sendNamespacedCorrelatedSessionRequest({
@@ -4542,7 +4564,6 @@ export class DaemonClient {
       message: {
         type: "orchestration.tools.list.request",
         callerAgentId: options?.callerAgentId,
-        includeVoice: options?.includeVoice,
       },
     });
   }
@@ -4553,7 +4574,6 @@ export class DaemonClient {
     callerAgentId?: string;
     callerCwd?: string;
     callerWorkspaceId?: string;
-    includeVoice?: boolean;
     requestId?: string;
     timeout?: number;
   }): Promise<OrchestrationToolCallResponse["payload"]> {
@@ -4564,7 +4584,6 @@ export class DaemonClient {
         callerAgentId: options.callerAgentId,
         callerCwd: options.callerCwd,
         callerWorkspaceId: options.callerWorkspaceId,
-        includeVoice: options.includeVoice,
         toolName: options.toolName,
         input: options.input,
       },
