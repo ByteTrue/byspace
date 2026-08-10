@@ -287,6 +287,14 @@ test.describe("Settings host page", () => {
 
     await expectSettingsHeader(page, "Dictation");
     await expect(page.getByTestId("host-dictation-settings")).toBeVisible();
+    const modelRows = page.locator(
+      '[data-testid="speech-model-sensevoice-small-int8"], [data-testid="speech-model-fire-red-asr2-aed-int8"]',
+    );
+    await expect(modelRows).toHaveCount(2);
+    await expect(modelRows.first()).toHaveAttribute(
+      "data-testid",
+      "speech-model-sensevoice-small-int8",
+    );
     const fireRedRow = page.getByTestId("speech-model-fire-red-asr2-aed-int8");
     await expect(fireRedRow).toContainText("FireRedASR2-AED");
     await expect(page.getByTestId("speech-model-action-fire-red-asr2-aed-int8")).toHaveText(

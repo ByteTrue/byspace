@@ -4,10 +4,10 @@ import { describe, expect, it } from "vitest";
 import { listSherpaOnnxModels, resolveSherpaOfflineRecognizerConfig } from "./model-catalog.js";
 
 describe("local speech model catalog", () => {
-  it("exposes FireRed and SenseVoice as allowlisted local models", () => {
+  it("exposes the default SenseVoice model first", () => {
     expect(listSherpaOnnxModels().map((model) => model.id)).toEqual([
-      "fire-red-asr2-aed-int8",
       "sensevoice-small-int8",
+      "fire-red-asr2-aed-int8",
     ]);
   });
 

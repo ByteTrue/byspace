@@ -48,7 +48,7 @@ start/stop flow remains the release blocker.
 
 ### Model catalog
 
-- The daemon exposes two allowlisted local STT choices: FireRedASR2-AED ONNX int8 for Mandarin-first quality, and SenseVoice Small ONNX int8 as the default selection for new or unconfigured Hosts.
+- The daemon exposes two allowlisted local STT choices: SenseVoice Small ONNX int8 is the default selection for new or unconfigured Hosts and appears first in the catalog/UI; FireRedASR2-AED ONNX int8 remains available for Mandarin-first quality.
 - SenseVoice is downloaded only on explicit user action, retains its bundled FunASR Model License file, and is attributed to Alibaba FunASR in the catalog and public documentation.
 - Qwen3-ASR 0.6B is deferred: sherpa-onnx publishes the model, but its latest stable Node binding does not expose the Qwen3 recognizer configuration required by the daemon.
 - Catalog IDs are allowlisted and validated again for every operation.

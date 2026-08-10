@@ -25,24 +25,6 @@ export interface SherpaOnnxCatalogEntry {
 }
 
 export const SHERPA_ONNX_MODEL_CATALOG = {
-  "fire-red-asr2-aed-int8": {
-    kind: "stt-offline",
-    label: "FireRedASR2-AED",
-    description:
-      "Mandarin-first; supports English, Mandarin-English code-switching, and 20+ Chinese dialects.",
-    archiveUrl:
-      "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-fire-red-asr2-zh_en-int8-2026-02-26.tar.bz2",
-    archiveSizeBytes: 838_589_068,
-    archiveSha256: "43015b3f1643a5688b4821e8ed323473d38b798c4ec291471fe00df1bcfc4f1c",
-    extractedDir: "sherpa-onnx-fire-red-asr2-zh_en-int8-2026-02-26",
-    requiredFiles: ["encoder.int8.onnx", "decoder.int8.onnx", "tokens.txt"],
-    runtime: {
-      kind: "fire_red_asr",
-      encoder: "encoder.int8.onnx",
-      decoder: "decoder.int8.onnx",
-      tokens: "tokens.txt",
-    },
-  },
   "sensevoice-small-int8": {
     kind: "stt-offline",
     label: "SenseVoice Small",
@@ -61,6 +43,24 @@ export const SHERPA_ONNX_MODEL_CATALOG = {
       tokens: "tokens.txt",
       language: "auto",
       useInverseTextNormalization: 1,
+    },
+  },
+  "fire-red-asr2-aed-int8": {
+    kind: "stt-offline",
+    label: "FireRedASR2-AED",
+    description:
+      "Mandarin-first; supports English, Mandarin-English code-switching, and 20+ Chinese dialects.",
+    archiveUrl:
+      "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-fire-red-asr2-zh_en-int8-2026-02-26.tar.bz2",
+    archiveSizeBytes: 838_589_068,
+    archiveSha256: "43015b3f1643a5688b4821e8ed323473d38b798c4ec291471fe00df1bcfc4f1c",
+    extractedDir: "sherpa-onnx-fire-red-asr2-zh_en-int8-2026-02-26",
+    requiredFiles: ["encoder.int8.onnx", "decoder.int8.onnx", "tokens.txt"],
+    runtime: {
+      kind: "fire_red_asr",
+      encoder: "encoder.int8.onnx",
+      decoder: "decoder.int8.onnx",
+      tokens: "tokens.txt",
     },
   },
 } as const satisfies Record<string, SherpaOnnxCatalogEntry>;
