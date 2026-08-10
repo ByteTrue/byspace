@@ -18,6 +18,8 @@ export interface ResolvedLocalSpeechConfig {
 
 export type { LocalSpeechModelId, LocalSttModelId } from "./models.js";
 
+export const DEFAULT_LOCAL_DICTATION_MODEL_ID: LocalSttModelId = "sensevoice-small-int8";
+
 function resolveSelectedModel(value: string | undefined): LocalSttModelId | null {
   if (!value?.trim()) return null;
   const parsed = LocalSttModelIdSchema.safeParse(value.trim());
@@ -35,7 +37,11 @@ export function resolveLocalSpeechConfig(params: {
     params.env.BYSPACE_LOCAL_MODELS_DIR?.trim() ||
     params.persisted.providers?.local?.modelsDir?.trim() ||
     path.join(params.byspaceHome, "models", "local-speech");
-  const selectedModel = resolveSelectedModel(params.persisted.features?.dictation?.stt?.model);
+  const persistedModel = params.persisted.features?.dictation?.stt?.model;
+  const selectedModel =
+    persistedModel === undefined
+      ? DEFAULT_LOCAL_DICTATION_MODEL_ID
+      : resolveSelectedModel(persistedModel);
   return {
     local: {
       modelsDir,

@@ -1778,6 +1778,10 @@ export const ar: TranslationResources = {
       orchestration: {
         title: "التنسيق",
         unavailable: "اتصل بهذا المضيف لإدارة التنسيق",
+        aiOperationsModel: {
+          title: "نموذج عمليات الذكاء الاصطناعي",
+          hint: "يُستخدم لعناوين مساحات العمل ونصوص Git وتنقيح الإملاء الصوتي",
+        },
         skills: {
           title: "مهارات التنسيق",
           installHint: "تثبيت مهارات BySpace المضمنة للوكلاء المدعومين",

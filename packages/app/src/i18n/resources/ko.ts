@@ -2049,6 +2049,10 @@ const koTranslations = {
           hint: "에이전트가 워크트리, 에이전트, 일정을 관리할 수 있습니다",
           accessibilityLabel: "BySpace 도구 주입",
         },
+        aiOperationsModel: {
+          title: "AI 작업 모델",
+          hint: "워크스페이스 제목, Git 문구 및 받아쓰기 정리에 사용됩니다",
+        },
         systemPrompt: {
           title: "시스템 프롬프트",
           hint: "모든 에이전트에 시스템 프롬프트를 추가합니다",

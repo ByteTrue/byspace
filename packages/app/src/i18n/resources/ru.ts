@@ -1807,6 +1807,10 @@ export const ru: TranslationResources = {
       orchestration: {
         title: "оркестровка",
         unavailable: "Подключитесь к этому хосту, чтобы управлять оркестрацией.",
+        aiOperationsModel: {
+          title: "Модель для ИИ-операций",
+          hint: "Используется для названий рабочих пространств, текста Git и обработки диктовки",
+        },
         skills: {
           title: "Навыки оркестрации",
           installHint: "Установить встроенные навыки BySpace для поддерживаемых агентов",

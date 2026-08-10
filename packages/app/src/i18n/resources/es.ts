@@ -1815,6 +1815,10 @@ export const es: TranslationResources = {
       orchestration: {
         title: "Orquestación",
         unavailable: "Conéctese a este host para administrar la orquestación",
+        aiOperationsModel: {
+          title: "Modelo para operaciones de IA",
+          hint: "Se usa para títulos de espacios de trabajo, texto de Git y limpieza del dictado",
+        },
         skills: {
           title: "Skills de orquestación",
           installHint: "Instala los skills incluidos de BySpace para los agentes compatibles",

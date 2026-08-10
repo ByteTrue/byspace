@@ -1762,6 +1762,10 @@ export const zhCN: TranslationResources = {
       orchestration: {
         title: "编排",
         unavailable: "连接到这个 Host 以管理编排",
+        aiOperationsModel: {
+          title: "AI 操作模型",
+          hint: "用于生成工作区标题、Git 文案和听写整理",
+        },
         skills: {
           title: "编排 Skills",
           installHint: "为受支持的编程 Agent 安装 BySpace 内置 Skills",

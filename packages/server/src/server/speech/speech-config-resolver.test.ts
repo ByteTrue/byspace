@@ -4,7 +4,7 @@ import { PersistedConfigSchema } from "../persisted-config.js";
 import { resolveSpeechConfig } from "./speech-config-resolver.js";
 
 describe("resolveSpeechConfig", () => {
-  test("starts enabled but without selecting a model", () => {
+  test("defaults new Hosts to SenseVoice without downloading it", () => {
     const byspaceHome = "/tmp/byspace-home";
     const result = resolveSpeechConfig({
       byspaceHome,
@@ -17,7 +17,7 @@ describe("resolveSpeechConfig", () => {
       sttLanguage: "auto",
       local: {
         modelsDir: path.join(byspaceHome, "models", "local-speech"),
-        models: { dictationStt: null },
+        models: { dictationStt: "sensevoice-small-int8" },
       },
     });
   });
@@ -52,7 +52,7 @@ describe("resolveSpeechConfig", () => {
     });
 
     expect(result.enabled).toBe(false);
-    expect(result.local?.models.dictationStt).toBeNull();
+    expect(result.local?.models.dictationStt).toBe("sensevoice-small-int8");
   });
 
   test("honors the environment override", () => {

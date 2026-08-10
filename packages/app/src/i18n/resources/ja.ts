@@ -1791,6 +1791,10 @@ export const ja: TranslationResources = {
       orchestration: {
         title: "オーケストレーション",
         unavailable: "オーケストレーションを管理するにはこのホストに接続してください",
+        aiOperationsModel: {
+          title: "AI 操作モデル",
+          hint: "ワークスペースのタイトル、Gitテキスト、音声入力の整理に使用します",
+        },
         skills: {
           title: "オーケストレーションスキル",
           installHint:

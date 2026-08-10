@@ -1788,6 +1788,10 @@ export const en = {
       orchestration: {
         title: "Orchestration",
         unavailable: "Connect to this host to manage orchestration",
+        aiOperationsModel: {
+          title: "AI operations model",
+          hint: "Used for workspace titles, Git text, and dictation cleanup",
+        },
         skills: {
           title: "Orchestration skills",
           installHint: "Install bundled BySpace skills for supported coding agents",

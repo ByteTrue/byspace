@@ -1805,6 +1805,10 @@ export const ptBR: TranslationResources = {
       orchestration: {
         title: "Orquestração",
         unavailable: "Conecte-se a este host para gerenciar a orquestração",
+        aiOperationsModel: {
+          title: "Modelo para operações de IA",
+          hint: "Usado para títulos de espaços de trabalho, texto do Git e revisão de ditado",
+        },
         skills: {
           title: "Skills de orquestração",
           installHint: "Instale os skills incluídos do BySpace para agentes compatíveis",

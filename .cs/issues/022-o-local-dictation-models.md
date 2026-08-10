@@ -18,7 +18,7 @@ BySpace only needs speech-to-text, but currently ships an unusable Voice mode an
 
 ## Goal
 
-Make dictation the only speech feature and require an explicit Host-local model installation/selection before it can run.
+Make dictation the only speech feature, default new Hosts to SenseVoice Small, and still require an explicit Host-local model installation before dictation can run.
 
 ## Product acceptance finding
 
@@ -48,7 +48,7 @@ start/stop flow remains the release blocker.
 
 ### Model catalog
 
-- The daemon exposes two allowlisted local STT choices: FireRedASR2-AED ONNX int8 for Mandarin-first quality, and SenseVoice Small ONNX int8 for a much smaller/faster multilingual option with built-in punctuation.
+- The daemon exposes two allowlisted local STT choices: FireRedASR2-AED ONNX int8 for Mandarin-first quality, and SenseVoice Small ONNX int8 as the default selection for new or unconfigured Hosts.
 - SenseVoice is downloaded only on explicit user action, retains its bundled FunASR Model License file, and is attributed to Alibaba FunASR in the catalog and public documentation.
 - Qwen3-ASR 0.6B is deferred: sherpa-onnx publishes the model, but its latest stable Node binding does not expose the Qwen3 recognizer configuration required by the daemon.
 - Catalog IDs are allowlisted and validated again for every operation.
@@ -58,8 +58,8 @@ start/stop flow remains the release blocker.
 
 ### Lifecycle
 
-- No model is selected by default.
-- Daemon startup never starts a model download.
+- SenseVoice Small is selected by default when the Host has no persisted selection.
+- Daemon startup never starts a model download; the default still requires explicit installation.
 - Install is explicit, backgrounded, idempotent, staged, and validated before becoming ready.
 - A successful install may activate the model; selecting an already-ready model is immediate.
 - Selection is persisted per Host and takes effect for the next dictation session.
@@ -80,8 +80,8 @@ start/stop flow remains the release blocker.
 
 - AI refinement is an explicit Host setting and defaults off.
 - When enabled, only the final transcript text—not audio—is sent through the same structured-generation provider resolution and non-persisted internal Agent path used for titles, commit messages, and PR text.
-- It therefore supports the same Provider set instead of adding a dictation-only adapter.
-- Provider or schema failure returns the original transcript and exposes the failure reason in a standalone status row above the composer input. A successful result is labeled as AI-cleaned there, keeps both original and refined drafts behind a direct toggle until the user edits or sends, and is never automatically sent.
+- Agents settings exposes one `AI operations model` selection shared by those structured-generation tasks; choosing a model persists exactly one Provider/model candidate rather than adding a dictation-only setting.
+- Provider or schema failure returns the original transcript and exposes the failure reason in a standalone status row above the composer input, with no successful-cleanup toggle. A successful result is labeled as AI-cleaned there, keeps both original and refined drafts behind a direct toggle until the user edits or sends, and is never automatically sent.
 - Download responses are stream-capped at the catalog size before archive verification, so a malformed overlong response cannot consume unbounded Host disk.
 
 ### Protocol
@@ -97,6 +97,7 @@ start/stop flow remains the release blocker.
 - Host settings add a compact Dictation section using the shared settings rows.
 - The section shows each model's purpose, size, state, and only the actions install/use, switch, and delete.
 - A separate `Refine with AI` switch defaults off and discloses the text-only extra model call plus the reversible original/refined draft behavior.
+- Agents settings reuses the shared Provider/model selector for the single Host-wide AI operations model used by metadata generation and dictation refinement.
 - Download state is refreshed while a job is active. New Hosts expose downloaded bytes so the row shows percentage, transferred/total size, and an accessible progress bar; older Hosts retain the indeterminate downloading state.
 - The microphone remains visible while unconfigured; activating it explains the requirement and opens that Host's Dictation settings.
 - While recording, the composer keeps the existing draft visible and unchanged.
@@ -128,7 +129,7 @@ start/stop flow remains the release blocker.
 ## Verification
 
 - [x] Protocol wire compatibility and generated validation pass.
-- [x] No selected model means no startup download and dictation unavailable.
+- [x] New or unconfigured Hosts select SenseVoice without downloading it at startup; persisted selections remain authoritative.
 - [x] Install/select/delete persistence and runtime switching pass focused server tests.
 - [x] Unknown model IDs and unsafe deletion are rejected.
 - [x] Old Voice mode requests receive a stable unsupported response.
@@ -137,7 +138,8 @@ start/stop flow remains the release blocker.
 - [x] Real FireRed worker loading and PCM transcription pass through the packaged Node binding.
 - [x] Mandarin, English, and mixed synthetic recordings were evaluated on FireRedASR2-AED.
 - [x] SenseVoice Small loads through the production sherpa Node worker and transcribes the real PCM fixture.
-- [x] AI refinement directly reuses the title/commit/PR structured-generation path, supports the same Providers, fails open to raw text, and keeps both original and refined drafts behind a composer toggle.
+- [x] AI refinement directly reuses the title/commit/PR structured-generation path; Agents settings persists one shared Provider/model selection for all of them.
+- [x] Actual refinement failure shows the reason, keeps raw text, and exposes no successful-cleanup toggle; successful refinement keeps both drafts behind the composer toggle.
 - [x] Independent correctness review has no unresolved high/medium findings.
 - [x] Natural pauses do not commit, emit partial text, or create line breaks.
 - [x] Fixed-duration background commits assemble in causal order and final output emits only after stop.
@@ -169,6 +171,7 @@ start/stop flow remains the release blocker.
 - Model download progress evidence: downloader/runtime/protocol validation tests and focused real-browser progress rendering passed; root typecheck, lint, format, and Web export remained green.
 - Refinement feedback evidence: state tests cover fail-open error retention, protocol/server tests cover optional wire errors, and a focused browser test covers success toggle placement plus visible failure reason.
 - Worker-stop regression evidence: the forced-exit unit path passed; real FireRed and SenseVoice runs each loaded the production sherpa worker, transcribed the PCM fixture, and confirmed shutdown (2/2 per model). The parent now waits for process `exit`, not stdio `close`, and force-stops native cleanup after a one-second grace period.
+- Default/configuration evidence: speech config tests cover SenseVoice defaulting without download and persisted-selection precedence; Agents settings browser acceptance selects a concrete Mock model, reloads the page, and confirms the persisted selection; the refinement browser acceptance confirms the failure alert and absence of the success toggle.
 - Synthetic quality smoke outputs:
   - English: `please run the type check and rebuild the server before opening the pull`
   - Mandarin: `今天我们修复了终端粘贴和工作区切换的问题请重新运行类型检查`

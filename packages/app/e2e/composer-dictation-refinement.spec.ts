@@ -178,6 +178,7 @@ test("shows dictation refinement status above the composer and explains failures
     await expect(notice).toContainText(
       `AI cleanup failed; original transcript kept. ${REFINEMENT_ERROR}`,
     );
+    await expect(page.getByTestId("dictation-refinement-toggle")).toHaveCount(0);
   } finally {
     await agent.client
       .patchDaemonConfig({ dictation: { refineWithAgent: false } })
