@@ -18,8 +18,14 @@ class FakeLocalSpeechWorker extends EventEmitter {
   public pid = 12345;
   public readonly stderr = new EventEmitter() as NodeJS.ReadableStream;
   public readonly sent: LocalSpeechWorkerRequest[] = [];
+  public readonly killSignals: NodeJS.Signals[] = [];
   public disconnects = 0;
   public kills = 0;
+  private exitScheduled = false;
+
+  constructor(private readonly hangsOnDisconnect = false) {
+    super();
+  }
 
   send(message: LocalSpeechWorkerRequest, callback: (error: Error | null) => void): boolean {
     this.sent.push(message);
@@ -30,14 +36,22 @@ class FakeLocalSpeechWorker extends EventEmitter {
   disconnect(): void {
     this.disconnects++;
     this.connected = false;
+    if (!this.hangsOnDisconnect) this.scheduleExit();
   }
 
-  kill(): boolean {
+  kill(signal: NodeJS.Signals = "SIGTERM"): boolean {
     this.kills++;
+    this.killSignals.push(signal);
     this.killed = true;
     this.connected = false;
-    queueMicrotask(() => this.emit("close", 0, null));
+    this.scheduleExit();
     return true;
+  }
+
+  private scheduleExit(): void {
+    if (this.exitScheduled) return;
+    this.exitScheduled = true;
+    queueMicrotask(() => this.emit("exit", 0, null));
   }
 
   respond(request: LocalSpeechWorkerRequest, result?: unknown): void {
@@ -81,8 +95,8 @@ class PausedIpcWorker {
     this.child.disconnect();
   }
 
-  kill(): boolean {
-    return this.child.kill();
+  kill(signal?: NodeJS.Signals): boolean {
+    return this.child.kill(signal);
   }
 
   on(event: "message", listener: (message: LocalSpeechWorkerToParentMessage) => void): this;
@@ -98,7 +112,7 @@ class PausedIpcWorker {
   }
 
   once(
-    event: "close",
+    event: "exit",
     listener: (code: number | null, signal: NodeJS.Signals | null) => void,
   ): this {
     this.child.once(event, listener);
@@ -218,6 +232,28 @@ describe("LocalSpeechWorkerClient", () => {
     for (const worker of workers) worker.kill();
   });
 
+  it("force-stops a worker that hangs while freeing its native model", async () => {
+    const worker = new FakeLocalSpeechWorker(true);
+    const client = new LocalSpeechWorkerClient({
+      logger: pino({ level: "silent" }),
+      config: { modelsDir: "/tmp/models", dictationSttModel: "fire-red-asr2-aed-int8" },
+      forkWorker: () => worker,
+    });
+    const session = new WorkerBackedSpeechToTextProvider(client).createSession({
+      logger: pino({ level: "silent" }),
+    });
+
+    const connect = session.connect();
+    worker.respond(worker.sent[0], { requiredSampleRate: 16000 });
+    await connect;
+    session.close();
+
+    await client.shutdownAndWait();
+
+    expect(worker.disconnects).toBe(1);
+    expect(worker.killSignals).toEqual(["SIGKILL"]);
+  });
+
   it("does not surface real IPC backpressure when replaying native-sized dictation frames", async () => {
     const workers: PausedIpcWorker[] = [];
     const client = new LocalSpeechWorkerClient({
@@ -272,7 +308,7 @@ describe("LocalSpeechWorkerClient", () => {
     session.on("error", () => undefined);
 
     const connect = session.connect();
-    workers[0].emit("close", null, "SIGABRT");
+    workers[0].emit("exit", null, "SIGABRT");
 
     await expect(connect).rejects.toThrow("Dictation worker exited (SIGABRT)");
   });

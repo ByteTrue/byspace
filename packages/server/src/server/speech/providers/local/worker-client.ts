@@ -14,7 +14,8 @@ import type {
 import { bufferToWorkerBytes } from "./worker-bytes.js";
 
 const REQUEST_TIMEOUT_MS = 60_000;
-const WORKER_SHUTDOWN_TIMEOUT_MS = 5_000;
+const WORKER_SHUTDOWN_GRACE_MS = 1_000;
+const WORKER_FORCE_SHUTDOWN_TIMEOUT_MS = 5_000;
 
 type RequestInput = LocalSpeechWorkerRequest extends infer Request
   ? Request extends LocalSpeechWorkerRequest
@@ -26,12 +27,9 @@ interface WorkerProcess {
   connected: boolean;
   send(message: LocalSpeechWorkerRequest, callback: (error: Error | null) => void): boolean;
   disconnect(): void;
-  kill(): boolean;
+  kill(signal?: NodeJS.Signals): boolean;
   on(event: "message", listener: (message: LocalSpeechWorkerToParentMessage) => void): this;
-  once(
-    event: "close",
-    listener: (code: number | null, signal: NodeJS.Signals | null) => void,
-  ): this;
+  once(event: "exit", listener: (code: number | null, signal: NodeJS.Signals | null) => void): this;
 }
 
 function workerUrl(): URL {
@@ -168,16 +166,21 @@ export class LocalSpeechWorkerClient {
     if (!worker) return;
 
     await new Promise<void>((resolve, reject) => {
-      const timeout = setTimeout(
-        () => reject(new Error("Timed out waiting for dictation worker to stop")),
-        WORKER_SHUTDOWN_TIMEOUT_MS,
-      );
-      worker.once("close", () => {
-        clearTimeout(timeout);
+      let forceTimeout: ReturnType<typeof setTimeout> | null = null;
+      const gracefulTimeout = setTimeout(() => {
+        this.options.logger.warn("Dictation worker did not stop gracefully; forcing shutdown");
+        forceTimeout = setTimeout(
+          () => reject(new Error("Timed out force-stopping the dictation worker")),
+          WORKER_FORCE_SHUTDOWN_TIMEOUT_MS,
+        );
+        worker.kill("SIGKILL");
+      }, WORKER_SHUTDOWN_GRACE_MS);
+      worker.once("exit", () => {
+        clearTimeout(gracefulTimeout);
+        if (forceTimeout) clearTimeout(forceTimeout);
         resolve();
       });
-      worker.disconnect();
-      worker.kill();
+      if (worker.connected) worker.disconnect();
     });
   }
 
@@ -188,7 +191,7 @@ export class LocalSpeechWorkerClient {
     worker.on("message", (message: LocalSpeechWorkerToParentMessage) =>
       this.handleMessage(message),
     );
-    worker.once("close", (code, signal) => {
+    worker.once("exit", (code, signal) => {
       if (this.worker === worker) this.worker = null;
       const error = new Error(`Dictation worker exited (${code ?? signal ?? "unknown"})`);
       for (const pending of this.pending.values()) {

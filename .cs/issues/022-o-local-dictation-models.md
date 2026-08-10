@@ -65,6 +65,7 @@ start/stop flow remains the release blocker.
 - Selection is persisted per Host and takes effect for the next dictation session.
 - Deletion cannot remove a model in use; deleting the selected model clears selection.
 - Existing model files are never silently removed.
+- Model switching waits for the isolated worker process to exit. If native model cleanup stalls, the Host force-stops that worker and confirms process exit before activating the next model.
 
 - FireRed and SenseVoice remain offline recognizers; the product does not claim streaming or live preview.
 - Recording continues until explicit cancel or stop. Acoustic pauses do not trigger commits.
@@ -144,6 +145,7 @@ start/stop flow remains the release blocker.
 - [x] Desktop and compact browser layouts keep the composer text visible while recording.
 - [x] Active model downloads expose byte and percentage progress; clients retain the indeterminate fallback for older Hosts.
 - [x] AI refinement success/failure feedback renders above the input; failure keeps raw text and shows the server reason.
+- [x] Switching models after a real transcription stops both loaded FireRed and SenseVoice workers without surfacing a shutdown timeout.
 - [ ] Human voice-input acceptance of the explicit start/stop, final-only flow.
 
 - Base focused server lifecycle/downloader/worker tests: 21 passed.
@@ -163,9 +165,10 @@ start/stop flow remains the release blocker.
 - Final independent review found no unresolved High/Medium correctness or data-loss issue after replacing the Claude-only adapter with the existing all-Provider structured-generation path and retaining the stream-size cap.
 - PR #25 integration merged the latest `main` and resolved all eight text/modify-delete conflicts while preserving current orchestration, active-turn, input-mode, Relay onboarding, and package semantics.
 - Integration review fixed pending-start cancel/unmount settlement, server-side pending-start cancellation, worker shutdown before model deletion, model-selection source-of-truth drift, mutation/refinement error handling, archived-Agent header controls, initial model-list retry, and draft submission before model defaults finish loading.
-- Final regression evidence includes 106 daemon-client tests, 6 stream-sender tests, 8 Dictation hook tests, 2 Dictation settings browser tests, 3 New Workspace Dictation browser tests, 12 stream-manager tests, 10 speech-runtime tests, the real worker-process test, root typecheck/lint/format check, server build, and Web export. Independent re-review closed all High/Medium findings.
+- Final regression evidence includes 106 daemon-client tests, 6 stream-sender tests, 8 Dictation hook tests, 2 Dictation settings browser tests, 3 New Workspace Dictation browser tests, 12 stream-manager tests, 14 speech-runtime tests, real worker-process tests, root typecheck/lint/format check, server build, and Web export. Independent re-review closed all High/Medium findings.
 - Model download progress evidence: downloader/runtime/protocol validation tests and focused real-browser progress rendering passed; root typecheck, lint, format, and Web export remained green.
 - Refinement feedback evidence: state tests cover fail-open error retention, protocol/server tests cover optional wire errors, and a focused browser test covers success toggle placement plus visible failure reason.
+- Worker-stop regression evidence: the forced-exit unit path passed; real FireRed and SenseVoice runs each loaded the production sherpa worker, transcribed the PCM fixture, and confirmed shutdown (2/2 per model). The parent now waits for process `exit`, not stdio `close`, and force-stops native cleanup after a one-second grace period.
 - Synthetic quality smoke outputs:
   - English: `please run the type check and rebuild the server before opening the pull`
   - Mandarin: `今天我们修复了终端粘贴和工作区切换的问题请重新运行类型检查`

@@ -18,6 +18,7 @@ import type {
   LocalSpeechWorkerToParentMessage,
 } from "./worker-protocol.js";
 import { bufferToWorkerBytes } from "./worker-bytes.js";
+import { LocalSpeechWorkerClient, WorkerBackedSpeechToTextProvider } from "./worker-client.js";
 
 const modelsDir =
   process.env.BYSPACE_LOCAL_MODELS_DIR ??
@@ -171,6 +172,28 @@ workerSpeechTest(
     }
   },
   shouldDownload ? 20 * 60_000 : 120_000,
+);
+
+workerSpeechTest(
+  "stops a real loaded local speech worker",
+  async () => {
+    const client = new LocalSpeechWorkerClient({
+      logger: pino({ level: "silent" }),
+      config: { modelsDir, dictationSttModel: testModel },
+    });
+    const session = new WorkerBackedSpeechToTextProvider(client).createSession({
+      logger: pino({ level: "silent" }),
+    });
+
+    try {
+      await session.connect();
+      session.close();
+      await expect(client.shutdownAndWait()).resolves.toBeUndefined();
+    } finally {
+      client.shutdown();
+    }
+  },
+  30_000,
 );
 
 type RequestInput = LocalSpeechWorkerRequest extends infer Request
