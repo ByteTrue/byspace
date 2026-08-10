@@ -109,14 +109,12 @@ export async function scrollTimelineToOldestLoadedEdge(page: Page): Promise<void
   });
 }
 
-export async function scrollTimelineUntilOlderHistoryIsReachable(page: Page): Promise<void> {
+export async function scrollTimelineUntilPromptIsVisible(
+  page: Page,
+  prompt: string,
+): Promise<void> {
   const scroll = page.locator('[data-testid="agent-chat-scroll"]:visible').first();
-  const previousHeight = await scroll.evaluate((element) => {
-    if (!(element instanceof HTMLElement)) {
-      throw new Error("Agent chat scroll element is not an HTMLElement");
-    }
-    return element.scrollHeight;
-  });
+  const target = page.getByText(prompt, { exact: true });
 
   await page.evaluate(
     () =>
@@ -124,16 +122,32 @@ export async function scrollTimelineUntilOlderHistoryIsReachable(page: Page): Pr
         requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
       }),
   );
-  await scrollTimelineToOldestLoadedEdge(page);
-  await expect
-    .poll(async () =>
-      scroll.evaluate((element) => {
-        if (!(element instanceof HTMLElement)) {
-          throw new Error("Agent chat scroll element is not an HTMLElement");
+
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    if (await target.isVisible()) {
+      return;
+    }
+    const previousHeight = await scroll.evaluate((element) => {
+      if (!(element instanceof HTMLElement)) {
+        throw new Error("Agent chat scroll element is not an HTMLElement");
+      }
+      return element.scrollHeight;
+    });
+    await scrollTimelineToOldestLoadedEdge(page);
+    await expect
+      .poll(async () => {
+        if (await target.isVisible()) {
+          return true;
         }
-        return element.scrollHeight;
-      }),
-    )
-    .toBeGreaterThan(previousHeight);
-  await scrollTimelineToOldestLoadedEdge(page);
+        return scroll.evaluate((element, height) => {
+          if (!(element instanceof HTMLElement)) {
+            throw new Error("Agent chat scroll element is not an HTMLElement");
+          }
+          return element.scrollHeight > height;
+        }, previousHeight);
+      })
+      .toBe(true);
+  }
+
+  await expect(target).toBeVisible();
 }
