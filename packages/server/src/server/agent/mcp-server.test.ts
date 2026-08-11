@@ -608,6 +608,7 @@ function createBySpaceWorktreeForMcpTest(options: {
     agentManager: buildAgentManagerSpies() as unknown as AgentManager,
     workspaceRegistry,
     workspaceGitService,
+    checkoutContext: { byspaceHome: options.byspaceHome },
     providerSnapshotManager: createOpenCodeManager().manager,
     readDaemonConfig: () => ({ metadataGeneration: { providers: [] } }),
     gitMutation: createGitMutationService({
