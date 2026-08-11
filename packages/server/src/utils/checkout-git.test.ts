@@ -440,6 +440,18 @@ describe("checkout git utilities", () => {
     ).toContain("refs/heads/feature/new-name");
   });
 
+  it("rejects when the checked out branch no longer matches the expected branch", async () => {
+    execSync("git checkout -b feature/old-name", { cwd: repoDir });
+
+    await expect(
+      renameCurrentBranch(repoDir, "feature/new-name", "feature/different-name"),
+    ).rejects.toThrow("Current branch changed");
+
+    expect(execSync("git branch --show-current", { cwd: repoDir }).toString().trim()).toBe(
+      "feature/old-name",
+    );
+  });
+
   it("fails when renaming the checked out branch to an existing branch", async () => {
     execSync("git branch feature/new-name", { cwd: repoDir });
     execSync("git checkout -b feature/old-name", { cwd: repoDir });

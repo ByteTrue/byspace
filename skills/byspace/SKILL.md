@@ -32,6 +32,10 @@ printf '%s' '{"statuses":["running"],"limit":20}' \
 
 **`archive_workspace`** — `{ workspaceId }`. Archives the workspace, its agents, and its terminals. Local directories remain; BySpace removes an owned worktree only after its final active workspace reference is archived.
 
+**`rename_workspace`** — `{ title, workspaceId? }`. Sets the user-visible title. Omit `workspaceId` to rename your current workspace.
+
+**`rename_branch`** — `{ branchName }`. Renames the current Git branch only when it is still the unpublished BySpace-generated worktree branch, including its one-time initial auto-name. It rejects default, published, upstream-tracking, PR/MR, manually renamed, non-BySpace, and conflicting branches. This is intentionally independent from `rename_workspace`: keep a successful title rename even when branch rename is ineligible, and report why the branch was skipped.
+
 Worktree creation and reference accounting are implementation details of `isolation: "worktree"`.
 
 ## Agents

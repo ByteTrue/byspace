@@ -12,6 +12,7 @@ import {
 import type { GitMutationService } from "./session/git-mutation/git-mutation-service.js";
 import type { WorkspaceGitService } from "./workspace-git-service.js";
 import type { PersistedWorkspaceRecord, WorkspaceRegistry } from "./workspace-registry.js";
+import type { CheckoutContext } from "../utils/checkout-git.js";
 import {
   generateBranchNameFromFirstAgentContext,
   type GeneratedWorkspaceName,
@@ -32,6 +33,7 @@ interface WorkspaceAutoNameOptions {
   emitWorkspaceUpdateForCwd: (cwd: string) => Promise<void>;
   emitWorkspaceUpdateForWorkspaceId: (workspaceId: string) => Promise<void>;
   logger: pino.Logger;
+  checkoutContext?: CheckoutContext;
   generateWorkspaceName?: WorkspaceNameGenerator;
 }
 
@@ -49,6 +51,7 @@ export class WorkspaceAutoName {
   private readonly emitWorkspaceUpdateForCwd: (cwd: string) => Promise<void>;
   private readonly emitWorkspaceUpdateForWorkspaceId: (workspaceId: string) => Promise<void>;
   private readonly logger: pino.Logger;
+  private readonly checkoutContext: CheckoutContext | undefined;
   private readonly generateWorkspaceName: WorkspaceNameGenerator;
 
   constructor(options: WorkspaceAutoNameOptions) {
@@ -61,6 +64,7 @@ export class WorkspaceAutoName {
     this.emitWorkspaceUpdateForCwd = options.emitWorkspaceUpdateForCwd;
     this.emitWorkspaceUpdateForWorkspaceId = options.emitWorkspaceUpdateForWorkspaceId;
     this.logger = options.logger;
+    this.checkoutContext = options.checkoutContext;
     this.generateWorkspaceName =
       options.generateWorkspaceName ?? generateBranchNameFromFirstAgentContext;
   }
@@ -122,6 +126,7 @@ export class WorkspaceAutoName {
           return nextGenerated?.branch ?? null;
         });
       },
+      checkoutContext: this.checkoutContext,
     });
 
     if (!generated) {

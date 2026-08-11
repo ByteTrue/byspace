@@ -1424,6 +1424,8 @@ export class VoiceAssistantWebSocketServer {
         cliCallerAgentContext: true,
         // COMPAT(cliOrchestrationTools): added in v0.5.0, remove after 2027-02-07.
         cliOrchestrationTools: true,
+        // COMPAT(workspaceAgentRename): added in v0.5.0, remove gate after 2027-02-11.
+        workspaceAgentRename: true,
         // COMPAT(workspaceMultiplicity): added in v0.1.97, drop the gate when floor >= v0.1.97
         workspaceMultiplicity: true,
         // COMPAT(projectRemove): added in v0.1.97, drop the gate when floor >= v0.1.97.

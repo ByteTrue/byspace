@@ -992,6 +992,7 @@ export const ja: TranslationResources = {
         copyPath: "パスをコピー",
         copyBranchName: "ブランチ名をコピー",
         rename: "ワークスペースの名前を変更",
+        renameWithAgent: "エージェントで名前を変更",
         archive: "アーカイブ",
         archiveWorkspace: "ワークスペースをアーカイブ",
         hideFromSidebar: "サイドバーから非表示",
@@ -1014,6 +1015,9 @@ export const ja: TranslationResources = {
         workspacePathUnavailable: "ワークスペースパスが利用できません",
         pathCopied: "パスをコピーしました",
         branchNameCopied: "ブランチ名をコピーしました",
+        agentRenamePromptCopied:
+          "プロンプトをコピーしました。このワークスペースを最もよく理解しているエージェントに貼り付けてください。",
+        agentRenamePromptCopyFailed: "プロンプトをコピーできませんでした",
         hostDisconnected: "ホストが接続されていません",
         hideFailed: "ワークスペースの非表示に失敗しました",
         archiveFailed: "ワークスペースのアーカイブに失敗しました",

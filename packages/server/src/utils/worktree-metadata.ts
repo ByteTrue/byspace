@@ -34,6 +34,7 @@ const BySpaceWorktreeMetadataV2Schema = z.object({
         status: z.literal("attempted"),
         placeholderBranchName: z.string().min(1),
         attemptedAt: z.string().min(1),
+        renamedBranchName: z.string().min(1).optional(),
       }),
     ])
     .optional(),
@@ -274,6 +275,37 @@ export function markBySpaceWorktreeFirstAgentBranchAutoNameAttempted(
       placeholderBranchName: current.firstAgentBranchAutoName.placeholderBranchName,
       attemptedAt: options.attemptedAt ?? new Date().toISOString(),
     },
+  };
+  writeBySpaceWorktreeMetadataFile(worktreeRoot, next);
+  return next;
+}
+
+export function recordBySpaceWorktreeFirstAgentBranchAutoName(
+  worktreeRoot: string,
+  renamedBranchName: string,
+): BySpaceWorktreeMetadata | null {
+  const current = readBySpaceWorktreeMetadata(worktreeRoot);
+  if (
+    !current ||
+    current.version !== 2 ||
+    (current.firstAgentBranchAutoName?.status !== "pending" &&
+      current.firstAgentBranchAutoName?.status !== "attempted")
+  ) {
+    return current;
+  }
+  const firstAgentBranchAutoName =
+    current.firstAgentBranchAutoName.status === "pending"
+      ? {
+          status: "attempted" as const,
+          placeholderBranchName: current.firstAgentBranchAutoName.placeholderBranchName,
+          attemptedAt: new Date().toISOString(),
+          renamedBranchName,
+        }
+      : { ...current.firstAgentBranchAutoName, renamedBranchName };
+
+  const next: BySpaceWorktreeMetadata = {
+    ...current,
+    firstAgentBranchAutoName,
   };
   writeBySpaceWorktreeMetadataFile(worktreeRoot, next);
   return next;

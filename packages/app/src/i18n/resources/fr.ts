@@ -1012,6 +1012,7 @@ export const fr: TranslationResources = {
         copyPath: "Copier le chemin",
         copyBranchName: "Copier le nom de la branche",
         rename: "Renommer l'espace de travail",
+        renameWithAgent: "Renommer avec un agent",
         archive: "Archive",
         archiveWorkspace: "Archiver l’espace de travail",
         hideFromSidebar: "Masquer de la barre latérale",
@@ -1034,6 +1035,9 @@ export const fr: TranslationResources = {
         workspacePathUnavailable: "CheminWorkspacenon disponible",
         pathCopied: "Chemin copié",
         branchNameCopied: "Nom de la succursale copié",
+        agentRenamePromptCopied:
+          "Prompt copié. Collez-le dans l’agent qui comprend le mieux cet espace de travail.",
+        agentRenamePromptCopyFailed: "Échec de la copie du prompt",
         hostDisconnected: "Hostn'est pas connecté",
         hideFailed: "Échec du masquage de l'espace de travail",
         archiveFailed: "Échec de l'archivage de l'espace de travail",

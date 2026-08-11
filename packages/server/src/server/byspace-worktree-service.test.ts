@@ -222,6 +222,7 @@ test("renames an eligible unnamed branch-off worktree once on first agent contex
 
   const first = await attemptFirstAgentBranchAutoName({
     cwd: created.worktree.worktreePath,
+    checkoutContext: { byspaceHome: path.join(tempDir, ".byspace") },
     firstAgentContext: { prompt: "Build the agent context name" },
     generateBranchNameFromContext: async ({ firstAgentContext }) =>
       firstAgentContext.prompt ? "renamed-from-agent-context" : null,
@@ -249,6 +250,7 @@ test("renames an eligible unnamed branch-off worktree once on first agent contex
 
   const second = await attemptFirstAgentBranchAutoName({
     cwd: created.worktree.worktreePath,
+    checkoutContext: { byspaceHome: path.join(tempDir, ".byspace") },
     firstAgentContext: { prompt: "Try another name" },
     generateBranchNameFromContext: async () => "second-agent-name",
   });
@@ -282,6 +284,7 @@ test("falls back to a numeric suffix when the desired branch name already exists
 
   const result = await attemptFirstAgentBranchAutoName({
     cwd: created.worktree.worktreePath,
+    checkoutContext: { byspaceHome: path.join(tempDir, ".byspace") },
     firstAgentContext: { prompt: "Build the agent context name" },
     generateBranchNameFromContext: async () => "renamed-from-agent-context",
   });
@@ -322,6 +325,7 @@ test("renames the branch even when the app supplies a random placeholder slug", 
 
   await attemptFirstAgentBranchAutoName({
     cwd: created.worktree.worktreePath,
+    checkoutContext: { byspaceHome: path.join(tempDir, ".byspace") },
     firstAgentContext: { prompt: "Investigate the failing login flow" },
     generateBranchNameFromContext: async ({ firstAgentContext }) =>
       firstAgentContext.prompt === "Investigate the failing login flow"
@@ -369,6 +373,7 @@ test("renames the branch from a github_pr attachment when no prompt is supplied"
 
   await attemptFirstAgentBranchAutoName({
     cwd: created.worktree.worktreePath,
+    checkoutContext: { byspaceHome: path.join(tempDir, ".byspace") },
     firstAgentContext: {
       attachments: [
         {
@@ -413,6 +418,7 @@ test("leaves the branch alone when generated branch text is invalid", async () =
   await expect(
     attemptFirstAgentBranchAutoName({
       cwd: created.worktree.worktreePath,
+      checkoutContext: { byspaceHome: path.join(tempDir, ".byspace") },
       firstAgentContext: { prompt: "Name this branch" },
       generateBranchNameFromContext: async () => "Invalid Branch Name",
     }),
@@ -465,6 +471,7 @@ test("does not mark checkout branch worktrees as eligible for first-agent rename
   await expect(
     attemptFirstAgentBranchAutoName({
       cwd: created.worktree.worktreePath,
+      checkoutContext: { byspaceHome: path.join(tempDir, ".byspace") },
       firstAgentContext: { prompt: "Rename checkout branch" },
       generateBranchNameFromContext: async () => "must-not-rename",
     }),
@@ -501,6 +508,7 @@ test("does not mark GitHub PR checkout worktrees as eligible for first-agent ren
   await expect(
     attemptFirstAgentBranchAutoName({
       cwd: created.worktree.worktreePath,
+      checkoutContext: { byspaceHome: path.join(tempDir, ".byspace") },
       firstAgentContext: { prompt: "Rename PR checkout" },
       generateBranchNameFromContext: async () => "must-not-rename",
     }),

@@ -95,6 +95,7 @@ import { createGitHubService } from "../services/github-service.js";
 import {
   createBySpaceWorktree as createRegisteredBySpaceWorktree,
   createLocalCheckoutWorkspace,
+  renameWorkspaceBranch,
 } from "./byspace-worktree-service.js";
 import { createBySpaceWorktreeWorkflow } from "./worktree-session.js";
 import { DownloadTokenStore } from "./file-download/token-store.js";
@@ -879,21 +880,25 @@ export async function createBySpaceDaemon(
   const emitExternalSessionMessage = (message: SessionOutboundMessage) => {
     wsServer?.broadcast(wrapSessionMessage(message));
   };
+  const checkoutContext = {
+    byspaceHome: config.byspaceHome,
+    worktreesRoot: config.worktreesRoot,
+    logger,
+  };
+  const gitMutation = createGitMutationService({ workspaceGitService, logger });
   const workspaceAutoName = new WorkspaceAutoName({
     agentManager,
     workspaceRegistry,
     workspaceGitService,
     providerSnapshotManager,
     readDaemonConfig: () => ({ metadataGeneration: daemonConfigStore.get().metadataGeneration }),
-    gitMutation: createGitMutationService({
-      workspaceGitService,
-      logger,
-    }),
+    gitMutation,
     emitWorkspaceUpdateForCwd: emitWorkspaceUpdateForCwdExternal,
     emitWorkspaceUpdateForWorkspaceId: async (workspaceId) => {
       await emitWorkspaceUpdatesExternal([workspaceId]);
     },
     logger,
+    checkoutContext,
   });
 
   setupAutoArchiveOnMerge({
@@ -1163,6 +1168,11 @@ export async function createBySpaceDaemon(
     stopWorkspaceSetup: (workspaceId) => workspaceSetupRuntime.stop(workspaceId),
     ensureWorkspaceForCreate: createAgentCommandDependencies.ensureWorkspaceForCreate,
     createBySpaceWorktree: createAgentCommandDependencies.createBySpaceWorktree,
+    renameWorkspaceBranch: async (input) => {
+      const renamed = await renameWorkspaceBranch({ ...input, checkoutContext });
+      await gitMutation.notifyGitMutation(input.cwd, "rename-branch");
+      return renamed;
+    },
     byspaceHome: config.byspaceHome,
     worktreesRoot: config.worktreesRoot,
     callerAgentId: runtime.callerAgentId,
