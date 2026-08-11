@@ -33,8 +33,8 @@ created: 2026-08-11
 
 ### Web
 
-1. App CI job 在 typecheck、unit tests 与 Web export 成功后上传 `packages/app/dist`，并记录源 SHA/digest。
-2. Deploy App 根据 release SHA 下载该 artifact，只执行 tag/npm preflight、必要的部署工具安装和 Cloudflare Pages 上传。
+1. CI 的 release artifact job 执行唯一一次 Web export，在同一 job 中将该 dist 嵌入 npm tarball，并分别上传 Web/npm artifact 及源 SHA/digest。App typecheck 与 unit tests 继续作为并行的完整 CI 门禁。
+2. Deploy App 根据 release SHA 下载该 Web artifact，只执行 tag/npm preflight、必要的部署工具安装和 Cloudflare Pages 上传。
 3. 部署阶段不得重新 export；artifact 缺失或身份不符时失败。
 
 Relay 保持现有同 SHA 部署与 post-deploy verification；它当前约 30 秒，不进入本 Issue 的构建复用。
@@ -61,14 +61,14 @@ Relay 保持现有同 SHA 部署与 post-deploy verification；它当前约 30 �
 ## 关闭时
 
 - 回写候选：Epic spec 固化最终 artifact 身份链、耗时结果和实际 retention。
-- 关闭判断：三平台与发布消费同一 npm artifact，App CI 与 Pages 使用同一 Web artifact，真实渠道证明完整。
+- 关闭判断：三平台与发布消费同一 npm artifact，CI release artifact job 与 Pages 使用同一 Web artifact，真实渠道证明完整。
 - 遗留：Playwright 关键路径由 Issue 003 处理；Relay 自身没有证据支持继续优化。
 
 ## Implementation
 
-- `app-tests` performs the only Web export, archives `packages/app/dist`, and emits an exact commit/version/SHA-256 manifest.
-- `package-artifact` waits for that Web artifact, verifies and extracts it, then calls `pack:byspace -- --skip-web-export` so the daemon embeds the same distribution rather than exporting again.
-- The package job creates one npm tarball and manifest; Linux, macOS, and Windows download, verify, globally install, and smoke that same tarball without repacking.
+- `package-artifact` starts independently of `app-tests`, performs the only Web export through the default `pack:byspace` path, embeds that exact dist in the daemon package, then emits separate Web/npm artifacts with exact commit/version/SHA-256 manifests.
+- App typecheck and unit tests remain independent required jobs; artifact creation before those gates finish grants no release authority because publishers select only an overall-successful exact-SHA CI run.
+- Linux, macOS, and Windows download, verify, globally install, and smoke the one npm tarball without repacking; distribution jobs restore the npm cache but never consume repository `node_modules`.
 - `Publish npm` selects a successful push-event CI run by exact SHA, downloads and verifies its tarball, publishes it with the existing Trusted Publishing boundary, then downloads the registry tarball and verifies the same digest. Already-published reruns follow the same registry digest proof.
 - `Deploy App` selects the same successful exact-SHA CI run, downloads and verifies its Web artifact, installs Wrangler from the committed lockfile, and deploys without rebuilding.
 - Artifact absence, wrong commit/run selection, version mismatch, digest mismatch, and semantic archive mismatch fail closed. Artifacts are retained for 14 days; an expired artifact requires rerunning exact-SHA CI before release.
@@ -79,4 +79,6 @@ Relay 保持现有同 SHA 部署与 post-deploy verification；它当前约 30 �
 - exact-SHA `d78c0b9e9` 的 CI run `31484477142` 已生成并回读 Web artifact（SHA-256 `2fe6d34d…b5b4`）和 npm artifact（SHA-256 `9fa3443b…3f08`）；npm 内嵌的 37 个未压缩 Web 文件与 canonical Web artifact 逐字节一致。
 - 同一 npm tarball 的 manifest 校验与全局安装 smoke 在 Ubuntu、macOS、Windows 均通过；app artifact job 4:41，package artifact job 2:08，Linux/macOS distribution 各约 45 秒，Windows 3:22。
 - 该 workflow 因独立的 Windows shortstat 后台测试竞态而总体失败，因此 npm/App publisher 不会选择它；这同时验证了“只接受 successful exact-SHA push CI”的失败关闭边界。
-- 真实 cross-workflow artifact download、npm registry digest round-trip、Pages promotion、Beta/Stable tuple 与 CI-green 后部署耗时仍待成功 exact-SHA CI 和真实渠道发布。
+- exact-SHA `c2e5aa66f` 的首次执行中，同一 tarball 在 Linux/macOS 通过，Windows 在全局安装后遇到一次 daemon readiness 超时；只重跑失败 job 时同一 digest 的 Windows smoke 在 4:31 内通过，run 最终 success。脚本现会在超时时输出 bounded status/daemon log，Windows job 同时恢复 npm cache；没有放宽 20 秒 readiness 门禁。
+- 该 run 还证明 `app-tests`（5:03）→ `package-artifact`（2:12）串行后再启动 Windows install 会制造新的关键路径，因此 artifact ownership 已反转为独立 `package-artifact` 一次构建 Web/npm，App tests 保持并行门禁。
+- 新 ownership 的 exact-SHA 三平台 CI、真实 cross-workflow promotion、npm registry digest round-trip、Pages、Beta/Stable tuple 与 CI-green 后部署耗时仍待后续成功 run 和真实渠道发布。

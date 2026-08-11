@@ -2,7 +2,7 @@
 kind: issue
 title: "恢复 main CI 可信基线"
 type: bug
-status: open
+status: closed
 created: 2026-08-11
 ---
 
@@ -57,6 +57,8 @@ GitHub Actions run `31471036867` 因此在 Ubuntu 和 Windows 的同一测试失
 - exact-SHA `1149b75a9` 的 push CI run `31482108162` 完整全绿：workflow 墙钟 16:58（10:25:06–10:42:04 UTC），Ubuntu server 3:03，Windows server 7:32；Playwright 四个 job 分别 16:54、13:18、13:25、16:06。原 stale assertion 与两个首用例超时均未复现。
 - exact-SHA `d78c0b9e9` 的 run `31484477142` 又暴露一处独立 Windows 测试竞态：后台 shortstat Git 读取在满载 suite 下超过测试自制的 500ms 轮询窗口，测试先报超时，`afterEach` 随即在 Git 仍占用仓库时删除目录并触发 `EBUSY`。
 - 测试现改为使用生产入口已有的 `onComplete` 回调：先断言调用立即返回且 cache 未命中，再等待真实后台读取完成并断言缓存 `null`。这既保留非阻塞契约，又在清理临时仓库前确定性收束 Git 子进程；定向测试 1/1 通过，未修改生产代码。
+- exact-SHA `c2e5aa66f` 的 run `31486753926` 中 Ubuntu server（2:56）和 Windows server（6:57）都通过，stale refresh assertion 与 shortstat 清理竞态均未复现；失败的 Windows package smoke 对同一 tarball 单独重跑后通过，run 最终 conclusion 为 success。
+- 可复算的优化前完整绿色基线固定为 run `31482108162` 的 16:58；后续 artifact/shard 变更另行采样，不回写污染该基线。
 
 ## 验证
 

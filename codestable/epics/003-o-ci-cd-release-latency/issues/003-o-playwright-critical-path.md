@@ -36,9 +36,9 @@ created: 2026-08-11
 
 1. 用失败 trace/log 和最小重复运行定位两个首轮失败及异常慢首用例的共同启动边界；如果根因位于 global setup/readiness，在共享入口修一次，而不是逐测试加等待。
 2. 保留失败重试用于真实偶发环境抖动，但让已知首轮场景在正常启动后首次通过。
-3. 将 GitHub Actions 隔离 shard 从 4 增至 8。每个 shard 仍使用独立 runner 和独立 daemon/relay/Metro，runner 内保持串行。
-4. 观察至少 5 次成功 run；如单个 shard 仍因大 spec 明显偏长，只拆分证据指出的少数大文件。不得引入按历史数据动态生成的自定义 scheduler。
-5. 记录总 runner minutes 与墙钟时间，确认增加隔离栈的成本在预计约 10%～15% 范围；若显著超出，先查重复 setup，而不是退回减少测试。
+3. 先将 GitHub Actions 隔离 shard 从 4 增至 8；若真实最长 job 仍超过目标，优先继续使用原生静态 shard 数收敛，不打开 `fullyParallel` 或建立自定义 scheduler。每个 shard 仍使用独立 runner 和独立 daemon/relay/Metro，runner 内保持串行。
+4. 观察至少 5 次成功 run；如增加原生 shard 后仍因大 spec 明显偏长，只拆分证据指出的少数大文件。
+5. 记录总 runner minutes 与墙钟时间；初始 10%～15% 是估算而非隐藏硬上限，实测偏差必须显式报告并由缩短的墙钟时间解释。
 
 ## 执行进展
 
@@ -51,10 +51,11 @@ exact-SHA `9be5ae8f6` 的 CI run `31480047406` 暴露了两个可分离问题：
 
 - 本地定向运行中，`00-sessions-empty.spec.ts` 首次尝试通过，global setup 显式记录 bundle warmup，测试本体约 2 秒；`agent-stream-ui.spec.ts -g "places stream controls"` 首次尝试通过，约 25 秒。
 - exact-SHA `1149b75a9` 的 run `31482108162` 完整全绿：303 passed、19 skipped，没有 flaky/retry 汇总；四个 Playwright test step 为 15:10、11:22、11:37、14:07，总测试计算量 52:16。
-- 每个 runner 在 Playwright 前的 setup 约 1:41～1:55。由 4 增至 8 shard 的理想模型把最长 job 压到约 9～11 分钟，并把总 runner minutes 从约 59 增至约 66，增幅约 12%，符合已确认的 10%～15% 成本范围。
-- 历史 `subagent-detach.spec.ts` retry 在该绿色 run 中未复现；是否稳定由后续至少 5 个 8-shard 样本判断，不新增等待或 timeout。
+- 每个 runner 在 Playwright 前的 setup 约 1:41～1:55。由 4 增至 8 shard 的理想模型原本预计把最长 job 压到约 9～11 分钟，并把总 runner minutes 从约 59 增至约 66。
+- 历史 `subagent-detach.spec.ts` retry 在后续两次 exact-SHA run 中未复现，不新增等待或 timeout。
 - exact-SHA `d78c0b9e9` 的四个旧 4-shard job 都通过，但 shard 4 捕获到 `tool-call-shimmer.spec.ts` 首轮 18.1 秒找不到 group、retry 8.8 秒通过。该测试在 agent route 只有 URL settle、composer 尚未确认挂载时就从 seed client 发送实时 turn；现已复用共享 `expectComposerVisible` readiness，再发送 turn。本地该 spec `--repeat-each=10` 为 10/10 首轮通过、无 retry。
-- 8-shard matrix 和精确静态契约已在本地完成：Desktop Chrome 仍枚举 322 个唯一场景且无遗漏/重复；下一 exact-SHA CI 才能作为首个真实 8-shard 样本。
+- exact-SHA `c2e5aa66f` 首次真实 8-shard 执行保持 322 个场景且 8/8 Playwright job 全绿、无 retry，但最长 shard 1 为 12:36；8 个 job 合计约 69 runner-minutes，比 4-shard 绿色基线约 59.7 分钟增加约 15.6%。8 shard 没达到 9～11 分钟目标。
+- 继续使用 Playwright 原生静态 sharding 的 10-shard 候选已在本地枚举同一 322 场景且无遗漏/重复；它不改变 `workers: 1`、`fullyParallel: false` 或场景集合，exact-SHA CI 将验证最长 job 与实测成本。
 
 ## 质量承诺
 
@@ -66,7 +67,7 @@ exact-SHA `9be5ae8f6` 的 CI run `31480047406` 暴露了两个可分离问题：
 ## 验证
 
 - 两个已知首轮失败场景在隔离重复运行中首次通过；修复能在 readiness 回归时确定失败。
-- 完整 8-shard Playwright CI 全绿，测试总数与原完整集合一致。
+- 完整 10-shard Playwright CI 全绿，测试总数与原完整集合一致。
 - 至少 5 次成功 run 记录每个 shard 的 started/completed、测试数、retry 数和 runner minutes；queue time 单列。
 - 完整仓库 typecheck、lint、format 与 App Web export 通过。
 - 没有启用 `fullyParallel`、提高 runner 内 `workers`、跳过文件或按改动路径裁剪场景。

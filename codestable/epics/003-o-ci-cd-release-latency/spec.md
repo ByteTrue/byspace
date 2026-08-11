@@ -31,8 +31,8 @@ release commit
       │
       ▼
 exact-SHA CI
-  ├─ app tests/build ─> 唯一 Web dist ─> package build ─> 唯一 npm tarball ─> Linux/macOS/Windows smoke
-  ├─ Playwright 全量场景
+  ├─ package build ─> 唯一 Web dist + npm tarball ─> Linux/macOS/Windows smoke
+  ├─ App typecheck/unit tests 与 Playwright 全量场景
   └─ 其余完整门禁
       │ 全绿
       ▼
@@ -44,13 +44,13 @@ immutable tag
 
 npm package 只在 CI 中生成一次。三个操作系统下载并 smoke 同一 tarball；Publisher 从该 exact-SHA 的成功 CI run 下载同一 artifact，再执行 Trusted Publishing。CI 负责承接原 Publisher `release:check` 中仍有独立价值的 package 结构、版本与 release verification 检查。artifact 缺失、过期、来源 SHA 不符、版本不符或 digest 不符时失败关闭，禁止静默重建另一份产物。
 
-Web `dist` 只在 App CI job 中生成一次。App Deploy 从 exact-SHA CI run 下载该 artifact 并部署，不再重新 typecheck/export。Relay 当前部署约 30 秒且没有同量级重复构建，暂不优化。
+Web `dist` 只在 release artifact job 中生成一次，并在同一 job 中嵌入 npm tarball；App tests 作为并行门禁继续存在。App Deploy 从 exact-SHA CI run 下载该 artifact 并部署，不再重新 typecheck/export。Relay 当前部署约 30 秒且没有同量级重复构建，暂不优化。
 
 ### 全量测试不变，缩短 Playwright 最长 shard
 
 当前 Playwright 使用 4 个彼此隔离的 runner，每个 runner 保持 `workers: 1`、`fullyParallel: false`，避免共享 daemon/relay/Metro 栈产生跨测试竞争。历史成功 run 的四个测试阶段约为 16:24、11:30、12:24、14:00；随后一次 run 的两个首用例各耗约 72 秒失败、retry 后约 8 秒通过。首用例根因修复后的 exact-SHA run `31482108162` 完整全绿，但四个 Playwright job 仍需 16:54、13:18、13:25、16:06，关键路径优化仍成立。
 
-先消除首轮 retry 的真实原因，再把隔离 shard 增至 8；不打开同一栈内并发，不减少场景，不做 path-based selective CI。若 8 shard 仍明显失衡，只拆分少数过大的 spec 文件；不先建立自定义调度器。
+先消除首轮 retry 的真实原因，再把隔离 shard 增至 8；首次实测保持全量场景但最长 job 仍为 12:36，因此继续用 Playwright 原生静态 sharding 收敛到 10。全过程不打开同一栈内并发、不减少场景、不做 path-based selective CI；如 10 shard 仍因大 spec 明显失衡，才拆分少数有证据的大文件，不建立自定义调度器。
 
 ### 质量约束与取舍
 
@@ -70,7 +70,7 @@ Web `dist` 只在 App CI job 中生成一次。App Deploy 从 exact-SHA CI run �
 
 ### Issues
 
-- [ ] `issues/001-o-restore-ci-baseline.md`：修正 Git 刷新异步 Forge 行为留下的旧测试断言，恢复 exact-SHA CI，并记录可复算基线。
+- [x] `issues/001-x-restore-ci-baseline.md`：修正 Git 刷新异步 Forge 行为留下的旧测试断言，恢复 exact-SHA CI，并记录可复算基线。
 - [ ] `issues/002-o-single-build-release-artifacts.md`：让三平台 smoke、npm Publisher 和 App Deploy 消费 CI 中唯一构建的 artifact。
 - [ ] `issues/003-o-playwright-critical-path.md`：消除首轮 retry 税，增加隔离 shard，在保留全量场景的前提下压缩最长 job。
 
@@ -92,7 +92,7 @@ Issue 002 和 003 在 Issue 001 恢复可信基线后可以并行推进；最终
 
 - 当前 `main` CI 回到绿色，Git 刷新的本地先响应、Forge 后更新行为有正确测试。
 - Linux、macOS、Windows smoke 的 npm tarball digest 相同，npm 实际发布的也是该 artifact。
-- App CI 构建的 Web artifact 与 Cloudflare Pages 实际部署输入相同；部署阶段不重新 export。
+- CI release artifact job 构建的 Web artifact 与 Cloudflare Pages 实际部署输入相同；部署阶段不重新 export。
 - Stable/Beta exact-SHA、不可变 Tag、npm dist-tag、Pages 与 Relay 隔离规则全部保持。
 - 至少 5 次成功 CI 样本证明完整 CI runner 执行时间中位数不高于 11 分钟；外部排队单独列出，不作为单次硬门。
 - 一次真实 Beta 和下一次真实 Stable 发布分别证明完整 tuple；如 Stable 尚无发布需求，Epic 保持开放，不为验收制造版本。

@@ -153,16 +153,17 @@ async function reservePort() {
 
 function waitForDaemon(env) {
   const deadline = Date.now() + 20_000;
+  let lastResult;
   while (Date.now() < deadline) {
-    const result = spawnBinary(["daemon", "status", "--json"], {
+    lastResult = spawnBinary(["daemon", "status", "--json"], {
       cwd: root,
       env,
       encoding: "utf8",
       timeout: 10_000,
     });
-    if (result.status === 0) {
+    if (lastResult.status === 0) {
       try {
-        const status = JSON.parse(result.stdout);
+        const status = JSON.parse(lastResult.stdout);
         if (status.localDaemon === "running" && status.connectedDaemon === "reachable")
           return status;
       } catch {
@@ -171,7 +172,13 @@ function waitForDaemon(env) {
     }
     sleep(250);
   }
-  throw new Error("Packaged daemon did not become ready within 20 seconds");
+  const daemonLogPath = join(env.BYSPACE_HOME, "daemon.log");
+  const daemonLog = existsSync(daemonLogPath)
+    ? readFileSync(daemonLogPath, "utf8").slice(-20_000)
+    : "<daemon.log was not created>";
+  throw new Error(
+    `Packaged daemon did not become ready within 20 seconds\nLast status exit: ${String(lastResult?.status)}\nLast status stdout: ${lastResult?.stdout ?? ""}\nLast status stderr: ${lastResult?.stderr ?? ""}\nDaemon log:\n${daemonLog}`,
+  );
 }
 
 let daemonStarted = false;
