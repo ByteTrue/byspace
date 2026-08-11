@@ -5,6 +5,8 @@ import {
   type HostBadgeDisplay,
   type HostColor,
 } from "@/hosts/appearance";
+import { WorkspaceMetaRow } from "@/components/sidebar/workspace-meta-row";
+import { identityColor } from "@/styles/identity-colors";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -295,22 +297,88 @@ export function HostUsagePage({ serverId }: { serverId: string }) {
   );
 }
 
+function HostColorSwatch({ color }: { color: HostColor }) {
+  const swatchStyle = useMemo(
+    () => [
+      styles.appearanceSwatch,
+      color === "none" ? null : { backgroundColor: identityColor(color) },
+    ],
+    [color],
+  );
+  return <View style={swatchStyle} />;
+}
+
 function HostAppearanceOption<Value extends string>({
   value,
   selected,
   label,
+  leading,
   onSelect,
 }: {
   value: Value;
   selected: boolean;
   label: string;
+  leading?: React.ReactElement;
   onSelect: (value: Value) => void | Promise<void>;
 }) {
   const handleSelect = useCallback(() => void onSelect(value), [onSelect, value]);
   return (
-    <DropdownMenuItem selected={selected} onSelect={handleSelect}>
+    <DropdownMenuItem selected={selected} leading={leading} onSelect={handleSelect}>
       {label}
     </DropdownMenuItem>
+  );
+}
+
+function HostColorAppearanceOption({
+  value,
+  selected,
+  label,
+  onSelect,
+}: {
+  value: HostColor;
+  selected: boolean;
+  label: string;
+  onSelect: (value: HostColor) => void | Promise<void>;
+}) {
+  const leading = useMemo(() => <HostColorSwatch color={value} />, [value]);
+  return (
+    <HostAppearanceOption
+      value={value}
+      selected={selected}
+      label={label}
+      leading={leading}
+      onSelect={onSelect}
+    />
+  );
+}
+
+function HostBadgePreview({
+  host,
+  badgeDisplay,
+}: {
+  host: HostProfile;
+  badgeDisplay: HostBadgeDisplay;
+}) {
+  const { t } = useTranslation();
+  const hostBadge = useMemo(
+    () =>
+      badgeDisplay === "hidden"
+        ? null
+        : {
+            serverId: host.serverId,
+            label: host.label,
+            color: host.appearance.color,
+            showLabel: badgeDisplay === "name",
+          },
+    [badgeDisplay, host.appearance.color, host.label, host.serverId],
+  );
+  return (
+    <View style={styles.appearancePreview} testID="host-appearance-preview">
+      <Text style={styles.appearancePreviewTitle} numberOfLines={1}>
+        {t("settings.host.appearance.preview.workspaceName")}
+      </Text>
+      <WorkspaceMetaRow hostBadge={hostBadge} prHint={null} serviceSummary={null} />
+    </View>
   );
 }
 
@@ -325,6 +393,8 @@ function HostAppearanceSection({ host }: { host: HostProfile }) {
       appearance: host.appearance,
       isLocalHost: host.serverId === localServerId,
     }) ?? "name";
+  const colorLabel = t(`settings.host.appearance.color.options.${color}`);
+  const badgeLabel = t(`settings.host.appearance.badge.options.${badgeDisplay}`);
   const handleColor = useCallback(
     async (next: HostColor) => {
       try {
@@ -350,21 +420,31 @@ function HostAppearanceSection({ host }: { host: HostProfile }) {
     <SettingsSection title={t("settings.host.appearance.title")}>
       <View style={settingsStyles.card}>
         <View style={styles.appearanceRow}>
+          <Text style={styles.appearanceLabel}>{t("settings.host.appearance.name.label")}</Text>
+          <View style={styles.appearanceNameValue}>
+            <Text style={styles.appearanceNameText} numberOfLines={1}>
+              {host.label}
+            </Text>
+            <HostRenameButton host={host} />
+          </View>
+        </View>
+        <View style={styles.appearanceRow}>
           <Text style={styles.appearanceLabel}>{t("settings.host.appearance.color.label")}</Text>
           <DropdownMenu>
             <DropdownMenuTrigger
               style={styles.appearanceTrigger}
               accessibilityRole="button"
-              accessibilityLabel={t("settings.host.appearance.color.label")}
+              accessibilityLabel={t("settings.host.appearance.color.accessibilityLabel", {
+                value: colorLabel,
+              })}
             >
-              <Text style={styles.appearanceValue}>
-                {t(`settings.host.appearance.color.options.${color}`)}
-              </Text>
+              <HostColorSwatch color={color} />
+              <Text style={styles.appearanceValue}>{colorLabel}</Text>
               <ThemedChevronRight uniProps={chevronProps} />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" width={180}>
               {HOST_COLORS.map((option) => (
-                <HostAppearanceOption
+                <HostColorAppearanceOption
                   key={option}
                   value={option}
                   selected={option === color}
@@ -376,18 +456,16 @@ function HostAppearanceSection({ host }: { host: HostProfile }) {
           </DropdownMenu>
         </View>
         <View style={styles.appearanceRow}>
-          <Text style={styles.appearanceLabel}>
-            {t("settings.host.appearance.badgeDisplay.label")}
-          </Text>
+          <Text style={styles.appearanceLabel}>{t("settings.host.appearance.badge.label")}</Text>
           <DropdownMenu>
             <DropdownMenuTrigger
               style={styles.appearanceTrigger}
               accessibilityRole="button"
-              accessibilityLabel={t("settings.host.appearance.badgeDisplay.label")}
+              accessibilityLabel={t("settings.host.appearance.badge.accessibilityLabel", {
+                value: badgeLabel,
+              })}
             >
-              <Text style={styles.appearanceValue}>
-                {t(`settings.host.appearance.badgeDisplay.options.${badgeDisplay}`)}
-              </Text>
+              <Text style={styles.appearanceValue}>{badgeLabel}</Text>
               <ThemedChevronRight uniProps={chevronProps} />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" width={180}>
@@ -396,13 +474,14 @@ function HostAppearanceSection({ host }: { host: HostProfile }) {
                   key={option}
                   value={option}
                   selected={option === badgeDisplay}
-                  label={t(`settings.host.appearance.badgeDisplay.options.${option}`)}
+                  label={t(`settings.host.appearance.badge.options.${option}`)}
                   onSelect={handleBadgeDisplay}
                 />
               ))}
             </DropdownMenuContent>
           </DropdownMenu>
         </View>
+        <HostBadgePreview host={host} badgeDisplay={badgeDisplay} />
       </View>
     </SettingsSection>
   );
@@ -427,7 +506,6 @@ export function HostSettingsPage({
         <Text style={styles.daemonHeaderLabel} numberOfLines={1}>
           {host.label}
         </Text>
-        <HostRenameButton host={host} />
       </View>
 
       <HostStatusBadges serverId={serverId} />
@@ -1674,6 +1752,19 @@ const styles = StyleSheet.create((theme) => ({
     color: theme.colors.foreground,
     fontSize: theme.fontSize.sm,
   },
+  appearanceNameValue: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[1],
+    minHeight: 32,
+    paddingHorizontal: theme.spacing[2],
+    flexShrink: 1,
+  },
+  appearanceNameText: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.sm,
+    flexShrink: 1,
+  },
   appearanceTrigger: {
     flexDirection: "row",
     alignItems: "center",
@@ -1684,6 +1775,29 @@ const styles = StyleSheet.create((theme) => ({
   appearanceValue: {
     color: theme.colors.foregroundMuted,
     fontSize: theme.fontSize.sm,
+  },
+  appearanceSwatch: {
+    width: theme.iconSize.md,
+    height: theme.iconSize.md,
+    borderRadius: theme.iconSize.md / 2,
+    borderWidth: theme.borderWidth[1],
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.surface3,
+  },
+  appearancePreview: {
+    flexDirection: "column",
+    alignItems: "flex-start",
+    gap: theme.spacing[1],
+    paddingVertical: theme.spacing[3],
+    paddingHorizontal: theme.spacing[4],
+    borderTopWidth: theme.borderWidth[1],
+    borderTopColor: theme.colors.border,
+    backgroundColor: theme.colors.surfaceSidebar,
+  },
+  appearancePreviewTitle: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.sm,
+    flexShrink: 1,
   },
   emptyCard: {
     padding: theme.spacing[4],

@@ -1711,28 +1711,37 @@ export const en = {
       notFound: "Host not found",
       appearance: {
         title: "Appearance",
+        name: {
+          label: "Name",
+        },
         color: {
           label: "Color",
+          accessibilityLabel: "Color, {{value}}",
           options: {
-            none: "None",
-            blue: "Blue",
-            cyan: "Cyan",
-            green: "Green",
-            lime: "Lime",
-            yellow: "Yellow",
+            none: "Default",
+            violet: "Violet",
+            sky: "Sky",
+            emerald: "Emerald",
             orange: "Orange",
-            red: "Red",
             pink: "Pink",
-            purple: "Purple",
+            indigo: "Indigo",
+            teal: "Teal",
+            red: "Red",
+            amber: "Amber",
+            blue: "Blue",
           },
         },
-        badgeDisplay: {
-          label: "Badge display",
+        badge: {
+          label: "Sidebar badge",
+          accessibilityLabel: "Sidebar badge, {{value}}",
           options: {
             name: "Name",
             icon: "Icon only",
             hidden: "Hidden",
           },
+        },
+        preview: {
+          workspaceName: "my-workspace",
         },
       },
       badges: {

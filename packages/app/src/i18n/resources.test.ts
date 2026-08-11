@@ -1,6 +1,7 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { join, relative } from "node:path";
 import { describe, expect, it } from "vitest";
+import { HOST_BADGE_DISPLAYS, HOST_COLORS } from "../hosts/appearance";
 import { ar } from "./resources/ar";
 import { en } from "./resources/en";
 import { es } from "./resources/es";
@@ -114,6 +115,17 @@ describe("translation resources", () => {
     expect(flattenKeys(ptBR).sort()).toEqual(englishKeys);
     expect(flattenKeys(ru).sort()).toEqual(englishKeys);
     expect(flattenKeys(zhCN).sort()).toEqual(englishKeys);
+  });
+
+  it("covers every host appearance option", () => {
+    const appearance = en.settings.host.appearance as {
+      color: { options: Record<string, string> };
+      badge?: { options: Record<string, string> };
+    };
+    expect(Object.keys(appearance.color.options).sort()).toEqual([...HOST_COLORS].sort());
+    expect(Object.keys(appearance.badge?.options ?? {}).sort()).toEqual(
+      [...HOST_BADGE_DISPLAYS].sort(),
+    );
   });
 
   it("keeps non-English supported languages translated beyond fallback labels", () => {

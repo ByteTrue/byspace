@@ -14,7 +14,7 @@ created: 2026-08-10
 
 ## 改了哪些
 
-- `packages/app/src/screens/settings/host-page.tsx` — 恢复上游 Appearance 卡片的名称、颜色色块、真实侧边栏 Meta Row 预览与可访问标签。
+- `packages/app/src/screens/settings/host-page.tsx` — 恢复上游 Appearance 卡片的名称、颜色色块、真实侧边栏 Meta Row 预览与可访问标签；Host 长名称在窄布局中保持单行收缩。
 - `packages/app/src/i18n/resources/{ar,en,es,fr,ja,pt-BR,ru,zh-CN}.ts` — 统一实际颜色枚举、Badge 和预览词条；修正中文文案。
 - `packages/app/src/i18n/resources.test.ts` — 锁定颜色与 Badge 选项必须和运行时枚举一致，并复用现有全语言键一致性检查。
 

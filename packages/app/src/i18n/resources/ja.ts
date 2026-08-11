@@ -1715,28 +1715,37 @@ export const ja: TranslationResources = {
       notFound: "ホストが見つかりません",
       appearance: {
         title: "外観",
+        name: {
+          label: "名前",
+        },
         color: {
           label: "色",
+          accessibilityLabel: "色、{{value}}",
           options: {
-            none: "なし",
-            blue: "青",
-            cyan: "シアン",
-            green: "緑",
-            lime: "ライム",
-            yellow: "黄色",
+            none: "デフォルト",
+            violet: "バイオレット",
+            sky: "スカイ",
+            emerald: "エメラルド",
             orange: "オレンジ",
-            red: "赤",
             pink: "ピンク",
-            purple: "紫",
+            indigo: "インディゴ",
+            teal: "ティール",
+            red: "レッド",
+            amber: "アンバー",
+            blue: "ブルー",
           },
         },
-        badgeDisplay: {
-          label: "バッジ表示",
+        badge: {
+          label: "サイドバーのバッジ",
+          accessibilityLabel: "サイドバーのバッジ、{{value}}",
           options: {
             name: "名前",
             icon: "アイコンのみ",
-            hidden: "隠れた",
+            hidden: "非表示",
           },
+        },
+        preview: {
+          workspaceName: "my-workspace",
         },
       },
       badges: {

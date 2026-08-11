@@ -1685,29 +1685,38 @@ export const zhCN: TranslationResources = {
     host: {
       notFound: "Host 未找到",
       appearance: {
-        title: "外貌",
+        title: "外观",
+        name: {
+          label: "名称",
+        },
         color: {
           label: "颜色",
+          accessibilityLabel: "颜色，{{value}}",
           options: {
-            none: "没有任何",
-            blue: "蓝色的",
-            cyan: "青色",
-            green: "绿色的",
-            lime: "酸橙",
-            yellow: "黄色的",
-            orange: "橙子",
-            red: "红色的",
-            pink: "粉色的",
-            purple: "紫色的",
+            none: "默认",
+            violet: "紫罗兰",
+            sky: "天蓝",
+            emerald: "翠绿",
+            orange: "橙色",
+            pink: "粉色",
+            indigo: "靛蓝",
+            teal: "青色",
+            red: "红色",
+            amber: "琥珀",
+            blue: "蓝色",
           },
         },
-        badgeDisplay: {
-          label: "徽章显示",
+        badge: {
+          label: "侧边栏徽章",
+          accessibilityLabel: "侧边栏徽章，{{value}}",
           options: {
-            name: "姓名",
+            name: "名称",
             icon: "仅图标",
-            hidden: "隐",
+            hidden: "隐藏",
           },
+        },
+        preview: {
+          workspaceName: "my-workspace",
         },
       },
       badges: {

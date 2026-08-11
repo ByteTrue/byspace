@@ -1728,29 +1728,38 @@ export const ru: TranslationResources = {
     host: {
       notFound: "Host не найден",
       appearance: {
-        title: "Появление",
+        title: "Оформление",
+        name: {
+          label: "Имя",
+        },
         color: {
           label: "Цвет",
+          accessibilityLabel: "Цвет, {{value}}",
           options: {
-            none: "Никто",
-            blue: "Синий",
-            cyan: "Голубой",
-            green: "Зеленый",
-            lime: "Лайм",
-            yellow: "Желтый",
-            orange: "Апельсин",
-            red: "Красный",
+            none: "По умолчанию",
+            violet: "Фиолетовый",
+            sky: "Небесный",
+            emerald: "Изумрудный",
+            orange: "Оранжевый",
             pink: "Розовый",
-            purple: "Фиолетовый",
+            indigo: "Индиго",
+            teal: "Бирюзовый",
+            red: "Красный",
+            amber: "Янтарный",
+            blue: "Синий",
           },
         },
-        badgeDisplay: {
-          label: "Отображение значка",
+        badge: {
+          label: "Значок на боковой панели",
+          accessibilityLabel: "Значок на боковой панели, {{value}}",
           options: {
             name: "Имя",
             icon: "Только значок",
-            hidden: "Скрытый",
+            hidden: "Скрыт",
           },
+        },
+        preview: {
+          workspaceName: "my-workspace",
         },
       },
       badges: {

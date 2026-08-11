@@ -1701,28 +1701,37 @@ export const ar: TranslationResources = {
       notFound: "لم يتم العثور على Host",
       appearance: {
         title: "المظهر",
+        name: {
+          label: "الاسم",
+        },
         color: {
           label: "اللون",
+          accessibilityLabel: "اللون، {{value}}",
           options: {
-            none: "لا شيء",
-            blue: "أزرق",
-            cyan: "سماوي",
-            green: "أخضر",
-            lime: "ليموني",
-            yellow: "أصفر",
+            none: "افتراضي",
+            violet: "بنفسجي",
+            sky: "سماوي",
+            emerald: "زمردي",
             orange: "برتقالي",
-            red: "أحمر",
             pink: "وردي",
-            purple: "أرجواني",
+            indigo: "نيلي",
+            teal: "أزرق مخضر",
+            red: "أحمر",
+            amber: "كهرماني",
+            blue: "أزرق",
           },
         },
-        badgeDisplay: {
-          label: "عرض الشارة",
+        badge: {
+          label: "شارة الشريط الجانبي",
+          accessibilityLabel: "شارة الشريط الجانبي، {{value}}",
           options: {
             name: "الاسم",
-            icon: "الأيقونة فقط",
+            icon: "أيقونة فقط",
             hidden: "مخفي",
           },
+        },
+        preview: {
+          workspaceName: "my-workspace",
         },
       },
       badges: {

@@ -1728,28 +1728,37 @@ export const ptBR: TranslationResources = {
       notFound: "Host não encontrado",
       appearance: {
         title: "Aparência",
+        name: {
+          label: "Nome",
+        },
         color: {
           label: "Cor",
+          accessibilityLabel: "Cor, {{value}}",
           options: {
-            none: "Nenhum",
-            blue: "Azul",
-            cyan: "Ciano",
-            green: "Verde",
-            lime: "Lima",
-            yellow: "Amarelo",
+            none: "Padrão",
+            violet: "Violeta",
+            sky: "Céu",
+            emerald: "Esmeralda",
             orange: "Laranja",
-            red: "Vermelho",
             pink: "Rosa",
-            purple: "Roxo",
+            indigo: "Índigo",
+            teal: "Verde-azulado",
+            red: "Vermelho",
+            amber: "Âmbar",
+            blue: "Azul",
           },
         },
-        badgeDisplay: {
-          label: "Exibição de crachá",
+        badge: {
+          label: "Selo da barra lateral",
+          accessibilityLabel: "Selo da barra lateral, {{value}}",
           options: {
             name: "Nome",
             icon: "Somente ícone",
-            hidden: "Escondido",
+            hidden: "Oculto",
           },
+        },
+        preview: {
+          workspaceName: "my-workspace",
         },
       },
       badges: {
