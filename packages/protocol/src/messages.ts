@@ -2994,6 +2994,8 @@ export const ServerInfoStatusPayloadSchema = z
         cliCallerAgentContext: z.boolean().optional(),
         // COMPAT(cliOrchestrationTools): added in v0.5.0; remove the gate after 2027-02-07.
         cliOrchestrationTools: z.boolean().optional(),
+        // COMPAT(workspaceAgentRename): added in v0.5.0, remove gate after 2027-02-11.
+        workspaceAgentRename: z.boolean().optional(),
         // COMPAT(workspaceMultiplicity): added in v0.1.97, drop the gate when floor >= v0.1.97
         workspaceMultiplicity: z.boolean().optional(),
         // COMPAT(projectRemove): added in v0.1.97, drop the gate when floor >= v0.1.97.

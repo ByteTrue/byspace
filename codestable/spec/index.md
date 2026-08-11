@@ -49,6 +49,8 @@ Project 只出现一次；全部 Project 与 Workspace 的顺序一律是用户�
 
 Workspace 行常驻显示需要处理或正在工作的 Agent 数；Hover 在保留 Workspace 元数据的同时，按父子层级展示全部未归档 Agent 及其精确状态。行内摘要是关键状态入口，不能依赖 Hover。daemon 汇总的 Workspace 状态（包括 Terminal 活动）与 Agent 细分状态共同参与状态显示，但都不改变顺序。
 
+首 prompt 生成的 Workspace title 与 worktree branch 只作为一次性初始名，不随对话持续漂移。Workspace 菜单的「Rename with agent」仅复制固定 prompt，用户自行粘贴给最理解当前工作的 Agent；Agent 先设置 title，再 best-effort 重命名仍为 BySpace 生成、未发布、无 upstream/PR/MR 且无冲突的 worktree branch。title 与 branch 是两个独立操作，branch 不满足条件时保留原名并说明原因。
+
 侧栏不提供独占整行空间的全局 `New workspace` 行。Workspaces 标题栏 `+` 是常驻全局入口；每个 Project 行的 `+` 是当前项目内创建 Workspace 的上下文入口，空 Project 也通过它创建第一个 Workspace；`Cmd/Ctrl+N` 保留为全局加速入口。三者进入同一个 Project-first Composer。
 
 显式 Project 或当前 Workspace 上下文会预填 Project；没有当前 Workspace 上下文时先自动展开 Project picker，不沿用过时的 remembered Project。当前 Workspace 的 `Cmd/Ctrl+N` 会沿用其显式 Host；单一可创建位置自动落定；多个可创建位置一律要求用户选择 Host，不根据最近使用或在线状态猜测。Isolation 保持内联次级选项，Base branch 仅在 Worktree 时显示。

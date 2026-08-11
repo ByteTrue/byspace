@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { type PressableStateCallbackType } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
-import { Archive, CircleCheck, Copy, MoreVertical, Pencil } from "lucide-react-native";
+import { Archive, CircleCheck, Copy, MoreVertical, Pencil, Sparkles } from "lucide-react-native";
 import { isNative, isWeb } from "@/constants/platform";
 import type { Theme } from "@/styles/theme";
 import type { ShortcutKey } from "@/utils/format-shortcut";
@@ -24,9 +24,13 @@ const ThemedCopy = withUnistyles(Copy);
 const ThemedArchive = withUnistyles(Archive);
 const ThemedPencil = withUnistyles(Pencil);
 const ThemedCircleCheck = withUnistyles(CircleCheck);
+const ThemedSparkles = withUnistyles(Sparkles);
 
 const copyLeadingIcon = <ThemedCopy size={14} uniProps={foregroundMutedColorMapping} />;
 const renameLeadingIcon = <ThemedPencil size={14} uniProps={foregroundMutedColorMapping} />;
+const renameWithAgentLeadingIcon = (
+  <ThemedSparkles size={14} uniProps={foregroundMutedColorMapping} />
+);
 const markAsReadLeadingIcon = (
   <ThemedCircleCheck size={14} uniProps={foregroundMutedColorMapping} />
 );
@@ -46,6 +50,7 @@ interface SidebarWorkspaceMenuProps {
   onCopyPath?: () => void;
   onCopyBranchName?: () => void;
   onRename?: () => void;
+  onRenameWithAgent?: () => void;
   onMarkAsRead?: () => void;
   onArchive: () => void;
   archiveLabel?: string;
@@ -59,6 +64,7 @@ export function SidebarWorkspaceMenu({
   onCopyPath,
   onCopyBranchName,
   onRename,
+  onRenameWithAgent,
   onMarkAsRead,
   onArchive,
   archiveLabel,
@@ -109,6 +115,15 @@ export function SidebarWorkspaceMenu({
             onSelect={onRename}
           >
             {t("sidebar.workspace.actions.rename")}
+          </DropdownMenuItem>
+        ) : null}
+        {onRenameWithAgent ? (
+          <DropdownMenuItem
+            testID={`sidebar-workspace-menu-rename-with-agent-${workspaceKey}`}
+            leading={renameWithAgentLeadingIcon}
+            onSelect={onRenameWithAgent}
+          >
+            {t("sidebar.workspace.actions.renameWithAgent")}
           </DropdownMenuItem>
         ) : null}
         {onMarkAsRead ? (

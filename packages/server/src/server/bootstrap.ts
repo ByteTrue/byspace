@@ -95,6 +95,7 @@ import { createGitHubService } from "../services/github-service.js";
 import {
   createBySpaceWorktree as createRegisteredBySpaceWorktree,
   createLocalCheckoutWorkspace,
+  renameWorkspaceBranch,
 } from "./byspace-worktree-service.js";
 import { createBySpaceWorktreeWorkflow } from "./worktree-session.js";
 import { DownloadTokenStore } from "./file-download/token-store.js";
@@ -894,6 +895,8 @@ export async function createBySpaceDaemon(
       await emitWorkspaceUpdatesExternal([workspaceId]);
     },
     logger,
+    byspaceHome: config.byspaceHome,
+    worktreesRoot: config.worktreesRoot,
   });
 
   setupAutoArchiveOnMerge({
@@ -1163,6 +1166,25 @@ export async function createBySpaceDaemon(
     stopWorkspaceSetup: (workspaceId) => workspaceSetupRuntime.stop(workspaceId),
     ensureWorkspaceForCreate: createAgentCommandDependencies.ensureWorkspaceForCreate,
     createBySpaceWorktree: createAgentCommandDependencies.createBySpaceWorktree,
+    renameWorkspaceBranch: async (input) => {
+      const renamed = await renameWorkspaceBranch({
+        ...input,
+        byspaceHome: config.byspaceHome,
+        worktreesRoot: config.worktreesRoot,
+      });
+      try {
+        const workspace = runtime.callerWorkspaceId
+          ? await workspaceRegistry.get(runtime.callerWorkspaceId)
+          : null;
+        await workspaceGitService.getSnapshot(workspace?.cwd ?? input.cwd, {
+          force: true,
+          reason: "rename_branch",
+        });
+      } catch (error) {
+        logger.warn({ error, cwd: input.cwd }, "Branch renamed but Git snapshot refresh failed");
+      }
+      return renamed;
+    },
     byspaceHome: config.byspaceHome,
     worktreesRoot: config.worktreesRoot,
     callerAgentId: runtime.callerAgentId,

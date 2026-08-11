@@ -53,7 +53,7 @@ import { getHostRuntimeStore, useHosts } from "@/runtime/host-runtime";
 import { useHostBadges } from "@/hosts/use-host-badges";
 import type { HostBadgeModel } from "@/hosts/appearance";
 import { useSidebarMetaPreferences } from "@/components/sidebar/display-preferences/model";
-import { useHostFeatureMap } from "@/runtime/host-features";
+import { useHostFeature, useHostFeatureMap } from "@/runtime/host-features";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { useProjectIconDataByProjectKey } from "@/projects/project-icons";
 import {
@@ -128,6 +128,9 @@ import {
   workspaceServiceLabelKey,
 } from "@/components/sidebar/workspace-meta-row";
 import { getProjectStatusBadgeContent } from "@/utils/project-status-badge-content";
+
+const AGENT_WORKSPACE_RENAME_PROMPT =
+  "Based on our current conversation and the actual repository changes, rename this workspace to reflect what the work has become. First set a concise, distinctive workspace title. If the current branch is still a BySpace-generated, unpublished worktree branch and the proposed name does not conflict, also set a matching branch name. Otherwise leave the branch unchanged and explain why. Generate the title and branch independently rather than mechanically slugifying the title. Never rename a default, published, upstream-tracking, or PR/MR branch. Use the BySpace skill to apply the changes and report the final title and branch.";
 
 const workspaceKeyExtractor = (workspace: SidebarWorkspacePlacement) => workspace.workspaceKey;
 
@@ -272,6 +275,7 @@ interface WorkspaceRowInnerProps {
   onCopyBranchName?: () => void;
   onCopyPath?: () => void;
   onRename?: () => void;
+  onRenameWithAgent?: () => void;
   onMarkAsRead?: () => void;
   archiveShortcutKeys?: ShortcutKey[][] | null;
   reserveIdleStatusIndicatorSpace?: boolean;
@@ -556,6 +560,7 @@ function WorkspaceRowRightGroup({
   onCopyBranchName,
   onCopyPath,
   onRename,
+  onRenameWithAgent,
 }: {
   workspace: SidebarWorkspaceEntry;
   isHovered: boolean;
@@ -573,6 +578,7 @@ function WorkspaceRowRightGroup({
   onCopyBranchName?: () => void;
   onCopyPath?: () => void;
   onRename?: () => void;
+  onRenameWithAgent?: () => void;
 }) {
   const { t } = useTranslation();
   const { trailing } = useSidebarMetaPreferences();
@@ -601,6 +607,7 @@ function WorkspaceRowRightGroup({
                 onCopyPath={onCopyPath}
                 onCopyBranchName={onCopyBranchName}
                 onRename={onRename}
+                onRenameWithAgent={onRenameWithAgent}
                 onMarkAsRead={onMarkAsRead}
                 onArchive={onArchive}
                 archiveLabel={archiveLabel}
@@ -885,6 +892,7 @@ function WorkspaceRowInner({
   onCopyBranchName,
   onCopyPath,
   onRename,
+  onRenameWithAgent,
   archiveShortcutKeys,
   reserveIdleStatusIndicatorSpace = true,
 }: WorkspaceRowInnerProps) {
@@ -997,6 +1005,7 @@ function WorkspaceRowInner({
                   onCopyBranchName={onCopyBranchName}
                   onCopyPath={onCopyPath}
                   onRename={onRename}
+                  onRenameWithAgent={onRenameWithAgent}
                 />
               </SidebarWorkspaceRowContent>
             </Pressable>
@@ -1038,6 +1047,7 @@ function WorkspaceRowWithMenu({
   const toast = useToast();
   const [isHidingWorkspace, setIsHidingWorkspace] = useState(false);
   const [isRenameOpen, setIsRenameOpen] = useState(false);
+  const supportsAgentRename = useHostFeature(workspace.serverId, "workspaceAgentRename");
   const isArchiving = workspace.archivingAt !== null || isHidingWorkspace;
   const redirectAfterArchive = useCallback(() => {
     redirectIfArchivingActiveWorkspace({
@@ -1090,6 +1100,14 @@ function WorkspaceRowWithMenu({
     void Clipboard.setStringAsync(workspace.currentBranch);
     toast.copied(t("sidebar.workspace.toasts.branchNameCopied"));
   }, [t, toast, workspace.currentBranch]);
+
+  const handleRenameWithAgent = useCallback(() => {
+    void Clipboard.setStringAsync(AGENT_WORKSPACE_RENAME_PROMPT)
+      .then(() => toast.copied(t("sidebar.workspace.toasts.agentRenamePromptCopied")))
+      .catch(() => {
+        toast.error(t("sidebar.workspace.toasts.agentRenamePromptCopyFailed"));
+      });
+  }, [t, toast]);
 
   const renameMutation = useMutation({
     mutationFn: async (title: string) => {
@@ -1160,6 +1178,7 @@ function WorkspaceRowWithMenu({
         onCopyBranchName={canCopyBranchName ? handleCopyBranchName : undefined}
         onCopyPath={handleCopyPath}
         onRename={handleOpenRename}
+        onRenameWithAgent={supportsAgentRename ? handleRenameWithAgent : undefined}
         onMarkAsRead={hasClearableAttention ? handleMarkAsRead : undefined}
         archiveShortcutKeys={selected ? archiveShortcutKeys : null}
         reserveIdleStatusIndicatorSpace={reserveIdleStatusIndicatorSpace}

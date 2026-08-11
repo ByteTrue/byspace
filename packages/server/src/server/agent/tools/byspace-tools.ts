@@ -74,6 +74,7 @@ import type {
   ProjectRegistry,
   WorkspaceRegistry,
 } from "../../workspace-registry.js";
+import type { RenameWorkspaceBranchResult } from "../../byspace-worktree-service.js";
 import { resolveWorktreeSourceCwd } from "../../workspace-source.js";
 import type { WorkspaceScriptsService } from "../../session/workspace-scripts/workspace-scripts-service.js";
 import {
@@ -118,6 +119,10 @@ export interface BySpaceToolHostDependencies {
   clearWorkspaceArchiving?: ArchiveDependencies["clearWorkspaceArchiving"];
   stopWorkspaceSetup?: ArchiveDependencies["stopWorkspaceSetup"];
   createBySpaceWorktree?: CreateBySpaceWorktreeWorkflowFn;
+  renameWorkspaceBranch?: (input: {
+    cwd: string;
+    newBranchName: string;
+  }) => Promise<RenameWorkspaceBranchResult>;
   // Mints a fresh directory workspace for a cwd and returns its id.
   ensureWorkspaceForCreate?: (
     cwd: string,
@@ -2122,6 +2127,40 @@ export function createBySpaceToolCatalog(options: BySpaceToolHostDependencies): 
           workspaceId,
           title,
         }),
+      };
+    },
+  );
+
+  registerTool(
+    "rename_branch",
+    {
+      title: "Rename branch",
+      description:
+        "Rename the current unpublished BySpace-generated worktree branch. Published, upstream-tracking, manually renamed, default, and non-BySpace branches are rejected.",
+      inputSchema: {
+        branchName: z
+          .string()
+          .trim()
+          .min(1, "branchName is required")
+          .describe("New Git branch name."),
+      },
+      outputSchema: {
+        success: z.boolean(),
+        previousBranch: z.string(),
+        currentBranch: z.string(),
+      },
+    },
+    async ({ branchName }) => {
+      if (!options.renameWorkspaceBranch) {
+        throw new Error("Workspace branch rename is not configured");
+      }
+      const renamed = await options.renameWorkspaceBranch({
+        cwd: resolveScopedCwd(undefined, { required: true }),
+        newBranchName: branchName,
+      });
+      return {
+        content: [],
+        structuredContent: ensureValidJson({ success: true, ...renamed }),
       };
     },
   );

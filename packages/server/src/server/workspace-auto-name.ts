@@ -32,6 +32,8 @@ interface WorkspaceAutoNameOptions {
   emitWorkspaceUpdateForCwd: (cwd: string) => Promise<void>;
   emitWorkspaceUpdateForWorkspaceId: (workspaceId: string) => Promise<void>;
   logger: pino.Logger;
+  byspaceHome?: string;
+  worktreesRoot?: string;
   generateWorkspaceName?: WorkspaceNameGenerator;
 }
 
@@ -49,6 +51,8 @@ export class WorkspaceAutoName {
   private readonly emitWorkspaceUpdateForCwd: (cwd: string) => Promise<void>;
   private readonly emitWorkspaceUpdateForWorkspaceId: (workspaceId: string) => Promise<void>;
   private readonly logger: pino.Logger;
+  private readonly byspaceHome: string | undefined;
+  private readonly worktreesRoot: string | undefined;
   private readonly generateWorkspaceName: WorkspaceNameGenerator;
 
   constructor(options: WorkspaceAutoNameOptions) {
@@ -61,6 +65,8 @@ export class WorkspaceAutoName {
     this.emitWorkspaceUpdateForCwd = options.emitWorkspaceUpdateForCwd;
     this.emitWorkspaceUpdateForWorkspaceId = options.emitWorkspaceUpdateForWorkspaceId;
     this.logger = options.logger;
+    this.byspaceHome = options.byspaceHome;
+    this.worktreesRoot = options.worktreesRoot;
     this.generateWorkspaceName =
       options.generateWorkspaceName ?? generateBranchNameFromFirstAgentContext;
   }
@@ -122,6 +128,8 @@ export class WorkspaceAutoName {
           return nextGenerated?.branch ?? null;
         });
       },
+      byspaceHome: this.byspaceHome,
+      worktreesRoot: this.worktreesRoot,
     });
 
     if (!generated) {
