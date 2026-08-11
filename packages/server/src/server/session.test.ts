@@ -3201,13 +3201,27 @@ describe("session checkout pull and push handling", () => {
 });
 
 describe("session checkout refresh handling", () => {
-  test("forces a git, GitHub, and diff refresh on demand", async () => {
+  test("returns after local git and diff refresh while Forge continues in the background", async () => {
     const messages: unknown[] = [];
-    const github = { invalidate: vi.fn() };
-    const workspaceGitService = { getSnapshot: vi.fn().mockResolvedValue({}) };
+    let releaseForgeRefresh!: () => void;
+    const forgeRefresh = new Promise<void>((resolve) => {
+      releaseForgeRefresh = resolve;
+    });
+    let markForgeRefreshFinished!: () => void;
+    const forgeRefreshFinished = new Promise<void>((resolve) => {
+      markForgeRefreshFinished = resolve;
+    });
+    const workspaceGitService = {
+      getSnapshot: vi.fn(async (_cwd: string, options?: { includeForge?: boolean }) => {
+        if (options?.includeForge) {
+          await forgeRefresh;
+          markForgeRefreshFinished();
+        }
+        return {};
+      }),
+    };
     const checkoutDiffManager = { scheduleRefreshForCwd: vi.fn() };
     const session = createSessionForTest({
-      github,
       workspaceGitService,
       checkoutDiffManager,
       messages,
@@ -3219,11 +3233,15 @@ describe("session checkout refresh handling", () => {
       requestId: "request-refresh",
     });
 
-    expect(github.invalidate).toHaveBeenCalledWith({ cwd: "/tmp/request-worktree" });
-    expect(workspaceGitService.getSnapshot).toHaveBeenCalledWith("/tmp/request-worktree", {
+    expect(workspaceGitService.getSnapshot).toHaveBeenNthCalledWith(1, "/tmp/request-worktree", {
+      force: true,
+      includeForge: false,
+      reason: "manual-refresh",
+    });
+    expect(workspaceGitService.getSnapshot).toHaveBeenNthCalledWith(2, "/tmp/request-worktree", {
       force: true,
       includeForge: true,
-      reason: "manual-refresh",
+      reason: "manual-refresh-forge",
     });
     expect(checkoutDiffManager.scheduleRefreshForCwd).toHaveBeenCalledWith("/tmp/request-worktree");
     expect(messages).toContainEqual({
@@ -3235,6 +3253,9 @@ describe("session checkout refresh handling", () => {
         requestId: "request-refresh",
       },
     });
+
+    releaseForgeRefresh();
+    await forgeRefreshFinished;
   });
 
   test("reports an error when the snapshot refresh fails", async () => {
