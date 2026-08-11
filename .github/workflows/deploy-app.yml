@@ -33,6 +33,7 @@ jobs:
           fetch-depth: 0
 
       - name: Verify trusted immutable release input
+        id: release_input
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -42,8 +43,10 @@ jobs:
           test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
           test "$(git rev-parse "refs/tags/$RELEASE_TAG^{commit}")" = "$EXPECTED_SHA"
           git merge-base --is-ancestor "$EXPECTED_SHA" origin/main
-          successes="$(gh run list --repo "$GITHUB_REPOSITORY" --workflow CI --commit "$EXPECTED_SHA" --event push --status success --json databaseId --jq 'length')"
-          test "$successes" -ge 1
+          ci_run_id="$(gh run list --repo "$GITHUB_REPOSITORY" --workflow CI --commit "$EXPECTED_SHA" --event push --status success --limit 1 --json databaseId --jq '.[0].databaseId // empty')"
+          test -n "$ci_run_id"
+          echo "ci_run_id=$ci_run_id" >> "$GITHUB_OUTPUT"
+          echo "Promoting Web artifact from CI run $ci_run_id for $EXPECTED_SHA"
           version="$(node -p 'require("./package.json").version')"
           test "$RELEASE_TAG" = "v$version"
           if [[ "$version" == *-* ]]; then
@@ -60,18 +63,28 @@ jobs:
         with:
           node-version: "22"
           cache: "npm"
+          cache-dependency-path: package-lock.json
+
+      - name: Download exact-SHA Web artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: byspace-web-app
+          path: artifacts
+          repository: ${{ github.repository }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ steps.release_input.outputs.ci_run_id }}
+
+      - name: Verify and extract exact-SHA Web artifact
+        run: |
+          node scripts/release-artifact-manifest.mjs verify --kind web --manifest artifacts/web-artifact.json --commit "$EXPECTED_SHA"
+          version="$(node -p 'require("./package.json").version')"
+          rm -rf packages/app/dist
+          tar -xzf "artifacts/byspace-web-${version}.tgz" -C packages/app
 
       - name: Install dependencies
         run: node scripts/npm-retry.mjs ci
-
-      - name: Build app dependencies
-        run: npm run build:app-deps
-
-      - name: Typecheck
-        run: npm run typecheck --workspace=@bytetrue/byspace-app
-
-      - name: Export Web app
-        run: cd packages/app && npx expo export --platform web
+        env:
+          ONNXRUNTIME_NODE_INSTALL_CUDA: skip
 
       - name: Recheck immutable channel release
         run: |

@@ -146,6 +146,26 @@ jobs:
       - name: Run app unit tests
         run: npm run test --workspace=@bytetrue/byspace-app
 
+      - name: Create exact-SHA Web artifact
+        env:
+          RELEASE_COMMIT: ${{ github.sha }}
+        run: |
+          mkdir -p artifacts
+          version="$(node -p 'require("./package.json").version')"
+          artifact="artifacts/byspace-web-${version}.tgz"
+          tar -czf "$artifact" -C packages/app dist
+          node scripts/release-artifact-manifest.mjs create --kind web --artifact "$artifact" --manifest artifacts/web-artifact.json --commit "$RELEASE_COMMIT"
+
+      - name: Upload exact-SHA Web artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: byspace-web-app
+          path: |
+            artifacts/byspace-web-*.tgz
+            artifacts/web-artifact.json
+          if-no-files-found: error
+          retention-days: 14
+
   sdk-tests:
     runs-on: ubuntu-latest
     steps:
@@ -268,7 +288,62 @@ jobs:
           BYSPACE_CLI_TEST_SHARD: ${{ matrix.shard }}
           BYSPACE_CLI_TEST_SHARD_TOTAL: "3"
 
+  package-artifact:
+    needs: app-tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - name: Download exact-SHA Web artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: byspace-web-app
+          path: artifacts
+
+      - name: Verify and reuse exact-SHA Web artifact
+        run: |
+          node scripts/release-artifact-manifest.mjs verify --kind web --manifest artifacts/web-artifact.json --commit "${{ github.sha }}"
+          artifact="$(node -p 'require("./artifacts/web-artifact.json").artifact')"
+          rm -rf packages/app/dist
+          tar -xzf "artifacts/$artifact" -C packages/app
+
+      - name: Install dependencies
+        run: node scripts/npm-retry.mjs ci
+
+      - name: Run package artifact checks
+        run: npm run test:pack
+
+      - name: Build public package artifact
+        run: npm run pack:byspace -- --skip-web-export
+
+      - name: Verify public package release
+        run: npm run release:verify
+
+      - name: Create exact-SHA package manifest
+        env:
+          RELEASE_COMMIT: ${{ github.sha }}
+        run: |
+          version="$(node -p 'require("./package.json").version')"
+          artifact="artifacts/bytetrue-byspace-${version}.tgz"
+          node scripts/release-artifact-manifest.mjs create --kind npm --artifact "$artifact" --manifest artifacts/npm-artifact.json --commit "$RELEASE_COMMIT"
+
+      - name: Upload exact-SHA public package
+        uses: actions/upload-artifact@v4
+        with:
+          name: byspace-npm-package
+          path: |
+            artifacts/bytetrue-byspace-*.tgz
+            artifacts/npm-artifact.json
+          if-no-files-found: error
+          retention-days: 14
+
   distribution:
+    needs: package-artifact
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -280,19 +355,15 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-          cache: "npm"
 
-      - name: Install dependencies
-        run: node scripts/npm-retry.mjs ci
-
-      - name: Pack, install, and smoke test the public package
-        run: npm run smoke:package
-
-      - name: Upload public package
-        if: ${{ matrix.os == 'ubuntu-latest' }}
-        uses: actions/upload-artifact@v4
+      - name: Download exact-SHA public package
+        uses: actions/download-artifact@v4
         with:
           name: byspace-npm-package
-          path: artifacts/bytetrue-byspace-*.tgz
-          if-no-files-found: error
-          retention-days: 7
+          path: artifacts
+
+      - name: Verify exact-SHA public package
+        run: node scripts/release-artifact-manifest.mjs verify --kind npm --manifest artifacts/npm-artifact.json --commit "${{ github.sha }}"
+
+      - name: Install and smoke test the exact public package
+        run: npm run smoke:package -- --skip-pack

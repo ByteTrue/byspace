@@ -53,7 +53,8 @@ GitHub Actions run `31471036867` 因此在 Ubuntu 和 Windows 的同一测试失
 - `npx vitest run packages/server/src/server/session/checkout/checkout-session.test.ts --bail=1`：35/35 通过。
 - `npm run format:files -- ...`、`npm run typecheck`、`npm run lint` 通过。
 - exact-SHA `542854ad3` 的 CI run `31480047406` 中，Ubuntu、Windows、macOS 与三平台 distribution jobs 均通过，原 stale assertion 没有再失败。
-- 完整 workflow 被 Playwright shard 1 的既有启动/滚动测试不确定性拦住；证据与修复转入 Issue 003，Issue 001 保持 open，直到后续 exact-SHA 完整 CI 全绿。
+- exact-SHA `542854ad3` 的完整 workflow 随后被 Playwright shard 1 的两个既有首用例超时拦住；修复归入 Issue 003，并由下一条成功 run 验证。
+- exact-SHA `7f4d633cb` 的 push CI run `31482108162` 完整全绿：workflow 墙钟 16:58（10:25:06–10:42:04 UTC），Ubuntu server 3:03，Windows server 7:32；Playwright 四个 job 分别 16:54、13:18、13:25、16:06。原 stale assertion 与两个首用例超时均未复现。
 
 ## 验证
 

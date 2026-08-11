@@ -10,6 +10,7 @@ const { version } = JSON.parse(readFileSync(join(root, "package.json"), "utf8"))
 const artifact = join(root, "artifacts", `bytetrue-byspace-${version}.tgz`);
 const installRoot = mkdtempSync(join(tmpdir(), "byspace-install-smoke-"));
 const npmCli = process.env.npm_execpath;
+const skipPack = process.argv.includes("--skip-pack");
 const globalPackageRoot = join(
   installRoot,
   process.platform === "win32" ? "node_modules" : join("lib", "node_modules"),
@@ -178,7 +179,8 @@ let env;
 let failure;
 let cleanupFailure;
 try {
-  runNpm(["run", "pack:byspace"], { timeout: 600_000 });
+  if (!skipPack) runNpm(["run", "pack:byspace"], { timeout: 600_000 });
+  if (!existsSync(artifact)) throw new Error(`Package artifact not found at ${artifact}`);
   const port = await reservePort();
   const home = join(installRoot, "home");
   env = {

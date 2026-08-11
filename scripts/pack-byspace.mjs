@@ -19,6 +19,7 @@ const cliDir = join(root, "packages", "cli");
 const artifactsDir = join(root, "artifacts");
 const internalWorkspaces = ["highlight", "protocol", "client", "relay", "server"];
 const npmCli = process.env.npm_execpath;
+const skipWebExport = process.argv.includes("--skip-web-export");
 
 function run(command, args, options = {}) {
   const result = spawnSync(command, args, {
@@ -61,7 +62,7 @@ function packWorkspace(workspaceDir, destination) {
 }
 
 runNpm(["run", "build:server:clean"]);
-runNpm(["run", "build:daemon-web-ui"]);
+runNpm(["run", "build:daemon-web-ui", ...(skipWebExport ? ["--", "--skip-export"] : [])]);
 
 mkdirSync(artifactsDir, { recursive: true });
 for (const filename of readdirSync(artifactsDir)) {

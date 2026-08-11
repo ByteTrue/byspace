@@ -63,3 +63,17 @@ Relay 保持现有同 SHA 部署与 post-deploy verification；它当前约 30 �
 - 回写候选：Epic spec 固化最终 artifact 身份链、耗时结果和实际 retention。
 - 关闭判断：三平台与发布消费同一 npm artifact，App CI 与 Pages 使用同一 Web artifact，真实渠道证明完整。
 - 遗留：Playwright 关键路径由 Issue 003 处理；Relay 自身没有证据支持继续优化。
+
+## Implementation
+
+- `app-tests` performs the only Web export, archives `packages/app/dist`, and emits an exact commit/version/SHA-256 manifest.
+- `package-artifact` waits for that Web artifact, verifies and extracts it, then calls `pack:byspace -- --skip-web-export` so the daemon embeds the same distribution rather than exporting again.
+- The package job creates one npm tarball and manifest; Linux, macOS, and Windows download, verify, globally install, and smoke that same tarball without repacking.
+- `Publish npm` selects a successful push-event CI run by exact SHA, downloads and verifies its tarball, publishes it with the existing Trusted Publishing boundary, then downloads the registry tarball and verifies the same digest. Already-published reruns follow the same registry digest proof.
+- `Deploy App` selects the same successful exact-SHA CI run, downloads and verifies its Web artifact, installs Wrangler from the committed lockfile, and deploys without rebuilding.
+- Artifact absence, wrong commit/run selection, version mismatch, digest mismatch, and semantic archive mismatch fail closed. Artifacts are retained for 14 days; an expired artifact requires rerunning exact-SHA CI before release.
+
+## Evidence status
+
+- Local manifest unit tests, workflow contract tests, full package build/smoke, YAML parsing, typecheck, lint, format, and whitespace checks are required before the first workflow push.
+- Linux/macOS/Windows reuse, real cross-workflow download, actual npm registry digest continuity, Pages promotion, and timing remain pending exact-SHA CI and a real channel release.

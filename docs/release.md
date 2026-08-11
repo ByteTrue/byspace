@@ -28,6 +28,7 @@ Future upstream updates port the aggregate delta between this baseline and an ap
 - Immediately before tagging, release SHA, CI SHA, local `HEAD`, and fetched `origin/main` must still be equal.
 - Release tags match `vX.Y.Z` or `vX.Y.Z-beta.N` and are immutable under the repository's `Immutable release tags` ruleset.
 - `Publish npm` verifies tag, package version, current `main`, and exact-SHA CI before publishing.
+- Successful exact-SHA push CI builds the canonical Web distribution once, embeds it in one npm tarball, and records commit/version/SHA-256 manifests. Publisher and Pages workflows download those CI-run artifacts and fail closed instead of rebuilding.
 - Successful `Publish npm` is the sole trigger for the channel-specific Pages and Relay workflows.
 - Deployment workflows accept only successful same-repository tag runs, peel annotated tags, and deploy the immutable tagged SHA. They do not require `main` to remain frozen after npm publication.
 - Prerelease daemons default to the Beta Web/Relay and self-update from npm `beta`; stable daemons default to Stable and self-update from npm `latest`. Custom endpoints and environment overrides remain supported.
@@ -59,7 +60,7 @@ npm run build:web --workspace=@bytetrue/byspace-app
 npm run release:check
 ```
 
-`release:check` builds one `@bytetrue/byspace` tarball, installs it into a clean global prefix, loads native dependencies, and proves CLI plus isolated daemon start/status/stop. Publishing reuses that exact artifact.
+`release:check` still builds and validates a local candidate before version control changes. Successful exact-SHA push CI independently creates the canonical Web archive and npm tarball, smoke-tests that one tarball on Linux/macOS/Windows, and records their SHA-256 manifests. Publishing and Pages deployment promote those exact CI artifacts; npm publication is verified by downloading the registry tarball and matching it against the CI manifest.
 
 ## Beta release
 
@@ -69,7 +70,7 @@ npm run release:check
 4. Immediately before tagging, fetch `origin/main` and prove release SHA = CI SHA = local `HEAD` = `origin/main`. Stop if `main` advanced.
 5. Confirm the `main` push did not deploy App or Relay, then record npm `latest` and the current Stable deployment IDs.
 6. Create and push annotated tag `vX.Y.Z-beta.N` once. Do not move it.
-7. `Publish npm` publishes npm dist-tag `beta` and creates a GitHub prerelease.
+7. `Publish npm` publishes the exact CI tarball under npm dist-tag `beta` and creates a GitHub prerelease.
 8. Successful publication deploys `byspace-beta` Pages and `byspace-relay-beta` Worker from the tagged SHA.
 9. Verify npm `beta`, `https://app-beta.byspace.zijieapi.de5.net`, the Beta Worker deployment, a real Beta daemon pairing URL, and relay connection. Confirm npm `latest` and Stable deployment IDs did not move.
 
@@ -81,7 +82,7 @@ npm run release:check
 4. Immediately before tagging, fetch `origin/main` and prove release SHA = CI SHA = local `HEAD` = `origin/main`. Stop if `main` advanced.
 5. Confirm the `main` push did not deploy App or Relay, then record npm `beta` and the current Beta deployment IDs.
 6. Create and push annotated tag `vX.Y.Z` once.
-7. `Publish npm` publishes npm dist-tag `latest` and creates the Stable GitHub release.
+7. `Publish npm` publishes the exact CI tarball under npm dist-tag `latest` and creates the Stable GitHub release.
 8. Successful publication deploys `byspace` Pages and `byspace-relay` Worker from the tagged SHA.
 9. Verify npm `latest`, Stable Web, Stable Relay, and a real Stable daemon pairing/relay connection. Confirm npm `beta` and Beta deployment IDs did not move.
 

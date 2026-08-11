@@ -31,8 +31,7 @@ release commit
       │
       ▼
 exact-SHA CI
-  ├─ package build ──> 唯一 npm tarball ──> Linux/macOS/Windows smoke
-  ├─ app tests/build ─> 唯一 Web dist
+  ├─ app tests/build ─> 唯一 Web dist ─> package build ─> 唯一 npm tarball ─> Linux/macOS/Windows smoke
   ├─ Playwright 全量场景
   └─ 其余完整门禁
       │ 全绿
@@ -49,7 +48,7 @@ Web `dist` 只在 App CI job 中生成一次。App Deploy 从 exact-SHA CI run �
 
 ### 全量测试不变，缩短 Playwright 最长 shard
 
-当前 Playwright 使用 4 个彼此隔离的 runner，每个 runner 保持 `workers: 1`、`fullyParallel: false`，避免共享 daemon/relay/Metro 栈产生跨测试竞争。最近一次成功 run 的四个测试阶段约为 16:24、11:30、12:24、14:00，最长 shard 比最短高约 43%。同一 run 还有两个首轮各耗约 72 秒失败、retry 后约 8 秒通过的启动型 flake。
+当前 Playwright 使用 4 个彼此隔离的 runner，每个 runner 保持 `workers: 1`、`fullyParallel: false`，避免共享 daemon/relay/Metro 栈产生跨测试竞争。历史成功 run 的四个测试阶段约为 16:24、11:30、12:24、14:00；随后一次 run 的两个首用例各耗约 72 秒失败、retry 后约 8 秒通过。首用例根因修复后的 exact-SHA run `31482108162` 完整全绿，但四个 Playwright job 仍需 16:54、13:18、13:25、16:06，关键路径优化仍成立。
 
 先消除首轮 retry 的真实原因，再把隔离 shard 增至 8；不打开同一栈内并发，不减少场景，不做 path-based selective CI。若 8 shard 仍明显失衡，只拆分少数过大的 spec 文件；不先建立自定义调度器。
 
@@ -114,6 +113,7 @@ Vision 不涉及本次基础设施优化，关闭时只需确认产品目标未�
 - `docs/release-engineering.md`：修改 workflow、artifact 信任或渠道切换前读取完整发布不变量。
 - `docs/release.md`：执行真实 Beta/Stable 验收时按现有 release playbook 操作。
 - `.github/workflows/ci.yml`：当前完整 CI 与 Playwright/distribution 关键路径证据。
-- `.github/workflows/publish-npm.yml`、`.github/workflows/deploy-app.yml`：当前重复构建发生的位置。
+- `.github/workflows/npm-release.yml`、`.github/workflows/deploy-app.yml`：当前重复构建发生的位置。
 - GitHub Actions run `31417319455`：成功 Playwright shard 基线。
 - GitHub Actions run `31471036867`：当前 stale assertion 失败及“早失败、晚结束”证据。
+- GitHub Actions run `31482108162`：Issue 001 修复后的首个完整绿色基线，workflow 墙钟 16:58。
