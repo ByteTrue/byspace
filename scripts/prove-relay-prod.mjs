@@ -29,6 +29,7 @@ const relayEndpoint =
   "relay.byspace.zijieapi.de5.net:443";
 const baseUrl =
   args["base-url"] ?? process.env.BYSPACE_APP_URL ?? "https://app.byspace.zijieapi.de5.net";
+const expectedVersion = args["expected-version"] ?? process.env.BYSPACE_EXPECTED_VERSION;
 const timeoutMs = Number(args["timeout-ms"] ?? process.env.BYSPACE_PROVE_TIMEOUT_MS ?? 60_000);
 const stabilityMs = Number(
   args["stability-ms"] ?? process.env.BYSPACE_PROVE_STABILITY_MS ?? 30_000,
@@ -46,11 +47,20 @@ if (!daemonPublicKeyB64 || typeof daemonPublicKeyB64 !== "string") {
 }
 
 const nowIso = new Date().toISOString();
+const relayConnectionId = `relay:wss:${relayEndpoint}`;
 const daemon = {
   serverId,
   label: "relay-daemon",
-  connections: [{ id: `relay:${relayEndpoint}`, type: "relay", relayEndpoint, daemonPublicKeyB64 }],
-  preferredConnectionId: `relay:${relayEndpoint}`,
+  connections: [
+    {
+      id: relayConnectionId,
+      type: "relay",
+      relayEndpoint,
+      useTls: true,
+      daemonPublicKeyB64,
+    },
+  ],
+  preferredConnectionId: relayConnectionId,
   createdAt: nowIso,
   updatedAt: nowIso,
 };
@@ -65,21 +75,28 @@ page.on("pageerror", (e) => console.error(`[browser:pageerror] ${e.message}`));
 await page.addInitScript(
   (seed) => {
     localStorage.setItem("@byspace:daemon-registry", JSON.stringify([seed.daemon]));
+    localStorage.setItem("@byspace:e2e", "1");
     localStorage.removeItem("@byspace:settings");
   },
   { daemon },
 );
 
-await page.goto(`${baseUrl}/settings`, { waitUntil: "domcontentloaded", timeout: timeoutMs });
+await page.goto(`${baseUrl}/settings/hosts/${encodeURIComponent(serverId)}/host`, {
+  waitUntil: "domcontentloaded",
+  timeout: timeoutMs,
+});
 
-const card = page.getByTestId(`daemon-card-${serverId}`);
-await card.waitFor({ timeout: timeoutMs });
-await card.getByText("Online", { exact: true }).waitFor({ timeout: timeoutMs });
-await card.getByText("Relay", { exact: true }).waitFor({ timeout: timeoutMs });
+const identity = page.getByTestId("host-page-identity");
+await identity.waitFor({ timeout: timeoutMs });
+await identity.getByText("Online", { exact: true }).waitFor({ timeout: timeoutMs });
+await identity.getByText("Relay", { exact: true }).waitFor({ timeout: timeoutMs });
+if (expectedVersion) {
+  await identity.getByText(`v${expectedVersion}`, { exact: true }).waitFor({ timeout: timeoutMs });
+}
 
 // Stability window: ensure it doesn't flap.
 await page.waitForTimeout(stabilityMs);
-await card.getByText("Online", { exact: true }).waitFor({ timeout: 5_000 });
+await identity.getByText("Online", { exact: true }).waitFor({ timeout: 5_000 });
 
 console.log(
   JSON.stringify(
