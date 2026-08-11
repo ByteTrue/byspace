@@ -46,13 +46,14 @@ GitHub Actions run `31471036867` 因此在 Ubuntu 和 Windows 的同一测试失
 
 2026-08-11：上层 session test 已改为用未完成的 Forge promise 验证两阶段边界。它先断言 `includeForge: false` 的本地 snapshot、diff refresh 和成功响应已经完成，再确认 `includeForge: true` / `manual-refresh-forge` 的后台读取已经启动，最后释放并等待该读取结束。没有修改生产代码，也没有恢复直接 `github.invalidate`。
 
-本地证据：
+本地与远端证据：
 
 - 修复前：`npx vitest run packages/server/src/server/session.test.ts --bail=1` 稳定复现原断言失败。
 - 修复后：同命令 143/143 通过。
 - `npx vitest run packages/server/src/server/session/checkout/checkout-session.test.ts --bail=1`：35/35 通过。
 - `npm run format:files -- ...`、`npm run typecheck`、`npm run lint` 通过。
-- 远端 exact-SHA Ubuntu/Windows 与完整 CI 尚未运行；提交和推送需要用户授权。
+- exact-SHA `542854ad3` 的 CI run `31480047406` 中，Ubuntu、Windows、macOS 与三平台 distribution jobs 均通过，原 stale assertion 没有再失败。
+- 完整 workflow 被 Playwright shard 1 的既有启动/滚动测试不确定性拦住；证据与修复转入 Issue 003，Issue 001 保持 open，直到后续 exact-SHA 完整 CI 全绿。
 
 ## 验证
 

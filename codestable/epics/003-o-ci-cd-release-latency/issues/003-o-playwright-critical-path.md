@@ -40,6 +40,19 @@ created: 2026-08-11
 4. 观察至少 5 次成功 run；如单个 shard 仍因大 spec 明显偏长，只拆分证据指出的少数大文件。不得引入按历史数据动态生成的自定义 scheduler。
 5. 记录总 runner minutes 与墙钟时间，确认增加隔离栈的成本在预计约 10%～15% 范围；若显著超出，先查重复 setup，而不是退回减少测试。
 
+## 执行进展
+
+exact-SHA `542854ad3` 的 CI run `31480047406` 暴露了两个可分离问题：
+
+- `00-sessions-empty.spec.ts` 首次尝试中，`page.goto("/")` 等待冷 Metro bundle 约 63 秒，已经耗尽默认 60 秒测试预算；业务断言实际只获得不到 1 秒，retry 在热 bundle 下约 8 秒通过。global setup 现在会在进入测试预算前请求并完整读取入口 bundle，TCP 监听不再被误当成 Web readiness。
+- `agent-stream-ui.spec.ts` 的共享滚动 helper 把鼠标放在 viewport 中央，可能命中并由嵌套 tool scroller 消费滚轮，导致主聊天区离底距离仍为 0。helper 现在向主聊天 viewport 派发 wheel intent，并确定性应用浏览器默认滚动结果，不再依赖命中测试数据中的具体子节点。
+
+定向证据：
+
+- `00-sessions-empty.spec.ts`：首次尝试通过；global setup 显式记录 bundle warmup，测试本体约 2 秒。
+- `agent-stream-ui.spec.ts -g "places stream controls"`：首次尝试通过，约 25 秒。
+- 仍需 exact-SHA CI 验证 Linux 冷 bundle、完整 shard 1，以及继续处理已记录的 `subagent-detach.spec.ts` 首次重试税；当前不提前扩大 shard。
+
 ## 质量承诺
 
 - 可靠性：现有场景、断言、retry 上限、trace/screenshot 失败证据不减少；启动 readiness 必须确定、可重复。

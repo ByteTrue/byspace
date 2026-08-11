@@ -129,6 +129,43 @@ async function waitForServer(port: number, options: WaitForServerOptions): Promi
   );
 }
 
+async function warmMetroWebBundle(
+  port: number,
+  childProcess: ChildProcess | null,
+  getRecentOutput: () => string,
+): Promise<void> {
+  const startedAt = Date.now();
+  const rootUrl = `http://127.0.0.1:${port}/`;
+  try {
+    const htmlResponse = await fetch(rootUrl, { signal: AbortSignal.timeout(120_000) });
+    if (!htmlResponse.ok) {
+      throw new Error(`Metro root returned HTTP ${htmlResponse.status}`);
+    }
+    const html = await htmlResponse.text();
+    const bundlePath = html.match(/<script[^>]+src=["']([^"']+\.bundle[^"']*)["']/i)?.[1];
+    if (!bundlePath) {
+      throw new Error("Metro root did not reference a web bundle");
+    }
+    const bundleResponse = await fetch(new URL(bundlePath.replaceAll("&amp;", "&"), rootUrl), {
+      signal: AbortSignal.timeout(120_000),
+    });
+    if (!bundleResponse.ok) {
+      throw new Error(`Metro bundle returned HTTP ${bundleResponse.status}`);
+    }
+    await bundleResponse.arrayBuffer();
+    if (childProcess && childProcess.exitCode !== null) {
+      throw new Error(`Metro exited during bundle warmup (exit ${childProcess.exitCode})`);
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(
+      `Metro web bundle warmup failed: ${message}.${formatRecentOutput(getRecentOutput)}`,
+      { cause: error },
+    );
+  }
+  console.log(`[e2e] Metro web bundle warmed in ${Date.now() - startedAt}ms`);
+}
+
 function parseRelayStartupFailure(line: string): string | null {
   const clean = stripAnsi(line);
   if (/Address already in use/i.test(clean)) {
@@ -811,6 +848,8 @@ export default async function globalSetup() {
         getRecentOutput: metroLineBuffer.dump,
       }),
     ]);
+
+    await warmMetroWebBundle(metroPort, metroProcess, metroLineBuffer.dump);
 
     const offer = await waitForPairingOfferFromDaemon({
       port,
