@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.5.0-beta.1 - 2026-08-11
+
+- Adds project-first workspace navigation, attention ordering, project icons, worktree labels, unified workspace creation, agent-guided project setup, and safe agent-guided workspace and branch renaming.
+- Expands Agent Timeline and History with durable synchronization, outline navigation, bounded cross-host search and jumps, duplicate-free pagination, and formatting-preserving copy.
+- Replaces legacy voice mode with local push-to-talk dictation, including model download progress and running-turn fork submission.
+- Adds sandboxed HTML preview, an expanded Command Center, Korean localization, and shared AI-operations settings.
+- Extends terminal launch profiles into unified workspace creation and tightens terminal, workspace setup, Provider lifecycle, and reconnect ownership behavior.
+- Restores Host appearance controls, returns Git Changes refresh before Forge network work, and shortens CI and release artifact promotion.
+
 ## 0.4.0 - 2026-08-04
 
 - Adds QR-code device pairing to Host settings.
