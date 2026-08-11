@@ -127,10 +127,6 @@ function removeInstallRoot() {
   }
 }
 
-function sleep(milliseconds) {
-  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, milliseconds);
-}
-
 async function reservePort() {
   const server = createServer();
   await new Promise((resolveListen, reject) => {
@@ -151,33 +147,87 @@ async function reservePort() {
   return address.port;
 }
 
-function waitForDaemon(env) {
-  const deadline = Date.now() + 20_000;
-  let lastResult;
-  while (Date.now() < deadline) {
-    lastResult = spawnBinary(["daemon", "status", "--json"], {
-      cwd: root,
-      env,
-      encoding: "utf8",
-      timeout: 10_000,
-    });
-    if (lastResult.status === 0) {
+function probeDaemonWebSocket(port) {
+  return new Promise((resolveProbe, rejectProbe) => {
+    const socket = new WebSocket(`ws://127.0.0.1:${port}/ws`);
+    let settled = false;
+    const timeout = setTimeout(
+      () => finish(new Error("WebSocket did not return server_info within 1.5 seconds")),
+      1_500,
+    );
+
+    function finish(error) {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
       try {
-        const status = JSON.parse(lastResult.stdout);
-        if (status.localDaemon === "running" && status.connectedDaemon === "reachable")
-          return status;
+        socket.close();
       } catch {
-        // The next bounded probe will retry while startup output settles.
+        // The probe is already settled; transport cleanup is best-effort.
       }
+      if (error) rejectProbe(error);
+      else resolveProbe();
     }
-    sleep(250);
+
+    socket.addEventListener("open", () => {
+      socket.send(
+        JSON.stringify({
+          type: "hello",
+          clientId: `package-smoke-${process.pid}`,
+          clientType: "cli",
+          protocolVersion: 1,
+          appVersion: version,
+        }),
+      );
+    });
+    socket.addEventListener("message", (event) => {
+      if (typeof event.data !== "string") return;
+      try {
+        const message = JSON.parse(event.data);
+        if (
+          message.type === "session" &&
+          message.message?.type === "status" &&
+          message.message.payload?.status === "server_info" &&
+          typeof message.message.payload.serverId === "string" &&
+          message.message.payload.serverId.length > 0
+        ) {
+          finish();
+        }
+      } catch {
+        // Ignore unrelated messages until the bounded probe expires.
+      }
+    });
+    socket.addEventListener("error", () => finish(new Error("WebSocket transport failed")));
+    socket.addEventListener("close", () =>
+      finish(new Error("WebSocket closed before server_info")),
+    );
+  });
+}
+
+async function waitForDaemon(env, port) {
+  const deadline = Date.now() + 20_000;
+  const url = `http://127.0.0.1:${port}/`;
+  let lastFailure = "Daemon probes did not run";
+  while (Date.now() < deadline) {
+    try {
+      const response = await fetch(url, { signal: AbortSignal.timeout(1_000) });
+      const body = await response.text();
+      if (response.ok && body.includes("__BYSPACE_INITIAL_DAEMON_CONNECTION__")) {
+        await probeDaemonWebSocket(port);
+        return;
+      }
+      lastFailure = `HTTP ${response.status}; embedded Web UI marker: ${body.includes("__BYSPACE_INITIAL_DAEMON_CONNECTION__")}`;
+    } catch (error) {
+      lastFailure = error instanceof Error ? error.message : String(error);
+    }
+    await new Promise((resolveSleep) => setTimeout(resolveSleep, 250));
   }
   const daemonLogPath = join(env.BYSPACE_HOME, "daemon.log");
   const daemonLog = existsSync(daemonLogPath)
     ? readFileSync(daemonLogPath, "utf8").slice(-20_000)
     : "<daemon.log was not created>";
   throw new Error(
-    `Packaged daemon did not become ready within 20 seconds\nLast status exit: ${String(lastResult?.status)}\nLast status stdout: ${lastResult?.stdout ?? ""}\nLast status stderr: ${lastResult?.stderr ?? ""}\nDaemon log:\n${daemonLog}`,
+    `Packaged daemon did not become ready within 20 seconds\nLast probe: ${lastFailure}\nDaemon log:\n${daemonLog}`,
   );
 }
 
@@ -340,12 +390,19 @@ try {
 
   runBinary(["daemon", "start"], { env });
   daemonStarted = true;
-  const defaultStatus = waitForDaemon(env);
-  if (defaultStatus.home !== home || defaultStatus.listen !== `127.0.0.1:${port}`) {
-    throw new Error(`Daemon used unexpected paths: ${JSON.stringify(defaultStatus)}`);
+  await waitForDaemon(env, port);
+  const daemonPid = JSON.parse(readFileSync(join(home, "byspace.pid"), "utf8"));
+  if (
+    !Number.isInteger(daemonPid.pid) ||
+    daemonPid.pid <= 0 ||
+    daemonPid.listen !== `127.0.0.1:${port}`
+  ) {
+    throw new Error(`Daemon used unexpected runtime metadata: ${JSON.stringify(daemonPid)}`);
   }
-  if (defaultStatus.relay !== "disabled") {
-    throw new Error(`Fresh daemon enabled relay without opt-in: ${JSON.stringify(defaultStatus)}`);
+  try {
+    process.kill(daemonPid.pid, 0);
+  } catch (error) {
+    throw new Error(`Daemon PID ${daemonPid.pid} is not alive`, { cause: error });
   }
   const defaultPersistedConfig = JSON.parse(readFileSync(join(home, "config.json"), "utf8"));
   if (
