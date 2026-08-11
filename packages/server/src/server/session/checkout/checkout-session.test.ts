@@ -375,8 +375,16 @@ describe("CheckoutSession", () => {
   });
 
   describe("refresh", () => {
-    it("forces a github-inclusive snapshot, nudges diffs, and confirms success", async () => {
+    it("returns local git before the forced forge refresh finishes", async () => {
       const snapshotCalls: Array<{ cwd: string; options: unknown }> = [];
+      let releaseForgeRefresh!: () => void;
+      const forgeRefresh = new Promise<void>((resolve) => {
+        releaseForgeRefresh = resolve;
+      });
+      let markForgeRefreshFinished!: () => void;
+      const forgeRefreshFinished = new Promise<void>((resolve) => {
+        markForgeRefreshFinished = resolve;
+      });
       const { subscriber, refreshedCwds } = createFakeDiffSubscriber({
         cwd: "",
         files: [],
@@ -386,6 +394,10 @@ describe("CheckoutSession", () => {
         git: {
           getSnapshot: async (cwd, snapshotOptions) => {
             snapshotCalls.push({ cwd, options: snapshotOptions });
+            if (snapshotOptions?.includeForge) {
+              await forgeRefresh;
+              markForgeRefreshFinished();
+            }
             return createNoGitWorkspaceRuntimeSnapshot(cwd);
           },
         },
@@ -399,7 +411,11 @@ describe("CheckoutSession", () => {
       });
 
       expect(snapshotCalls).toEqual([
-        { cwd: "/repo", options: { force: true, includeForge: true, reason: "manual-refresh" } },
+        { cwd: "/repo", options: { force: true, includeForge: false, reason: "manual-refresh" } },
+        {
+          cwd: "/repo",
+          options: { force: true, includeForge: true, reason: "manual-refresh-forge" },
+        },
       ]);
       expect(refreshedCwds).toEqual(["/repo"]);
       expect(emitted).toEqual([
@@ -408,6 +424,8 @@ describe("CheckoutSession", () => {
           payload: { cwd: "/repo", success: true, error: null, requestId: "r7" },
         },
       ]);
+      releaseForgeRefresh();
+      await forgeRefreshFinished;
     });
 
     it("expands a tilde cwd before refreshing git and diffs", async () => {
@@ -434,7 +452,7 @@ describe("CheckoutSession", () => {
       });
 
       const resolvedCwd = expandTilde("~/repo");
-      expect(snapshotCalls).toEqual([resolvedCwd]);
+      expect(snapshotCalls).toEqual([resolvedCwd, resolvedCwd]);
       expect(refreshedCwds).toEqual([resolvedCwd]);
     });
   });

@@ -51,7 +51,7 @@ function gitFiles() {
 }
 
 for (const path of gitFiles()) {
-  const pathAllowed = ignoredFiles.has(path) || path.startsWith(".cs/");
+  const pathAllowed = ignoredFiles.has(path) || path.startsWith("codestable/");
   if (!pathAllowed) {
     for (const value of forbiddenNames) {
       if (path.includes(value)) fail(`Legacy identity in active path: ${path}`);

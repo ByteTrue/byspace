@@ -454,10 +454,9 @@ export class CheckoutSession {
     const resolvedCwd = expandTilde(cwd);
 
     try {
-      (await this.resolveForgeService(resolvedCwd))?.service.invalidate({ cwd: resolvedCwd });
       await this.workspaceGitService.getSnapshot(resolvedCwd, {
         force: true,
-        includeForge: true,
+        includeForge: false,
         reason: "manual-refresh",
       });
       this.checkoutDiffManager.scheduleRefreshForCwd(resolvedCwd);
@@ -470,6 +469,18 @@ export class CheckoutSession {
           requestId,
         },
       });
+      void this.workspaceGitService
+        .getSnapshot(resolvedCwd, {
+          force: true,
+          includeForge: true,
+          reason: "manual-refresh-forge",
+        })
+        .catch((error) => {
+          this.logger.warn(
+            { err: error, cwd: resolvedCwd },
+            "Failed to refresh checkout forge status",
+          );
+        });
     } catch (error) {
       this.host.emit({
         type: "checkout.refresh.response",
