@@ -12,6 +12,7 @@ import {
 import type { GitMutationService } from "./session/git-mutation/git-mutation-service.js";
 import type { WorkspaceGitService } from "./workspace-git-service.js";
 import type { PersistedWorkspaceRecord, WorkspaceRegistry } from "./workspace-registry.js";
+import type { CheckoutContext } from "../utils/checkout-git.js";
 import {
   generateBranchNameFromFirstAgentContext,
   type GeneratedWorkspaceName,
@@ -32,8 +33,7 @@ interface WorkspaceAutoNameOptions {
   emitWorkspaceUpdateForCwd: (cwd: string) => Promise<void>;
   emitWorkspaceUpdateForWorkspaceId: (workspaceId: string) => Promise<void>;
   logger: pino.Logger;
-  byspaceHome?: string;
-  worktreesRoot?: string;
+  checkoutContext?: CheckoutContext;
   generateWorkspaceName?: WorkspaceNameGenerator;
 }
 
@@ -51,8 +51,7 @@ export class WorkspaceAutoName {
   private readonly emitWorkspaceUpdateForCwd: (cwd: string) => Promise<void>;
   private readonly emitWorkspaceUpdateForWorkspaceId: (workspaceId: string) => Promise<void>;
   private readonly logger: pino.Logger;
-  private readonly byspaceHome: string | undefined;
-  private readonly worktreesRoot: string | undefined;
+  private readonly checkoutContext: CheckoutContext | undefined;
   private readonly generateWorkspaceName: WorkspaceNameGenerator;
 
   constructor(options: WorkspaceAutoNameOptions) {
@@ -65,8 +64,7 @@ export class WorkspaceAutoName {
     this.emitWorkspaceUpdateForCwd = options.emitWorkspaceUpdateForCwd;
     this.emitWorkspaceUpdateForWorkspaceId = options.emitWorkspaceUpdateForWorkspaceId;
     this.logger = options.logger;
-    this.byspaceHome = options.byspaceHome;
-    this.worktreesRoot = options.worktreesRoot;
+    this.checkoutContext = options.checkoutContext;
     this.generateWorkspaceName =
       options.generateWorkspaceName ?? generateBranchNameFromFirstAgentContext;
   }
@@ -128,8 +126,7 @@ export class WorkspaceAutoName {
           return nextGenerated?.branch ?? null;
         });
       },
-      byspaceHome: this.byspaceHome,
-      worktreesRoot: this.worktreesRoot,
+      checkoutContext: this.checkoutContext,
     });
 
     if (!generated) {

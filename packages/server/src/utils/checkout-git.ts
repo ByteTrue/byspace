@@ -1174,18 +1174,6 @@ export async function remoteBranchExists(cwd: string, branchName: string): Promi
   );
   return matches.some(Boolean);
 }
-
-export async function getBranchUpstreamRef(
-  cwd: string,
-  branchName: string,
-): Promise<string | null> {
-  const { stdout } = await runGitCommand(
-    ["for-each-ref", "--format=%(upstream)", `refs/heads/${branchName}`],
-    { cwd, envOverlay: READ_ONLY_GIT_ENV },
-  );
-  return stdout.trim() || null;
-}
-
 export async function renameCurrentBranch(
   cwd: string,
   newName: string,

@@ -895,8 +895,7 @@ export async function createBySpaceDaemon(
       await emitWorkspaceUpdatesExternal([workspaceId]);
     },
     logger,
-    byspaceHome: config.byspaceHome,
-    worktreesRoot: config.worktreesRoot,
+    checkoutContext: { byspaceHome: config.byspaceHome, worktreesRoot: config.worktreesRoot },
   });
 
   setupAutoArchiveOnMerge({
@@ -1169,8 +1168,10 @@ export async function createBySpaceDaemon(
     renameWorkspaceBranch: async (input) => {
       const renamed = await renameWorkspaceBranch({
         ...input,
-        byspaceHome: config.byspaceHome,
-        worktreesRoot: config.worktreesRoot,
+        checkoutContext: {
+          byspaceHome: config.byspaceHome,
+          worktreesRoot: config.worktreesRoot,
+        },
       });
       try {
         const workspace = runtime.callerWorkspaceId

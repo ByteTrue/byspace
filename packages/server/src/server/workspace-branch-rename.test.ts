@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { afterEach, expect, test, vi } from "vitest";
+import { afterEach, expect, test } from "vitest";
 
 import {
   attemptFirstAgentBranchAutoName,
@@ -30,7 +30,7 @@ test("renames an unpublished BySpace-generated worktree branch", async () => {
     renameWorkspaceBranch({
       cwd: nestedCwd,
       newBranchName: "focused-rename",
-      byspaceHome,
+      checkoutContext: { byspaceHome },
     }),
   ).resolves.toEqual({
     previousBranch: "quiet-otter",
@@ -45,13 +45,14 @@ test("renames the provisional branch produced by initial auto-naming", async () 
     cwd: worktree,
     firstAgentContext: { prompt: "Build focused workspace rename" },
     generateBranchNameFromContext: async () => "initial-prompt-name",
+    checkoutContext: { byspaceHome },
   });
 
   await expect(
     renameWorkspaceBranch({
       cwd: worktree,
       newBranchName: "converged-workspace-name",
-      byspaceHome,
+      checkoutContext: { byspaceHome },
     }),
   ).resolves.toEqual({
     previousBranch: "initial-prompt-name",
@@ -65,13 +66,14 @@ test("allows a later agent refinement of an auto-named branch", async () => {
     cwd: worktree,
     firstAgentContext: { prompt: "Build focused workspace rename" },
     generateBranchNameFromContext: async () => "initial-prompt-name",
+    checkoutContext: { byspaceHome },
   });
 
   await expect(
     renameWorkspaceBranch({
       cwd: worktree,
       newBranchName: "converged-workspace-name",
-      byspaceHome,
+      checkoutContext: { byspaceHome },
     }),
   ).resolves.toEqual({
     previousBranch: "initial-prompt-name",
@@ -81,7 +83,7 @@ test("allows a later agent refinement of an auto-named branch", async () => {
     renameWorkspaceBranch({
       cwd: worktree,
       newBranchName: "final-workspace-name",
-      byspaceHome,
+      checkoutContext: { byspaceHome },
     }),
   ).resolves.toEqual({
     previousBranch: "converged-workspace-name",
@@ -97,7 +99,7 @@ test("rejects a branch that was renamed outside BySpace", async () => {
     renameWorkspaceBranch({
       cwd: worktree,
       newBranchName: "focused-rename",
-      byspaceHome,
+      checkoutContext: { byspaceHome },
     }),
   ).rejects.toThrow("current BySpace-generated worktree branch");
 });
@@ -113,44 +115,41 @@ test("rejects a published branch even without an upstream", async () => {
     renameWorkspaceBranch({
       cwd: worktree,
       newBranchName: "focused-rename",
-      byspaceHome,
+      checkoutContext: { byspaceHome },
     }),
   ).rejects.toThrow("Published branches cannot be renamed");
 });
 
 test("rechecks publication before applying the delayed initial auto-name", async () => {
-  const { worktree } = createManagedWorktree("quiet-otter");
-  const renameCurrentBranch = vi.fn();
+  const { root, byspaceHome, repo, worktree } = createManagedWorktree("quiet-otter");
+  const remote = path.join(root, "remote.git");
+  git(root, "init", "--bare", remote);
+  git(repo, "remote", "add", "origin", remote);
+  git(worktree, "push", "origin", "quiet-otter");
 
   await expect(
     attemptFirstAgentBranchAutoName({
       cwd: worktree,
       firstAgentContext: { prompt: "Rename this worktree" },
       generateBranchNameFromContext: async () => "focused-rename",
-      getCurrentBranch: async () => "quiet-otter",
-      getBranchUpstreamRef: async () => "refs/remotes/origin/quiet-otter",
-      remoteBranchExists: async () => false,
-      localBranchExists: async () => false,
-      renameCurrentBranch,
+      checkoutContext: { byspaceHome },
     }),
   ).resolves.toEqual({ attempted: true, renamed: false, branchName: null });
-  expect(renameCurrentBranch).not.toHaveBeenCalled();
+  expect(git(worktree, "branch", "--show-current")).toBe("quiet-otter");
 });
 
 test("rechecks BySpace ownership before applying the delayed initial auto-name", async () => {
   const { root, worktree } = createManagedWorktree("quiet-otter");
-  const renameCurrentBranch = vi.fn();
 
   await expect(
     attemptFirstAgentBranchAutoName({
       cwd: worktree,
       firstAgentContext: { prompt: "Rename this worktree" },
       generateBranchNameFromContext: async () => "focused-rename",
-      byspaceHome: path.join(root, "different-home"),
-      renameCurrentBranch,
+      checkoutContext: { byspaceHome: path.join(root, "different-home") },
     }),
   ).resolves.toEqual({ attempted: true, renamed: false, branchName: null });
-  expect(renameCurrentBranch).not.toHaveBeenCalled();
+  expect(git(worktree, "branch", "--show-current")).toBe("quiet-otter");
 });
 
 function createManagedWorktree(branchName: string): {

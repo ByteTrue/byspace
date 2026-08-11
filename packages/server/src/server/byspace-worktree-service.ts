@@ -26,12 +26,12 @@ import {
   type WorktreeConfig,
 } from "../utils/worktree.js";
 import {
-  getBranchUpstreamRef,
   getCheckoutStatus,
   getCurrentBranch,
   localBranchExists,
   remoteBranchExists,
   renameCurrentBranch,
+  type CheckoutContext,
 } from "../utils/checkout-git.js";
 import {
   markBySpaceWorktreeFirstAgentBranchAutoNameAttempted,
@@ -186,13 +186,7 @@ export async function attemptFirstAgentBranchAutoName(options: {
     cwd: string;
     firstAgentContext: FirstAgentContext;
   }) => Promise<string | null>;
-  getCurrentBranch?: typeof getCurrentBranch;
-  getBranchUpstreamRef?: typeof getBranchUpstreamRef;
-  remoteBranchExists?: typeof remoteBranchExists;
-  renameCurrentBranch?: typeof renameCurrentBranch;
-  localBranchExists?: typeof localBranchExists;
-  byspaceHome?: string;
-  worktreesRoot?: string;
+  checkoutContext?: CheckoutContext;
 }): Promise<AttemptFirstAgentBranchAutoNameResult> {
   const firstAgentContext = options.firstAgentContext;
   if (!firstAgentContext || !buildAgentBranchNameSeed(firstAgentContext)) {
@@ -213,9 +207,8 @@ export async function attemptFirstAgentBranchAutoName(options: {
     return { attempted: false, renamed: false, branchName: null };
   }
 
-  const getCurrentBranchImpl = options.getCurrentBranch ?? getCurrentBranch;
   const placeholderBranchName = metadata.firstAgentBranchAutoName.placeholderBranchName;
-  if ((await getCurrentBranchImpl(options.cwd)) !== placeholderBranchName) {
+  if ((await getCurrentBranch(options.cwd)) !== placeholderBranchName) {
     markBySpaceWorktreeFirstAgentBranchAutoNameAttempted(options.cwd);
     return { attempted: true, renamed: false, branchName: null };
   }
@@ -234,12 +227,11 @@ export async function attemptFirstAgentBranchAutoName(options: {
     return { attempted: true, renamed: false, branchName: null };
   }
   return workspaceLifecycleCoordinator.runExclusive(async () => {
-    const localBranchExistsImpl = options.localBranchExists ?? localBranchExists;
     const targetName = await findAvailableBranchName({
       cwd: options.cwd,
       desiredName: branchName,
       placeholderBranchName,
-      localBranchExists: localBranchExistsImpl,
+      localBranchExists,
     });
     if (!targetName) {
       return { attempted: true, renamed: false, branchName: null };
@@ -249,22 +241,13 @@ export async function attemptFirstAgentBranchAutoName(options: {
       !(await isInitialAutoBranchRenameStillSafe({
         cwd: options.cwd,
         placeholderBranchName,
-        getCurrentBranch: getCurrentBranchImpl,
-        getBranchUpstreamRef: options.getBranchUpstreamRef,
-        remoteBranchExists: options.remoteBranchExists,
-        byspaceHome: options.byspaceHome,
-        worktreesRoot: options.worktreesRoot,
+        checkoutContext: options.checkoutContext,
       }))
     ) {
       return { attempted: true, renamed: false, branchName: null };
     }
 
-    const renameCurrentBranchImpl = options.renameCurrentBranch ?? renameCurrentBranch;
-    const renamedBranch = await renameCurrentBranchImpl(
-      options.cwd,
-      targetName,
-      placeholderBranchName,
-    );
+    const renamedBranch = await renameCurrentBranch(options.cwd, targetName, placeholderBranchName);
     const currentBranch = renamedBranch.currentBranch ?? targetName;
     recordBySpaceWorktreeFirstAgentBranchAutoName(options.cwd, currentBranch);
     return { attempted: true, renamed: true, branchName: currentBranch };
@@ -274,11 +257,7 @@ export async function attemptFirstAgentBranchAutoName(options: {
 async function isInitialAutoBranchRenameStillSafe(options: {
   cwd: string;
   placeholderBranchName: string;
-  getCurrentBranch: typeof getCurrentBranch;
-  getBranchUpstreamRef?: typeof getBranchUpstreamRef;
-  remoteBranchExists?: typeof remoteBranchExists;
-  byspaceHome?: string;
-  worktreesRoot?: string;
+  checkoutContext?: CheckoutContext;
 }): Promise<boolean> {
   let currentMetadata: ReturnType<typeof readBySpaceWorktreeMetadata>;
   try {
@@ -290,29 +269,14 @@ async function isInitialAutoBranchRenameStillSafe(options: {
     return false;
   }
 
-  let currentBranch: string | null;
-  let upstreamRef: string | null;
-  if (options.byspaceHome || options.worktreesRoot) {
-    const status = await getCheckoutStatus(options.cwd, {
-      byspaceHome: options.byspaceHome,
-      worktreesRoot: options.worktreesRoot,
-    });
-    if (!status.isGit || !status.isBySpaceOwnedWorktree) {
-      return false;
-    }
-    currentBranch = status.currentBranch;
-    upstreamRef = status.upstreamRef;
-  } else {
-    currentBranch = await options.getCurrentBranch(options.cwd);
-    const getBranchUpstreamRefImpl = options.getBranchUpstreamRef ?? getBranchUpstreamRef;
-    upstreamRef = await getBranchUpstreamRefImpl(options.cwd, options.placeholderBranchName);
+  const status = await getCheckoutStatus(options.cwd, options.checkoutContext);
+  if (!status.isGit || !status.isBySpaceOwnedWorktree) {
+    return false;
   }
-
-  const remoteBranchExistsImpl = options.remoteBranchExists ?? remoteBranchExists;
   return (
-    currentBranch === options.placeholderBranchName &&
-    !upstreamRef &&
-    !(await remoteBranchExistsImpl(options.cwd, options.placeholderBranchName))
+    status.currentBranch === options.placeholderBranchName &&
+    !status.upstreamRef &&
+    !(await remoteBranchExists(options.cwd, options.placeholderBranchName))
   );
 }
 
@@ -331,8 +295,7 @@ function getEligibleBySpaceGeneratedBranchName(
 export async function renameWorkspaceBranch(options: {
   cwd: string;
   newBranchName: string;
-  byspaceHome?: string;
-  worktreesRoot?: string;
+  checkoutContext?: CheckoutContext;
 }): Promise<RenameWorkspaceBranchResult> {
   const validation = validateBranchSlug(options.newBranchName);
   if (!validation.valid) {
@@ -341,10 +304,7 @@ export async function renameWorkspaceBranch(options: {
   const expectedCurrentBranch = await getCurrentBranch(options.cwd);
 
   return workspaceLifecycleCoordinator.runExclusive(async () => {
-    const status = await getCheckoutStatus(options.cwd, {
-      byspaceHome: options.byspaceHome,
-      worktreesRoot: options.worktreesRoot,
-    });
+    const status = await getCheckoutStatus(options.cwd, options.checkoutContext);
     if (!status.isGit || !status.isBySpaceOwnedWorktree || !status.currentBranch) {
       throw new Error("Branch rename is limited to BySpace-owned worktree branches");
     }
@@ -379,7 +339,6 @@ export async function renameWorkspaceBranch(options: {
     if (!renamed.previousBranch || !renamed.currentBranch) {
       throw new Error("Branch rename did not produce a named branch");
     }
-    markBySpaceWorktreeFirstAgentBranchAutoNameAttempted(status.repoRoot);
     recordBySpaceWorktreeFirstAgentBranchAutoName(status.repoRoot, renamed.currentBranch);
     return { previousBranch: renamed.previousBranch, currentBranch: renamed.currentBranch };
   });

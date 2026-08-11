@@ -288,17 +288,24 @@ export function recordBySpaceWorktreeFirstAgentBranchAutoName(
   if (
     !current ||
     current.version !== 2 ||
-    current.firstAgentBranchAutoName?.status !== "attempted"
+    (current.firstAgentBranchAutoName?.status !== "pending" &&
+      current.firstAgentBranchAutoName?.status !== "attempted")
   ) {
     return current;
   }
+  const firstAgentBranchAutoName =
+    current.firstAgentBranchAutoName.status === "pending"
+      ? {
+          status: "attempted" as const,
+          placeholderBranchName: current.firstAgentBranchAutoName.placeholderBranchName,
+          attemptedAt: new Date().toISOString(),
+          renamedBranchName,
+        }
+      : { ...current.firstAgentBranchAutoName, renamedBranchName };
 
   const next: BySpaceWorktreeMetadata = {
     ...current,
-    firstAgentBranchAutoName: {
-      ...current.firstAgentBranchAutoName,
-      renamedBranchName,
-    },
+    firstAgentBranchAutoName,
   };
   writeBySpaceWorktreeMetadataFile(worktreeRoot, next);
   return next;
