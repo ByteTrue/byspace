@@ -92,12 +92,13 @@ export async function scrollChatAwayFromBottom(
   input: { deltaY: number; minDistanceFromBottom: number },
 ): Promise<ScrollAnchorBaseline> {
   const scroll = getVisibleChatScroll(page);
-  // Keep the gesture on the chat viewport so nested tool scrollers cannot consume it.
-  await scroll.evaluate((root: Element, deltaY) => {
-    root.dispatchEvent(new WheelEvent("wheel", { bubbles: true, deltaY }));
-    const scrollElement = root as HTMLElement;
-    scrollElement.scrollTop += deltaY;
-  }, input.deltaY);
+  const box = await scroll.boundingBox();
+  if (!box) {
+    throw new Error("Agent chat scroll container is not visible");
+  }
+  // Use trusted wheel input near the viewport edge, away from nested tool scrollers.
+  await page.mouse.move(box.x + 2, box.y + 2);
+  await page.mouse.wheel(0, input.deltaY);
 
   await expect
     .poll(async () => {

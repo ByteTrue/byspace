@@ -75,8 +75,8 @@ Web `dist` 只在 release artifact job 中生成一次，并在同一 job 中嵌
 - [x] `issues/001-x-restore-ci-baseline.md`：修正 Git 刷新异步 Forge 行为留下的旧测试断言，恢复 exact-SHA CI，并记录可复算基线。
 - [ ] `issues/002-o-single-build-release-artifacts.md`：让三平台 smoke、npm Publisher 和 App Deploy 消费 CI 中唯一构建的 artifact。
 - [ ] `issues/003-o-playwright-critical-path.md`：消除首轮 retry 税，增加隔离 shard，在保留全量场景的前提下压缩最长 job。
-- [ ] `issues/004-o-git-stdin-epipe-flake.md`：共享 Git runner 消费提前关闭的 stdin pipe error，避免 CI 在断言全绿后以 uncaught `EPIPE` 失败。
-- [ ] `issues/005-o-codex-resume-test-startup-race.md`：让 Codex fake app-server 集成测试等待协议结果，而不是假定 Windows runner 必须在 500ms 内启动子进程。
+- [x] `issues/004-x-git-stdin-epipe-flake.md`：共享 Git runner 消费提前关闭的 stdin pipe error，避免 CI 在断言全绿后以 uncaught `EPIPE` 失败。
+- [x] `issues/005-x-codex-resume-test-startup-race.md`：让 Codex fake app-server 集成测试等待协议结果，而不是假定 Windows runner 必须在 500ms 内启动子进程。
 
 Issue 002 和 003 在 Issue 001 恢复可信基线后可以并行推进；Issue 004、005 是测量过程暴露的可靠性阻断，最终要合并观察端到端 release 时间。
 

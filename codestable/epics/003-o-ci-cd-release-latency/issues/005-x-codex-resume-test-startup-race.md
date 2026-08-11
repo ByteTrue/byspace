@@ -1,7 +1,7 @@
 ---
 kind: issue
 title: 移除 Codex resume 测试的 500ms 启动竞态
-status: open
+status: closed
 type: bug
 created: 2026-08-11
 updated: 2026-08-11
@@ -27,8 +27,9 @@ CI `31491465489` 的 Windows server suite 只有一个失败：`resumeSession do
 ## 验证
 
 - [x] 该测试独立启动 10 次，10/10 通过；协议本体每次约 93～130ms。
-- [ ] Windows server suite 在新的 exact-SHA CI 中通过。
-- [ ] 完整 CI 通过。
+- [x] exact-SHA `6044abc83` 的 Windows server suite 在 run `31495966222` 中 6:32 通过；原失败场景没有 500ms runner 调度竞态。
+- [x] 同一 run 27/27 jobs 全绿，workflow 墙钟 8:56。
+- [x] 独立 review 确认 persisted thread 的 rejection 与精确 request 序列断言均保留，未发现 correctness blocker。
 
 ## 关闭条件
 

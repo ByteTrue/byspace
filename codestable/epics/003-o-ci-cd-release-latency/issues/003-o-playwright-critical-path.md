@@ -45,7 +45,7 @@ created: 2026-08-11
 exact-SHA `9be5ae8f6` 的 CI run `31480047406` 暴露了两个可分离问题：
 
 - `00-sessions-empty.spec.ts` 首次尝试中，`page.goto("/")` 等待冷 Metro bundle 约 63 秒，已经耗尽默认 60 秒测试预算；业务断言实际只获得不到 1 秒，retry 在热 bundle 下约 8 秒通过。global setup 现在会在进入测试预算前请求并完整读取入口 bundle，TCP 监听不再被误当成 Web readiness。
-- `agent-stream-ui.spec.ts` 的共享滚动 helper 原先可能把滚轮交给嵌套 tool scroller；首轮修复改为直接滚动主 viewport。10-shard 实测进一步证明 `readScrollMetrics()` 仍会从所有后代中选最大可滚元素，可能用 tool scroller 通过“可滚动”门、随后却滚动主 viewport。现在指标、readiness、滚动与断言统一只读取 `data-testid="agent-chat-scroll"` 这个真实 Web stream scroll owner。
+- `agent-stream-ui.spec.ts` 的共享滚动 helper 原先可能把真实滚轮交给居中的嵌套 tool scroller；首轮修复改为直接滚动主 viewport。10-shard 实测进一步证明 `readScrollMetrics()` 仍会从所有后代中选最大可滚元素，可能用 tool scroller 通过“可滚动”门、随后却滚动主 viewport。指标、readiness 与断言因此统一只读取 `data-testid="agent-chat-scroll"` 这个真实 Web stream scroll owner；后续样本又证明合成 wheel + `scrollTop` 会绕开浏览器原生 wheel→scroll 排序，最终候选改为在 viewport 边缘发出真实 wheel，既避开嵌套 scroller，也保留产品的用户意图取消路径。
 
 验证与成本模型：
 
@@ -62,6 +62,10 @@ exact-SHA `9be5ae8f6` 的 CI run `31480047406` 暴露了两个可分离问题：
 - exact-SHA `39247795a` 的 run `31491465489` 再次让 10/10 Playwright job 全绿；303 passed、19 skipped、0 flaky/retry，证明 scroll-owner 修复生效。最长 shard 1 仍为 11:08，说明稳定关键路径不是 retry，而是静态 shard 1 同时承载 `agent-stream-ui`、`archive-tab` 与 `assistant-fork-menu`。该 workflow 由独立的 Windows Codex resume 测试 500ms 启动竞态阻断（Issue 005），仍不计入完整成功样本。
 - 原生 11-shard 对 shard 1 的 33 个场景分配与 10-shard 完全相同，不能缩短关键路径；不采用。12-shard 将该组减为 28 个场景。按 `31491465489` 的逐场景实测时长回放，12 个 shard 的最大测试负载约 6.88 分钟，加上已测 global setup/job setup 后预计最长 job 约 10.2 分钟。
 - 12-shard 本地枚举仍为同一 322 场景，0 重复、0 遗漏；预计比 10-shard 再增加约两个 runner setup，exact-SHA CI 将记录实际墙钟与总 runner-minutes。
+- exact-SHA `8a4e04ac5` 的 run `31493797852` 首次验证 12/12 Playwright job 全部通过，最长 job 9:34，322 场景无遗漏；workflow 被独立的旧 Windows package readiness 阻断，因此不计完整成功样本。
+- exact-SHA `6044abc83` 的 5 个完整成功 run 为 `31495966222`、`31496837106`、`31497777703`、`31498620664`、`31499762158`。workflow 墙钟分别为 8:56、9:46、10:27、10:59、11:12，中位数 10:27；最长 runner job 分别为 8:52、9:41、10:14、10:53、9:59，中位数 9:59；最长 queue 为 11、3、4、5、81 秒，外部排队已单列。
+- 12 个 Playwright job 的 runner minutes 分别为 86.5、83.9、89.2、84.4、80.9，中位数 84.4；相对 4-shard 绿色基线约 59.7 runner-minutes 增加约 41.4%，明显高于最初 10%～15% 估算。换来的结果是 workflow 中位数从 16:58 降至 10:27（约 38.3%），关键 job 中位数降至 9:59；这是已显式记录的成本换墙钟取舍。
+- 这 5 个 workflow 虽全部 success，样本 4、5 各有一次 `agent-stream-ui.spec.ts` scroll-away retry，因此只证明性能目标，不满足可靠性关闭条件。失败首尝试都显示主 viewport `distanceFromBottom=0`；合成 wheel + 直接 `scrollTop` 没有保留浏览器原生事件排序。最终候选改为在 viewport 左上边缘发送真实 wheel；该场景本地 `--repeat-each=10` 为 10/10 首轮通过，共享 helper 的 image-stability 调用也首轮通过。新 exact-SHA 仍需重新取得 5 个无 retry 样本。
 
 ## 质量承诺
 

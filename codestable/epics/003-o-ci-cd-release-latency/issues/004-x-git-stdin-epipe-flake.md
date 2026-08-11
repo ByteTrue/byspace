@@ -1,7 +1,7 @@
 ---
 kind: issue
 title: 消除 Git stdin 提前关闭导致的 CI EPIPE
-status: open
+status: closed
 type: bug
 created: 2026-08-11
 updated: 2026-08-11
@@ -28,8 +28,9 @@ CI `31489371511` 的 Ubuntu server test 在 4,263 个断言全部通过后仍因
 ## 验证
 
 - [x] `run-git-command.test.ts` 与 `directory-suggestions.test.ts`：43/43。
-- [ ] Ubuntu server test 在新的 exact-SHA CI 中通过且无 uncaught `EPIPE`。
-- [ ] 完整 CI 通过。
+- [x] exact-SHA `6044abc83` 的 Ubuntu server test 在 run `31495966222` 中 3:14 通过，4,264 passed / 46 skipped，无 uncaught `EPIPE`。
+- [x] 同一 run 27/27 jobs 全绿，workflow 墙钟 8:56。
+- [x] 独立 review 未发现共享 Git runner 修复的 correctness blocker；既有 mock seam 记为前存测试架构约束，不为本 bug 扩展 spawn port。
 
 ## 关闭条件
 
