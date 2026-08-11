@@ -59,6 +59,9 @@ exact-SHA `9be5ae8f6` 的 CI run `31480047406` 暴露了两个可分离问题：
 - exact-SHA `348efeae0` 的 run `31489371511` 首次执行 10/10 Playwright job 全部通过，最长 shard 1 为 11:08；10 个 job 合计约 79.2 runner-minutes，比 4-shard 绿色基线约 59.7 分钟增加约 32.6%，高于初始成本估算。场景汇总为 302 passed、19 skipped、1 flaky（flaky 重试后通过），总计仍为 322。
 - 唯一 flaky 正是 `agent-stream-ui.spec.ts` 的 scroll-owner 不一致：readiness 被嵌套 tool scroller 满足，主 viewport 的 `scrollTop` 仍为 0。统一到真实 scroll owner 后，该场景本地单次通过且 `--repeat-each=3` 为 3/3 首轮通过；下一次 exact-SHA CI 继续验证。
 - 同一 run 的 workflow 最终由独立的 Ubuntu server-test stdin `EPIPE` 阻断，记录在 Issue 004；因此它是有效的 Playwright 性能样本，但不计入“成功完整 CI”五次验收样本。
+- exact-SHA `39247795a` 的 run `31491465489` 再次让 10/10 Playwright job 全绿；303 passed、19 skipped、0 flaky/retry，证明 scroll-owner 修复生效。最长 shard 1 仍为 11:08，说明稳定关键路径不是 retry，而是静态 shard 1 同时承载 `agent-stream-ui`、`archive-tab` 与 `assistant-fork-menu`。该 workflow 由独立的 Windows Codex resume 测试 500ms 启动竞态阻断（Issue 005），仍不计入完整成功样本。
+- 原生 11-shard 对 shard 1 的 33 个场景分配与 10-shard 完全相同，不能缩短关键路径；不采用。12-shard 将该组减为 28 个场景。按 `31491465489` 的逐场景实测时长回放，12 个 shard 的最大测试负载约 6.88 分钟，加上已测 global setup/job setup 后预计最长 job 约 10.2 分钟。
+- 12-shard 本地枚举仍为同一 322 场景，0 重复、0 遗漏；预计比 10-shard 再增加约两个 runner setup，exact-SHA CI 将记录实际墙钟与总 runner-minutes。
 
 ## 质量承诺
 
@@ -70,7 +73,7 @@ exact-SHA `9be5ae8f6` 的 CI run `31480047406` 暴露了两个可分离问题：
 ## 验证
 
 - 两个已知首轮失败场景在隔离重复运行中首次通过；修复能在 readiness 回归时确定失败。
-- 完整 10-shard Playwright CI 全绿，测试总数与原完整集合一致。
+- 完整 12-shard Playwright CI 全绿，测试总数与原完整集合一致。
 - 至少 5 次成功 run 记录每个 shard 的 started/completed、测试数、retry 数和 runner minutes；queue time 单列。
 - 完整仓库 typecheck、lint、format 与 App Web export 通过。
 - 没有启用 `fullyParallel`、提高 runner 内 `workers`、跳过文件或按改动路径裁剪场景。

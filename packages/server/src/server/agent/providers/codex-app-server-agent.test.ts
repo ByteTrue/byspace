@@ -1234,36 +1234,18 @@ describe("Codex app-server provider", () => {
       provider,
     ).spawnAppServer = async () => appServer.child;
 
-    const outcome = await Promise.race([
-      provider
-        .resumeSession({
-          sessionId: "archived-thread-id",
-          metadata: {
-            cwd: "/tmp/codex-question-test",
-            modeId: "auto",
-            model: "gpt-5.4",
-          },
-        })
-        .then(
-          () => "resolved" as const,
-          (error) => {
-            expect(error).toBeInstanceOf(Error);
-            expect((error as Error).message).toContain(
-              "no tool-call found for thread id archived-thread-id",
-            );
-            return "rejected" as const;
-          },
-        ),
-      new Promise<"timed_out">((resolve) => setTimeout(() => resolve("timed_out"), 500)),
-    ]);
-
-    if (outcome === "timed_out") {
-      appServer.child.kill("SIGTERM");
-      throw new Error(`resumeSession timed out; thread requests: ${threadRequests.join(", ")}`);
-    }
+    await expect(
+      provider.resumeSession({
+        sessionId: "archived-thread-id",
+        metadata: {
+          cwd: "/tmp/codex-question-test",
+          modeId: "auto",
+          model: "gpt-5.4",
+        },
+      }),
+    ).rejects.toThrow("no tool-call found for thread id archived-thread-id");
 
     expect(threadRequests).toEqual(["thread/loaded/list", "thread/resume"]);
-    expect(outcome).toBe("rejected");
     appServer.assertNoErrors();
   });
 

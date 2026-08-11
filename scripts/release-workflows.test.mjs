@@ -22,17 +22,25 @@ test("CI builds Web once, embeds it in one package, and smokes that package on e
   assert.match(workflow, /npm run smoke:package -- --skip-pack/);
 });
 
-test("Playwright CI keeps ten matching isolated shards", () => {
+test("Playwright CI keeps twelve matching isolated shards", () => {
   const workflow = readWorkflow("ci.yml");
+  const jobStart = workflow.indexOf("\n  playwright:");
+  const jobEnd = workflow.indexOf("\n  relay-tests:", jobStart);
+  assert.notEqual(jobStart, -1);
+  assert.notEqual(jobEnd, -1);
+  const playwrightJob = workflow.slice(jobStart, jobEnd);
   const rows = Array.from(
-    { length: 10 },
-    (_, index) => `          - { label: "shard ${index + 1}/10", shard: ${index + 1} }`,
+    { length: 12 },
+    (_, index) => `          - { label: "shard ${index + 1}/12", shard: ${index + 1} }`,
   ).join("\n");
-  assert.ok(workflow.includes(`      matrix:\n        include:\n${rows}\n    name: playwright`));
-  assert.equal(workflow.match(/--shard=/g)?.length, 1);
-  assert.match(
-    workflow,
-    /run: npm run test:e2e --workspace=@bytetrue\/byspace-app -- --shard=\$\{\{ matrix\.shard \}\}\/10/,
+  assert.ok(
+    playwrightJob.includes(`      matrix:\n        include:\n${rows}\n    name: playwright`),
+  );
+  const command =
+    "        run: npm run test:e2e --workspace=@bytetrue/byspace-app -- --shard=${{ matrix.shard }}/12";
+  assert.deepEqual(
+    playwrightJob.split("\n").filter((line) => line.includes("npm run test:e2e")),
+    [command],
   );
 });
 
