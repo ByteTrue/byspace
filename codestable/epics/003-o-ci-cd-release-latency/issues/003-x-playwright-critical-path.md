@@ -2,7 +2,7 @@
 kind: issue
 title: "压缩 Playwright CI 关键路径"
 type: refactor
-status: open
+status: closed
 created: 2026-08-11
 ---
 
@@ -67,6 +67,21 @@ exact-SHA `9be5ae8f6` 的 CI run `31480047406` 暴露了两个可分离问题：
 - 12 个 Playwright job 的 runner minutes 分别为 86.5、83.9、89.2、84.4、80.9，中位数 84.4；相对 4-shard 绿色基线约 59.7 runner-minutes 增加约 41.4%，明显高于最初 10%～15% 估算。换来的结果是 workflow 中位数从 16:58 降至 10:27（约 38.3%），关键 job 中位数降至 9:59；这是已显式记录的成本换墙钟取舍。
 - 这 5 个 workflow 虽全部 success，样本 4、5 各有一次 `agent-stream-ui.spec.ts` scroll-away retry，因此只证明性能目标，不满足可靠性关闭条件。失败首尝试都显示主 viewport `distanceFromBottom=0`；合成 wheel + 直接 `scrollTop` 没有保留浏览器原生事件排序。最终候选改为在 viewport 左上边缘发送真实 wheel；该场景本地 `--repeat-each=10` 为 10/10 首轮通过，共享 helper 的 image-stability 调用也首轮通过。新 exact-SHA 仍需重新取得 5 个无 retry 样本。
 
+最终 exact-SHA `66c07b1e0` 的验收证据：
+
+| Run           | Workflow 墙钟 | 最长 job | 关键 job queue |                             Playwright 汇总 | Playwright runner-minutes |
+| ------------- | ------------: | -------: | -------------: | ------------------------------------------: | ------------------------: |
+| `31502465439` |          9:47 |     9:28 |             4s | 303 passed / 19 skipped / 0 flaky / 0 retry |                      83.7 |
+| `31503552063` |         10:04 |     9:50 |            13s | 303 passed / 19 skipped / 0 flaky / 0 retry |                      87.7 |
+| `31507584275` |         10:27 |    10:16 |             6s | 303 passed / 19 skipped / 0 flaky / 0 retry |                      83.3 |
+| `31508693183` |          9:22 |     9:13 |             5s | 303 passed / 19 skipped / 0 flaky / 0 retry |                      83.7 |
+| `31509644024` |         10:39 |     9:49 |            11s | 303 passed / 19 skipped / 0 flaky / 0 retry |                      88.2 |
+
+- 五个 run 均为 attempt 1、run-level `success`。Playwright 汇总来自逐 run 下载 `gh run view <id> --log` 后，只累加 12 个 `playwright (shard n/12)` job 的 `passed` / `skipped` / `flaky` 终结行，并额外拒绝任何 `Retry #` / `Retrying`；每次 303 + 19 = 322 场景，真实 wheel 修复没有再依赖 retry。
+- GitHub leaf-job 聚合存在已观测的不一致，因此不声称五次 API 都返回“27/27”。run `31507584275` 的 shard 1 job `93833014634` 仍被 job API 标成 `in_progress`，但其 `Complete job` step 在 15:42:53Z 明确为 `success`，日志给出 `28 passed (8.3m)`；run `31509644024` 的 format job `93839915077` 同样残留 `in_progress`，但 `Complete job` step 在 15:56:02Z 明确为 `success`。两者的 workflow 最终均为 success。
+- 五次 workflow 墙钟中位数 10:04；最长 runner job 中位数 9:49；对应关键 job queue 中位数 6 秒，执行与外部排队已分列。Playwright runner-minutes 中位数 83.7，相对 4-shard 绿色基线 59.7 增加约 40.2%；workflow 中位数相对 16:58 基线缩短约 40.7%。
+- 额外 run `31504607319` 的所有 runner 步骤在约 10 分钟内成功完成，但 GitHub Actions 控制面把两个已完成 job 错误保留为 `in_progress` 约 46 分钟后才聚合为 success；它作为外部服务状态延迟记录，不计入五次墙钟样本，也没有被 rerun 掩盖。
+
 ## 质量承诺
 
 - 可靠性：现有场景、断言、retry 上限、trace/screenshot 失败证据不减少；启动 readiness 必须确定、可重复。
@@ -76,11 +91,11 @@ exact-SHA `9be5ae8f6` 的 CI run `31480047406` 暴露了两个可分离问题：
 
 ## 验证
 
-- 两个已知首轮失败场景在隔离重复运行中首次通过；修复能在 readiness 回归时确定失败。
-- 完整 12-shard Playwright CI 全绿，测试总数与原完整集合一致。
-- 至少 5 次成功 run 记录每个 shard 的 started/completed、测试数、retry 数和 runner minutes；queue time 单列。
-- 完整仓库 typecheck、lint、format 与 App Web export 通过。
-- 没有启用 `fullyParallel`、提高 runner 内 `workers`、跳过文件或按改动路径裁剪场景。
+- [x] 两个已知首轮失败场景在隔离重复运行中首次通过；修复能在 readiness 回归时确定失败。
+- [x] 完整 12-shard Playwright CI 全绿，测试总数与原完整集合一致。
+- [x] 至少 5 次成功 run 记录每个 shard 的 started/completed、测试数、retry 数和 runner minutes；queue time 单列。
+- [x] 完整仓库 typecheck、lint、format 与 App Web export 通过。
+- [x] 没有启用 `fullyParallel`、提高 runner 内 `workers`、跳过文件或按改动路径裁剪场景。
 
 ## 关闭时
 

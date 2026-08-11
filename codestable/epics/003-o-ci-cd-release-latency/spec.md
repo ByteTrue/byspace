@@ -50,7 +50,7 @@ Web `dist` 只在 release artifact job 中生成一次，并在同一 job 中嵌
 
 当前 Playwright 使用 4 个彼此隔离的 runner，每个 runner 保持 `workers: 1`、`fullyParallel: false`，避免共享 daemon/relay/Metro 栈产生跨测试竞争。历史成功 run 的四个测试阶段约为 16:24、11:30、12:24、14:00；随后一次 run 的两个首用例各耗约 72 秒失败、retry 后约 8 秒通过。首用例根因修复后的 exact-SHA run `31482108162` 完整全绿，但四个 Playwright job 仍需 16:54、13:18、13:25、16:06，关键路径优化仍成立。
 
-先消除首轮 retry 的真实原因，再把隔离 shard 增至 8；首次实测保持全量场景但最长 job 仍为 12:36，因此继续用 Playwright 原生静态 sharding 收敛到 10。全过程不打开同一栈内并发、不减少场景、不做 path-based selective CI；如 10 shard 仍因大 spec 明显失衡，才拆分少数有证据的大文件，不建立自定义调度器。
+先消除首轮 retry 的真实原因，再把隔离 shard 从 4 增至 8；首次实测保持全量场景但最长 job 仍为 12:36，10 shard 又稳定在 11:08，最终用 Playwright 原生静态 sharding 收敛到 12。全过程没有打开同一栈内并发、减少场景、做 path-based selective CI、拆大 spec 或建立自定义调度器。
 
 ### 质量约束与取舍
 
@@ -58,7 +58,7 @@ Web `dist` 只在 release artifact job 中生成一次，并在同一 job 中嵌
 - 可靠性：所有现有测试面、三平台 package smoke、release verification 与 Stable/Beta 发布后证明继续存在。优化不能通过减少检查换时间。
 - 信息安全性：artifact 只能来自同仓库、同 release SHA 的成功 CI run；PR 等不可信上下文不能获得 npm 或 Cloudflare 发布权限。Trusted Publishing、环境隔离与不可变 Tag 不变。
 - 可维护性：优先使用 GitHub Actions artifact 与现有脚本；不先引入 Nx/Turbo、远程缓存、自托管 runner、自定义测试调度平台或新的发布渠道。
-- 成本取舍：增加 Playwright shard 会增加隔离栈的启动 runner minutes，预计约 10%～15%；用户已选择用该有限成本换取更短墙钟时间。实际 shard 数仍由基线和复测证据收敛。
+- 成本取舍：最终 12-shard 的 Playwright runner-minutes 中位数为 83.7，相对 4-shard 绿色基线 59.7 增加约 40.2%，高于最初 10%～15% 估算；对应完整 workflow 中位数从 16:58 降至 10:04（约 40.7%）。该成本换墙钟取舍已显式记录，不隐藏为“免费优化”。
 
 ## 当前推进
 
@@ -74,7 +74,7 @@ Web `dist` 只在 release artifact job 中生成一次，并在同一 job 中嵌
 
 - [x] `issues/001-x-restore-ci-baseline.md`：修正 Git 刷新异步 Forge 行为留下的旧测试断言，恢复 exact-SHA CI，并记录可复算基线。
 - [ ] `issues/002-o-single-build-release-artifacts.md`：让三平台 smoke、npm Publisher 和 App Deploy 消费 CI 中唯一构建的 artifact。
-- [ ] `issues/003-o-playwright-critical-path.md`：消除首轮 retry 税，增加隔离 shard，在保留全量场景的前提下压缩最长 job。
+- [x] `issues/003-x-playwright-critical-path.md`：消除首轮 retry 税，增加隔离 shard，在保留全量场景的前提下压缩最长 job。
 - [x] `issues/004-x-git-stdin-epipe-flake.md`：共享 Git runner 消费提前关闭的 stdin pipe error，避免 CI 在断言全绿后以 uncaught `EPIPE` 失败。
 - [x] `issues/005-x-codex-resume-test-startup-race.md`：让 Codex fake app-server 集成测试等待协议结果，而不是假定 Windows runner 必须在 500ms 内启动子进程。
 
@@ -90,7 +90,7 @@ Issue 002 和 003 在 Issue 001 恢复可信基线后可以并行推进；Issue 
 
 ### 未确认项
 
-没有产品或发布策略待确认。实现阶段只需让最终 shard 数和 artifact retention 由实测数据收敛；不得借此放宽 fail-closed 与 exact-SHA 边界。
+没有产品或发布策略待确认。最终 shard 数已由 5 次 final-SHA、零 retry 样本收敛为 12；artifact retention 和发布身份边界已固定，不得借后续真实渠道验收放宽 fail-closed 与 exact-SHA 契约。
 
 ## 关闭条件
 
