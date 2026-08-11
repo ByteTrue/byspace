@@ -301,15 +301,11 @@ export async function renameWorkspaceBranch(options: {
   if (!validation.valid) {
     throw new Error(validation.error);
   }
-  const expectedCurrentBranch = await getCurrentBranch(options.cwd);
 
   return workspaceLifecycleCoordinator.runExclusive(async () => {
     const status = await getCheckoutStatus(options.cwd, options.checkoutContext);
     if (!status.isGit || !status.isBySpaceOwnedWorktree || !status.currentBranch) {
       throw new Error("Branch rename is limited to BySpace-owned worktree branches");
-    }
-    if (status.currentBranch !== expectedCurrentBranch) {
-      throw new Error("Current branch changed before it could be renamed");
     }
 
     const metadata = readBySpaceWorktreeMetadata(status.repoRoot);

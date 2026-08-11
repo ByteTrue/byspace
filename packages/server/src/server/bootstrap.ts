@@ -880,22 +880,25 @@ export async function createBySpaceDaemon(
   const emitExternalSessionMessage = (message: SessionOutboundMessage) => {
     wsServer?.broadcast(wrapSessionMessage(message));
   };
+  const checkoutContext = {
+    byspaceHome: config.byspaceHome,
+    worktreesRoot: config.worktreesRoot,
+    logger,
+  };
+  const gitMutation = createGitMutationService({ workspaceGitService, logger });
   const workspaceAutoName = new WorkspaceAutoName({
     agentManager,
     workspaceRegistry,
     workspaceGitService,
     providerSnapshotManager,
     readDaemonConfig: () => ({ metadataGeneration: daemonConfigStore.get().metadataGeneration }),
-    gitMutation: createGitMutationService({
-      workspaceGitService,
-      logger,
-    }),
+    gitMutation,
     emitWorkspaceUpdateForCwd: emitWorkspaceUpdateForCwdExternal,
     emitWorkspaceUpdateForWorkspaceId: async (workspaceId) => {
       await emitWorkspaceUpdatesExternal([workspaceId]);
     },
     logger,
-    checkoutContext: { byspaceHome: config.byspaceHome, worktreesRoot: config.worktreesRoot },
+    checkoutContext,
   });
 
   setupAutoArchiveOnMerge({
@@ -1166,24 +1169,8 @@ export async function createBySpaceDaemon(
     ensureWorkspaceForCreate: createAgentCommandDependencies.ensureWorkspaceForCreate,
     createBySpaceWorktree: createAgentCommandDependencies.createBySpaceWorktree,
     renameWorkspaceBranch: async (input) => {
-      const renamed = await renameWorkspaceBranch({
-        ...input,
-        checkoutContext: {
-          byspaceHome: config.byspaceHome,
-          worktreesRoot: config.worktreesRoot,
-        },
-      });
-      try {
-        const workspace = runtime.callerWorkspaceId
-          ? await workspaceRegistry.get(runtime.callerWorkspaceId)
-          : null;
-        await workspaceGitService.getSnapshot(workspace?.cwd ?? input.cwd, {
-          force: true,
-          reason: "rename_branch",
-        });
-      } catch (error) {
-        logger.warn({ error, cwd: input.cwd }, "Branch renamed but Git snapshot refresh failed");
-      }
+      const renamed = await renameWorkspaceBranch({ ...input, checkoutContext });
+      await gitMutation.notifyGitMutation(input.cwd, "rename-branch");
       return renamed;
     },
     byspaceHome: config.byspaceHome,
