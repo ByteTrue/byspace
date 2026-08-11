@@ -6,6 +6,7 @@ interface FakeSpawnBehavior {
   emitError?: Error;
   exitCode?: number | null;
   stderrData?: Buffer | string;
+  stdinError?: Error;
   stdoutData?: Buffer | string;
 }
 
@@ -37,9 +38,21 @@ const fakeSpawnController = vi.hoisted<FakeSpawnController>(() => ({
   },
 }));
 
+class FakeStdin extends EventEmitter {
+  public constructor(private readonly writeError?: Error) {
+    super();
+  }
+
+  public end(): void {
+    const error = this.writeError;
+    if (error) queueMicrotask(() => this.emit("error", error));
+  }
+}
+
 class FakeChildProcess extends EventEmitter {
   public readonly pid: number;
   public readonly stderr = new EventEmitter();
+  public readonly stdin: FakeStdin;
   public readonly stdout = new EventEmitter();
   public killed = false;
   public killSignals: NodeJS.Signals[] = [];
@@ -51,6 +64,7 @@ class FakeChildProcess extends EventEmitter {
   public constructor(behavior: FakeSpawnBehavior) {
     super();
     this.behavior = behavior;
+    this.stdin = new FakeStdin(behavior.stdinError);
     this.pid = fakeSpawnController.nextPid;
     fakeSpawnController.nextPid += 1;
 
@@ -371,6 +385,24 @@ describe("runGitCommand", () => {
       signal: null,
       truncated: false,
     });
+  });
+
+  it("consumes stdin pipe errors when Git exits before reading input", async () => {
+    const { runGitCommand } = await loadRunGitCommand(1);
+    const pipeError = Object.assign(new Error("write EPIPE"), { code: "EPIPE" });
+
+    enqueueSpawnBehaviors({
+      exitCode: 128,
+      stderrData: "fatal: not a git repository\n",
+      stdinError: pipeError,
+    });
+
+    await expect(
+      runGitCommand(["check-ignore", "--stdin", "-z"], {
+        cwd: process.cwd(),
+        input: "candidate\0",
+      }),
+    ).rejects.toThrow("Git command failed: git check-ignore --stdin -z");
   });
 
   it("releases concurrency slots after timeouts so later commands can run", async () => {

@@ -81,4 +81,6 @@ Relay 保持现有同 SHA 部署与 post-deploy verification；它当前约 30 �
 - 该 workflow 因独立的 Windows shortstat 后台测试竞态而总体失败，因此 npm/App publisher 不会选择它；这同时验证了“只接受 successful exact-SHA push CI”的失败关闭边界。
 - exact-SHA `c2e5aa66f` 的首次执行中，同一 tarball 在 Linux/macOS 通过，Windows 在全局安装后遇到一次 daemon readiness 超时；只重跑失败 job 时同一 digest 的 Windows smoke 在 4:31 内通过，run 最终 success。脚本现会在超时时输出 bounded status/daemon log，Windows job 同时恢复 npm cache；没有放宽 20 秒 readiness 门禁。
 - 该 run 还证明 `app-tests`（5:03）→ `package-artifact`（2:12）串行后再启动 Windows install 会制造新的关键路径，因此 artifact ownership 已反转为独立 `package-artifact` 一次构建 Web/npm，App tests 保持并行门禁。
-- 新 ownership 的 exact-SHA 三平台 CI、真实 cross-workflow promotion、npm registry digest round-trip、Pages、Beta/Stable tuple 与 CI-green 后部署耗时仍待后续成功 run 和真实渠道发布。
+- exact-SHA `348efeae0` 的 run `31489371511` 验证了新 ownership：独立 `package-artifact` 从 workflow 起点并行，4:04 生成 npm SHA-256 `9fa3443b…3f08` 与 Web SHA-256 `fd6f0fb5…03123`；Ubuntu、macOS、Windows 对同一 npm artifact 的校验、安装和 smoke 分别约 1:05、0:41、3:17，全部通过。
+- 从该 run 下载两份 artifact 后，manifest 对 commit/version/digest 的本地回验通过；解包 npm 并排除服务器额外生成的 `.gz`/`.br` 预压缩副本后，内嵌 Web 与 promoted Web `dist` 逐文件一致。
+- 该 workflow 最终由独立的 Ubuntu server-test stdin `EPIPE` 阻断（Issue 004），所以 publisher 仍正确拒绝选择它。新 ownership 的 artifact 和三平台 distribution 已验证；真实 cross-workflow promotion、npm registry digest round-trip、Pages、Beta/Stable tuple 与 CI-green 后部署耗时仍待完整绿色 run 和真实渠道发布。

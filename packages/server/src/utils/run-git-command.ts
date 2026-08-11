@@ -174,8 +174,11 @@ export function runGitCommand(
           shell: false,
           stdio: [options.input === undefined ? "ignore" : "pipe", "pipe", "pipe"],
         });
-        if (options.input !== undefined) {
-          child.stdin?.end(options.input);
+        if (options.input !== undefined && child.stdin) {
+          // Git may exit before consuming stdin (for example outside a repository). Its process
+          // exit remains authoritative; consuming the pipe error prevents a second uncaught EPIPE.
+          child.stdin.on("error", () => {});
+          child.stdin.end(options.input);
         }
 
         let settled = false;

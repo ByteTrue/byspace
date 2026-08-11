@@ -45,7 +45,7 @@ created: 2026-08-11
 exact-SHA `9be5ae8f6` 的 CI run `31480047406` 暴露了两个可分离问题：
 
 - `00-sessions-empty.spec.ts` 首次尝试中，`page.goto("/")` 等待冷 Metro bundle 约 63 秒，已经耗尽默认 60 秒测试预算；业务断言实际只获得不到 1 秒，retry 在热 bundle 下约 8 秒通过。global setup 现在会在进入测试预算前请求并完整读取入口 bundle，TCP 监听不再被误当成 Web readiness。
-- `agent-stream-ui.spec.ts` 的共享滚动 helper 把鼠标放在 viewport 中央，可能命中并由嵌套 tool scroller 消费滚轮，导致主聊天区离底距离仍为 0。helper 现在向主聊天 viewport 派发 wheel intent，并确定性应用浏览器默认滚动结果，不再依赖命中测试数据中的具体子节点。
+- `agent-stream-ui.spec.ts` 的共享滚动 helper 原先可能把滚轮交给嵌套 tool scroller；首轮修复改为直接滚动主 viewport。10-shard 实测进一步证明 `readScrollMetrics()` 仍会从所有后代中选最大可滚元素，可能用 tool scroller 通过“可滚动”门、随后却滚动主 viewport。现在指标、readiness、滚动与断言统一只读取 `data-testid="agent-chat-scroll"` 这个真实 Web stream scroll owner。
 
 验证与成本模型：
 
@@ -56,6 +56,9 @@ exact-SHA `9be5ae8f6` 的 CI run `31480047406` 暴露了两个可分离问题：
 - exact-SHA `d78c0b9e9` 的四个旧 4-shard job 都通过，但 shard 4 捕获到 `tool-call-shimmer.spec.ts` 首轮 18.1 秒找不到 group、retry 8.8 秒通过。该测试在 agent route 只有 URL settle、composer 尚未确认挂载时就从 seed client 发送实时 turn；现已复用共享 `expectComposerVisible` readiness，再发送 turn。本地该 spec `--repeat-each=10` 为 10/10 首轮通过、无 retry。
 - exact-SHA `c2e5aa66f` 首次真实 8-shard 执行保持 322 个场景且 8/8 Playwright job 全绿、无 retry，但最长 shard 1 为 12:36；8 个 job 合计约 69 runner-minutes，比 4-shard 绿色基线约 59.7 分钟增加约 15.6%。8 shard 没达到 9～11 分钟目标。
 - 继续使用 Playwright 原生静态 sharding 的 10-shard 候选已在本地枚举同一 322 场景且无遗漏/重复；它不改变 `workers: 1`、`fullyParallel: false` 或场景集合，exact-SHA CI 将验证最长 job 与实测成本。
+- exact-SHA `348efeae0` 的 run `31489371511` 首次执行 10/10 Playwright job 全部通过，最长 shard 1 为 11:08；10 个 job 合计约 79.2 runner-minutes，比 4-shard 绿色基线约 59.7 分钟增加约 32.6%，高于初始成本估算。场景汇总为 302 passed、19 skipped、1 flaky（flaky 重试后通过），总计仍为 322。
+- 唯一 flaky 正是 `agent-stream-ui.spec.ts` 的 scroll-owner 不一致：readiness 被嵌套 tool scroller 满足，主 viewport 的 `scrollTop` 仍为 0。统一到真实 scroll owner 后，该场景本地单次通过且 `--repeat-each=3` 为 3/3 首轮通过；下一次 exact-SHA CI 继续验证。
+- 同一 run 的 workflow 最终由独立的 Ubuntu server-test stdin `EPIPE` 阻断，记录在 Issue 004；因此它是有效的 Playwright 性能样本，但不计入“成功完整 CI”五次验收样本。
 
 ## 质量承诺
 

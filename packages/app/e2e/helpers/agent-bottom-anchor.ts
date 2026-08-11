@@ -21,33 +21,13 @@ function getVisibleChatScroll(page: Page) {
 
 export async function readScrollMetrics(page: Page): Promise<ScrollMetrics> {
   return getVisibleChatScroll(page).evaluate((root: Element) => {
-    const candidates = [root, ...Array.from(root.querySelectorAll("*"))]
-      .filter((element): element is HTMLElement => element instanceof HTMLElement)
-      .filter((element) => {
-        const tagName = element.tagName.toLowerCase();
-        const isEditable =
-          tagName === "textarea" ||
-          tagName === "input" ||
-          element.getAttribute("contenteditable") === "true";
-        return !isEditable && element.scrollHeight - element.clientHeight > 1;
-      });
-    const scrollElement =
-      candidates.sort(
-        (left, right) =>
-          right.scrollHeight - right.clientHeight - (left.scrollHeight - left.clientHeight),
-      )[0] ?? (root as HTMLElement);
-
+    const scrollElement = root as HTMLElement;
     const offsetY = Math.max(0, scrollElement.scrollTop);
     const contentHeight = Math.max(0, scrollElement.scrollHeight);
     const viewportHeight = Math.max(0, scrollElement.clientHeight);
     const distanceFromBottom = Math.max(0, contentHeight - (offsetY + viewportHeight));
 
-    return {
-      offsetY,
-      contentHeight,
-      viewportHeight,
-      distanceFromBottom,
-    };
+    return { offsetY, contentHeight, viewportHeight, distanceFromBottom };
   });
 }
 

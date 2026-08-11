@@ -67,14 +67,16 @@ Web `dist` 只在 release artifact job 中生成一次，并在同一 job 中嵌
 1. 恢复当前 `main` CI 可信基线，并固化本 Epic 的耗时计算口径。
 2. 统一 npm/Web artifact 的构建、跨平台验证和发布晋升。
 3. 修复 Playwright 启动型 flake，增加隔离 shard 并复测关键路径。
+4. 消除测量期间暴露的 Git stdin `EPIPE` CI 竞态。
 
 ### Issues
 
 - [x] `issues/001-x-restore-ci-baseline.md`：修正 Git 刷新异步 Forge 行为留下的旧测试断言，恢复 exact-SHA CI，并记录可复算基线。
 - [ ] `issues/002-o-single-build-release-artifacts.md`：让三平台 smoke、npm Publisher 和 App Deploy 消费 CI 中唯一构建的 artifact。
 - [ ] `issues/003-o-playwright-critical-path.md`：消除首轮 retry 税，增加隔离 shard，在保留全量场景的前提下压缩最长 job。
+- [ ] `issues/004-o-git-stdin-epipe-flake.md`：共享 Git runner 消费提前关闭的 stdin pipe error，避免 CI 在断言全绿后以 uncaught `EPIPE` 失败。
 
-Issue 002 和 003 在 Issue 001 恢复可信基线后可以并行推进；最终要合并观察端到端 release 时间。
+Issue 002 和 003 在 Issue 001 恢复可信基线后可以并行推进；Issue 004 是测量过程暴露的可靠性阻断，最终要合并观察端到端 release 时间。
 
 ### 暂不推进
 
