@@ -195,10 +195,14 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { label: "shard 1/4", shard: 1 }
-          - { label: "shard 2/4", shard: 2 }
-          - { label: "shard 3/4", shard: 3 }
-          - { label: "shard 4/4", shard: 4 }
+          - { label: "shard 1/8", shard: 1 }
+          - { label: "shard 2/8", shard: 2 }
+          - { label: "shard 3/8", shard: 3 }
+          - { label: "shard 4/8", shard: 4 }
+          - { label: "shard 5/8", shard: 5 }
+          - { label: "shard 6/8", shard: 6 }
+          - { label: "shard 7/8", shard: 7 }
+          - { label: "shard 8/8", shard: 8 }
     name: playwright (${{ matrix.label }})
     runs-on: ubuntu-latest
     steps:
@@ -225,7 +229,7 @@ jobs:
         run: node scripts/npm-retry.mjs install -g @anthropic-ai/claude-code @openai/codex@0.105.0 opencode-ai
 
       - name: Run Playwright E2E tests
-        run: npm run test:e2e --workspace=@bytetrue/byspace-app -- --shard=${{ matrix.shard }}/4
+        run: npm run test:e2e --workspace=@bytetrue/byspace-app -- --shard=${{ matrix.shard }}/8
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
 

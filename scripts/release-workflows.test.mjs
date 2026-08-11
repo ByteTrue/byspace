@@ -20,6 +20,20 @@ test("CI builds Web once, embeds it in one package, and smokes that package on e
   assert.match(workflow, /npm run smoke:package -- --skip-pack/);
 });
 
+test("Playwright CI keeps eight matching isolated shards", () => {
+  const workflow = readWorkflow("ci.yml");
+  const rows = Array.from(
+    { length: 8 },
+    (_, index) => `          - { label: "shard ${index + 1}/8", shard: ${index + 1} }`,
+  ).join("\n");
+  assert.ok(workflow.includes(`      matrix:\n        include:\n${rows}\n    name: playwright`));
+  assert.equal(workflow.match(/--shard=/g)?.length, 1);
+  assert.match(
+    workflow,
+    /run: npm run test:e2e --workspace=@bytetrue\/byspace-app -- --shard=\$\{\{ matrix\.shard \}\}\/8/,
+  );
+});
+
 test("npm publisher selects a successful push CI run and promotes its exact artifact", () => {
   const workflow = readWorkflow("npm-release.yml");
   assert.match(

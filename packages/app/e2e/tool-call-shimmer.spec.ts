@@ -2,6 +2,7 @@ import type { Locator, Page } from "@playwright/test";
 import { test, expect } from "./fixtures";
 import { daemonWsRoutePattern } from "./helpers/daemon-port";
 import { openAgentRoute, seedMockAgentWorkspace } from "./helpers/mock-agent";
+import { expectComposerVisible } from "./helpers/composer";
 
 type WebSocketMessage = string | Buffer;
 
@@ -196,6 +197,7 @@ test("measures an overview heading that becomes loading after its idle mount", a
       workspaceId: agent.workspaceId,
       agentId: agent.agentId,
     });
+    await expectComposerVisible(page);
     await agent.client.sendAgentMessage(agent.agentId, "Prove the overview shimmer lifecycle.");
 
     await gate.waitForFirstCompleted();

@@ -75,5 +75,8 @@ Relay 保持现有同 SHA 部署与 post-deploy verification；它当前约 30 �
 
 ## Evidence status
 
-- Local manifest unit tests, workflow contract tests, full package build/smoke, YAML parsing, typecheck, lint, format, and whitespace checks are required before the first workflow push.
-- Linux/macOS/Windows reuse, real cross-workflow download, actual npm registry digest continuity, Pages promotion, and timing remain pending exact-SHA CI and a real channel release.
+- Local manifest unit tests, workflow contract tests, full package build/smoke, YAML parsing, typecheck, lint, format, whitespace checks, and independent implementation review passed before the first workflow push.
+- exact-SHA `d78c0b9e9` 的 CI run `31484477142` 已生成并回读 Web artifact（SHA-256 `2fe6d34d…b5b4`）和 npm artifact（SHA-256 `9fa3443b…3f08`）；npm 内嵌的 37 个未压缩 Web 文件与 canonical Web artifact 逐字节一致。
+- 同一 npm tarball 的 manifest 校验与全局安装 smoke 在 Ubuntu、macOS、Windows 均通过；app artifact job 4:41，package artifact job 2:08，Linux/macOS distribution 各约 45 秒，Windows 3:22。
+- 该 workflow 因独立的 Windows shortstat 后台测试竞态而总体失败，因此 npm/App publisher 不会选择它；这同时验证了“只接受 successful exact-SHA push CI”的失败关闭边界。
+- 真实 cross-workflow artifact download、npm registry digest round-trip、Pages promotion、Beta/Stable tuple 与 CI-green 后部署耗时仍待成功 exact-SHA CI 和真实渠道发布。

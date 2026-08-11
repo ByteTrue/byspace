@@ -42,16 +42,19 @@ created: 2026-08-11
 
 ## 执行进展
 
-exact-SHA `542854ad3` 的 CI run `31480047406` 暴露了两个可分离问题：
+exact-SHA `9be5ae8f6` 的 CI run `31480047406` 暴露了两个可分离问题：
 
 - `00-sessions-empty.spec.ts` 首次尝试中，`page.goto("/")` 等待冷 Metro bundle 约 63 秒，已经耗尽默认 60 秒测试预算；业务断言实际只获得不到 1 秒，retry 在热 bundle 下约 8 秒通过。global setup 现在会在进入测试预算前请求并完整读取入口 bundle，TCP 监听不再被误当成 Web readiness。
 - `agent-stream-ui.spec.ts` 的共享滚动 helper 把鼠标放在 viewport 中央，可能命中并由嵌套 tool scroller 消费滚轮，导致主聊天区离底距离仍为 0。helper 现在向主聊天 viewport 派发 wheel intent，并确定性应用浏览器默认滚动结果，不再依赖命中测试数据中的具体子节点。
 
-定向证据：
+验证与成本模型：
 
-- `00-sessions-empty.spec.ts`：首次尝试通过；global setup 显式记录 bundle warmup，测试本体约 2 秒。
-- `agent-stream-ui.spec.ts -g "places stream controls"`：首次尝试通过，约 25 秒。
-- 仍需 exact-SHA CI 验证 Linux 冷 bundle、完整 shard 1，以及继续处理已记录的 `subagent-detach.spec.ts` 首次重试税；当前不提前扩大 shard。
+- 本地定向运行中，`00-sessions-empty.spec.ts` 首次尝试通过，global setup 显式记录 bundle warmup，测试本体约 2 秒；`agent-stream-ui.spec.ts -g "places stream controls"` 首次尝试通过，约 25 秒。
+- exact-SHA `1149b75a9` 的 run `31482108162` 完整全绿：303 passed、19 skipped，没有 flaky/retry 汇总；四个 Playwright test step 为 15:10、11:22、11:37、14:07，总测试计算量 52:16。
+- 每个 runner 在 Playwright 前的 setup 约 1:41～1:55。由 4 增至 8 shard 的理想模型把最长 job 压到约 9～11 分钟，并把总 runner minutes 从约 59 增至约 66，增幅约 12%，符合已确认的 10%～15% 成本范围。
+- 历史 `subagent-detach.spec.ts` retry 在该绿色 run 中未复现；是否稳定由后续至少 5 个 8-shard 样本判断，不新增等待或 timeout。
+- exact-SHA `d78c0b9e9` 的四个旧 4-shard job 都通过，但 shard 4 捕获到 `tool-call-shimmer.spec.ts` 首轮 18.1 秒找不到 group、retry 8.8 秒通过。该测试在 agent route 只有 URL settle、composer 尚未确认挂载时就从 seed client 发送实时 turn；现已复用共享 `expectComposerVisible` readiness，再发送 turn。本地该 spec `--repeat-each=10` 为 10/10 首轮通过、无 retry。
+- 8-shard matrix 和精确静态契约已在本地完成：Desktop Chrome 仍枚举 322 个唯一场景且无遗漏/重复；下一 exact-SHA CI 才能作为首个真实 8-shard 样本。
 
 ## 质量承诺
 

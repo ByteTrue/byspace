@@ -52,9 +52,11 @@ GitHub Actions run `31471036867` 因此在 Ubuntu 和 Windows 的同一测试失
 - 修复后：同命令 143/143 通过。
 - `npx vitest run packages/server/src/server/session/checkout/checkout-session.test.ts --bail=1`：35/35 通过。
 - `npm run format:files -- ...`、`npm run typecheck`、`npm run lint` 通过。
-- exact-SHA `542854ad3` 的 CI run `31480047406` 中，Ubuntu、Windows、macOS 与三平台 distribution jobs 均通过，原 stale assertion 没有再失败。
-- exact-SHA `542854ad3` 的完整 workflow 随后被 Playwright shard 1 的两个既有首用例超时拦住；修复归入 Issue 003，并由下一条成功 run 验证。
-- exact-SHA `7f4d633cb` 的 push CI run `31482108162` 完整全绿：workflow 墙钟 16:58（10:25:06–10:42:04 UTC），Ubuntu server 3:03，Windows server 7:32；Playwright 四个 job 分别 16:54、13:18、13:25、16:06。原 stale assertion 与两个首用例超时均未复现。
+- exact-SHA `9be5ae8f6` 的 CI run `31480047406` 中，Ubuntu、Windows、macOS 与三平台 distribution jobs 均通过，原 stale assertion 没有再失败。
+- exact-SHA `9be5ae8f6` 的完整 workflow 随后被 Playwright shard 1 的两个既有首用例超时拦住；修复归入 Issue 003，并由下一条成功 run 验证。
+- exact-SHA `1149b75a9` 的 push CI run `31482108162` 完整全绿：workflow 墙钟 16:58（10:25:06–10:42:04 UTC），Ubuntu server 3:03，Windows server 7:32；Playwright 四个 job 分别 16:54、13:18、13:25、16:06。原 stale assertion 与两个首用例超时均未复现。
+- exact-SHA `d78c0b9e9` 的 run `31484477142` 又暴露一处独立 Windows 测试竞态：后台 shortstat Git 读取在满载 suite 下超过测试自制的 500ms 轮询窗口，测试先报超时，`afterEach` 随即在 Git 仍占用仓库时删除目录并触发 `EBUSY`。
+- 测试现改为使用生产入口已有的 `onComplete` 回调：先断言调用立即返回且 cache 未命中，再等待真实后台读取完成并断言缓存 `null`。这既保留非阻塞契约，又在清理临时仓库前确定性收束 Git 子进程；定向测试 1/1 通过，未修改生产代码。
 
 ## 验证
 
