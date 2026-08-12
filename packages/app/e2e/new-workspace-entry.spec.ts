@@ -75,7 +75,9 @@ test.describe("New workspace entry points", () => {
     }
   });
 
-  test("renders the submit control for the selected launch target", async ({ page }) => {
+  test("renders the selected launch target and links terminal profiles to Providers settings", async ({
+    page,
+  }) => {
     const seeded: SeededWorkspace = await seedWorkspace({ repoPrefix: "entry-launch-target-" });
 
     try {
@@ -94,6 +96,12 @@ test.describe("New workspace entry points", () => {
 
       await expect(page.getByTestId("new-workspace-launch-submit")).toBeVisible();
       await expect(page.getByTestId("workspace-create-submit")).toHaveCount(0);
+
+      await page.getByTestId("new-workspace-launch-trigger").click();
+      await page.getByTestId("new-workspace-launch-manage-profiles").click();
+      await expect(page).toHaveURL(
+        new RegExp(`/settings/hosts/${getServerId()}/providers(?:\\?|$)`),
+      );
     } finally {
       await seeded.cleanup();
     }
