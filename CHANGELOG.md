@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.5.0-beta.2 - 2026-08-12
+## 0.5.0 - 2026-08-12
 
 - Adds project-first workspace navigation, attention ordering, project icons, worktree labels, unified workspace creation, agent-guided project setup, and safe agent-guided workspace and branch renaming.
 - Expands Agent Timeline and History with durable synchronization, outline navigation, bounded cross-host search and jumps, duplicate-free pagination, and formatting-preserving copy.
