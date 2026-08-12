@@ -115,6 +115,12 @@ const IGNORED_DIRECTORY_NAMES = new Set([
 const directoryListCache = new Map<string, DirectoryListCacheEntry>();
 const defaultDependencies: DirectorySuggestionDependencies = { runGitCommand };
 
+// Discovery and retrieval filter differently, on purpose. Discovery — anything that ranks or
+// browses candidates the caller has not named — drops gitignored and hidden entries, so pickers
+// do not offer build output. Retrieval of a path the caller named exactly applies no ignore or
+// hidden filtering; the only question is whether the path stays inside the root. Clicking a file
+// reference an agent wrote must open it whether or not Git tracks it.
+
 export async function searchDirectoryEntries(
   options: SearchDirectoryEntriesOptions,
   dependencies: DirectorySuggestionDependencies = defaultDependencies,
@@ -130,9 +136,7 @@ export async function searchDirectoryEntries(
       ? await findExactEntry(input)
       : null;
   if (exact && input.limit === 1) {
-    return options.respectGitIgnore
-      ? filterGitIgnoredCandidates(root, [exact], dependencies)
-      : [exact];
+    return [exact];
   }
 
   const browsesRoot = input.plan.isPathQuery && !input.plan.normalizedQuery;
@@ -145,7 +149,14 @@ export async function searchDirectoryEntries(
     ? [exact, ...results.filter((entry) => !sameEntry(entry, exact))].slice(0, input.limit)
     : results;
   if (!options.respectGitIgnore) return candidates;
-  return filterGitIgnoredCandidates(root, candidates, dependencies);
+  if (!exact) return filterGitIgnoredCandidates(root, candidates, dependencies);
+  const discoveredCandidates = candidates.filter((entry) => !sameEntry(entry, exact));
+  const visibleCandidates = await filterGitIgnoredCandidates(
+    root,
+    discoveredCandidates,
+    dependencies,
+  );
+  return [exact, ...visibleCandidates].slice(0, input.limit);
 }
 
 function buildSearchInput(

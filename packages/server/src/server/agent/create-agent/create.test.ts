@@ -22,6 +22,14 @@ function createRealAgentManager(storage: AgentStorage): AgentManager {
   });
 }
 
+async function shutdownRealAgentManager(
+  agentManager: AgentManager,
+  storage: AgentStorage,
+): Promise<void> {
+  await agentManager.flushForShutdown();
+  await storage.flush();
+}
+
 // Creates a worktree directory under repoRoot and reports it back as a fresh
 // workspace so the command can stamp the agent with it (mirrors the production
 // worktree service).
@@ -237,6 +245,7 @@ test("session create stamps the requested workspaceId when no worktree setup run
     const stored = await storage.get(snapshot.id);
     expect(stored?.workspaceId).toBe("ws-source");
   } finally {
+    await shutdownRealAgentManager(agentManager, storage);
     rmSync(workdir, { recursive: true, force: true });
   }
 });
@@ -272,6 +281,7 @@ test("session create stamps the new worktree's workspaceId when a setup continua
     const stored = await storage.get(snapshot.id);
     expect(stored?.workspaceId).toBe("ws-new-worktree");
   } finally {
+    await shutdownRealAgentManager(agentManager, storage);
     rmSync(workdir, { recursive: true, force: true });
   }
 });
@@ -322,6 +332,7 @@ test("mcp create stamps the new worktree's workspaceId, not the parent's", async
     const storedChild = await storage.get(child.id);
     expect(storedChild?.workspaceId).toBe("ws-new-worktree");
   } finally {
+    await shutdownRealAgentManager(agentManager, storage);
     rmSync(workdir, { recursive: true, force: true });
   }
 });
@@ -360,6 +371,7 @@ test("session create keeps the prompt title after the initial prompt settles", a
     const settled = await storage.get(snapshot.id);
     expect(settled?.title).toBe(title);
   } finally {
+    await shutdownRealAgentManager(agentManager, storage);
     rmSync(workdir, { recursive: true, force: true });
   }
 });
@@ -398,6 +410,7 @@ test("session create keeps an explicit title after the initial prompt settles", 
     const settled = await storage.get(snapshot.id);
     expect(settled?.title).toBe(title);
   } finally {
+    await shutdownRealAgentManager(agentManager, storage);
     rmSync(workdir, { recursive: true, force: true });
   }
 });

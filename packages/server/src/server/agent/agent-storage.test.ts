@@ -391,6 +391,46 @@ describe("AgentStorage", () => {
     expect(record?.title).toBe("Generated title");
   });
 
+  test("applySnapshot preserves archivedAt from a concurrent archive update", async () => {
+    const agentId = "agent-concurrent-archive";
+    await storage.applySnapshot(createManagedAgent({ id: agentId }));
+    const initialRecord = await storage.get(agentId);
+    expect(initialRecord).not.toBeNull();
+
+    const storageInternals = storage as unknown as {
+      writeRecord: (record: StoredAgentRecord) => Promise<void>;
+    };
+    const originalWriteRecord = storageInternals.writeRecord.bind(storage);
+    let releaseArchiveWrite!: () => void;
+    const archiveWriteStarted = new Promise<void>((resolveStarted) => {
+      storageInternals.writeRecord = async (record) => {
+        storageInternals.writeRecord = originalWriteRecord;
+        resolveStarted();
+        await new Promise<void>((resolve) => {
+          releaseArchiveWrite = resolve;
+        });
+        await originalWriteRecord(record);
+      };
+    });
+
+    const archivedAt = "2025-01-03T00:00:00.000Z";
+    const archivePromise = storage.upsert({ ...initialRecord!, archivedAt });
+    await archiveWriteStarted;
+
+    const snapshotPromise = storage.applySnapshot(
+      createManagedAgent({
+        id: agentId,
+        lifecycle: "running",
+        updatedAt: new Date("2025-01-02T00:00:00.000Z"),
+      }),
+    );
+    releaseArchiveWrite();
+    await Promise.all([archivePromise, snapshotPromise]);
+
+    const record = await storage.get(agentId);
+    expect(record?.archivedAt).toBe(archivedAt);
+  });
+
   test("list returns all agents including internal ones", async () => {
     // Create a normal agent
     await storage.applySnapshot(

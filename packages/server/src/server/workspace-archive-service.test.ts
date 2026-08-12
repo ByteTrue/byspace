@@ -147,6 +147,7 @@ function createArchiveDeps(input: ArchiveDepsInput): ArchiveTestDependencies {
     } as unknown as Pick<WorkspaceGitService, "getSnapshot">,
     agentManager: {
       listAgents: () => [],
+      getAgent: () => null,
       archiveAgent: vi.fn(async (agentId: string) => {
         archivedAgentIds.push(agentId);
         return { archivedAt: new Date().toISOString() };
@@ -193,6 +194,39 @@ function assertArchiveResult(
 }
 
 describe("archiveByScope", () => {
+  test("archives the durable snapshot when an observed live agent closes before teardown", async () => {
+    const { tempDir, repoDir } = createGitRepo();
+    const byspaceHome = path.join(tempDir, ".byspace");
+    const workspaceId = "ws-live-teardown-race";
+    const agentId = "agent-live-teardown-race";
+    const deps = createArchiveDeps({
+      byspaceHome,
+      activeWorkspaces: [{ workspaceId, cwd: repoDir, kind: "local_checkout" }],
+    });
+    deps.agentManager = {
+      listAgents: () => [{ id: agentId, workspaceId }] as ManagedAgent[],
+      getAgent: () => undefined,
+      archiveAgent: vi.fn(async () => ({ archivedAt: new Date().toISOString() })),
+      archiveSnapshot: vi.fn(async (id: string) => {
+        deps.archivedSnapshotIds.push(id);
+        return {};
+      }),
+    };
+    deps.agentStorage = {
+      list: async () => [{ id: agentId, workspaceId, archivedAt: null }] as StoredAgentRecord[],
+    } as Pick<AgentStorage, "list">;
+
+    const result = await archiveByScope(deps, {
+      scope: { kind: "workspace", workspaceId },
+      repoRoot: null,
+      requestId: "req-live-teardown-race",
+    });
+
+    expect(result.archivedAgentIds).toContain(agentId);
+    expect(deps.archivedSnapshotIds).toEqual([agentId]);
+    expect(deps.agentManager.archiveAgent).not.toHaveBeenCalled();
+  });
+
   test("workspace scope archives the record and removes the directory on last reference", async () => {
     const { tempDir, repoDir } = createGitRepo();
     const byspaceHome = path.join(tempDir, ".byspace");
@@ -527,6 +561,10 @@ describe("archiveByScope", () => {
     });
     deps.agentManager = {
       listAgents: () => [{ id: liveAgentId, workspaceId: targetWorkspaceId }] as ManagedAgent[],
+      getAgent: (agentId: string) =>
+        agentId === liveAgentId
+          ? ({ id: liveAgentId, workspaceId: targetWorkspaceId } as ManagedAgent)
+          : undefined,
       archiveAgent: vi.fn(async (agentId: string) => {
         deps.archivedAgentIds.push(agentId);
         return { archivedAt: new Date().toISOString() };
