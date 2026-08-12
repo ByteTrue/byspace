@@ -243,6 +243,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   splitButtonCaret: {
     width: 28,
+    height: "100%",
     alignItems: "center",
     justifyContent: "center",
     borderLeftWidth: theme.borderWidth[1],

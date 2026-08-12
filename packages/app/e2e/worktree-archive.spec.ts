@@ -8,7 +8,11 @@ import {
   openProjectViaDaemon,
 } from "./helpers/new-workspace";
 import { getServerId } from "./helpers/server-id";
-import { archiveWorkspaceFromSidebar, expectWorkspaceAbsentFromSidebar } from "./helpers/sidebar";
+import {
+  archiveWorkspaceFromSidebar,
+  expectWorkspaceAbsentFromSidebar,
+  selectWorkspaceInSidebar,
+} from "./helpers/sidebar";
 import { createTempGitRepo } from "./helpers/workspace";
 import { waitForSidebarHydration, waitForWorkspaceInSidebar } from "./helpers/workspace-ui";
 
@@ -31,6 +35,40 @@ test.describe("Workspace archive with worktree backing", () => {
     createdWorktreeDirectories.clear();
     await client?.close().catch(() => undefined);
     await tempRepo?.cleanup().catch(() => undefined);
+  });
+
+  test("archive split button caret fills its container", async ({ page }) => {
+    const serverId = getServerId();
+    await openProjectViaDaemon(client, tempRepo.path);
+    const worktree = await createWorktreeViaDaemon(client, {
+      cwd: tempRepo.path,
+      slug: `archive-caret-${Date.now()}`,
+    });
+    createdWorktreeDirectories.add(worktree.workspaceDirectory);
+
+    await gotoAppShell(page);
+    await waitForSidebarHydration(page);
+    await waitForWorkspaceInSidebar(page, { serverId, workspaceId: worktree.workspaceId });
+    await selectWorkspaceInSidebar(page, worktree.workspaceId);
+
+    const primary = page.getByTestId("changes-primary-cta");
+    const caret = page.getByTestId("changes-primary-cta-caret");
+    await expect(primary).toHaveAccessibleName("Archive workspace", { timeout: 30_000 });
+    await expect(caret).toBeVisible();
+
+    const geometryDelta = await caret.evaluate((caretElement) => {
+      const primaryElement = document.querySelector('[data-testid="changes-primary-cta"]');
+      if (!primaryElement) throw new Error("Missing archive split-button primary action");
+      const primaryRect = primaryElement.getBoundingClientRect();
+      const caretRect = caretElement.getBoundingClientRect();
+      return {
+        top: caretRect.top - primaryRect.top,
+        bottom: caretRect.bottom - primaryRect.bottom,
+        height: caretRect.height - primaryRect.height,
+      };
+    });
+
+    expect(geometryDelta).toEqual({ top: 0, bottom: 0, height: 0 });
   });
 
   test("archiving the final workspace removes its managed worktree directory", async ({ page }) => {

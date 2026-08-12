@@ -75,6 +75,8 @@ Pi uses a global extension and Pi's documented lifecycle events:
 - ask/question tool end → `running`
 - `agent_settled`, `session_shutdown` → `idle`
 
+Pi serializes those reports: at most one request is in flight and only the latest state waits behind it. This keeps an older `running` request from arriving after a later `idle`, bounds bursts without an unbounded queue, and lets `session_shutdown` return the active drain promise.
+
 The daemon maps hook states onto terminal activity like an agent lifecycle plus unread attention: `running` → `state: working`, `idle` → `state: idle`, and `needs-input` → `state: idle` with `attentionReason: needs_input`. A `working` → `idle` transition records `state: idle` with `attentionReason: finished` until the user focuses that terminal; plain idle terminals still contribute no workspace status.
 
 ## Focus clearing
