@@ -46,6 +46,7 @@ Do not repeat existing client deletion, identity migration, packaging, or releas
 - Do not merge, rebase, or cherry-pick upstream history. Create normal BySpace-authored sync commits.
 - Use one writer for the candidate and independent read-only reviewers.
 - Freeze dispositions before implementation. The user, not the synchronizing agent, decides whether questionable upstream behavior is copied, excluded, or handled as separate work.
+- Before implementation, first give the user a complete plain-language list of what upstream added, fixed, and changed. Every item must include a recommendation and reason; end with a concise summary and only the genuine decision points.
 - Do not tag, publish, deploy, or restart production as part of source synchronization.
 
 ## Workflow
@@ -58,24 +59,13 @@ Do not repeat existing client deletion, identity migration, packaging, or releas
 4. Verify that the baseline and target objects exist in an isolated upstream checkout.
 5. Do not move either endpoint during the sync.
 
-### 2. Prove the upstream target
-
-In a disposable checkout of the exact target:
-
-```bash
-npm ci
-npm run build:server
-npm run typecheck
-npm run build:web --workspace=@getpaseo/app
-```
-
-Use the target's documented equivalents if scripts or package names changed. Record upstream failures before touching BySpace.
-
-### 3. Review the release delta
+### 2. Build the complete release inventory
 
 Review the aggregate `BASE..TARGET` tree diff and release notes. Use individual commits only to understand intent.
 
-Summarize impact by retained subsystem:
+Identify each independent behavior and classify its change type as a new feature, problem fix, experience change, or engineering/dependency/release change. Do not collapse distinct behaviors merely because they share a commit or subsystem.
+
+For internal accounting, summarize impact across:
 
 - protocol and backward compatibility;
 - persistence and workspace/agent lifecycle;
@@ -86,17 +76,63 @@ Summarize impact by retained subsystem:
 - Relay and connection security;
 - dependencies, generated declarations, packaging, and CI.
 
-For each relevant behavior, record one disposition:
+Give each behavior one internal disposition:
 
-- **Port** — copy the approved upstream behavior with only mechanical BySpace adaptations
-- **Already present**
-- **Excluded surface**
-- **Superseded by a previously documented BySpace decision**
-- **Needs user decision** — stop before implementation; unresolved decisions block baseline advancement
+- **Port** — copy the approved upstream behavior with only mechanical BySpace adaptations;
+- **Already present**;
+- **Excluded surface**;
+- **Superseded by a previously documented BySpace decision**;
+- **Needs user decision** — stop before implementation; unresolved decisions block baseline advancement.
 
-This is release-level accounting, not a per-commit ledger. An explicit user decision to copy upstream as-is, exclude the behavior, or move a fix into separate work resolves the decision.
+This is release-level accounting, not a per-commit implementation plan. Keep a separate commit/file coverage index proving that every part of the release delta maps to a behavior, including merge-only and release-metadata changes.
 
-### 4. Copy approved upstream code
+Before presenting the inventory as final, obtain an independent read-only classification review. It must check omissions, cross-subsystem conflicts, whole-commit exclusions that hide retained behavior, and incorrect Already present or Superseded claims. Correct the ledger first.
+
+### 3. Present the change-by-change recommendation
+
+The first user checkpoint explains the upstream release before discussing implementation phases. Do not lead with internal IDs, commit hashes, file counts, or disposition taxonomy.
+
+Group a numbered list under the applicable headings:
+
+1. **新增功能**
+2. **问题修复**
+3. **体验调整**
+4. **工程、依赖与发布变化**
+
+For every item, report:
+
+- **上游改了什么** — concrete before/after behavior;
+- **影响** — affected user, API, runtime, or operational path;
+- **我的意见** — 建议采纳 / BySpace 已有，无需重复 / 建议不采纳 / 需要你决定;
+- **原因** — the actual product, boundary, compatibility, or correctness reason;
+- **BySpace 处理** — only when a mechanical adaptation or preserved invariant matters;
+- **依据** — compact commit/file evidence, without making the user decode the diff.
+
+After the complete list, add in this order:
+
+- **审计依据** — baseline → target, frozen coordinates, complete commit/file coverage, independent classification result, and target build status;
+- **精炼总结** — counts by recommendation plus the few highest-impact outcomes;
+- **需要你介入** — only genuine product, architecture, security, or compatibility choices, each with the recommended default and consequences. If none exist, say so explicitly;
+- one approval shortcut such as `按建议冻结`. The user may override individual numbered items. Nothing follows this section.
+
+The complete user list and internal coverage index must describe the same set of behaviors. The concise summary may compress the list but must not replace it.
+
+Wait for explicit target and disposition approval before implementation.
+
+### 4. Prove the upstream target
+
+In a disposable checkout of the exact target:
+
+```bash
+npm ci
+npm run build:server
+npm run typecheck
+npm run build --workspace=@getpaseo/app
+```
+
+Use the target's documented equivalents if scripts or package names changed. Record upstream failures before touching BySpace. The proof may run alongside inventory work, but a long build should not delay the first change explanation unless it changes a recommendation. It must pass before copying code.
+
+### 5. Copy approved upstream code
 
 1. Create a persistent isolated worktree from the recorded current BySpace `main` SHA.
 2. For each approved Port, copy the upstream implementation and its tests as directly as the retained BySpace tree permits.
@@ -111,7 +147,7 @@ This is release-level accounting, not a per-commit ledger. An explicit user deci
 7. Build workspace declarations before interpreting cross-package type errors.
 8. Commit copied slices as ordinary BySpace commits; never import upstream ancestry.
 
-### 5. Verify the candidate
+### 6. Verify the candidate
 
 Run focused tests for each changed behavior, then:
 
@@ -122,7 +158,7 @@ npm run build:server
 npm run typecheck
 npm run lint
 npm run format:check
-npm run build:web --workspace=@bytetrue/byspace-app
+npm run build --workspace=@bytetrue/byspace-app
 npm run release:check
 ```
 
@@ -139,7 +175,7 @@ Also prove:
 
 Use upstream tests for copied behavior and focused tests for mechanical adaptations. Do not broaden a sync into an exploratory E2E campaign. If testing reveals behavior that requires a product decision, stop and ask. Broad platform coverage belongs to remote CI, not a local full-suite run.
 
-### 6. Review and integrate normally
+### 7. Review and integrate normally
 
 Ask independent read-only reviewers to inspect only:
 
@@ -154,7 +190,7 @@ Fix transfer mistakes and resolve all **Needs user decision** items through expl
 
 Integration is branch-first: push the sync branch, run the full `CI` workflow on its exact SHA (PR to `main` or `workflow_dispatch`), and only after it is green and the user approves, fast-forward `main` to that same SHA. The baseline marker therefore lands on `main` only together with green exact-SHA CI evidence; never merge a red or unverified candidate into `main`.
 
-### 7. Tear down temporary sync trees
+### 8. Tear down temporary sync trees
 
 A sync worktree is a temporary process resource, not a second BySpace checkout to keep indefinitely.
 
@@ -179,12 +215,21 @@ Shipping is separate. Invoke `release-beta` or `release-stable` only when explic
 
 ## Required report
 
+The first approval report must contain, in this order:
+
+1. the complete numbered change list grouped into new features, fixes, experience changes, and engineering/release changes, with a recommendation and concrete reason for every item;
+2. compact audit evidence: baseline → target, frozen coordinates, complete-coverage result, independent classification review, and target build result if available;
+3. a concise summary with counts and highest-impact outcomes;
+4. only the items requiring user intervention, with recommended defaults and an approval shortcut; this is the final section.
+
+The final integration report additionally contains:
+
 - current BySpace base SHA;
 - upstream baseline and target tag, commit, and tree;
 - unmodified target build result;
-- release-delta summary and dispositions;
+- the approved change list and user choices;
+- all **Needs user decision** items and the user's explicit choices;
 - candidate commits and changed subsystems;
 - focused tests, full gates, fidelity review, and CI if pushed;
-- all **Needs user decision** items and the user's explicit choices;
 - residual upstream concerns that were observed but not changed;
 - explicit list of remote or production mutations.
