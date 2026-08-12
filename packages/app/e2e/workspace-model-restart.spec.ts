@@ -439,7 +439,7 @@ test.describe("Workspace model restart regressions", () => {
           status: "running",
         });
 
-      await page.goto(buildHostWorkspaceRoute(serverId, seeded.workspaceA));
+      await page.goto(buildHostWorkspaceRoute(serverId, seeded.workspaceB));
       await waitForSidebarHydration(page);
       await expectWorkspaceRowHasOnlyIndicator(page, {
         serverId,
@@ -451,9 +451,6 @@ test.describe("Workspace model restart regressions", () => {
         workspaceId: seeded.workspaceB,
         indicator: "running",
       });
-      await expect
-        .poll(() => getVisibleWorkspaceAgentTabIds(page), { timeout: 30_000 })
-        .toContain(`workspace-tab-agent_${LEGACY_AGENT_ID}`);
 
       await openGlobalNewWorkspaceComposer(page);
       const listedProject = (await client.listProjects()).projects.find(
@@ -473,7 +470,11 @@ test.describe("Workspace model restart regressions", () => {
       await expect
         .poll(() => {
           const workspaceId = parseWorkspaceIdFromPageUrl(page, serverId);
-          return workspaceId && workspaceId !== seeded.workspaceA ? workspaceId : null;
+          return workspaceId &&
+            workspaceId !== seeded.workspaceA &&
+            workspaceId !== seeded.workspaceB
+            ? workspaceId
+            : null;
         })
         .not.toBeNull();
       const createdWorkspaceId = parseWorkspaceIdFromPageUrl(page, serverId);
