@@ -517,7 +517,7 @@ function MobileTabTrailingAccessory({
 }) {
   const { t } = useTranslation();
   return (
-    <DropdownMenu>
+    <DropdownMenu compactMode={isWeb ? "sheet" : undefined}>
       <DropdownMenuTrigger
         testID={`${menuTestIDBase}-trigger`}
         accessibilityRole="button"
@@ -527,7 +527,13 @@ function MobileTabTrailingAccessory({
       >
         <ThemedEllipsis size={14} uniProps={mutedColorMapping} />
       </DropdownMenuTrigger>
-      <DropdownMenuContent side="bottom" align="end" width={220} testID={menuTestIDBase}>
+      <DropdownMenuContent
+        side="bottom"
+        align="end"
+        width={220}
+        sheetTitle={presentationLabel}
+        testID={menuTestIDBase}
+      >
         {menuEntries.map((entry) =>
           entry.kind === "separator" ? (
             <DropdownMenuSeparator key={entry.key} />

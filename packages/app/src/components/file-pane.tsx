@@ -47,7 +47,6 @@ import type { FileConflictAlertState } from "@/file-pane/conflict-alert";
 import type { LiveFileModel } from "@/file-pane/live-file/model";
 import { confirmDialog } from "@/utils/confirm-dialog";
 import { usePublishPanelInstanceAttributes } from "@/panels/panel-instance-attributes";
-import { AppearanceStyleBoundary } from "@/components/appearance-style-boundary";
 import type { Theme } from "@/styles/theme";
 import { createHtmlPreviewDocument, isHtmlPreviewPath } from "@/file-pane/html-preview";
 
@@ -680,17 +679,15 @@ function FilePanePresentation({
           onModeChange={onMarkdownModeChange}
         />
       ) : null}
-      <AppearanceStyleBoundary>
-        <FilePreviewBody
-          preview={preview}
-          isLoading={isLoading}
-          isMobile={isMobile}
-          location={location}
-          navigationRevision={navigationRevision}
-          imagePreviewUri={imagePreviewUri}
-          mode={markdownMode}
-        />
-      </AppearanceStyleBoundary>
+      <FilePreviewBody
+        preview={preview}
+        isLoading={isLoading}
+        isMobile={isMobile}
+        location={location}
+        navigationRevision={navigationRevision}
+        imagePreviewUri={imagePreviewUri}
+        mode={markdownMode}
+      />
     </View>
   );
 }
@@ -868,17 +865,15 @@ function EditableFilePane({
           onVimModeChange={handleVimModeChange}
         />
       ) : (
-        <AppearanceStyleBoundary>
-          <FilePreviewBody
-            preview={renderedPreview}
-            isLoading={isLoading}
-            isMobile={isMobile}
-            location={location}
-            navigationRevision={navigationRevision}
-            imagePreviewUri={null}
-            mode="preview"
-          />
-        </AppearanceStyleBoundary>
+        <FilePreviewBody
+          preview={renderedPreview}
+          isLoading={isLoading}
+          isMobile={isMobile}
+          location={location}
+          navigationRevision={navigationRevision}
+          imagePreviewUri={null}
+          mode="preview"
+        />
       )}
     </View>
   );

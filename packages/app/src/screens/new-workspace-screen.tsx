@@ -1371,8 +1371,10 @@ function useNewWorkspaceFormStack(input: NewWorkspaceFormStackInput): ReactEleme
     [isPending],
   );
 
+  const desktopControlStyle = isCompact ? undefined : styles.desktopControl;
+
   const projectControl = (
-    <View>
+    <View style={desktopControlStyle}>
       <ProjectPickerTrigger
         pickerAnchorRef={project.anchorRef}
         onPress={project.open}
@@ -1408,7 +1410,7 @@ function useNewWorkspaceFormStack(input: NewWorkspaceFormStackInput): ReactEleme
   );
 
   const hostControl = showHostControl ? (
-    <View>
+    <View style={desktopControlStyle}>
       <HostPicker
         hosts={host.allHosts}
         value={host.requiresHostSelection ? "" : host.selectedServerId}
@@ -1440,7 +1442,7 @@ function useNewWorkspaceFormStack(input: NewWorkspaceFormStackInput): ReactEleme
   ) : null;
 
   const isolationControl = isolation.canCreateWorktree ? (
-    <View>
+    <View style={desktopControlStyle}>
       <IsolationPickerTrigger
         pickerAnchorRef={isolation.anchorRef}
         onPress={isolation.open}
@@ -1467,7 +1469,7 @@ function useNewWorkspaceFormStack(input: NewWorkspaceFormStackInput): ReactEleme
   ) : null;
 
   const baseControl = base.showRefPicker ? (
-    <View>
+    <View style={desktopControlStyle}>
       <RefPickerTrigger
         pickerAnchorRef={base.anchorRef}
         onPress={base.open}
@@ -2523,6 +2525,10 @@ const styles = StyleSheet.create((theme) => ({
   formStack: {
     marginBottom: theme.spacing[8],
     gap: theme.spacing[2],
+  },
+  desktopControl: {
+    minWidth: 0,
+    flexShrink: 1,
   },
   formStackDesktop: {
     flexDirection: "row",

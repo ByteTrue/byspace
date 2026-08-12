@@ -3,10 +3,14 @@ import { gotoAppShell } from "./helpers/app";
 import { addConnectedHostAndReload } from "./helpers/hosts";
 import { startIsolatedHostDaemon } from "./helpers/isolated-host-daemon";
 import { connectSeedClient } from "./helpers/seed-client";
-import { submitNewWorkspaceEmpty } from "./helpers/new-workspace";
+import {
+  expectNewWorkspaceProjectSelected,
+  openGlobalNewWorkspaceComposer,
+  submitNewWorkspaceEmpty,
+} from "./helpers/new-workspace";
 import { getServerId } from "./helpers/server-id";
 import { createTempGitRepo } from "./helpers/workspace";
-import { waitForSidebarHydration } from "./helpers/workspace-ui";
+import { switchWorkspaceViaSidebar, waitForSidebarHydration } from "./helpers/workspace-ui";
 
 const REMOTE = "https://github.com/byspace-e2e/shared-project.git";
 
@@ -65,6 +69,7 @@ test.describe("cross-host project identity", () => {
 
       const groupedRow = page.getByTestId(`sidebar-project-row-${projectKey}`);
       await expect(groupedRow).toHaveCount(1, { timeout: 30_000 });
+
       await groupedRow.hover();
       await page.getByTestId(`sidebar-project-new-worktree-${projectKey}`).click();
       await expect(page.getByTestId("new-workspace-project-picker-trigger")).toBeVisible();
@@ -157,6 +162,24 @@ test.describe("cross-host project identity", () => {
 
       await page.goBack();
       await waitForSidebarHydration(page);
+      // A workspace route names the canonical project. Switching the New Workspace host must
+      // preserve that project instead of replacing it with a host-local default.
+      await switchWorkspaceViaSidebar({
+        page,
+        serverId: primaryServerId,
+        workspaceId: primaryCreated.workspace.id,
+      });
+      await openGlobalNewWorkspaceComposer(page);
+      await expectNewWorkspaceProjectSelected(page, "Primary shared app");
+      await page.getByTestId("host-picker-trigger").click();
+      await page.getByTestId(`new-workspace-host-picker-option-${secondary.serverId}`).click();
+      await expectNewWorkspaceProjectSelected(page, "Primary shared app");
+      await switchWorkspaceViaSidebar({
+        page,
+        serverId: primaryServerId,
+        workspaceId: primaryCreated.workspace.id,
+      });
+
       await groupedRow.hover();
       await page.getByTestId(`sidebar-project-kebab-${projectKey}`).click();
       page.once("dialog", (dialog) => void dialog.accept());

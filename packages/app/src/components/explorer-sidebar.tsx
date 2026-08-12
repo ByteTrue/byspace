@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -8,6 +8,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Animated, { useAnimatedStyle, useSharedValue, runOnJS } from "react-native-reanimated";
+import { scheduleOnRN } from "react-native-worklets";
 import { Gesture } from "react-native-gesture-handler";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { X } from "lucide-react-native";
@@ -27,6 +28,7 @@ import { useToast } from "@/contexts/toast-context";
 import { useCloseFileExplorerGesture } from "@/mobile-panels/gestures";
 import { MobilePanelOverlay } from "@/mobile-panels/presentation";
 import { HEADER_INNER_HEIGHT } from "@/constants/layout";
+import { isWeb } from "@/constants/platform";
 import { GitDiffPane } from "@/git/diff-pane";
 import { FileExplorerPane } from "./file-explorer-pane";
 
@@ -34,6 +36,7 @@ import { RetainedPanelActivity } from "@/components/retained-panel";
 import { SidebarResizeHandle } from "@/components/sidebar-resize-handle";
 import { buildWorkspaceAttachmentScopeKey } from "@/attachments/workspace-attachments-store";
 import { resolveDesktopExplorerWidth } from "@/components/desktop-sidebar-layout";
+import { resolveSidebarResizePanGestureConfig } from "@/components/sidebar-resize-handle-layout";
 
 function logExplorerSidebar(_event: string, _details: Record<string, unknown>): void {}
 
@@ -153,6 +156,9 @@ export function ExplorerSidebar({
   });
   const startWidthRef = useRef(visibleExplorerWidth);
   const resizeWidth = useSharedValue(visibleExplorerWidth);
+  const [resizePressed, setResizePressed] = useState(false);
+  const showResizeGrip = useCallback(() => setResizePressed(true), []);
+  const hideResizeGrip = useCallback(() => setResizePressed(false), []);
 
   useEffect(() => {
     resizeWidth.value = visibleExplorerWidth;
@@ -166,27 +172,50 @@ export function ExplorerSidebar({
     closeDesktopFileExplorer();
   }, [closeDesktopFileExplorer, isOpen]);
 
-  const resizeGesture = useMemo(
-    () =>
-      Gesture.Pan()
-        .enabled(true)
-        .hitSlop({ left: 8, right: 8, top: 0, bottom: 0 })
-        .onStart(() => {
-          startWidthRef.current = visibleExplorerWidth;
-          resizeWidth.value = visibleExplorerWidth;
+  const resizeGesture = useMemo(() => {
+    const gesture = Gesture.Pan().enabled(true).hitSlop({ left: 8, right: 8, top: 0, bottom: 0 });
+    const webConfig = resolveSidebarResizePanGestureConfig(isWeb);
+
+    if (webConfig) {
+      gesture
+        .onBegin(() => {
+          scheduleOnRN(showResizeGrip);
         })
-        .onUpdate((event) => {
-          const newWidth = startWidthRef.current - event.translationX;
-          resizeWidth.value = resolveDesktopExplorerWidth({
-            requestedWidth: newWidth,
-            viewportWidth,
-          });
-        })
-        .onEnd(() => {
-          runOnJS(setExplorerWidth)(resizeWidth.value);
-        }),
-    [resizeWidth, setExplorerWidth, viewportWidth, visibleExplorerWidth],
-  );
+        .activeOffsetX(webConfig.activeOffsetX)
+        .failOffsetY(webConfig.failOffsetY);
+    }
+
+    gesture
+      .onStart((event) => {
+        startWidthRef.current = visibleExplorerWidth + (isWeb ? event.translationX : 0);
+        resizeWidth.value = visibleExplorerWidth;
+      })
+      .onUpdate((event) => {
+        const newWidth = startWidthRef.current - event.translationX;
+        resizeWidth.value = resolveDesktopExplorerWidth({
+          requestedWidth: newWidth,
+          viewportWidth,
+        });
+      })
+      .onEnd(() => {
+        runOnJS(setExplorerWidth)(resizeWidth.value);
+      });
+
+    if (webConfig) {
+      gesture.onFinalize(() => {
+        scheduleOnRN(hideResizeGrip);
+      });
+    }
+
+    return gesture;
+  }, [
+    hideResizeGrip,
+    resizeWidth,
+    setExplorerWidth,
+    showResizeGrip,
+    viewportWidth,
+    visibleExplorerWidth,
+  ]);
 
   const resizeAnimatedStyle = useAnimatedStyle(() => ({
     width: resizeWidth.value,
@@ -206,6 +235,7 @@ export function ExplorerSidebar({
         <SidebarResizeHandle
           edge="left"
           gesture={resizeGesture}
+          pressed={resizePressed}
           testID="explorer-sidebar-resize-handle"
         />
 

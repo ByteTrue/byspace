@@ -23,9 +23,11 @@ import {
 } from "react-native";
 import { Gesture } from "react-native-gesture-handler";
 import Animated, { runOnJS, useAnimatedStyle, useSharedValue } from "react-native-reanimated";
+import { scheduleOnRN } from "react-native-worklets";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { resolveDesktopSidebarWidth } from "@/components/desktop-sidebar-layout";
+import { resolveSidebarResizePanGestureConfig } from "@/components/sidebar-resize-handle-layout";
 import { HostPicker } from "@/components/hosts/host-picker";
 import { SidebarHeaderRow } from "@/components/sidebar/sidebar-header-row";
 import { SidebarDisplayPreferencesMenu } from "@/components/sidebar/sidebar-display-preferences-menu";
@@ -34,6 +36,7 @@ import { SidebarResizeHandle } from "@/components/sidebar-resize-handle";
 import { Shortcut } from "@/components/ui/shortcut";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { HEADER_INNER_HEIGHT, useIsCompactFormFactor } from "@/constants/layout";
+import { isWeb } from "@/constants/platform";
 import { useOpenAddProject } from "@/hooks/use-open-add-project";
 import { useOpenNewWorkspace } from "@/hooks/use-global-new-workspace-action";
 import { useShortcutKeys } from "@/hooks/use-shortcut-keys";
@@ -656,32 +659,59 @@ function DesktopSidebar({
 
   const startWidthRef = useRef(visibleSidebarWidth);
   const resizeWidth = useSharedValue(visibleSidebarWidth);
+  const [resizePressed, setResizePressed] = useState(false);
+  const showResizeGrip = useCallback(() => setResizePressed(true), []);
+  const hideResizeGrip = useCallback(() => setResizePressed(false), []);
 
   useEffect(() => {
     resizeWidth.value = visibleSidebarWidth;
   }, [resizeWidth, visibleSidebarWidth]);
 
-  const resizeGesture = useMemo(
-    () =>
-      Gesture.Pan()
-        .hitSlop({ left: 8, right: 8, top: 0, bottom: 0 })
-        .onStart(() => {
-          startWidthRef.current = visibleSidebarWidth;
-          resizeWidth.value = visibleSidebarWidth;
+  const resizeGesture = useMemo(() => {
+    const gesture = Gesture.Pan().hitSlop({ left: 8, right: 8, top: 0, bottom: 0 });
+    const webConfig = resolveSidebarResizePanGestureConfig(isWeb);
+
+    if (webConfig) {
+      gesture
+        .onBegin(() => {
+          scheduleOnRN(showResizeGrip);
         })
-        .onUpdate((event) => {
-          // Dragging right (positive translationX) increases width
-          const newWidth = startWidthRef.current + event.translationX;
-          resizeWidth.value = resolveDesktopSidebarWidth({
-            requestedWidth: newWidth,
-            viewportWidth,
-          });
-        })
-        .onEnd(() => {
-          runOnJS(setSidebarWidth)(resizeWidth.value);
-        }),
-    [resizeWidth, setSidebarWidth, viewportWidth, visibleSidebarWidth],
-  );
+        .activeOffsetX(webConfig.activeOffsetX)
+        .failOffsetY(webConfig.failOffsetY);
+    }
+
+    gesture
+      .onStart((event) => {
+        startWidthRef.current = visibleSidebarWidth - (isWeb ? event.translationX : 0);
+        resizeWidth.value = visibleSidebarWidth;
+      })
+      .onUpdate((event) => {
+        // Dragging right (positive translationX) increases width
+        const newWidth = startWidthRef.current + event.translationX;
+        resizeWidth.value = resolveDesktopSidebarWidth({
+          requestedWidth: newWidth,
+          viewportWidth,
+        });
+      })
+      .onEnd(() => {
+        runOnJS(setSidebarWidth)(resizeWidth.value);
+      });
+
+    if (webConfig) {
+      gesture.onFinalize(() => {
+        scheduleOnRN(hideResizeGrip);
+      });
+    }
+
+    return gesture;
+  }, [
+    hideResizeGrip,
+    resizeWidth,
+    setSidebarWidth,
+    showResizeGrip,
+    viewportWidth,
+    visibleSidebarWidth,
+  ]);
 
   const resizeAnimatedStyle = useAnimatedStyle(() => ({
     width: resizeWidth.value,
@@ -757,6 +787,7 @@ function DesktopSidebar({
         <SidebarResizeHandle
           edge="right"
           gesture={resizeGesture}
+          pressed={resizePressed}
           testID="left-sidebar-resize-handle"
         />
       </View>
