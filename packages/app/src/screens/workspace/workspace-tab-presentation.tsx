@@ -4,14 +4,15 @@ import { Check } from "lucide-react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { useTranslation } from "react-i18next";
 import invariant from "tiny-invariant";
-import { SyncedLoader } from "@/components/synced-loader";
+import { StatusRing } from "@/components/status-ring";
 import { ensurePanelsRegistered } from "@/panels/register-panels";
 import { getPanelRegistration } from "@/panels/panel-registry";
 import type { WorkspaceTabDescriptor } from "@/screens/workspace/workspace-tabs-types";
 import type { SidebarStateBucket } from "@/utils/sidebar-agent-state";
 import { isEmphasizedStatusDotBucket } from "@/utils/status-dot-color";
-import { shouldRenderSyncedStatusLoader } from "@/utils/status-loader";
 import type { Theme } from "@/styles/theme";
+import type { SurfaceBackdrop } from "@/styles/surface-backdrop";
+import { STATUS_INDICATOR_FILLED_DOT_SIZE } from "@/utils/status-indicator-geometry";
 
 export interface WorkspaceTabPresentation {
   key: string;
@@ -23,7 +24,7 @@ export interface WorkspaceTabPresentation {
   statusBucket: SidebarStateBucket | null;
 }
 
-const DEFAULT_STATUS_DOT_SIZE = 7;
+const DEFAULT_STATUS_DOT_SIZE = STATUS_INDICATOR_FILLED_DOT_SIZE;
 const EMPHASIZED_STATUS_DOT_SIZE = 9;
 const DEFAULT_STATUS_DOT_OFFSET = -2;
 const EMPHASIZED_STATUS_DOT_OFFSET = -3;
@@ -103,6 +104,7 @@ interface WorkspaceTabIconProps {
   active?: boolean;
   size?: number;
   statusDotBorderColor?: string;
+  backdrop: SurfaceBackdrop;
 }
 
 const ThemedCheckIcon = withUnistyles(Check);
@@ -113,6 +115,7 @@ export function WorkspaceTabIcon({
   active = false,
   size = 14,
   statusDotBorderColor,
+  backdrop,
 }: WorkspaceTabIconProps): ReactElement {
   const iconColor = active ? styles.iconActive.color : styles.iconInactive.color;
   const bucket = presentation.statusBucket;
@@ -128,9 +131,6 @@ export function WorkspaceTabIcon({
     statusDotSize === EMPHASIZED_STATUS_DOT_SIZE
       ? EMPHASIZED_STATUS_DOT_OFFSET
       : DEFAULT_STATUS_DOT_OFFSET;
-  const shouldShowLoader = shouldRenderSyncedStatusLoader({
-    bucket: presentation.statusBucket,
-  });
   const Icon = presentation.icon;
   const agentIconWrapperStyle = useMemo(
     () => [styles.agentIconWrapper, { width: size, height: size }],
@@ -151,22 +151,19 @@ export function WorkspaceTabIcon({
     [statusDotColor, statusDotBorderColor, statusDotSize, statusDotOffset],
   );
 
-  if (shouldShowLoader) {
-    return (
-      <View
-        style={agentIconWrapperStyle}
-        accessibilityRole="progressbar"
-        accessibilityLabel="Agent running"
-      >
-        <SyncedLoader size={size - 1} color={styles.syncedLoader.color} />
-      </View>
-    );
-  }
-
   return (
     <View style={agentIconWrapperStyle}>
       <Icon size={size} color={iconColor} />
-      {statusDotColor ? <View style={statusDotStyle} /> : null}
+      {bucket === "running" ? (
+        <View
+          style={styles.statusRingOverlay}
+          accessibilityRole="progressbar"
+          accessibilityLabel="Agent running"
+        >
+          <StatusRing backdrop={backdrop} />
+        </View>
+      ) : null}
+      {bucket !== "running" && statusDotColor ? <View style={statusDotStyle} /> : null}
     </View>
   );
 }
@@ -189,12 +186,17 @@ export function WorkspaceTabOptionRow({
   trailingAccessory,
 }: WorkspaceTabOptionRowProps): ReactElement {
   const { t } = useTranslation();
-  const pressableStyle = useCallback(
-    ({ hovered, pressed }: PressableStateCallbackType & { hovered?: boolean }) => [
-      styles.optionMainPressable,
-      (Boolean(hovered) || pressed || active) && styles.optionRowActive,
-    ],
+  const isOptionActive = useCallback(
+    ({ hovered, pressed }: PressableStateCallbackType & { hovered?: boolean }) =>
+      Boolean(hovered) || pressed || active,
     [active],
+  );
+  const pressableStyle = useCallback(
+    (state: PressableStateCallbackType & { hovered?: boolean }) => [
+      styles.optionMainPressable,
+      isOptionActive(state) && styles.optionRowActive,
+    ],
+    [isOptionActive],
   );
   const optionRowStyle = useMemo(
     () => [styles.optionRow, active && styles.optionRowActive],
@@ -203,21 +205,32 @@ export function WorkspaceTabOptionRow({
   return (
     <View style={optionRowStyle}>
       <Pressable onPress={onPress} style={pressableStyle}>
-        <View style={styles.optionLeadingSlot}>
-          <WorkspaceTabIcon presentation={presentation} active={selected || active} />
-        </View>
-        <View style={styles.optionContent}>
-          <Text numberOfLines={1} style={styles.optionLabel}>
-            {presentation.titleState === "loading"
-              ? t("workspace.tabs.loading")
-              : presentation.label}
-          </Text>
-          {modified ? (
-            <Text style={styles.optionModifiedIndicator} accessibilityElementsHidden>
-              •
-            </Text>
-          ) : null}
-        </View>
+        {(state) => {
+          const optionActive = isOptionActive(state);
+          return (
+            <>
+              <View style={styles.optionLeadingSlot}>
+                <WorkspaceTabIcon
+                  presentation={presentation}
+                  active={selected || active}
+                  backdrop={optionActive ? "surface1" : "surface0"}
+                />
+              </View>
+              <View style={styles.optionContent}>
+                <Text numberOfLines={1} style={styles.optionLabel}>
+                  {presentation.titleState === "loading"
+                    ? t("workspace.tabs.loading")
+                    : presentation.label}
+                </Text>
+                {modified ? (
+                  <Text style={styles.optionModifiedIndicator} accessibilityElementsHidden>
+                    •
+                  </Text>
+                ) : null}
+              </View>
+            </>
+          );
+        }}
       </Pressable>
       {selected ? (
         <View style={styles.optionTrailingSlot}>
@@ -236,6 +249,11 @@ const styles = StyleSheet.create((theme) => ({
     position: "relative",
     alignItems: "center",
     justifyContent: "center",
+  },
+  statusRingOverlay: {
+    position: "absolute",
+    right: DEFAULT_STATUS_DOT_OFFSET - 3,
+    bottom: DEFAULT_STATUS_DOT_OFFSET - 3,
   },
   statusDot: {
     position: "absolute",

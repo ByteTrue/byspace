@@ -76,7 +76,9 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
 } from "@/components/ui/dropdown-menu";
-import { SyncedLoader } from "@/components/synced-loader";
+import { StatusRing } from "@/components/status-ring";
+import { getSidebarRowBackdrop } from "@/components/sidebar/sidebar-row-backdrop";
+import type { SidebarSurfaceBackdrop } from "@/styles/surface-backdrop";
 import { useToast } from "@/contexts/toast-context";
 import { getForgePresentation, normalizeForge } from "@/git/forge";
 import { toWorktreeArchiveRisk } from "@/git/worktree-archive-warning";
@@ -135,13 +137,12 @@ const AGENT_WORKSPACE_RENAME_PROMPT =
 const workspaceKeyExtractor = (workspace: SidebarWorkspacePlacement) => workspace.workspaceKey;
 
 const WORKSPACE_STATUS_DOT_WIDTH = 14;
-const DEFAULT_STATUS_DOT_SIZE = 7;
+const DEFAULT_STATUS_DOT_SIZE = 6;
 const DEFAULT_STATUS_DOT_OFFSET = 0;
 const ThemedExternalLink = withUnistyles(ExternalLink);
 const ThemedGitPullRequest = withUnistyles(GitPullRequest);
 const ThemedLoadingSpinner = withUnistyles(LoadingSpinner);
 const ThemedCircleAlert = withUnistyles(CircleAlert);
-const ThemedSyncedLoader = withUnistyles(SyncedLoader);
 const ThemedPlus = withUnistyles(Plus);
 const ThemedMoreVertical = withUnistyles(MoreVertical);
 const ThemedTrash2 = withUnistyles(Trash2);
@@ -164,9 +165,6 @@ const greenColorMapping = (theme: Theme) => ({
 });
 const purpleColorMapping = (theme: Theme) => ({
   color: theme.colors.statusMerged,
-});
-const syncedLoaderColorMapping = (theme: Theme) => ({
-  color: theme.colors.statusWarning,
 });
 
 function getPrIconUniMapping(state: PrHint["state"]) {
@@ -345,18 +343,21 @@ function projectKebabStyle({
 
 function getProjectWorkspaceRowStyle({
   isDragging,
+  isPressed,
   selected,
   isHovered,
 }: {
   isDragging: boolean;
+  isPressed: boolean;
   selected: boolean;
   isHovered: boolean;
 }) {
   return [
     styles.workspaceRow,
-    isDragging && styles.workspaceRowDragging,
     selected && styles.sidebarRowSelected,
     isHovered && styles.workspaceRowHovered,
+    isDragging && styles.workspaceRowDragging,
+    isPressed && styles.workspaceRowPressed,
   ];
 }
 
@@ -387,12 +388,14 @@ function ProjectLeadingVisual({
   iconDataUri,
   statusBucket,
   projectKey,
+  backdrop,
   isArchiving = false,
 }: {
   displayName: string;
   iconDataUri: string | null;
   statusBucket: SidebarStateBucket | null;
   projectKey: string;
+  backdrop: SidebarSurfaceBackdrop;
   isArchiving?: boolean;
 }) {
   const { t } = useTranslation();
@@ -403,7 +406,7 @@ function ProjectLeadingVisual({
   if (isArchiving) {
     return (
       <View style={styles.projectLeadingVisualSlot}>
-        <ThemedSyncedLoader size={14} uniProps={syncedLoaderColorMapping} />
+        <StatusRing backdrop={backdrop} />
       </View>
     );
   }
@@ -423,9 +426,13 @@ function ProjectLeadingVisual({
         >
           {badge.kind === "alert" ? (
             <ThemedCircleAlert size={11} uniProps={amberColorMapping} />
-          ) : (
+          ) : null}
+          {badge.kind === "dot" && badge.bucket === "running" ? (
+            <StatusRing backdrop={backdrop} />
+          ) : null}
+          {badge.kind === "dot" && badge.bucket !== "running" ? (
             <View style={[styles.projectStatusBadgeDot, getStatusDotColorStyle(badge.bucket)]} />
-          )}
+          ) : null}
         </View>
       ) : null}
     </View>
@@ -745,6 +752,7 @@ function ProjectHeaderRow({
 }: ProjectHeaderRowProps) {
   const { t } = useTranslation();
   const [isHovered, setIsHovered] = useState(false);
+  const [isPressed, setIsPressed] = useState(false);
   const isMobileBreakpoint = useIsCompactFormFactor();
   const handleBeginWorkspaceSetup = useCallback(() => {
     if (!newWorkspaceTarget) {
@@ -766,6 +774,17 @@ function ProjectHeaderRow({
 
   const handlePointerEnter = useCallback(() => setIsHovered(true), []);
   const handlePointerLeave = useCallback(() => setIsHovered(false), []);
+  const handleProjectPressIn = useCallback(
+    (event: GestureResponderEvent) => {
+      setIsPressed(true);
+      interaction.handlePressIn(event);
+    },
+    [interaction],
+  );
+  const handleProjectPressOut = useCallback(() => {
+    setIsPressed(false);
+    interaction.handlePressOut();
+  }, [interaction]);
 
   const projectRowStyle = useCallback(
     ({ pressed }: PressableStateCallbackType) => [
@@ -786,6 +805,7 @@ function ProjectHeaderRow({
           iconDataUri={iconDataUri}
           statusBucket={statusBucket}
           projectKey={project.projectKey}
+          backdrop={getSidebarRowBackdrop({ isDragging, isPressed, selected, isHovered })}
           isArchiving={isArchiving}
         />
 
@@ -839,9 +859,9 @@ function ProjectHeaderRow({
           enabledOnMobile={false}
           accessibilityRole="button"
           style={projectRowStyle}
-          onPressIn={interaction.handlePressIn}
+          onPressIn={handleProjectPressIn}
           onTouchMove={interaction.handleTouchMove}
-          onPressOut={interaction.handlePressOut}
+          onPressOut={handleProjectPressOut}
           testID={`sidebar-project-row-${project.projectKey}`}
         >
           {rowChildren}
@@ -861,9 +881,9 @@ function ProjectHeaderRow({
       <Pressable
         focusable={false}
         style={projectRowStyle}
-        onPressIn={interaction.handlePressIn}
+        onPressIn={handleProjectPressIn}
         onTouchMove={interaction.handleTouchMove}
-        onPressOut={interaction.handlePressOut}
+        onPressOut={handleProjectPressOut}
         testID={`sidebar-project-row-${project.projectKey}`}
       >
         {rowChildren}
@@ -897,6 +917,7 @@ function WorkspaceRowInner({
   reserveIdleStatusIndicatorSpace = true,
 }: WorkspaceRowInnerProps) {
   const isCompactBreakpoint = useIsCompactFormFactor();
+  const [isPressed, setIsPressed] = useState(false);
   const isTouchPlatform = platformIsNative;
   const interaction = useLongPressDragInteraction({
     drag,
@@ -916,6 +937,17 @@ function WorkspaceRowInner({
     }
     onPress();
   }, [interaction.didLongPressRef, onPress]);
+  const handleWorkspacePressIn = useCallback(
+    (event: GestureResponderEvent) => {
+      setIsPressed(true);
+      interaction.handlePressIn(event);
+    },
+    [interaction],
+  );
+  const handleWorkspacePressOut = useCallback(() => {
+    setIsPressed(false);
+    interaction.handlePressOut();
+  }, [interaction]);
 
   const accessibilityState = useMemo(() => ({ selected }), [selected]);
   const { t } = useTranslation();
@@ -954,6 +986,7 @@ function WorkspaceRowInner({
       {({ isHovered, hoverHandlers }) => {
         const workspaceRowStyle = getProjectWorkspaceRowStyle({
           isDragging,
+          isPressed,
           selected,
           isHovered,
         });
@@ -972,9 +1005,9 @@ function WorkspaceRowInner({
               accessibilityState={accessibilityState}
               accessibilityLabel={accessibilityLabel}
               style={workspaceRowStyle}
-              onPressIn={interaction.handlePressIn}
+              onPressIn={handleWorkspacePressIn}
               onTouchMove={interaction.handleTouchMove}
-              onPressOut={interaction.handlePressOut}
+              onPressOut={handleWorkspacePressOut}
               onPress={handlePress}
               testID={`sidebar-workspace-row-${workspace.workspaceKey}`}
             >
@@ -982,6 +1015,7 @@ function WorkspaceRowInner({
                 workspace={workspace}
                 hostBadge={subtitle}
                 serviceSummary={serviceSummary}
+                backdrop={getSidebarRowBackdrop({ isDragging, isPressed, selected, isHovered })}
                 isHovered={isHovered}
                 isLoading={isArchiving || isCreating}
                 isCreating={isCreating}
@@ -2040,8 +2074,8 @@ const styles = StyleSheet.create((theme) => ({
     justifyContent: "center",
   },
   projectStatusBadgeDot: {
-    width: 7,
-    height: 7,
+    width: 6,
+    height: 6,
     borderRadius: theme.borderRadius.full,
   },
   projectIconFallback: {

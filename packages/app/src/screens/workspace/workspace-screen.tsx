@@ -175,6 +175,7 @@ import {
 import { findAdjacentPane } from "@/utils/split-navigation";
 import { useIsCompactFormFactor, supportsDesktopPaneSplits } from "@/constants/layout";
 import { isNative, isWeb } from "@/constants/platform";
+import type { SurfaceBackdrop } from "@/styles/surface-backdrop";
 import { useContainerWidthBelow } from "@/hooks/use-container-width";
 import {
   buildHostRootRoute,
@@ -407,11 +408,13 @@ function MobileActiveTabTrigger({
   normalizedServerId,
   normalizedWorkspaceId,
   isModified,
+  backdrop,
 }: {
   activeTab: WorkspaceTabDescriptor | null;
   normalizedServerId: string;
   normalizedWorkspaceId: string;
   isModified: boolean;
+  backdrop: SurfaceBackdrop;
 }) {
   if (!activeTab) {
     return null;
@@ -423,6 +426,7 @@ function MobileActiveTabTrigger({
       normalizedServerId={normalizedServerId}
       normalizedWorkspaceId={normalizedWorkspaceId}
       isModified={isModified}
+      backdrop={backdrop}
     />
   );
 }
@@ -432,11 +436,13 @@ function ResolvedMobileActiveTabTrigger({
   normalizedServerId,
   normalizedWorkspaceId,
   isModified,
+  backdrop,
 }: {
   activeTab: WorkspaceTabDescriptor;
   normalizedServerId: string;
   normalizedWorkspaceId: string;
   isModified: boolean;
+  backdrop: SurfaceBackdrop;
 }) {
   const { t } = useTranslation();
   return (
@@ -448,7 +454,7 @@ function ResolvedMobileActiveTabTrigger({
       {(presentation) => (
         <>
           <View style={styles.switcherTriggerIcon} testID="workspace-active-tab-icon">
-            <WorkspaceTabIcon presentation={presentation} active />
+            <WorkspaceTabIcon presentation={presentation} active backdrop={backdrop} />
           </View>
 
           <Text style={styles.switcherTriggerText} numberOfLines={1}>
@@ -740,6 +746,7 @@ const MobileWorkspaceTabSwitcher = memo(function MobileWorkspaceTabSwitcher({
 }: MobileWorkspaceTabSwitcherProps) {
   const { t } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
+  const [isTriggerPressed, setIsTriggerPressed] = useState(false);
   const anchorRef = useRef<View>(null);
   const paneHeaderActionsPortalName =
     activeTab?.target.kind === "agent"
@@ -757,6 +764,8 @@ const MobileWorkspaceTabSwitcher = memo(function MobileWorkspaceTabSwitcher({
     Keyboard.dismiss();
     setIsOpen(true);
   }, []);
+  const handleTriggerPressIn = useCallback(() => setIsTriggerPressed(true), []);
+  const handleTriggerPressOut = useCallback(() => setIsTriggerPressed(false), []);
 
   const renderTabOption = useCallback(
     ({
@@ -830,6 +839,8 @@ const MobileWorkspaceTabSwitcher = memo(function MobileWorkspaceTabSwitcher({
         accessibilityRole="button"
         accessibilityLabel={t("workspace.tabs.switcher.trigger", { count: tabs.length })}
         style={switcherTriggerStyle}
+        onPressIn={handleTriggerPressIn}
+        onPressOut={handleTriggerPressOut}
         onPress={handleOpenSwitcher}
       >
         <View style={styles.switcherTriggerLeft}>
@@ -838,6 +849,7 @@ const MobileWorkspaceTabSwitcher = memo(function MobileWorkspaceTabSwitcher({
             normalizedServerId={normalizedServerId}
             normalizedWorkspaceId={normalizedWorkspaceId}
             isModified={activeTab ? modifiedTabIds.has(activeTab.tabId) : false}
+            backdrop={isTriggerPressed ? "surface1" : "surface0"}
           />
         </View>
         <ThemedChevronDown size={14} uniProps={mutedColorMapping} />

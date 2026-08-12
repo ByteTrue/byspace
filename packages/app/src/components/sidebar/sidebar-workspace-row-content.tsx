@@ -5,10 +5,11 @@ import { Text, View, type ViewStyle } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { CircleAlert, Folder, FolderGit2, Monitor } from "lucide-react-native";
 import { WorkspaceHoverCard } from "@/components/workspace-hover-card";
-import { SyncedLoader } from "@/components/synced-loader";
+import { StatusRing } from "@/components/status-ring";
 import type { SidebarWorkspaceEntry } from "@/hooks/use-sidebar-workspaces-list";
 import { useAppSettings } from "@/hooks/use-settings";
 import type { Theme } from "@/styles/theme";
+import type { SidebarSurfaceBackdrop } from "@/styles/surface-backdrop";
 import type { SidebarStateBucket } from "@/utils/sidebar-agent-state";
 import { isEmphasizedStatusDotBucket } from "@/utils/status-dot-color";
 import { shouldRenderSyncedStatusLoader } from "@/utils/status-loader";
@@ -16,18 +17,16 @@ import { resolveSidebarWorkspacePrimaryLabel } from "@/components/sidebar/sideba
 import type { HostBadgeModel } from "@/hosts/appearance";
 import { WorkspaceMetaRow, type WorkspaceServiceSummary } from "./workspace-meta-row";
 
-const DEFAULT_STATUS_DOT_SIZE = 7;
+const DEFAULT_STATUS_DOT_SIZE = 6;
 const EMPHASIZED_STATUS_DOT_SIZE = 9;
 const DEFAULT_STATUS_DOT_OFFSET = 0;
 const EMPHASIZED_STATUS_DOT_OFFSET = -1;
 
 const foregroundMutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
 const amberColorMapping = (theme: Theme) => ({ color: theme.colors.statusWarning });
-const syncedLoaderColorMapping = (theme: Theme) => ({ color: theme.colors.statusWarning });
 
 const ThemedLoadingSpinner = withUnistyles(LoadingSpinner);
 const ThemedCircleAlert = withUnistyles(CircleAlert);
-const ThemedSyncedLoader = withUnistyles(SyncedLoader);
 const ThemedMonitor = withUnistyles(Monitor);
 const ThemedFolder = withUnistyles(Folder);
 const ThemedFolderGit2 = withUnistyles(FolderGit2);
@@ -63,6 +62,7 @@ export const SidebarWorkspaceRowContent = memo(function SidebarWorkspaceRowConte
   workspace,
   hostBadge,
   serviceSummary = null,
+  backdrop,
   isHovered,
   isLoading,
   isCreating = false,
@@ -74,6 +74,7 @@ export const SidebarWorkspaceRowContent = memo(function SidebarWorkspaceRowConte
   workspace: SidebarWorkspaceEntry;
   hostBadge?: HostBadgeModel | null;
   serviceSummary?: WorkspaceServiceSummary | null;
+  backdrop: SidebarSurfaceBackdrop;
   isHovered: boolean;
   isLoading: boolean;
   isCreating?: boolean;
@@ -103,6 +104,7 @@ export const SidebarWorkspaceRowContent = memo(function SidebarWorkspaceRowConte
         <WorkspaceStatusIndicator
           bucket={workspace.statusBucket}
           workspaceKind={workspace.workspaceKind}
+          backdrop={backdrop}
           loading={isLoading}
           reserveIdleSpace={reserveIdleStatusIndicatorSpace}
         />
@@ -137,11 +139,13 @@ export const SidebarWorkspaceRowContent = memo(function SidebarWorkspaceRowConte
 function WorkspaceStatusIndicator({
   bucket,
   workspaceKind,
+  backdrop,
   loading = false,
   reserveIdleSpace = true,
 }: {
   bucket: SidebarWorkspaceEntry["statusBucket"];
   workspaceKind: SidebarWorkspaceEntry["workspaceKind"];
+  backdrop: SidebarSurfaceBackdrop;
   loading?: boolean;
   reserveIdleSpace?: boolean;
 }) {
@@ -158,7 +162,7 @@ function WorkspaceStatusIndicator({
   if (shouldShowSyncedLoader) {
     return (
       <View style={styles.workspaceStatusDot} testID="workspace-status-indicator-running">
-        <ThemedSyncedLoader size={11} uniProps={syncedLoaderColorMapping} />
+        <StatusRing backdrop={backdrop} />
       </View>
     );
   }

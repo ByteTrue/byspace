@@ -57,6 +57,7 @@ export function useKeyboardShortcuts({
   const openProjectPickerAction = useOpenAddProject();
   const activeWorkspaceSelection = useActiveWorkspaceSelection();
   const keyboardWorkspaceSelectionRef = useRef<ActiveWorkspaceSelection | null>(null);
+  const badgeModifierKeyRef = useRef<string | null | undefined>(undefined);
 
   useEffect(() => {
     if (activeWorkspaceSelection) {
@@ -72,10 +73,18 @@ export function useKeyboardShortcuts({
     // runtime should reveal the sidebar number badges (Alt on web, Cmd on
     // desktop Mac, Ctrl on desktop non-Mac). The store ORs altDown/cmdOrCtrlDown
     // to drive badge visibility, so we set the flag matching this runtime.
-    const badgeModifierKey = getWorkspaceIndexJumpModifierKey({ isMac, isDesktop: false });
+    const badgeModifierKey = getWorkspaceIndexJumpModifierKey(
+      { isMac, isDesktop: false },
+      bindings,
+    );
     const setBadgeModifierDown = (down: boolean) => {
       useKeyboardShortcutsStore.getState().setAltDown(down);
     };
+
+    if (badgeModifierKeyRef.current !== badgeModifierKey) {
+      badgeModifierKeyRef.current = badgeModifierKey;
+      resetModifiers();
+    }
 
     const shouldHandle = () => {
       if (typeof document === "undefined") return false;

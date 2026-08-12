@@ -135,13 +135,15 @@ const darkStatusColors = {
 };
 
 const lightStatusDotColors = {
-  statusDotSuccess: "#186933",
-  statusDotDanger: "#a11c1c",
-  statusDotWarning: "#774e14",
-  statusDotRunning: "#165a96",
+  // L=0.62, chroma 90% of gamut max
+  statusDotSuccess: "#299f51",
+  statusDotDanger: "#f12e2f",
+  statusDotWarning: "#b37824",
+  statusDotRunning: "#268ae0",
 };
 
 const darkStatusDotColors = {
+  // L=0.72, chroma 90% of gamut max
   statusDotSuccess: "#35c264",
   statusDotDanger: "#f7796d",
   statusDotWarning: "#db932e",

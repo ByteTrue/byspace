@@ -20,6 +20,6 @@ export function useShortcutKeys(actionId: string): ShortcutKey[][] | null {
     }
 
     const defaultKeys = getDefaultKeysForAction(actionId, platform);
-    return defaultKeys ? [defaultKeys] : null;
+    return defaultKeys;
   }, [actionId, overrides, isMac]);
 }

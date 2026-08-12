@@ -1,5 +1,6 @@
 export const MARKDOWN_COPY_TAG_ATTRIBUTE = "data-byspace-markdown-tag";
 export const MARKDOWN_COPY_IGNORE_ATTRIBUTE = "data-byspace-markdown-ignore";
+export const MARKDOWN_COPY_LIST_MARKER_ATTRIBUTE = "data-byspace-markdown-list-marker";
 export const MARKDOWN_COPY_UNWRAP_ATTRIBUTE = "data-byspace-markdown-unwrap";
 export const MARKDOWN_COPY_LIST_START_ATTRIBUTE = "data-byspace-markdown-list-start";
 export const MARKDOWN_COPY_LANGUAGE_ATTRIBUTE = "data-byspace-markdown-language";
@@ -28,6 +29,7 @@ export const markdownCopyDataSet = {
   hr: { byspaceMarkdownTag: "hr" },
   ignore: { byspaceMarkdownIgnore: "true" },
   li: { byspaceMarkdownTag: "li" },
+  listMarker: { byspaceMarkdownIgnore: "true", byspaceMarkdownListMarker: "true" },
   ol: { byspaceMarkdownTag: "ol" },
   p: { byspaceMarkdownTag: "p" },
   pre: { byspaceMarkdownTag: "pre" },

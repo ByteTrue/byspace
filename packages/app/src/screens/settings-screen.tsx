@@ -115,7 +115,7 @@ interface SidebarSectionItem {
 
 const SIDEBAR_SECTION_ITEMS: SidebarSectionItem[] = [
   { id: "preferences", labelKey: "settings.sections.preferences", icon: Settings },
-  { id: "shortcuts", labelKey: "settings.sections.shortcuts", icon: Keyboard, desktopOnly: true },
+  { id: "shortcuts", labelKey: "settings.sections.shortcuts", icon: Keyboard },
   {
     id: "permissions",
     labelKey: "settings.sections.permissions",

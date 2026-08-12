@@ -1,6 +1,7 @@
 import React, { useMemo, type ReactElement } from "react";
 import { Text, View, type StyleProp, type TextStyle, type ViewStyle } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
+import { normalizeDisplayChord } from "@/components/ui/normalize-display-chord";
 import { formatShortcut, type ShortcutKey } from "@/utils/format-shortcut";
 import { getShortcutOs } from "@/utils/shortcut-platform";
 
@@ -14,17 +15,19 @@ export function Shortcut({
   chord?: ShortcutKey[][];
   style?: StyleProp<ViewStyle>;
   textStyle?: StyleProp<TextStyle>;
-}): ReactElement {
-  const displayChord = chord ?? (keys ? [keys] : []);
+}): ReactElement | null {
+  const displayChord = normalizeDisplayChord(chord, keys);
   const shortcutOs = getShortcutOs();
-  const singleCombo = displayChord[0];
 
   const badgeStyle = useMemo(() => [styles.badge, style], [style]);
   const textCombinedStyle = useMemo(() => [styles.text, textStyle], [textStyle]);
   const sequenceStyle = useMemo(() => [styles.sequence, style], [style]);
 
-  if (!singleCombo) {
-    return <View style={style} />;
+  const singleCombo = displayChord?.[0];
+  // Render nothing, literally — an empty View would still consume the
+  // parent's gap and leave a phantom slot where the badge used to be.
+  if (!displayChord || !singleCombo) {
+    return null;
   }
 
   if (displayChord.length === 1) {

@@ -251,3 +251,7 @@ The bespoke pills in `packages/app/src/screens/settings/host-page.tsx:97-116`, `
 | Trigger-anchored menu                               | `packages/app/src/components/ui/dropdown-menu.tsx` (used in `sidebar-workspace-list.tsx`, theme picker)                                                                     |
 | Right-click / long-press menu                       | `packages/app/src/components/ui/context-menu.tsx` (used in `sidebar-workspace-list.tsx`)                                                                                    |
 | Headers (back, screen, menu)                        | `packages/app/src/components/headers/back-header.tsx`, `screen-header.tsx`, `menu-header.tsx`                                                                               |
+
+## Status indicator geometry
+
+Browser running states use the phase-locked two-tone `StatusRing` (12px outer diameter). Filled status dots use a lighter 6px geometry; emphasized alert overlays remain 9px so they retain visual priority. Sidebar rings use the sidebar row backdrop, while tab rings use the tab surface backdrop.

@@ -1653,11 +1653,15 @@ export const ptBR: TranslationResources = {
       searchPlaceholder: "Pesquisar atalhos",
       unavailableOnMobile: "Atalhos de teclado estão disponíveis apenas no desktop",
       capturePrompt: "Pressione o atalho...",
+      unassigned: "Não definido",
       actions: {
+        menu: "Ações para {{name}}",
         done: "Concluído",
         cancel: "Cancelar",
+        bind: "Atribuir",
         rebind: "Reatribuir",
-        reset: "Redefinir",
+        clear: "Limpar",
+        reset: "Redefinir para o padrão",
         resetAll: "Redefinir tudo",
       },
       sections: {
