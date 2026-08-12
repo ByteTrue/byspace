@@ -1,5 +1,4 @@
-import type { Options as ClaudeAgentOptions } from "@anthropic-ai/claude-agent-sdk";
-import type { AgentProviderNotice } from "@bytetrue/byspace-protocol/agent-types";
+import type { AgentProviderNotice, ProviderOptions } from "@bytetrue/byspace-protocol/agent-types";
 import type { AgentAttachment } from "@bytetrue/byspace-protocol/messages";
 
 export type { AgentProviderNotice };
@@ -574,14 +573,7 @@ export interface AgentSessionConfig {
   thinkingOptionId?: string;
   featureValues?: Record<string, unknown>;
   title?: string | null;
-  approvalPolicy?: string;
-  sandboxMode?: string;
-  networkAccess?: boolean;
-  webSearch?: boolean;
-  extra?: {
-    codex?: AgentMetadata;
-    claude?: Partial<ClaudeAgentOptions>;
-  };
+  providerOptions?: ProviderOptions;
   mcpServers?: Record<string, McpServerConfig>;
   /**
    * Internal agents are hidden from listings and don't trigger notifications.

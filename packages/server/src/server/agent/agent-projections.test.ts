@@ -28,9 +28,7 @@ function createManagedAgent(overrides: ManagedAgentOverrides = {}): ManagedAgent
     cwd: "/tmp/project",
     modeId: "plan",
     model: "claude-3.5-sonnet",
-    extra: {
-      claude: { tone: "friendly" },
-    },
+    providerOptions: { allowedTools: ["Read"] },
   };
 
   const basePersistence: AgentPersistenceHandle = {
@@ -181,11 +179,11 @@ describe("toStoredAgentRecord", () => {
     expect(record.config).toEqual({
       modeId: agent.config.modeId,
       model: agent.config.model,
-      extra: { claude: { tone: "friendly" } },
+      providerOptions: { allowedTools: ["Read"] },
     });
 
-    record.config!.extra!.claude!.tone = "serious";
-    expect(agent.config.extra!.claude!.tone).toBe("friendly");
+    record.config!.providerOptions!.allowedTools = ["Bash"];
+    expect(agent.config.providerOptions!.allowedTools).toEqual(["Read"]);
     record.persistence!.sessionId = "mutated";
     expect(agent.persistence!.sessionId).toBe("persist-2");
   });
@@ -208,7 +206,7 @@ describe("toStoredAgentRecord", () => {
       config: {
         modeId: undefined,
         model: undefined,
-        extra: undefined,
+        providerOptions: undefined,
       },
     });
 

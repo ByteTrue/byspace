@@ -90,6 +90,11 @@ import {
   type OpenCodeSubagentPresentationState,
 } from "./opencode/subagent-presentation.js";
 import type { ManagedProcessRegistry } from "../../managed-processes/managed-processes.js";
+import {
+  buildOpenCodePermissionRules,
+  OpenCodeProviderOptionsSchema,
+  type OpenCodeProviderOptions,
+} from "./opencode/options.js";
 
 const OPENCODE_CAPABILITIES: AgentCapabilityFlags = {
   supportsStreaming: true,
@@ -264,7 +269,10 @@ function resolveOpenCodePermissionReply(
   return "once";
 }
 
-type OpenCodeAgentConfig = AgentSessionConfig & { provider: "opencode" };
+type OpenCodeAgentConfig = Omit<AgentSessionConfig, "providerOptions"> & {
+  provider: "opencode";
+  providerOptions: OpenCodeProviderOptions;
+};
 type OpenCodeMessageRole = "user" | "assistant";
 type OpenCodePersistedSession = OpenCodeSession | OpenCodeGlobalSession;
 
@@ -1695,7 +1703,8 @@ export class OpenCodeAgentClient implements AgentClient {
     if (config.provider !== "opencode") {
       throw new Error(`OpenCodeAgentClient received config for provider '${config.provider}'`);
     }
-    return normalizeOpenCodeConfig({ ...config, provider: "opencode" });
+    const providerOptions = OpenCodeProviderOptionsSchema.parse(config.providerOptions ?? {});
+    return normalizeOpenCodeConfig({ ...config, provider: "opencode", providerOptions });
   }
 
   private async populateModelContextWindowCache(
@@ -3472,6 +3481,7 @@ class OpenCodeAgentSession implements AgentSession {
             this.config.systemPrompt,
             this.config.daemonAppendSystemPrompt,
           );
+          const permission = buildOpenCodePermissionRules(this.config.providerOptions);
           const promptResponse = await this.client.session.promptAsync({
             sessionID: this.sessionId,
             directory: this.config.cwd,
@@ -3485,6 +3495,7 @@ class OpenCodeAgentSession implements AgentSession {
                 }
               : {}),
             ...(systemPrompt ? { system: systemPrompt } : {}),
+            ...(permission ? { permission } : {}),
             ...(model ? { model } : {}),
             ...(effectiveMode ? { agent: effectiveMode } : {}),
             ...(effectiveVariant ? { variant: effectiveVariant } : {}),

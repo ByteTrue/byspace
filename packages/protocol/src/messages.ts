@@ -377,6 +377,8 @@ const McpServerConfigSchema = z.discriminatedUnion("type", [
   McpSseServerConfigSchema,
 ]);
 
+const ProviderOptionsSchema = z.record(z.string(), z.json());
+
 const AgentSessionConfigSchema = z.object({
   provider: AgentProviderSchema,
   cwd: z.string(),
@@ -385,6 +387,9 @@ const AgentSessionConfigSchema = z.object({
   thinkingOptionId: z.string().optional(),
   featureValues: z.record(z.string(), z.unknown()).optional(),
   title: z.string().trim().min(1).max(MAX_EXPLICIT_AGENT_TITLE_CHARS).optional().nullable(),
+  providerOptions: ProviderOptionsSchema.optional(),
+  // COMPAT(providerOptions): added 2026-08-12; remove after 2027-02-12 when the
+  // supported wire floor no longer includes flattened provider configuration.
   approvalPolicy: z.string().optional(),
   sandboxMode: z.string().optional(),
   networkAccess: z.boolean().optional(),
@@ -2953,6 +2958,8 @@ export const ServerInfoStatusPayloadSchema = z
     // COMPAT(providersSnapshot): added in v0.1.48, remove gating when all clients use snapshot
     features: z
       .object({
+        // COMPAT(providerOptions): added in v0.5.0-beta.1 on 2026-08-12; remove the gate after 2027-02-12.
+        providerOptions: z.boolean().optional(),
         providersSnapshot: z.boolean().optional(),
         // COMPAT(checkoutForgeSetAutoMerge): added in v0.1.106, remove old
         // checkoutGithubSetAutoMerge fallback after 2026-12-28.

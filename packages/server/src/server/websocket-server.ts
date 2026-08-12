@@ -1382,6 +1382,8 @@ export class VoiceAssistantWebSocketServer {
       version: this.daemonVersion,
       ...(this.serverCapabilities ? { capabilities: this.serverCapabilities } : {}),
       features: {
+        // COMPAT(providerOptions): added in v0.5.0-beta.1 on 2026-08-12; remove the gate after 2027-02-12.
+        providerOptions: true,
         // COMPAT(speechModelSelection): added in v0.5.0, remove gate after 2027-02-04.
         speechModelSelection: true,
         // COMPAT(dictationRefinement): added in v0.5.0, remove gate after 2027-02-04.

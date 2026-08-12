@@ -27,13 +27,17 @@ function createRecord(overrides?: Partial<StoredAgentRecord>): StoredAgentRecord
 }
 
 describe("persistence hooks", () => {
-  test("buildConfigOverrides carries systemPrompt and mcpServers", () => {
+  test("buildConfigOverrides preserves the complete private launch config", () => {
     const record = createRecord({
       title: "Voice agent (current)",
       config: {
         modeId: "default",
         model: "gpt-5.4-mini",
         thinkingOptionId: "minimal",
+        providerOptions: {
+          sandbox_mode: "workspace-write",
+          sandbox_workspace_write: { writable_roots: ["/tmp/shared"] },
+        },
         systemPrompt: "Use speak first.",
         mcpServers: {
           byspace: {
@@ -47,9 +51,13 @@ describe("persistence hooks", () => {
 
     expect(buildConfigOverrides(record)).toMatchObject({
       cwd: "/tmp/project",
-      modeId: "plan",
+      modeId: "default",
       model: "gpt-5.4-mini",
       thinkingOptionId: "minimal",
+      providerOptions: {
+        sandbox_mode: "workspace-write",
+        sandbox_workspace_write: { writable_roots: ["/tmp/shared"] },
+      },
       systemPrompt: "Use speak first.",
       mcpServers: {
         byspace: {
@@ -61,12 +69,11 @@ describe("persistence hooks", () => {
     });
   });
 
-  test("buildSessionConfig includes persisted systemPrompt and mcpServers", () => {
+  test("buildSessionConfig keeps an omitted mode omitted on resume", () => {
     const record = createRecord({
       provider: "codex",
       title: "Renamed title",
       config: {
-        modeId: "default",
         model: "gpt-5.4-mini",
         systemPrompt: "Confirm and speak first.",
         mcpServers: {
@@ -82,7 +89,7 @@ describe("persistence hooks", () => {
     expect(buildSessionConfig(record)).toMatchObject({
       provider: "codex",
       cwd: "/tmp/project",
-      modeId: "plan",
+      modeId: undefined,
       model: "gpt-5.4-mini",
       systemPrompt: "Confirm and speak first.",
       mcpServers: {

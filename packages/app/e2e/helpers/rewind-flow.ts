@@ -156,7 +156,7 @@ export async function launchAgent(input: {
   mode: "full-access";
   providerConfig?: {
     model?: string;
-    extra?: { codex?: { features?: { multi_agent_v2?: boolean } } };
+    providerOptions?: { features?: { multi_agent_v2?: boolean } };
   };
 }): Promise<AgentHandle> {
   execFileSync("git", ["init", "-b", "main"], { cwd: input.cwd, stdio: "ignore" });

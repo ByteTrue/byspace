@@ -1838,6 +1838,93 @@ test("normalizes workspace_setup_progress into a workspace-scoped daemon event",
   });
 });
 
+test("rejects providerOptions requests before sending to an older daemon", async () => {
+  const logger = createMockLogger();
+  const mock = createMockTransport();
+  const client = new DaemonClient({
+    url: "ws://test",
+    clientId: "clsk_provider_options_old_host",
+    logger,
+    reconnect: { enabled: false },
+    transportFactory: () => mock.transport,
+  });
+  clients.push(client);
+
+  const connectPromise = client.connect();
+  mock.triggerOpen();
+  await connectPromise;
+
+  await expect(
+    client.createAgent({
+      provider: "claude",
+      cwd: "/tmp/project",
+      providerOptions: { allowedTools: ["Read"] },
+    }),
+  ).rejects.toThrow("Update the host to use provider options.");
+  await expect(
+    client.resumeAgent(
+      { provider: "claude", sessionId: "session-old-host" },
+      { providerOptions: { allowedTools: ["Read"] } },
+    ),
+  ).rejects.toThrow("Update the host to use provider options.");
+  await expect(
+    client.scheduleCreate({
+      prompt: "Run the task",
+      cadence: { type: "every", everyMs: 60_000 },
+      target: {
+        type: "new-agent",
+        config: {
+          provider: "claude",
+          cwd: "/tmp/project",
+          providerOptions: { allowedTools: ["Read"] },
+        },
+      },
+    }),
+  ).rejects.toThrow("Update the host to use provider options.");
+
+  expect(mock.sent).toEqual([]);
+});
+
+test("sends providerOptions when the daemon advertises support", async () => {
+  const logger = createMockLogger();
+  const mock = createMockTransport();
+  const client = new DaemonClient({
+    url: "ws://test",
+    clientId: "clsk_provider_options_new_host",
+    logger,
+    reconnect: { enabled: false },
+    transportFactory: () => mock.transport,
+  });
+  clients.push(client);
+
+  const connectPromise = client.connect();
+  mock.triggerOpen({ features: { providerOptions: true } });
+  await connectPromise;
+
+  const createPromise = client.createAgent({
+    provider: "claude",
+    cwd: "/tmp/project",
+    providerOptions: { allowedTools: ["Read"] },
+  });
+  const request = parseSentFrame(mock.sent[0]);
+  expect(request).toMatchObject({
+    type: "create_agent_request",
+    config: { providerOptions: { allowedTools: ["Read"] } },
+  });
+
+  mock.triggerMessage(
+    wrapSessionMessage({
+      type: "status",
+      payload: {
+        status: "agent_create_failed",
+        requestId: request.requestId,
+        error: "provider options test sentinel",
+      },
+    }),
+  );
+  await expect(createPromise).rejects.toThrow("provider options test sentinel");
+});
+
 test("sends create_agent_request with string workspace ids", async () => {
   const logger = createMockLogger();
   const mock = createMockTransport();

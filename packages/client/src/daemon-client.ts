@@ -831,11 +831,7 @@ export interface CreateScheduleOptions {
           archiveOnFinish?: boolean;
           isolation?: "local" | "worktree";
           title?: string | null;
-          approvalPolicy?: string;
-          sandboxMode?: string;
-          networkAccess?: boolean;
-          webSearch?: boolean;
-          extra?: AgentSessionConfig["extra"];
+          providerOptions?: AgentSessionConfig["providerOptions"];
           systemPrompt?: string;
           mcpServers?: AgentSessionConfig["mcpServers"];
         };
@@ -1614,6 +1610,30 @@ export class DaemonClient {
     }
   }
 
+  private messageUsesProviderOptions(message: SessionInboundMessage): boolean {
+    if (message.type === "create_agent_request") {
+      return message.config.providerOptions !== undefined;
+    }
+    if (message.type === "resume_agent_request") {
+      return message.overrides?.providerOptions !== undefined;
+    }
+    return (
+      message.type === "schedule/create" &&
+      message.target.type === "new-agent" &&
+      message.target.config.providerOptions !== undefined
+    );
+  }
+
+  private assertProviderOptionsSupported(message: SessionInboundMessage): void {
+    // COMPAT(providerOptions): added in v0.5.0-beta.1 on 2026-08-12; remove the gate after 2027-02-12.
+    if (
+      this.messageUsesProviderOptions(message) &&
+      !this.lastServerInfoMessage?.features?.providerOptions
+    ) {
+      throw new Error("Update the host to use provider options.");
+    }
+  }
+
   private sendBinaryFrame(frame: Uint8Array): void {
     if (!this.transport || this.connectionState.status !== "connected") {
       if (this.config.suppressSendErrors) {
@@ -1642,6 +1662,7 @@ export class DaemonClient {
 
     // If connected, send immediately
     if (this.transport && status === "connected") {
+      this.assertProviderOptionsSupported(message);
       const payload = SessionInboundMessageSchema.parse(message);
       this.transport.send(JSON.stringify({ type: "session", message: payload }));
       return Promise.resolve();
@@ -1676,17 +1697,7 @@ export class DaemonClient {
 
     for (const pending of queue) {
       clearTimeout(pending.timeoutHandle);
-      try {
-        if (this.transport && this.connectionState.status === "connected") {
-          const payload = SessionInboundMessageSchema.parse(pending.message);
-          this.transport.send(JSON.stringify({ type: "session", message: payload }));
-          pending.resolve();
-        } else {
-          pending.reject(new Error("Connection lost before message could be sent"));
-        }
-      } catch (error) {
-        pending.reject(error instanceof Error ? error : new Error(String(error)));
-      }
+      void this.sendSessionMessageOrThrow(pending.message).then(pending.resolve, pending.reject);
     }
   }
 

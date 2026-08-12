@@ -1,4 +1,6 @@
 import type { Logger } from "pino";
+import type { ProviderOptions } from "@bytetrue/byspace-protocol/agent-types";
+import { z } from "zod";
 
 import type {
   AgentClient,
@@ -15,6 +17,7 @@ import type {
   ResolveAgentCreateConfigInput,
   ResolveAgentCreateConfigResult,
   ResolveAgentDefaultModeInput,
+  AgentSessionConfig,
 } from "./agent-sdk-types.js";
 import {
   isDefaultAgentCreateConfigUnattended,
@@ -34,6 +37,7 @@ import { CodexAppServerAgentClient } from "./providers/codex-app-server-agent.js
 import { CopilotACPAgentClient } from "./providers/copilot-acp-agent.js";
 import { CursorACPAgentClient } from "./providers/cursor-acp-agent.js";
 import { GenericACPAgentClient } from "./providers/generic-acp-agent.js";
+import { KimiACPAgentClient } from "./providers/kimi-acp-agent.js";
 import { KiroACPAgentClient } from "./providers/kiro-acp-agent.js";
 import { OpenCodeAgentClient } from "./providers/opencode-agent.js";
 import { OmpAgentClient } from "./providers/omp/agent.js";
@@ -42,6 +46,10 @@ import { PiRpcAgentClient } from "./providers/pi/agent.js";
 import { TraeACPAgentClient } from "./providers/trae-acp-agent.js";
 import { MockLoadTestAgentClient } from "./providers/mock-load-test-agent.js";
 import { MockSlowProviderClient } from "./providers/mock-slow-provider.js";
+import { ClaudeProviderOptionsSchema } from "./providers/claude/options.js";
+import { CodexProviderOptionsSchema } from "./providers/codex/options.js";
+import { OpenCodeProviderOptionsSchema } from "./providers/opencode/options.js";
+import { validateProviderOptions } from "./provider-options.js";
 import {
   AGENT_PROVIDER_DEFINITIONS,
   BUILTIN_PROVIDER_IDS,
@@ -66,6 +74,12 @@ export interface ProviderDefinition extends AgentProviderDefinition {
    * generic ACP providers (which only extend the literal "acp" sentinel).
    */
   derivedFromProviderId: string | null;
+  optionsSchema: z.ZodType<ProviderOptions>;
+  validateOptions: (options: ProviderOptions | undefined) => ProviderOptions | undefined;
+  applyOptions: (
+    config: AgentSessionConfig,
+    options: ProviderOptions | undefined,
+  ) => AgentSessionConfig;
   createClient: (logger: Logger) => AgentClient;
   resolveCreateConfig: (input: ResolveAgentCreateConfigInput) => ResolveAgentCreateConfigResult;
   isCreateConfigUnattended: (input: AgentCreateConfigUnattendedInput) => boolean;
@@ -113,7 +127,20 @@ interface ResolvedProvider {
   derivedFromProviderId: string | null;
   providerParams?: unknown;
   createBaseClient: (logger: Logger) => AgentClient;
+  contract: ProviderContract;
 }
+
+interface ProviderContract {
+  optionsSchema: z.ZodType<ProviderOptions>;
+}
+
+const EmptyProviderOptionsSchema: z.ZodType<ProviderOptions> = z.object({}).strict();
+const PROVIDER_CONTRACTS: Record<string, ProviderContract> = {
+  claude: { optionsSchema: ClaudeProviderOptionsSchema },
+  codex: { optionsSchema: CodexProviderOptionsSchema },
+  opencode: { optionsSchema: OpenCodeProviderOptionsSchema },
+};
+const EMPTY_PROVIDER_CONTRACT: ProviderContract = { optionsSchema: EmptyProviderOptionsSchema };
 
 const PROVIDER_CLIENT_FACTORIES: Record<string, ProviderClientFactory> = {
   claude: (logger, runtimeSettings) =>
@@ -534,6 +561,10 @@ function createRegistryEntry(
     ...resolved.definition,
     enabled: resolved.enabled,
     derivedFromProviderId: resolved.derivedFromProviderId,
+    optionsSchema: resolved.contract.optionsSchema,
+    validateOptions: (options) =>
+      validateProviderOptions(provider, resolved.contract.optionsSchema, options),
+    applyOptions: (config, options) => ({ ...config, providerOptions: options }),
     createClient: (providerLogger: Logger) =>
       createResolvedProviderClient(providerLogger, provider, resolved),
     resolveCreateConfig: modelClient.resolveCreateConfig ?? resolveDefaultAgentCreateConfig,
@@ -635,6 +666,7 @@ function buildResolvedBuiltinProviders(
           ompRuntime: options.ompRuntime,
           providerParams: override?.params,
         }),
+      contract: PROVIDER_CONTRACTS[definition.id] ?? EMPTY_PROVIDER_CONTRACT,
     });
   }
 
@@ -693,6 +725,9 @@ function addDerivedProviders(
           if (providerId === "cursor") {
             return new CursorACPAgentClient(acpOptions);
           }
+          if (providerId === "kimi") {
+            return new KimiACPAgentClient(acpOptions);
+          }
           if (providerId === "kiro") {
             return new KiroACPAgentClient(acpOptions);
           }
@@ -701,6 +736,7 @@ function addDerivedProviders(
           }
           return new GenericACPAgentClient(acpOptions);
         },
+        contract: EMPTY_PROVIDER_CONTRACT,
       });
       continue;
     }
@@ -740,6 +776,7 @@ function addDerivedProviders(
             extends: baseProviderId,
           },
         }),
+      contract: baseProvider.contract,
     });
   }
 }

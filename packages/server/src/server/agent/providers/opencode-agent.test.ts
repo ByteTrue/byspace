@@ -1076,6 +1076,48 @@ describe("OpenCode adapter context-window normalization", () => {
 });
 
 describe("OpenCode adapter startTurn error handling", () => {
+  test("passes native OpenCode permission options without merging legacy tool policy", async () => {
+    const promptAsync = vi.fn(async () => ({ data: {}, error: undefined }));
+    const fakeClient = {
+      global: {
+        event: vi.fn().mockImplementation(async ({ signal }: { signal: AbortSignal }) => ({
+          stream: {
+            async *[Symbol.asyncIterator](): AsyncGenerator<OpenCodeEvent> {
+              yield { type: "server.connected", properties: {} } as OpenCodeEvent;
+              await waitForAbort(signal);
+            },
+          },
+        })),
+      },
+      session: { promptAsync },
+    } as never;
+    const session = new __openCodeInternals.OpenCodeAgentSession(
+      {
+        provider: "opencode",
+        cwd: "/tmp/test",
+        providerOptions: { permission: { bash: "ask", edit: "deny" } },
+      },
+      fakeClient,
+      "ses_unit_test",
+      createTestLogger(),
+    );
+
+    await session.startTurn("edit");
+
+    expect(promptAsync).toHaveBeenCalledWith(
+      expect.objectContaining({
+        permission: [
+          { permission: "bash", pattern: "*", action: "ask" },
+          { permission: "edit", pattern: "*", action: "deny" },
+        ],
+      }),
+    );
+    expect(promptAsync.mock.calls[0]?.[0].permission).not.toContainEqual(
+      expect.objectContaining({ action: "allow" }),
+    );
+    await session.close();
+  });
+
   test("dynamically adds injected MCP servers without config-backed connect", async () => {
     const runtime = new TestOpenCodeHarness();
     const openCodeClient = new TestOpenCodeClient();

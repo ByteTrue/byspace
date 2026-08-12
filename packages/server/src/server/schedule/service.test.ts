@@ -21,6 +21,8 @@ import type {
   AgentStreamEvent,
 } from "../agent/agent-sdk-types.js";
 import { createTestAgentClients } from "../test-utils/fake-agent-client.js";
+import { validateProviderOptions } from "../agent/provider-options.js";
+import { ClaudeProviderOptionsSchema } from "../agent/providers/claude/options.js";
 import { createTestLogger } from "../../test-utils/test-logger.js";
 import type { ProviderSnapshotManager } from "../agent/provider-snapshot-manager.js";
 import { createLocalCheckoutWorkspace } from "../byspace-worktree-service.js";
@@ -63,6 +65,16 @@ const NO_UNATTENDED_SCHEDULE_POLICY: Pick<ProviderSnapshotManager, "resolveCreat
       featureValues: input.featureValues,
     };
   },
+};
+
+const TEST_CLAUDE_PROVIDER_DEFINITION = {
+  enabled: true,
+  validateOptions: (options: AgentSessionConfig["providerOptions"]) =>
+    validateProviderOptions("claude", ClaudeProviderOptionsSchema, options),
+  applyOptions: (config: AgentSessionConfig, options: AgentSessionConfig["providerOptions"]) => ({
+    ...config,
+    ...(options ? { providerOptions: options } : {}),
+  }),
 };
 
 let workspaceArchiveInProgress = false;
@@ -481,7 +493,6 @@ describe("ScheduleService", () => {
           provider: "claude",
           model: "test-model",
           cwd: tempDir,
-          approvalPolicy: "never",
         },
       },
       maxRuns: 1,
@@ -522,7 +533,6 @@ describe("ScheduleService", () => {
           provider: "claude",
           model: "test-model",
           cwd: tempDir,
-          approvalPolicy: "never",
         },
       },
       maxRuns: 1,
@@ -1330,7 +1340,6 @@ describe("ScheduleService", () => {
           provider: "claude",
           model: "test-model",
           cwd: tempDir,
-          approvalPolicy: "never",
         },
       },
       maxRuns: 1,
@@ -1506,7 +1515,6 @@ describe("ScheduleService", () => {
           provider: "claude",
           model: "test-model",
           cwd: tempDir,
-          approvalPolicy: "never",
         },
       },
       maxRuns: 1,
@@ -1676,7 +1684,6 @@ describe("ScheduleService", () => {
           provider: "claude",
           model: "test-model",
           cwd: tempDir,
-          approvalPolicy: "never",
         },
       },
       maxRuns: 1,
@@ -1785,6 +1792,7 @@ describe("ScheduleService", () => {
     const manager = new AgentManager({
       logger: createTestLogger(),
       clients,
+      providerDefinitions: { claude: TEST_CLAUDE_PROVIDER_DEFINITION },
       registry: agentStorage,
     });
     const service = createScheduleService({
@@ -1820,12 +1828,11 @@ describe("ScheduleService", () => {
           title: "Stored launch title",
           modeId: "stored-mode",
           thinkingOptionId: "think-hard",
-          approvalPolicy: "never",
-          sandboxMode: "danger-full-access",
-          networkAccess: true,
-          webSearch: true,
+          providerOptions: {
+            allowedTools: ["Read"],
+            sandbox: { enabled: true, network: { allowLocalBinding: true } },
+          },
           featureValues: { auto_accept: true },
-          extra: { codex: { profile: "full-access" } },
           systemPrompt: "Stay concise.",
           mcpServers: {
             docs: {
@@ -1849,12 +1856,11 @@ describe("ScheduleService", () => {
       model: "test-model",
       modeId: "stored-mode",
       thinkingOptionId: "think-hard",
-      approvalPolicy: "never",
-      sandboxMode: "danger-full-access",
-      networkAccess: true,
-      webSearch: true,
+      providerOptions: {
+        allowedTools: ["Read"],
+        sandbox: { enabled: true, network: { allowLocalBinding: true } },
+      },
       featureValues: { auto_accept: true, resolved: true },
-      extra: { codex: { profile: "full-access" } },
       systemPrompt: "Stay concise.",
       mcpServers: {
         docs: {
@@ -2916,7 +2922,7 @@ describe("ScheduleService", () => {
         config: {
           provider: "claude",
           cwd: deletedWorktree,
-          approvalPolicy: "never",
+          providerOptions: { allowedTools: ["Read"] },
         },
       },
     });
@@ -3236,9 +3242,8 @@ describe("ScheduleService", () => {
         config: {
           provider: "claude",
           cwd: tempDir,
-          networkAccess: true,
+          providerOptions: { allowedTools: ["Read"] },
           title: "nightly job",
-          approvalPolicy: "never",
         },
       },
     });
@@ -3251,9 +3256,8 @@ describe("ScheduleService", () => {
         config: {
           provider: "claude",
           cwd: tempDir,
-          networkAccess: true,
+          providerOptions: { allowedTools: ["Read"] },
           title: "nightly job",
-          approvalPolicy: "never",
         },
       },
     });
