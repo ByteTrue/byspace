@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.5.0-beta.1 - 2026-08-11
+## 0.5.0-beta.2 - 2026-08-12
 
 - Adds project-first workspace navigation, attention ordering, project icons, worktree labels, unified workspace creation, agent-guided project setup, and safe agent-guided workspace and branch renaming.
 - Expands Agent Timeline and History with durable synchronization, outline navigation, bounded cross-host search and jumps, duplicate-free pagination, and formatting-preserving copy.
@@ -8,6 +8,9 @@
 - Adds sandboxed HTML preview, an expanded Command Center, Korean localization, and shared AI-operations settings.
 - Extends terminal launch profiles into unified workspace creation and tightens terminal, workspace setup, Provider lifecycle, and reconnect ownership behavior.
 - Restores Host appearance controls, returns Git Changes refresh before Forge network work, and shortens CI and release artifact promotion.
+- Adds native Provider options for Claude, Codex, and OpenCode, with improved Codex skill filtering and Kimi authentication, usage, and reasoning support.
+- Improves Browser crash recovery, compact workspace controls, shortcut customization, Markdown copying, inline code rendering, and running-status animation.
+- Hardens daemon supervision, ignored-path resolution, agent and workspace archival races, and restart ownership behavior.
 
 ## 0.4.0 - 2026-08-04
 
