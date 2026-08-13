@@ -433,9 +433,14 @@ describe("createGitLabService", () => {
     expect(calls[0]).toEqual(["mr", "list", "-F", "json", "-P", "5"]);
   });
 
-  it("resolves the glab CLI path once per service instance, not per invocation", async () => {
+  it("executes the resolved glab CLI path and caches it per service instance", async () => {
     let resolveCalls = 0;
+    const executablePaths: string[] = [];
     const { service } = makeService(() => ok(JSON.stringify([OPEN_MR])), {
+      runner: async (_args, _options, executablePath) => {
+        executablePaths.push(executablePath);
+        return ok(JSON.stringify([OPEN_MR]));
+      },
       resolveGlabPath: async () => {
         resolveCalls += 1;
         return "/usr/bin/glab";
@@ -446,6 +451,7 @@ describe("createGitLabService", () => {
     await service.listPullRequests({ cwd: "/repo", limit: 5 });
 
     expect(resolveCalls).toBe(1);
+    expect(executablePaths).toEqual(["/usr/bin/glab", "/usr/bin/glab"]);
   });
 
   it("maps a same-repo merge request view to a checkout target", async () => {
@@ -1124,13 +1130,23 @@ describe("createGitLabService", () => {
     expect(timeline).toMatchObject({ truncated: false, error: null });
   });
 
-  it("reports authentication via a host-scoped glab auth status", async () => {
-    const { service, calls } = makeService((args) => {
-      if (args[0] === "auth") return ok("");
-      throw new Error("unexpected");
+  it("reports authentication via resolved-path host-scoped glab auth status", async () => {
+    const calls: Array<{ args: string[]; executablePath: string }> = [];
+    const { service } = makeService(() => ok(""), {
+      runner: async (args, _options, executablePath) => {
+        calls.push({ args, executablePath });
+        return ok("");
+      },
+      resolveGlabPath: async () => "/usr/bin/glab",
     });
+
     await expect(service.isAuthenticated({ cwd: "/repo" })).resolves.toBe(true);
-    expect(calls[0]).toEqual(["auth", "status", "--hostname", "gitlab.example.com"]);
+    expect(calls).toEqual([
+      {
+        args: ["auth", "status", "--hostname", "gitlab.example.com"],
+        executablePath: "/usr/bin/glab",
+      },
+    ]);
   });
 
   it("reports unauthenticated when glab auth status fails", async () => {

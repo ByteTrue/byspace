@@ -114,7 +114,7 @@ describe.skipIf(isPlatform("win32"))("createForgeCliRunner", () => {
       },
     });
 
-    await expect(runner.run(["arg"], { cwd: tempDir })).rejects.toThrow();
+    await expect(runner.run(["arg"], { cwd: tempDir }, cli)).rejects.toThrow();
   });
 
   it("classifies a timed-out invocation through normalizeError", async () => {
@@ -133,10 +133,39 @@ describe.skipIf(isPlatform("win32"))("createForgeCliRunner", () => {
       },
     });
 
-    const rawError = await runner.run(["arg"], { cwd: tempDir }).catch((error: unknown) => error);
+    const rawError = await runner
+      .run(["arg"], { cwd: tempDir }, cli)
+      .catch((error: unknown) => error);
     const normalized = runner.normalizeError(rawError, { args: ["arg"], cwd: tempDir });
     expect(normalized).toBeInstanceOf(FakeCommandError);
     expect((normalized as FakeCommandError).stderr).toMatch(/timed out after 100ms/);
+  });
+});
+
+describe("createForgeCliRunner executable path", () => {
+  it("passes multiline arguments directly to the resolved native executable", async () => {
+    const body = '## 摘要\n- first & second | third\n- ! ^ < > ( ) "quoted"';
+    const runner = createForgeCliRunner({
+      binary: "missing-forge-cli",
+      envOverlay: {},
+      timeoutMs: 1_000,
+      isAuthFailureText: () => false,
+      errorClasses: {
+        isAlreadyClassified: () => false,
+        isCommandError: (error): error is Error => error instanceof Error,
+        createAuthError: (stderr) => new Error(`auth: ${stderr}`),
+        createMissingError: () => new Error("missing"),
+        createCommandError: (params) => new Error(params.stderr),
+      },
+    });
+
+    const result = await runner.run(
+      ["-e", "process.stdout.write(process.argv[1])", body],
+      { cwd: process.cwd() },
+      process.execPath,
+    );
+
+    expect(result).toEqual({ stdout: body, stderr: "" });
   });
 });
 

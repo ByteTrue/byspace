@@ -102,6 +102,7 @@ export interface GlabCommandResult {
 export type GlabCommandRunner = (
   args: string[],
   options: GlabCommandRunnerOptions,
+  executablePath: string,
 ) => Promise<GlabCommandResult>;
 
 export interface CreateGitLabServiceOptions {
@@ -278,8 +279,9 @@ const glabCliRunner = createForgeCliRunner({
 async function runGlabCommand(
   args: string[],
   options: GlabCommandRunnerOptions,
+  executablePath: string,
 ): Promise<GlabCommandResult> {
-  return glabCliRunner.run(args, options);
+  return glabCliRunner.run(args, options, executablePath);
 }
 
 export function parseGitLabHostFromRemoteUrl(url: string): string | null {
@@ -831,7 +833,7 @@ export function createGitLabService(options: CreateGitLabServiceOptions = {}): F
       throw new GlabCliMissingError();
     }
     try {
-      const result = await runner(args, runOptions);
+      const result = await runner(args, runOptions, glabPath);
       return result.stdout.trim();
     } catch (error) {
       throw glabCliRunner.normalizeError(error, { args, cwd: runOptions.cwd });
@@ -1007,7 +1009,7 @@ export function createGitLabService(options: CreateGitLabServiceOptions = {}): F
         return false;
       }
       try {
-        await runner(["auth", "status", "--hostname", host], { cwd: input.cwd });
+        await runner(["auth", "status", "--hostname", host], { cwd: input.cwd }, glabPath);
         return true;
       } catch {
         return false;
