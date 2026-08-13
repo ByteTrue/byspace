@@ -629,6 +629,7 @@ export interface GitHubCommandResult {
 export type GitHubCommandRunner = (
   args: string[],
   options: GitHubCommandRunnerOptions,
+  executablePath: string,
 ) => Promise<GitHubCommandResult>;
 
 const DIRECT_PULL_REQUEST_MERGE_STATE_ALLOWLIST = new Set(["CLEAN", "HAS_HOOKS"]);
@@ -826,7 +827,7 @@ export function createGitHubService(options: CreateGitHubServiceOptions = {}): G
       ? { ...runOptions, envOverlay: { ...runOptions.envOverlay, GH_HOST: host } }
       : runOptions;
     try {
-      const result = await deps.runner(args, effectiveOptions);
+      const result = await deps.runner(args, effectiveOptions, ghPath);
       return result.stdout.trim();
     } catch (error) {
       throw githubCliRunner.normalizeError(error, {
@@ -1566,8 +1567,9 @@ const githubCliRunner = createForgeCliRunner({
 async function runGhCommand(
   args: string[],
   options: GitHubCommandRunnerOptions,
+  executablePath: string,
 ): Promise<GitHubCommandResult> {
-  return githubCliRunner.run(args, options);
+  return githubCliRunner.run(args, options, executablePath);
 }
 
 // Anchored to github.com so a pasted URL from an unrelated tracker (a GitLab

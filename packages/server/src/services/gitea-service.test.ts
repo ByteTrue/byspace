@@ -1574,9 +1574,14 @@ describe("createGiteaService", () => {
     );
   });
 
-  it("resolves the tea CLI path once per service instance, not per invocation", async () => {
+  it("executes the resolved tea CLI path and caches it per service instance", async () => {
     let resolveCalls = 0;
+    const executablePaths: string[] = [];
     const { service } = makeService(() => ok(JSON.stringify([OPEN_PR])), {
+      runner: async (_args, _options, executablePath) => {
+        executablePaths.push(executablePath);
+        return ok(JSON.stringify([OPEN_PR]));
+      },
       resolveTeaPath: async () => {
         resolveCalls += 1;
         return "/usr/bin/tea";
@@ -1587,6 +1592,7 @@ describe("createGiteaService", () => {
     await service.listPullRequests({ cwd: "/repo" });
 
     expect(resolveCalls).toBe(1);
+    expect(executablePaths).toEqual(["/usr/bin/tea", "/usr/bin/tea"]);
   });
 
   it("lists issues", async () => {

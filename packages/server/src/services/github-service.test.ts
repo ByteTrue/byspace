@@ -3192,11 +3192,28 @@ describe("ForgeService", () => {
     expect(valid.reason).toBe("test");
   });
 
+  it("executes the resolved gh CLI path", async () => {
+    const executablePaths: string[] = [];
+    const service = createGitHubService({
+      runner: async (_args, _options, executablePath) => {
+        executablePaths.push(executablePath);
+        return { stdout: "[]", stderr: "" };
+      },
+      resolveGhPath: async () => "C:\\Program Files\\GitHub CLI\\gh.exe",
+      resolveRepoHost: async () => null,
+    });
+
+    await service.listPullRequests({ cwd: "/repo" });
+
+    expect(executablePaths).toEqual(["C:\\Program Files\\GitHub CLI\\gh.exe"]);
+  });
+
   it("resolves the repo slug from the workspace when creating a pull request", async () => {
     const runner = createRunner([
       JSON.stringify({ owner: { login: "acme" }, name: "repo" }),
       JSON.stringify({ url: "https://github.com/acme/repo/pull/7", number: 7 }),
     ]);
+    const body = '## 摘要\n- first & second | third\n- ! ^ < > ( ) "quoted"';
     const service = createGitHubService({
       runner: runner.runner,
       resolveRepoHost: async () => null,
@@ -3207,6 +3224,7 @@ describe("ForgeService", () => {
         cwd: "/tmp/repo",
         title: "Add thing",
         head: "feature",
+        body,
         base: "main",
       }),
     ).resolves.toEqual({ url: "https://github.com/acme/repo/pull/7", number: 7 });
@@ -3223,6 +3241,8 @@ describe("ForgeService", () => {
       "head=feature",
       "-f",
       "base=main",
+      "-f",
+      `body=${body}`,
     ]);
   });
 

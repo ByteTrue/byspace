@@ -127,6 +127,7 @@ export interface TeaCommandResult {
 export type TeaCommandRunner = (
   args: string[],
   options: TeaCommandRunnerOptions,
+  executablePath: string,
 ) => Promise<TeaCommandResult>;
 
 export interface CreateGiteaServiceOptions {
@@ -393,8 +394,9 @@ const teaCliRunner = createForgeCliRunner({
 async function runTeaCommand(
   args: string[],
   options: TeaCommandRunnerOptions,
+  executablePath: string,
 ): Promise<TeaCommandResult> {
-  return teaCliRunner.run(args, options);
+  return teaCliRunner.run(args, options, executablePath);
 }
 
 async function defaultResolveCurrentBranch(cwd: string): Promise<string | null> {
@@ -1034,7 +1036,7 @@ export async function probeGiteaHost(host: string): Promise<boolean> {
     return false;
   }
   try {
-    const { stdout } = await execCommand("tea", ["login", "list", "-o", "json"], {
+    const { stdout } = await execCommand(teaPath, ["login", "list", "-o", "json"], {
       envOverlay: TEA_ENV,
       timeout: CLI_AUTH_PROBE_TIMEOUT_MS,
     });
@@ -1092,7 +1094,11 @@ export interface DetectGiteaFamilyOptions {
 }
 
 async function defaultRunTea(args: string[]): Promise<{ stdout: string; stderr: string }> {
-  const { stdout, stderr } = await execCommand("tea", args, {
+  const teaPath = await resolveTeaPath();
+  if (!teaPath) {
+    throw new TeaCliMissingError();
+  }
+  const { stdout, stderr } = await execCommand(teaPath, args, {
     envOverlay: TEA_ENV,
     timeout: GITEA_SOFTWARE_PROBE_TIMEOUT_MS,
   });
@@ -1240,7 +1246,7 @@ export function createGiteaService(options: CreateGiteaServiceOptions = {}): For
       throw new TeaCliMissingError();
     }
     try {
-      const result = await runner(args, runOptions);
+      const result = await runner(args, runOptions, teaPath);
       return result.stdout.trim();
     } catch (error) {
       throw teaCliRunner.normalizeError(error, { args: redactTeaArgs(args), cwd: runOptions.cwd });

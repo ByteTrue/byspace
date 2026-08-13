@@ -69,6 +69,7 @@ export interface ForgeCliRunnerResult {
 export type ForgeCliRunner = (
   args: string[],
   options: ForgeCliRunnerOptions,
+  executablePath: string,
 ) => Promise<ForgeCliRunnerResult>;
 
 export interface ForgeCliRunnerErrorClasses {
@@ -102,8 +103,8 @@ export interface ForgeCliRunnerFactory {
  * trio. The three adapters differ only in the params passed here.
  */
 export function createForgeCliRunner(options: CreateForgeCliRunnerOptions): ForgeCliRunnerFactory {
-  const run: ForgeCliRunner = (args, runOptions) =>
-    execCommand(options.binary, args, {
+  const run: ForgeCliRunner = (args, runOptions, executablePath) =>
+    execCommand(executablePath, args, {
       cwd: runOptions.cwd,
       envOverlay: { ...options.envOverlay, ...runOptions.envOverlay },
       maxBuffer: 10 * 1024 * 1024,
@@ -291,7 +292,7 @@ export async function probeHostViaCliAuthStatus(
     return false;
   }
   try {
-    await execCommand(options.cli, ["auth", "status", "--hostname", options.host], {
+    await execCommand(cliPath, ["auth", "status", "--hostname", options.host], {
       envOverlay: options.envOverlay,
       timeout: CLI_AUTH_PROBE_TIMEOUT_MS,
     });
