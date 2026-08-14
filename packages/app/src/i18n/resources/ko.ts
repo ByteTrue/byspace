@@ -948,6 +948,10 @@ const koTranslations = {
       sessions: "기록",
       schedules: "일정",
     },
+    pages: {
+      trigger: "BySpace",
+      triggerAccessibilityLabel: "BySpace 페이지 열기",
+    },
     worktreeSetup: {
       title: "워크트리 스크립트 설정",
       description:

@@ -930,6 +930,10 @@ export const ar: TranslationResources = {
       sessions: "السجل",
       schedules: "الجداول",
     },
+    pages: {
+      trigger: "BySpace",
+      triggerAccessibilityLabel: "فتح صفحات BySpace",
+    },
     worktreeSetup: {
       title: "إعداد البرامج النصية لشجرة العمل",
       description:

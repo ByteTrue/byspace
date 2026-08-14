@@ -549,7 +549,7 @@ test.describe("Composer autocomplete", () => {
     const agent = await openReadyMockAgent(page);
 
     try {
-      await expect(page.getByTestId("sidebar-sessions")).toBeVisible({ timeout: 30_000 });
+      await expect(page.getByTestId("sidebar-pages")).toBeVisible({ timeout: 30_000 });
       const input = composerLocator(page);
       await expect(input).toBeEditable({ timeout: 30_000 });
 
@@ -589,7 +589,7 @@ test.describe("Composer autocomplete", () => {
         });
 
         await page.getByRole("button", { name: "Open menu" }).click();
-        await expect(page.getByTestId("sidebar-sessions")).toBeInViewport({ timeout: 5_000 });
+        await expect(page.getByTestId("sidebar-pages")).toBeInViewport({ timeout: 5_000 });
 
         const popoverBox = await popover.boundingBox();
         expect(popoverBox).not.toBeNull();
