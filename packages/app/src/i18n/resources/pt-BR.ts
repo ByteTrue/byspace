@@ -952,6 +952,10 @@ export const ptBR: TranslationResources = {
       sessions: "Histórico",
       schedules: "Agendamentos",
     },
+    pages: {
+      trigger: "BySpace",
+      triggerAccessibilityLabel: "Abrir páginas do BySpace",
+    },
     worktreeSetup: {
       title: "Configurar scripts de worktree",
       description:

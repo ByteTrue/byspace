@@ -941,6 +941,10 @@ export const ja: TranslationResources = {
       sessions: "履歴",
       schedules: "スケジュール",
     },
+    pages: {
+      trigger: "BySpace",
+      triggerAccessibilityLabel: "BySpace のページを開く",
+    },
     worktreeSetup: {
       title: "ワークツリースクリプトを設定",
       description:

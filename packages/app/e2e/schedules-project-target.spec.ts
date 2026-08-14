@@ -11,6 +11,7 @@ import { escapeRegex } from "./helpers/regex";
 import { expectNoTruncation } from "./helpers/no-truncation";
 import { expectSettled, expectStableHeight } from "./helpers/settled";
 import { waitForSidebarHydration } from "./helpers/workspace-ui";
+import { openSidebarPage } from "./helpers/sidebar";
 import { buildSchedulesRoute } from "../src/utils/host-routes";
 
 const MOBILE_SHEET_VIEWPORT = { width: 390, height: 844 };
@@ -185,7 +186,7 @@ test.describe("Schedules project target", () => {
     await gotoAppShell(page);
     await waitForSidebarHydration(page);
 
-    await page.getByRole("button", { name: "Schedules" }).click();
+    await openSidebarPage(page, "sidebar-schedules");
     await expect(page).toHaveURL(/\/schedules$/);
     await expect(page).not.toHaveURL(/\/h\//);
     await expect(page.getByTestId("schedules-empty")).toBeVisible();

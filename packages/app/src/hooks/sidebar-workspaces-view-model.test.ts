@@ -691,22 +691,22 @@ describe("deriveSidebarLoadingState", () => {
 });
 
 describe("createSidebarWorkspaceEntry workspace directory label", () => {
-  it("uses the daemon-provided slug for a BySpace-owned worktree", () => {
+  it("shows the workspace path for a BySpace-owned worktree", () => {
     const descriptor = workspaceWithForge(undefined, "https://github.com/acme/repo/pull/42");
     descriptor.workspaceDirectory = "/worktrees/feature/packages/app";
     descriptor.worktreeSlug = "feature";
 
     const entry = createSidebarWorkspaceEntry({ serverId: "srv", workspace: descriptor });
 
-    expect(entry.workspaceDirectoryLabel).toBe("feature");
+    expect(entry.workspaceDirectoryLabel).toBe("/worktrees/feature/packages/app");
   });
 
-  it("shortens the workspace path when the daemon omits a worktree slug", () => {
+  it("preserves an absolute workspace path", () => {
     const descriptor = workspaceWithForge(undefined, "https://github.com/acme/repo/pull/42");
     descriptor.workspaceDirectory = "/home/alice/external/feature";
 
     const entry = createSidebarWorkspaceEntry({ serverId: "srv", workspace: descriptor });
 
-    expect(entry.workspaceDirectoryLabel).toBe("~/external/feature");
+    expect(entry.workspaceDirectoryLabel).toBe("/home/alice/external/feature");
   });
 });

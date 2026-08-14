@@ -962,6 +962,10 @@ export const es: TranslationResources = {
       sessions: "Historial",
       schedules: "Horarios",
     },
+    pages: {
+      trigger: "BySpace",
+      triggerAccessibilityLabel: "Abrir páginas de BySpace",
+    },
     worktreeSetup: {
       title: "Configurar secuencias de comandos del árbol de trabajo",
       description:

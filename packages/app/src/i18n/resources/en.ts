@@ -940,6 +940,10 @@ export const en = {
       sessions: "History",
       schedules: "Schedules",
     },
+    pages: {
+      trigger: "BySpace",
+      triggerAccessibilityLabel: "Open BySpace pages",
+    },
     worktreeSetup: {
       title: "Set up worktree scripts",
       description:

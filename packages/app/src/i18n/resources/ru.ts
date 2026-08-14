@@ -951,6 +951,10 @@ export const ru: TranslationResources = {
       sessions: "История",
       schedules: "Расписания",
     },
+    pages: {
+      trigger: "BySpace",
+      triggerAccessibilityLabel: "Открыть страницы BySpace",
+    },
     worktreeSetup: {
       title: "Настройка сценариев рабочего дерева",
       description:

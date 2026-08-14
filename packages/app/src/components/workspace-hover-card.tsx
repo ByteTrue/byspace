@@ -323,10 +323,11 @@ function WorkspaceHoverCardContent({
           {workspace.workspaceDirectoryLabel ? (
             <CopyableInfoRow
               icon={ThemedFolder}
-              value={workspace.workspaceDirectoryLabel ?? ""}
+              value={workspace.workspaceDirectoryLabel}
               copyValue={workspace.workspaceDirectory ?? ""}
               copyLabel={t("workspace.hoverCard.copyPath")}
               testID="hover-card-workspace-cwd"
+              multiline
             />
           ) : null}
           {prHint || workspace.diffStat ? (
@@ -470,12 +471,14 @@ function CopyableInfoRow({
   copyValue,
   copyLabel,
   testID,
+  multiline = false,
 }: {
   icon: CardInfoIcon;
   value: string;
   copyValue: string;
   copyLabel: string;
   testID: string;
+  multiline?: boolean;
 }) {
   const [isHovered, setIsHovered] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -522,7 +525,7 @@ function CopyableInfoRow({
         }
         return <Icon size={12} uniProps={iconUniProps} />;
       })()}
-      <Text style={textStyle} numberOfLines={1} testID={testID}>
+      <Text style={textStyle} numberOfLines={multiline ? undefined : 1} testID={testID}>
         {value}
       </Text>
     </Pressable>

@@ -9,6 +9,7 @@ import {
   submitNewWorkspaceEmpty,
 } from "./helpers/new-workspace";
 import { getServerId } from "./helpers/server-id";
+import { openSidebarPage } from "./helpers/sidebar";
 import { createTempGitRepo } from "./helpers/workspace";
 import { switchWorkspaceViaSidebar, waitForSidebarHydration } from "./helpers/workspace-ui";
 
@@ -147,7 +148,7 @@ test.describe("cross-host project identity", () => {
 
       await page.goBack();
       await waitForSidebarHydration(page);
-      await page.getByTestId("sidebar-schedules").click();
+      await openSidebarPage(page, "sidebar-schedules");
       await page.getByTestId("schedules-empty-new").click();
       await page.getByTestId("schedule-host-trigger").click();
       await page.getByTestId(`schedule-host-option-${primaryServerId}`).click();

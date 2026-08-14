@@ -922,6 +922,10 @@ export const zhCN: TranslationResources = {
       sessions: "历史",
       schedules: "计划",
     },
+    pages: {
+      trigger: "BySpace",
+      triggerAccessibilityLabel: "打开 BySpace 页面",
+    },
     worktreeSetup: {
       title: "设置 worktree scripts",
       description: "添加 setup 命令，让新的 worktree 自动安装依赖并完成准备。",

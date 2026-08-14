@@ -199,7 +199,7 @@ test.describe("Model B sidebar shape", () => {
 
       // The deepest level inside the sidebar is the workspace row: no tab,
       // agent, or terminal element appears as a sidebar descendant.
-      const sidebar = page.getByTestId("sidebar-sessions").filter({ visible: true }).first();
+      const sidebar = page.getByTestId("sidebar-project-list").filter({ visible: true }).first();
       await expect(workspaceRow(page, mock.workspaceId).first()).toBeVisible({ timeout: 30_000 });
       await expect(sidebar.locator('[data-testid^="workspace-tab-"]')).toHaveCount(0);
       await expect(sidebar.locator('[data-testid^="sidebar-agent-row-"]')).toHaveCount(0);

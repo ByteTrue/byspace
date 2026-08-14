@@ -72,9 +72,20 @@ export async function closeMobileAgentSidebar(page: Page): Promise<void> {
 // The mobile sidebar panel animates via translateX. Waiting for its header to be fully visible
 // prevents a close click from targeting a button while the panel is still moving.
 export async function expectMobileAgentSidebarVisible(page: Page): Promise<void> {
-  await expect(page.getByTestId("sidebar-sessions")).toBeInViewport({ ratio: 1, timeout: 5_000 });
+  await expect(page.getByTestId("sidebar-pages")).toBeInViewport({ ratio: 1, timeout: 5_000 });
 }
 
 export async function expectMobileAgentSidebarHidden(page: Page): Promise<void> {
-  await expect(page.getByTestId("sidebar-sessions")).not.toBeInViewport({ timeout: 5_000 });
+  await expect(page.getByTestId("sidebar-pages")).not.toBeInViewport({ timeout: 5_000 });
+}
+
+// Top-level pages live behind the sidebar's single page-menu trigger, so reaching one is always
+// "open the menu, then pick the page".
+export async function openSidebarPage(page: Page, pageTestID: string): Promise<void> {
+  const trigger = page.getByTestId("sidebar-pages");
+  await expect(trigger).toBeVisible({ timeout: 30_000 });
+  await trigger.click();
+  const item = page.getByTestId(pageTestID);
+  await expect(item).toBeVisible({ timeout: 10_000 });
+  await item.click();
 }
