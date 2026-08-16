@@ -475,6 +475,10 @@ export class CheckoutSession {
           includeForge: true,
           reason: "manual-refresh-forge",
         })
+        .then((snapshot) => {
+          this.emitStatusUpdate(resolvedCwd, snapshot);
+          return snapshot;
+        })
         .catch((error) => {
           this.logger.warn(
             { err: error, cwd: resolvedCwd },
@@ -497,6 +501,20 @@ export class CheckoutSession {
   emitStatusUpdate(cwd: string, snapshot: WorkspaceGitRuntimeSnapshot): void {
     try {
       const requestId = `subscription:${cwd}`;
+      // A local-only refresh has no Forge result yet. Do not overwrite a cached
+      // GitLab MR (or another forge) with the client's legacy GitHub default.
+      const hasUnresolvedRemoteForge =
+        snapshot.git.hasRemote &&
+        snapshot.forge.forge === undefined &&
+        snapshot.forge.pullRequest === null &&
+        snapshot.forge.error === null;
+      const prStatus = hasUnresolvedRemoteForge
+        ? undefined
+        : buildCheckoutPrStatusPayloadFromSnapshot({
+            cwd,
+            requestId,
+            snapshot,
+          });
       this.host.emit({
         type: "checkout_status_update",
         payload: {
@@ -505,11 +523,7 @@ export class CheckoutSession {
             requestId,
             snapshot,
           }),
-          prStatus: buildCheckoutPrStatusPayloadFromSnapshot({
-            cwd,
-            requestId,
-            snapshot,
-          }),
+          ...(prStatus ? { prStatus } : {}),
         },
       });
     } catch (error) {

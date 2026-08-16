@@ -390,6 +390,28 @@ describe("CheckoutSession", () => {
         files: [],
         error: null,
       });
+      const forgeSnapshot: WorkspaceGitRuntimeSnapshot = {
+        ...createGitSnapshot("/repo", "feature/gitlab-mr"),
+        git: {
+          ...createGitSnapshot("/repo", "feature/gitlab-mr").git,
+          remoteUrl: "https://gitlab.example.com/group/repo.git",
+        },
+        forge: {
+          featuresEnabled: true,
+          authState: "authenticated",
+          forge: "gitlab",
+          error: null,
+          pullRequest: {
+            number: 14,
+            url: "https://gitlab.example.com/group/repo/-/merge_requests/14",
+            title: "GitLab MR",
+            state: "open",
+            baseRefName: "main",
+            headRefName: "feature/gitlab-mr",
+            isMerged: false,
+          },
+        },
+      };
       const { checkout, emitted } = makeCheckoutSession({
         git: {
           getSnapshot: async (cwd, snapshotOptions) => {
@@ -397,6 +419,7 @@ describe("CheckoutSession", () => {
             if (snapshotOptions?.includeForge) {
               await forgeRefresh;
               markForgeRefreshFinished();
+              return forgeSnapshot;
             }
             return createNoGitWorkspaceRuntimeSnapshot(cwd);
           },
@@ -424,8 +447,20 @@ describe("CheckoutSession", () => {
           payload: { cwd: "/repo", success: true, error: null, requestId: "r7" },
         },
       ]);
+
       releaseForgeRefresh();
       await forgeRefreshFinished;
+      await Promise.resolve();
+      expect(emitted).toContainEqual({
+        type: "checkout_status_update",
+        payload: expect.objectContaining({
+          cwd: "/repo",
+          prStatus: expect.objectContaining({
+            forge: "gitlab",
+            status: expect.objectContaining({ number: 14 }),
+          }),
+        }),
+      });
     });
 
     it("expands a tilde cwd before refreshing git and diffs", async () => {
@@ -574,6 +609,33 @@ describe("CheckoutSession", () => {
         {
           type: "checkout_status_update",
           payload: expect.objectContaining({ cwd: "/repo", currentBranch: "main" }),
+        },
+      ]);
+    });
+
+    it("does not publish an unresolved remote forge as a GitHub PR status", () => {
+      const { checkout, emitted } = makeCheckoutSession();
+      const snapshot: WorkspaceGitRuntimeSnapshot = {
+        ...createGitSnapshot("/repo", "feature/gitlab-mr"),
+        git: {
+          ...createGitSnapshot("/repo", "feature/gitlab-mr").git,
+          hasRemote: true,
+          remoteUrl: "https://gitlab.example.com/group/repo.git",
+        },
+        forge: {
+          featuresEnabled: false,
+          authState: "no_remote",
+          pullRequest: null,
+          error: null,
+        },
+      };
+
+      checkout.emitStatusUpdate("/repo", snapshot);
+
+      expect(emitted).toEqual([
+        {
+          type: "checkout_status_update",
+          payload: expect.not.objectContaining({ prStatus: expect.anything() }),
         },
       ]);
     });
