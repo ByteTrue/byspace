@@ -62,6 +62,7 @@ import {
   parseHostWorkspaceRouteFromPathname,
 } from "@/utils/host-routes";
 import {
+  shouldShowProjectHostLabels,
   type SidebarProjectEntry,
   type SidebarWorkspaceEntry,
   type SidebarWorkspacePlacement,
@@ -138,6 +139,16 @@ const workspaceKeyExtractor = (workspace: SidebarWorkspacePlacement) => workspac
 
 const WORKSPACE_STATUS_DOT_WIDTH = 14;
 const DEFAULT_STATUS_DOT_SIZE = 6;
+
+function resolveWorkspaceHostBadge(input: {
+  badge: HostBadgeModel | null;
+  showAutoLabel: boolean;
+}): HostBadgeModel | null {
+  if (!input.badge || input.badge.display !== "auto" || !input.showAutoLabel) {
+    return input.badge;
+  }
+  return { ...input.badge, showLabel: true };
+}
 const DEFAULT_STATUS_DOT_OFFSET = 0;
 const ThemedExternalLink = withUnistyles(ExternalLink);
 const ThemedGitPullRequest = withUnistyles(GitPullRequest);
@@ -1428,6 +1439,7 @@ function ProjectBlock({
     canToggle: canToggleWorkspaces,
     toggleExpanded: toggleWorkspacesExpanded,
   } = useLimitedSidebarGroup(project.workspaces);
+  const showAutoHostLabel = shouldShowProjectHostLabels(project);
   const newWorkspaceTarget = useMemo(
     () =>
       resolveSidebarProjectNewWorkspaceTarget({
@@ -1456,7 +1468,14 @@ function ProjectBlock({
         <MemoWorkspaceRowItem
           workspace={item}
           workspaceEntry={workspaceEntriesByKey.get(item.workspaceKey) ?? null}
-          subtitle={showHostLabels ? (hostBadgeByServerId.get(item.serverId) ?? null) : null}
+          subtitle={
+            showHostLabels
+              ? resolveWorkspaceHostBadge({
+                  badge: hostBadgeByServerId.get(item.serverId) ?? null,
+                  showAutoLabel: showAutoHostLabel,
+                })
+              : null
+          }
           shortcutNumber={shortcutIndexByWorkspaceKey.get(item.workspaceKey) ?? null}
           showShortcutBadge={showShortcutBadges}
           canCopyBranchName={project.projectKind === "git"}
@@ -1472,6 +1491,7 @@ function ProjectBlock({
     },
     [
       project.projectKind,
+      showAutoHostLabel,
       showHostLabels,
       activeWorkspaceSelection,
       creatingWorkspaceIds,

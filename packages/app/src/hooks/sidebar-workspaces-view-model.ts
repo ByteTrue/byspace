@@ -415,17 +415,11 @@ export function buildSidebarProjectsFromHostProjects(input: {
   }));
 }
 
-// Host labels disambiguate which machine a workspace lives on; they only earn their
-// space once the visible sidebar spans more than one host. Counting distinct hosts
-// across the visible projects (not all connected hosts) keeps labels off when a host
-// filter pins the view to a single host.
-export function shouldShowSidebarHostLabels(projects: SidebarProjectEntry[]): boolean {
-  const serverIds = new Set<string>();
-  for (const project of projects) {
-    for (const host of project.hosts) {
-      serverIds.add(host.serverId);
-    }
-  }
+// Automatic host labels only appear where two machines have workspaces in the same project.
+export function shouldShowProjectHostLabels(
+  project: Pick<SidebarProjectEntry, "workspaces">,
+): boolean {
+  const serverIds = new Set(project.workspaces.map((workspace) => workspace.serverId));
   return serverIds.size >= 2;
 }
 

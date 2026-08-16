@@ -1743,6 +1743,7 @@ export const en = {
           label: "Sidebar badge",
           accessibilityLabel: "Sidebar badge, {{value}}",
           options: {
+            auto: "Automatic",
             name: "Name",
             icon: "Icon only",
             hidden: "Hidden",
