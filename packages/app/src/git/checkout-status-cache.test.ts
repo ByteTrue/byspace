@@ -217,6 +217,27 @@ describe("applyCheckoutStatusUpdateFromEvent", () => {
     expect(queryClient.getQueryData(checkoutPrStatusQueryKey(serverId, otherCwd))).toBeUndefined();
   });
 
+  it("preserves a cached GitLab MR when a git-only update has no PR status", () => {
+    const queryClient = createQueryClient();
+    const gitlabPr = prStatus({
+      forge: "gitlab",
+      status: {
+        ...prStatus().status!,
+        forge: "gitlab",
+        url: "https://gitlab.example.com/group/repo/-/merge_requests/42",
+      },
+    });
+    queryClient.setQueryData(checkoutPrStatusQueryKey(serverId, cwd), gitlabPr);
+
+    applyCheckoutStatusUpdateFromEvent({
+      queryClient,
+      serverId,
+      message: checkoutStatusUpdate(checkoutStatus()),
+    });
+
+    expect(queryClient.getQueryData(checkoutPrStatusQueryKey(serverId, cwd))).toEqual(gitlabPr);
+  });
+
   it("normalizes legacy PR auth state at the pushed-cache boundary", () => {
     const queryClient = createQueryClient();
     const { authState: _authState, ...legacyPrStatus } = prStatus({
