@@ -35,18 +35,36 @@ describe("host badge appearance", () => {
     });
   });
 
-  it("preserves an explicit badge display choice", () => {
+  it.each([
+    { display: "name" as const, showLabel: true },
+    { display: "icon" as const, showLabel: false },
+  ])("preserves explicit $display badge display", ({ display, showLabel }) => {
     const badges = selectHostBadges({
       hosts: [
         {
           serverId: "host-a",
           label: "MacBook",
-          appearance: { color: "none", badgeDisplay: "name" },
+          appearance: { color: "none", badgeDisplay: display },
         },
       ],
       enabled: true,
     });
 
-    expect(badges.get("host-a")?.showLabel).toBe(true);
+    expect(badges.get("host-a")).toMatchObject({ display, showLabel });
+  });
+
+  it("preserves an explicit hidden badge display", () => {
+    const badges = selectHostBadges({
+      hosts: [
+        {
+          serverId: "host-a",
+          label: "MacBook",
+          appearance: { color: "none", badgeDisplay: "hidden" },
+        },
+      ],
+      enabled: true,
+    });
+
+    expect(badges.has("host-a")).toBe(false);
   });
 });
