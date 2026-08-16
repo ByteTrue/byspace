@@ -1736,6 +1736,7 @@ export const ar: TranslationResources = {
           label: "شارة الشريط الجانبي",
           accessibilityLabel: "شارة الشريط الجانبي، {{value}}",
           options: {
+            auto: "تلقائي",
             name: "الاسم",
             icon: "أيقونة فقط",
             hidden: "مخفي",

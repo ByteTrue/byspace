@@ -38,7 +38,6 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { CombinedModelSelector } from "@/components/combined-model-selector";
 import { useDaemonConfig } from "@/hooks/use-daemon-config";
-import { useLocalDaemonServerId } from "@/hooks/use-is-local-daemon";
 import { useToast } from "@/contexts/toast-context";
 import {
   getHostRuntimeStore,
@@ -369,6 +368,7 @@ function HostBadgePreview({
             label: host.label,
             color: host.appearance.color,
             showLabel: badgeDisplay === "name",
+            display: badgeDisplay,
           },
     [badgeDisplay, host.appearance.color, host.label, host.serverId],
   );
@@ -386,13 +386,8 @@ function HostAppearanceSection({ host }: { host: HostProfile }) {
   const { t } = useTranslation();
   const { setHostColor, setHostBadgeDisplay } = useHostMutations();
   const toast = useToast();
-  const localServerId = useLocalDaemonServerId();
   const color = host.appearance.color;
-  const badgeDisplay =
-    resolveHostBadgeDisplay({
-      appearance: host.appearance,
-      isLocalHost: host.serverId === localServerId,
-    }) ?? "name";
+  const badgeDisplay = resolveHostBadgeDisplay({ appearance: host.appearance });
   const colorLabel = t(`settings.host.appearance.color.options.${color}`);
   const badgeLabel = t(`settings.host.appearance.badge.options.${badgeDisplay}`);
   const handleColor = useCallback(

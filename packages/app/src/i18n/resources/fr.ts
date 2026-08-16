@@ -1774,6 +1774,7 @@ export const fr: TranslationResources = {
           label: "Badge de la barre latérale",
           accessibilityLabel: "Badge de la barre latérale, {{value}}",
           options: {
+            auto: "Automatique",
             name: "Nom",
             icon: "Icône seule",
             hidden: "Masqué",

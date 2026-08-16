@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { shouldShowProjectHostLabels } from "@/hooks/sidebar-workspaces-view-model";
 import type {
   SidebarProjectEntry,
   SidebarWorkspaceEntry,
@@ -7,15 +8,10 @@ import type {
 import type { WorkspaceAgentSummary } from "@/utils/workspace-agent-summary";
 import { buildSidebarProjection } from "./sidebar-projection";
 
-const HOST = {
-  serverId: "srv",
-  iconWorkingDir: "/repo",
-  canCreateWorktree: true,
-};
-
 function makeWorkspace(input: {
   id: string;
   projectKey: string;
+  serverId?: string;
   status?: SidebarWorkspaceEntry["statusBucket"];
   statusEnteredAt?: string;
   latestActivityAt?: string;
@@ -25,8 +21,8 @@ function makeWorkspace(input: {
   const status = input.status ?? "done";
   const statusEnteredAt = new Date(input.statusEnteredAt ?? "2026-07-01T00:00:00.000Z");
   const placement: SidebarWorkspacePlacement = {
-    workspaceKey: `srv:${input.id}`,
-    serverId: "srv",
+    workspaceKey: `${input.serverId ?? "srv"}:${input.id}`,
+    serverId: input.serverId ?? "srv",
     workspaceId: input.id,
     projectKey: input.projectKey,
     projectName: input.projectKey,
@@ -70,7 +66,11 @@ function makeProject(
     projectName: projectKey,
     projectKind: "git",
     iconWorkingDir: "/repo",
-    hosts: [HOST],
+    hosts: [...new Set(workspaces.map((workspace) => workspace.serverId))].map((serverId) => ({
+      serverId,
+      iconWorkingDir: "/repo",
+      canCreateWorktree: true,
+    })),
     workspaces,
   };
 }
@@ -132,16 +132,18 @@ describe("buildSidebarProjection", () => {
     ]);
   });
 
-  it("attentionOnly shows only attention workspaces and drops quiet projects", () => {
-    const waiting = makeWorkspace({
-      id: "waiting",
-      projectKey: "mixed",
-      status: "needs_input",
-      needsAttentionCount: 1,
-    });
+  it("attentionOnly narrows automatic host labels to visible workspaces", () => {
     const quiet = makeWorkspace({
       id: "quiet",
       projectKey: "mixed",
+      serverId: "srv-a",
+    });
+    const waiting = makeWorkspace({
+      id: "waiting",
+      projectKey: "mixed",
+      serverId: "srv-b",
+      status: "needs_input",
+      needsAttentionCount: 1,
     });
 
     const projection = buildSidebarProjection({
@@ -159,5 +161,6 @@ describe("buildSidebarProjection", () => {
     expect(projectKeys(projection.projects)).toEqual(["mixed"]);
     expect(projection.projects[0]?.workspaces.map((row) => row.workspaceId)).toEqual(["waiting"]);
     expect(projection.needsAttentionWorkspaceCount).toBe(1);
+    expect(shouldShowProjectHostLabels(projection.projects[0]!)).toBe(false);
   });
 });

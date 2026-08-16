@@ -1751,6 +1751,7 @@ export const ja: TranslationResources = {
           label: "サイドバーのバッジ",
           accessibilityLabel: "サイドバーのバッジ、{{value}}",
           options: {
+            auto: "自動",
             name: "名前",
             icon: "アイコンのみ",
             hidden: "非表示",

@@ -2025,6 +2025,7 @@ const koTranslations = {
           label: "사이드바 배지",
           accessibilityLabel: "사이드바 배지, {{value}}",
           options: {
+            auto: "자동",
             name: "이름",
             icon: "아이콘만",
             hidden: "숨겨진",
