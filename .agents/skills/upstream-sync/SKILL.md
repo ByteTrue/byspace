@@ -1,6 +1,6 @@
 ---
 name: upstream-sync
-description: Synchronize current BySpace main with a newer frozen getpaseo/paseo release: first present every upstream feature, fix, and change with a recommendation and reason, then faithfully copy the user-approved release delta with only mechanical BySpace adaptations. Use for any upstream/Paseo check, comparison, review, update, pull, merge, sync, or adoption request.
+description: "Synchronize current BySpace main with a newer frozen getpaseo/paseo release: first present every upstream feature, fix, and change with a recommendation and reason, then faithfully copy the user-approved release delta with only mechanical BySpace adaptations. Use for any upstream/Paseo check, comparison, review, update, pull, merge, sync, or adoption request."
 ---
 
 # Sync BySpace with upstream
