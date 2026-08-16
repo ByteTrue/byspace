@@ -42,6 +42,14 @@ The daemon requires a valid cryptographic handshake before processing any comman
 
 The QR code or pairing link is the trust anchor. It contains the daemon's public key, which is required to establish the encrypted connection. Treat it like a password — don't share it publicly.
 
+## Remote TCP Forward threat model
+
+Remote TCP Forward uses the same pairing trust anchor and Relay E2EE channel as normal remote daemon control. A pairing-link holder is already a trusted operator of the target daemon; the TCP-forward data connection does not add a second daemon-password exchange. Do not share a pairing link with anyone who should not be able to access services running under that daemon user's authority.
+
+The source daemon binds only `127.0.0.1`. The target request carries only a TCP port, and the target daemon dials only its own `127.0.0.1` or `::1`; it cannot be widened to a LAN/public hostname, Unix socket, route, DNS change, proxy change, firewall change, or command. Each stream remains end-to-end encrypted through Relay. Relay can observe the target daemon/session identifiers, timing, and byte sizes but cannot read the TCP payload.
+
+See [docs/remote-tcp-forward.md](docs/remote-tcp-forward.md) for the data path and lifecycle.
+
 ## Local daemon trust boundary
 
 By default, the daemon binds to `127.0.0.1`. With no password configured, the local control plane is trusted by network reachability — anything that can reach the daemon socket can control the daemon. This is the same security model Docker documents for its daemon: the security boundary is access to the socket or listening address.

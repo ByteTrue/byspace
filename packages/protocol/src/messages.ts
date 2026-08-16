@@ -5,6 +5,7 @@ import { AGENT_LIFECYCLE_STATUSES } from "./agent-lifecycle.js";
 import { MAX_EXPLICIT_AGENT_TITLE_CHARS } from "./agent-title-limits.js";
 import { AgentProviderSchema } from "./provider-manifest.js";
 import { TOOL_CALL_ICON_NAMES } from "./agent-types.js";
+import { ConnectionOfferV2Schema } from "./connection-offer.js";
 import {
   ChatCreateRequestSchema,
   ChatListRequestSchema,
@@ -2588,6 +2589,23 @@ export const CaptureTerminalRequestSchema = z.object({
   requestId: z.string(),
 });
 
+export const RemoteTcpForwardOpenRequestSchema = z.object({
+  type: z.literal("remote.tcp.forward.open.request"),
+  requestId: z.string(),
+  target: ConnectionOfferV2Schema,
+  targetPort: z.number().int().min(1).max(65535),
+  localPort: z.number().int().min(0).max(65535).optional(),
+});
+
+export const RemoteTcpForwardCloseRequestSchema = z.object({
+  type: z.literal("remote.tcp.forward.close.request"),
+  requestId: z.string(),
+  forwardId: z.string().min(1),
+});
+
+export type RemoteTcpForwardOpenRequest = z.infer<typeof RemoteTcpForwardOpenRequestSchema>;
+export type RemoteTcpForwardCloseRequest = z.infer<typeof RemoteTcpForwardCloseRequestSchema>;
+
 export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   VoiceAudioChunkMessageSchema,
   AbortRequestMessageSchema,
@@ -2731,6 +2749,8 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   TerminalInputSchema,
   KillTerminalRequestSchema,
   CaptureTerminalRequestSchema,
+  RemoteTcpForwardOpenRequestSchema,
+  RemoteTcpForwardCloseRequestSchema,
   ChatCreateRequestSchema,
   ChatListRequestSchema,
   ChatInspectRequestSchema,
@@ -2961,6 +2981,8 @@ export const ServerInfoStatusPayloadSchema = z
         // COMPAT(providerOptions): added in v0.5.0-beta.1 on 2026-08-12; remove the gate after 2027-02-12.
         providerOptions: z.boolean().optional(),
         providersSnapshot: z.boolean().optional(),
+        // COMPAT(remoteTcpForward): added in v0.5.0-beta.2 on 2026-08-16; remove the gate after 2027-02-16.
+        remoteTcpForward: z.boolean().optional(),
         // COMPAT(checkoutForgeSetAutoMerge): added in v0.1.106, remove old
         // checkoutGithubSetAutoMerge fallback after 2026-12-28.
         checkoutForgeSetAutoMerge: z.boolean().optional(),
@@ -5420,6 +5442,29 @@ export const OrchestrationToolCallResponseSchema = z.object({
 });
 export type OrchestrationToolCallResponse = z.infer<typeof OrchestrationToolCallResponseSchema>;
 
+export const RemoteTcpForwardOpenResponseSchema = z.object({
+  type: z.literal("remote.tcp.forward.open.response"),
+  payload: z.object({
+    requestId: z.string(),
+    forwardId: z.string(),
+    localHost: z.literal("127.0.0.1"),
+    localPort: z.number().int().min(1).max(65535),
+    targetServerId: z.string(),
+    targetPort: z.number().int().min(1).max(65535),
+  }),
+});
+
+export const RemoteTcpForwardCloseResponseSchema = z.object({
+  type: z.literal("remote.tcp.forward.close.response"),
+  payload: z.object({
+    requestId: z.string(),
+    forwardId: z.string(),
+  }),
+});
+
+export type RemoteTcpForwardOpenResponse = z.infer<typeof RemoteTcpForwardOpenResponseSchema>;
+export type RemoteTcpForwardCloseResponse = z.infer<typeof RemoteTcpForwardCloseResponseSchema>;
+
 export const DaemonUpdateProgressMessageSchema = z.object({
   type: z.literal("daemon.update.progress"),
   payload: z.object({
@@ -5489,6 +5534,8 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   SpeechModelSelectResponseSchema,
   SpeechModelDeleteResponseSchema,
   DictationRefineResponseSchema,
+  RemoteTcpForwardOpenResponseSchema,
+  RemoteTcpForwardCloseResponseSchema,
   DaemonGetStatusResponseSchema,
   DaemonGetPairingOfferResponseSchema,
   DiagnosticsResponseSchema,

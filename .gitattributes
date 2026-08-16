@@ -1,0 +1,3 @@
+# These redistribution/provenance artifacts preserve exact upstream bytes.
+packages/server/native/remote-tunnel-helper/LICENSE.lwip.txt whitespace=-blank-at-eof
+packages/server/native/remote-tunnel-helper/patches/*.patch whitespace=-trailing-space,-blank-at-eof

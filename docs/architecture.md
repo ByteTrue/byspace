@@ -108,6 +108,7 @@ Commander.js CLI with Docker-style commands. Common agent operations are also ex
 - `byspace provider ls/models`
 - `byspace worktree create/ls/archive`
 - `byspace speech …`
+- `byspace tunnel <pairing-url> <target-port>` — foreground loopback TCP forward to a remote daemon
 
 Communicates with the daemon via the same WebSocket protocol as the app.
 
@@ -119,6 +120,13 @@ Enables remote access when the daemon is behind a firewall.
 - Relay server is zero-knowledge — it routes encrypted bytes, cannot read content
 - Client and daemon channels with identical API (`createClientChannel`, `createDaemonChannel`)
 - Pairing via QR code transfers the daemon's public key to the client
+
+#### Remote TCP Forward
+
+A source daemon can bind `127.0.0.1:<localPort>` and carry each accepted TCP connection over one Relay v2 E2EE data connection to a target daemon. The target daemon dials only its own loopback at the requested port. The path is byte-transparent, preserves half-close, and uses bounded ACK-based backpressure, so HTTP, HTTPS, WebSocket, HMR, and arbitrary TCP do not need protocol-specific proxying.
+
+This feature does not create a virtual IP or change TUN interfaces, routes, DNS, system proxy, firewall, or Mihomo. See [remote-tcp-forward.md](remote-tcp-forward.md).
+
 - Optional E2EE capability negotiation preserves application frame kind: text plaintext uses base64 ciphertext text frames, while binary plaintext uses raw ciphertext binary frames; mixed-version peers remain base64-only
 - Self-hosted relays opt into TLS with `daemon.relay.useTls` or `BYSPACE_RELAY_USE_TLS=true`; the public (client-facing) TLS setting can be overridden independently via `daemon.relay.publicUseTls` or `BYSPACE_RELAY_PUBLIC_USE_TLS`
 

@@ -1,0 +1,53 @@
+diff --git a/src/hev-socks5-tunnel.c b/src/hev-socks5-tunnel.c
+index f161ed7..d959c7c 100644
+--- a/src/hev-socks5-tunnel.c
++++ b/src/hev-socks5-tunnel.c
+@@ -49,6 +49,8 @@ enum
+ };
+ 
+ static int run;
++static HevSocks5TunnelReadyCallback ready_callback;
++static void *ready_callback_data;
+ static atomic_int tsync;
+ 
+ static int tun_fd = -1;
+@@ -289,6 +291,9 @@ event_task_entry (void *data)
+ 
+     hev_task_add_fd (task_event, event_fds[0], POLLIN);
+ 
++    if (ready_callback)
++        ready_callback (ready_callback_data);
++
+     hev_task_io_read (event_fds[0], &val, sizeof (val), NULL, NULL);
+ 
+     WRITE_ONCE (run, 0);
+@@ -651,6 +656,14 @@ mapped_dns_fini (void)
+     }
+ }
+ 
++void
++hev_socks5_tunnel_set_ready_callback (HevSocks5TunnelReadyCallback callback,
++                                      void *data)
++{
++    ready_callback = callback;
++    ready_callback_data = data;
++}
++
+ int
+ hev_socks5_tunnel_init (int tun_fd)
+ {
+     int res;
+diff --git a/src/hev-socks5-tunnel.h b/src/hev-socks5-tunnel.h
+index 1c20f4d..97e8f79 100644
+--- a/src/hev-socks5-tunnel.h
++++ b/src/hev-socks5-tunnel.h
+@@ -12,6 +12,9 @@
+ 
+ #include "hev-list.h"
+ 
++typedef void (*HevSocks5TunnelReadyCallback) (void *data);
++void hev_socks5_tunnel_set_ready_callback (
++    HevSocks5TunnelReadyCallback callback, void *data);
+ int hev_socks5_tunnel_init (int tun_fd);
+ void hev_socks5_tunnel_fini (void);
+ 

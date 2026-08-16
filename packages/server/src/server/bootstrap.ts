@@ -91,6 +91,10 @@ function formatListenTarget(listenTarget: ListenTarget | null): string | null {
 
 import { VoiceAssistantWebSocketServer } from "./websocket-server.js";
 import { WorkspaceSetupRuntime } from "./workspace-setup-runtime.js";
+import { REMOTE_TCP_FORWARD_CONNECTION_PREFIX } from "@bytetrue/byspace-protocol/remote-tcp-forward";
+import { RemoteTcpForwardManager } from "./remote-tcp-forward/remote-tcp-forward-manager.js";
+import { connectRemoteTcpForwardRelay } from "./remote-tcp-forward/remote-tcp-forward-relay-client.js";
+import { acceptRemoteTcpForwardChannel } from "./remote-tcp-forward/remote-tcp-forward-session.js";
 import { createGitHubService } from "../services/github-service.js";
 import {
   createBySpaceWorktree as createRegisteredBySpaceWorktree,
@@ -474,6 +478,10 @@ export async function createBySpaceDaemon(
   const elapsed = () => `${(performance.now() - bootstrapStart).toFixed(0)}ms`;
   const daemonVersion = config.daemonVersion ?? resolveDaemonVersion(import.meta.url);
   const hostedRelease = resolveBySpaceHostedRelease(daemonVersion);
+  const remoteTcpForwardManager = new RemoteTcpForwardManager({
+    connectRemote: connectRemoteTcpForwardRelay,
+    logger: logger.child({ module: "remote-tcp-forward" }),
+  });
   const daemonConfigStore = new DaemonConfigStore(
     config.byspaceHome,
     createInitialMutableDaemonConfig(config),
@@ -1425,11 +1433,16 @@ export async function createBySpaceDaemon(
               daemonRuntimeConfig,
               serviceProxyPublicBaseUrl,
               workspaceSetupRuntime,
+              remoteTcpForwardManager,
             );
 
             relayRuntime = new RelayRuntime({
               logger,
               attachSocket: (ws, metadata) => {
+                if (metadata?.relayConnectionId?.startsWith(REMOTE_TCP_FORWARD_CONNECTION_PREFIX)) {
+                  void acceptRemoteTcpForwardChannel(ws);
+                  return Promise.resolve();
+                }
                 if (!wsServer) {
                   throw new Error("WebSocket server not initialized");
                 }
@@ -1499,6 +1512,7 @@ export async function createBySpaceDaemon(
     terminalManager.killAll();
     speechService.stop();
     await scheduleService.stop().catch(() => undefined);
+    await remoteTcpForwardManager.stop().catch(() => undefined);
     await relayRuntime?.stop().catch(() => undefined);
     if (wsServer) {
       await wsServer.close();

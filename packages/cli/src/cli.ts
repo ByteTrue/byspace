@@ -13,6 +13,7 @@ import { createWorktreeCommand } from "./commands/worktree/index.js";
 import { createWorkspaceCommand } from "./commands/workspace/index.js";
 import { createToolCommand } from "./commands/tool/index.js";
 import { createHooksCommand } from "./commands/hooks.js";
+import { addTunnelOptions, handleTunnelCommand } from "./commands/tunnel.js";
 import { createHeartbeatCommand } from "./commands/heartbeat/index.js";
 import { startCommand as daemonStartCommand } from "./commands/daemon/start.js";
 import { runStatusCommand as runDaemonStatusCommand } from "./commands/daemon/status.js";
@@ -84,6 +85,10 @@ export function createCli(): Command {
       ),
     )
     .action(withOutput(runCloneCommand));
+
+  addJsonAndDaemonHostOptions(addTunnelOptions(program.command("tunnel"))).action(
+    handleTunnelCommand,
+  );
 
   addDaemonHostOption(addAttachOptions(program.command("attach"))).action(runAttachCommand);
 

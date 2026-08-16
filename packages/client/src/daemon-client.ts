@@ -110,6 +110,9 @@ import type {
   SpeechModelDownloadResponse,
   SpeechModelSelectResponse,
   SpeechModelDeleteResponse,
+  RemoteTcpForwardCloseResponse,
+  RemoteTcpForwardOpenRequest,
+  RemoteTcpForwardOpenResponse,
   DictationRefineResponse,
 } from "@bytetrue/byspace-protocol/messages";
 import type {
@@ -529,6 +532,14 @@ type SubscribeTerminalPayload = SubscribeTerminalResponse["payload"];
 type CloseItemsPayload = CloseItemsResponse["payload"];
 type KillTerminalPayload = KillTerminalResponse["payload"];
 type CaptureTerminalPayload = CaptureTerminalResponse["payload"];
+export type RemoteTcpForwardOpenResult = RemoteTcpForwardOpenResponse["payload"];
+export type RemoteTcpForwardCloseResult = RemoteTcpForwardCloseResponse["payload"];
+export interface RemoteTcpForwardOpenInput {
+  target: RemoteTcpForwardOpenRequest["target"];
+  targetPort: number;
+  localPort?: number;
+  requestId?: string;
+}
 type ChatCreatePayload = Extract<
   SessionOutboundMessage,
   { type: "chat/create/response" }
@@ -4957,6 +4968,33 @@ export class DaemonClient {
       message,
       responseType: "list_terminals_response",
       options: { skipQueue: true },
+    });
+  }
+
+  async openRemoteTcpForward(
+    input: RemoteTcpForwardOpenInput,
+  ): Promise<RemoteTcpForwardOpenResult> {
+    return this.sendCorrelatedSessionRequest({
+      requestId: input.requestId,
+      message: {
+        type: "remote.tcp.forward.open.request",
+        target: input.target,
+        targetPort: input.targetPort,
+        ...(input.localPort === undefined ? {} : { localPort: input.localPort }),
+      },
+      responseType: "remote.tcp.forward.open.response",
+      timeout: 20_000,
+    });
+  }
+
+  async closeRemoteTcpForward(
+    forwardId: string,
+    requestId?: string,
+  ): Promise<RemoteTcpForwardCloseResult> {
+    return this.sendCorrelatedSessionRequest({
+      requestId,
+      message: { type: "remote.tcp.forward.close.request", forwardId },
+      responseType: "remote.tcp.forward.close.response",
     });
   }
 

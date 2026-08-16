@@ -12,6 +12,7 @@ import type { CheckoutDiffManager } from "./checkout-diff-manager.js";
 import type { WorkspaceAutoName } from "./workspace-auto-name.js";
 import { asInternals, createStub } from "./test-utils/class-mocks.js";
 import { createProviderSnapshotManagerStub } from "./test-utils/session-stubs.js";
+import type { RemoteTcpForwardManager } from "./remote-tcp-forward/remote-tcp-forward-manager.js";
 import {
   asUint8Array,
   decodeTerminalStreamFrame,
@@ -230,6 +231,7 @@ function createWorkspaceAutoNameStub(): WorkspaceAutoName {
 function createServer(options?: {
   speechReadiness?: SpeechReadinessSnapshot | null;
   logger?: ReturnType<typeof createLogger>;
+  remoteTcpForwardManager?: RemoteTcpForwardManager;
 }) {
   const speechReadiness = options?.speechReadiness ?? null;
   const daemonConfigStore = {
@@ -305,6 +307,10 @@ function createServer(options?: {
     undefined,
     undefined,
     createProviderSnapshotManagerStub().manager,
+    undefined,
+    undefined,
+    undefined,
+    options?.remoteTcpForwardManager,
   );
 }
 
@@ -475,6 +481,38 @@ describe("relay external socket reconnect behavior", () => {
     await vi.advanceTimersByTimeAsync(20_000);
     expect(session.cleanup).not.toHaveBeenCalled();
 
+    await server.close();
+  });
+
+  test("does not expire a session that reconnects while forward cleanup is in flight", async () => {
+    let finishCloseOwner: () => void = () => undefined;
+    const closeOwner = vi
+      .fn()
+      .mockImplementationOnce(
+        () =>
+          new Promise<void>((resolve) => {
+            finishCloseOwner = resolve;
+          }),
+      )
+      .mockResolvedValue(undefined);
+    const server = createServer({
+      remoteTcpForwardManager: createStub<RemoteTcpForwardManager>({ closeOwner }),
+    });
+    const clientId = "cid-relay-reconnect-during-forward-cleanup";
+    const socket1 = new MockSocket();
+    await attachRelayAndHello({ server, socket: socket1, clientId });
+    const session = sessionMock.instances[0];
+
+    socket1.emit("close", 1006, "");
+    expect(closeOwner).toHaveBeenCalledOnce();
+
+    const socket2 = new MockSocket();
+    await attachRelayAndHello({ server, socket: socket2, clientId });
+    finishCloseOwner();
+    await vi.advanceTimersByTimeAsync(90_001);
+
+    expect(sessionMock.instances).toHaveLength(1);
+    expect(session.cleanup).not.toHaveBeenCalled();
     await server.close();
   });
 

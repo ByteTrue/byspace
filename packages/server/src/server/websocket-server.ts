@@ -34,6 +34,7 @@ import type { HostnamesConfig } from "./hostnames.js";
 import { isHostnameAllowed } from "./hostnames.js";
 import { Session, type SessionLifecycleIntent, type SessionRuntimeMetrics } from "./session.js";
 import { WorkspaceSetupRuntime } from "./workspace-setup-runtime.js";
+import type { RemoteTcpForwardManager } from "./remote-tcp-forward/remote-tcp-forward-manager.js";
 import type { AgentProvider } from "./agent/agent-sdk-types.js";
 import { ProviderSnapshotManager } from "./agent/provider-snapshot-manager.js";
 import type {
@@ -492,6 +493,7 @@ export class VoiceAssistantWebSocketServer {
     | ((workspaceId: string, oldBranch: string | null, newBranch: string | null) => void)
     | null;
   private serverCapabilities: ServerCapabilities | undefined;
+  private readonly remoteTcpForwardManager: RemoteTcpForwardManager | null;
   private readonly runtimeMetrics = new WebSocketRuntimeMetricsWindow();
   private lastRuntimeMetricsSnapshot: WebSocketRuntimeDiagnosticPayload | null = null;
   private runtimeMetricsInterval: ReturnType<typeof setInterval> | null = null;
@@ -547,9 +549,11 @@ export class VoiceAssistantWebSocketServer {
     daemonRuntimeConfig?: DaemonRuntimeConfig,
     serviceProxyPublicBaseUrl?: string | null,
     workspaceSetupRuntime: WorkspaceSetupRuntime = new WorkspaceSetupRuntime(),
+    remoteTcpForwardManager?: RemoteTcpForwardManager,
   ) {
     this.logger = logger.child({ module: "websocket-server" });
     this.workspaceSetupRuntime = workspaceSetupRuntime;
+    this.remoteTcpForwardManager = remoteTcpForwardManager ?? null;
     this.serverId = serverId;
     if (typeof daemonVersion !== "string" || daemonVersion.trim().length === 0) {
       throw new MissingDaemonVersionError();
@@ -910,6 +914,11 @@ export class VoiceAssistantWebSocketServer {
       }
 
       cleanupPromises.push(connection.session.cleanup());
+      if (this.remoteTcpForwardManager) {
+        cleanupPromises.push(
+          this.remoteTcpForwardManager.closeOwner(connection.session.getSessionId()),
+        );
+      }
       for (const ws of connection.sockets) {
         cleanupPromises.push(
           new Promise<void>((resolve) => {
@@ -1390,6 +1399,8 @@ export class VoiceAssistantWebSocketServer {
         dictationRefinement: true,
         // COMPAT(providersSnapshot): keep optional until all clients rely on snapshot flow.
         providersSnapshot: true,
+        // COMPAT(remoteTcpForward): added in v0.5.0-beta.2 on 2026-08-16; remove the gate after 2027-02-16.
+        remoteTcpForward: this.remoteTcpForwardManager !== null,
         // COMPAT(checkoutForgeSetAutoMerge): added in v0.1.106, remove old
         // checkoutGithubSetAutoMerge fallback after 2026-12-28.
         checkoutForgeSetAutoMerge: true,
@@ -1592,6 +1603,20 @@ export class VoiceAssistantWebSocketServer {
     this.socketIdentities.delete(ws);
 
     if (connection.sockets.size === 0) {
+      await this.remoteTcpForwardManager?.closeOwner(connection.session.getSessionId());
+      if (connection.sockets.size > 0) {
+        this.incrementRuntimeCounter("sessionSocketDisconnectedAttached");
+        connection.connectionLogger.info(
+          {
+            ...identityFields,
+            remainingSockets: connection.sockets.size,
+            code: details.code,
+            reason: stringifyCloseReason(details.reason),
+          },
+          "Client reconnected while remote TCP forwards were closing; session remains attached",
+        );
+        return;
+      }
       this.incrementRuntimeCounter("sessionDisconnectedWaitingReconnect");
       if (connection.externalDisconnectCleanupTimeout) {
         clearTimeout(connection.externalDisconnectCleanupTimeout);
@@ -1658,7 +1683,10 @@ export class VoiceAssistantWebSocketServer {
       { clientId: connection.clientId, totalSessions: this.sessions.size },
       logMessage,
     );
-    await connection.session.cleanup();
+    await Promise.all([
+      connection.session.cleanup(),
+      this.remoteTcpForwardManager?.closeOwner(connection.session.getSessionId()),
+    ]);
   }
 
   private handleInvalidInboundMessage(args: {
@@ -1902,6 +1930,64 @@ export class VoiceAssistantWebSocketServer {
     }
   }
 
+  private async dispatchRemoteTcpForwardMessage(
+    ws: WebSocketLike,
+    activeConnection: SessionConnection,
+    message: Extract<WSInboundMessage, { type: "session" }>["message"],
+  ): Promise<boolean> {
+    if (
+      message.type !== "remote.tcp.forward.open.request" &&
+      message.type !== "remote.tcp.forward.close.request"
+    ) {
+      return false;
+    }
+
+    const requestId = message.requestId;
+    try {
+      if (!this.remoteTcpForwardManager) {
+        throw new Error("Remote TCP forwarding is unavailable on this daemon");
+      }
+      const ownerId = activeConnection.session.getSessionId();
+      if (message.type === "remote.tcp.forward.open.request") {
+        const forward = await this.remoteTcpForwardManager.open(ownerId, {
+          target: message.target,
+          targetPort: message.targetPort,
+          localPort: message.localPort,
+        });
+        this.sendToClient(
+          ws,
+          wrapSessionMessage({
+            type: "remote.tcp.forward.open.response",
+            payload: { requestId, ...forward },
+          }),
+        );
+      } else {
+        await this.remoteTcpForwardManager.close(ownerId, message.forwardId);
+        this.sendToClient(
+          ws,
+          wrapSessionMessage({
+            type: "remote.tcp.forward.close.response",
+            payload: { requestId, forwardId: message.forwardId },
+          }),
+        );
+      }
+    } catch (error) {
+      this.sendToClient(
+        ws,
+        wrapSessionMessage({
+          type: "rpc_error",
+          payload: {
+            requestId,
+            requestType: message.type,
+            error: error instanceof Error ? error.message : String(error),
+            code: "remote_tcp_forward_failed",
+          },
+        }),
+      );
+    }
+    return true;
+  }
+
   private async dispatchSessionMessage(
     ws: WebSocketLike,
     activeConnection: SessionConnection,
@@ -1921,6 +2007,11 @@ export class VoiceAssistantWebSocketServer {
     }
 
     const startMs = performance.now();
+    if (await this.dispatchRemoteTcpForwardMessage(ws, activeConnection, message.message)) {
+      const durationMs = performance.now() - startMs;
+      this.recordRequestLatency(message.message.type, durationMs);
+      return;
+    }
     await activeConnection.session.handleMessage(message.message, ws);
     const durationMs = performance.now() - startMs;
     this.recordRequestLatency(message.message.type, durationMs);
