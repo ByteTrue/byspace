@@ -3,6 +3,7 @@ import net from "node:net";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+import { isPlatform } from "../../test-utils/platform.js";
 import {
   inspectRemoteTunnelSupervisor,
   startRemoteTunnelSession,
@@ -117,7 +118,7 @@ afterEach(async () => {
   fixtures.clear();
 });
 
-describe("Remote Tunnel supervisor client", () => {
+describe.skipIf(isPlatform("win32"))("Remote Tunnel supervisor client (POSIX-only)", () => {
   it("checks socket ownership and permissions before connecting", async () => {
     const missingPath = path.join(tmpdir(), `missing-byspace-tunnel-${process.pid}.sock`);
     await expect(inspectRemoteTunnelSupervisor({ socketPath: missingPath })).resolves.toEqual({
