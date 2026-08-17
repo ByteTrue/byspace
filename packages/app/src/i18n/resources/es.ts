@@ -232,6 +232,44 @@ export const es: TranslationResources = {
       clearSearch: "Borrar búsqueda",
     },
   },
+  portForwarding: {
+    title: "Reenvío de puertos",
+    newForward: "Nuevo reenvío",
+    sourceHost: "Host de origen",
+    targetHost: "Host de destino",
+    selectHost: "Seleccionar host",
+    noHosts: "No hay hosts disponibles",
+    targetPort: "Puerto de destino",
+    localPort: "Puerto local",
+    localPortHint: "Opcional",
+    auto: "Automático",
+    start: "Iniciar reenvío",
+    needTwoHosts: "Se requieren dos hosts conectados",
+    needTwoHostsDescription: "Actualiza y conecta ambos hosts para usar el reenvío de puertos.",
+    activeForwards: "Reenvíos activos",
+    noActiveForwards: "No hay reenvíos activos",
+    copyAddress: "Copiar dirección",
+    stop: "Detener reenvío",
+    status: {
+      active: "Activo",
+      stopping: "Deteniendo",
+    },
+    errors: {
+      hostRequired: "Selecciona un host.",
+      hostsMustDiffer: "Elige otro host de destino.",
+      invalidPort: "Introduce un puerto entre 1 y 65535.",
+      sourceUnavailable:
+        "El host de origen ya no está conectado. Vuelve a conectarlo e inténtalo de nuevo.",
+      targetUnavailable:
+        "El host de destino ya no está conectado. Vuelve a conectarlo e inténtalo de nuevo.",
+      updateRequired: "Actualiza ambos hosts para usar el reenvío de puertos.",
+      relayDisabled: "Activa Relay en el host de destino e inténtalo de nuevo.",
+      invalidOffer: "El host de destino devolvió una oferta de emparejamiento no válida.",
+      startFailed: "No se pudo iniciar el reenvío. Comprueba ambos hosts e inténtalo de nuevo.",
+      copyFailed: "No se pudo copiar la dirección. Inténtalo de nuevo.",
+      stopFailed: "No se pudo detener el reenvío. Inténtalo de nuevo.",
+    },
+  },
   agentList: {
     fallbackTitle: "Nueva sesión",
     dateSections: {
@@ -961,6 +999,7 @@ export const es: TranslationResources = {
     sections: {
       sessions: "Historial",
       schedules: "Horarios",
+      tunnels: "Reenvío de puertos",
     },
     pages: {
       trigger: "BySpace",

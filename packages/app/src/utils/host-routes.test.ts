@@ -9,6 +9,7 @@ import {
   resolveKnownHostRoute,
   buildSessionsRoute,
   buildSettingsAddHostRoute,
+  buildTunnelsRoute,
   buildProjectSettingsRoute,
   buildProjectsSettingsRoute,
   decodeFilePathFromPathSegment,
@@ -219,6 +220,10 @@ describe("projects settings routes", () => {
 describe("global routes", () => {
   it("buildSessionsRoute returns the all-host Sessions route", () => {
     expect(buildSessionsRoute()).toBe("/sessions");
+  });
+
+  it("buildTunnelsRoute returns the global Port Forwarding route", () => {
+    expect(buildTunnelsRoute()).toBe("/tunnels");
   });
 
   it("buildNewWorkspaceRoute returns the all-host New Workspace route", () => {

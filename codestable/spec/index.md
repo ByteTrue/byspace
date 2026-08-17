@@ -8,7 +8,9 @@ BySpace 是一个 Web + CLI 环境，用于从浏览器或命令行监控和控�
 
 `byspace tunnel <daemon-B-pairing-url> <target-port>` 在 daemon A 上创建一个前台、按需的本地 TCP 转发，并输出实际的 `127.0.0.1:<localPort>`。每个本地 TCP 连接复用现有 Relay v2 与端到端加密通道到达 daemon B；daemon B 只连接自己的 `127.0.0.1:<targetPort>` 或 `::1:<targetPort>`。传输层不解析 HTTP/WebSocket，显式保留 TCP half-close，并用写入完成后的 ACK 提供有界 backpressure。
 
-pairing link 是现有 daemon operator 信任锚。listener 只绑定 source loopback，target authority 只包含一个 loopback 端口；forward 归创建它的 daemon control session 和前台 CLI 所有，显式关闭、CLI 信号、session 断开或 daemon shutdown 都必须回收 listener 与活动 stream。
+Web App 侧栏的「端口转发」是同一能力的独立页面入口。用户直接选择两台已连接且支持该能力的 Host，页面从目标 daemon 临时获取当前 pairing offer，不在表单或持久状态中暴露、复制或保存 pairing link；启动后显示实际 loopback 地址，并提供复制与停止操作。
+
+pairing link 是现有 daemon operator 信任锚。listener 只绑定 source loopback，target authority 只包含一个 loopback 端口；forward 归创建它的 daemon control session 所有，Web 页面切换不改变所有权，显式停止、CLI 信号、session 断开或 daemon shutdown 都必须回收 listener 与活动 stream。
 
 该能力不需要管理员权限、TUN、虚拟 IP、系统 route、DNS、proxy、firewall 或 Mihomo 配置变更，也不提供 UDP、远程 LAN、透明全端口覆盖、持久 detached mapping 或 stream multiplexing。单机跨 network namespace 的独立 daemon 全进程链路与 Beta Relay smoke 已通过；物理多机、不同 NAT 和现场代理/防火墙仍是延期的部署信心验证，不能从现有证据推断为通过。
 

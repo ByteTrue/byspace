@@ -74,13 +74,20 @@ async function stopProcess(child: ChildProcess): Promise<void> {
   }
 }
 
-export async function startIsolatedHostDaemon(serverId: string): Promise<IsolatedHostDaemon> {
+export async function startIsolatedHostDaemon(
+  serverId: string,
+  options: { relayEnabled?: boolean } = {},
+): Promise<IsolatedHostDaemon> {
   const primaryPort = Number(process.env.E2E_DAEMON_PORT ?? 0);
   let port = await getAvailablePort();
   while (port === 6777 || port === primaryPort) port = await getAvailablePort();
 
   const metroPort = process.env.E2E_METRO_PORT;
   if (!metroPort) throw new Error("E2E_METRO_PORT is required to start an isolated host daemon");
+  const relayPort = process.env.E2E_RELAY_PORT;
+  if (options.relayEnabled && !relayPort) {
+    throw new Error("E2E_RELAY_PORT is required for a Relay-enabled isolated host daemon");
+  }
 
   const byspaceHome = await mkdtemp(path.join(tmpdir(), "byspace-e2e-secondary-host-"));
   const serverDir = path.resolve(__dirname, "../../../server");
@@ -94,7 +101,8 @@ export async function startIsolatedHostDaemon(serverId: string): Promise<Isolate
       BYSPACE_SERVER_ID: serverId,
       BYSPACE_LISTEN: `127.0.0.1:${port}`,
       BYSPACE_CORS_ORIGINS: `http://localhost:${metroPort}`,
-      BYSPACE_RELAY_ENABLED: "0",
+      BYSPACE_RELAY_ENABLED: options.relayEnabled ? "1" : "0",
+      ...(options.relayEnabled ? { BYSPACE_RELAY_ENDPOINT: `127.0.0.1:${relayPort}` } : {}),
       BYSPACE_NODE_ENV: "development",
       NODE_ENV: "development",
     }),

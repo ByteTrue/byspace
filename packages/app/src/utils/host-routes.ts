@@ -424,6 +424,10 @@ export function buildSchedulesRoute() {
   return "/schedules" as const;
 }
 
+export function buildTunnelsRoute() {
+  return "/tunnels" as const;
+}
+
 export function buildOpenProjectRoute() {
   return "/open-project" as const;
 }

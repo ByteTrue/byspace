@@ -4,7 +4,11 @@ Remote TCP Forward exposes one selected port from a remote BySpace daemon as a l
 
 ## Start a forward
 
-Obtain daemon B's normal v2 pairing URL from its Pair screen or `byspace daemon pair`, then run the command on daemon A's machine:
+In the Web app, open **Port forwarding** from the left sidebar. Select two connected hosts, enter the target daemon's loopback port, optionally request an exact local port, and start the forward. The app obtains the target host's current pairing offer directly; it does not display or persist the pairing URL. Active forwards remain available while navigating elsewhere in the app and can be copied or stopped from the same page.
+
+The CLI equivalent uses daemon B's normal v2 pairing URL from its Pair screen or `byspace daemon pair`:
+
+Run the command on daemon A's machine:
 
 ```bash
 byspace tunnel '<pairing-url>' 3000
@@ -52,6 +56,7 @@ The bridge preserves TCP half-close. DATA frames are bounded and acknowledged on
 - Relay routes connection metadata and encrypted frames but cannot read the forwarded TCP payload.
 - The target daemon must be reachable through its configured Relay and the supplied pairing URL must contain its server ID, public key, and Relay endpoint.
 - The pairing URL is the Relay trust anchor, exactly as it is for normal remote daemon control. A holder is already a trusted operator of daemon B and can use this feature without a second daemon-password exchange. Treat the URL like a password.
+- The Web app selects from already configured hosts and fetches the target offer only when starting a forward. It keeps no pairing URL in form or persisted state.
 
 ## What it does not do
 

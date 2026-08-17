@@ -232,6 +232,45 @@ export const ptBR: TranslationResources = {
       clearSearch: "Limpar busca",
     },
   },
+  portForwarding: {
+    title: "Encaminhamento de portas",
+    newForward: "Novo encaminhamento",
+    sourceHost: "Host de origem",
+    targetHost: "Host de destino",
+    selectHost: "Selecionar host",
+    noHosts: "Nenhum host disponível",
+    targetPort: "Porta de destino",
+    localPort: "Porta local",
+    localPortHint: "Opcional",
+    auto: "Automática",
+    start: "Iniciar encaminhamento",
+    needTwoHosts: "Dois hosts conectados são necessários",
+    needTwoHostsDescription:
+      "Atualize e conecte os dois hosts para usar o encaminhamento de portas.",
+    activeForwards: "Encaminhamentos ativos",
+    noActiveForwards: "Nenhum encaminhamento ativo",
+    copyAddress: "Copiar endereço",
+    stop: "Parar encaminhamento",
+    status: {
+      active: "Ativo",
+      stopping: "Parando",
+    },
+    errors: {
+      hostRequired: "Selecione um host.",
+      hostsMustDiffer: "Escolha outro host de destino.",
+      invalidPort: "Digite uma porta entre 1 e 65535.",
+      sourceUnavailable: "O host de origem não está mais conectado. Reconecte-o e tente novamente.",
+      targetUnavailable:
+        "O host de destino não está mais conectado. Reconecte-o e tente novamente.",
+      updateRequired: "Atualize os dois hosts para usar o encaminhamento de portas.",
+      relayDisabled: "Ative o Relay no host de destino e tente novamente.",
+      invalidOffer: "O host de destino retornou uma oferta de pareamento inválida.",
+      startFailed:
+        "Não foi possível iniciar o encaminhamento. Verifique os dois hosts e tente novamente.",
+      copyFailed: "Não foi possível copiar o endereço. Tente novamente.",
+      stopFailed: "Não foi possível parar o encaminhamento. Tente novamente.",
+    },
+  },
   agentList: {
     fallbackTitle: "Nova sessão",
     dateSections: {
@@ -951,6 +990,7 @@ export const ptBR: TranslationResources = {
     sections: {
       sessions: "Histórico",
       schedules: "Agendamentos",
+      tunnels: "Encaminhamento de portas",
     },
     pages: {
       trigger: "BySpace",

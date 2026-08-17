@@ -233,6 +233,43 @@ export const fr: TranslationResources = {
       clearSearch: "Effacer la recherche",
     },
   },
+  portForwarding: {
+    title: "Redirection de ports",
+    newForward: "Nouvelle redirection",
+    sourceHost: "Hôte source",
+    targetHost: "Hôte cible",
+    selectHost: "Sélectionner un hôte",
+    noHosts: "Aucun hôte disponible",
+    targetPort: "Port cible",
+    localPort: "Port local",
+    localPortHint: "Facultatif",
+    auto: "Automatique",
+    start: "Démarrer la redirection",
+    needTwoHosts: "Deux hôtes connectés sont requis",
+    needTwoHostsDescription:
+      "Mettez à jour et connectez les deux hôtes pour utiliser la redirection de ports.",
+    activeForwards: "Redirections actives",
+    noActiveForwards: "Aucune redirection active",
+    copyAddress: "Copier l’adresse",
+    stop: "Arrêter la redirection",
+    status: {
+      active: "Active",
+      stopping: "Arrêt en cours",
+    },
+    errors: {
+      hostRequired: "Sélectionnez un hôte.",
+      hostsMustDiffer: "Choisissez un autre hôte cible.",
+      invalidPort: "Saisissez un port compris entre 1 et 65535.",
+      sourceUnavailable: "L’hôte source n’est plus connecté. Reconnectez-le et réessayez.",
+      targetUnavailable: "L’hôte cible n’est plus connecté. Reconnectez-le et réessayez.",
+      updateRequired: "Mettez à jour les deux hôtes pour utiliser la redirection de ports.",
+      relayDisabled: "Activez Relay sur l’hôte cible et réessayez.",
+      invalidOffer: "L’hôte cible a renvoyé une offre d’association non valide.",
+      startFailed: "Impossible de démarrer la redirection. Vérifiez les deux hôtes et réessayez.",
+      copyFailed: "Impossible de copier l’adresse. Réessayez.",
+      stopFailed: "Impossible d’arrêter la redirection. Réessayez.",
+    },
+  },
   agentList: {
     fallbackTitle: "Nouvelle séance",
     dateSections: {
@@ -960,6 +997,7 @@ export const fr: TranslationResources = {
     sections: {
       sessions: "Historique",
       schedules: "Planifications",
+      tunnels: "Redirection de ports",
     },
     pages: {
       trigger: "BySpace",

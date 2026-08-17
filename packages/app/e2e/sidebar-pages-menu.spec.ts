@@ -8,7 +8,7 @@ import {
   openMobileAgentSidebar,
   openSidebarPage,
 } from "./helpers/sidebar";
-import { buildSchedulesRoute, buildSessionsRoute } from "@/utils/host-routes";
+import { buildSchedulesRoute, buildSessionsRoute, buildTunnelsRoute } from "@/utils/host-routes";
 
 // The sidebar's top-level pages sit behind a single trigger so that adding a page never grows the
 // sidebar's fixed height. These specs hold the two properties that trade-off depends on: the rows
@@ -48,11 +48,13 @@ test.describe("sidebar pages menu", () => {
     // The collapse is the point: no page keeps its own row in the sidebar.
     await expect(page.getByTestId("sidebar-sessions")).toHaveCount(0);
     await expect(page.getByTestId("sidebar-schedules")).toHaveCount(0);
+    await expect(page.getByTestId("sidebar-tunnels")).toHaveCount(0);
 
     await trigger.click();
     await expect(page.getByTestId("sidebar-pages-menu")).toBeVisible({ timeout: 10_000 });
     await expect(page.getByTestId("sidebar-sessions")).toBeVisible();
     await expect(page.getByTestId("sidebar-schedules")).toBeVisible();
+    await expect(page.getByTestId("sidebar-tunnels")).toBeVisible();
   });
 
   // The point of the menu is a fixed cost that does not grow with the number of pages. This bound
@@ -97,10 +99,10 @@ test.describe("sidebar pages menu", () => {
     await expect(trigger).toBeVisible({ timeout: 30_000 });
     await trigger.hover();
 
-    // Discoverability replacement for the two labels the trigger absorbed.
-    await expect(page.getByText("History · Schedules", { exact: true })).toBeVisible({
-      timeout: 10_000,
-    });
+    // Discoverability replacement for the destination labels the trigger absorbed.
+    await expect(
+      page.getByText("History · Schedules · Port forwarding", { exact: true }),
+    ).toBeVisible({ timeout: 10_000 });
   });
 
   test("navigates to each page through the menu", async ({ page }) => {
@@ -111,6 +113,9 @@ test.describe("sidebar pages menu", () => {
 
     await openSidebarPage(page, "sidebar-schedules");
     await expectAppRoute(page, buildSchedulesRoute(), { timeout: 30_000 });
+
+    await openSidebarPage(page, "sidebar-tunnels");
+    await expectAppRoute(page, buildTunnelsRoute(), { timeout: 30_000 });
   });
 
   test("opens and selects with the keyboard", async ({ page }) => {

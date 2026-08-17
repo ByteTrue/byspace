@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState, type ReactElement } from "react";
 import { Text, View, type LayoutChangeEvent } from "react-native";
 import { router } from "expo-router";
-import { CalendarClock, ChevronDown, History, LayoutGrid } from "lucide-react-native";
+import { CalendarClock, Cable, ChevronDown, History, LayoutGrid } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import {
@@ -13,7 +13,7 @@ import {
 import type { MenuTriggerState } from "@/components/ui/menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
-import { buildSchedulesRoute, buildSessionsRoute } from "@/utils/host-routes";
+import { buildSchedulesRoute, buildSessionsRoute, buildTunnelsRoute } from "@/utils/host-routes";
 
 const foregroundColorMapping = (theme: Theme) => ({ color: theme.colors.foreground });
 const foregroundMutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
@@ -22,12 +22,16 @@ const ThemedLayoutGrid = withUnistyles(LayoutGrid);
 const ThemedChevronDown = withUnistyles(ChevronDown);
 const ThemedHistory = withUnistyles(History);
 const ThemedCalendarClock = withUnistyles(CalendarClock);
+const ThemedCable = withUnistyles(Cable);
 
 const historyLeadingIcon = (
   <ThemedHistory size={ICON_SIZE.sm} uniProps={foregroundMutedColorMapping} />
 );
 const schedulesLeadingIcon = (
   <ThemedCalendarClock size={ICON_SIZE.sm} uniProps={foregroundMutedColorMapping} />
+);
+const tunnelsLeadingIcon = (
+  <ThemedCable size={ICON_SIZE.sm} uniProps={foregroundMutedColorMapping} />
 );
 
 interface SidebarPageItem {
@@ -57,6 +61,13 @@ const SIDEBAR_PAGES: readonly SidebarPageItem[] = [
     leading: schedulesLeadingIcon,
     buildRoute: buildSchedulesRoute,
     testID: "sidebar-schedules",
+  },
+  {
+    id: "tunnels",
+    labelKey: "sidebar.sections.tunnels",
+    leading: tunnelsLeadingIcon,
+    buildRoute: buildTunnelsRoute,
+    testID: "sidebar-tunnels",
   },
 ];
 

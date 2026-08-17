@@ -231,6 +231,43 @@ export const ru: TranslationResources = {
       clearSearch: "Очистить поиск",
     },
   },
+  portForwarding: {
+    title: "Перенаправление портов",
+    newForward: "Новое перенаправление",
+    sourceHost: "Исходный хост",
+    targetHost: "Целевой хост",
+    selectHost: "Выбрать хост",
+    noHosts: "Нет доступных хостов",
+    targetPort: "Целевой порт",
+    localPort: "Локальный порт",
+    localPortHint: "Необязательно",
+    auto: "Авто",
+    start: "Запустить перенаправление",
+    needTwoHosts: "Требуются два подключённых хоста",
+    needTwoHostsDescription:
+      "Обновите и подключите оба хоста, чтобы использовать перенаправление портов.",
+    activeForwards: "Активные перенаправления",
+    noActiveForwards: "Нет активных перенаправлений",
+    copyAddress: "Копировать адрес",
+    stop: "Остановить перенаправление",
+    status: {
+      active: "Активно",
+      stopping: "Остановка",
+    },
+    errors: {
+      hostRequired: "Выберите хост.",
+      hostsMustDiffer: "Выберите другой целевой хост.",
+      invalidPort: "Введите порт от 1 до 65535.",
+      sourceUnavailable: "Исходный хост больше не подключён. Подключите его и повторите попытку.",
+      targetUnavailable: "Целевой хост больше не подключён. Подключите его и повторите попытку.",
+      updateRequired: "Обновите оба хоста, чтобы использовать перенаправление портов.",
+      relayDisabled: "Включите Relay на целевом хосте и повторите попытку.",
+      invalidOffer: "Целевой хост вернул недопустимое предложение сопряжения.",
+      startFailed: "Не удалось запустить перенаправление. Проверьте оба хоста и повторите попытку.",
+      copyFailed: "Не удалось скопировать адрес. Повторите попытку.",
+      stopFailed: "Не удалось остановить перенаправление. Повторите попытку.",
+    },
+  },
   agentList: {
     fallbackTitle: "Новая сессия",
     dateSections: {
@@ -950,6 +987,7 @@ export const ru: TranslationResources = {
     sections: {
       sessions: "История",
       schedules: "Расписания",
+      tunnels: "Перенаправление портов",
     },
     pages: {
       trigger: "BySpace",
