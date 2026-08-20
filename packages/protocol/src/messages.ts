@@ -2521,6 +2521,54 @@ export const WorkspaceScriptStopRequestSchema = z.object({
   requestId: z.string(),
 });
 
+export const RemoteWebServiceTargetSchema = z.object({
+  serverId: z.string().trim().min(1),
+  label: z.string().trim().min(1),
+  port: z.number().int().min(1).max(65_535),
+  daemonPublicKeyB64: z.string().trim().min(1),
+});
+
+export const RemoteWebServiceSchema = z.object({
+  id: z.string().trim().min(1),
+  name: z.string().trim().min(1),
+  hostname: z.string().trim().min(1),
+  target: RemoteWebServiceTargetSchema,
+  createdAt: z.string(),
+  localUrl: z.string().url().nullable().optional(),
+});
+
+export const RemoteWebServiceListRequestSchema = z.object({
+  type: z.literal("remote_web_service.list.request"),
+  requestId: z.string(),
+});
+
+export const RemoteWebServiceCreateRequestSchema = z.object({
+  type: z.literal("remote_web_service.create.request"),
+  requestId: z.string(),
+  name: z.string().trim().min(1),
+  target: RemoteWebServiceTargetSchema,
+});
+
+export const RemoteWebServiceRemoveRequestSchema = z.object({
+  type: z.literal("remote_web_service.remove.request"),
+  requestId: z.string(),
+  id: z.string().trim().min(1),
+});
+
+export const RemoteWebServiceGrantRequestSchema = z.object({
+  type: z.literal("remote_web_service.grant.request"),
+  requestId: z.string(),
+  serviceId: z.string().uuid(),
+  sourceDaemonPublicKeyB64: z.string().trim().min(1),
+  targetPort: z.number().int().min(1).max(65_535),
+});
+
+export const RemoteWebServiceRevokeRequestSchema = z.object({
+  type: z.literal("remote_web_service.revoke.request"),
+  requestId: z.string(),
+  serviceId: z.string().uuid(),
+});
+
 export const SubscribeTerminalRequestSchema = z.object({
   type: z.literal("subscribe_terminal_request"),
   terminalId: z.string(),
@@ -2726,6 +2774,11 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   WorkspaceScriptListRequestSchema,
   WorkspaceScriptStartRequestSchema,
   WorkspaceScriptStopRequestSchema,
+  RemoteWebServiceListRequestSchema,
+  RemoteWebServiceCreateRequestSchema,
+  RemoteWebServiceRemoveRequestSchema,
+  RemoteWebServiceGrantRequestSchema,
+  RemoteWebServiceRevokeRequestSchema,
   SubscribeTerminalRequestSchema,
   UnsubscribeTerminalRequestSchema,
   TerminalInputSchema,
@@ -2954,12 +3007,18 @@ export const ServerInfoStatusPayloadSchema = z
     serverId: z.string().trim().min(1),
     hostname: ServerInfoHostnameSchema.optional(),
     version: ServerInfoVersionSchema.optional(),
+    // COMPAT(remoteWebServices): added in v0.6.0; old daemons omit their data-plane key.
+    daemonPublicKeyB64: z.string().trim().min(1).optional(),
+    // COMPAT(remoteWebServices): added in v0.6.0; remove the gate after 2027-02-20.
+    dataRelay: z.object({ configured: z.boolean() }).optional(),
     capabilities: ServerCapabilitiesFromUnknownSchema.optional(),
     // COMPAT(providersSnapshot): added in v0.1.48, remove gating when all clients use snapshot
     features: z
       .object({
         // COMPAT(providerOptions): added in v0.5.0-beta.1 on 2026-08-12; remove the gate after 2027-02-12.
         providerOptions: z.boolean().optional(),
+        // COMPAT(remoteWebServices): added in v0.6.0; remove the gate after 2027-02-20.
+        remoteWebServices: z.boolean().optional(),
         providersSnapshot: z.boolean().optional(),
         // COMPAT(checkoutForgeSetAutoMerge): added in v0.1.106, remove old
         // checkoutGithubSetAutoMerge fallback after 2026-12-28.
@@ -3721,6 +3780,43 @@ export const WorkspaceScriptStartResponseMessageSchema = z.object({
 export const WorkspaceScriptStopResponseMessageSchema = z.object({
   type: z.literal("workspace.script.stop.response"),
   payload: WorkspaceScriptOperationPayloadSchema,
+});
+
+const RemoteWebServiceOperationPayloadSchema = z.object({
+  requestId: z.string(),
+  service: RemoteWebServiceSchema.nullable().optional(),
+  services: z.array(RemoteWebServiceSchema).optional(),
+  error: z.string().nullable(),
+});
+
+export const RemoteWebServiceListResponseSchema = z.object({
+  type: z.literal("remote_web_service.list.response"),
+  payload: RemoteWebServiceOperationPayloadSchema,
+});
+
+export const RemoteWebServiceCreateResponseSchema = z.object({
+  type: z.literal("remote_web_service.create.response"),
+  payload: RemoteWebServiceOperationPayloadSchema,
+});
+
+export const RemoteWebServiceRemoveResponseSchema = z.object({
+  type: z.literal("remote_web_service.remove.response"),
+  payload: RemoteWebServiceOperationPayloadSchema,
+});
+
+const RemoteWebServiceGrantOperationPayloadSchema = z.object({
+  requestId: z.string(),
+  error: z.string().nullable(),
+});
+
+export const RemoteWebServiceGrantResponseSchema = z.object({
+  type: z.literal("remote_web_service.grant.response"),
+  payload: RemoteWebServiceGrantOperationPayloadSchema,
+});
+
+export const RemoteWebServiceRevokeResponseSchema = z.object({
+  type: z.literal("remote_web_service.revoke.response"),
+  payload: RemoteWebServiceGrantOperationPayloadSchema,
 });
 
 // COMPAT(desktopEditorBridge): added in v0.1.88, remove after 2026-12-03 once old clients no longer parse daemon editor RPC responses.
@@ -5466,6 +5562,11 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   WorkspaceScriptListResponseMessageSchema,
   WorkspaceScriptStartResponseMessageSchema,
   WorkspaceScriptStopResponseMessageSchema,
+  RemoteWebServiceListResponseSchema,
+  RemoteWebServiceCreateResponseSchema,
+  RemoteWebServiceRemoveResponseSchema,
+  RemoteWebServiceGrantResponseSchema,
+  RemoteWebServiceRevokeResponseSchema,
   LegacyListAvailableEditorsResponseMessageSchema,
   LegacyOpenInEditorResponseMessageSchema,
   ArchiveWorkspaceResponseMessageSchema,
@@ -5671,6 +5772,18 @@ export type WorkspaceScriptStartResponseMessage = z.infer<
 export type WorkspaceScriptStopResponseMessage = z.infer<
   typeof WorkspaceScriptStopResponseMessageSchema
 >;
+export type RemoteWebService = z.infer<typeof RemoteWebServiceSchema>;
+export type RemoteWebServiceTarget = z.infer<typeof RemoteWebServiceTargetSchema>;
+export type RemoteWebServiceListRequest = z.infer<typeof RemoteWebServiceListRequestSchema>;
+export type RemoteWebServiceCreateRequest = z.infer<typeof RemoteWebServiceCreateRequestSchema>;
+export type RemoteWebServiceRemoveRequest = z.infer<typeof RemoteWebServiceRemoveRequestSchema>;
+export type RemoteWebServiceGrantRequest = z.infer<typeof RemoteWebServiceGrantRequestSchema>;
+export type RemoteWebServiceRevokeRequest = z.infer<typeof RemoteWebServiceRevokeRequestSchema>;
+export type RemoteWebServiceListResponse = z.infer<typeof RemoteWebServiceListResponseSchema>;
+export type RemoteWebServiceCreateResponse = z.infer<typeof RemoteWebServiceCreateResponseSchema>;
+export type RemoteWebServiceRemoveResponse = z.infer<typeof RemoteWebServiceRemoveResponseSchema>;
+export type RemoteWebServiceGrantResponse = z.infer<typeof RemoteWebServiceGrantResponseSchema>;
+export type RemoteWebServiceRevokeResponse = z.infer<typeof RemoteWebServiceRevokeResponseSchema>;
 export type LegacyListAvailableEditorsResponseMessage = z.infer<
   typeof LegacyListAvailableEditorsResponseMessageSchema
 >;

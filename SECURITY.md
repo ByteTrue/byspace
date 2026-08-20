@@ -42,6 +42,16 @@ The daemon requires a valid cryptographic handshake before processing any comman
 
 The QR code or pairing link is the trust anchor. It contains the daemon's public key, which is required to establish the encrypted connection. Treat it like a password — don't share it publicly.
 
+### Remote Web Service Data Relay
+
+Private Remote Web Services reuse the E2EE channel for daemon-to-daemon HTTP, SSE, and WebSocket traffic, but carry that high-volume data through a separately configured WSS Data Relay. Any daemon may host this relay on an isolated listener. The listener exposes only `GET /health` and WebSocket `/ws`; it must never be confused with or reverse-proxied to the daemon's main API port.
+
+A shared `BYSPACE_DATA_RELAY_ACCESS_TOKEN` is required when hosting or connecting to a Data Relay. The token is a bandwidth-abuse gate, not the content encryption key, daemon identity, or authorization to dial loopback: daemon public keys remain the E2EE trust anchor, and every target daemon requires a persisted grant matching the source daemon's long-term public key, source mapping ID, and exact target port. Treat the token as a secret, use TLS for non-loopback connections, and rotate it if exposed. A TLS-terminating reverse proxy on the relay host can observe the bearer token and transport metadata, but it cannot decrypt the daemon-to-daemon application channel or forge a source grant.
+
+The shared token is still an availability trust domain. The standalone Relay rejects concurrent replacement of an active target control/data socket and enforces relay-wide socket and buffered-byte budgets, but after a target disconnects another token holder can temporarily occupy the same public `serverId` until the legitimate daemon reconnects. End-to-end target identity pinning and source grants turn this into denial of service rather than loopback access.
+
+The Data Relay can observe participating IP addresses, timing, ciphertext sizes, daemon/session routing identifiers, and public-key handshake frames. It cannot read target URLs, HTTP headers or bodies, SSE events, WebSocket messages, project data, or AI gateway credentials. Source-side `*.remote.localhost` routes accept only raw loopback TCP clients (`127.0.0.0/8`, IPv4-mapped loopback, or `::1`); proxy headers cannot make a remote client local. Before loopback connect, the target issues a fresh challenge and requires an open message matching that challenge plus the persisted source grant. Data frames then carry the negotiated connection identity and monotonic sequence numbers, so captured opens, duplicate frames, and cross-connection replay are rejected before plaintext reaches the local service. See [docs/remote-web-services.md](docs/remote-web-services.md) for safe listener and reverse-proxy topology.
+
 ## Local daemon trust boundary
 
 By default, the daemon binds to `127.0.0.1`. With no password configured, the local control plane is trusted by network reachability — anything that can reach the daemon socket can control the daemon. This is the same security model Docker documents for its daemon: the security boundary is access to the socket or listening address.

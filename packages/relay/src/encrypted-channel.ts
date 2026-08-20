@@ -44,6 +44,7 @@ export interface EncryptedChannelEvents {
 type ChannelState = "connecting" | "handshaking" | "open" | "closed";
 
 interface EncryptedChannelOptions {
+  peerPublicKeyB64?: string;
   /**
    * If set, the channel can validate repeated plaintext `{type:"e2ee_hello"}`
    * messages even after it is open.
@@ -158,12 +159,14 @@ export async function createClientChannel(
   transport: Transport,
   daemonPublicKeyB64: string,
   events: EncryptedChannelEvents = {},
+  keyPair: KeyPair = generateKeyPair(),
 ): Promise<EncryptedChannel> {
-  const keyPair = generateKeyPair();
   const daemonPublicKey = importPublicKey(daemonPublicKeyB64);
   const sharedKey = deriveSharedKey(keyPair.secretKey, daemonPublicKey);
 
-  const channel = new EncryptedChannel(transport, sharedKey, events);
+  const channel = new EncryptedChannel(transport, sharedKey, events, {
+    peerPublicKeyB64: daemonPublicKeyB64,
+  });
 
   // Send e2ee_hello with our public key
   const ourPublicKeyB64 = exportPublicKey(keyPair.publicKey);
@@ -305,6 +308,7 @@ export async function createDaemonChannel(
         const channel = new EncryptedChannel(transport, sharedKey, events, {
           daemonKeyPair,
           binaryCiphertext,
+          peerPublicKeyB64: msg.key,
         });
         channel.setState("open");
         events.onopen?.();
@@ -371,6 +375,10 @@ export class EncryptedChannel {
 
   setState(state: ChannelState): void {
     this.state = state;
+  }
+
+  getPeerPublicKeyB64(): string | null {
+    return this.options.peerPublicKeyB64 ?? null;
   }
 
   private async handleMessage(message: TransportMessage): Promise<void> {

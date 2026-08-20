@@ -20,6 +20,7 @@ export interface RelayRuntimeOptions {
   relayUseTls: boolean;
   serverId: string;
   daemonKeyPair: KeyPair;
+  relayAccessToken?: string;
   initialEnabled: boolean;
   startTransport?: typeof startRelayTransport;
 }
@@ -75,6 +76,7 @@ export class RelayRuntime {
       relayUseTls: this.options.relayUseTls,
       serverId: this.options.serverId,
       daemonKeyPair: this.options.daemonKeyPair,
+      relayAccessToken: this.options.relayAccessToken,
     });
   }
 }

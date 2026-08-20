@@ -65,6 +65,7 @@ import { formatConnectionStatus, getConnectionStatusTone } from "@/utils/daemons
 import { formatLatency } from "@/utils/latency";
 import { hasDaemonReconnectedAfter, type DaemonConnectionMarker } from "./daemon-reconnect";
 import { PairDeviceModal } from "@/components/pair-device-modal";
+import { RemoteWebServicesSection } from "./remote-web-services-section";
 
 const ThemedChevronRight = withUnistyles(ChevronRight);
 const chevronProps = (theme: Theme) => ({
@@ -206,6 +207,7 @@ export function HostConnectionsPage({ serverId }: { serverId: string }) {
     <View>
       <HostConnectionError serverId={serverId} />
       <ConnectionsSection host={host} />
+      <RemoteWebServicesSection host={host} />
       <SettingsSection title={t("settings.host.pairDevices.title")}>
         <PairDeviceRow serverId={serverId} />
       </SettingsSection>

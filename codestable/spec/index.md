@@ -6,9 +6,46 @@ BySpace 是一个 Web + CLI 环境，用于从浏览器或命令行监控和控�
 
 ## 发行边界
 
-- 支持：浏览器 Web/PWA、`byspace` CLI、本地 daemon、Cloudflare encrypted relay。
+- 支持：浏览器 Web/PWA、`byspace` CLI、本地 daemon、Cloudflare encrypted control relay，以及可选的 daemon-hosted 私有 Remote Web Service 数据面。
 - 保留：Paseo `v0.2.0` 中的直接 Provider、ACP、自定义 Provider、Terminal、Git/worktree、Schedule、Loop 与 MCP 能力；Voice conversation/TTS 已由本地 Dictation 取代。
 - 不支持：Electron、原生 iOS/Android、app-store/APK、marketing website、Electron Browser automation。
+
+## 私有远程 Web 服务
+
+一台已运行 BySpace daemon 的设备可以通过稳定的本地 URL，访问另一台 daemon 的 loopback Web 服务。源端映射产生 `http://<name>.remote.localhost:<source-daemon-port>`；同一种映射承载普通 HTTP、SSE 与 WebSocket/HMR，不区分 AI Gateway、开发服务器或其他 Web 服务。
+
+```text
+浏览器或源端本地 HTTP 客户端
+        │  仅 loopback
+        ▼
+源 daemon Service Proxy（稳定 .remote.localhost URL）
+        │  daemon-to-daemon E2EE
+        ▼
+独立 WSS Data Relay（只转发密文）
+        │
+        ▼
+目标 daemon → 127.0.0.1/::1:<已授权端口>
+```
+
+### 控制面与数据面
+
+现有 Cloudflare Relay 只继续承载 Web App 与 daemon 的控制消息。Remote Web Service 的高频数据进入独立 WSS Data Relay，不经过 Worker 或 Durable Object。任意 BySpace daemon 都可以在与完整 daemon API 不同的端口上可选托管 Data Relay；公网入口只能反向代理它的 `/ws` 与 `/health`，不能暴露 daemon API。
+
+Data Relay access token 是整个 Relay 的带宽与可用性门，不授予目标 loopback 访问权。Relay 只维护内存中的 Relay v2 socket 配对，拒绝活动 control/data socket 替换，并对物理连接、待配对连接、frame、缓冲字节和慢端背压设总量与单会话上限。它能看到连接地址、时序、密文长度、路由标识和公钥握手，但不能读取 HTTP header/body、SSE、WebSocket 消息、Prompt、API Key 或模型输出。
+
+### 映射、授权与身份
+
+源 daemon 原子持久化 mapping ID、本地名称、稳定 hostname、目标 daemon 身份/长期公钥和目标端口。目标 daemon 独立持久化精确 grant：mapping ID、源 daemon 长期公钥和目标端口必须同时匹配，目标才会连接自己的 `127.0.0.1` 或 `::1`。源映射是授权 desired state；管理 UI 在映射存在且目标重新在线时幂等修复 grant，因此 create 响应丢失或目标短暂离线不会永久留下未授权映射。删除先幂等撤销目标 grant，再删除源映射；撤销阻止新连接，不中断已经建立的流。
+
+每次数据连接由目标发出不可预测的新 challenge，源端 open 必须绑定该 challenge；握手后每个 frame 都绑定本连接的 session ID 与严格单调序号。旧 open、重复 frame、乱序 frame 和跨连接重放都会在明文进入 loopback 服务前被拒绝。源端 `.remote.localhost` 路由也按真实 TCP 来源限制为 loopback，不能由 Host 或代理 header 绕过。
+
+### 持久性、部署与失败语义
+
+Relay endpoint、TLS 选择和 access token 都是 daemon 运行配置，不写入 mapping 或 grant。当前可以让家里设备 B 托管 Data Relay 并通过自己的入口暴露；以后迁移到 VPS 时，只需在 VPS 安装普通 daemon、启用独立 Data Relay listener、配置 Caddy/nginx，并修改参与 daemon 的 endpoint/token 后重启。已有 mapping、grant 与 `.remote.localhost` URL 不变。
+
+源 daemon 重启后恢复映射与 hostname；Data Relay 或目标暂时离线不会删除它们。网络断开会立即终止当前 HTTP/SSE/WebSocket 流并有界清理两端资源，后续新请求重新建链。系统不缓存、重放、断点续传或恢复活动请求。
+
+该能力通过 `server_info.features.remoteWebServices` 集中检测；新客户端面对不支持的 daemon 只提示升级，不用旧 RPC 模拟降级路径。它不提供公共 preview URL、浏览器直连、任意 TCP/UDP、SSH、数据库代理、P2P/TURN、NAT 打洞、TUN/native helper、AI 专属类型、Provider 自动配置或 API Key 托管。
 
 ## Dictation
 

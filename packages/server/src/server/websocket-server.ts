@@ -49,6 +49,7 @@ import { PushTokenStore } from "./push/token-store.js";
 import { createPushNotificationSender, type PushNotificationSender } from "./push/notifications.js";
 import type { ScriptHealthState } from "./script-health-monitor.js";
 import type { ServiceProxySubsystem } from "./service-proxy.js";
+import type { RemoteWebServiceManager } from "./remote-web-service/remote-web-service-manager.js";
 import type { WorkspaceScriptRuntimeStore } from "./workspace-script-runtime-store.js";
 import type { SpeechReadinessSnapshot, SpeechService } from "./speech/speech-runtime.js";
 import {
@@ -453,6 +454,7 @@ export class VoiceAssistantWebSocketServer {
   private readonly externalSessionsByKey: Map<string, SessionConnection> = new Map();
   private readonly serverId: string;
   private readonly daemonVersion: string;
+  private readonly daemonPublicKeyB64: string | undefined;
   private readonly daemonRuntimeConfig: DaemonRuntimeConfig | undefined;
   private readonly agentManager: AgentManager;
   private readonly agentStorage: AgentStorage;
@@ -476,6 +478,7 @@ export class VoiceAssistantWebSocketServer {
   private readonly dictationTranscriptRefiner: DictationTranscriptRefiner;
   private terminalManager!: TerminalManager | null;
   private serviceProxy!: ServiceProxySubsystem | null;
+  private remoteWebServiceManager!: RemoteWebServiceManager | null;
   private scriptRuntimeStore!: WorkspaceScriptRuntimeStore | null;
   private getDaemonTcpPort!: (() => number | null) | null;
   private getDaemonTcpHost!: (() => string | null) | null;
@@ -547,6 +550,8 @@ export class VoiceAssistantWebSocketServer {
     daemonRuntimeConfig?: DaemonRuntimeConfig,
     serviceProxyPublicBaseUrl?: string | null,
     workspaceSetupRuntime: WorkspaceSetupRuntime = new WorkspaceSetupRuntime(),
+    remoteWebServiceManager?: RemoteWebServiceManager | null,
+    daemonPublicKeyB64?: string,
   ) {
     this.logger = logger.child({ module: "websocket-server" });
     this.workspaceSetupRuntime = workspaceSetupRuntime;
@@ -555,6 +560,7 @@ export class VoiceAssistantWebSocketServer {
       throw new MissingDaemonVersionError();
     }
     this.daemonVersion = daemonVersion.trim();
+    this.daemonPublicKeyB64 = daemonPublicKeyB64;
     this.daemonRuntimeConfig = daemonRuntimeConfig;
     this.agentManager = agentManager;
     this.agentStorage = agentStorage;
@@ -598,6 +604,7 @@ export class VoiceAssistantWebSocketServer {
       dictation,
       onLifecycleIntent,
       serviceProxy,
+      remoteWebServiceManager,
       scriptRuntimeStore,
       onBranchChanged,
       getDaemonTcpPort,
@@ -649,6 +656,7 @@ export class VoiceAssistantWebSocketServer {
     dictation: { finalTimeoutMs?: number } | undefined;
     onLifecycleIntent: ((intent: SessionLifecycleIntent) => void) | undefined;
     serviceProxy: ServiceProxySubsystem | null | undefined;
+    remoteWebServiceManager: RemoteWebServiceManager | null | undefined;
     scriptRuntimeStore: WorkspaceScriptRuntimeStore | null | undefined;
     onBranchChanged:
       | ((workspaceId: string, oldBranch: string | null, newBranch: string | null) => void)
@@ -687,6 +695,7 @@ export class VoiceAssistantWebSocketServer {
     this.dictation = params.dictation ?? null;
     this.onLifecycleIntent = params.onLifecycleIntent ?? null;
     this.serviceProxy = params.serviceProxy ?? null;
+    this.remoteWebServiceManager = params.remoteWebServiceManager ?? null;
     this.scriptRuntimeStore = params.scriptRuntimeStore ?? null;
     this.onBranchChanged = params.onBranchChanged ?? null;
     this.getDaemonTcpPort = params.getDaemonTcpPort ?? null;
@@ -1218,6 +1227,7 @@ export class VoiceAssistantWebSocketServer {
       providerSnapshotManager: this.providerSnapshotManager,
       providerUsageService: this.providerUsageService,
       serviceProxy: this.serviceProxy ?? undefined,
+      remoteWebServiceManager: this.remoteWebServiceManager ?? undefined,
       scriptRuntimeStore: this.scriptRuntimeStore ?? undefined,
       workspaceSetupSnapshots: this.workspaceSetupSnapshots,
       workspaceSetupRuntime: this.workspaceSetupRuntime,
@@ -1380,10 +1390,14 @@ export class VoiceAssistantWebSocketServer {
       serverId: this.serverId,
       hostname: getHostname(),
       version: this.daemonVersion,
+      ...(this.daemonPublicKeyB64 ? { daemonPublicKeyB64: this.daemonPublicKeyB64 } : {}),
+      dataRelay: { configured: this.remoteWebServiceManager?.isDataRelayConfigured() ?? false },
       ...(this.serverCapabilities ? { capabilities: this.serverCapabilities } : {}),
       features: {
         // COMPAT(providerOptions): added in v0.5.0-beta.1 on 2026-08-12; remove the gate after 2027-02-12.
         providerOptions: true,
+        // COMPAT(remoteWebServices): added in v0.6.0; remove the gate after 2027-02-20.
+        remoteWebServices: true,
         // COMPAT(speechModelSelection): added in v0.5.0, remove gate after 2027-02-04.
         speechModelSelection: true,
         // COMPAT(dictationRefinement): added in v0.5.0, remove gate after 2027-02-04.

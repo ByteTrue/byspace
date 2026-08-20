@@ -17,7 +17,8 @@ $BYSPACE_HOME/
 ├── config.json                          # Daemon configuration
 ├── server-id                            # Stable daemon identifier (plain text, "srv_<base64url>")
 ├── daemon-keypair.json                  # E2EE keypair for relay (mode 0600)
-├── byspace.pid                            # Daemon PID lock file
+├── remote-web-services.json             # Source mappings and target authorization grants (mode 0600)
+├── byspace.pid                          # Daemon PID lock file
 ├── daemon.log                           # Default log file (path configurable)
 ├── agents/
 │   └── {sanitized-cwd}/
@@ -211,6 +212,26 @@ Relevant environment overrides are:
 | --------------------------- | ------------------------------------ |
 | `BYSPACE_DICTATION_ENABLED` | Enable or disable composer dictation |
 | `BYSPACE_LOCAL_MODELS_DIR`  | Host speech-model storage directory  |
+
+---
+
+## Remote Web Services
+
+**Path:** `$BYSPACE_HOME/remote-web-services.json` (mode `0600`)
+
+Each daemon owns this versioned file. On a source daemon, each mapping stores its stable local name
+and hostname, the target daemon ID and public key, the target loopback port, and its creation
+timestamp. On a target daemon, each authorization grant stores the source daemon public key,
+source-generated mapping ID, and exact loopback port. The source mapping is the authorization
+desired state: when the management UI loads mappings while both daemons are online, the Web app
+idempotently reconciles the exact target grant. This repairs indeterminate create responses and target reconnects. Removal revokes the target
+grant before deleting the source mapping.
+
+Relay endpoints and access tokens are runtime configuration and are never persisted here, so
+moving from a daemon-hosted Relay on a development machine to a VPS Relay changes neither mappings
+nor grants. The store validates daemon public keys, serializes mutations, and writes a new snapshot
+before changing in-memory state. Invalid or unreadable files fail startup for this subsystem instead
+of being treated as empty; this prevents a later mutation from silently replacing damaged state.
 
 ---
 

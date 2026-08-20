@@ -3,6 +3,7 @@ import net from "node:net";
 import { createHash } from "node:crypto";
 import { existsSync, unlinkSync } from "node:fs";
 import type { IncomingMessage } from "node:http";
+import type { Duplex } from "node:stream";
 import express, { type RequestHandler } from "express";
 import type { Logger } from "pino";
 import { markUpgradeClaimed } from "./upgrade-routing.js";
@@ -15,6 +16,14 @@ export type ServiceProxyListenTarget =
 export interface ServiceProxyRoute {
   hostname: string;
   port: number;
+  connect?: () => Promise<Duplex>;
+  localOnly?: boolean;
+}
+
+export interface RegisterRemoteWebServiceInput {
+  hostname: string;
+  port: number;
+  connect: () => Promise<Duplex>;
 }
 
 export interface ServiceProxyRouteEntry extends ServiceProxyRoute {
@@ -94,6 +103,14 @@ const HOP_BY_HOP_HEADERS = new Set([
 
 function normalizeHostHeader(host: string): string {
   return host.trim().toLowerCase().replace(/:\d+$/, "");
+}
+
+function isLoopbackRemoteAddress(remoteAddress: string | undefined): boolean {
+  if (remoteAddress === "::1") return true;
+  const address = remoteAddress?.startsWith("::ffff:")
+    ? remoteAddress.slice("::ffff:".length)
+    : remoteAddress;
+  return address !== undefined && net.isIP(address) === 4 && address.startsWith("127.");
 }
 
 function toHostnameLabel(value: string): string {
@@ -328,22 +345,7 @@ function proxyHttpRequest({
   logger: Logger;
 }): void {
   const forwardedHeaders = buildForwardedHeaders({ req, route, protocol: req.protocol });
-
-  const proxyReq = http.request(
-    {
-      hostname: "127.0.0.1",
-      port: route.port,
-      path: req.originalUrl,
-      method: req.method,
-      headers: forwardedHeaders,
-    },
-    (proxyRes) => {
-      const responseHeaders = stripHopByHopHeaders(proxyRes.headers);
-      res.writeHead(proxyRes.statusCode ?? 502, responseHeaders);
-      proxyRes.pipe(res, { end: true });
-    },
-  );
-  proxyReq.on("error", (err) => {
+  const fail = (err: unknown) => {
     logger.warn(
       { err, hostname: route.hostname, port: route.port },
       "Service proxy: upstream unreachable",
@@ -352,8 +354,55 @@ function proxyHttpRequest({
       res.writeHead(502, { "content-type": "text/plain" });
       res.end("502 Bad Gateway");
     }
-  });
-  req.pipe(proxyReq, { end: true });
+  };
+  const startRequest = (connection?: Duplex) => {
+    if (req.destroyed || res.destroyed) {
+      connection?.destroy();
+      return;
+    }
+    const agent = connection ? new http.Agent({ keepAlive: false, maxSockets: 1 }) : undefined;
+    if (agent && connection) {
+      agent.createConnection = () => connection as net.Socket;
+    }
+    let downstreamClosed = false;
+    const proxyReq = http.request(
+      {
+        hostname: "127.0.0.1",
+        port: route.port,
+        path: req.originalUrl,
+        method: req.method,
+        headers: forwardedHeaders,
+        ...(agent ? { agent } : {}),
+      },
+      (proxyRes) => {
+        const responseHeaders = stripHopByHopHeaders(proxyRes.headers);
+        res.writeHead(proxyRes.statusCode ?? 502, responseHeaders);
+        if (connection) {
+          proxyRes.once("end", () => connection.destroy());
+        }
+        proxyRes.pipe(res, { end: true });
+      },
+    );
+    const closeUpstream = () => {
+      downstreamClosed = true;
+      proxyReq.destroy();
+      connection?.destroy();
+    };
+    const handleUpstreamError = (error: unknown) => {
+      if (!downstreamClosed) fail(error);
+    };
+    req.once("aborted", closeUpstream);
+    res.once("close", closeUpstream);
+    connection?.on("error", handleUpstreamError);
+    proxyReq.on("error", handleUpstreamError);
+    req.pipe(proxyReq, { end: true });
+  };
+
+  if (route.connect) {
+    void route.connect().then(startRequest, fail);
+    return;
+  }
+  startRequest();
 }
 
 function proxyUpgradeRequest({
@@ -369,36 +418,49 @@ function proxyUpgradeRequest({
   route: ServiceProxyRoute;
   logger: Logger;
 }): void {
-  const targetSocket = net.connect({ host: "127.0.0.1", port: route.port }, () => {
-    const forwardedHeaders = buildForwardedHeaders({ req, route, protocol: "http" });
-    forwardedHeaders.connection = "Upgrade";
-    forwardedHeaders.upgrade = req.headers.upgrade ?? "websocket";
-
-    const headerLines: string[] = [];
-    headerLines.push(`${req.method ?? "GET"} ${req.url ?? "/"} HTTP/${req.httpVersion}`);
-    for (const [key, value] of Object.entries(forwardedHeaders)) {
-      if (Array.isArray(value)) {
-        for (const v of value) headerLines.push(`${key}: ${v}`);
-      } else {
-        headerLines.push(`${key}: ${value}`);
+  const connect = route.connect
+    ? route.connect()
+    : new Promise<Duplex>((resolve, reject) => {
+        const target = net.connect({ host: "127.0.0.1", port: route.port }, () => resolve(target));
+        target.once("error", reject);
+      });
+  void connect.then(
+    (targetSocket) => {
+      if (socket.destroyed) {
+        targetSocket.destroy();
+        return undefined;
       }
-    }
-    headerLines.push("\r\n");
-    targetSocket.write(headerLines.join("\r\n"));
-    if (head.length > 0) targetSocket.write(head);
-    targetSocket.pipe(socket);
-    socket.pipe(targetSocket);
-  });
-  targetSocket.on("error", (err) => {
-    logger.warn(
-      { err, hostname: route.hostname, port: route.port },
-      "Service proxy: WebSocket upstream unreachable",
-    );
-    socket.end();
-  });
-  socket.on("error", () => {
-    targetSocket.destroy();
-  });
+      const forwardedHeaders = buildForwardedHeaders({ req, route, protocol: "http" });
+      forwardedHeaders.connection = "Upgrade";
+      forwardedHeaders.upgrade = req.headers.upgrade ?? "websocket";
+
+      const headerLines: string[] = [];
+      headerLines.push(`${req.method ?? "GET"} ${req.url ?? "/"} HTTP/${req.httpVersion}`);
+      for (const [key, value] of Object.entries(forwardedHeaders)) {
+        if (Array.isArray(value)) {
+          for (const v of value) headerLines.push(`${key}: ${v}`);
+        } else {
+          headerLines.push(`${key}: ${value}`);
+        }
+      }
+      headerLines.push("\r\n");
+      targetSocket.write(headerLines.join("\r\n"));
+      if (head.length > 0) targetSocket.write(head);
+      targetSocket.pipe(socket);
+      socket.pipe(targetSocket);
+      targetSocket.on("error", () => socket.destroy());
+      socket.on("error", () => targetSocket.destroy());
+      return undefined;
+    },
+    (err) => {
+      logger.warn(
+        { err, hostname: route.hostname, port: route.port },
+        "Service proxy: WebSocket upstream unreachable",
+      );
+      socket.end();
+      return undefined;
+    },
+  );
 }
 
 function sameRouteOwner(left: ServiceProxyRouteEntry, right: ServiceProxyRouteEntry): boolean {
@@ -420,6 +482,7 @@ export class ServiceProxyRouteCollisionError extends Error {
 
 export class ServiceProxyRouteRegistry {
   private routes = new Map<string, ServiceProxyRouteEntry>();
+  private remoteRoutes = new Map<string, ServiceProxyRoute>();
   private hostnameAliases = new Map<string, string>();
   private workspaceHostnames = new Map<string, Set<string>>();
   private configuredPublicBaseHostnames = new Set<string>();
@@ -431,6 +494,26 @@ export class ServiceProxyRouteRegistry {
       this.configuredPublicBaseHostnames.add(hostname);
       this.publicBaseHostnames.add(hostname);
     }
+  }
+
+  registerRemoteWebService(input: RegisterRemoteWebServiceInput): ServiceProxyRoute {
+    const hostname = normalizeHostHeader(input.hostname);
+    if (!hostname.endsWith(".remote.localhost")) {
+      throw new Error("Remote Web Service hostname must end with .remote.localhost");
+    }
+    if (!Number.isInteger(input.port) || input.port < 1 || input.port > MAX_TCP_PORT) {
+      throw new Error("Remote Web Service port must be an integer between 1 and 65535");
+    }
+    if (this.remoteRoutes.has(hostname) || this.getRouteByHostname(hostname)) {
+      throw new Error(`Service proxy route already exists: ${hostname}`);
+    }
+    const route = { hostname, port: input.port, connect: input.connect, localOnly: true };
+    this.remoteRoutes.set(hostname, route);
+    return route;
+  }
+
+  removeRemoteWebService(hostname: string): void {
+    this.remoteRoutes.delete(normalizeHostHeader(hostname));
   }
 
   registerWorkspaceService(input: RegisterWorkspaceServiceInput): ServiceProxyRouteEntry {
@@ -625,12 +708,19 @@ export class ServiceProxyRouteRegistry {
       return { type: "daemon" };
     }
     const hostname = normalizeHostHeader(host);
+    const remoteRoute = this.remoteRoutes.get(hostname);
+    if (remoteRoute) {
+      return { type: "registered-service", route: remoteRoute };
+    }
     const exactRoute = this.getRouteByHostname(hostname);
     if (exactRoute) {
       return {
         type: "registered-service",
         route: { hostname: exactRoute.hostname, port: exactRoute.port },
       };
+    }
+    if (hostname.endsWith(".remote.localhost")) {
+      return { type: "known-service-miss" };
     }
     if (hostname.endsWith(".localhost") && hostname.split(".")[0]?.includes("--")) {
       return { type: "known-service-miss" };
@@ -772,6 +862,10 @@ export function createScriptProxyMiddleware({
       res.status(404).send("404 Not Found");
       return;
     }
+    if (classification.route.localOnly && !isLoopbackRemoteAddress(req.socket.remoteAddress)) {
+      res.status(403).send("403 Forbidden");
+      return;
+    }
     proxyHttpRequest({ req, res, route: classification.route, logger });
   };
 }
@@ -797,11 +891,17 @@ export function createScriptProxyUpgradeHandler({
     // both; without this the daemon socket answers 400 for the service's own
     // WebSockets, which is a reload loop for any dev server with HMR.
     markUpgradeClaimed(req);
+    if (classification.route.localOnly && !isLoopbackRemoteAddress(req.socket.remoteAddress)) {
+      socket.destroy();
+      return;
+    }
     proxyUpgradeRequest({ req, socket, head, route: classification.route, logger });
   };
 }
 
 export interface ServiceProxySubsystem {
+  registerRemoteWebService(input: RegisterRemoteWebServiceInput): ServiceProxyRoute;
+  removeRemoteWebService(hostname: string): void;
   registerWorkspaceService(input: RegisterWorkspaceServiceInput): ServiceProxyRouteEntry;
   removeWorkspaceService(params: { workspaceId: string; scriptName: string }): void;
   removeServiceRoutesByHostnames(hostnames: string[]): void;
@@ -861,6 +961,14 @@ class NodeServiceProxySubsystem implements ServiceProxySubsystem {
     publicBaseUrl: string | null,
   ) {
     this.routes = new ServiceProxyRouteRegistry(publicBaseUrl);
+  }
+
+  registerRemoteWebService(input: RegisterRemoteWebServiceInput): ServiceProxyRoute {
+    return this.routes.registerRemoteWebService(input);
+  }
+
+  removeRemoteWebService(hostname: string): void {
+    this.routes.removeRemoteWebService(hostname);
   }
 
   registerWorkspaceService(input: RegisterWorkspaceServiceInput): ServiceProxyRouteEntry {

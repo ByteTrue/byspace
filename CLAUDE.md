@@ -37,6 +37,7 @@ At the start of non-trivial work, list `docs/` and skim anything relevant to the
 | [docs/providers.md](docs/providers.md)                         | Adding a new agent provider end-to-end                                                                                         |
 | [docs/custom-providers.md](docs/custom-providers.md)           | Custom provider config: Z.AI, Alibaba/Qwen, ACP agents, profiles, custom binaries                                              |
 | [docs/service-proxy.md](docs/service-proxy.md)                 | Service proxy: exposing workspace scripts at public URLs, DNS setup, reverse proxy config                                      |
+| [docs/remote-web-services.md](docs/remote-web-services.md)     | Private daemon-to-daemon HTTP/SSE/WebSocket services, Data Relay topology, deployment, and VPS migration                       |
 | [docs/development.md](docs/development.md)                     | Dev server, build sync gotchas, CLI reference, agent state, Playwright MCP                                                     |
 | [docs/rpc-namespacing.md](docs/rpc-namespacing.md)             | WebSocket RPC naming convention — dotted namespaces and `.request`/`.response` pairs                                           |
 | [docs/protocol-validation.md](docs/protocol-validation.md)     | zod-aot generated inbound WebSocket validation, patched compiler regressions, schema-purity rules                              |

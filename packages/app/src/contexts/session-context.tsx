@@ -311,6 +311,10 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
       serverId: serverInfo.serverId,
       hostname: serverInfo.hostname,
       version: serverInfo.version,
+      ...(serverInfo.daemonPublicKeyB64
+        ? { daemonPublicKeyB64: serverInfo.daemonPublicKeyB64 }
+        : {}),
+      ...(serverInfo.dataRelay ? { dataRelay: serverInfo.dataRelay } : {}),
       ...(serverInfo.capabilities ? { capabilities: serverInfo.capabilities } : {}),
       ...(serverInfo.features ? { features: serverInfo.features } : {}),
     });
@@ -378,6 +382,10 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
           serverId: serverInfo.serverId,
           hostname: serverInfo.hostname,
           version: serverInfo.version,
+          ...(serverInfo.daemonPublicKeyB64
+            ? { daemonPublicKeyB64: serverInfo.daemonPublicKeyB64 }
+            : {}),
+          ...(serverInfo.dataRelay ? { dataRelay: serverInfo.dataRelay } : {}),
           ...(serverInfo.capabilities ? { capabilities: serverInfo.capabilities } : {}),
           ...(serverInfo.features ? { features: serverInfo.features } : {}),
         });

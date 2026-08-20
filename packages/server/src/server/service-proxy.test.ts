@@ -3,7 +3,7 @@ import path from "node:path";
 import http from "node:http";
 import net from "node:net";
 import express from "express";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import pino from "pino";
 import {
   buildLocalServiceHostname,
@@ -52,6 +52,59 @@ function httpGet(port: number, host: string, options: HttpGetOptions = {}) {
     req.on("error", reject);
   });
 }
+
+describe("remote web service access boundary", () => {
+  it("rejects non-loopback HTTP clients before opening the remote route", () => {
+    const serviceProxy = createServiceProxySubsystem({ logger });
+    const connect = vi.fn();
+    serviceProxy.registerRemoteWebService({
+      hostname: "private.remote.localhost",
+      port: 5173,
+      connect,
+    });
+    const status = vi.fn();
+    const send = vi.fn();
+    status.mockReturnValue({ send });
+    const next = vi.fn();
+
+    serviceProxy.middleware()(
+      {
+        headers: { host: "private.remote.localhost:6777" },
+        socket: { remoteAddress: "192.0.2.10" },
+      } as never,
+      { status } as never,
+      next,
+    );
+
+    expect(status).toHaveBeenCalledWith(403);
+    expect(send).toHaveBeenCalledWith("403 Forbidden");
+    expect(connect).not.toHaveBeenCalled();
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it("rejects non-loopback WebSocket clients before opening the remote route", () => {
+    const serviceProxy = createServiceProxySubsystem({ logger });
+    const connect = vi.fn();
+    serviceProxy.registerRemoteWebService({
+      hostname: "private.remote.localhost",
+      port: 5173,
+      connect,
+    });
+    const destroy = vi.fn();
+
+    serviceProxy.upgradeHandler({ passthroughUnknown: false })(
+      {
+        headers: { host: "private.remote.localhost:6777" },
+        socket: { remoteAddress: "::ffff:192.0.2.10" },
+      } as never,
+      { destroy } as never,
+      Buffer.alloc(0),
+    );
+
+    expect(destroy).toHaveBeenCalledOnce();
+    expect(connect).not.toHaveBeenCalled();
+  });
+});
 
 describe("service proxy subsystem shape", () => {
   it("keeps production imports behind the service-proxy entrypoint", () => {
@@ -313,7 +366,7 @@ interface ForwardedFixture {
  * echoes the headers it received so tests can assert what actually crossed the
  * proxy, not what a helper returned.
  */
-async function startForwardedHeadersFixture(): Promise<ForwardedFixture> {
+async function startForwardedHeadersFixture(remote = false): Promise<ForwardedFixture> {
   const upstreamPort = await findFreePort();
   const upstream = http.createServer((req, res) => {
     res.writeHead(200, { "content-type": "application/json" });
@@ -332,15 +385,30 @@ async function startForwardedHeadersFixture(): Promise<ForwardedFixture> {
     );
   });
   await new Promise<void>((resolve) => upstream.listen(upstreamPort, "127.0.0.1", resolve));
+  // A remote route's target port belongs to the other daemon. Keep it closed
+  // locally so these tests fail if the proxy ignores the supplied connector.
+  const remoteMetadataPort = remote ? await findFreePort() : upstreamPort;
 
   const serviceProxy = createServiceProxySubsystem({ logger });
-  const route = serviceProxy.registerWorkspaceService({
-    workspaceId: "workspace-a",
-    projectSlug: "repo",
-    branchName: "feature",
-    scriptName: "api",
-    port: upstreamPort,
-  });
+  const route = remote
+    ? serviceProxy.registerRemoteWebService({
+        hostname: "preview.remote.localhost",
+        port: remoteMetadataPort,
+        connect: () =>
+          new Promise((resolve, reject) => {
+            const socket = net.connect({ host: "127.0.0.1", port: upstreamPort }, () =>
+              resolve(socket),
+            );
+            socket.once("error", reject);
+          }),
+      })
+    : serviceProxy.registerWorkspaceService({
+        workspaceId: "workspace-a",
+        projectSlug: "repo",
+        branchName: "feature",
+        scriptName: "api",
+        port: upstreamPort,
+      });
 
   const daemonPort = await findFreePort();
   const app = express();
@@ -415,6 +483,81 @@ function upgradeThroughProxy(
     });
   });
 }
+
+describe("remote service proxy routes", () => {
+  it("proxies HTTP through an asynchronous Duplex connection", async () => {
+    const fixture = await startForwardedHeadersFixture(true);
+    try {
+      const response = await httpGet(fixture.daemonPort, fixture.hostname, { path: "/remote" });
+      expect(response.status).toBe(200);
+      expect(JSON.parse(response.body).host).toBe(fixture.hostname);
+    } finally {
+      await fixture.close();
+    }
+  });
+
+  it("closes the remote connection when the client leaves before response headers", async () => {
+    const upstreamPort = await findFreePort();
+    let upstreamSocket: net.Socket | null = null;
+    let resolveRequestReceived!: () => void;
+    const requestReceived = new Promise<void>((resolve) => {
+      resolveRequestReceived = resolve;
+    });
+    const upstream = http.createServer(() => resolveRequestReceived());
+    upstream.on("connection", (socket) => {
+      upstreamSocket = socket;
+    });
+    await new Promise<void>((resolve) => upstream.listen(upstreamPort, "127.0.0.1", resolve));
+
+    const serviceProxy = createServiceProxySubsystem({ logger });
+    serviceProxy.registerRemoteWebService({
+      hostname: "slow.remote.localhost",
+      port: await findFreePort(),
+      connect: () =>
+        new Promise((resolve, reject) => {
+          const socket = net.connect({ host: "127.0.0.1", port: upstreamPort }, () =>
+            resolve(socket),
+          );
+          socket.once("error", reject);
+        }),
+    });
+    const daemonPort = await findFreePort();
+    const app = express();
+    app.use(serviceProxy.middleware());
+    const daemon = http.createServer(app);
+    await new Promise<void>((resolve) => daemon.listen(daemonPort, "127.0.0.1", resolve));
+    const client = net.connect({ host: "127.0.0.1", port: daemonPort });
+
+    try {
+      await new Promise<void>((resolve, reject) => {
+        client.once("connect", resolve);
+        client.once("error", reject);
+      });
+      client.write("GET /slow HTTP/1.1\r\nHost: slow.remote.localhost\r\n\r\n");
+      await requestReceived;
+      client.destroy();
+
+      await vi.waitFor(() => expect(upstreamSocket?.destroyed).toBe(true));
+    } finally {
+      client.destroy();
+      daemon.closeAllConnections();
+      await new Promise<void>((resolve) => daemon.close(() => resolve()));
+      upstream.closeAllConnections();
+      await new Promise<void>((resolve) => upstream.close(() => resolve()));
+    }
+  });
+
+  it("proxies WebSocket upgrades through an asynchronous Duplex connection", async () => {
+    const fixture = await startForwardedHeadersFixture(true);
+    try {
+      const headers = await upgradeThroughProxy(fixture.daemonPort, fixture.hostname);
+      expect(headers.host).toBe(fixture.hostname);
+      expect(headers.upgrade).toBe("websocket");
+    } finally {
+      await fixture.close();
+    }
+  });
+});
 
 describe("service proxy forwarded headers", () => {
   it("forwards the client authority with its port so services build reachable URLs", async () => {

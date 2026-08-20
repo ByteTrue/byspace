@@ -309,6 +309,72 @@ describe("daemon trusted proxy config", () => {
   });
 });
 
+describe("daemon data relay config", () => {
+  afterEach(async () => {
+    await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
+  });
+
+  test("stays unavailable without an explicit endpoint", async () => {
+    const home = await createBySpaceHome({ version: 1 });
+    const config = loadConfig(home, { env: {} });
+
+    expect(config.dataRelayListen).toBeNull();
+    expect(config.dataRelayEndpoint).toBeNull();
+    expect(config.dataRelayPublicEndpoint).toBeNull();
+    expect(config.dataRelayAccessToken).toBeNull();
+  });
+
+  test("loads separate private and public endpoints from the environment", async () => {
+    const home = await createBySpaceHome({ version: 1 });
+    const config = loadConfig(home, {
+      env: {
+        BYSPACE_DATA_RELAY_ENDPOINT: "relay.internal:8080",
+        BYSPACE_DATA_RELAY_PUBLIC_ENDPOINT: "relay.example.com:443",
+        BYSPACE_DATA_RELAY_USE_TLS: "false",
+        BYSPACE_DATA_RELAY_PUBLIC_USE_TLS: "true",
+        BYSPACE_DATA_RELAY_ACCESS_TOKEN: "secret-token",
+      },
+    });
+
+    expect(config.dataRelayEndpoint).toBe("relay.internal:8080");
+    expect(config.dataRelayPublicEndpoint).toBe("relay.example.com:443");
+    expect(config.dataRelayUseTls).toBe(false);
+    expect(config.dataRelayPublicUseTls).toBe(true);
+    expect(config.dataRelayAccessToken).toBe("secret-token");
+  });
+
+  test("loads a daemon-hosted listener without requiring a client endpoint", async () => {
+    const home = await createBySpaceHome({ version: 1 });
+    const config = loadConfig(home, {
+      env: {
+        BYSPACE_DATA_RELAY_LISTEN: "127.0.0.1:8788",
+        BYSPACE_DATA_RELAY_PUBLIC_ENDPOINT: "relay-home.example.com:443",
+        BYSPACE_DATA_RELAY_ACCESS_TOKEN: "host-token",
+      },
+    });
+
+    expect(config.dataRelayListen).toBe("127.0.0.1:8788");
+    expect(config.dataRelayEndpoint).toBeNull();
+    expect(config.dataRelayPublicEndpoint).toBe("relay-home.example.com:443");
+    expect(config.dataRelayAccessToken).toBe("host-token");
+  });
+
+  test("rejects Data Relay endpoints with a URL scheme or path", async () => {
+    const home = await createBySpaceHome({ version: 1 });
+
+    expect(() =>
+      loadConfig(home, {
+        env: { BYSPACE_DATA_RELAY_ENDPOINT: "relay.example.com:443/ws" },
+      }),
+    ).toThrow("Invalid BYSPACE_DATA_RELAY_ENDPOINT");
+    expect(() =>
+      loadConfig(home, {
+        env: { BYSPACE_DATA_RELAY_PUBLIC_ENDPOINT: "wss://relay.example.com/ws" },
+      }),
+    ).toThrow("Invalid BYSPACE_DATA_RELAY_PUBLIC_ENDPOINT");
+  });
+});
+
 describe("daemon worktree root config", () => {
   afterEach(async () => {
     await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
