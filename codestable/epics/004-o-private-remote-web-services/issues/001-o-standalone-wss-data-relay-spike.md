@@ -2,7 +2,7 @@
 kind: issue
 title: "穿刺 Standalone WSS Data Relay"
 type: feature
-status: closed
+status: open
 created: 2026-08-20
 ---
 
@@ -88,9 +88,15 @@ created: 2026-08-20
 
 穿刺结论为通过。
 
-## 关闭结论
+## 重新打开原因
 
-- 判断：Standalone Node WSS Relay 已证明能够复用 Relay v2 与现有 daemon 间 E2EE channel；daemon-hosted 独立 listener 的部署边界成立，不需要新产品、安装包或镜像。
-- 质量证据：真实 WebSocket 测试覆盖鉴权、会话配对、text/binary 双向转发、E2EE 互通、连接/消息/缓冲限制、背压、超时、断开和 graceful stop；后续双 daemon 真机链路也使用了同一 adapter。
-- 回写位置：稳定的控制面/数据面分离、daemon-hosted listener、E2EE 与资源边界已回写本 Epic，并随 Epic 毕业到 `codestable/spec/index.md` 的“私有远程 Web 服务”。
-- 遗留事项：无本 Issue 阻断项；TLS 终止与公网入口继续属于部署环境，不扩展 Relay 产品范围。
+PR #1 的安全复核发现 standalone Relay 尚不能视为完成：共享 token 不绑定 `serverId` 所有权，任意 token 持有者可以替换其他 daemon 的 control session；单 session 上限也缺少 relay-wide socket 与 aggregate-buffer 总预算。该攻击主要影响可用性，但必须明确并验证其信任模型，不能继续以“无遗留事项”关闭。
+
+本 Issue 在以下条件满足前保持 open：
+
+- 明确 Data Relay bandwidth token、daemon 身份和 Remote Web Service 来源授权之间的边界；
+- 对 control replacement 的跨身份行为给出实现约束与负向测试；
+- 增加 relay-wide 连接与待转发字节总预算，避免逐 session 上限相乘；
+- 与 Issue 002 的 E2EE 来源授权和 replay protection 一起完成复审。
+
+当前修复已完成实现与定向测试：活动 control/data socket 不再允许同 token 连接替换；Relay 新增全局 physical socket 与 aggregate buffered-byte budget；文档明确共享 token 仍是可用性信任域，而目标端 source grant、双向长期 daemon 公钥身份和 nonce/sequence replay protection 才是 loopback 数据安全边界。保持本 Issue open，直到 PR 全量 CI 与独立复审通过。

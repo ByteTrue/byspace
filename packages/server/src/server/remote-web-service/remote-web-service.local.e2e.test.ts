@@ -127,6 +127,7 @@ describe("Remote Web Service daemon-to-daemon path", () => {
     cleanup.push(() => source.close());
 
     const targetKey = await loadOrCreateDaemonKeyPair(target.byspaceHome);
+    const sourceKey = await loadOrCreateDaemonKeyPair(source.byspaceHome);
     const mapping = await source.daemon.remoteWebServiceManager.create({
       name: "home-web",
       target: {
@@ -135,6 +136,11 @@ describe("Remote Web Service daemon-to-daemon path", () => {
         port: upstreamAddress.port,
         daemonPublicKeyB64: targetKey.publicKeyB64,
       },
+    });
+    await target.daemon.remoteWebServiceManager.grant({
+      serviceId: mapping.id,
+      sourceDaemonPublicKeyB64: sourceKey.publicKeyB64,
+      targetPort: upstreamAddress.port,
     });
 
     const response = await requestEventually(source.port, mapping.hostname);
@@ -150,5 +156,11 @@ describe("Remote Web Service daemon-to-daemon path", () => {
     const echoed = nextWebSocketMessage(webSocket);
     webSocket.send("hmr");
     await expect(echoed).resolves.toBe("echo:hmr");
+    await closeWebSocket(webSocket);
+
+    await target.daemon.remoteWebServiceManager.revokeGrant(mapping.id);
+    await expect(requestRemote(source.port, mapping.hostname)).resolves.toMatchObject({
+      status: 502,
+    });
   });
 });

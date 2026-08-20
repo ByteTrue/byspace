@@ -30,13 +30,21 @@ const RemoteWebServiceSchema = z.object({
   createdAt: z.string().datetime(),
 });
 
+const RemoteWebServiceGrantSchema = z.object({
+  serviceId: z.string().uuid(),
+  sourceDaemonPublicKeyB64: z.string().trim().min(1).refine(isValidDaemonPublicKey),
+  targetPort: z.number().int().min(1).max(65_535),
+});
+
 const StorePayloadSchema = z.object({
   version: z.literal(1),
   services: z.array(RemoteWebServiceSchema),
+  grants: z.array(RemoteWebServiceGrantSchema).optional(),
 });
 
 export type RemoteWebServiceTarget = z.infer<typeof RemoteWebServiceTargetSchema>;
 export type RemoteWebService = z.infer<typeof RemoteWebServiceSchema>;
+export type RemoteWebServiceGrant = z.infer<typeof RemoteWebServiceGrantSchema>;
 
 function normalizeName(name: string): string {
   const normalized = name
@@ -53,6 +61,7 @@ export class RemoteWebServiceStore {
   private readonly filePath: string;
   private readonly logger: pino.Logger;
   private readonly services = new Map<string, RemoteWebService>();
+  private readonly grants = new Map<string, RemoteWebServiceGrant>();
   private loaded = false;
   private loadPromise: Promise<void> | null = null;
   private mutationQueue: Promise<void> = Promise.resolve();
@@ -84,7 +93,7 @@ export class RemoteWebServiceStore {
         target,
         createdAt: new Date().toISOString(),
       });
-      await this.persist([...this.services.values(), service]);
+      await this.persist([...this.services.values(), service], [...this.grants.values()]);
       this.services.set(service.id, service);
       return service;
     });
@@ -96,10 +105,49 @@ export class RemoteWebServiceStore {
       const service = this.services.get(id);
       if (!service) throw new Error(`Remote Web Service not found: ${id}`);
       const remaining = Array.from(this.services.values()).filter((entry) => entry.id !== id);
-      await this.persist(remaining);
+      await this.persist(remaining, [...this.grants.values()]);
       this.services.delete(id);
       return service;
     });
+  }
+
+  async grant(input: RemoteWebServiceGrant): Promise<void> {
+    await this.load();
+    return this.enqueueMutation(async () => {
+      const grant = RemoteWebServiceGrantSchema.parse(input);
+      const existing = this.grants.get(grant.serviceId);
+      if (existing) {
+        if (
+          existing.sourceDaemonPublicKeyB64 !== grant.sourceDaemonPublicKeyB64 ||
+          existing.targetPort !== grant.targetPort
+        ) {
+          throw new Error(`Remote Web Service grant conflict: ${grant.serviceId}`);
+        }
+        return;
+      }
+      await this.persist([...this.services.values()], [...this.grants.values(), grant]);
+      this.grants.set(grant.serviceId, grant);
+    });
+  }
+
+  async revokeGrant(serviceId: string): Promise<void> {
+    await this.load();
+    return this.enqueueMutation(async () => {
+      if (!this.grants.has(serviceId)) return;
+      const remaining = [...this.grants.values()].filter((grant) => grant.serviceId !== serviceId);
+      await this.persist([...this.services.values()], remaining);
+      this.grants.delete(serviceId);
+    });
+  }
+
+  async isGranted(input: RemoteWebServiceGrant): Promise<boolean> {
+    await this.load();
+    const grant = RemoteWebServiceGrantSchema.parse(input);
+    const existing = this.grants.get(grant.serviceId);
+    return (
+      existing?.sourceDaemonPublicKeyB64 === grant.sourceDaemonPublicKeyB64 &&
+      existing.targetPort === grant.targetPort
+    );
   }
 
   private load(): Promise<void> {
@@ -113,6 +161,7 @@ export class RemoteWebServiceStore {
       const raw = await fs.readFile(this.filePath, "utf8");
       const payload = StorePayloadSchema.parse(JSON.parse(raw));
       for (const service of payload.services) this.services.set(service.id, service);
+      for (const grant of payload.grants ?? []) this.grants.set(grant.serviceId, grant);
       this.loaded = true;
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === "ENOENT") {
@@ -133,7 +182,7 @@ export class RemoteWebServiceStore {
     return next;
   }
 
-  private persist(services: RemoteWebService[]): Promise<void> {
-    return writeJsonFileAtomic(this.filePath, { version: 1, services }, { mode: 0o600 });
+  private persist(services: RemoteWebService[], grants: RemoteWebServiceGrant[]): Promise<void> {
+    return writeJsonFileAtomic(this.filePath, { version: 1, services, grants }, { mode: 0o600 });
   }
 }

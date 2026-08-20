@@ -12,7 +12,8 @@ Remote Web Services split control traffic from service data:
 - A daemon-hosted Data Relay carries only encrypted Remote Web Service traffic.
 - Every participating daemon makes an outbound WebSocket connection to the Data Relay.
 - The Data Relay pairs sockets and forwards ciphertext in memory. It cannot read HTTP headers, bodies, SSE events, or WebSocket messages.
-- A static access token prevents unauthorized clients from consuming relay bandwidth. Daemon public keys authenticate and encrypt the end-to-end channel.
+- A static access token prevents unauthorized clients from consuming relay bandwidth. It does not authorize loopback access.
+- Daemon public keys authenticate and encrypt the end-to-end channel. The target also requires an exact persisted grant for the source daemon public key, mapping ID, and loopback port.
 
 The Data Relay runs as an optional listener inside the normal BySpace daemon. It uses a separate port and exposes only `GET /health` and WebSocket upgrades at `/ws`. Never publish the daemon's main port (`6777`) as the Data Relay.
 
@@ -98,7 +99,7 @@ In each source host's settings, create the address needed on that host:
 | B           | `office-ai`  | A, port `8317` | `http://office-ai.remote.localhost:<B daemon port>` |
 | A           | `home-web`   | B, port `5173` | `http://home-web.remote.localhost:<A daemon port>`  |
 
-Mappings persist on the source daemon. They store the target daemon identity and loopback port, but never store the Data Relay endpoint or access token.
+Mappings persist on the source daemon. Creating one also writes an authorization grant on the target daemon for the source daemon public key, mapping ID, and loopback port. Removing the mapping revokes that target grant before deleting the source route. Neither record stores the Data Relay endpoint or access token.
 
 ## Moving the relay to a VPS
 
@@ -180,6 +181,8 @@ Remote Web Services do not replay requests, resume SSE streams, or cache respons
 - Publish only the Data Relay port, never the daemon API or target service ports.
 - Use TLS for every non-loopback endpoint.
 - Source-side `*.remote.localhost` routes accept only raw loopback TCP clients; forwarded headers cannot bypass this boundary.
-- Store the access token in a mode-`0600` environment/secret file, keep it out of shell history and service command lines, and rotate it if exposed.
+- Target-side grants bind each mapping ID and port to the source daemon's long-term E2EE public key. Revocation blocks new connections; an already active HTTP/SSE/WebSocket stream ends normally or when either side disconnects.
+- Replay protection binds every data frame to fresh per-connection nonces and a monotonic sequence number; repeated or cross-connection frames close the stream before reaching loopback.
+- Store the access token in a mode-`0600` environment/secret file, keep it out of shell history and service command lines, and rotate it if exposed. The shared token remains an availability trust domain: a malicious holder can compete for Relay session IDs, but cannot pass target loopback authorization.
 - Keep the daemon and reverse proxy updated.
 - Prefer a dedicated VPS daemon with no projects or provider credentials when hosting a central relay.

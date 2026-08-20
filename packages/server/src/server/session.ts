@@ -2356,6 +2356,10 @@ export class Session {
         return this.handleRemoteWebServiceCreate(msg);
       case "remote_web_service.remove.request":
         return this.handleRemoteWebServiceRemove(msg.requestId, msg.id);
+      case "remote_web_service.grant.request":
+        return this.handleRemoteWebServiceGrant(msg);
+      case "remote_web_service.revoke.request":
+        return this.handleRemoteWebServiceRevoke(msg.requestId, msg.serviceId);
       default:
         return undefined;
     }
@@ -2434,6 +2438,50 @@ export class Session {
         payload: {
           requestId,
           service: null,
+          error: error instanceof Error ? error.message : String(error),
+        },
+      });
+    }
+  }
+
+  private async handleRemoteWebServiceGrant(
+    request: Extract<SessionInboundMessage, { type: "remote_web_service.grant.request" }>,
+  ): Promise<void> {
+    try {
+      if (!this.remoteWebServiceManager) throw new Error("Remote Web Services are unavailable");
+      await this.remoteWebServiceManager.grant({
+        serviceId: request.serviceId,
+        sourceDaemonPublicKeyB64: request.sourceDaemonPublicKeyB64,
+        targetPort: request.targetPort,
+      });
+      this.emit({
+        type: "remote_web_service.grant.response",
+        payload: { requestId: request.requestId, error: null },
+      });
+    } catch (error) {
+      this.emit({
+        type: "remote_web_service.grant.response",
+        payload: {
+          requestId: request.requestId,
+          error: error instanceof Error ? error.message : String(error),
+        },
+      });
+    }
+  }
+
+  private async handleRemoteWebServiceRevoke(requestId: string, serviceId: string): Promise<void> {
+    try {
+      if (!this.remoteWebServiceManager) throw new Error("Remote Web Services are unavailable");
+      await this.remoteWebServiceManager.revokeGrant(serviceId);
+      this.emit({
+        type: "remote_web_service.revoke.response",
+        payload: { requestId, error: null },
+      });
+    } catch (error) {
+      this.emit({
+        type: "remote_web_service.revoke.response",
+        payload: {
+          requestId,
           error: error instanceof Error ? error.message : String(error),
         },
       });

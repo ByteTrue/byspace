@@ -8,7 +8,9 @@ export interface StandaloneRelayServerOptions {
   port?: number;
   maxSessions?: number;
   maxConnectionsPerSession?: number;
+  maxSockets?: number;
   maxBufferedBytes?: number;
+  maxTotalBufferedBytes?: number;
   pairingTimeoutMs?: number;
   accessToken?: string;
 }
@@ -51,7 +53,9 @@ interface UpgradeTarget {
 
 const DEFAULT_MAX_SESSIONS = 1_000;
 const DEFAULT_MAX_CONNECTIONS_PER_SESSION = 128;
+const DEFAULT_MAX_SOCKETS = 4_096;
 const DEFAULT_MAX_BUFFERED_BYTES = 4 * 1024 * 1024;
+const DEFAULT_MAX_TOTAL_BUFFERED_BYTES = 64 * 1024 * 1024;
 const DEFAULT_PAIRING_TIMEOUT_MS = 15_000;
 const CLOSE_POLICY_VIOLATION = 1008;
 const CLOSE_TRY_AGAIN_LATER = 1013;
@@ -75,9 +79,12 @@ function rejectUpgrade(
 ): void {
   const body = `${message}\n`;
   const statusText =
-    ({ 400: "Bad Request", 401: "Unauthorized", 404: "Not Found" } as Record<number, string>)[
-      status
-    ] ?? "Error";
+    (
+      { 400: "Bad Request", 401: "Unauthorized", 404: "Not Found", 503: "Unavailable" } as Record<
+        number,
+        string
+      >
+    )[status] ?? "Error";
   socket.write(
     `HTTP/1.1 ${status} ${statusText}\r\n` +
       "Connection: close\r\n" +
@@ -158,10 +165,16 @@ export async function startStandaloneRelayServer(
     DEFAULT_MAX_CONNECTIONS_PER_SESSION,
     "maxConnectionsPerSession",
   );
+  const maxSockets = parsePositiveInteger(options.maxSockets, DEFAULT_MAX_SOCKETS, "maxSockets");
   const maxBufferedBytes = parsePositiveInteger(
     options.maxBufferedBytes,
     DEFAULT_MAX_BUFFERED_BYTES,
     "maxBufferedBytes",
+  );
+  const maxTotalBufferedBytes = parsePositiveInteger(
+    options.maxTotalBufferedBytes,
+    DEFAULT_MAX_TOTAL_BUFFERED_BYTES,
+    "maxTotalBufferedBytes",
   );
   const pairingTimeoutMs = parsePositiveInteger(
     options.pairingTimeoutMs,
@@ -191,6 +204,13 @@ export async function startStandaloneRelayServer(
     maxPayload: maxBufferedBytes,
   });
   let stopping = false;
+  let totalPendingBytes = 0;
+
+  const getTotalSocketBufferedBytes = (): number => {
+    let total = 0;
+    for (const socket of webSocketServer.clients) total += socket.bufferedAmount;
+    return total;
+  };
 
   const maybeDeleteSession = (session: RelaySession): void => {
     if (!session.control && session.connections.size === 0) sessions.delete(session.id);
@@ -212,6 +232,7 @@ export async function startStandaloneRelayServer(
     if (connection.pairingTimeout) clearTimeout(connection.pairingTimeout);
     connection.pairingTimeout = null;
     session.connections.delete(connection.id);
+    totalPendingBytes = Math.max(0, totalPendingBytes - connection.pendingBytes);
     connection.pendingFrames.length = 0;
     connection.pendingBytes = 0;
     for (const socket of [connection.client, connection.server]) {
@@ -244,7 +265,8 @@ export async function startStandaloneRelayServer(
     if (
       target.readyState !== WebSocket.OPEN ||
       frame.byteLength > maxBufferedBytes ||
-      target.bufferedAmount + frame.byteLength > maxBufferedBytes
+      target.bufferedAmount + frame.byteLength > maxBufferedBytes ||
+      totalPendingBytes + getTotalSocketBufferedBytes() + frame.byteLength > maxTotalBufferedBytes
     ) {
       failBackpressure(session, connection);
       return;
@@ -255,11 +277,11 @@ export async function startStandaloneRelayServer(
   };
 
   const acceptControl = (session: RelaySession, socket: WebSocket): void => {
-    const previous = session.control;
-    session.control = socket;
-    if (previous && previous !== socket && previous.readyState !== WebSocket.CLOSED) {
-      previous.close(1012, "Replaced by new server control connection");
+    if (session.control && session.control.readyState !== WebSocket.CLOSED) {
+      socket.close(CLOSE_POLICY_VIOLATION, "Server control connection already exists");
+      return;
     }
+    session.control = socket;
     socket.on("message", (data, isBinary) => {
       if (isBinary) return;
       try {
@@ -310,13 +332,15 @@ export async function startStandaloneRelayServer(
       }
       if (
         frame.byteLength > maxBufferedBytes ||
-        connection.pendingBytes + frame.byteLength > maxBufferedBytes
+        connection.pendingBytes + frame.byteLength > maxBufferedBytes ||
+        totalPendingBytes + frame.byteLength > maxTotalBufferedBytes
       ) {
         failBackpressure(session, connection);
         return;
       }
       connection.pendingFrames.push(frame);
       connection.pendingBytes += frame.byteLength;
+      totalPendingBytes += frame.byteLength;
     });
     socket.on("close", () => {
       closeConnection(session, connection, 1001, "Client disconnected", socket);
@@ -338,7 +362,8 @@ export async function startStandaloneRelayServer(
       return;
     }
     if (connection.server && connection.server.readyState !== WebSocket.CLOSED) {
-      connection.server.close(1012, "Replaced by new server data connection");
+      socket.close(CLOSE_POLICY_VIOLATION, "Server data connection already exists");
+      return;
     }
     connection.server = socket;
     if (connection.pairingTimeout) clearTimeout(connection.pairingTimeout);
@@ -357,12 +382,13 @@ export async function startStandaloneRelayServer(
         closeConnection(session, connection, 1011, "Server socket failed", socket);
       }
     });
+    totalPendingBytes = Math.max(0, totalPendingBytes - connection.pendingBytes);
+    connection.pendingBytes = 0;
     for (const frame of connection.pendingFrames) {
       if (connection.closed) break;
       forwardFrame(session, connection, socket, frame);
     }
     connection.pendingFrames.length = 0;
-    connection.pendingBytes = 0;
   };
 
   const acceptSocket = (socket: WebSocket, target: UpgradeTarget): void => {
@@ -396,6 +422,10 @@ export async function startStandaloneRelayServer(
     }
     if (!isAuthorized(request.headers.authorization, accessToken)) {
       rejectUpgrade(socket, 401, "Unauthorized");
+      return;
+    }
+    if (webSocketServer.clients.size >= maxSockets) {
+      rejectUpgrade(socket, 503, "Relay socket limit reached");
       return;
     }
     const target = parseUpgradeTarget(request.url);

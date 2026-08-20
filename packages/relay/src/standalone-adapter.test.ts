@@ -127,6 +127,8 @@ describe("standalone relay adapter", () => {
       maxBufferedBytes?: number;
       maxConnectionsPerSession?: number;
       maxSessions?: number;
+      maxSockets?: number;
+      maxTotalBufferedBytes?: number;
       pairingTimeoutMs?: number;
     } = {},
   ) {
@@ -200,23 +202,59 @@ describe("standalone relay adapter", () => {
     expect(code).toBe(1013);
   });
 
-  it("replaces a stale control socket and synchronizes waiting clients", async () => {
+  it("rejects a duplicate control socket instead of replacing the active target", async () => {
     const server = await start();
-    const serverId = "srv_replaced";
+    const serverId = "srv_duplicate_control";
     const firstControl = await connect(`${server.wsUrl}/ws?serverId=${serverId}&role=server&v=2`);
     await waitForControlMessage(firstControl.messages, "sync");
-    const client = await connect(`${server.wsUrl}/ws?serverId=${serverId}&role=client&v=2`);
-    const connected = await waitForControlMessage(firstControl.messages, "connected");
-    const firstClosed = once(firstControl.socket, "close");
 
-    const secondControl = await connect(`${server.wsUrl}/ws?serverId=${serverId}&role=server&v=2`);
-    await expect(waitForControlMessage(secondControl.messages, "sync")).resolves.toEqual({
-      type: "sync",
-      connectionIds: [connected.connectionId],
+    const secondControl = new WebSocket(`${server.wsUrl}/ws?serverId=${serverId}&role=server&v=2`, {
+      headers: { Authorization: `Bearer ${TEST_ACCESS_TOKEN}` },
     });
-    const [code] = await firstClosed;
-    expect(code).toBe(1012);
-    client.socket.close();
+    sockets.push(secondControl);
+    const secondClosed = once(secondControl, "close");
+    await once(secondControl, "open");
+    const [code] = await secondClosed;
+    expect(code).toBe(1008);
+
+    firstControl.socket.send(JSON.stringify({ type: "ping" }));
+    await expect(waitForControlMessage(firstControl.messages, "pong")).resolves.toMatchObject({
+      type: "pong",
+    });
+  });
+
+  it("enforces a relay-wide physical socket limit", async () => {
+    const server = await start({ maxSockets: 1 });
+    const control = await connect(`${server.wsUrl}/ws?serverId=srv_socket_limit&role=server&v=2`);
+    await waitForControlMessage(control.messages, "sync");
+
+    const rejected = new WebSocket(`${server.wsUrl}/ws?serverId=srv_other&role=server&v=2`, {
+      headers: { Authorization: `Bearer ${TEST_ACCESS_TOKEN}` },
+    });
+    const unexpectedResponse = once(rejected, "unexpected-response");
+    const [, response] = await unexpectedResponse;
+    const httpResponse = response as { statusCode?: number; destroy: () => void };
+    expect(httpResponse.statusCode).toBe(503);
+    httpResponse.destroy();
+  });
+
+  it("enforces a relay-wide pending-byte budget", async () => {
+    const server = await start({ maxBufferedBytes: 8, maxTotalBufferedBytes: 6 });
+    const serverId = "srv_total_buffer";
+    const control = await connect(`${server.wsUrl}/ws?serverId=${serverId}&role=server&v=2`);
+    await waitForControlMessage(control.messages, "sync");
+    const first = await connect(`${server.wsUrl}/ws?serverId=${serverId}&role=client&v=2`);
+    await waitForControlMessage(control.messages, "connected");
+    first.socket.send("1234");
+    await new Promise((resolve) => setTimeout(resolve, 5));
+
+    const second = await connect(`${server.wsUrl}/ws?serverId=${serverId}&role=client&v=2`);
+    await waitForControlMessage(control.messages, "connected");
+    const closed = once(second.socket, "close");
+    second.socket.send("1234");
+    const [code] = await closed;
+    expect(code).toBe(1013);
+    expect(first.socket.readyState).toBe(WebSocket.OPEN);
   });
 
   it("times out clients that never get a matching server data socket", async () => {

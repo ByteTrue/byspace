@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -60,11 +61,49 @@ describe("RemoteWebServiceStore", () => {
     await expect(store.remove(first.id)).rejects.toThrow("not found");
   });
 
+  it("persists exact source, mapping, and port grants and revokes them idempotently", async () => {
+    const { byspaceHome, store } = await createStore();
+    const service = await store.create({ name: "granted", target });
+    const sourceDaemonPublicKeyB64 = exportPublicKey(generateKeyPair().publicKey);
+    const grant = {
+      serviceId: service.id,
+      sourceDaemonPublicKeyB64,
+      targetPort: target.port,
+    };
+
+    await store.grant(grant);
+    await expect(store.isGranted(grant)).resolves.toBe(true);
+    await expect(store.isGranted({ ...grant, targetPort: target.port + 1 })).resolves.toBe(false);
+    await expect(
+      store.isGranted({
+        ...grant,
+        sourceDaemonPublicKeyB64: exportPublicKey(generateKeyPair().publicKey),
+      }),
+    ).resolves.toBe(false);
+    await expect(store.grant(grant)).resolves.toBeUndefined();
+    await expect(store.grant({ ...grant, targetPort: target.port + 1 })).rejects.toThrow(
+      "conflict",
+    );
+
+    const reloaded = new RemoteWebServiceStore({ byspaceHome, logger: pino({ level: "silent" }) });
+    await expect(reloaded.isGranted(grant)).resolves.toBe(true);
+    await expect(reloaded.revokeGrant(service.id)).resolves.toBeUndefined();
+    await expect(reloaded.revokeGrant(service.id)).resolves.toBeUndefined();
+    await expect(reloaded.isGranted(grant)).resolves.toBe(false);
+  });
+
   it("rejects invalid daemon public keys before persisting", async () => {
     const { store } = await createStore();
 
     await expect(
       store.create({ name: "invalid-key", target: { ...target, daemonPublicKeyB64: "invalid" } }),
+    ).rejects.toThrow();
+    await expect(
+      store.grant({
+        serviceId: randomUUID(),
+        sourceDaemonPublicKeyB64: "invalid",
+        targetPort: target.port,
+      }),
     ).rejects.toThrow();
     await expect(store.list()).resolves.toEqual([]);
   });

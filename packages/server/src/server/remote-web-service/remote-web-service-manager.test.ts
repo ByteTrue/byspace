@@ -38,6 +38,7 @@ describe("RemoteWebServiceManager", () => {
       byspaceHome,
       serviceProxy: createServiceProxySubsystem({ logger }),
       dataRelay: null,
+      daemonKeyPair: generateKeyPair(),
       logger,
     });
 

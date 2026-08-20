@@ -1,13 +1,21 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { RemoteWebService, RemoteWebServiceTarget } from "@bytetrue/byspace-protocol/messages";
 import { useFetchQuery } from "@/data/query";
-import { useHostRuntimeClient, useHostRuntimeIsConnected } from "@/runtime/host-runtime";
+import {
+  getHostRuntimeStore,
+  useHostRuntimeClient,
+  useHostRuntimeIsConnected,
+} from "@/runtime/host-runtime";
 
 export function remoteWebServicesQueryKey(serverId: string) {
   return ["remoteWebServices", serverId] as const;
 }
 
-export function useRemoteWebServices(serverId: string, enabled: boolean) {
+export function useRemoteWebServices(
+  serverId: string,
+  enabled: boolean,
+  sourceDaemonPublicKeyB64?: string,
+) {
   const queryClient = useQueryClient();
   const client = useHostRuntimeClient(serverId);
   const isConnected = useHostRuntimeIsConnected(serverId);
@@ -28,10 +36,30 @@ export function useRemoteWebServices(serverId: string, enabled: boolean) {
 
   const createMutation = useMutation({
     mutationFn: async (input: { name: string; target: RemoteWebServiceTarget }) => {
-      if (!client) throw new Error("Host is disconnected");
+      if (!client || !sourceDaemonPublicKeyB64) throw new Error("Source host is disconnected");
+      const targetClient = getHostRuntimeStore().getClient(input.target.serverId);
+      if (!targetClient) throw new Error("Target host is disconnected");
       const result = await client.createRemoteWebService(input);
       if (result.error) throw new Error(result.error);
       if (!result.service) throw new Error("Host returned no Remote Web Service");
+      try {
+        const grant = await targetClient.grantRemoteWebService({
+          serviceId: result.service.id,
+          sourceDaemonPublicKeyB64,
+          targetPort: input.target.port,
+        });
+        if (grant.error) throw new Error(grant.error);
+      } catch (error) {
+        const rollback = await client.removeRemoteWebService(result.service.id).catch(() => null);
+        if (!rollback || rollback.error) {
+          void queryClient.invalidateQueries({ queryKey });
+          throw new Error(
+            `Target authorization failed and the source mapping could not be rolled back: ${error instanceof Error ? error.message : String(error)}`,
+            { cause: error },
+          );
+        }
+        throw error;
+      }
       return result.service;
     },
     onSuccess: (service) => {
@@ -43,11 +71,15 @@ export function useRemoteWebServices(serverId: string, enabled: boolean) {
   });
 
   const removeMutation = useMutation({
-    mutationFn: async (id: string) => {
-      if (!client) throw new Error("Host is disconnected");
-      const result = await client.removeRemoteWebService(id);
+    mutationFn: async (service: RemoteWebService) => {
+      if (!client) throw new Error("Source host is disconnected");
+      const targetClient = getHostRuntimeStore().getClient(service.target.serverId);
+      if (!targetClient) throw new Error("Target host is disconnected");
+      const revoke = await targetClient.revokeRemoteWebServiceGrant(service.id);
+      if (revoke.error) throw new Error(revoke.error);
+      const result = await client.removeRemoteWebService(service.id);
       if (result.error) throw new Error(result.error);
-      return id;
+      return service.id;
     },
     onSuccess: (id) => {
       queryClient.setQueryData<RemoteWebService[]>(queryKey, (current = []) =>
@@ -64,6 +96,6 @@ export function useRemoteWebServices(serverId: string, enabled: boolean) {
     createService: createMutation.mutateAsync,
     removeService: removeMutation.mutateAsync,
     isCreating: createMutation.isPending,
-    removingId: removeMutation.isPending ? (removeMutation.variables ?? null) : null,
+    removingId: removeMutation.isPending ? (removeMutation.variables?.id ?? null) : null,
   };
 }

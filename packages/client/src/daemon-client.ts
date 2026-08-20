@@ -2359,6 +2359,33 @@ export class DaemonClient {
     });
   }
 
+  async grantRemoteWebService(
+    input: Omit<
+      Extract<SessionInboundMessage, { type: "remote_web_service.grant.request" }>,
+      "type" | "requestId"
+    >,
+    requestId?: string,
+  ): Promise<
+    Extract<SessionOutboundMessage, { type: "remote_web_service.grant.response" }>["payload"]
+  > {
+    return this.sendNamespacedCorrelatedSessionRequest<"remote_web_service.grant.response">({
+      requestId,
+      message: { type: "remote_web_service.grant.request", ...input },
+    });
+  }
+
+  async revokeRemoteWebServiceGrant(
+    serviceId: string,
+    requestId?: string,
+  ): Promise<
+    Extract<SessionOutboundMessage, { type: "remote_web_service.revoke.response" }>["payload"]
+  > {
+    return this.sendNamespacedCorrelatedSessionRequest<"remote_web_service.revoke.response">({
+      requestId,
+      message: { type: "remote_web_service.revoke.request", serviceId },
+    });
+  }
+
   async archiveWorkspace(
     workspaceId: string,
     requestId?: string,

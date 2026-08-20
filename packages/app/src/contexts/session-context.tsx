@@ -314,6 +314,7 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
       ...(serverInfo.daemonPublicKeyB64
         ? { daemonPublicKeyB64: serverInfo.daemonPublicKeyB64 }
         : {}),
+      ...(serverInfo.dataRelay ? { dataRelay: serverInfo.dataRelay } : {}),
       ...(serverInfo.capabilities ? { capabilities: serverInfo.capabilities } : {}),
       ...(serverInfo.features ? { features: serverInfo.features } : {}),
     });
@@ -384,6 +385,7 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
           ...(serverInfo.daemonPublicKeyB64
             ? { daemonPublicKeyB64: serverInfo.daemonPublicKeyB64 }
             : {}),
+          ...(serverInfo.dataRelay ? { dataRelay: serverInfo.dataRelay } : {}),
           ...(serverInfo.capabilities ? { capabilities: serverInfo.capabilities } : {}),
           ...(serverInfo.features ? { features: serverInfo.features } : {}),
         });

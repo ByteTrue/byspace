@@ -1,28 +1,36 @@
-import { randomUUID } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import { Socket } from "node:net";
 import type pino from "pino";
 import { WebSocket } from "ws";
-import { createClientChannel } from "@bytetrue/byspace-relay/e2ee";
+import { createClientChannel, type KeyPair } from "@bytetrue/byspace-relay/e2ee";
 import { buildRelayWebSocketUrl } from "@bytetrue/byspace-protocol/daemon-endpoints";
 import { createRelayTransportAdapter, type RelaySocketLike } from "../relay-transport.js";
 import { RemoteByteStream } from "./remote-byte-stream.js";
-import type { RemoteWebServiceTarget } from "./remote-web-service-store.js";
+import type { RemoteWebService } from "./remote-web-service-store.js";
 
 const PROTOCOL_VERSION = 1;
 const CONNECT_TIMEOUT_MS = 15_000;
 const HANDSHAKE_TIMEOUT_MS = 10_000;
 const LOOPBACK_CONNECT_TIMEOUT_MS = 5_000;
 const DEFAULT_MAX_TARGET_STREAMS = 256;
+const MAX_REMEMBERED_SOURCE_NONCES = 4096;
+const NONCE_PATTERN = /^[A-Za-z0-9_-]{22}$/;
+const SERVICE_ID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 interface OpenMessage {
   type: "remote.web.open";
   version: typeof PROTOCOL_VERSION;
+  serviceId: string;
   targetPort: number;
+  sourceNonce: string;
 }
 
 interface ReadyMessage {
   type: "remote.web.ready";
   version: typeof PROTOCOL_VERSION;
+  sourceNonce: string;
+  targetNonce: string;
 }
 
 interface ErrorMessage {
@@ -39,12 +47,21 @@ export interface DataRelayClientConfig {
   accessToken: string;
 }
 
+export interface RemoteWebServiceAuthorization {
+  serviceId: string;
+  sourceDaemonPublicKeyB64: string;
+  targetPort: number;
+}
+
 export async function connectRemoteWebService(
   config: DataRelayClientConfig,
-  target: RemoteWebServiceTarget,
+  service: RemoteWebService,
+  sourceKeyPair: KeyPair,
   logger: pino.Logger,
 ): Promise<RemoteByteStream> {
+  const target = service.target;
   const connectionId = `rws_${randomUUID()}`;
+  const sourceNonce = createNonce();
   const url = buildRelayWebSocketUrl({
     endpoint: config.endpoint,
     useTls: config.useTls,
@@ -67,41 +84,52 @@ export async function connectRemoteWebService(
     let rejectHandshake: ((error: Error) => void) | null = null;
     const pendingFrames: Array<string | ArrayBuffer> = [];
 
-    const channel = await createClientChannel(transport, target.daemonPublicKeyB64, {
-      onmessage: (data) => {
-        if (stream) {
-          stream.receive(data);
-          return;
-        }
-        if (settleHandshake && typeof data === "string") {
-          const response = parseHandshakeResponse(data);
-          if (response) {
-            settleHandshake(response);
+    const channel = await createClientChannel(
+      transport,
+      target.daemonPublicKeyB64,
+      {
+        onmessage: (data) => {
+          if (stream) {
+            stream.receive(data);
             return;
           }
-        }
-        pendingFrames.push(data);
+          if (settleHandshake && typeof data === "string") {
+            const response = parseHandshakeResponse(data);
+            if (response) {
+              settleHandshake(response);
+              return;
+            }
+          }
+          pendingFrames.push(data);
+        },
+        onclose: (code, reason) => {
+          if (stream) stream.receiveClose(code, reason);
+          else rejectHandshake?.(new Error(reason || "Data Relay channel closed"));
+        },
+        onerror: (error) => {
+          if (stream) stream.destroy(error);
+          else rejectHandshake?.(error);
+        },
       },
-      onclose: (code, reason) => {
-        if (stream) stream.receiveClose(code, reason);
-        else rejectHandshake?.(new Error(reason || "Data Relay channel closed"));
-      },
-      onerror: (error) => {
-        if (stream) stream.destroy(error);
-        else rejectHandshake?.(error);
-      },
-    });
+      sourceKeyPair,
+    );
 
     await waitForChannelOpen(channel, HANDSHAKE_TIMEOUT_MS);
     const responsePromise = new Promise<HandshakeResponse>((resolve, reject) => {
       settleHandshake = resolve;
       rejectHandshake = reject;
     });
+    // The send can fail before we await the response. Keep a rejection handler
+    // attached so a concurrent channel close cannot surface as an unhandled
+    // promise rejection during handshake teardown.
+    void responsePromise.catch(() => undefined);
     await channel.send(
       JSON.stringify({
         type: "remote.web.open",
         version: PROTOCOL_VERSION,
+        serviceId: service.id,
         targetPort: target.port,
+        sourceNonce,
       } satisfies OpenMessage),
     );
     const response = await withTimeout(responsePromise, HANDSHAKE_TIMEOUT_MS, () => {
@@ -113,11 +141,18 @@ export async function connectRemoteWebService(
       channel.close(1008, "Remote Web Service target rejected");
       throw new Error(response.message);
     }
+    if (response.sourceNonce !== sourceNonce) {
+      channel.close(1008, "Remote Web Service handshake replay rejected");
+      throw new Error("Remote Web Service handshake did not match this connection");
+    }
 
-    stream = new RemoteByteStream({
-      send: (data) => channel.send(data),
-      close: (code, reason) => channel.close(code, reason),
-    });
+    stream = new RemoteByteStream(
+      {
+        send: (data) => channel.send(data),
+        close: (code, reason) => channel.close(code, reason),
+      },
+      { sessionId: `${sourceNonce}.${response.targetNonce}` },
+    );
     for (const frame of pendingFrames) stream.receive(frame);
     pendingFrames.length = 0;
     return stream;
@@ -129,9 +164,11 @@ export async function connectRemoteWebService(
 
 export class RemoteWebServiceTargetAcceptor {
   private activeStreams = 0;
+  private readonly rememberedSourceNonces = new Set<string>();
 
   constructor(
     private readonly logger: pino.Logger,
+    private readonly authorize: (input: RemoteWebServiceAuthorization) => Promise<boolean>,
     private readonly maxTargetStreams = DEFAULT_MAX_TARGET_STREAMS,
   ) {}
 
@@ -150,15 +187,18 @@ export class RemoteWebServiceTargetAcceptor {
     socket.once("close", release);
     void this.accept(socket).catch((error: unknown) => {
       this.logger.warn({ err: error }, "Remote Web Service target connection failed");
-      void Promise.resolve(
-        socket.send(
-          JSON.stringify({
-            type: "remote.web.error",
-            version: PROTOCOL_VERSION,
-            message: "Remote loopback service is unavailable",
-          } satisfies ErrorMessage),
-        ),
-      ).finally(() => socket.close(1008, "Remote Web Service target rejected"));
+      void Promise.resolve()
+        .then(() =>
+          socket.send(
+            JSON.stringify({
+              type: "remote.web.error",
+              version: PROTOCOL_VERSION,
+              message: "Remote Web Service target rejected",
+            } satisfies ErrorMessage),
+          ),
+        )
+        .catch(() => undefined)
+        .finally(() => socket.close(1008, "Remote Web Service target rejected"));
     });
   }
 
@@ -166,12 +206,27 @@ export class RemoteWebServiceTargetAcceptor {
     const message = await waitForFirstMessage(socket, HANDSHAKE_TIMEOUT_MS);
     const open = parseOpenMessage(message);
     if (!open) throw new Error("Invalid Remote Web Service open message");
+    const sourceDaemonPublicKeyB64 = socket.peerPublicKeyB64?.trim();
+    if (!sourceDaemonPublicKeyB64) throw new Error("Remote Web Service source identity is missing");
+    const authorization = {
+      serviceId: open.serviceId,
+      sourceDaemonPublicKeyB64,
+      targetPort: open.targetPort,
+    };
+    if (!(await this.authorize(authorization))) {
+      throw new Error("Remote Web Service source is not authorized");
+    }
+    this.rememberSourceNonce(`${sourceDaemonPublicKeyB64}:${open.sourceNonce}`);
 
     const loopback = await connectLoopback(open.targetPort);
-    const stream = new RemoteByteStream({
-      send: (data) => Promise.resolve(socket.send(data)).then(() => undefined),
-      close: (code, reason) => socket.close(code, reason),
-    });
+    const targetNonce = createNonce();
+    const stream = new RemoteByteStream(
+      {
+        send: (data) => Promise.resolve(socket.send(data)).then(() => undefined),
+        close: (code, reason) => socket.close(code, reason),
+      },
+      { sessionId: `${open.sourceNonce}.${targetNonce}` },
+    );
     socket.on("message", (data) => {
       const normalized = normalizeSocketMessage(data);
       if (normalized !== null) stream.receive(normalized);
@@ -195,6 +250,8 @@ export class RemoteWebServiceTargetAcceptor {
           JSON.stringify({
             type: "remote.web.ready",
             version: PROTOCOL_VERSION,
+            sourceNonce: open.sourceNonce,
+            targetNonce,
           } satisfies ReadyMessage),
         ),
       );
@@ -205,6 +262,16 @@ export class RemoteWebServiceTargetAcceptor {
       throw error;
     }
   }
+
+  private rememberSourceNonce(key: string): void {
+    if (this.rememberedSourceNonces.has(key)) {
+      throw new Error("Remote Web Service handshake replay rejected");
+    }
+    this.rememberedSourceNonces.add(key);
+    if (this.rememberedSourceNonces.size <= MAX_REMEMBERED_SOURCE_NONCES) return;
+    const oldest = this.rememberedSourceNonces.values().next().value;
+    if (oldest) this.rememberedSourceNonces.delete(oldest);
+  }
 }
 
 function parseOpenMessage(data: unknown): OpenMessage | null {
@@ -214,6 +281,10 @@ function parseOpenMessage(data: unknown): OpenMessage | null {
     if (
       parsed.type !== "remote.web.open" ||
       parsed.version !== PROTOCOL_VERSION ||
+      typeof parsed.serviceId !== "string" ||
+      !SERVICE_ID_PATTERN.test(parsed.serviceId) ||
+      typeof parsed.sourceNonce !== "string" ||
+      !NONCE_PATTERN.test(parsed.sourceNonce) ||
       !Number.isInteger(parsed.targetPort) ||
       (parsed.targetPort as number) < 1 ||
       (parsed.targetPort as number) > 65_535
@@ -230,8 +301,19 @@ function parseHandshakeResponse(data: string): HandshakeResponse | null {
   try {
     const parsed = JSON.parse(data) as Record<string, unknown>;
     if (parsed.version !== PROTOCOL_VERSION) return null;
-    if (parsed.type === "remote.web.ready") {
-      return { type: "remote.web.ready", version: PROTOCOL_VERSION };
+    if (
+      parsed.type === "remote.web.ready" &&
+      typeof parsed.sourceNonce === "string" &&
+      NONCE_PATTERN.test(parsed.sourceNonce) &&
+      typeof parsed.targetNonce === "string" &&
+      NONCE_PATTERN.test(parsed.targetNonce)
+    ) {
+      return {
+        type: "remote.web.ready",
+        version: PROTOCOL_VERSION,
+        sourceNonce: parsed.sourceNonce,
+        targetNonce: parsed.targetNonce,
+      };
     }
     if (parsed.type === "remote.web.error" && typeof parsed.message === "string") {
       return {
@@ -244,6 +326,10 @@ function parseHandshakeResponse(data: string): HandshakeResponse | null {
   } catch {
     return null;
   }
+}
+
+function createNonce(): string {
+  return randomBytes(16).toString("base64url");
 }
 
 function waitForWebSocketOpen(socket: WebSocket, timeoutMs: number): Promise<void> {

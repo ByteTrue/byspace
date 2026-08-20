@@ -1,7 +1,7 @@
 ---
 kind: epic
 title: "私有远程 Web 服务"
-status: closed
+status: open
 created: 2026-08-20
 ---
 
@@ -61,6 +61,12 @@ Data Relay 与现有 Relay E2EE channel 兼容，但作为新能力只需要 Rel
 
 目标 daemon 每条数据连接只接收版本化的目标端口请求，并且只能尝试自己的 `127.0.0.1` 与 `::1`。线路上不得出现任意 hostname、Unix socket、命令或 LAN 地址。
 
+### 目标显式授权来源
+
+共享 Data Relay token 只控制 Relay 带宽，不授予 loopback 访问权限。创建映射时，Web App 在源 daemon 持久化映射，并在目标 daemon 持久化精确 grant：源 daemon 长期 E2EE 公钥、mapping ID 与目标端口。目标必须在连接 loopback 之前同时验证三者；删除映射时先幂等撤销目标 grant，再删除源映射。撤销阻止新连接，不强制中断已建立的流。
+
+每条数据连接协商新的双向 nonce，所有数据 frame 带 connection session ID 与严格单调序号。重复、乱序或跨连接 frame 在解密后、写入 loopback 前关闭连接。
+
 ### 映射稳定，请求不续传
 
 - 映射与本地 hostname 由源 daemon 原子持久化，daemon 重启后恢复；
@@ -75,11 +81,11 @@ Data Relay 与现有 Relay E2EE channel 兼容，但作为新能力只需要 Rel
 - 功能适合性：正确承载普通 HTTP、SSE 与 WebSocket/HMR；不以支持 AI Gateway 为由增加专属协议或 UI。
 - 可靠性：映射跨源 daemon 重启保持，活动流中断时两端有界清理，控制面不被数据面故障拖垮。
 - 性能效率：Data Relay 不经过 Durable Object；转发必须有有界缓冲和背压，不能用无限内存吸收慢端。
-- 信息安全性：daemon 公钥继续作为目标身份锚点，数据在源与目标 daemon 间端到端加密；Relay 只见连接元数据和密文；目标只能是 loopback。
+- 信息安全性：daemon 长期公钥双向绑定目标身份与来源 grant，数据在源与目标 daemon 间端到端加密；Relay 只见连接元数据和密文；目标只能是已授权的 loopback 端口；nonce 与序号拒绝数据重放。
 - 兼容性：新 RPC 使用 dotted namespace，能力集中通过 `server_info.features.remoteWebServices` 检测；没有旧 daemon fallback。
 - 可维护性：复用现有 Relay v2/E2EE 与 Service Proxy，不引入 P2P、TURN、TUN、native helper、协议转换或 AI provider 自动配置。
 
-## 完成结果
+## 当前实现与复核结论
 
 ### 已完成范围
 
@@ -89,11 +95,13 @@ Data Relay 与现有 Relay E2EE channel 兼容，但作为新能力只需要 Rel
 4. 增加 create/list/delete RPC、统一能力门和最小通用 Web UI。
 5. 用双 daemon 实测 HTTP、SSE、WebSocket、重启恢复、断线与无公网 alias。
 6. 补充家里 B daemon + 内网穿透，以及 VPS daemon + Caddy/nginx 两套部署、健康检查、资源限制和运行说明。
+7. 增加目标端持久化 source grant、双向 daemon 公钥身份、握手 nonce 与数据 frame replay protection；Data Relay 拒绝活动 control/data 替换并设 relay-wide socket/byte budget。
+8. 增加真实双 daemon Playwright E2E：从 Web UI 创建并授权映射，浏览器访问 `.remote.localhost`，重启源 daemon 后复验，撤销并删除，同时生成 desktop/compact 截图。
 
 ### Issues
 
-- [x] `issues/001-x-standalone-wss-data-relay-spike.md`：standalone Relay v2、E2EE、有界转发及 daemon-hosted listener 穿刺通过并已关闭。
-- [x] `issues/002-x-daemon-remote-web-services.md`：daemon 数据链路、持久化、Service Proxy、RPC、UI、安全加固、部署文档与真机验证完成并已关闭。
+- [ ] `issues/001-o-standalone-wss-data-relay-spike.md`：重新审查 Relay 身份绑定、全局资源上限与 replay 边界。
+- [ ] `issues/002-o-daemon-remote-web-services.md`：修复数据链路、App ingestion、真实 Playwright E2E、CI 与来源授权。
 
 ### 暂不推进
 
@@ -103,38 +111,23 @@ Data Relay 与现有 Relay E2EE channel 兼容，但作为新能力只需要 Rel
 - 活动 HTTP/SSE/WebSocket 的断点续传、缓存或透明重放。
 - 将数据重新放回 Cloudflare Worker/Durable Object，或免费额度不足时静默回退控制 Relay。
 
-### 已确认实现
+### 已实现但仍需复核
 
 - Data Relay 使用 `packages/relay` 的 Node adapter，由 `packages/server` daemon 生命周期按可选独立 listener 托管；不创建独立产品、安装包或镜像。
 - 映射不持久化 Relay locator；运行时始终使用当前 daemon Data Relay 配置，因此 B-hosted Relay 迁移到 VPS 只需要修改 A/B 的 endpoint/token 并重启 daemon。
 - 最小通用 UI 位于 Host Settings，只创建名称、目标 Host 和端口，不区分 AI Gateway 与 Web dev service。
 - Source Service Proxy 对 HTTP 与 WebSocket 都按真实 socket 来源强制 loopback；目标 daemon 只连接自己的 loopback 端口。
-- 实现已通过 108 个定向测试、build、全仓 typecheck/lint/format check、Web export、真实浏览器 CRUD、双向 A/B 真机链路、source daemon 重启恢复和最终独立复审。
+- 定向测试、build、typecheck/lint/format check、Web export 与双向 A/B 隔离真机链路已经提供了基础证据，但 PR 复核证明这些证据没有覆盖真实 App ingestion、完整 Playwright E2E 与全量 CI。
 
-## 关闭条件
+## 重新打开原因
 
-以下条件均已由自动化测试、独立复审或隔离真机验证满足：
+PR #1 的首轮 CI 与独立审查推翻了原关闭结论：
 
-- 源 daemon 创建映射后得到稳定 localhost URL，重启后同一 URL 仍可使用。
-- 目标只连接自己的 IPv4/IPv6 loopback 端口，非法目标无法进入协议或持久层。
-- HTTP、SSE 与 WebSocket/HMR 通过双 daemon 真实链路工作；网络断开会终止当前流但保留映射。
-- Remote Web Service 数据只经过 daemon-hosted WSS Data Relay listener，不产生 Cloudflare Worker/Durable Object 数据面操作。
-- Data Relay 有健康检查、连接/缓冲/消息限制、优雅关闭和可复现部署说明。
-- 数据面与控制面故障隔离，Relay 无法读取应用正文，持久化文件按项目规则原子写入并保持私有权限。
-- 新旧 daemon 组合由单点 capability gate 明确拒绝，不存在散落 fallback。
-- 定向测试、typecheck、lint、format 与 Web export 全部通过。
+- Linux 与 Windows server tests 都复现 `RemoteByteStream` 半关闭测试的未处理 rejection；
+- App ingestion 丢弃 `server_info.dataRelay`，正常 Host Settings 流程无法创建映射；
+- UI 还缺少桌面与 compact viewport 的真实 Playwright E2E 和截图证据；
+- 目标 daemon 没有独立于 Relay bandwidth token 的来源授权，Relay 或 token 持有者理论上可请求任意 loopback 端口；
+- 数据通道缺少 replay protection，握手断线错误路径也需加固；
+- 多语言、可访问性和断线状态仍未达到项目标准。
 
-## 毕业回写
-
-稳定能力、核心契约、长期边界与排除范围已经直接合并到 `codestable/spec/index.md` 的“私有远程 Web 服务”章节，包括：
-
-- daemon-to-daemon、local-only 的 HTTP/SSE/WebSocket 能力与源端稳定映射；
-- 任意 daemon 可选托管的独立 WSS Data Relay、daemon 间 E2EE，以及不经过 Cloudflare Worker/Durable Object 的数据面；
-- loopback-only source/target 边界、当前配置与映射分离、B→VPS 无需重建映射的迁移契约；
-- 网络中断终止活动流但保留映射，以及 capability gate 和明确非目标。
-
-项目没有单独的 Vision 文档需要更新；本 Epic 没有把公共分享、browser-only 入口或通用网络隧道扩大为目标世界。
-
-## 关闭结论
-
-两个所属 Issue 均已关闭，直接推进范围已由自动化、真实浏览器、双向 A/B 真机和独立复审提供证据。控制面/数据面隔离、E2EE、资源限制、持久化、兼容性与部署迁移约束均已成为 Project Spec 的可独立阅读真相；无阻断关闭的遗留事项。
+在这些阻断项修复、PR CI 全绿、真实 Playwright 证据附上并再次独立复审前，不满足关闭或毕业条件。先前加入 Project Spec 的章节已撤回，待功能真正稳定后重新毕业。

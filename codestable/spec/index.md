@@ -4,18 +4,6 @@
 
 BySpace 是一个 Web + CLI 环境，用于从浏览器或命令行监控和控制本机 AI coding agents。代码、凭据、Agent 进程、工作区和持久状态都留在本地 Node.js daemon；远程浏览器通过自托管的端到端加密 Relay 与 daemon 通信。
 
-## 私有远程 Web 服务
-
-已经配对且都运行 BySpace daemon 的两台机器，可以通过源 daemon 上稳定的 `<name>.remote.localhost` URL，访问目标 daemon 自己的 loopback Web 服务。该能力统一承载普通 HTTP、SSE 与 WebSocket/HMR，不区分 AI Gateway 和 Web dev service，也不提供公共分享 URL 或 browser-only 入口。
-
-映射由源 daemon 原子持久化，只保存稳定名称、目标 daemon 身份/公钥和目标 loopback 端口；Relay endpoint 与 access token 属于 daemon 当前运行配置，不进入映射。因此把 Data Relay 从家中开发机迁到 VPS 时，只需修改参与 daemon 的 endpoint/token 并重启，不需要重建映射或改变本地 URL。
-
-Remote Web Service 使用与控制 Relay 分离的数据面：任意 daemon 都可在独立端口选择性托管 WSS Data Relay listener，Relay 只做内存中的 Relay v2 socket 配对、有界背压和密文字节转发。应用正文在源与目标 daemon 间端到端加密，不进入 Cloudflare Worker/Durable Object；Data Relay access token 只承担带宽滥用门禁，daemon 公钥仍是目标身份锚点。公网反向代理或内网穿透只能暴露 Data Relay 的 `/ws` 与 `/health`，不得暴露完整 daemon API。
-
-源端只接受真实 loopback TCP 客户端对 `.remote.localhost` 的 HTTP 与 WebSocket 请求；目标端协议只携带端口，目标 daemon 只能连接自己的 `127.0.0.1` 或 `::1`。活动请求每次建立独立数据连接，网络中断会立即终止 HTTP/SSE/WebSocket 并清理两端资源，但保留映射；系统不缓存、重放、断点续传或恢复活动请求，后续请求重新连接。
-
-该能力通过单点 capability gate 拒绝旧 daemon，不提供旧协议 fallback。范围明确排除任意 TCP/UDP、SSH、数据库、VPN、P2P/TURN/TUN、AI provider 自动配置、API Key 托管和协议转换。
-
 ## 发行边界
 
 - 支持：浏览器 Web/PWA、`byspace` CLI、本地 daemon、Cloudflare encrypted control relay，以及可选的 daemon-hosted 私有 Remote Web Service 数据面。

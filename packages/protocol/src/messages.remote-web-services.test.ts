@@ -12,6 +12,8 @@ const target = {
   daemonPublicKeyB64: "public-key",
 };
 
+const grantServiceId = "00000000-0000-4000-8000-000000000001";
+
 const service = {
   id: "rws_1",
   name: "home-web",
@@ -30,6 +32,18 @@ describe("Remote Web Service protocol", () => {
       target,
     },
     { type: "remote_web_service.remove.request", requestId: "req-remove", id: "rws_1" },
+    {
+      type: "remote_web_service.grant.request",
+      requestId: "req-grant",
+      serviceId: grantServiceId,
+      sourceDaemonPublicKeyB64: "source-public-key",
+      targetPort: 5173,
+    },
+    {
+      type: "remote_web_service.revoke.request",
+      requestId: "req-revoke",
+      serviceId: grantServiceId,
+    },
   ])("parses $type", (message) => {
     expect(SessionInboundMessageSchema.parse(message)).toEqual(message);
   });
@@ -46,6 +60,14 @@ describe("Remote Web Service protocol", () => {
     {
       type: "remote_web_service.remove.response",
       payload: { requestId: "req-remove", service, error: null },
+    },
+    {
+      type: "remote_web_service.grant.response",
+      payload: { requestId: "req-grant", error: null },
+    },
+    {
+      type: "remote_web_service.revoke.response",
+      payload: { requestId: "req-revoke", error: null },
     },
   ])("parses $type", (message) => {
     expect(SessionOutboundMessageSchema.parse(message)).toEqual(message);

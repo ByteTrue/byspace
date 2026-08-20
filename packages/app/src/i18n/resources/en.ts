@@ -1814,6 +1814,7 @@ export const en = {
           "Access loopback web services on another host through your private data relay.",
         add: "Add service",
         loading: "Loading services…",
+        disconnected: "Connect to this host to manage remote web services.",
         empty: "No remote web services yet.",
         noCompatibleTargets: "Connect another updated host with Data Relay configured.",
         relayNotConfigured: "Configure Data Relay on this host before adding services.",

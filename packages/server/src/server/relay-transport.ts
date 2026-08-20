@@ -29,6 +29,7 @@ export interface RelayTransportController {
 export interface RelaySocketLike {
   readyState: number;
   bufferedAmount?: number;
+  peerPublicKeyB64?: string | null;
   send: (data: string | Uint8Array | ArrayBuffer, callback?: (error?: Error) => void) => void;
   close: (code?: number, reason?: string) => void;
   terminate?: () => void;
@@ -469,9 +470,12 @@ async function attachEncryptedSocket(
         );
       },
     );
+    const peerPublicKeyB64 = channel.getPeerPublicKeyB64();
+    if (!peerPublicKeyB64) throw new Error("E2EE peer identity is unavailable");
     const encryptedSocket = createEncryptedRelaySocket({
       channel,
       emitter,
+      peerPublicKeyB64,
       getTransportBufferedAmount: () => socket.bufferedAmount,
       terminateTransport: () => socket.terminate(),
     });

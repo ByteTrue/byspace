@@ -1,8 +1,12 @@
+import { createHash, timingSafeEqual } from "node:crypto";
 import { Duplex } from "node:stream";
 
 const DEFAULT_INITIAL_CREDIT_BYTES = 256 * 1024;
 const DEFAULT_MAX_FRAME_BYTES = 64 * 1024;
 const MAX_CREDIT_BYTES = 64 * 1024 * 1024;
+const DATA_SEQUENCE_PREFIX_BYTES = 8;
+const DATA_SESSION_DIGEST_BYTES = 16;
+const DATA_HEADER_BYTES = DATA_SEQUENCE_PREFIX_BYTES + DATA_SESSION_DIGEST_BYTES;
 
 export interface RemoteByteStreamTransport {
   send(data: string | ArrayBuffer): Promise<void>;
@@ -15,14 +19,35 @@ interface PendingWrite {
   callback: (error?: Error | null) => void;
 }
 
-type ControlFrame = { type: "window"; bytes: number } | { type: "end" } | { type: "reset" };
+type ControlFrame =
+  | { type: "window"; bytes: number; sequence: number; sessionId: string }
+  | { type: "end"; sequence: number; sessionId: string }
+  | { type: "reset"; sequence: number; sessionId: string };
+
+type OutboundControlFrame = { type: "window"; bytes: number } | { type: "end" } | { type: "reset" };
 
 function parseControlFrame(raw: string): ControlFrame | null {
   try {
     const parsed = JSON.parse(raw) as unknown;
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
     const frame = parsed as Record<string, unknown>;
-    if (frame.type === "end" || frame.type === "reset") return { type: frame.type };
+    if (
+      typeof frame.sequence !== "number" ||
+      !Number.isSafeInteger(frame.sequence) ||
+      frame.sequence < 0
+    ) {
+      return null;
+    }
+    if (
+      typeof frame.sessionId !== "string" ||
+      frame.sessionId.length === 0 ||
+      frame.sessionId.length > 128
+    ) {
+      return null;
+    }
+    if (frame.type === "end" || frame.type === "reset") {
+      return { type: frame.type, sequence: frame.sequence, sessionId: frame.sessionId };
+    }
     if (
       frame.type === "window" &&
       typeof frame.bytes === "number" &&
@@ -30,7 +55,12 @@ function parseControlFrame(raw: string): ControlFrame | null {
       frame.bytes > 0 &&
       frame.bytes <= MAX_CREDIT_BYTES
     ) {
-      return { type: "window", bytes: frame.bytes };
+      return {
+        type: "window",
+        bytes: frame.bytes,
+        sequence: frame.sequence,
+        sessionId: frame.sessionId,
+      };
     }
     return null;
   } catch {
@@ -45,9 +75,41 @@ function toArrayBuffer(buffer: Buffer): ArrayBuffer {
   ) as ArrayBuffer;
 }
 
+function encodeDataFrame(buffer: Buffer, sequence: number, sessionDigest: Buffer): ArrayBuffer {
+  const frame = Buffer.allocUnsafe(DATA_HEADER_BYTES + buffer.byteLength);
+  frame.writeBigUInt64BE(BigInt(sequence), 0);
+  sessionDigest.copy(frame, DATA_SEQUENCE_PREFIX_BYTES);
+  buffer.copy(frame, DATA_HEADER_BYTES);
+  return toArrayBuffer(frame);
+}
+
+function parseDataFrame(
+  data: ArrayBuffer,
+  expectedSessionDigest: Buffer,
+): { chunk: Buffer; sequence: number } | null {
+  if (data.byteLength <= DATA_HEADER_BYTES) return null;
+  const frame = Buffer.from(data);
+  const sequence = frame.readBigUInt64BE(0);
+  if (sequence > BigInt(Number.MAX_SAFE_INTEGER)) return null;
+  const sessionDigest = frame.subarray(DATA_SEQUENCE_PREFIX_BYTES, DATA_HEADER_BYTES);
+  if (!timingSafeEqual(sessionDigest, expectedSessionDigest)) return null;
+  return {
+    sequence: Number(sequence),
+    chunk: frame.subarray(DATA_HEADER_BYTES),
+  };
+}
+
+export interface RemoteByteStreamOptions {
+  sessionId: string;
+  initialCreditBytes?: number;
+  maxFrameBytes?: number;
+}
+
 export class RemoteByteStream extends Duplex {
   private readonly initialCreditBytes: number;
   private readonly maxFrameBytes: number;
+  private readonly sessionId: string;
+  private readonly sessionDigest: Buffer;
   private sendCreditBytes: number;
   private uncreditedReadBytes = 0;
   private pendingWrite: PendingWrite | null = null;
@@ -55,13 +117,23 @@ export class RemoteByteStream extends Duplex {
   private localEnded = false;
   private remoteEnded = false;
   private transportClosed = false;
+  private sendSequence = 0;
+  private receiveSequence = 0;
   private sendOperation: Promise<void> = Promise.resolve();
 
   constructor(
     private readonly transport: RemoteByteStreamTransport,
-    options: { initialCreditBytes?: number; maxFrameBytes?: number } = {},
+    options: RemoteByteStreamOptions,
   ) {
     super({ allowHalfOpen: true });
+    this.sessionId = options.sessionId.trim();
+    if (!this.sessionId || this.sessionId.length > 128) {
+      throw new Error("Remote Web Service sessionId is invalid");
+    }
+    this.sessionDigest = createHash("sha256")
+      .update(this.sessionId)
+      .digest()
+      .subarray(0, DATA_SESSION_DIGEST_BYTES);
     this.initialCreditBytes = options.initialCreditBytes ?? DEFAULT_INITIAL_CREDIT_BYTES;
     this.maxFrameBytes = options.maxFrameBytes ?? DEFAULT_MAX_FRAME_BYTES;
     if (
@@ -85,8 +157,8 @@ export class RemoteByteStream extends Duplex {
     if (this.destroyed) return;
     if (typeof data === "string") {
       const frame = parseControlFrame(data);
-      if (!frame) {
-        this.destroy(new Error("Invalid Remote Web Service frame"));
+      if (!frame || frame.sessionId !== this.sessionId || !this.acceptSequence(frame.sequence)) {
+        this.destroy(new Error("Invalid or replayed Remote Web Service frame"));
         return;
       }
       if (frame.type === "window") {
@@ -111,11 +183,17 @@ export class RemoteByteStream extends Duplex {
       return;
     }
 
-    if (this.remoteEnded || data.byteLength === 0 || data.byteLength > this.maxFrameBytes) {
-      this.destroy(new Error("Invalid Remote Web Service data frame"));
+    const frame = parseDataFrame(data, this.sessionDigest);
+    if (
+      !frame ||
+      !this.acceptSequence(frame.sequence) ||
+      this.remoteEnded ||
+      frame.chunk.byteLength > this.maxFrameBytes
+    ) {
+      this.destroy(new Error("Invalid or replayed Remote Web Service data frame"));
       return;
     }
-    const chunk = Buffer.from(data);
+    const chunk = frame.chunk;
     this.uncreditedReadBytes += chunk.byteLength;
     if (this.uncreditedReadBytes > this.initialCreditBytes) {
       this.destroy(new Error("Remote Web Service receive window exceeded"));
@@ -176,7 +254,7 @@ export class RemoteByteStream extends Duplex {
     const bytes = this.uncreditedReadBytes - this.readableLength;
     if (bytes <= 0) return;
     this.uncreditedReadBytes -= bytes;
-    void this.enqueueSend(JSON.stringify({ type: "window", bytes })).catch((error: unknown) => {
+    void this.enqueueControl({ type: "window", bytes }).catch((error: unknown) => {
       this.destroy(error instanceof Error ? error : new Error(String(error)));
     });
   }
@@ -196,7 +274,7 @@ export class RemoteByteStream extends Duplex {
         const size = Math.min(remaining, this.maxFrameBytes, this.sendCreditBytes);
         const frame = pending.buffer.subarray(pending.offset, pending.offset + size);
         this.sendCreditBytes -= size;
-        await this.enqueueSend(toArrayBuffer(frame));
+        await this.enqueueData(frame);
         pending.offset += size;
         if (pending.offset === pending.buffer.byteLength) {
           this.pendingWrite = null;
@@ -210,6 +288,31 @@ export class RemoteByteStream extends Duplex {
     }
   }
 
+  private acceptSequence(sequence: number): boolean {
+    if (sequence !== this.receiveSequence) return false;
+    this.receiveSequence += 1;
+    return true;
+  }
+
+  private takeSendSequence(): number {
+    if (this.sendSequence > Number.MAX_SAFE_INTEGER) {
+      throw new Error("Remote Web Service sequence limit exceeded");
+    }
+    const sequence = this.sendSequence;
+    this.sendSequence += 1;
+    return sequence;
+  }
+
+  private enqueueControl(frame: OutboundControlFrame): Promise<void> {
+    return this.enqueueSend(
+      JSON.stringify({ ...frame, sequence: this.takeSendSequence(), sessionId: this.sessionId }),
+    );
+  }
+
+  private enqueueData(data: Buffer): Promise<void> {
+    return this.enqueueSend(encodeDataFrame(data, this.takeSendSequence(), this.sessionDigest));
+  }
+
   private enqueueSend(data: string | ArrayBuffer): Promise<void> {
     const operation = this.sendOperation.then(() => this.transport.send(data));
     this.sendOperation = operation.catch(() => undefined);
@@ -218,7 +321,7 @@ export class RemoteByteStream extends Duplex {
 
   private async sendEnd(callback: (error?: Error | null) => void): Promise<void> {
     try {
-      await this.enqueueSend(JSON.stringify({ type: "end" }));
+      await this.enqueueControl({ type: "end" });
       callback();
     } catch (error) {
       callback(error instanceof Error ? error : new Error(String(error)));

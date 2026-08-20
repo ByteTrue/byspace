@@ -1786,6 +1786,7 @@ export const zhCN: TranslationResources = {
         description: "通过你的私有数据中继访问另一台主机上的本地 Web 服务。",
         add: "添加服务",
         loading: "正在加载服务…",
+        disconnected: "连接到此主机以管理远程 Web 服务。",
         empty: "还没有远程 Web 服务。",
         noCompatibleTargets: "请连接另一台已配置数据中继的主机。",
         relayNotConfigured: "请先在此主机配置数据中继，再添加服务。",

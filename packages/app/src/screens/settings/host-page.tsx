@@ -207,6 +207,7 @@ export function HostConnectionsPage({ serverId }: { serverId: string }) {
     <View>
       <HostConnectionError serverId={serverId} />
       <ConnectionsSection host={host} />
+      <RemoteWebServicesSection host={host} />
       <SettingsSection title={t("settings.host.pairDevices.title")}>
         <PairDeviceRow serverId={serverId} />
       </SettingsSection>
@@ -507,8 +508,6 @@ export function HostSettingsPage({
       <HostStatusBadges serverId={serverId} />
 
       <HostAppearanceSection host={host} />
-
-      <RemoteWebServicesSection host={host} />
 
       <UpdateDaemonCard host={host} />
 

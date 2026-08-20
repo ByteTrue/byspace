@@ -802,7 +802,6 @@ export default async function globalSetup() {
   await loadEnvTestFile(repoRoot);
 
   const port = await getAvailablePortExcluding(new Set());
-  const metroPort = await getAvailablePortExcluding(new Set([port]));
   const requestedBySpaceHome = resolveOptionalBySpaceHomeEnv(process.env.E2E_BYSPACE_HOME);
   const shouldRemoveBySpaceHome =
     !requestedBySpaceHome && process.env.E2E_KEEP_BYSPACE_HOME !== "1";
@@ -819,7 +818,11 @@ export default async function globalSetup() {
   logSpeechHarnessConfig();
 
   try {
-    const relayPort = await startRelay(new Set([port, metroPort]));
+    const relayPort = await startRelay(new Set([port]));
+    // Wrangler opens internal loopback listeners in addition to its public port.
+    // Choose Metro's port only after Wrangler is ready so we cannot race one of
+    // those listeners (observed in a sharded CI run).
+    const metroPort = await getAvailablePortExcluding(new Set([port, relayPort]));
     metroProcess = startMetro({
       metroPort,
       daemonPort: port,

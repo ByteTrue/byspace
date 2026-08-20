@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Text, View } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
 import type { RemoteWebService } from "@bytetrue/byspace-protocol/messages";
@@ -21,6 +21,8 @@ import { confirmDialog } from "@/utils/confirm-dialog";
 import { useTranslation } from "react-i18next";
 
 const FLEX_ONE_STYLE = { flex: 1 } as const;
+const remoteWebServiceTargetOptionTestID = (serverId: string) =>
+  `remote-web-service-target-option-${serverId}`;
 
 interface TargetHost {
   serverId: string;
@@ -38,12 +40,14 @@ function resolveEmptyMessage(input: {
   isConnected: boolean;
   isDataRelayConfigured: boolean;
   hasTargets: boolean;
+  disconnected: string;
   empty: string;
   noCompatibleTargets: string;
   relayNotConfigured: string;
 }): string {
-  if (input.isConnected && !input.isDataRelayConfigured) return input.relayNotConfigured;
-  if (input.isConnected && !input.hasTargets) return input.noCompatibleTargets;
+  if (!input.isConnected) return input.disconnected;
+  if (!input.isDataRelayConfigured) return input.relayNotConfigured;
+  if (!input.hasTargets) return input.noCompatibleTargets;
   return input.empty;
 }
 
@@ -62,7 +66,10 @@ function RemoteWebServiceRow({
   const handleRemove = useCallback(() => onRemove(service), [onRemove, service]);
 
   return (
-    <View style={[settingsStyles.row, showBorder && settingsStyles.rowBorder]}>
+    <View
+      style={[settingsStyles.row, showBorder && settingsStyles.rowBorder]}
+      testID={`remote-web-service-row-${service.id}`}
+    >
       <View style={settingsStyles.rowContent}>
         <Text style={settingsStyles.rowTitle}>{service.name}</Text>
         <Text style={settingsStyles.rowHint} selectable>
@@ -80,6 +87,9 @@ function RemoteWebServiceRow({
         size="sm"
         onPress={handleRemove}
         disabled={isRemoving}
+        accessibilityLabel={t("settings.host.remoteWebServices.removeTitle", {
+          name: service.name,
+        })}
         testID={`remote-web-service-remove-${service.id}`}
       >
         {isRemoving
@@ -166,6 +176,7 @@ function AddRemoteWebServiceSheet({
           autoCapitalize="none"
           autoCorrect={false}
           editable={!isSaving}
+          accessibilityLabel={t("settings.host.remoteWebServices.nameLabel")}
           placeholder={t("settings.host.remoteWebServices.namePlaceholder")}
           testID="remote-web-service-name-input"
         />
@@ -182,8 +193,10 @@ function AddRemoteWebServiceSheet({
           anchorRef={targetAnchorRef}
           searchable
           title={t("settings.host.remoteWebServices.targetLabel")}
+          hostOptionTestID={remoteWebServiceTargetOptionTestID}
         >
           <ComboboxTrigger
+            testID="remote-web-service-target-trigger"
             ref={targetAnchorRef}
             block
             style={styles.selector}
@@ -210,13 +223,18 @@ function AddRemoteWebServiceSheet({
           autoCorrect={false}
           keyboardType="number-pad"
           editable={!isSaving}
+          accessibilityLabel={t("settings.host.remoteWebServices.portLabel")}
           placeholder="5173"
           testID="remote-web-service-port-input"
         />
         <Text style={styles.helper}>{t("settings.host.remoteWebServices.portHint")}</Text>
       </View>
 
-      {error ? <Text style={styles.error}>{error}</Text> : null}
+      {error ? (
+        <Text style={styles.error} accessibilityRole="alert" accessibilityLiveRegion="polite">
+          {error}
+        </Text>
+      ) : null}
 
       <View style={styles.actions}>
         <Button
@@ -243,6 +261,90 @@ function AddRemoteWebServiceSheet({
   );
 }
 
+function RemoteWebServicesCard({
+  services,
+  isConnected,
+  isLoading,
+  error,
+  emptyMessage,
+  canAdd,
+  removingId,
+  onAdd,
+  onRemove,
+}: {
+  services: RemoteWebService[];
+  isConnected: boolean;
+  isLoading: boolean;
+  error: string | null;
+  emptyMessage: string;
+  canAdd: boolean;
+  removingId: string | null;
+  onAdd: () => void;
+  onRemove: (service: RemoteWebService) => void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <View style={settingsStyles.card} testID="remote-web-services-card">
+      <View style={settingsStyles.row}>
+        <View style={settingsStyles.rowContent}>
+          <Text style={settingsStyles.rowTitle}>
+            {t("settings.host.remoteWebServices.summary")}
+          </Text>
+          <Text style={settingsStyles.rowHint}>
+            {t("settings.host.remoteWebServices.description")}
+          </Text>
+        </View>
+        <Button
+          variant="outline"
+          size="sm"
+          onPress={onAdd}
+          disabled={!canAdd}
+          testID="remote-web-service-add"
+        >
+          {t("settings.host.remoteWebServices.add")}
+        </Button>
+      </View>
+
+      {!isConnected ? (
+        <View
+          style={[settingsStyles.row, settingsStyles.rowBorder]}
+          testID="remote-web-services-disconnected"
+        >
+          <Text style={settingsStyles.rowHint}>{emptyMessage}</Text>
+        </View>
+      ) : null}
+      {isConnected && isLoading ? (
+        <View style={[settingsStyles.row, settingsStyles.rowBorder]}>
+          <Text style={settingsStyles.rowHint}>{t("settings.host.remoteWebServices.loading")}</Text>
+        </View>
+      ) : null}
+      {isConnected && error ? (
+        <View style={[settingsStyles.row, settingsStyles.rowBorder]}>
+          <Text style={styles.error} accessibilityRole="alert" accessibilityLiveRegion="polite">
+            {error}
+          </Text>
+        </View>
+      ) : null}
+      {isConnected && !isLoading && !error && services.length === 0 ? (
+        <View style={[settingsStyles.row, settingsStyles.rowBorder]}>
+          <Text style={settingsStyles.rowHint}>{emptyMessage}</Text>
+        </View>
+      ) : null}
+      {isConnected
+        ? services.map((service) => (
+            <RemoteWebServiceRow
+              key={service.id}
+              service={service}
+              showBorder
+              isRemoving={removingId === service.id}
+              onRemove={onRemove}
+            />
+          ))
+        : null}
+    </View>
+  );
+}
+
 export function RemoteWebServicesSection({ host }: { host: HostProfile }) {
   const { t } = useTranslation();
   const toast = useToast();
@@ -251,6 +353,8 @@ export function RemoteWebServicesSection({ host }: { host: HostProfile }) {
   const serverInfo = sessions[host.serverId]?.serverInfo ?? null;
   const isSupported = serverInfo?.features?.remoteWebServices === true;
   const isDataRelayConfigured = serverInfo?.dataRelay?.configured === true;
+  const sourceDaemonPublicKeyB64 =
+    serverInfo?.daemonPublicKeyB64 ?? resolveRelayPublicKey(host) ?? undefined;
   const {
     services,
     isConnected,
@@ -260,7 +364,7 @@ export function RemoteWebServicesSection({ host }: { host: HostProfile }) {
     removeService,
     isCreating,
     removingId,
-  } = useRemoteWebServices(host.serverId, isSupported);
+  } = useRemoteWebServices(host.serverId, isSupported, sourceDaemonPublicKeyB64);
   const [isAdding, setIsAdding] = useState(false);
 
   const targetHosts = useMemo<TargetHost[]>(
@@ -282,10 +386,15 @@ export function RemoteWebServicesSection({ host }: { host: HostProfile }) {
     isConnected,
     isDataRelayConfigured,
     hasTargets: targetHosts.length > 0,
+    disconnected: t("settings.host.remoteWebServices.disconnected"),
     empty: t("settings.host.remoteWebServices.empty"),
     noCompatibleTargets: t("settings.host.remoteWebServices.noCompatibleTargets"),
     relayNotConfigured: t("settings.host.remoteWebServices.relayNotConfigured"),
   });
+
+  useEffect(() => {
+    if (!isConnected) setIsAdding(false);
+  }, [isConnected]);
 
   const handleOpen = useCallback(() => setIsAdding(true), []);
   const handleClose = useCallback(() => setIsAdding(false), []);
@@ -315,7 +424,7 @@ export function RemoteWebServicesSection({ host }: { host: HostProfile }) {
       })
         .then((confirmed) => {
           if (!confirmed) return;
-          return removeService(service.id).catch((removeError) => {
+          return removeService(service).catch((removeError) => {
             toast.error(removeError instanceof Error ? removeError.message : String(removeError));
           });
         })
@@ -347,54 +456,22 @@ export function RemoteWebServicesSection({ host }: { host: HostProfile }) {
 
   return (
     <SettingsSection title={t("settings.host.remoteWebServices.title")}>
-      <View style={settingsStyles.card} testID="remote-web-services-card">
-        <View style={settingsStyles.row}>
-          <View style={settingsStyles.rowContent}>
-            <Text style={settingsStyles.rowTitle}>
-              {t("settings.host.remoteWebServices.summary")}
-            </Text>
-            <Text style={settingsStyles.rowHint}>
-              {t("settings.host.remoteWebServices.description")}
-            </Text>
-          </View>
-          <Button
-            variant="outline"
-            size="sm"
-            onPress={handleOpen}
-            disabled={!isConnected || !isDataRelayConfigured || targetHosts.length === 0}
-            testID="remote-web-service-add"
-          >
-            {t("settings.host.remoteWebServices.add")}
-          </Button>
-        </View>
-
-        {isLoading ? (
-          <View style={[settingsStyles.row, settingsStyles.rowBorder]}>
-            <Text style={settingsStyles.rowHint}>
-              {t("settings.host.remoteWebServices.loading")}
-            </Text>
-          </View>
-        ) : null}
-        {error ? (
-          <View style={[settingsStyles.row, settingsStyles.rowBorder]}>
-            <Text style={styles.error}>{error}</Text>
-          </View>
-        ) : null}
-        {!isLoading && !error && services.length === 0 ? (
-          <View style={[settingsStyles.row, settingsStyles.rowBorder]}>
-            <Text style={settingsStyles.rowHint}>{emptyMessage}</Text>
-          </View>
-        ) : null}
-        {services.map((service) => (
-          <RemoteWebServiceRow
-            key={service.id}
-            service={service}
-            showBorder
-            isRemoving={removingId === service.id}
-            onRemove={handleRemove}
-          />
-        ))}
-      </View>
+      <RemoteWebServicesCard
+        services={services}
+        isConnected={isConnected}
+        isLoading={isLoading}
+        error={error}
+        emptyMessage={emptyMessage}
+        canAdd={
+          isConnected &&
+          isDataRelayConfigured &&
+          Boolean(sourceDaemonPublicKeyB64) &&
+          targetHosts.length > 0
+        }
+        removingId={removingId}
+        onAdd={handleOpen}
+        onRemove={handleRemove}
+      />
 
       {isAdding ? (
         <AddRemoteWebServiceSheet

@@ -80,6 +80,27 @@ function permutations<T>(values: readonly T[]): T[][] {
   );
 }
 
+describe("server info", () => {
+  it("preserves Remote Web Service capability, relay, and identity fields", () => {
+    initializeTestSession();
+
+    useSessionStore.getState().updateSessionServerInfo("test-server", {
+      serverId: "test-server",
+      hostname: "source",
+      version: "0.5.0",
+      daemonPublicKeyB64: "source-public-key",
+      dataRelay: { configured: true },
+      features: { remoteWebServices: true },
+    });
+
+    expect(useSessionStore.getState().getSession("test-server")?.serverInfo).toMatchObject({
+      daemonPublicKeyB64: "source-public-key",
+      dataRelay: { configured: true },
+      features: { remoteWebServices: true },
+    });
+  });
+});
+
 describe("agent timeline state", () => {
   it("commits canonical items, range, and older availability as one synced state", () => {
     initializeTestSession();

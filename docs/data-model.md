@@ -17,7 +17,7 @@ $BYSPACE_HOME/
 ├── config.json                          # Daemon configuration
 ├── server-id                            # Stable daemon identifier (plain text, "srv_<base64url>")
 ├── daemon-keypair.json                  # E2EE keypair for relay (mode 0600)
-├── remote-web-services.json             # Source-owned private service mappings (mode 0600)
+├── remote-web-services.json             # Source mappings and target authorization grants (mode 0600)
 ├── byspace.pid                          # Daemon PID lock file
 ├── daemon.log                           # Default log file (path configurable)
 ├── agents/
@@ -219,14 +219,17 @@ Relevant environment overrides are:
 
 **Path:** `$BYSPACE_HOME/remote-web-services.json` (mode `0600`)
 
-The source daemon owns this versioned file. Each mapping stores its stable local name and hostname,
-the target daemon ID and public key, the target loopback port, and its creation timestamp. Relay
-endpoints and access tokens are runtime configuration and are never persisted here, so moving from
-a daemon-hosted Relay on a development machine to a VPS Relay does not change mappings.
+Each daemon owns this versioned file. On a source daemon, each mapping stores its stable local name
+and hostname, the target daemon ID and public key, the target loopback port, and its creation
+timestamp. On a target daemon, each authorization grant stores the source daemon public key,
+source-generated mapping ID, and exact loopback port. The Web app creates the source mapping and
+then the target grant; removal revokes the target grant before deleting the source mapping.
 
-The store validates daemon public keys, serializes mutations, and writes a new snapshot before
-changing in-memory state. Invalid or unreadable files fail startup for this subsystem instead of
-being treated as empty; this prevents a later mutation from silently replacing damaged state.
+Relay endpoints and access tokens are runtime configuration and are never persisted here, so
+moving from a daemon-hosted Relay on a development machine to a VPS Relay changes neither mappings
+nor grants. The store validates daemon public keys, serializes mutations, and writes a new snapshot
+before changing in-memory state. Invalid or unreadable files fail startup for this subsystem instead
+of being treated as empty; this prevents a later mutation from silently replacing damaged state.
 
 ---
 

@@ -1,8 +1,8 @@
 # Issue: Daemon Remote Web Services
 
-**ID:** 002-x-daemon-remote-web-services
-**Epic:** 004-x-private-remote-web-services
-**Status:** closed
+**ID:** 002-o-daemon-remote-web-services
+**Epic:** 004-o-private-remote-web-services
+**Status:** open
 **Priority:** P0
 **Created:** 2026-08-20
 
@@ -45,6 +45,11 @@ Implement the daemon-owned Remote Web Service backend on top of the WSS Data Rel
 - [x] Control Relay traffic and Data Relay traffic remain physically separate.
 - [x] B-hosted tunnel and VPS-hosted reverse-proxy topologies are documented; their shared daemon Host/Client lifecycle is covered by automated tests.
 - [x] Protocol changes are backward-compatible and capability-gated.
+- [x] A target independently authorizes the source inside E2EE, without trusting the Relay bandwidth token.
+- [x] Replayed data/control frames are rejected before duplicate plaintext reaches a loopback service.
+- [x] The App preserves `server_info.dataRelay` through initial and live ingestion paths.
+- [x] Desktop and compact Playwright E2E cover list/create/remove, capability gating, restart persistence and screenshots.
+- [ ] Linux and Windows CI complete without RemoteByteStream unhandled rejections.
 
 ## Verification
 
@@ -61,7 +66,7 @@ npm run format:check
 
 ## Implementation notes
 
-The pairing URL/public key remains the trust anchor: a holder is already a trusted daemon operator. Target-side service routing is intentionally stateless; the source persists the target daemon identity/public key and explicit target port, but never a Relay locator or token. Every request uses current daemon Data Relay configuration so moving from B-hosted Relay to a VPS does not recreate mappings. The target never accepts a hostname, only `127.0.0.1:<port>`/`::1:<port>` semantics.
+The target daemon public key remains the source-side identity anchor, while the source uses its long-term daemon key for each data channel. Creating a mapping persists an exact target-side grant over source public key, mapping ID, and port; deleting it revokes the grant before removing the source route. The Relay access token remains only a bandwidth gate. Relay locator and token never enter mappings or grants, so moving from B-hosted Relay to a VPS does not recreate either. The target never accepts a hostname, only `127.0.0.1:<port>`/`::1:<port>` semantics.
 
 ## Implementation evidence
 
@@ -77,9 +82,14 @@ Verification on 2026-08-20:
 - the LAN run exposed an HTTP connector bypass that dialed the source machine's metadata port instead of the remote Duplex; a one-shot custom HTTP Agent and a regression fixture with a deliberately closed local port now prevent recurrence;
 - independent read-only review found endpoint syntax, non-loopback route access, lifecycle/durability hardening, and pre-header disconnect cleanup issues; all were fixed, covered by regression tests, and the focused re-review passed with no remaining actionable findings.
 
-## Closure
+## Reopened after PR review
 
-- Decision: the daemon data path, source-owned stable mapping, Service Proxy HTTP/SSE/WebSocket boundary, protocol capability gate, Host Settings UI, deployment topologies, and failure cleanup satisfy the Issue goal and acceptance criteria.
-- Quality evidence: automated limits, persistence, security-boundary and lifecycle tests are backed by real browser and bidirectional A/B machine validation; production daemons remained untouched and healthy throughout the isolated run.
-- Graduation: stable mapping, E2EE Data Relay, loopback-only target, disconnect, migration and compatibility contracts are recorded in the Epic and `codestable/spec/index.md` under “私有远程 Web 服务”.
-- Residual scope: public URLs, browser-only access, arbitrary TCP, P2P/TURN, request resume, mutable Relay settings UI, and AI-specific behavior remain explicit non-goals rather than unfinished work.
+The first PR CI and independent review invalidated the closure evidence:
+
+- both Linux and Windows full server jobs fail on an unhandled `RemoteByteStream` close error;
+- the App drops `server_info.dataRelay`, so the normal UI cannot create a mapping;
+- no committed Playwright E2E or desktop/compact screenshot evidence covers this UI;
+- target-side source authorization and replay protection are incomplete;
+- handshake disconnect cleanup, translations, accessibility and disconnected states still require work.
+
+The earlier LAN validation remains useful transport evidence, but it cannot substitute for these missing product and security boundaries. Implemented after the reopen: long-term source E2EE identity and persisted target grants, connection nonce/sequence replay rejection, real App ingestion, disconnected-state/a11y/i18n fixes, and a dual-daemon Playwright flow that creates, reaches, persists across source restart, revokes, removes, and captures desktop/compact screenshots. Keep this Issue open until the remaining Linux/Windows CI criterion passes and an independent re-review confirms the complete diff.

@@ -522,9 +522,6 @@ export async function createBySpaceDaemon(
   });
   let relayRuntime: RelayRuntime | null = null;
   let dataRelayRuntime: RelayRuntime | null = null;
-  const remoteWebServiceTargetAcceptor = new RemoteWebServiceTargetAcceptor(
-    logger.child({ component: "remote-web-service-target" }),
-  );
 
   const staticDir = config.staticDir;
   const downloadTokenTtlMs = config.downloadTokenTtlMs ?? 60000;
@@ -565,8 +562,13 @@ export async function createBySpaceDaemon(
             accessToken: config.dataRelayAccessToken,
           }
         : null,
+    daemonKeyPair: daemonKeyPair.keyPair,
     logger,
   });
+  const remoteWebServiceTargetAcceptor = new RemoteWebServiceTargetAcceptor(
+    logger.child({ component: "remote-web-service-target" }),
+    (authorization) => remoteWebServiceManager.isGranted(authorization),
+  );
   const scriptRuntimeStore = new WorkspaceScriptRuntimeStore();
   const workspaceSetupRuntime = new WorkspaceSetupRuntime();
   const configuredHostnames = config.hostnames ?? config.allowedHosts;
