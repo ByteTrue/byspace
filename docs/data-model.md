@@ -222,8 +222,10 @@ Relevant environment overrides are:
 Each daemon owns this versioned file. On a source daemon, each mapping stores its stable local name
 and hostname, the target daemon ID and public key, the target loopback port, and its creation
 timestamp. On a target daemon, each authorization grant stores the source daemon public key,
-source-generated mapping ID, and exact loopback port. The Web app creates the source mapping and
-then the target grant; removal revokes the target grant before deleting the source mapping.
+source-generated mapping ID, and exact loopback port. The source mapping is the authorization
+desired state: when the management UI loads mappings while both daemons are online, the Web app
+idempotently reconciles the exact target grant. This repairs indeterminate create responses and target reconnects. Removal revokes the target
+grant before deleting the source mapping.
 
 Relay endpoints and access tokens are runtime configuration and are never persisted here, so
 moving from a daemon-hosted Relay on a development machine to a VPS Relay changes neither mappings

@@ -1867,6 +1867,15 @@ export const fr: TranslationResources = {
         remove: "Supprimer",
         removeTitle: "Supprimer {{name}} ?",
         removeMessage: "L’adresse locale ne redirigera plus vers le service cible.",
+        sourceDisconnected: "Connectez-vous à l’hôte source et réessayez.",
+        targetDisconnected: "Connectez-vous à l’hôte cible et réessayez.",
+        missingCreatedService: "L’hôte source n’a pas renvoyé le service créé.",
+        authorizationRollbackFailed:
+          "L’autorisation de la cible a échoué et le mappage source n’a pas pu être supprimé : {{message}}",
+        authorizationOutcomeUnknown:
+          "Le résultat de l’autorisation de la cible est inconnu. Le mappage source a été conservé pour permettre de réessayer ou de le supprimer.",
+        authorizationRepairFailed:
+          "Impossible de restaurer l’autorisation de la cible pour un ou plusieurs services.",
       },
       orchestration: {
         title: "Orchestration",

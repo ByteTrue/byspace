@@ -1838,6 +1838,15 @@ export const en = {
         remove: "Remove",
         removeTitle: "Remove {{name}}?",
         removeMessage: "The local address will stop routing to the target service.",
+        sourceDisconnected: "Connect to the source host and try again.",
+        targetDisconnected: "Connect to the target host and try again.",
+        missingCreatedService: "The source host did not return the created service.",
+        authorizationRollbackFailed:
+          "Target authorization failed, and the source mapping could not be removed: {{message}}",
+        authorizationOutcomeUnknown:
+          "The target authorization result is unknown. The source mapping was kept so you can retry or remove it.",
+        authorizationRepairFailed:
+          "Could not restore target authorization for one or more services.",
       },
       orchestration: {
         title: "Orchestration",

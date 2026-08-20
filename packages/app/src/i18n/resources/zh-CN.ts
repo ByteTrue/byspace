@@ -1810,6 +1810,12 @@ export const zhCN: TranslationResources = {
         remove: "移除",
         removeTitle: "移除 {{name}}？",
         removeMessage: "该本地地址将停止路由到目标服务。",
+        sourceDisconnected: "请连接源 Host 后重试。",
+        targetDisconnected: "请连接目标 Host 后重试。",
+        missingCreatedService: "源 Host 未返回已创建的服务。",
+        authorizationRollbackFailed: "目标授权失败，且无法移除源映射：{{message}}",
+        authorizationOutcomeUnknown: "无法确认目标授权结果。源映射已保留，你可以重试或将其移除。",
+        authorizationRepairFailed: "无法恢复一个或多个服务的目标授权。",
       },
       orchestration: {
         title: "编排",

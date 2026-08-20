@@ -63,9 +63,9 @@ Data Relay 与现有 Relay E2EE channel 兼容，但作为新能力只需要 Rel
 
 ### 目标显式授权来源
 
-共享 Data Relay token 只控制 Relay 带宽，不授予 loopback 访问权限。创建映射时，Web App 在源 daemon 持久化映射，并在目标 daemon 持久化精确 grant：源 daemon 长期 E2EE 公钥、mapping ID 与目标端口。目标必须在连接 loopback 之前同时验证三者；删除映射时先幂等撤销目标 grant，再删除源映射。撤销阻止新连接，不强制中断已建立的流。
+共享 Data Relay token 只控制 Relay 带宽，不授予 loopback 访问权限。创建映射时，Web App 在源 daemon 持久化映射，并在目标 daemon 持久化精确 grant：源 daemon 长期 E2EE 公钥、mapping ID 与目标端口。源 mapping 是授权 desired state；管理 UI 加载 mapping 且两端在线时，会幂等修复精确 grant，从而收敛 create 响应丢失和 target 重连。目标必须在连接 loopback 之前同时验证三者；删除映射时先幂等撤销目标 grant，再删除源映射。撤销阻止新连接，不强制中断已建立的流。
 
-每条数据连接协商新的双向 nonce，所有数据 frame 带 connection session ID 与严格单调序号。重复、乱序或跨连接 frame 在解密后、写入 loopback 前关闭连接。
+每条数据连接先由目标 daemon 发送不可预测的新 challenge，源端 `remote.web.open` 必须原样绑定该 challenge；因此旧 open 即使跨目标 daemon 重启重放也会被拒绝。握手完成后，所有数据 frame 带协商出的 connection session ID 与严格单调序号；重复、乱序或跨连接 frame 在解密后、写入 loopback 前关闭连接。
 
 ### 映射稳定，请求不续传
 
@@ -95,7 +95,7 @@ Data Relay 与现有 Relay E2EE channel 兼容，但作为新能力只需要 Rel
 4. 增加 create/list/delete RPC、统一能力门和最小通用 Web UI。
 5. 用双 daemon 实测 HTTP、SSE、WebSocket、重启恢复、断线与无公网 alias。
 6. 补充家里 B daemon + 内网穿透，以及 VPS daemon + Caddy/nginx 两套部署、健康检查、资源限制和运行说明。
-7. 增加目标端持久化 source grant、双向 daemon 公钥身份、握手 nonce 与数据 frame replay protection；Data Relay 拒绝活动 control/data 替换并设 relay-wide socket/byte budget。
+7. 增加目标端持久化 source grant、双向 daemon 公钥身份、目标新鲜 challenge 与数据 frame replay protection；Data Relay 拒绝活动 control/data 替换并设 relay-wide socket/byte budget。
 8. 增加真实双 daemon Playwright E2E：从 Web UI 创建并授权映射，浏览器访问 `.remote.localhost`，重启源 daemon 后复验，撤销并删除，同时生成 desktop/compact 截图。
 
 ### Issues
@@ -117,7 +117,7 @@ Data Relay 与现有 Relay E2EE channel 兼容，但作为新能力只需要 Rel
 - 映射不持久化 Relay locator；运行时始终使用当前 daemon Data Relay 配置，因此 B-hosted Relay 迁移到 VPS 只需要修改 A/B 的 endpoint/token 并重启 daemon。
 - 最小通用 UI 位于 Host Settings，只创建名称、目标 Host 和端口，不区分 AI Gateway 与 Web dev service。
 - Source Service Proxy 对 HTTP 与 WebSocket 都按真实 socket 来源强制 loopback；目标 daemon 只连接自己的 loopback 端口。
-- 定向测试、build、typecheck/lint/format check、Web export 与双向 A/B 隔离真机链路已经提供了基础证据，但 PR 复核证明这些证据没有覆盖真实 App ingestion、完整 Playwright E2E 与全量 CI。
+- 定向测试、build、typecheck/lint/format check、Web export 与双向 A/B 隔离真机链路已经提供基础证据；重新打开后又增加真实 App ingestion、双 daemon Playwright E2E、source 重启恢复、target grant/revoke 和 desktop/compact 截图，但仍等待替换 CI 与独立复审。
 
 ## 重新打开原因
 
@@ -130,4 +130,4 @@ PR #1 的首轮 CI 与独立审查推翻了原关闭结论：
 - 数据通道缺少 replay protection，握手断线错误路径也需加固；
 - 多语言、可访问性和断线状态仍未达到项目标准。
 
-在这些阻断项修复、PR CI 全绿、真实 Playwright 证据附上并再次独立复审前，不满足关闭或毕业条件。先前加入 Project Spec 的章节已撤回，待功能真正稳定后重新毕业。
+这些首轮阻断项已实现修复。后续复审又发现静态 E2EE key 下旧 open 可跨目标重启重放、握手前缓冲无上限、grant 响应不确定时可能遗留孤儿授权、离线 target 仍可选择，以及 source create 响应丢失可留下未授权 mapping；当前实现分别加入目标新鲜 challenge、统一握手缓冲预算、补偿 revoke/rollback、live-target 过滤与 source desired-state grant reconciliation。PR CI 全绿、真实 Playwright 截图附上并再次独立复审前，仍不满足关闭或毕业条件。先前加入 Project Spec 的章节已撤回，待功能真正稳定后重新毕业。

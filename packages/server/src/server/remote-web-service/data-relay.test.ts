@@ -1,9 +1,14 @@
+import { EventEmitter } from "node:events";
 import http from "node:http";
 import type pino from "pino";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { exportPublicKey, generateKeyPair, type KeyPair } from "@bytetrue/byspace-relay";
 import { startStandaloneRelayServer } from "@bytetrue/byspace-relay/standalone";
-import { startRelayTransport, type RelayTransportController } from "../relay-transport.js";
+import {
+  startRelayTransport,
+  type RelaySocketLike,
+  type RelayTransportController,
+} from "../relay-transport.js";
 import {
   connectRemoteWebService,
   type RemoteWebServiceAuthorization,
@@ -80,6 +85,7 @@ async function startDataPlane(input: {
     input: RemoteWebServiceAuthorization,
     expected: RemoteWebServiceAuthorization,
   ) => boolean;
+  attachSocket?: (socket: RelaySocketLike) => void;
 }) {
   const relay = await startStandaloneRelayServer({ accessToken: ACCESS_TOKEN });
   input.cleanup.push(() => relay.stop());
@@ -102,7 +108,8 @@ async function startDataPlane(input: {
   });
   const targetTransport: RelayTransportController = startRelayTransport({
     logger: createLogger(markControlReady),
-    attachSocket: async (socket) => acceptor.attachSocket(socket),
+    attachSocket: async (socket) =>
+      input.attachSocket ? input.attachSocket(socket) : acceptor.attachSocket(socket),
     relayEndpoint: `127.0.0.1:${relay.port}`,
     relayUseTls: false,
     relayAccessToken: ACCESS_TOKEN,
@@ -112,6 +119,36 @@ async function startDataPlane(input: {
   input.cleanup.push(() => targetTransport.stop());
   await controlReady;
   return { relay, service, sourceKeyPair };
+}
+
+function createFakeRelaySocket() {
+  const emitter = new EventEmitter();
+  const sent: Array<string | Uint8Array | ArrayBuffer> = [];
+  let closed: { code?: number; reason?: string } | null = null;
+  const socket: RelaySocketLike = {
+    readyState: 1,
+    peerPublicKeyB64: exportPublicKey(generateKeyPair().publicKey),
+    send: (data, callback) => {
+      sent.push(data);
+      callback?.();
+    },
+    close: (code, reason) => {
+      closed = { code, reason };
+      emitter.emit("close", code, reason);
+    },
+    on: (event, listener) => {
+      emitter.on(event, listener);
+    },
+    once: (event, listener) => {
+      emitter.once(event, listener);
+    },
+  };
+  return {
+    socket,
+    sent,
+    emitMessage: (data: string) => emitter.emit("message", data),
+    getClosed: () => closed,
+  };
 }
 
 function connectFixture(
@@ -159,6 +196,48 @@ describe("Remote Web Service Data Relay", () => {
     const fixture = await startDataPlane({ cleanup, port: unavailablePort });
 
     await expect(connectFixture(fixture)).rejects.toThrow();
+  });
+
+  it("bounds frames received before the target challenge completes", async () => {
+    const fixture = await startDataPlane({
+      cleanup,
+      port: 1234,
+      attachSocket: (socket) => {
+        for (let index = 0; index < 40; index += 1) socket.send(new Uint8Array(8192));
+      },
+    });
+
+    await expect(connectFixture(fixture)).rejects.toThrow("pre-handshake buffer");
+  });
+
+  it("issues a fresh target challenge and rejects an open replayed across acceptor restarts", async () => {
+    const authorize = vi.fn(async () => true);
+    const firstAcceptor = new RemoteWebServiceTargetAcceptor(createLogger(), authorize);
+    const first = createFakeRelaySocket();
+    firstAcceptor.attachSocket(first.socket);
+    await vi.waitFor(() => expect(first.sent.length).toBeGreaterThan(0));
+    const firstChallenge = JSON.parse(String(first.sent[0])) as { targetNonce: string };
+    const replayedTargetNonce = `${firstChallenge.targetNonce.startsWith("A") ? "B" : "A"}${firstChallenge.targetNonce.slice(1)}`;
+    first.emitMessage(
+      JSON.stringify({
+        type: "remote.web.open",
+        version: 1,
+        serviceId: SERVICE_ID,
+        targetPort: 1234,
+        sourceNonce: "AAAAAAAAAAAAAAAAAAAAAA",
+        targetNonce: replayedTargetNonce,
+      }),
+    );
+    await vi.waitFor(() => expect(first.getClosed()?.code).toBe(1008));
+    expect(authorize).not.toHaveBeenCalled();
+
+    const restartedAcceptor = new RemoteWebServiceTargetAcceptor(createLogger(), authorize);
+    const second = createFakeRelaySocket();
+    restartedAcceptor.attachSocket(second.socket);
+    await vi.waitFor(() => expect(second.sent.length).toBeGreaterThan(0));
+    const secondChallenge = JSON.parse(String(second.sent[0])) as { targetNonce: string };
+    expect(secondChallenge.targetNonce).not.toBe(firstChallenge.targetNonce);
+    second.socket.close(1000, "test complete");
   });
 
   it("rejects a mapping without a target grant", async () => {

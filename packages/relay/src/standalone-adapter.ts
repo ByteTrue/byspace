@@ -73,7 +73,7 @@ function formatUrlHost(host: string): string {
 }
 
 function rejectUpgrade(
-  socket: { write: (data: string) => unknown; destroy: () => unknown },
+  socket: { end: (data: string) => unknown },
   status: number,
   message: string,
 ): void {
@@ -85,17 +85,25 @@ function rejectUpgrade(
         string
       >
     )[status] ?? "Error";
-  socket.write(
+  socket.end(
     `HTTP/1.1 ${status} ${statusText}\r\n` +
       "Connection: close\r\n" +
       "Content-Type: text/plain; charset=utf-8\r\n" +
       `Content-Length: ${Buffer.byteLength(body)}\r\n\r\n${body}`,
   );
-  socket.destroy();
+}
+
+function parseRequestUrl(requestUrl: string | undefined): URL | null {
+  try {
+    return new URL(requestUrl ?? "/", "http://relay.local");
+  } catch {
+    return null;
+  }
 }
 
 function parseUpgradeTarget(requestUrl: string | undefined): UpgradeTarget | { error: string } {
-  const url = new URL(requestUrl ?? "/", "http://relay.local");
+  const url = parseRequestUrl(requestUrl);
+  if (!url) return { error: "Malformed request target" };
   if (url.pathname !== "/ws") return { error: "Not found" };
   if (url.searchParams.get("v") !== "2") {
     return { error: "Invalid v parameter (expected 2)" };
@@ -184,7 +192,12 @@ export async function startStandaloneRelayServer(
 
   const sessions = new Map<string, RelaySession>();
   const httpServer: HttpServer = createServer((request, response) => {
-    const url = new URL(request.url ?? "/", "http://relay.local");
+    const url = parseRequestUrl(request.url);
+    if (!url) {
+      response.writeHead(400, { "Content-Type": "text/plain; charset=utf-8" });
+      response.end("Malformed request target");
+      return;
+    }
     if (request.method === "GET" && url.pathname === "/health") {
       response.writeHead(200, { "Content-Type": "application/json" });
       response.end(JSON.stringify({ status: "ok" }));

@@ -1826,6 +1826,13 @@ export const ar: TranslationResources = {
         remove: "إزالة",
         removeTitle: "هل تريد إزالة {{name}}؟",
         removeMessage: "سيتوقف العنوان المحلي عن توجيه الطلبات إلى الخدمة الهدف.",
+        sourceDisconnected: "اتصل بالمضيف المصدر ثم حاول مرة أخرى.",
+        targetDisconnected: "اتصل بالمضيف الهدف ثم حاول مرة أخرى.",
+        missingCreatedService: "لم يُرجع المضيف المصدر الخدمة التي تم إنشاؤها.",
+        authorizationRollbackFailed: "فشل تفويض الهدف وتعذرت إزالة التعيين من المصدر: {{message}}",
+        authorizationOutcomeUnknown:
+          "نتيجة تفويض الهدف غير معروفة. تم الاحتفاظ بتعيين المصدر لتتمكن من إعادة المحاولة أو إزالته.",
+        authorizationRepairFailed: "تعذرت استعادة تفويض الهدف لخدمة واحدة أو أكثر.",
       },
       orchestration: {
         title: "التنسيق",

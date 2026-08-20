@@ -1867,6 +1867,15 @@ export const es: TranslationResources = {
         remove: "Eliminar",
         removeTitle: "¿Eliminar {{name}}?",
         removeMessage: "La dirección local dejará de dirigir tráfico al servicio de destino.",
+        sourceDisconnected: "Conéctate al host de origen e inténtalo de nuevo.",
+        targetDisconnected: "Conéctate al host de destino e inténtalo de nuevo.",
+        missingCreatedService: "El host de origen no devolvió el servicio creado.",
+        authorizationRollbackFailed:
+          "Falló la autorización del destino y no se pudo eliminar la asignación de origen: {{message}}",
+        authorizationOutcomeUnknown:
+          "Se desconoce el resultado de la autorización del destino. Se conservó la asignación de origen para que puedas reintentarla o eliminarla.",
+        authorizationRepairFailed:
+          "No se pudo restaurar la autorización del destino para uno o más servicios.",
       },
       orchestration: {
         title: "Orquestación",

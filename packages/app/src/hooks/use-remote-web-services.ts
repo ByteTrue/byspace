@@ -1,9 +1,12 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import type { RemoteWebService, RemoteWebServiceTarget } from "@bytetrue/byspace-protocol/messages";
 import { useFetchQuery } from "@/data/query";
 import {
   getHostRuntimeStore,
   useHostRuntimeClient,
+  useHostRuntimeConnectionStatuses,
   useHostRuntimeIsConnected,
 } from "@/runtime/host-runtime";
 
@@ -16,6 +19,7 @@ export function useRemoteWebServices(
   enabled: boolean,
   sourceDaemonPublicKeyB64?: string,
 ) {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const client = useHostRuntimeClient(serverId);
   const isConnected = useHostRuntimeIsConnected(serverId);
@@ -24,7 +28,9 @@ export function useRemoteWebServices(
   const query = useFetchQuery({
     queryKey,
     queryFn: async (): Promise<RemoteWebService[]> => {
-      if (!client) throw new Error("Host is disconnected");
+      if (!client) {
+        throw new Error(t("settings.host.remoteWebServices.sourceDisconnected"));
+      }
       const result = await client.listRemoteWebServices();
       if (result.error) throw new Error(result.error);
       return result.services ?? [];
@@ -34,33 +40,93 @@ export function useRemoteWebServices(
     staleTimeMs: 10_000,
   });
 
+  const services = useMemo(() => query.data ?? [], [query.data]);
+  const targetServerIds = useMemo(
+    () => [...new Set(services.map((service) => service.target.serverId))],
+    [services],
+  );
+  const targetStatuses = useHostRuntimeConnectionStatuses(targetServerIds);
+  const [reconciliationError, setReconciliationError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!sourceDaemonPublicKeyB64 || !isConnected) return;
+    let cancelled = false;
+    void Promise.all(
+      services.map(async (service) => {
+        if (targetStatuses.get(service.target.serverId) !== "online") return;
+        const targetClient = getHostRuntimeStore().getClient(service.target.serverId);
+        if (!targetClient) return;
+        const result = await targetClient.grantRemoteWebService({
+          serviceId: service.id,
+          sourceDaemonPublicKeyB64,
+          targetPort: service.target.port,
+        });
+        if (result.error) throw new Error(result.error);
+      }),
+    ).then(
+      () => {
+        if (!cancelled) setReconciliationError(null);
+        return undefined;
+      },
+      () => {
+        if (!cancelled) {
+          setReconciliationError(t("settings.host.remoteWebServices.authorizationRepairFailed"));
+        }
+        return undefined;
+      },
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [isConnected, services, sourceDaemonPublicKeyB64, t, targetStatuses]);
+
   const createMutation = useMutation({
     mutationFn: async (input: { name: string; target: RemoteWebServiceTarget }) => {
-      if (!client || !sourceDaemonPublicKeyB64) throw new Error("Source host is disconnected");
+      if (!client || !sourceDaemonPublicKeyB64) {
+        throw new Error(t("settings.host.remoteWebServices.sourceDisconnected"));
+      }
       const targetClient = getHostRuntimeStore().getClient(input.target.serverId);
-      if (!targetClient) throw new Error("Target host is disconnected");
+      if (!targetClient) {
+        throw new Error(t("settings.host.remoteWebServices.targetDisconnected"));
+      }
       const result = await client.createRemoteWebService(input);
       if (result.error) throw new Error(result.error);
-      if (!result.service) throw new Error("Host returned no Remote Web Service");
-      try {
-        const grant = await targetClient.grantRemoteWebService({
-          serviceId: result.service.id,
-          sourceDaemonPublicKeyB64,
-          targetPort: input.target.port,
-        });
-        if (grant.error) throw new Error(grant.error);
-      } catch (error) {
-        const rollback = await client.removeRemoteWebService(result.service.id).catch(() => null);
+      const service = result.service;
+      if (!service) {
+        throw new Error(t("settings.host.remoteWebServices.missingCreatedService"));
+      }
+      const rollbackSource = async (cause: unknown): Promise<never> => {
+        const rollback = await client.removeRemoteWebService(service.id).catch(() => null);
         if (!rollback || rollback.error) {
-          void queryClient.invalidateQueries({ queryKey });
           throw new Error(
-            `Target authorization failed and the source mapping could not be rolled back: ${error instanceof Error ? error.message : String(error)}`,
-            { cause: error },
+            t("settings.host.remoteWebServices.authorizationRollbackFailed", {
+              message: cause instanceof Error ? cause.message : String(cause),
+            }),
+            { cause },
           );
         }
-        throw error;
-      }
-      return result.service;
+        throw cause;
+      };
+
+      const grant = await targetClient
+        .grantRemoteWebService({
+          serviceId: service.id,
+          sourceDaemonPublicKeyB64,
+          targetPort: input.target.port,
+        })
+        .catch(async (error: unknown) => {
+          const revoke = await targetClient
+            .revokeRemoteWebServiceGrant(service.id)
+            .catch(() => null);
+          if (!revoke || revoke.error) {
+            throw new Error(t("settings.host.remoteWebServices.authorizationOutcomeUnknown"), {
+              cause: error,
+            });
+          }
+          return await rollbackSource(error);
+        });
+      if (grant.error) return await rollbackSource(new Error(grant.error));
+      return service;
     },
     onSuccess: (service) => {
       queryClient.setQueryData<RemoteWebService[]>(queryKey, (current = []) => [
@@ -68,13 +134,20 @@ export function useRemoteWebServices(
         service,
       ]);
     },
+    onError: () => {
+      void queryClient.invalidateQueries({ queryKey });
+    },
   });
 
   const removeMutation = useMutation({
     mutationFn: async (service: RemoteWebService) => {
-      if (!client) throw new Error("Source host is disconnected");
+      if (!client) {
+        throw new Error(t("settings.host.remoteWebServices.sourceDisconnected"));
+      }
       const targetClient = getHostRuntimeStore().getClient(service.target.serverId);
-      if (!targetClient) throw new Error("Target host is disconnected");
+      if (!targetClient) {
+        throw new Error(t("settings.host.remoteWebServices.targetDisconnected"));
+      }
       const revoke = await targetClient.revokeRemoteWebServiceGrant(service.id);
       if (revoke.error) throw new Error(revoke.error);
       const result = await client.removeRemoteWebService(service.id);
@@ -86,13 +159,16 @@ export function useRemoteWebServices(
         current.filter((service) => service.id !== id),
       );
     },
+    onError: () => {
+      void queryClient.invalidateQueries({ queryKey });
+    },
   });
 
   return {
-    services: query.data ?? [],
+    services,
     isConnected,
     isLoading: query.isLoading,
-    error: query.error instanceof Error ? query.error.message : null,
+    error: query.error instanceof Error ? query.error.message : reconciliationError,
     createService: createMutation.mutateAsync,
     removeService: removeMutation.mutateAsync,
     isCreating: createMutation.isPending,

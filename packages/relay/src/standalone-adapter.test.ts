@@ -1,4 +1,5 @@
 import { once } from "node:events";
+import { connect as connectTcp } from "node:net";
 import { afterEach, describe, expect, it } from "vitest";
 import { WebSocket } from "ws";
 import {
@@ -53,6 +54,17 @@ async function openSocket(
   const messages = createMessageQueue(socket);
   await once(socket, "open");
   return { socket, messages };
+}
+
+async function sendRawHttp(port: number, request: string): Promise<string> {
+  const socket = connectTcp({ host: "127.0.0.1", port });
+  const chunks: Buffer[] = [];
+  socket.on("data", (chunk) => chunks.push(Buffer.from(chunk)));
+  await once(socket, "connect");
+  socket.write(request);
+  await once(socket, "end");
+  socket.destroy();
+  return Buffer.concat(chunks).toString("utf8");
 }
 
 function decodeText(message: QueuedMessage): string {
@@ -158,6 +170,32 @@ describe("standalone relay adapter", () => {
     const response = await fetch(`${server.httpUrl}/ws?serverId=srv_test&role=server&v=1`);
     expect(response.status).toBe(400);
     await expect(response.text()).resolves.toBe("Invalid v parameter (expected 2)");
+  });
+
+  it("rejects malformed HTTP and upgrade targets without stopping the relay", async () => {
+    const server = await start();
+    const malformedHttp = await sendRawHttp(
+      server.port,
+      "GET http://[ HTTP/1.1\r\nHost: relay.local\r\nConnection: close\r\n\r\n",
+    );
+    expect(malformedHttp).toContain("HTTP/1.1 400 Bad Request");
+    expect(malformedHttp).toContain("Malformed request target");
+
+    const malformedUpgrade = await sendRawHttp(
+      server.port,
+      "GET http://[ HTTP/1.1\r\n" +
+        "Host: relay.local\r\n" +
+        "Connection: Upgrade\r\n" +
+        "Upgrade: websocket\r\n" +
+        `Authorization: Bearer ${TEST_ACCESS_TOKEN}\r\n` +
+        "Sec-WebSocket-Version: 13\r\n" +
+        "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n\r\n",
+    );
+    expect(malformedUpgrade).toContain("HTTP/1.1 400 Bad Request");
+    expect(malformedUpgrade).toContain("Malformed request target");
+
+    const health = await fetch(`${server.httpUrl}/health`);
+    expect(health.status).toBe(200);
   });
 
   it("requires the configured access token for WebSocket upgrades", async () => {

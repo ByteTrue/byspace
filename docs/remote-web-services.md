@@ -99,7 +99,19 @@ In each source host's settings, create the address needed on that host:
 | B           | `office-ai`  | A, port `8317` | `http://office-ai.remote.localhost:<B daemon port>` |
 | A           | `home-web`   | B, port `5173` | `http://home-web.remote.localhost:<A daemon port>`  |
 
-Mappings persist on the source daemon. Creating one also writes an authorization grant on the target daemon for the source daemon public key, mapping ID, and loopback port. Removing the mapping revokes that target grant before deleting the source route. Neither record stores the Data Relay endpoint or access token.
+Mappings persist on the source daemon. Creating one also writes an authorization grant on the target daemon for the source daemon public key, mapping ID, and loopback port. The source mapping is the authorization desired state: whenever the management UI loads it while both daemons are online, the Web app idempotently repairs the exact target grant, including after an indeterminate create response or target reconnect. Removing the mapping revokes that target grant before deleting the source route. Neither record stores the Data Relay endpoint or access token.
+
+## User interface
+
+Remote Web Services are managed from **Host settings → Connections**.
+
+### Desktop browser
+
+![Remote Web Services settings on a desktop browser](assets/remote-web-services/desktop.png)
+
+### Compact browser viewport
+
+<img src="assets/remote-web-services/compact.png" alt="Remote Web Services settings in a compact browser viewport" width="390">
 
 ## Moving the relay to a VPS
 
@@ -182,7 +194,7 @@ Remote Web Services do not replay requests, resume SSE streams, or cache respons
 - Use TLS for every non-loopback endpoint.
 - Source-side `*.remote.localhost` routes accept only raw loopback TCP clients; forwarded headers cannot bypass this boundary.
 - Target-side grants bind each mapping ID and port to the source daemon's long-term E2EE public key. Revocation blocks new connections; an already active HTTP/SSE/WebSocket stream ends normally or when either side disconnects.
-- Replay protection binds every data frame to fresh per-connection nonces and a monotonic sequence number; repeated or cross-connection frames close the stream before reaching loopback.
-- Store the access token in a mode-`0600` environment/secret file, keep it out of shell history and service command lines, and rotate it if exposed. The shared token remains an availability trust domain: a malicious holder can compete for Relay session IDs, but cannot pass target loopback authorization.
+- The target issues a fresh per-connection challenge before accepting `remote.web.open`; a captured open cannot be replayed after reconnect or daemon restart. Every data frame is then bound to the negotiated session and a monotonic sequence number, so repeated or cross-connection frames close the stream before reaching loopback.
+- Store the access token in a mode-`0600` environment/secret file, keep it out of shell history and service command lines, and rotate it if exposed. The shared token remains an availability trust domain: a malicious holder can consume bounded Relay session/socket capacity, but cannot pass target loopback authorization.
 - Keep the daemon and reverse proxy updated.
 - Prefer a dedicated VPS daemon with no projects or provider credentials when hosting a central relay.

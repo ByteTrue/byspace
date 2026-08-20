@@ -1857,6 +1857,15 @@ export const ptBR: TranslationResources = {
         remove: "Remover",
         removeTitle: "Remover {{name}}?",
         removeMessage: "O endereço local deixará de encaminhar para o serviço de destino.",
+        sourceDisconnected: "Conecte-se ao host de origem e tente novamente.",
+        targetDisconnected: "Conecte-se ao host de destino e tente novamente.",
+        missingCreatedService: "O host de origem não retornou o serviço criado.",
+        authorizationRollbackFailed:
+          "A autorização do destino falhou e não foi possível remover o mapeamento de origem: {{message}}",
+        authorizationOutcomeUnknown:
+          "O resultado da autorização do destino é desconhecido. O mapeamento de origem foi mantido para que você possa tentar novamente ou removê-lo.",
+        authorizationRepairFailed:
+          "Não foi possível restaurar a autorização do destino para um ou mais serviços.",
       },
       orchestration: {
         title: "Orquestração",

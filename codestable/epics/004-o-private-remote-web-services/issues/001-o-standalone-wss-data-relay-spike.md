@@ -99,4 +99,4 @@ PR #1 的安全复核发现 standalone Relay 尚不能视为完成：共享 toke
 - 增加 relay-wide 连接与待转发字节总预算，避免逐 session 上限相乘；
 - 与 Issue 002 的 E2EE 来源授权和 replay protection 一起完成复审。
 
-当前修复已完成实现与定向测试：活动 control/data socket 不再允许同 token 连接替换；Relay 新增全局 physical socket 与 aggregate buffered-byte budget；文档明确共享 token 仍是可用性信任域，而目标端 source grant、双向长期 daemon 公钥身份和 nonce/sequence replay protection 才是 loopback 数据安全边界。保持本 Issue open，直到 PR 全量 CI 与独立复审通过。
+当前修复已完成实现与定向测试：活动 control/data socket 不再允许同 token 连接替换；Relay 新增全局 physical socket 与 aggregate buffered-byte budget；公开 HTTP 与 Upgrade handler 对 malformed request target 返回 400 而不会让进程退出；文档明确共享 token 仍是可用性信任域，而目标端 source grant、双向长期 daemon 公钥身份、目标新鲜 challenge 和 sequence replay protection 才是 loopback 数据安全边界。保持本 Issue open，直到 PR 全量 CI 与独立复审通过。

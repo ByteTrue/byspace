@@ -1841,6 +1841,14 @@ export const ja: TranslationResources = {
         remove: "削除",
         removeTitle: "{{name}} を削除しますか？",
         removeMessage: "ローカルアドレスから対象サービスへのルーティングが停止します。",
+        sourceDisconnected: "接続元ホストに接続して、もう一度お試しください。",
+        targetDisconnected: "対象ホストに接続して、もう一度お試しください。",
+        missingCreatedService: "接続元ホストから作成済みサービスが返されませんでした。",
+        authorizationRollbackFailed:
+          "対象の認可に失敗し、接続元のマッピングも削除できませんでした: {{message}}",
+        authorizationOutcomeUnknown:
+          "対象の認可結果を確認できません。再試行または削除できるよう、接続元のマッピングを保持しました。",
+        authorizationRepairFailed: "1 件以上のサービスで対象の認可を復元できませんでした。",
       },
       orchestration: {
         title: "オーケストレーション",

@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { ComboboxTrigger } from "@/components/ui/combobox-trigger";
 import { useToast } from "@/contexts/toast-context";
 import { useRemoteWebServices } from "@/hooks/use-remote-web-services";
-import { useHosts } from "@/runtime/host-runtime";
+import { useHostRuntimeConnectionStatuses, useHosts } from "@/runtime/host-runtime";
 import { SettingsSection } from "@/screens/settings/settings-section";
 import { useSessionStore } from "@/stores/session-store";
 import { settingsStyles } from "@/styles/settings";
@@ -349,6 +349,8 @@ export function RemoteWebServicesSection({ host }: { host: HostProfile }) {
   const { t } = useTranslation();
   const toast = useToast();
   const hosts = useHosts();
+  const hostServerIds = useMemo(() => hosts.map((candidate) => candidate.serverId), [hosts]);
+  const connectionStatuses = useHostRuntimeConnectionStatuses(hostServerIds);
   const sessions = useSessionStore((state) => state.sessions);
   const serverInfo = sessions[host.serverId]?.serverInfo ?? null;
   const isSupported = serverInfo?.features?.remoteWebServices === true;
@@ -371,6 +373,7 @@ export function RemoteWebServicesSection({ host }: { host: HostProfile }) {
     () =>
       hosts.flatMap((candidate) => {
         if (candidate.serverId === host.serverId) return [];
+        if (connectionStatuses.get(candidate.serverId) !== "online") return [];
         const candidateInfo = sessions[candidate.serverId]?.serverInfo;
         if (candidateInfo?.features?.remoteWebServices !== true) return [];
         if (candidateInfo.dataRelay?.configured !== true) return [];
@@ -379,7 +382,7 @@ export function RemoteWebServicesSection({ host }: { host: HostProfile }) {
         if (!daemonPublicKeyB64) return [];
         return [{ serverId: candidate.serverId, label: candidate.label, daemonPublicKeyB64 }];
       }),
-    [host.serverId, hosts, sessions],
+    [connectionStatuses, host.serverId, hosts, sessions],
   );
 
   const emptyMessage = resolveEmptyMessage({

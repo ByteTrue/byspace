@@ -2084,6 +2084,14 @@ const koTranslations = {
         remove: "삭제",
         removeTitle: "{{name}}을(를) 삭제할까요?",
         removeMessage: "로컬 주소가 대상 서비스로 더 이상 라우팅되지 않습니다.",
+        sourceDisconnected: "소스 호스트에 연결한 후 다시 시도하세요.",
+        targetDisconnected: "대상 호스트에 연결한 후 다시 시도하세요.",
+        missingCreatedService: "소스 호스트가 생성된 서비스를 반환하지 않았습니다.",
+        authorizationRollbackFailed:
+          "대상 권한 부여에 실패했으며 소스 매핑도 제거하지 못했습니다: {{message}}",
+        authorizationOutcomeUnknown:
+          "대상 권한 부여 결과를 확인할 수 없습니다. 다시 시도하거나 제거할 수 있도록 소스 매핑을 유지했습니다.",
+        authorizationRepairFailed: "하나 이상의 서비스에 대한 대상 권한을 복원하지 못했습니다.",
       },
       orchestration: {
         title: "오케스트레이션",

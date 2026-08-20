@@ -1,6 +1,6 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
-import { createServer, type Server } from "node:http";
+import { createServer, request as httpRequest, type Server } from "node:http";
 import net from "node:net";
 import os from "node:os";
 import path from "node:path";
@@ -28,18 +28,28 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function isDaemonHealthy(port: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    const request = httpRequest(
+      { host: "127.0.0.1", port, path: "/health", method: "GET", agent: false },
+      (response) => {
+        response.resume();
+        resolve(response.statusCode === 200);
+      },
+    );
+    request.setTimeout(1_000, () => request.destroy());
+    request.once("error", () => resolve(false));
+    request.end();
+  });
+}
+
 async function waitForDaemon(port: number, child: ChildProcess, output: string[]): Promise<void> {
   const deadline = Date.now() + 30_000;
   while (Date.now() < deadline) {
     if (child.exitCode !== null) {
       throw new Error(`Test daemon exited with code ${child.exitCode}\n${output.join("")}`);
     }
-    try {
-      const response = await fetch(`http://127.0.0.1:${port}/health`);
-      if (response.ok) return;
-    } catch {
-      // The listener is not ready yet.
-    }
+    if (await isDaemonHealthy(port)) return;
     await sleep(100);
   }
   throw new Error(`Timed out waiting for test daemon on ${port}\n${output.join("")}`);
