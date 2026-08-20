@@ -65,6 +65,7 @@ import { formatConnectionStatus, getConnectionStatusTone } from "@/utils/daemons
 import { formatLatency } from "@/utils/latency";
 import { hasDaemonReconnectedAfter, type DaemonConnectionMarker } from "./daemon-reconnect";
 import { PairDeviceModal } from "@/components/pair-device-modal";
+import { RemoteWebServicesSection } from "./remote-web-services-section";
 
 const ThemedChevronRight = withUnistyles(ChevronRight);
 const chevronProps = (theme: Theme) => ({
@@ -506,6 +507,8 @@ export function HostSettingsPage({
       <HostStatusBadges serverId={serverId} />
 
       <HostAppearanceSection host={host} />
+
+      <RemoteWebServicesSection host={host} />
 
       <UpdateDaemonCard host={host} />
 

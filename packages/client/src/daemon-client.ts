@@ -2318,6 +2318,47 @@ export class DaemonClient {
     });
   }
 
+  async listRemoteWebServices(
+    requestId?: string,
+  ): Promise<
+    Extract<SessionOutboundMessage, { type: "remote_web_service.list.response" }>["payload"]
+  > {
+    return this.sendNamespacedCorrelatedSessionRequest<"remote_web_service.list.response">({
+      requestId,
+      message: { type: "remote_web_service.list.request" },
+    });
+  }
+
+  async createRemoteWebService(
+    input: {
+      name: string;
+      target: Extract<
+        SessionInboundMessage,
+        { type: "remote_web_service.create.request" }
+      >["target"];
+    },
+    requestId?: string,
+  ): Promise<
+    Extract<SessionOutboundMessage, { type: "remote_web_service.create.response" }>["payload"]
+  > {
+    return this.sendNamespacedCorrelatedSessionRequest<"remote_web_service.create.response">({
+      requestId,
+      message: { type: "remote_web_service.create.request", ...input },
+    });
+  }
+
+  async removeRemoteWebService(
+    id: string,
+    requestId?: string,
+  ): Promise<
+    Extract<SessionOutboundMessage, { type: "remote_web_service.remove.response" }>["payload"]
+  > {
+    return this.sendNamespacedCorrelatedSessionRequest<"remote_web_service.remove.response">({
+      requestId,
+      message: { type: "remote_web_service.remove.request", id },
+    });
+  }
+
   async archiveWorkspace(
     workspaceId: string,
     requestId?: string,

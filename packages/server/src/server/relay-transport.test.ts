@@ -329,6 +329,35 @@ describe("relay-transport control lifecycle", () => {
     expect(completed).toBe(true);
   });
 
+  test("terminates data sockets whose E2EE handshake never completes", async () => {
+    vi.useFakeTimers();
+    const logger = createMockLogger();
+    const attachSocket = vi.fn();
+    const controller = startRelayTransport({
+      logger: logger as unknown as pino.Logger,
+      attachSocket,
+      relayEndpoint: "relay.byspace.test:443",
+      relayUseTls: true,
+      serverId: "srv_test",
+      daemonKeyPair: generateKeyPair(),
+      createWebSocket: relay.createWebSocket,
+    });
+    controllers.push(controller);
+
+    const control = relay.sockets[0];
+    control.open();
+    control.message(JSON.stringify({ type: "sync", connectionIds: [] }), false);
+    control.message(JSON.stringify({ type: "connected", connectionId: "clt_stalled" }), false);
+    const dataSocket = relay.sockets[1];
+    dataSocket.open();
+
+    await vi.advanceTimersByTimeAsync(10_000);
+
+    expect(dataSocket.terminateCalls).toBe(1);
+    expect(attachSocket).not.toHaveBeenCalled();
+    expect(hasLogMessage(logger, "warn", "relay_e2ee_handshake_failed")).toBe(true);
+  });
+
   test("uses relayUseTls for control and data socket URLs", () => {
     const logger = createMockLogger();
     const controller = startRelayTransport({

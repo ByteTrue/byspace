@@ -6,6 +6,10 @@ import { hostname as getHostname } from "node:os";
 import path from "node:path";
 import { randomBytes } from "node:crypto";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
+import {
+  startStandaloneRelayServer,
+  type StandaloneRelayServer,
+} from "@bytetrue/byspace-relay/standalone";
 import type { Logger } from "pino";
 import { z } from "zod";
 import { createBranchChangeRouteHandler } from "./script-route-branch-handler.js";
@@ -138,6 +142,8 @@ import { createConfiguredTerminalManager } from "../terminal/terminal-manager-fa
 import { applyTerminalAgentHookSetting } from "../terminal/agent-hooks/terminal-agent-hook-setting.js";
 import { loadOrCreateDaemonKeyPair } from "./daemon-keypair.js";
 import { RelayRuntime } from "./relay-runtime.js";
+import { RemoteWebServiceTargetAcceptor } from "./remote-web-service/data-relay.js";
+import { RemoteWebServiceManager } from "./remote-web-service/remote-web-service-manager.js";
 import type { PushNotificationSender } from "./push/notifications.js";
 import { getOrCreateServerId } from "./server-id.js";
 import { resolveDaemonVersion } from "./daemon-version.js";
@@ -348,6 +354,12 @@ export interface BySpaceDaemonConfig {
   relayPublicEndpoint?: string;
   relayUseTls?: boolean;
   relayPublicUseTls?: boolean;
+  dataRelayListen?: string | null;
+  dataRelayEndpoint?: string | null;
+  dataRelayPublicEndpoint?: string | null;
+  dataRelayUseTls?: boolean;
+  dataRelayPublicUseTls?: boolean;
+  dataRelayAccessToken?: string | null;
   serviceProxy?: {
     publicBaseUrl: string | null;
     standaloneListen: string | null;
@@ -383,6 +395,7 @@ export interface BySpaceDaemon {
   agentStorage: AgentStorage;
   terminalManager: TerminalManager;
   serviceProxy: ServiceProxySubsystem;
+  remoteWebServiceManager: RemoteWebServiceManager;
   scriptRuntimeStore: WorkspaceScriptRuntimeStore;
   start(): Promise<void>;
   stop(): Promise<void>;
@@ -465,6 +478,21 @@ function createInitialMutableDaemonConfig(config: BySpaceDaemonConfig): MutableD
   return initialConfig;
 }
 
+function resolveDataRelayListenTarget(
+  config: BySpaceDaemonConfig,
+): Extract<ListenTarget, { type: "tcp" }> | null {
+  const listenTarget = config.dataRelayListen ? parseListenString(config.dataRelayListen) : null;
+  if (listenTarget && listenTarget.type !== "tcp") {
+    throw new Error("BYSPACE_DATA_RELAY_LISTEN must be a TCP host:port");
+  }
+  if ((listenTarget || config.dataRelayEndpoint) && !config.dataRelayAccessToken?.trim()) {
+    throw new Error(
+      "BYSPACE_DATA_RELAY_ACCESS_TOKEN is required when hosting or connecting to a Data Relay",
+    );
+  }
+  return listenTarget;
+}
+
 export async function createBySpaceDaemon(
   config: BySpaceDaemonConfig,
   rootLogger: Logger,
@@ -493,6 +521,10 @@ export async function createBySpaceDaemon(
     logger.warn({ err: error }, "Failed to reconcile managed helper process ledger");
   });
   let relayRuntime: RelayRuntime | null = null;
+  let dataRelayRuntime: RelayRuntime | null = null;
+  const remoteWebServiceTargetAcceptor = new RemoteWebServiceTargetAcceptor(
+    logger.child({ component: "remote-web-service-target" }),
+  );
 
   const staticDir = config.staticDir;
   const downloadTokenTtlMs = config.downloadTokenTtlMs ?? 60000;
@@ -502,6 +534,8 @@ export async function createBySpaceDaemon(
   });
 
   const listenTarget = parseListenString(config.listen);
+  const dataRelayListenTarget = resolveDataRelayListenTarget(config);
+  let dataRelayHost: StandaloneRelayServer | null = null;
 
   const app = express();
   app.set("trust proxy", resolveExpressTrustProxySetting(config));
@@ -519,6 +553,19 @@ export async function createBySpaceDaemon(
   const serviceProxy = createServiceProxySubsystem({
     logger,
     publicBaseUrl: serviceProxyPublicBaseUrl,
+  });
+  const remoteWebServiceManager = new RemoteWebServiceManager({
+    byspaceHome: config.byspaceHome,
+    serviceProxy,
+    dataRelay:
+      config.dataRelayEndpoint && config.dataRelayAccessToken
+        ? {
+            endpoint: config.dataRelayEndpoint,
+            useTls: config.dataRelayUseTls ?? true,
+            accessToken: config.dataRelayAccessToken,
+          }
+        : null,
+    logger,
   });
   const scriptRuntimeStore = new WorkspaceScriptRuntimeStore();
   const workspaceSetupRuntime = new WorkspaceSetupRuntime();
@@ -1302,6 +1349,23 @@ export async function createBySpaceDaemon(
   const start = async () => {
     let mainStarted = false;
     try {
+      await remoteWebServiceManager.initialize();
+      if (dataRelayListenTarget) {
+        dataRelayHost = await startStandaloneRelayServer({
+          host: dataRelayListenTarget.host,
+          port: dataRelayListenTarget.port,
+          accessToken: config.dataRelayAccessToken ?? undefined,
+        });
+        logger.info(
+          {
+            host: dataRelayHost.host,
+            port: dataRelayHost.port,
+            publicEndpoint: config.dataRelayPublicEndpoint,
+            elapsed: elapsed(),
+          },
+          "Data Relay listening",
+        );
+      }
       if (serviceProxyListenTarget) {
         const boundServiceProxyTarget = await serviceProxy.startStandalone({
           listenTarget: serviceProxyListenTarget,
@@ -1425,6 +1489,8 @@ export async function createBySpaceDaemon(
               daemonRuntimeConfig,
               serviceProxyPublicBaseUrl,
               workspaceSetupRuntime,
+              remoteWebServiceManager,
+              daemonKeyPair.publicKeyB64,
             );
 
             relayRuntime = new RelayRuntime({
@@ -1453,6 +1519,20 @@ export async function createBySpaceDaemon(
               });
             }
             await relayRuntime.start();
+
+            if (config.dataRelayEndpoint && config.dataRelayAccessToken) {
+              dataRelayRuntime = new RelayRuntime({
+                logger: logger.child({ component: "data-relay-runtime" }),
+                attachSocket: async (ws) => remoteWebServiceTargetAcceptor.attachSocket(ws),
+                relayEndpoint: config.dataRelayEndpoint,
+                relayUseTls: config.dataRelayUseTls ?? true,
+                relayAccessToken: config.dataRelayAccessToken,
+                serverId,
+                daemonKeyPair: daemonKeyPair.keyPair,
+                initialEnabled: true,
+              });
+              await dataRelayRuntime.start();
+            }
           };
 
           logAndResolve().then(resolve, reject);
@@ -1475,6 +1555,10 @@ export async function createBySpaceDaemon(
       speechService.start();
       scriptHealthMonitor.start();
     } catch (error) {
+      await dataRelayRuntime?.stop().catch(() => undefined);
+      dataRelayRuntime = null;
+      await dataRelayHost?.stop().catch(() => undefined);
+      dataRelayHost = null;
       await serviceProxy.stopStandalone().catch(() => undefined);
       if (mainStarted) {
         httpServer.closeAllConnections();
@@ -1500,6 +1584,9 @@ export async function createBySpaceDaemon(
     speechService.stop();
     await scheduleService.stop().catch(() => undefined);
     await relayRuntime?.stop().catch(() => undefined);
+    await dataRelayRuntime?.stop().catch(() => undefined);
+    await dataRelayHost?.stop().catch(() => undefined);
+    dataRelayHost = null;
     if (wsServer) {
       await wsServer.close();
     }
@@ -1527,6 +1614,7 @@ export async function createBySpaceDaemon(
     agentStorage,
     terminalManager,
     serviceProxy,
+    remoteWebServiceManager,
     scriptRuntimeStore,
     start,
     stop,

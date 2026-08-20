@@ -30,7 +30,8 @@ Your code never leaves your machine. BySpace is local-first.
 - **Daemon:** Local server that spawns and manages agent processes and exposes the WebSocket API.
 - **Web app:** Expo/React Native Web client hosted independently or served by the daemon.
 - **CLI:** Terminal interface for agent workflows that can also start and manage the daemon.
-- **Relay:** Optional encrypted bridge for remote access without opening ports directly.
+- **Relay:** Optional encrypted bridge for remote control without opening daemon ports directly.
+- **Data Relay:** Optional daemon-hosted WSS listener that carries E2EE Remote Web Service traffic separately from the control Relay.
 
 ## Packages
 
@@ -42,7 +43,8 @@ The heart of BySpace. A Node.js process that:
 - Manages agent lifecycle (create, run, stop, resume, archive)
 - Streams agent output in real time via a timeline model
 - Provides agent-to-agent tools through a transport-neutral tool catalog, with MCP as one adapter
-- Optionally connects outbound to a relay for remote access
+- Optionally connects outbound to the control Relay and a separately configured Data Relay
+- Optionally hosts an isolated Data Relay listener for private daemon-to-daemon Web services
 - Optionally serves the browser web client from the same HTTP server (self-hosting guide: [public-docs/web-ui.md](../public-docs/web-ui.md))
 
 All paths are under `packages/server/src/`.
@@ -61,6 +63,7 @@ All paths are under `packages/server/src/`.
 | `server/agent/providers/`         | Provider adapters (see "Agent providers" below)                              |
 | `server/workspace-git-service.ts` | Demand-driven Workspace Git/forge snapshots and cache                        |
 | `server/relay-transport.ts`       | Outbound relay connection with E2E encryption                                |
+| `server/remote-web-service/`      | Private HTTP/SSE/WebSocket mappings over the daemon-hosted Data Relay        |
 | `server/schedule/`                | Cron-based scheduled agents                                                  |
 | `server/loop-service.ts`          | Looping agent runs that retry until an exit condition                        |
 | `server/chat/`                    | Chat rooms for agent-to-agent and human-to-agent messaging                   |
@@ -122,7 +125,7 @@ Enables remote access when the daemon is behind a firewall.
 - Optional E2EE capability negotiation preserves application frame kind: text plaintext uses base64 ciphertext text frames, while binary plaintext uses raw ciphertext binary frames; mixed-version peers remain base64-only
 - Self-hosted relays opt into TLS with `daemon.relay.useTls` or `BYSPACE_RELAY_USE_TLS=true`; the public (client-facing) TLS setting can be overridden independently via `daemon.relay.publicUseTls` or `BYSPACE_RELAY_PUBLIC_USE_TLS`
 
-BySpace deploys its own Stable and Beta Cloudflare Relay Workers; see [release-engineering.md](release-engineering.md) for channel isolation.
+BySpace deploys its own Stable and Beta Cloudflare Relay Workers for control traffic; see [release-engineering.md](release-engineering.md) for channel isolation. High-volume Remote Web Service traffic instead uses a standalone WSS Data Relay hosted by any BySpace daemon, never the hosted Worker/Durable Object path. See [remote-web-services.md](remote-web-services.md) for topology, deployment, and failure semantics.
 
 See [SECURITY.md](../SECURITY.md) for the full threat model.
 

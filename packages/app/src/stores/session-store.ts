@@ -358,6 +358,8 @@ export interface DaemonServerInfo {
   serverId: string;
   hostname: string | null;
   version: string | null;
+  daemonPublicKeyB64?: string;
+  dataRelay?: ServerInfoStatusPayload["dataRelay"];
   capabilities?: ServerCapabilities;
   features?: ServerInfoStatusPayload["features"];
 }
@@ -759,17 +761,29 @@ function isSessionServerInfoUnchanged(input: {
   currentServerInfo: SessionState["serverInfo"] | undefined;
   nextHostname: string | null;
   nextVersion: string | null;
+  nextDaemonPublicKeyB64: string | undefined;
+  nextDataRelay: ServerInfoStatusPayload["dataRelay"] | undefined;
   nextCapabilities: ServerCapabilities | undefined;
   nextFeatures: ServerInfoStatusPayload["features"] | undefined;
   nextServerId: string;
 }): boolean {
-  const { currentServerInfo, nextHostname, nextVersion, nextCapabilities, nextFeatures } = input;
+  const {
+    currentServerInfo,
+    nextHostname,
+    nextVersion,
+    nextDaemonPublicKeyB64,
+    nextDataRelay,
+    nextCapabilities,
+    nextFeatures,
+  } = input;
   const prevHostname = currentServerInfo?.hostname?.trim() || null;
   const prevVersion = currentServerInfo?.version?.trim() || null;
   return (
     currentServerInfo?.serverId === input.nextServerId &&
     prevHostname === nextHostname &&
     prevVersion === nextVersion &&
+    currentServerInfo?.daemonPublicKeyB64 === nextDaemonPublicKeyB64 &&
+    currentServerInfo?.dataRelay?.configured === nextDataRelay?.configured &&
     areServerCapabilitiesEqual(currentServerInfo?.capabilities, nextCapabilities) &&
     areServerInfoFeaturesEqual(currentServerInfo?.features, nextFeatures)
   );
@@ -943,6 +957,8 @@ export const useSessionStore = create<SessionStore>()(
 
           const nextHostname = info.hostname?.trim() || null;
           const nextVersion = info.version?.trim() || null;
+          const nextDaemonPublicKeyB64 = info.daemonPublicKeyB64?.trim() || undefined;
+          const nextDataRelay = info.dataRelay;
           const nextCapabilities = info.capabilities;
           const nextFeatures = info.features;
 
@@ -951,6 +967,8 @@ export const useSessionStore = create<SessionStore>()(
               currentServerInfo: session.serverInfo,
               nextHostname,
               nextVersion,
+              nextDaemonPublicKeyB64,
+              nextDataRelay,
               nextCapabilities,
               nextFeatures,
               nextServerId: info.serverId,
@@ -969,6 +987,8 @@ export const useSessionStore = create<SessionStore>()(
                   serverId: info.serverId,
                   hostname: nextHostname,
                   version: nextVersion,
+                  ...(nextDaemonPublicKeyB64 ? { daemonPublicKeyB64: nextDaemonPublicKeyB64 } : {}),
+                  ...(nextDataRelay ? { dataRelay: nextDataRelay } : {}),
                   ...(nextCapabilities ? { capabilities: nextCapabilities } : {}),
                   ...(nextFeatures ? { features: nextFeatures } : {}),
                 },

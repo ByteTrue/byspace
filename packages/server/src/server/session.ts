@@ -13,6 +13,7 @@ import {
   serializeAgentStreamEvent,
   type AgentSnapshotPayload,
   type FirstAgentContext,
+  type RemoteWebService,
   type SessionInboundMessage,
   type SessionOutboundMessage,
   type GitSetupOptions,
@@ -172,6 +173,7 @@ import {
 } from "./workspace-archive-service.js";
 import { WorkspaceReconciliationService } from "./workspace-reconciliation-service.js";
 import type { ServiceProxySubsystem } from "./service-proxy.js";
+import type { RemoteWebServiceManager } from "./remote-web-service/remote-web-service-manager.js";
 import { renameCurrentBranch as renameCurrentBranchDefault } from "../utils/checkout-git.js";
 import {
   createGitMutationService,
@@ -536,6 +538,7 @@ export interface SessionOptions {
   providerSnapshotManager: ProviderSnapshotManager;
   providerUsageService: ProviderUsageService;
   serviceProxy?: ServiceProxySubsystem;
+  remoteWebServiceManager?: RemoteWebServiceManager;
   scriptRuntimeStore?: WorkspaceScriptRuntimeStore;
   workspaceSetupSnapshots?: Map<string, WorkspaceSetupSnapshot>;
   workspaceSetupRuntime?: WorkspaceSetupRuntime;
@@ -592,6 +595,12 @@ export type SessionLifecycleIntent =
       requestId: string;
       reason: string;
     };
+
+function resolveRemoteWebServiceManager(
+  manager: RemoteWebServiceManager | undefined,
+): RemoteWebServiceManager | null {
+  return manager ?? null;
+}
 
 function parseClientCapabilities(
   capabilities: Record<string, unknown> | null | undefined,
@@ -713,6 +722,7 @@ export class Session {
   private readonly terminalManager: TerminalManager | null;
   private readonly providerSnapshotManager: ProviderSnapshotManager;
   private readonly serviceProxy: ServiceProxySubsystem | null;
+  private readonly remoteWebServiceManager: RemoteWebServiceManager | null;
   private readonly scriptRuntimeStore: WorkspaceScriptRuntimeStore | null;
   private readonly getDaemonTcpPort: (() => number | null) | null;
   private readonly getDaemonTcpHost: (() => string | null) | null;
@@ -773,6 +783,7 @@ export class Session {
       providerSnapshotManager,
       providerUsageService,
       serviceProxy,
+      remoteWebServiceManager,
       scriptRuntimeStore,
       workspaceSetupSnapshots,
       workspaceSetupRuntime,
@@ -1019,6 +1030,7 @@ export class Session {
     });
     this.providerSnapshotManager = providerSnapshotManager;
     this.serviceProxy = serviceProxy ?? null;
+    this.remoteWebServiceManager = resolveRemoteWebServiceManager(remoteWebServiceManager);
     this.scriptRuntimeStore = scriptRuntimeStore ?? null;
     this.workspaceSetupSnapshots = workspaceSetupSnapshots ?? new Map();
     this.workspaceSetupRuntime = resolveWorkspaceSetupRuntime(workspaceSetupRuntime);
@@ -1842,6 +1854,7 @@ export class Session {
       this.dispatchWorkspaceAndProjectMessage(msg) ??
       this.dispatchWorkspaceFileMessage(msg, source) ??
       this.dispatchProviderMessage(msg) ??
+      this.dispatchRemoteWebServiceMessage(msg) ??
       this.dispatchTerminalMessage(msg) ??
       this.dispatchChatScheduleLoopMessage(msg) ??
       this.dispatchMiscMessage(msg);
@@ -2332,6 +2345,98 @@ export class Session {
         return this.providerCatalogSession.handleProviderUsageListRequest(msg);
       default:
         return undefined;
+    }
+  }
+
+  private dispatchRemoteWebServiceMessage(msg: SessionInboundMessage): Promise<void> | undefined {
+    switch (msg.type) {
+      case "remote_web_service.list.request":
+        return this.handleRemoteWebServiceList(msg.requestId);
+      case "remote_web_service.create.request":
+        return this.handleRemoteWebServiceCreate(msg);
+      case "remote_web_service.remove.request":
+        return this.handleRemoteWebServiceRemove(msg.requestId, msg.id);
+      default:
+        return undefined;
+    }
+  }
+
+  private serializeRemoteWebService(service: RemoteWebService): RemoteWebService {
+    const daemonPort = this.getDaemonTcpPort?.() ?? null;
+    return {
+      ...service,
+      localUrl: daemonPort ? `http://${service.hostname}:${daemonPort}` : null,
+    };
+  }
+
+  private async handleRemoteWebServiceList(requestId: string): Promise<void> {
+    try {
+      if (!this.remoteWebServiceManager) throw new Error("Remote Web Services are unavailable");
+      const services = (await this.remoteWebServiceManager.list()).map((service) =>
+        this.serializeRemoteWebService(service),
+      );
+      this.emit({
+        type: "remote_web_service.list.response",
+        payload: { requestId, services, error: null },
+      });
+    } catch (error) {
+      this.emit({
+        type: "remote_web_service.list.response",
+        payload: {
+          requestId,
+          services: [],
+          error: error instanceof Error ? error.message : String(error),
+        },
+      });
+    }
+  }
+
+  private async handleRemoteWebServiceCreate(
+    request: Extract<SessionInboundMessage, { type: "remote_web_service.create.request" }>,
+  ): Promise<void> {
+    try {
+      if (!this.remoteWebServiceManager) throw new Error("Remote Web Services are unavailable");
+      const service = await this.remoteWebServiceManager.create({
+        name: request.name,
+        target: request.target,
+      });
+      this.emit({
+        type: "remote_web_service.create.response",
+        payload: {
+          requestId: request.requestId,
+          service: this.serializeRemoteWebService(service),
+          error: null,
+        },
+      });
+    } catch (error) {
+      this.emit({
+        type: "remote_web_service.create.response",
+        payload: {
+          requestId: request.requestId,
+          service: null,
+          error: error instanceof Error ? error.message : String(error),
+        },
+      });
+    }
+  }
+
+  private async handleRemoteWebServiceRemove(requestId: string, id: string): Promise<void> {
+    try {
+      if (!this.remoteWebServiceManager) throw new Error("Remote Web Services are unavailable");
+      const service = await this.remoteWebServiceManager.remove(id);
+      this.emit({
+        type: "remote_web_service.remove.response",
+        payload: { requestId, service: this.serializeRemoteWebService(service), error: null },
+      });
+    } catch (error) {
+      this.emit({
+        type: "remote_web_service.remove.response",
+        payload: {
+          requestId,
+          service: null,
+          error: error instanceof Error ? error.message : String(error),
+        },
+      });
     }
   }
 

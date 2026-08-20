@@ -54,6 +54,25 @@ describe("byspace daemon bootstrap", () => {
     }
   });
 
+  test("hosts the authenticated Data Relay on a separate listener", async () => {
+    const dataRelayPort = await findFreePort();
+    const daemonHandle = await createTestBySpaceDaemon({
+      dataRelayListen: `127.0.0.1:${dataRelayPort}`,
+      dataRelayAccessToken: "test-data-relay-token",
+    });
+    try {
+      const relayHealth = await fetch(`http://127.0.0.1:${dataRelayPort}/health`);
+      await expect(relayHealth.json()).resolves.toEqual({ status: "ok" });
+
+      const daemonRouteOnRelay = await fetch(`http://127.0.0.1:${dataRelayPort}/api/health`);
+      expect(daemonRouteOnRelay.status).toBe(404);
+    } finally {
+      await daemonHandle.close();
+    }
+
+    await expect(fetch(`http://127.0.0.1:${dataRelayPort}/health`)).rejects.toThrow();
+  });
+
   function httpGetWithHost(port: number, host: string, requestPath: string): Promise<Response> {
     return new Promise((resolve, reject) => {
       const req = http.get(

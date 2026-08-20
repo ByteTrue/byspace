@@ -27,6 +27,7 @@ import {
   type BySpaceHostedRelease,
 } from "@bytetrue/byspace-protocol/release-channel";
 import { resolveDaemonVersion } from "./daemon-version.js";
+import { normalizeHostPort } from "@bytetrue/byspace-protocol/daemon-endpoints";
 
 const DEFAULT_PORT = 6777;
 const DEFAULT_TRUSTED_PROXIES = ["loopback"];
@@ -189,6 +190,36 @@ interface ResolvedRelay {
 interface ResolvedServiceProxy {
   publicBaseUrl: string | null;
   standaloneListen: string | null;
+}
+
+function parseDataRelayEndpoint(value: string | undefined, variable: string): string | null {
+  const endpoint = value?.trim();
+  if (!endpoint) return null;
+  try {
+    return normalizeHostPort(endpoint);
+  } catch {
+    throw new Error(`Invalid ${variable}: ${endpoint}`);
+  }
+}
+
+function resolveDataRelayConfig(env: NodeJS.ProcessEnv) {
+  const endpoint = parseDataRelayEndpoint(
+    env.BYSPACE_DATA_RELAY_ENDPOINT,
+    "BYSPACE_DATA_RELAY_ENDPOINT",
+  );
+  const publicEndpoint = parseDataRelayEndpoint(
+    env.BYSPACE_DATA_RELAY_PUBLIC_ENDPOINT,
+    "BYSPACE_DATA_RELAY_PUBLIC_ENDPOINT",
+  );
+  const useTls = parseBooleanEnv(env.BYSPACE_DATA_RELAY_USE_TLS) ?? true;
+  return {
+    dataRelayListen: env.BYSPACE_DATA_RELAY_LISTEN?.trim() || null,
+    dataRelayEndpoint: endpoint,
+    dataRelayPublicEndpoint: publicEndpoint ?? endpoint,
+    dataRelayUseTls: useTls,
+    dataRelayPublicUseTls: parseBooleanEnv(env.BYSPACE_DATA_RELAY_PUBLIC_USE_TLS) ?? useTls,
+    dataRelayAccessToken: env.BYSPACE_DATA_RELAY_ACCESS_TOKEN?.trim() || null,
+  };
 }
 
 function resolveTlsFromEnv(
@@ -472,6 +503,7 @@ export function loadConfig(
     hostedRelease,
   });
   const serviceProxy = resolveServiceProxyConfig(env, persisted);
+  const dataRelay = resolveDataRelayConfig(env);
   const webUi = resolveWebUiConfig(byspaceHome, env, options?.cli, persisted);
 
   const speech = resolveSpeechConfig({
@@ -510,6 +542,7 @@ export function loadConfig(
     relayPublicEndpoint: relay.publicEndpoint,
     relayUseTls: relay.useTls,
     relayPublicUseTls: relay.publicUseTls,
+    ...dataRelay,
     serviceProxy,
     webUi,
     appBaseUrl,

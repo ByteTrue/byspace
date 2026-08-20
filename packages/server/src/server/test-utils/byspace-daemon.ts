@@ -26,6 +26,10 @@ interface TestBySpaceDaemonOptions {
   relayEndpoint?: string;
   relayUseTls?: boolean;
   relayPublicUseTls?: boolean;
+  dataRelayListen?: string;
+  dataRelayEndpoint?: string;
+  dataRelayUseTls?: boolean;
+  dataRelayAccessToken?: string;
   agentClients?: Partial<Record<AgentProvider, AgentClient>>;
   providerOverrides?: BySpaceDaemonConfig["providerOverrides"];
   byspaceHomeRoot?: string;
@@ -170,6 +174,10 @@ async function prepareTestDaemonConfig(
     relayEndpoint: options.relayEndpoint ?? "relay.byspace.zijieapi.de5.net:443",
     relayUseTls: options.relayUseTls,
     relayPublicUseTls: options.relayPublicUseTls,
+    dataRelayListen: options.dataRelayListen,
+    dataRelayEndpoint: options.dataRelayEndpoint,
+    dataRelayUseTls: options.dataRelayUseTls,
+    dataRelayAccessToken: options.dataRelayAccessToken,
     appBaseUrl: "https://app.byspace.zijieapi.de5.net",
     auth: options.auth,
     pushNotificationSender: options.pushNotificationSender,
