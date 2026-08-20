@@ -1,8 +1,8 @@
 # Issue: Daemon Remote Web Services
 
-**ID:** 002-o-daemon-remote-web-services
-**Epic:** 004-o-private-remote-web-services
-**Status:** open
+**ID:** 002-x-daemon-remote-web-services
+**Epic:** 004-x-private-remote-web-services
+**Status:** closed
 **Priority:** P0
 **Created:** 2026-08-20
 
@@ -49,7 +49,7 @@ Implement the daemon-owned Remote Web Service backend on top of the WSS Data Rel
 - [x] Replayed data/control frames are rejected before duplicate plaintext reaches a loopback service.
 - [x] The App preserves `server_info.dataRelay` through initial and live ingestion paths.
 - [x] Desktop and compact Playwright E2E cover list/create/remove, capability gating, restart persistence and screenshots.
-- [ ] Linux and Windows CI complete without RemoteByteStream unhandled rejections.
+- [x] Linux and Windows CI complete without RemoteByteStream unhandled rejections.
 
 ## Verification
 
@@ -92,4 +92,10 @@ The first PR CI and independent review invalidated the closure evidence:
 - target-side source authorization and replay protection are incomplete;
 - handshake disconnect cleanup, translations, accessibility and disconnected states still require work.
 
-The earlier LAN validation remains useful transport evidence, but it cannot substitute for these missing product and security boundaries. Implemented after the reopen: long-term source E2EE identity and persisted target grants, a fresh target-issued handshake challenge that survives target restart, bounded pre-handshake buffering, connection session/sequence replay rejection, real App ingestion, disconnected-state/a11y/i18n fixes, live-target filtering, and compensating revoke/rollback handling for indeterminate grant responses. Source mappings are now the authorization desired state: loading mappings and a target coming online idempotently repair the exact target grant, so a lost source-create response cannot leave a permanent ungranted mapping; dedicated hook tests cover online repair, offline waiting, and visible repair failure. A dual-daemon Playwright flow now creates, reaches, persists across source restart, revokes, removes, and captures committed desktop/compact screenshots. Keep this Issue open until the replacement Linux/Windows CI passes and an independent re-review confirms the complete diff.
+The earlier LAN validation remains useful transport evidence, but it cannot substitute for these missing product and security boundaries. Implemented after the reopen: long-term source E2EE identity and persisted target grants, a fresh target-issued handshake challenge that survives target restart, bounded pre-handshake buffering, connection session/sequence replay rejection, real App ingestion, disconnected-state/a11y/i18n fixes, live-target filtering, and compensating revoke/rollback handling for indeterminate grant responses. Source mappings are now the authorization desired state: loading mappings and a target coming online idempotently repair the exact target grant, so a lost source-create response cannot leave a permanent ungranted mapping; dedicated hook tests cover online repair, offline waiting, unrelated runtime updates, and visible repair failure. A dual-daemon Playwright flow now creates, reaches, persists across source restart, revokes, removes, and captures committed desktop/compact screenshots.
+
+## Closure
+
+All acceptance criteria are satisfied. CI run `32353615653` passed at exact code SHA `0840f75a19bb28760fe31f94d5d7c0fdf6113927`, including Linux and Windows server tests, all 12 Playwright shards, App/SDK/Relay/CLI, typecheck, lint, format, package artifact, and Linux/macOS/Windows distribution. The committed dual-daemon browser E2E covers source mapping creation, exact target grant persistence, real `.remote.localhost` access, source restart recovery, target revoke, mapping removal, and desktop/compact visual evidence. Independent backend/security and App/E2E reviews reported no remaining blocker after the final portability and canonical health-endpoint fixes.
+
+Stable behavior and constraints were written back to the Epic and graduated to `codestable/spec/index.md` under “私有远程 Web 服务”. No deferred requirement remains inside this Issue.

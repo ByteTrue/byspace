@@ -2,7 +2,7 @@
 kind: issue
 title: "穿刺 Standalone WSS Data Relay"
 type: feature
-status: open
+status: closed
 created: 2026-08-20
 ---
 
@@ -92,11 +92,17 @@ created: 2026-08-20
 
 PR #1 的安全复核发现 standalone Relay 尚不能视为完成：共享 token 不绑定 `serverId` 所有权，任意 token 持有者可以替换其他 daemon 的 control session；单 session 上限也缺少 relay-wide socket 与 aggregate-buffer 总预算。该攻击主要影响可用性，但必须明确并验证其信任模型，不能继续以“无遗留事项”关闭。
 
-本 Issue 在以下条件满足前保持 open：
+本 Issue 在重新打开期间要求：
 
 - 明确 Data Relay bandwidth token、daemon 身份和 Remote Web Service 来源授权之间的边界；
 - 对 control replacement 的跨身份行为给出实现约束与负向测试；
 - 增加 relay-wide 连接与待转发字节总预算，避免逐 session 上限相乘；
 - 与 Issue 002 的 E2EE 来源授权和 replay protection 一起完成复审。
 
-当前修复已完成实现与定向测试：活动 control/data socket 不再允许同 token 连接替换；Relay 新增全局 physical socket 与 aggregate buffered-byte budget；公开 HTTP 与 Upgrade handler 对 malformed request target 返回 400 而不会让进程退出；文档明确共享 token 仍是可用性信任域，而目标端 source grant、双向长期 daemon 公钥身份、目标新鲜 challenge 和 sequence replay protection 才是 loopback 数据安全边界。保持本 Issue open，直到 PR 全量 CI 与独立复审通过。
+当前修复已完成实现与定向测试：活动 control/data socket 不再允许同 token 连接替换；Relay 新增全局 physical socket 与 aggregate buffered-byte budget；公开 HTTP 与 Upgrade handler 对 malformed request target 返回 400 而不会让进程退出；文档明确共享 token 仍是可用性信任域，而目标端 source grant、双向长期 daemon 公钥身份、目标新鲜 challenge 和 sequence replay protection 才是 loopback 数据安全边界。
+
+## 关闭结论
+
+Standalone adapter 的 Relay v2/E2EE 兼容、daemon-hosted 独立 listener、全局与单会话资源预算、活动 socket replacement 拒绝、malformed request target 防护和共享 token 信任边界均已实现并有负向测试。完整 backend/security 独立复审没有剩余 finding；CI run `32353615653` 的 Relay、Linux/Windows server、typecheck、lint、format 与 distribution jobs 全部通过。
+
+稳定结论已回写 Epic，并随 Epic 毕业到 `codestable/spec/index.md` 的“私有远程 Web 服务”章节。没有遗留项需要移出本 Epic。

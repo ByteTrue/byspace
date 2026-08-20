@@ -1,7 +1,7 @@
 ---
 kind: epic
 title: "私有远程 Web 服务"
-status: open
+status: closed
 created: 2026-08-20
 ---
 
@@ -13,7 +13,7 @@ created: 2026-08-20
 
 这项变化跨 daemon-hosted Data Relay、daemon 间 E2EE 数据链路、Service Proxy、持久化、协议和 Web UI，且需要先证明新的数据面不会继承 Cloudflare Durable Object 免费操作额度风险，因此使用 Epic 承载。
 
-- 关联 Project Spec：`codestable/spec/index.md` 中的“安全与可信边界”与“Workspace、Project 与生命周期”。
+- 关联 Project Spec：`codestable/spec/index.md` 中的“私有远程 Web 服务”。
 - 关联系统说明：`docs/architecture.md`、`docs/service-proxy.md`、`docs/data-model.md`、`docs/rpc-namespacing.md`、`docs/protocol-validation.md`。
 - 历史证据：`origin/human-seahorse` 保留未合入的通用 TCP/TUN 实验，只作为选择性复用证据，不合并或 cherry-pick。
 
@@ -100,8 +100,8 @@ Data Relay 与现有 Relay E2EE channel 兼容，但作为新能力只需要 Rel
 
 ### Issues
 
-- [ ] `issues/001-o-standalone-wss-data-relay-spike.md`：重新审查 Relay 身份绑定、全局资源上限与 replay 边界。
-- [ ] `issues/002-o-daemon-remote-web-services.md`：修复数据链路、App ingestion、真实 Playwright E2E、CI 与来源授权。
+- [x] `issues/001-x-standalone-wss-data-relay-spike.md`：Relay 身份边界、全局资源上限与 malformed request target 已加固并复核。
+- [x] `issues/002-x-daemon-remote-web-services.md`：数据链路、App ingestion、真实 Playwright E2E、CI 与来源授权已完成。
 
 ### 暂不推进
 
@@ -111,15 +111,15 @@ Data Relay 与现有 Relay E2EE channel 兼容，但作为新能力只需要 Rel
 - 活动 HTTP/SSE/WebSocket 的断点续传、缓存或透明重放。
 - 将数据重新放回 Cloudflare Worker/Durable Object，或免费额度不足时静默回退控制 Relay。
 
-### 已实现但仍需复核
+### 稳定实现结论
 
 - Data Relay 使用 `packages/relay` 的 Node adapter，由 `packages/server` daemon 生命周期按可选独立 listener 托管；不创建独立产品、安装包或镜像。
 - 映射不持久化 Relay locator；运行时始终使用当前 daemon Data Relay 配置，因此 B-hosted Relay 迁移到 VPS 只需要修改 A/B 的 endpoint/token 并重启 daemon。
 - 最小通用 UI 位于 Host Settings，只创建名称、目标 Host 和端口，不区分 AI Gateway 与 Web dev service。
 - Source Service Proxy 对 HTTP 与 WebSocket 都按真实 socket 来源强制 loopback；目标 daemon 只连接自己的 loopback 端口。
-- 定向测试、build、typecheck/lint/format check、Web export 与双向 A/B 隔离真机链路已经提供基础证据；重新打开后又增加真实 App ingestion、双 daemon Playwright E2E、source 重启恢复、target grant/revoke 和 desktop/compact 截图，但仍等待替换 CI 与独立复审。
+- 定向测试、build、typecheck/lint/format check、Web export 与双向 A/B 隔离真机链路提供基础证据；重新打开后又增加真实 App ingestion、双 daemon Playwright E2E、source 重启恢复、target grant/revoke 和 desktop/compact 截图，替换 CI 与独立复审均已通过。
 
-## 重新打开原因
+## 重新打开与最终复核
 
 PR #1 的首轮 CI 与独立审查推翻了原关闭结论：
 
@@ -130,4 +130,12 @@ PR #1 的首轮 CI 与独立审查推翻了原关闭结论：
 - 数据通道缺少 replay protection，握手断线错误路径也需加固；
 - 多语言、可访问性和断线状态仍未达到项目标准。
 
-这些首轮阻断项已实现修复。后续复审又发现静态 E2EE key 下旧 open 可跨目标重启重放、握手前缓冲无上限、grant 响应不确定时可能遗留孤儿授权、离线 target 仍可选择，以及 source create 响应丢失可留下未授权 mapping；当前实现分别加入目标新鲜 challenge、统一握手缓冲预算、补偿 revoke/rollback、live-target 过滤与 source desired-state grant reconciliation。PR CI 全绿、真实 Playwright 截图附上并再次独立复审前，仍不满足关闭或毕业条件。先前加入 Project Spec 的章节已撤回，待功能真正稳定后重新毕业。
+这些首轮阻断项随后全部修复。后续复审又发现静态 E2EE key 下旧 open 可跨目标重启重放、握手前缓冲无上限、grant 响应不确定时可能遗留孤儿授权、离线 target 仍可选择，以及 source create 响应丢失可留下未授权 mapping；最终实现分别加入目标新鲜 challenge、统一握手缓冲预算、补偿 revoke/rollback、live-target 过滤与 source desired-state grant reconciliation。
+
+替换 CI run `32353615653` 在精确代码 SHA `0840f75a19bb28760fe31f94d5d7c0fdf6113927` 上通过 Linux/Windows server tests、12 个 Playwright shards、App/SDK/Relay/CLI、typecheck、lint、format、package artifact 与三平台 distribution。独立 backend/security 与 App/E2E 复审均无剩余 blocker；真实 Playwright 证据与 desktop/compact 截图已附 PR #1。
+
+## 关闭结论
+
+Epic 的目标范围已经完成，重新打开的所有阻断项均有回归测试、真实浏览器路径或跨平台 CI 证据。稳定能力、控制/数据面分离、mapping/grant 身份边界、重放保护、B→VPS 迁移契约、断线语义和明确非目标已合并到 `codestable/spec/index.md` 的“私有远程 Web 服务”章节。
+
+`codestable/vision/` 没有该能力的来源 Vision 项，因此没有实现状态或目标内容需要更新。已排除的公共分享、任意 TCP、P2P/TURN、AI 专属类型和请求续传仍只作为本 Epic 的设计历史保留。
