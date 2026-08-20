@@ -1,6 +1,7 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { createServer, request as httpRequest, type Server } from "node:http";
+import { createRequire } from "node:module";
 import net from "node:net";
 import os from "node:os";
 import path from "node:path";
@@ -10,12 +11,8 @@ import { openSettingsHost, seedSavedSettingsHosts, selectSettingsHost } from "./
 const DATA_RELAY_ACCESS_TOKEN = "playwright-remote-web-services-token";
 const REPO_ROOT = path.resolve(__dirname, "../../..");
 const SERVER_DIR = path.join(REPO_ROOT, "packages/server");
-const TSX_BIN = path.join(
-  REPO_ROOT,
-  "node_modules",
-  ".bin",
-  process.platform === "win32" ? "tsx.cmd" : "tsx",
-);
+const resolveFromRoot = createRequire(path.join(REPO_ROOT, "package.json"));
+const TSX_CLI = resolveFromRoot.resolve("tsx/cli");
 
 interface E2EDaemon {
   child: ChildProcess;
@@ -39,6 +36,28 @@ function isDaemonHealthy(port: number): Promise<boolean> {
     );
     request.setTimeout(1_000, () => request.destroy());
     request.once("error", () => resolve(false));
+    request.end();
+  });
+}
+
+function fetchRemoteProbe(port: number): Promise<number | undefined> {
+  return new Promise((resolve) => {
+    const request = httpRequest(
+      {
+        host: "127.0.0.1",
+        port,
+        path: "/probe",
+        method: "GET",
+        headers: { host: "home-web.remote.localhost" },
+        agent: false,
+      },
+      (response) => {
+        response.resume();
+        resolve(response.statusCode);
+      },
+    );
+    request.setTimeout(1_000, () => request.destroy());
+    request.once("error", () => resolve(undefined));
     request.end();
   });
 }
@@ -67,7 +86,7 @@ async function startDaemon(input: StartDaemonInput): Promise<E2EDaemon> {
   const home = input.home ?? (await mkdtemp(path.join(os.tmpdir(), "byspace-rws-playwright-")));
   const port = input.port ?? (await getAvailablePort());
   const output: string[] = [];
-  const child = spawn(TSX_BIN, ["scripts/supervisor-entrypoint.ts", "--dev"], {
+  const child = spawn(process.execPath, [TSX_CLI, "scripts/supervisor-entrypoint.ts", "--dev"], {
     cwd: SERVER_DIR,
     env: {
       ...process.env,
@@ -276,7 +295,7 @@ test.describe("Remote Web Services", () => {
       dataRelayListen: dataRelayEndpoint,
       dataRelayEndpoint,
     });
-    await expect.poll(async () => (await fetch(localUrl)).status, { timeout: 15_000 }).toBe(200);
+    await expect.poll(() => fetchRemoteProbe(source?.port ?? 0), { timeout: 15_000 }).toBe(200);
     await expect(page.getByTestId(/^remote-web-service-row-/)).toContainText(
       "home-web.remote.localhost",
     );
