@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { RemoteWebService, RemoteWebServiceTarget } from "@bytetrue/byspace-protocol/messages";
 import { useFetchQuery } from "@/data/query";
@@ -47,13 +47,24 @@ export function useRemoteWebServices(
   );
   const targetStatuses = useHostRuntimeConnectionStatuses(targetServerIds);
   const [reconciliationError, setReconciliationError] = useState<string | null>(null);
+  const reconciliationFailureMessage = t(
+    "settings.host.remoteWebServices.authorizationRepairFailed",
+  );
+  const repairCandidates = services.filter(
+    (service) => targetStatuses.get(service.target.serverId) === "online",
+  );
+  const repairSignature = repairCandidates
+    .map((service) => `${service.id}:${service.target.serverId}:${service.target.port}`)
+    .sort()
+    .join("|");
+  const repairCandidatesRef = useRef(repairCandidates);
+  repairCandidatesRef.current = repairCandidates;
 
   useEffect(() => {
     if (!sourceDaemonPublicKeyB64 || !isConnected) return;
     let cancelled = false;
     void Promise.all(
-      services.map(async (service) => {
-        if (targetStatuses.get(service.target.serverId) !== "online") return;
+      repairCandidatesRef.current.map(async (service) => {
         const targetClient = getHostRuntimeStore().getClient(service.target.serverId);
         if (!targetClient) return;
         const result = await targetClient.grantRemoteWebService({
@@ -70,7 +81,7 @@ export function useRemoteWebServices(
       },
       () => {
         if (!cancelled) {
-          setReconciliationError(t("settings.host.remoteWebServices.authorizationRepairFailed"));
+          setReconciliationError(reconciliationFailureMessage);
         }
         return undefined;
       },
@@ -78,7 +89,13 @@ export function useRemoteWebServices(
     return () => {
       cancelled = true;
     };
-  }, [isConnected, services, sourceDaemonPublicKeyB64, t, targetStatuses]);
+  }, [
+    isConnected,
+    reconciliationFailureMessage,
+    repairSignature,
+    services,
+    sourceDaemonPublicKeyB64,
+  ]);
 
   const createMutation = useMutation({
     mutationFn: async (input: { name: string; target: RemoteWebServiceTarget }) => {

@@ -8,7 +8,7 @@ import { expect, test } from "./fixtures";
 import { gotoAppShell, openSettings } from "./helpers/app";
 import { openSettingsHost, seedSavedSettingsHosts, selectSettingsHost } from "./helpers/settings";
 const DATA_RELAY_ACCESS_TOKEN = "playwright-remote-web-services-token";
-const REPO_ROOT = path.resolve(process.cwd(), "../..");
+const REPO_ROOT = path.resolve(__dirname, "../../..");
 const SERVER_DIR = path.join(REPO_ROOT, "packages/server");
 const TSX_BIN = path.join(
   REPO_ROOT,
