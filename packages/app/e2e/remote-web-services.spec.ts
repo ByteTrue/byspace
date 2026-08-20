@@ -28,7 +28,7 @@ function sleep(ms: number): Promise<void> {
 function isDaemonHealthy(port: number): Promise<boolean> {
   return new Promise((resolve) => {
     const request = httpRequest(
-      { host: "127.0.0.1", port, path: "/health", method: "GET", agent: false },
+      { host: "127.0.0.1", port, path: "/api/health", method: "GET", agent: false },
       (response) => {
         response.resume();
         resolve(response.statusCode === 200);
