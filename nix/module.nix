@@ -94,7 +94,7 @@ in
         description = ''
           How the daemon reaches the relay when `relay.enable = true`:
 
-          - `"hosted"` (default): use the upstream `relay.byspace.zijieapi.de5.net` relay.
+          - `"hosted"` (default): use the upstream `relay.byspace.cc.cd` relay.
             Preserves the current behavior; no extra options needed.
           - `"remote"`: connect to a self-hosted relay at
             `relay.host:relay.port`. Sets `BYSPACE_RELAY_ENDPOINT` and
@@ -159,7 +159,7 @@ in
       default = { };
       example = lib.literalExpression ''
         {
-          BYSPACE_RELAY_ENDPOINT = "relay.byspace.zijieapi.de5.net:443";
+          BYSPACE_RELAY_ENDPOINT = "relay.byspace.cc.cd:443";
         }
       '';
       description = "Extra environment variables for the BySpace daemon.";

@@ -69,12 +69,12 @@ byspace daemon restart
 byspace daemon status
 ```
 
-终端会显示对应 channel 的配对链接。Stable 使用 npm `latest`、[app.byspace.zijieapi.de5.net](https://app.byspace.zijieapi.de5.net) 和 `byspace-relay`；Beta 使用 npm `beta`、[app-beta.byspace.zijieapi.de5.net](https://app-beta.byspace.zijieapi.de5.net) 和 `byspace-relay-beta`。
+终端会显示对应 channel 的配对链接。Stable 使用 npm `latest`、[app.byspace.cc.cd](https://app.byspace.cc.cd) 和 `byspace-relay`；Beta 使用 npm `beta`、[app-beta.byspace.cc.cd](https://app-beta.byspace.cc.cd) 和 `byspace-relay-beta`。
 
 完整安装和配置见：
 
-- [文档](https://app.byspace.zijieapi.de5.net/docs)
-- [配置参考](https://app.byspace.zijieapi.de5.net/docs/configuration)
+- [文档](https://app.byspace.cc.cd/docs)
+- [配置参考](https://app.byspace.cc.cd/docs/configuration)
 
 ## CLI
 
@@ -92,7 +92,7 @@ byspace send abc123 "also add tests" # 发送后续任务
 byspace --host workstation.local:6777 run "run the full test suite"
 ```
 
-更多内容见[完整 CLI 参考](https://app.byspace.zijieapi.de5.net/docs/cli)。
+更多内容见[完整 CLI 参考](https://app.byspace.cc.cd/docs/cli)。
 
 ## Skills
 

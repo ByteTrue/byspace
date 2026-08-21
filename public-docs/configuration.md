@@ -37,7 +37,7 @@ Minimal example that configures listening address, hostnames, and MCP:
 
 ```json
 {
-  "$schema": "https://app.byspace.zijieapi.de5.net/schemas/byspace.config.v1.json",
+  "$schema": "https://app.byspace.cc.cd/schemas/byspace.config.v1.json",
   "version": 1,
   "daemon": {
     "listen": "127.0.0.1:6777",
@@ -206,5 +206,5 @@ In the Web app, enter the password in the direct connection setup screen.
 For editor autocomplete/validation, set `$schema` to:
 
 ```
-https://app.byspace.zijieapi.de5.net/schemas/byspace.config.v1.json
+https://app.byspace.cc.cd/schemas/byspace.config.v1.json
 ```

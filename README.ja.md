@@ -69,12 +69,12 @@ byspace daemon restart
 byspace daemon status
 ```
 
-ターミナルには対応するチャンネルのペアリングリンクが表示されます。Stable は npm `latest`、[app.byspace.zijieapi.de5.net](https://app.byspace.zijieapi.de5.net)、`byspace-relay` を使用し、Beta は npm `beta`、[app-beta.byspace.zijieapi.de5.net](https://app-beta.byspace.zijieapi.de5.net)、`byspace-relay-beta` を使用します。
+ターミナルには対応するチャンネルのペアリングリンクが表示されます。Stable は npm `latest`、[app.byspace.cc.cd](https://app.byspace.cc.cd)、`byspace-relay` を使用し、Beta は npm `beta`、[app-beta.byspace.cc.cd](https://app-beta.byspace.cc.cd)、`byspace-relay-beta` を使用します。
 
 詳しいセットアップと設定については以下を参照してください。
 
-- [ドキュメント](https://app.byspace.zijieapi.de5.net/docs)
-- [設定リファレンス](https://app.byspace.zijieapi.de5.net/docs/configuration)
+- [ドキュメント](https://app.byspace.cc.cd/docs)
+- [設定リファレンス](https://app.byspace.cc.cd/docs/configuration)
 
 ## CLI
 
@@ -92,7 +92,7 @@ byspace send abc123 "also add tests" # 追加タスクを送信
 byspace --host workstation.local:6777 run "run the full test suite"
 ```
 
-詳細は[完全な CLI リファレンス](https://app.byspace.zijieapi.de5.net/docs/cli)を参照してください。
+詳細は[完全な CLI リファレンス](https://app.byspace.cc.cd/docs/cli)を参照してください。
 
 ## スキル
 

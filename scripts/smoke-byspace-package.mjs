@@ -339,12 +339,12 @@ try {
 
   const expectedHostedRelease = version.includes("-")
     ? {
-        appBaseUrl: "https://app-beta.byspace.zijieapi.de5.net",
-        relayEndpoint: "relay-beta.byspace.zijieapi.de5.net:443",
+        appBaseUrl: "https://app-beta.byspace.cc.cd",
+        relayEndpoint: "relay-beta.byspace.cc.cd:443",
       }
     : {
-        appBaseUrl: "https://app.byspace.zijieapi.de5.net",
-        relayEndpoint: "relay.byspace.zijieapi.de5.net:443",
+        appBaseUrl: "https://app.byspace.cc.cd",
+        relayEndpoint: "relay.byspace.cc.cd:443",
       };
   const pairingProbeScript = `
     const { generateLocalPairingOffer, loadConfig, parseConnectionOfferFromUrl } =

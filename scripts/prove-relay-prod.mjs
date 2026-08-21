@@ -24,11 +24,8 @@ const serverId = args["server-id"] ?? process.env.BYSPACE_SERVER_ID;
 const daemonPublicKeyB64 =
   args["daemon-public-key-b64"] ?? process.env.BYSPACE_DAEMON_PUBLIC_KEY_B64;
 const relayEndpoint =
-  args["relay-endpoint"] ??
-  process.env.BYSPACE_RELAY_ENDPOINT ??
-  "relay.byspace.zijieapi.de5.net:443";
-const baseUrl =
-  args["base-url"] ?? process.env.BYSPACE_APP_URL ?? "https://app.byspace.zijieapi.de5.net";
+  args["relay-endpoint"] ?? process.env.BYSPACE_RELAY_ENDPOINT ?? "relay.byspace.cc.cd:443";
+const baseUrl = args["base-url"] ?? process.env.BYSPACE_APP_URL ?? "https://app.byspace.cc.cd";
 const expectedVersion = args["expected-version"] ?? process.env.BYSPACE_EXPECTED_VERSION;
 const timeoutMs = Number(args["timeout-ms"] ?? process.env.BYSPACE_PROVE_TIMEOUT_MS ?? 60_000);
 const stabilityMs = Number(

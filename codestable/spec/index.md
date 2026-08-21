@@ -107,8 +107,8 @@ Agent 使用 bundled `byspace-project-setup` Skill 检查干净 worktree 的可�
 - 环境变量：`BYSPACE_*`
 - daemon home：`~/.byspace`
 - 默认端口：`6777`
-- Web：`https://app.byspace.zijieapi.de5.net`
-- Relay：`wss://relay.byspace.zijieapi.de5.net:443`
+- Web：`https://app.byspace.cc.cd`
+- Relay：`wss://relay.byspace.cc.cd:443`
 
 ## Agent 聊天完整性
 

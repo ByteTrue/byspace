@@ -47,7 +47,7 @@ function extractOfferFragmentEncoded(input: string): string | null {
 }
 
 /**
- * Parse a pairing-offer URL of the form `https://app.byspace.zijieapi.de5.net/#offer=<base64url>`.
+ * Parse a pairing-offer URL of the form `https://app.byspace.cc.cd/#offer=<base64url>`.
  *
  * Returns `null` if the input has no `#offer=` fragment. Throws if the fragment
  * exists but the payload is malformed or fails schema validation.

@@ -10,7 +10,7 @@
     "voice",
     "voice-assistant"
   ],
-  "homepage": "https://app.byspace.zijieapi.de5.net",
+  "homepage": "https://app.byspace.cc.cd",
   "license": "AGPL-3.0-or-later",
   "author": {
     "name": "ByteTrue"
@@ -26,7 +26,8 @@
     "packages/server",
     "packages/app",
     "packages/relay",
-    "packages/cli"
+    "packages/cli",
+    "packages/website"
   ],
   "scripts": {
     "dev": "npm run dev:server",

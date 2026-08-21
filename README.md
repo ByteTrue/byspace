@@ -69,12 +69,12 @@ byspace daemon restart
 byspace daemon status
 ```
 
-The daemon prints a pairing link for its matching hosted Web app and keeps agents running after the browser closes. Stable uses npm `latest`, [app.byspace.zijieapi.de5.net](https://app.byspace.zijieapi.de5.net), and `byspace-relay`; Beta uses npm `beta`, [app-beta.byspace.zijieapi.de5.net](https://app-beta.byspace.zijieapi.de5.net), and `byspace-relay-beta`.
+The daemon prints a pairing link for its matching hosted Web app and keeps agents running after the browser closes. Stable uses npm `latest`, [app.byspace.cc.cd](https://app.byspace.cc.cd), and `byspace-relay`; Beta uses npm `beta`, [app-beta.byspace.cc.cd](https://app-beta.byspace.cc.cd), and `byspace-relay-beta`.
 
 For full setup and configuration, see:
 
-- [Docs](https://app.byspace.zijieapi.de5.net/docs)
-- [Configuration reference](https://app.byspace.zijieapi.de5.net/docs/configuration)
+- [Docs](https://app.byspace.cc.cd/docs)
+- [Configuration reference](https://app.byspace.cc.cd/docs/configuration)
 
 ## CLI
 
@@ -92,7 +92,7 @@ byspace send abc123 "also add tests" # follow-up task
 byspace --host workstation.local:6777 run "run the full test suite"
 ```
 
-See the [full CLI reference](https://app.byspace.zijieapi.de5.net/docs/cli) for more.
+See the [full CLI reference](https://app.byspace.cc.cd/docs/cli) for more.
 
 ## Skills
 
