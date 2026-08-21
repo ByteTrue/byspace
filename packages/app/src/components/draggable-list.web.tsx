@@ -4,8 +4,7 @@ import {
   DndContext,
   closestCenter,
   KeyboardSensor,
-  MouseSensor,
-  TouchSensor,
+  PointerSensor,
   type Modifier,
   useSensor,
   useSensors,
@@ -149,11 +148,8 @@ export function DraggableList<T>({
   const activationConstraints = getDragActivationConstraints(useDragHandle, DRAG_ACTIVATION_CONFIG);
 
   const sensors = useSensors(
-    useSensor(MouseSensor, {
+    useSensor(PointerSensor, {
       activationConstraint: activationConstraints.mouse,
-    }),
-    useSensor(TouchSensor, {
-      activationConstraint: activationConstraints.touch,
     }),
     useSensor(KeyboardSensor, {
       coordinateGetter: sortableKeyboardCoordinates,

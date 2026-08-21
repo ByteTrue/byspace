@@ -1594,7 +1594,6 @@ function ProjectBlock({
           onDragEnd={handleWorkspaceDragEnd}
           extraData={activeWorkspaceSelectionKey(activeWorkspaceSelection)}
           scrollEnabled={false}
-          useDragHandle
           nestable={useNestable}
           simultaneousGestureRef={parentGestureRef}
           containerStyle={styles.workspaceListContainer}
