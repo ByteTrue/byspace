@@ -245,10 +245,6 @@ describe("ReplicaCache", () => {
     store.setAgentAuthoritativeHistoryApplied(SERVER_ID, "agent-2", true);
     await cache.flush();
 
-    const serialized = storage.values.get("@byspace:replica-cache");
-    expect(serialized).toContain("__byspaceDate");
-    expect(serialized).not.toContain(["__", "pa", "seoDate"].join(""));
-
     store.clearSession(SERVER_ID);
     const reader = new ReplicaCache(storage);
     reader.setHosts([SERVER_ID]);

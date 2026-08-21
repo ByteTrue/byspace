@@ -695,7 +695,6 @@ export class Session {
   private unsubscribeProjectMutations: (() => void) | null = null;
   private unsubscribeWorkspaceMutations: (() => void) | null = null;
   private registryMutationQueue: Promise<void> = Promise.resolve();
-  private readonly optimisticInitialAgentWorkspaceIds = new Set<string>();
   private isCleanedUp = false;
   private readonly activeOrchestrationToolCalls = new Set<AbortController>();
   private viewedTimelineAgentIds = new Set<string>();
@@ -1187,9 +1186,6 @@ export class Session {
     workspace: WorkspaceDescriptorPayload,
     requestedStatus?: WorkspaceDescriptorPayload["status"],
   ): Promise<void> {
-    if (requestedStatus) {
-      this.optimisticInitialAgentWorkspaceIds.add(workspace.id);
-    }
     if (this.workspaceUpdatesSubscription) {
       await this.emitWorkspaceUpdatesForWorkspaceIds([workspace.id], {
         skipReconcile: true,
@@ -1431,15 +1427,11 @@ export class Session {
   private async handleWorkspaceMutation(mutation: WorkspaceMutation): Promise<void> {
     try {
       if (this.isCleanedUp) return;
-      if (mutation.initialAgentSettled) {
-        this.optimisticInitialAgentWorkspaceIds.delete(mutation.workspaceId);
-      }
       if (
         mutation.kind === "archive" ||
         mutation.kind === "remove" ||
         mutation.workspace?.archivedAt
       ) {
-        this.optimisticInitialAgentWorkspaceIds.delete(mutation.workspaceId);
         this.workspaceGitObserver.removeForWorkspaceId(mutation.workspaceId);
         const subscription = this.workspaceUpdatesSubscription;
         if (!subscription) return;
@@ -1452,18 +1444,11 @@ export class Session {
         );
         return;
       }
-      if (mutation.expectsInitialAgent) {
-        this.optimisticInitialAgentWorkspaceIds.add(mutation.workspaceId);
-        await this.emitWorkspaceUpdatesForWorkspaceIds([mutation.workspaceId], {
-          skipReconcile: true,
-          optimisticStatus: "running",
-        });
-        return;
-      }
       await this.syncWorkspaceMutationObserver(mutation);
       if (this.isCleanedUp) return;
       await this.emitWorkspaceUpdatesForWorkspaceIds([mutation.workspaceId], {
         skipReconcile: true,
+        ...(mutation.expectsInitialAgent ? { optimisticStatus: "running" } : {}),
       });
     } catch (error) {
       this.sessionLogger.warn(
@@ -3315,7 +3300,6 @@ export class Session {
 
     let createdWorktreeForCleanup: CreateBySpaceWorktreeWorkflowResult | null = null;
     let createdAgentId: string | null = null;
-    let optimisticWorkspaceId: string | null = null;
     try {
       await workspaceLifecycleCoordinator.runExclusive(async () => {
         try {
@@ -3369,13 +3353,6 @@ export class Session {
           const createAgentConfig: AgentSessionConfig = { ...config, cwd: intent.cwd };
           const workspaceId = intent.workspaceId;
           const createdDirectoryWorkspaceForAgent = !explicitWorkspaceId && !caller;
-          if (
-            (createdDirectoryWorkspaceForAgent && hasFirstAgentContext) ||
-            this.optimisticInitialAgentWorkspaceIds.has(workspaceId)
-          ) {
-            optimisticWorkspaceId = workspaceId;
-            this.optimisticInitialAgentWorkspaceIds.add(workspaceId);
-          }
 
           const { snapshot, liveSnapshot } = await createAgentCommand(
             {
@@ -3407,7 +3384,6 @@ export class Session {
           );
           createdAgentId = snapshot.id;
           await this.agentUpdates.forwardLiveAgent(snapshot);
-          await this.finalizeOptimisticInitialAgentWorkspace(optimisticWorkspaceId);
           if (createdDirectoryWorkspaceForAgent && trimmedPrompt) {
             this.workspaceAutoName.scheduleForDirectory(
               {
@@ -3445,7 +3421,6 @@ export class Session {
             createdWorktree: createdWorktreeForCleanup,
             createdAgentId,
           });
-          await this.finalizeOptimisticInitialAgentWorkspace(optimisticWorkspaceId);
           throw error;
         }
       });
@@ -3472,20 +3447,6 @@ export class Session {
           content: `Failed to create agent: ${wireError.message}`,
         },
       });
-    }
-  }
-
-  private async finalizeOptimisticInitialAgentWorkspace(workspaceId: string | null): Promise<void> {
-    if (!workspaceId) return;
-    try {
-      await this.workspaceRegistry.update(workspaceId, (workspace) => workspace, {
-        initialAgentSettled: true,
-      });
-    } catch (error) {
-      this.sessionLogger.warn(
-        { err: error, workspaceId },
-        "Failed to finalize optimistic initial-agent workspace update",
-      );
     }
   }
 
@@ -5195,12 +5156,8 @@ export class Session {
     workspace: WorkspaceDescriptorPayload | null,
     requestedStatus: WorkspaceDescriptorPayload["status"] | undefined,
   ): WorkspaceDescriptorPayload | null {
-    if (!workspace) return workspace;
-    const optimisticStatus =
-      requestedStatus ??
-      (this.optimisticInitialAgentWorkspaceIds.has(workspace.id) ? "running" : undefined);
-    if (!optimisticStatus) return workspace;
-    return { ...workspace, status: optimisticStatus };
+    if (!workspace || !requestedStatus) return workspace;
+    return { ...workspace, status: requestedStatus };
   }
 
   private shouldSkipWorkspaceRemoval(
@@ -7283,7 +7240,6 @@ export class Session {
     this.unsubscribeProjectMutations = null;
     this.unsubscribeWorkspaceMutations?.();
     this.unsubscribeWorkspaceMutations = null;
-    this.optimisticInitialAgentWorkspaceIds.clear();
     this.agentUpdates.dispose();
     if (this.unsubscribeTerminalWorkspaceContributionEvents) {
       this.unsubscribeTerminalWorkspaceContributionEvents();

@@ -1,9 +1,9 @@
 import { expect, test, type Page } from "./fixtures";
+import type { FormPreferences } from "@/create-agent-preferences/preferences";
 import { daemonWsRoutePattern } from "./helpers/daemon-port";
 import { openAgentRoute } from "./helpers/mock-agent";
 import { openGlobalNewWorkspaceComposer, selectNewWorkspaceProject } from "./helpers/new-workspace";
 import { seedWorkspace } from "./helpers/seed-client";
-import { getServerId } from "./helpers/server-id";
 
 const CREATE_AGENT_PREFERENCES_KEY = "@byspace:create-agent-preferences";
 
@@ -59,13 +59,12 @@ async function recordSetAgentModeRequests(page: Page): Promise<{
   };
 }
 
-async function seedCodexDefaultPreferences(page: Page, serverId: string): Promise<void> {
+async function seedCodexDefaultPreferences(page: Page): Promise<void> {
   await page.addInitScript(
-    ({ preferencesKey, serverId: seededServerId }) => {
+    ({ preferencesKey }) => {
       localStorage.setItem(
         preferencesKey,
         JSON.stringify({
-          serverId: seededServerId,
           provider: "codex",
           providerPreferences: {
             codex: {
@@ -75,10 +74,10 @@ async function seedCodexDefaultPreferences(page: Page, serverId: string): Promis
             },
             mock: { model: "ten-second-stream" },
           },
-        }),
+        } satisfies FormPreferences),
       );
     },
-    { preferencesKey: CREATE_AGENT_PREFERENCES_KEY, serverId },
+    { preferencesKey: CREATE_AGENT_PREFERENCES_KEY },
   );
 }
 
@@ -101,9 +100,8 @@ test.describe("New Workspace mode cycle safety", () => {
   // control and silently change that (possibly running) agent's mode — e.g. into a
   // permissive/bypass mode. See use-keyboard-action-handler.ts.
   test("Shift+Tab in New Workspace never changes a backgrounded agent's mode", async ({ page }) => {
-    const serverId = getServerId();
     const seeded = await seedWorkspace({ repoPrefix: "mode-cycle-safety-" });
-    await seedCodexDefaultPreferences(page, serverId);
+    await seedCodexDefaultPreferences(page);
     const modeRequests = await recordSetAgentModeRequests(page);
 
     try {

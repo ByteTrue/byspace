@@ -24,7 +24,11 @@ export function defaultHostAppearance(): HostAppearance {
 
 export function normalizeStoredHostAppearance(value: unknown): HostAppearance {
   const result = HostAppearanceSchema.safeParse(value);
-  return result.success ? result.data : defaultHostAppearance();
+  if (!result.success) return defaultHostAppearance();
+  return {
+    ...result.data,
+    badgeDisplay: result.data.badgeDisplay ?? "auto",
+  };
 }
 
 export function resolveHostBadgeDisplay(input: { appearance: HostAppearance }): HostBadgeDisplay {

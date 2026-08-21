@@ -236,38 +236,6 @@ export function AgentModeControl({
   );
 }
 
-/** Retained BySpace create-workspace surfaces provide draft values directly. */
-export function DraftAgentModeControl({
-  placement: _placement,
-  providerDefinitions,
-  selectedProvider,
-  modeOptions,
-  selectedMode,
-  onSelectMode,
-  disabled,
-}: {
-  placement?: "footer" | "inline";
-  providerDefinitions: AgentProviderDefinition[];
-  selectedProvider: string | null;
-  modeOptions: AgentMode[];
-  selectedMode: string;
-  onSelectMode: (modeId: string) => void;
-  disabled?: boolean;
-}) {
-  if (!selectedProvider) return null;
-  return (
-    <AgentModeControl
-      provider={selectedProvider}
-      providerDefinitions={providerDefinitions}
-      modeOptions={modeOptions}
-      selectedModeId={selectedMode}
-      onSelectMode={onSelectMode}
-      disabled={disabled}
-      surface="toolbar"
-    />
-  );
-}
-
 const EMPTY_MODES: AgentMode[] = [];
 
 function compareAvailableModes(a: AgentMode[], b: AgentMode[]): boolean {

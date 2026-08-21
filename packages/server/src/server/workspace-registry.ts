@@ -106,12 +106,10 @@ export interface WorkspaceMutation {
   workspaceId: string;
   workspace: PersistedWorkspaceRecord | null;
   expectsInitialAgent?: boolean;
-  initialAgentSettled?: boolean;
 }
 
 export interface WorkspaceMutationContext {
   expectsInitialAgent?: boolean;
-  initialAgentSettled?: boolean;
 }
 
 export interface WorkspaceArchiveContext {

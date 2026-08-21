@@ -2270,6 +2270,10 @@ export function SharedDiffView({ files, displayPreferences, mode }: SharedDiffVi
     if (!hasTarget) {
       return;
     }
+    if (mode.kind === "working_tab" && !expandedPaths.has(focusPath)) {
+      mode.onExpandedPathsChange([...expandedPaths, focusPath]);
+      return;
+    }
     pendingFocusRequestRef.current = focusRequestKey;
     const frame = requestAnimationFrame(() => {
       diffListRef.current?.scrollToOffset({
@@ -2285,7 +2289,7 @@ export function SharedDiffView({ files, displayPreferences, mode }: SharedDiffVi
         pendingFocusRequestRef.current = null;
       }
     };
-  }, [computeHeaderOffset, flatItems, focusPath, focusRequestId]);
+  }, [computeHeaderOffset, expandedPaths, flatItems, focusPath, focusRequestId, mode]);
 
   const handleToggleExpanded = useCallback(
     (path: string) => {
@@ -2957,7 +2961,7 @@ export function GitDiffPane({
     workspaceId: workspaceId ?? undefined,
     cwd,
     attachment: reviewAttachment,
-    enabled: !changesTabOpen,
+    enabled: asWorkspaceTab || !changesTabOpen,
   });
   const {
     githubFeaturesEnabled,
@@ -2998,7 +3002,7 @@ export function GitDiffPane({
     cwd,
     files,
     viewMode,
-    changesTabOpen,
+    changesTabOpen: asWorkspaceTab ? false : changesTabOpen,
     onViewModeChange: handleViewModeChange,
   });
   const sharedDisplayPreferences = useMemo(

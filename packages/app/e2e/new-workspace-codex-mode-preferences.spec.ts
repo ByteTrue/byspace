@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "./fixtures";
+import type { FormPreferences } from "@/create-agent-preferences/preferences";
 import { gotoAppShell } from "./helpers/app";
 import { daemonWsRoutePattern } from "./helpers/daemon-port";
 import { openAgentRoute } from "./helpers/mock-agent";
@@ -10,7 +11,6 @@ import {
 import { expectNoTruncation } from "./helpers/no-truncation";
 import { escapeRegex } from "./helpers/regex";
 import { seedWorkspace } from "./helpers/seed-client";
-import { getServerId } from "./helpers/server-id";
 import { waitForSidebarHydration } from "./helpers/workspace-ui";
 
 const CREATE_AGENT_PREFERENCES_KEY = "@byspace:create-agent-preferences";
@@ -49,13 +49,12 @@ function getSessionMessage(message: WebSocketMessage): Record<string, unknown> |
   return maybeEnvelope.message as Record<string, unknown>;
 }
 
-async function seedCodexDefaultPermissionPreferences(page: Page, serverId: string): Promise<void> {
+async function seedCodexDefaultPermissionPreferences(page: Page): Promise<void> {
   await page.addInitScript(
-    ({ preferencesKey, serverId: seededServerId }) => {
+    ({ preferencesKey }) => {
       localStorage.setItem(
         preferencesKey,
         JSON.stringify({
-          serverId: seededServerId,
           provider: "codex",
           providerPreferences: {
             codex: {
@@ -69,10 +68,10 @@ async function seedCodexDefaultPermissionPreferences(page: Page, serverId: strin
               model: "ten-second-stream",
             },
           },
-        }),
+        } satisfies FormPreferences),
       );
     },
-    { preferencesKey: CREATE_AGENT_PREFERENCES_KEY, serverId },
+    { preferencesKey: CREATE_AGENT_PREFERENCES_KEY },
   );
 }
 
@@ -88,7 +87,7 @@ async function readCodexModePreference(page: Page): Promise<unknown> {
 }
 
 async function selectMode(page: Page, label: string): Promise<void> {
-  const modeControl = page.getByTestId("mode-control").first();
+  const modeControl = page.getByRole("button", { name: /^Select agent mode \(/ });
   await expect(modeControl).toBeVisible({ timeout: 30_000 });
   await modeControl.click();
 
@@ -155,10 +154,9 @@ test.describe("New workspace Codex mode preferences", () => {
   test("keeps Full Access as the global Codex mode after the workspace draft auto-submit handoff", async ({
     page,
   }) => {
-    const serverId = getServerId();
     const seeded = await seedWorkspace({ repoPrefix: "codex-mode-preferences-" });
     const createAgentRecorder = await recordAndBlockCreateAgentRequests(page);
-    await seedCodexDefaultPermissionPreferences(page, serverId);
+    await seedCodexDefaultPermissionPreferences(page);
 
     try {
       await gotoAppShell(page);
@@ -169,12 +167,14 @@ test.describe("New workspace Codex mode preferences", () => {
         projectDisplayName: seeded.projectDisplayName,
       });
 
-      await expect(page.getByTestId("mode-control").first()).toContainText("Default permissions", {
-        timeout: 30_000,
-      });
+      await expect(
+        page.getByRole("button", { name: "Select agent mode (Default permissions)" }),
+      ).toBeVisible({ timeout: 30_000 });
       await expectThinkingOptionsFit(page);
       await selectMode(page, "Full access");
-      await expect(page.getByTestId("mode-control").first()).toContainText("Full access");
+      await expect(
+        page.getByRole("button", { name: "Select agent mode (Full access)" }),
+      ).toBeVisible();
 
       await submitNewWorkspacePrompt(page, "Keep Codex full access selected globally.");
       const createAgentRequest = await createAgentRecorder.waitForCreateAgentRequest();
@@ -192,9 +192,8 @@ test.describe("New workspace Codex mode preferences", () => {
   });
 
   test("uses the live Codex agent mode as the next New Workspace default", async ({ page }) => {
-    const serverId = getServerId();
     const seeded = await seedWorkspace({ repoPrefix: "codex-live-mode-preferences-" });
-    await seedCodexDefaultPermissionPreferences(page, serverId);
+    await seedCodexDefaultPermissionPreferences(page);
 
     try {
       const agent = await seeded.client.createAgent({
@@ -210,14 +209,14 @@ test.describe("New workspace Codex mode preferences", () => {
         workspaceId: seeded.workspaceId,
         agentId: agent.id,
       });
-      await expect(page.getByTestId("mode-control").first()).toContainText("Default permissions", {
-        timeout: 30_000,
-      });
+      await expect(
+        page.getByRole("button", { name: "Select agent mode (Default permissions)" }),
+      ).toBeVisible({ timeout: 30_000 });
 
       await selectMode(page, "Full access");
-      await expect(page.getByTestId("mode-control").first()).toContainText("Full access", {
-        timeout: 30_000,
-      });
+      await expect(
+        page.getByRole("button", { name: "Select agent mode (Full access)" }),
+      ).toBeVisible({ timeout: 30_000 });
 
       await openGlobalNewWorkspaceComposer(page);
       await selectNewWorkspaceProject(page, {
@@ -225,9 +224,9 @@ test.describe("New workspace Codex mode preferences", () => {
         projectDisplayName: seeded.projectDisplayName,
       });
 
-      await expect(page.getByTestId("mode-control").first()).toContainText("Full access", {
-        timeout: 30_000,
-      });
+      await expect(
+        page.getByRole("button", { name: "Select agent mode (Full access)" }),
+      ).toBeVisible({ timeout: 30_000 });
     } finally {
       await seeded.cleanup();
     }

@@ -76,22 +76,26 @@ describe("sidebar view store", () => {
     expect(useSidebarViewStore.getState().hostFilters).toEqual(["host-a"]);
   });
 
-  it("drops removed group-mode state during migration", () => {
+  it("migrates legacy per-host group modes to the new global mode", () => {
     expect(
       migrateSidebarViewState({
-        groupModeByServerId: { "host-a": "status" },
+        groupModeByServerId: { "host-a": "project", "host-b": "status" },
       }),
-    ).toEqual({ hostFilters: [] });
+    ).toEqual({ groupMode: "status", hostFilters: [] });
   });
 
   it("migrates a pre-v2 single host filter to the multi-host list", () => {
-    expect(migrateSidebarViewState({ hostFilter: "host-a" })).toEqual({
+    expect(migrateSidebarViewState({ groupMode: "status", hostFilter: "host-a" })).toEqual({
+      groupMode: "status",
       hostFilters: ["host-a"],
     });
   });
 
-  it("keeps current host filters during version migration", () => {
-    expect(migrateSidebarViewState({ hostFilters: ["host-a", "host-b"] })).toEqual({
+  it("keeps current sidebar view state during version migration", () => {
+    expect(
+      migrateSidebarViewState({ groupMode: "status", hostFilters: ["host-a", "host-b"] }),
+    ).toEqual({
+      groupMode: "status",
       hostFilters: ["host-a", "host-b"],
     });
   });

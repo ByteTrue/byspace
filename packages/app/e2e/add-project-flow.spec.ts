@@ -164,7 +164,7 @@ test.describe("Add Project command-center flow", () => {
       await expect(addProjectFlow(page)).toContainText(SECONDARY_HOST_LABEL);
     });
 
-    test("Escape and Back restore page input and active selection before closing at the root", async ({
+    test("Escape and Back restore searchable page input before closing at the root", async ({
       page,
     }) => {
       await gotoAppShell(page);
@@ -180,14 +180,13 @@ test.describe("Add Project command-center flow", () => {
       await page.keyboard.press("Enter");
       await expectAddProjectPage(page, "method");
 
-      await addProjectFlowInput(page).fill("new");
-      await page.keyboard.press("Enter");
+      await chooseAddProjectMethod(page, "new-directory");
       await expectAddProjectPage(page, "new-directory-parent");
       await page.keyboard.press("Escape");
 
       await expectAddProjectPage(page, "method");
-      await expect(addProjectFlowInput(page)).toHaveValue("new");
-      await page.keyboard.press("Enter");
+      await expect(addProjectFlowInput(page)).toHaveCount(0);
+      await chooseAddProjectMethod(page, "new-directory");
       await expectAddProjectPage(page, "new-directory-parent");
       await addProjectFlowBack(page).click();
 

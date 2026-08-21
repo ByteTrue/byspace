@@ -99,6 +99,7 @@ export const UserComposerAttachmentSchema: z.ZodType<UserComposerAttachment> = z
       kind: z.literal("github_pr"),
       item: ChangeRequestItemSchema,
       owner: z.literal(NEW_WORKSPACE_PICKER_ATTACHMENT_OWNER).optional(),
+      ownerTargetId: z.string().optional(),
     }),
   ],
 );

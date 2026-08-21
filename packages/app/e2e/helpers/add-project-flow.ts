@@ -62,7 +62,9 @@ export async function openAddProjectFlow(
   await page.getByTestId("sidebar-add-project").click();
   await expect(addProjectFlow(page)).toBeVisible({ timeout: 30_000 });
   await expectAddProjectPage(page, expectedPage);
-  await expect(addProjectFlowInput(page)).toBeFocused();
+  if (expectedPage !== "method") {
+    await expect(addProjectFlowInput(page)).toBeFocused();
+  }
 }
 
 export async function chooseAddProjectMethod(page: Page, method: AddProjectMethod): Promise<void> {

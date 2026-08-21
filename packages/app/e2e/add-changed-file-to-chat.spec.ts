@@ -35,7 +35,7 @@ test("adds a changed file to the focused chat without replacing its composer dra
     await page.getByTestId("explorer-tab-changes").click();
     const changedFile = page.getByText("changed file.ts", { exact: true }).first();
     await expect(changedFile).toBeVisible({ timeout: 30_000 });
-    await page.getByTestId("diff-file-0-actions").click();
+    await page.getByTestId("diff-file-0-toggle").click({ button: "right" });
     await page.getByTestId("diff-file-0-add-to-chat").click();
 
     const attachment = page.getByTestId("composer-workspace-file-attachment-pill");

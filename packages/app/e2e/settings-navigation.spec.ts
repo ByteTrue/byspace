@@ -82,7 +82,7 @@ test.describe("Settings sidebar navigation", () => {
       const selector = card.getByTestId("combined-model-selector");
       await expect(selector).toContainText("Select model");
       await selector.click();
-      await page.getByText("Mock Load Test", { exact: true }).click();
+      await page.getByRole("button", { name: "Mock Load Test 4 models" }).click();
       await page.getByText("Ten second stream", { exact: true }).click();
 
       await expect(selector).toContainText("Ten second stream");

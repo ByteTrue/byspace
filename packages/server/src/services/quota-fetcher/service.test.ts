@@ -391,6 +391,7 @@ describe("real provider usage fetchers", () => {
       platform?: typeof process.platform;
       keychain?: () => Promise<unknown | null>;
       kimiHomeDir?: string;
+      cursorHomeDir?: string;
       miniMaxConfigPath?: string;
       miniMaxCredentialsPath?: string;
     } = {},
@@ -411,9 +412,19 @@ describe("real provider usage fetchers", () => {
         }),
         new CodexQuotaProvider({ logger, codexHome, fetch: fetchThroughTestDouble }),
         new CopilotQuotaProvider({ logger, fetch: fetchThroughTestDouble }),
-        new CursorQuotaProvider({ logger, fetch: fetchThroughTestDouble }),
+        new CursorQuotaProvider({
+          logger,
+          fetch: fetchThroughTestDouble,
+          homeDir: options.cursorHomeDir,
+        }),
         new ZaiQuotaProvider({ logger, fetch: fetchThroughTestDouble }),
-        new GrokQuotaProvider({ logger, fetch: fetchThroughTestDouble }),
+        new GrokQuotaProvider({
+          logger,
+          fetch: fetchThroughTestDouble,
+          // Match Kimi: inject temp HOME so nested auth-file tests work on Windows
+          // (os.homedir() uses USERPROFILE there and ignores process.env.HOME).
+          homeDir,
+        }),
         new KimiQuotaProvider({
           logger,
           fetch: fetchThroughTestDouble,
