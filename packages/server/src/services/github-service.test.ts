@@ -3485,6 +3485,8 @@ describe("ForgeService", () => {
     const runner = createRunner([JSON.stringify({})]);
     const service = createGitHubService({
       runner: runner.runner,
+      resolveGhPath: async () => "/usr/bin/gh",
+      resolveRepoHost: async () => null,
       resolveRepoSlug: async () => null,
     });
 

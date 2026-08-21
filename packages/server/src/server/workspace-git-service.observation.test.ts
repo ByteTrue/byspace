@@ -891,13 +891,12 @@ describe("WorkspaceGitService checkout observation", () => {
     await fetchSnapshotRead.promise;
     await vi.waitFor(() => {
       expect(getCheckoutSnapshotFacts).toHaveBeenCalledTimes(1);
+      expect(getWatcherRecordsForDirectory(watcher, GIT_DIR)).toHaveLength(1);
     });
 
-    watcher.records
-      .find((record) => record.directory === GIT_DIR)
-      ?.callback(null, [
-        { path: path.join(GIT_DIR, "refs", "remotes", "origin", "main"), type: "update" },
-      ]);
+    getWatcherRecordsForDirectory(watcher, GIT_DIR)[0]?.callback(null, [
+      { path: path.join(GIT_DIR, "refs", "remotes", "origin", "main"), type: "update" },
+    ]);
     releaseFetch.resolve();
     await flushPromises();
     await vi.advanceTimersByTimeAsync(1_000);
