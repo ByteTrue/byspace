@@ -1,7 +1,7 @@
 {
-  "$ref": "#/definitions/PaseoConfigV1",
+  "$ref": "#/definitions/BySpaceConfigV1",
   "definitions": {
-    "PaseoConfigV1": {
+    "BySpaceConfigV1": {
       "type": "object",
       "properties": {
         "$schema": {
@@ -303,7 +303,7 @@
                   "additionalModels": {
                     "type": "array",
                     "items": {
-                      "$ref": "#/definitions/PaseoConfigV1/properties/agents/properties/providers/additionalProperties/properties/models/items"
+                      "$ref": "#/definitions/BySpaceConfigV1/properties/agents/properties/providers/additionalProperties/properties/models/items"
                     }
                   },
                   "disallowedTools": {
@@ -388,7 +388,7 @@
                   "type": "object",
                   "properties": {
                     "provider": {
-                      "$ref": "#/definitions/PaseoConfigV1/properties/features/properties/dictation/properties/stt/properties/provider"
+                      "$ref": "#/definitions/BySpaceConfigV1/properties/features/properties/dictation/properties/stt/properties/provider"
                     },
                     "model": {
                       "type": "string",
@@ -405,7 +405,7 @@
                   "type": "object",
                   "properties": {
                     "provider": {
-                      "$ref": "#/definitions/PaseoConfigV1/properties/features/properties/dictation/properties/stt/properties/provider"
+                      "$ref": "#/definitions/BySpaceConfigV1/properties/features/properties/dictation/properties/stt/properties/provider"
                     }
                   },
                   "additionalProperties": false
@@ -414,7 +414,7 @@
                   "type": "object",
                   "properties": {
                     "provider": {
-                      "$ref": "#/definitions/PaseoConfigV1/properties/features/properties/dictation/properties/stt/properties/provider"
+                      "$ref": "#/definitions/BySpaceConfigV1/properties/features/properties/dictation/properties/stt/properties/provider"
                     },
                     "model": {
                       "type": "string",
@@ -467,10 +467,10 @@
               "type": "object",
               "properties": {
                 "level": {
-                  "$ref": "#/definitions/PaseoConfigV1/properties/log/properties/level"
+                  "$ref": "#/definitions/BySpaceConfigV1/properties/log/properties/level"
                 },
                 "format": {
-                  "$ref": "#/definitions/PaseoConfigV1/properties/log/properties/format"
+                  "$ref": "#/definitions/BySpaceConfigV1/properties/log/properties/format"
                 }
               },
               "additionalProperties": false
@@ -479,7 +479,7 @@
               "type": "object",
               "properties": {
                 "level": {
-                  "$ref": "#/definitions/PaseoConfigV1/properties/log/properties/level"
+                  "$ref": "#/definitions/BySpaceConfigV1/properties/log/properties/level"
                 },
                 "path": {
                   "type": "string",
