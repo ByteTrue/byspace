@@ -35,6 +35,7 @@ Treat `docs/upstream-sync.md` as the process source of truth.
 - Keep one writer. Use independent reviewers read-only.
 - Freeze the approved disposition before implementation. After approval, do not silently change a behavior from Port to Superseded, Needs user decision, or a downstream redesign.
 - For an approved Port, preserve upstream behavior and code structure as closely as the retained BySpace tree permits.
+- Do not treat an inherited BySpace test, helper, comment, or runtime branch as proof of an intentional downstream contract. Preserve divergence only when docs, an active BySpace-specific path, or Git provenance proves it was deliberate; otherwise follow the frozen target.
 - Only deterministic mechanical adaptations may be made without asking: BySpace names/imports/package paths, removal of wiring used only by excluded surfaces, and direct compile/test adjustments caused by those edits.
 - Stop and ask before any non-mechanical change: new state, schema, RPC, fallback, policy, UX, architecture, broader compatibility layer, bug fix, hardening, or behavior that has more than one reasonable implementation.
 - If upstream code appears buggy or unsafe, report the exact upstream behavior and options. Do not repair it during sync unless the user explicitly chooses that work.
@@ -84,16 +85,31 @@ The detailed list must account for every behavior in the internal ledger, includ
 8. Prove the exact unmodified target with its own clean install, server build, typecheck, and Web build before copying code.
 9. Freeze the approved dispositions. Do not begin implementation while any **需要你决定** item is unresolved.
 10. Create an isolated persistent worktree from the recorded current BySpace `main` SHA.
-11. Copy each approved Port from upstream as directly as possible. Apply only the mechanical BySpace adaptations listed above.
+11. Copy each approved Port from upstream as directly as possible. Transfer its complete support slice too: tests, shared E2E helpers, fixtures, factories, benchmarks, generated assets, smoke expectations, and removal residuals. Apply only the mechanical BySpace adaptations listed above.
 12. If direct copying exposes an upstream defect, architecture conflict, unclear compatibility choice, or additional responsibility, stop that slice and ask the user before writing a solution.
-13. Import only dependency and lockfile changes required by copied behavior. Rebuild workspace declarations before diagnosing cross-package type errors.
-14. Run the upstream tests that cover copied behavior plus focused adaptation tests; then run the complete gates in `docs/upstream-sync.md`.
-15. Audit only transfer fidelity and fixed BySpace boundaries: no omitted approved code, accidental redesign, excluded client, old identity, upstream package namespace, port, home path, deployment target, or release-channel regression.
+13. Import only dependency and lockfile changes required by copied behavior. Rebuild workspace declarations before diagnosing cross-package type errors. Adapt new `COMPAT(...)` markers to the actual first BySpace release and cleanup date; never copy an upstream version marker or guess an unknown BySpace release.
+14. Run the upstream tests that cover copied behavior plus focused adaptation tests. Before fixing any failure, classify its provenance with the decision tree below; then run the complete gates in `docs/upstream-sync.md`.
+15. Audit only transfer fidelity and fixed BySpace boundaries: no omitted approved code or support files, accidental redesign, excluded client, old identity, upstream package namespace, port, home path, deployment target, release-channel regression, stale removed-feature references, or inconsistent compatibility markers.
 16. Obtain independent reviews limited to copied-versus-upstream fidelity, approved dispositions, mechanical adaptation scope, excluded-surface leakage, and fixed release boundaries. Reviewers must not propose upstream improvements or new hardening as sync blockers.
 17. Fix transfer mistakes. Classify a discovered upstream defect or desirable improvement as **Needs user decision**; do not implement it automatically. Only then update the recorded upstream baseline.
-18. Push the sync branch and run the full `CI` workflow on its exact SHA (PR to `main` or `workflow_dispatch`). The baseline marker rides in the sync branch, so it can only reach `main` together with green CI evidence.
+18. Push the sync branch and run the full `CI` workflow on its exact SHA (PR to `main` or `workflow_dispatch`). The baseline marker rides in the sync branch, so it can only reach `main` together with green CI evidence. For every red run, record failure → provenance → action → focused proof → replacement SHA, then rerun the complete matrix; deterministic platform failures cannot be waived by a lucky rerun.
 19. Present the candidate SHA, CI result, validation, approved change list, user decisions, and residual upstream concerns. With user approval, fast-forward `main` to the exact CI-green SHA and push. Never merge a red or unverified candidate into `main`.
 20. Stop after source convergence. Use `release-beta` or `release-stable` only for a separate explicit shipping request.
+
+## Provenance-first failure triage
+
+A red test says the candidate and expectation disagree; it does not say which side is authoritative. Before editing production behavior:
+
+1. Find the earliest causal failure. Check whether a failed assertion left a deferred operation unresolved, a lifecycle lock held, a scheduler queue blocked, or a watcher half-started; later timeouts may be fan-out noise.
+2. Compare the frozen upstream baseline, frozen target (implementation, tests, and support files), BySpace immediately before the candidate, and the candidate diff.
+3. Choose exactly one outcome:
+   - **Follow target:** inherited baseline behavior changed upstream and no deliberate BySpace divergence is proven; update/remove stale BySpace tests instead of restoring old behavior.
+   - **Preserve BySpace seam:** docs, Git provenance, or an active BySpace-only caller proves intent; keep it with the smallest adaptation and a focused test.
+   - **Complete the transfer:** the target's test/helper/fixture/factory/benchmark/generated asset/smoke expectation was omitted; copy it.
+   - **Stop for an upstream defect:** unchanged target reproduces the failure; ask before fixing it, even when the defect is only in a benchmark or test.
+   - **Isolate the test:** focused passes but the full suite fails because a unit test reaches real global state; inject the external resolver/home/scheduler dependency without changing production defaults.
+   - **Fix a platform seam:** inspect path case/separators, home resolution, watcher readiness, and teardown ordering; do not start by increasing timeouts or weakening assertions.
+4. Run the smallest focused proof, then the required local gates, then the full exact-SHA matrix. Do not infer that a broad failure cluster has one cause without evidence, or patch every secondary timeout independently.
 
 ## Worktree lifecycle
 
@@ -108,7 +124,9 @@ The detailed list must account for every behavior in the internal ledger, includ
 
 ## Failure discipline
 
-- Treat a timeout as evidence, not restart permission.
+- Treat a timeout as evidence, not restart permission. Inspect the earliest failure and shared deferred/lock/queue state first.
+- Treat inherited tests as provenance evidence, not automatic product requirements.
+- Treat focused-pass/full-suite-fail as an isolation signal and platform-only failures as platform-seam signals; neither authorizes changing production behavior without proof.
 - Never patch inferred types merely because generated workspace declarations are stale; rebuild the owning stack first.
 - Never delete or regenerate the lockfile to escape conflicts. Preserve unrelated resolved dependency versions.
 - If direct copying requires anything beyond deterministic mechanical adaptation, stop before implementing and ask the user.

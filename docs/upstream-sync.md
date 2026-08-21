@@ -23,6 +23,8 @@ current BySpace main
 
 The current BySpace tree is the product source of truth. The upstream release diff is input to review, not a replacement tree and not a commit queue.
 
+An existing BySpace test, helper, comment, or runtime branch proves only that the behavior existed at the current baseline. It does not prove that BySpace deliberately diverged. Preserve a divergence only when a documented decision, an active BySpace-specific product path, or Git provenance shows an intentional downstream change. Otherwise follow the frozen upstream target implementation and tests.
+
 A sync is a controlled source transfer, not a design or hardening project. Once the user approves which upstream behaviors to take, copy those behaviors as faithfully as possible. Discovery of a possible upstream bug or a non-obvious compatibility choice transfers decision authority back to the user; it does not authorize the synchronizing agent to invent a fix.
 
 A sync must preserve these established BySpace contracts:
@@ -135,7 +137,7 @@ Use the target's documented equivalents if scripts or package names changed. Rec
 ### 5. Copy approved upstream code
 
 1. Create a persistent isolated worktree from the recorded current BySpace `main` SHA.
-2. For each approved Port, copy the upstream implementation and its tests as directly as the retained BySpace tree permits.
+2. For each approved Port, copy the complete upstream implementation slice as directly as the retained BySpace tree permits. The slice includes production code, tests, shared E2E helpers, fixtures, test factories, benchmarks, generated assets, and smoke/package expectations changed by the same behavior.
 3. Without further approval, make only deterministic mechanical adaptations:
    - BySpace product/package/import/path names;
    - omission of wiring used only by excluded surfaces;
@@ -143,11 +145,26 @@ Use the target's documented equivalents if scripts or package names changed. Rec
    - dependency and lockfile changes strictly required by the copied code.
 4. Mechanical means there is one obvious result and no product choice. It must not add state, schemas, RPCs, fallbacks, policies, UX, architecture, generalized compatibility layers, bug fixes, or hardening.
 5. If copying reveals an apparent upstream defect, a conflict with BySpace, more than one reasonable adaptation, or any additional responsibility, stop that slice before implementing a solution. Report the upstream code, impact, and choices to the user.
-6. Do not improve upstream code during sync. If the user wants a fix, record whether to copy upstream first, exclude it, or perform separately scoped follow-up work.
-7. Build workspace declarations before interpreting cross-package type errors.
-8. Commit copied slices as ordinary BySpace commits; never import upstream ancestry.
+6. When upstream removes a feature, transfer the complete removal slice: runtime and UI wiring, CLI, tests, bundled skills, smoke expectations, docs, and stale ownership comments. Preserve protocol parsing compatibility where required by BySpace's protocol contract.
+7. Treat copied `COMPAT(...)` comments as release metadata, not literal source text. Before integration, make every new marker name the actual first BySpace release that carries the shim and include its cleanup date; never retain an upstream version number or guess an unknown BySpace release.
+8. Do not improve upstream code during sync. If the user wants a fix, record whether to copy upstream first, exclude it, or perform separately scoped follow-up work.
+9. Build workspace declarations before interpreting cross-package type errors.
+10. Commit copied slices as ordinary BySpace commits; never import upstream ancestry.
 
 ### 6. Verify the candidate
+
+Before changing runtime behavior to satisfy a failing test or CI job, establish the failure's provenance:
+
+1. Find the earliest causal failure. One failed assertion can leave a deferred operation unresolved or a global lifecycle lock held, turning many later timeouts into secondary noise.
+2. Compare four sources: the frozen upstream baseline implementation/tests, the frozen target implementation/tests and support files, BySpace immediately before the candidate, and the candidate diff.
+3. Classify the failure before editing:
+   - **stale inherited behavior** — baseline had it, target intentionally changed it, and BySpace has no deliberate divergence evidence: follow the target and update or remove the stale test;
+   - **intentional BySpace seam** — docs, Git provenance, or an active BySpace-only caller proves a downstream contract: preserve the seam with the smallest adaptation and a focused test;
+   - **transfer omission** — target code, test, helper, fixture, factory, generated asset, or smoke expectation was not copied together: port the missing target piece;
+   - **upstream defect** — the unchanged frozen target reproduces the failure: stop and ask before fixing it;
+   - **test isolation defect** — the focused file passes but the full suite fails because a unit test reaches a real scheduler, filesystem home, credential store, or other shared resource: inject or isolate that dependency without changing production behavior;
+   - **platform defect** — only one OS fails: inspect path case/separators, home resolution, watcher readiness, and teardown ordering before changing timeouts or weakening assertions.
+4. Keep a compact CI failure ledger: failing job/assertion, provenance evidence, chosen action, focused proof, and replacement exact SHA. Do not assume that every failure in a cluster shares one root cause, or that every timeout is independent.
 
 Run focused tests for each changed behavior, then:
 
@@ -188,7 +205,7 @@ A reviewer finding is a sync blocker only when code was omitted, copied incorrec
 
 Fix transfer mistakes and resolve all **Needs user decision** items through explicit user choices. Then update the baseline marker inside the sync branch and report the candidate SHA, tests, reviews, decisions, and residual upstream concerns.
 
-Integration is branch-first: push the sync branch, run the full `CI` workflow on its exact SHA (PR to `main` or `workflow_dispatch`), and only after it is green and the user approves, fast-forward `main` to that same SHA. The baseline marker therefore lands on `main` only together with green exact-SHA CI evidence; never merge a red or unverified candidate into `main`.
+Integration is branch-first: push the sync branch, run the full `CI` workflow on its exact SHA (PR to `main` or `workflow_dispatch`), and only after it is green and the user approves, fast-forward `main` to that same SHA. If CI fails, classify each failure with the provenance procedure above, fix only the transfer or explicitly approved defect, run focused proof and local gates, then submit a replacement exact SHA to the complete matrix. Do not accept rerun luck for a deterministic platform failure. The baseline marker therefore lands on `main` only together with green exact-SHA CI evidence; never merge a red or unverified candidate into `main`.
 
 ### 8. Tear down temporary sync trees
 
@@ -205,7 +222,10 @@ Shipping is separate. Invoke `release-beta` or `release-stable` only when explic
 
 ## Failure rules
 
-- A timeout is evidence, not permission to restart production.
+- A timeout is evidence, not permission to restart production. Inspect the earliest failure and any unresolved deferred operations, lifecycle locks, scheduler queues, or watcher setup before treating later timeouts as independent.
+- An inherited test is not proof of an intentional BySpace contract. Establish provenance before changing target behavior to satisfy it.
+- A focused pass plus full-suite failure is evidence of test isolation or shared-resource coupling; do not turn it into production behavior without proof.
+- A platform-only failure is evidence of a platform seam; do not weaken a cross-platform assertion until path, environment, watcher, and teardown behavior are understood.
 - A patch conflict permits only an obvious mechanical reconciliation. If it requires semantic or product judgment, stop and ask.
 - Missing generated declarations require rebuilding the owning workspace, not adding duplicate local types.
 - Never delete the lockfile to make dependency conflicts disappear.
