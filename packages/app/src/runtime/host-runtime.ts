@@ -11,6 +11,7 @@ import {
   normalizeStoredHostProfile,
   upsertHostConnectionInProfiles,
   registryHasConnection,
+  StoredHostRegistrySchema,
   type HostConnection,
   type HostProfile,
 } from "@/types/host-connection";
@@ -31,6 +32,8 @@ import { CLIENT_CAPS } from "@bytetrue/byspace-protocol/client-capabilities";
 import { isWeb } from "@/constants/platform";
 import { connectToDaemon } from "@/utils/test-daemon-connection";
 import { getOrCreateClientId } from "@/utils/client-id";
+import { z } from "zod";
+import { readValidatedJson, readValidatedString } from "@/storage/validated-storage";
 import {
   selectBestConnection,
   type ConnectionCandidate,
@@ -154,6 +157,7 @@ export interface HostRuntimeControllerDeps {
 export interface HostRuntimeStorage {
   getItem: (key: string) => Promise<string | null>;
   setItem: (key: string, value: string) => Promise<void>;
+  removeItem: (key: string) => Promise<void>;
 }
 
 export interface HostRuntimeStartOptions {
@@ -1221,9 +1225,10 @@ export interface InitialDaemonConnectionHint {
   useTls?: boolean;
 }
 
-function isInitialConnectionHintRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
-}
+const InitialDaemonConnectionHintSchema: z.ZodType<InitialDaemonConnectionHint> = z.object({
+  listen: z.string().trim().min(1),
+  useTls: z.boolean().optional().default(false),
+});
 
 export function readInitialDaemonConnectionHint(input?: {
   isWebRuntime?: boolean;
@@ -1232,18 +1237,10 @@ export function readInitialDaemonConnectionHint(input?: {
   if (!isWebRuntime || typeof globalThis === "undefined") {
     return null;
   }
-  const value = (globalThis as Record<string, unknown>)[INITIAL_DAEMON_CONNECTION_HINT_GLOBAL_KEY];
-  if (!isInitialConnectionHintRecord(value)) {
-    return null;
-  }
-  const listen = typeof value.listen === "string" ? value.listen.trim() : "";
-  if (!listen) {
-    return null;
-  }
-  return {
-    listen,
-    useTls: value.useTls === true,
-  };
+  const result = InitialDaemonConnectionHintSchema.safeParse(
+    Reflect.get(globalThis, INITIAL_DAEMON_CONNECTION_HINT_GLOBAL_KEY),
+  );
+  return result.success ? result.data : null;
 }
 
 function readConfiguredLocalDaemonOverride(): string | null {
@@ -1348,7 +1345,7 @@ export class HostRuntimeStore {
 
     let isE2E: string | null = null;
     try {
-      isE2E = await this.storage.getItem(E2E_STORAGE_KEY);
+      isE2E = await readValidatedString(this.storage, E2E_STORAGE_KEY, z.string().min(1));
     } catch {
       return;
     }
@@ -1377,17 +1374,25 @@ export class HostRuntimeStore {
     let shouldPersistHosts = false;
     let profiles: HostProfile[] = [];
     try {
-      const stored = await this.storage.getItem(REGISTRY_STORAGE_KEY);
+      const stored = await readValidatedJson(
+        this.storage,
+        REGISTRY_STORAGE_KEY,
+        StoredHostRegistrySchema,
+      );
       if (stored) {
-        const parsed = JSON.parse(stored) as unknown;
-        if (Array.isArray(parsed)) {
-          const normalizedProfiles = parsed
-            .map((entry) => normalizeStoredHostProfile(entry))
-            .filter((entry): entry is HostProfile => entry !== null);
-          profiles = normalizedProfiles.filter((entry) => !isPlaceholderServerId(entry.serverId));
-          if (profiles.length !== normalizedProfiles.length) {
-            shouldPersistHosts = true;
+        const normalizedProfiles: HostProfile[] = [];
+        for (const entry of stored) {
+          const profile = normalizeStoredHostProfile(entry);
+          if (!profile) {
+            await this.storage.removeItem(REGISTRY_STORAGE_KEY);
+            normalizedProfiles.length = 0;
+            break;
           }
+          normalizedProfiles.push(profile);
+        }
+        profiles = normalizedProfiles.filter((entry) => !isPlaceholderServerId(entry.serverId));
+        if (profiles.length !== normalizedProfiles.length) {
+          shouldPersistHosts = true;
         }
       }
       this.hosts = profiles;
@@ -1800,8 +1805,14 @@ export class HostRuntimeStore {
           ])
         : undefined,
     });
-    void this.persistHosts();
-    return next.find((daemon) => daemon.serverId === input.serverId) as HostProfile;
+    void this.persistHosts().catch((error) =>
+      console.error("[HostRuntime] Failed to persist host registry", error),
+    );
+    const profile = next.find((daemon) => daemon.serverId === input.serverId);
+    if (!profile) {
+      throw new Error(`Host ${input.serverId} was not inserted`);
+    }
+    return profile;
   }
 
   private setHostsAndSync(
@@ -2248,25 +2259,19 @@ export class HostRuntimeStore {
 let singletonHostRuntimeStore: HostRuntimeStore | null = null;
 const HOST_RUNTIME_STORE_GLOBAL_KEY = "__byspaceHostRuntimeStore";
 
-type HostRuntimeGlobal = typeof globalThis & {
-  [HOST_RUNTIME_STORE_GLOBAL_KEY]?: HostRuntimeStore;
-};
-
 export function getHostRuntimeStore(): HostRuntimeStore {
   if (singletonHostRuntimeStore) {
     return singletonHostRuntimeStore;
   }
 
-  const runtimeGlobal = globalThis as HostRuntimeGlobal;
-  if (runtimeGlobal[HOST_RUNTIME_STORE_GLOBAL_KEY]) {
-    singletonHostRuntimeStore = runtimeGlobal[HOST_RUNTIME_STORE_GLOBAL_KEY] ?? null;
-    if (singletonHostRuntimeStore) {
-      return singletonHostRuntimeStore;
-    }
+  const existing = Reflect.get(globalThis, HOST_RUNTIME_STORE_GLOBAL_KEY);
+  if (existing instanceof HostRuntimeStore) {
+    singletonHostRuntimeStore = existing;
+    return existing;
   }
 
   singletonHostRuntimeStore = new HostRuntimeStore();
-  runtimeGlobal[HOST_RUNTIME_STORE_GLOBAL_KEY] = singletonHostRuntimeStore;
+  Reflect.set(globalThis, HOST_RUNTIME_STORE_GLOBAL_KEY, singletonHostRuntimeStore);
   return singletonHostRuntimeStore;
 }
 
@@ -2332,12 +2337,11 @@ export function useHostRuntimeConnectionStatuses(
   return useMemo(() => {
     // The aggregate version is the reactivity trigger; re-read snapshots on every host tick.
     void version;
-    return new Map(
-      serverIds.map(
-        (serverId) =>
-          [serverId, store.getSnapshot(serverId)?.connectionStatus ?? "connecting"] as const,
-      ),
-    );
+    const entries: Array<[string, HostRuntimeConnectionStatus]> = serverIds.map((serverId) => [
+      serverId,
+      store.getSnapshot(serverId)?.connectionStatus ?? "connecting",
+    ]);
+    return new Map(entries);
   }, [serverIds, store, version]);
 }
 

@@ -358,9 +358,8 @@ function ProjectPickerTrigger({
               <ProjectIconView
                 iconDataUri={iconDataUri}
                 initial={placeholderInitial}
-                projectKey={projectKey}
-                imageStyle={styles.projectIcon}
-                fallbackStyle={styles.projectIconFallback}
+                projectViewKey={projectKey}
+                size={ICON_SIZE.md}
                 textStyle={styles.projectIconFallbackText}
               />
             ) : (
@@ -501,9 +500,8 @@ function ProjectOptionItem({
         <ProjectIconView
           iconDataUri={iconDataUri}
           initial={placeholderInitial}
-          projectKey={projectKey}
-          imageStyle={styles.projectIcon}
-          fallbackStyle={styles.projectIconFallback}
+          projectViewKey={projectKey}
+          size={ICON_SIZE.md}
           textStyle={styles.projectIconFallbackText}
         />
       </View>

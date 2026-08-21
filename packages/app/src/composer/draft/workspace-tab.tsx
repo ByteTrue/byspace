@@ -7,7 +7,6 @@ import { useContainerWidthBelow } from "@/hooks/use-container-width";
 import invariant from "tiny-invariant";
 import { Composer } from "@/composer";
 import { FileDropZone } from "@/components/file-drop/file-drop-zone";
-import { DraftAgentModeControl } from "@/composer/agent-controls/mode-control";
 import { ComposerImportPill } from "@/composer/draft/import-pill";
 import { AgentStreamView } from "@/agent-stream/view";
 import { composerWorkspaceAttachment } from "@/composer/attachments/workspace";
@@ -625,14 +624,6 @@ export function WorkspaceDraftAgentTab({
     focusInputRef.current = focus;
   }, []);
 
-  const handleProviderSelectWithFocus = useCallback(
-    (provider: Parameters<typeof composerState.setProviderFromUser>[0]) => {
-      composerState.setProviderFromUser(provider);
-      focusInputRef.current?.();
-    },
-    [composerState],
-  );
-
   const handleModeSelectWithFocus = useCallback(
     (modeId: string) => {
       composerState.setModeFromUser(modeId);
@@ -688,7 +679,6 @@ export function WorkspaceDraftAgentTab({
   const composerAgentControls = useMemo(
     () => ({
       ...composerState.agentControls,
-      onSelectProvider: handleProviderSelectWithFocus,
       onSelectMode: handleModeSelectWithFocus,
       onSelectModel: handleModelSelectWithFocus,
       onSelectProviderAndModel: handleProviderAndModelSelectWithFocus,
@@ -699,7 +689,6 @@ export function WorkspaceDraftAgentTab({
     }),
     [
       composerState.agentControls,
-      handleProviderSelectWithFocus,
       handleModeSelectWithFocus,
       handleModelSelectWithFocus,
       handleProviderAndModelSelectWithFocus,
@@ -709,18 +698,6 @@ export function WorkspaceDraftAgentTab({
       isSubmitting,
     ],
   );
-  const composerFooter = useMemo(
-    () =>
-      isCompactComposerLayout ? (
-        <DraftAgentModeControl
-          placement="footer"
-          {...composerAgentControls}
-          isCompactLayout={isCompactComposerLayout}
-        />
-      ) : undefined,
-    [isCompactComposerLayout, composerAgentControls],
-  );
-
   return (
     <FileDropZone style={styles.container}>
       <View style={styles.contentContainer}>
@@ -780,7 +757,6 @@ export function WorkspaceDraftAgentTab({
           onFocusInput={handleFocusInputCallback}
           commandDraftConfig={composerState.commandDraftConfig}
           agentControls={composerAgentControls}
-          footer={composerFooter}
           isCompactLayout={isCompactComposerLayout}
         />
       </View>

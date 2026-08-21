@@ -22,6 +22,7 @@ import {
   type WorkspaceLifecycleCoordinator,
   workspaceLifecycleCoordinator,
 } from "./workspace-lifecycle-coordinator.js";
+import { runWithGitCommandPriority } from "../utils/run-git-command.js";
 
 export interface ActiveWorkspaceRef {
   workspaceId: string;
@@ -41,7 +42,7 @@ export interface ArchiveDependencies {
   workspaceGitService: Pick<WorkspaceGitService, "getSnapshot"> &
     Partial<Pick<WorkspaceGitService, "invalidateWorktreeLists">>;
   agentManager: Pick<AgentManager, "listAgents" | "getAgent" | "archiveAgent" | "archiveSnapshot">;
-  agentStorage: Pick<AgentStorage, "list">;
+  agentStorage: Pick<AgentStorage, "listByWorkspace">;
   // Resolves the worktree at a path to its workspaceId for archive-by-path. The
   // path uniquely identifies a worktree workspace; this is a directory lookup for
   // the archive target, not status/ownership.
@@ -123,8 +124,10 @@ export async function archiveByScope(
   dependencies: ArchiveDependencies,
   request: ArchiveByScopeRequest,
 ): Promise<ArchiveResult> {
-  return (dependencies.lifecycleCoordinator ?? workspaceLifecycleCoordinator).runExclusive(() =>
-    archiveByScopeUnlocked(dependencies, request),
+  return runWithGitCommandPriority("high", () =>
+    (dependencies.lifecycleCoordinator ?? workspaceLifecycleCoordinator).runExclusive(() =>
+      archiveByScopeUnlocked(dependencies, request),
+    ),
   );
 }
 
@@ -348,16 +351,14 @@ export async function archiveWorkspaceContents(
 
   let storedRecords: StoredAgentRecord[] = [];
   try {
-    storedRecords = await dependencies.agentStorage.list();
+    storedRecords = await dependencies.agentStorage.listByWorkspace(workspaceId);
   } catch (error) {
     dependencies.sessionLogger?.warn(
       { err: error, workspaceId },
       "Failed to list stored agents during workspace archive; continuing",
     );
   }
-  const matchingStoredRecords = storedRecords.filter(
-    (record) => record.workspaceId === workspaceId,
-  );
+  const matchingStoredRecords = storedRecords;
   for (const record of matchingStoredRecords) {
     archivedAgents.add(record.id);
   }

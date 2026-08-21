@@ -1,6 +1,8 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { create } from "zustand";
-import { createJSONStorage, persist } from "zustand/middleware";
+import { persist, type StateStorage } from "zustand/middleware";
+import { z } from "zod";
+import { createValidatedPersistStorage } from "@/storage/validated-persist-storage";
 import type { WorkspaceScriptLinkKind } from "@/utils/workspace-script-links";
 
 interface WorkspaceServiceRoutePreferencesState {
@@ -8,9 +10,19 @@ interface WorkspaceServiceRoutePreferencesState {
   setPreferredRoute: (serverId: string, kind: WorkspaceScriptLinkKind) => void;
 }
 
-export const useWorkspaceServiceRoutePreferencesStore =
-  create<WorkspaceServiceRoutePreferencesState>()(
-    persist(
+const WorkspaceScriptLinkKindSchema = z.enum(["public", "byspace", "direct"]);
+const WorkspaceServiceRoutePreferencesSchema = z.strictObject({
+  byServerId: z.record(z.string(), WorkspaceScriptLinkKindSchema),
+});
+
+export function createWorkspaceServiceRoutePreferencesStore(storage: StateStorage) {
+  return create<WorkspaceServiceRoutePreferencesState>()(
+    persist<
+      WorkspaceServiceRoutePreferencesState,
+      [],
+      [],
+      z.infer<typeof WorkspaceServiceRoutePreferencesSchema>
+    >(
       (set) => ({
         byServerId: {},
         setPreferredRoute: (serverId, kind) =>
@@ -19,8 +31,19 @@ export const useWorkspaceServiceRoutePreferencesStore =
       {
         name: "byspace-workspace-service-route-preferences",
         version: 1,
-        storage: createJSONStorage(() => AsyncStorage),
+        storage: createValidatedPersistStorage(storage, WorkspaceServiceRoutePreferencesSchema),
         partialize: (state) => ({ byServerId: state.byServerId }),
+        merge: (persistedState, currentState) => {
+          const result = WorkspaceServiceRoutePreferencesSchema.safeParse(persistedState);
+          return {
+            ...currentState,
+            byServerId: result.success ? result.data.byServerId : {},
+          };
+        },
       },
     ),
   );
+}
+
+export const useWorkspaceServiceRoutePreferencesStore =
+  createWorkspaceServiceRoutePreferencesStore(AsyncStorage);

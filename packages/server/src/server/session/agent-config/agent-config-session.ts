@@ -1,6 +1,7 @@
 import type pino from "pino";
 import { v4 as uuidv4 } from "uuid";
 import { getErrorMessage, getErrorMessageOr } from "@bytetrue/byspace-protocol/error-utils";
+import type { AgentConfigApply } from "@bytetrue/byspace-protocol/messages";
 import type { AgentProviderNotice } from "../../agent/agent-sdk-types.js";
 import type { SessionInboundMessage, SessionOutboundMessage } from "../../messages.js";
 
@@ -132,6 +133,45 @@ export class AgentConfigSession {
       run: () => this.operations.setThinking(agentId, thinkingOptionId),
       emitResponse: (payload) => this.host.emit({ type: "set_agent_thinking_response", payload }),
     });
+  }
+
+  handleAgentConfigApplyRequest(
+    msg: Extract<SessionInboundMessage, { type: "agent.config.apply.request" }>,
+  ): Promise<void> {
+    const { agentId, config, requestId } = msg;
+    return this.applyConfigChange({
+      agentId,
+      requestId,
+      logLabel: "agent.config.apply.request",
+      logFields: { agentId, requestId, config },
+      failureText: "Failed to apply agent config",
+      run: () => this.applyBundle(agentId, config),
+      emitResponse: (payload) => this.host.emit({ type: "agent.config.apply.response", payload }),
+    });
+  }
+
+  private async applyBundle(
+    agentId: string,
+    config: AgentConfigApply,
+  ): Promise<AgentProviderNotice | null> {
+    let notice: AgentProviderNotice | null = null;
+
+    if (config.modelId !== undefined) {
+      await this.operations.setModel(agentId, config.modelId);
+    }
+    if (config.modeId !== undefined) {
+      const modeNotice = await this.operations.setMode(agentId, config.modeId);
+      notice ??= modeNotice;
+    }
+    if (config.thinkingOptionId !== undefined) {
+      const thinkingNotice = await this.operations.setThinking(agentId, config.thinkingOptionId);
+      notice ??= thinkingNotice;
+    }
+    for (const [featureId, value] of Object.entries(config.featureValues ?? {})) {
+      await this.operations.setFeature(agentId, featureId, value);
+    }
+
+    return notice;
   }
 
   private async applyConfigChange(change: ConfigChange): Promise<void> {

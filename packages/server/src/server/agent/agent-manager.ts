@@ -258,6 +258,7 @@ export interface AgentManagerOptions {
   idFactory?: () => string;
   registry?: AgentStorage;
   onAgentAttention?: AgentAttentionCallback;
+  onWorkspaceStateMayHaveChanged?: (params: { cwd: string }) => void;
   durableTimelineStore?: AgentTimelineStore;
   terminalManager?: TerminalManager | null;
   cliAuthToken?: string;
@@ -640,6 +641,7 @@ export class AgentManager {
   private appendSystemPrompt: string;
   private onAgentAttention?: AgentAttentionCallback;
   private onAgentArchived?: AgentArchivedCallback;
+  private onWorkspaceStateMayHaveChanged?: (params: { cwd: string }) => void;
   private logger: Logger;
   private readonly rescueTimeouts: Required<AgentManagerRescueTimeouts>;
   private acceptingAgentRegistrations = true;
@@ -649,6 +651,7 @@ export class AgentManager {
     this.registry = options?.registry;
     this.durableTimelineStore = options?.durableTimelineStore;
     this.onAgentAttention = options?.onAgentAttention;
+    this.onWorkspaceStateMayHaveChanged = options?.onWorkspaceStateMayHaveChanged;
     this.cliAuthToken = options.cliAuthToken;
     this.appendSystemPrompt = options.appendSystemPrompt ?? "";
     this.logger = options.logger.child({ module: "agent", component: "agent-manager" });
@@ -4094,6 +4097,18 @@ export class AgentManager {
       timestamp: row.timestamp,
     });
 
+    if (
+      item.type === "tool_call" &&
+      item.status === "completed" &&
+      item.detail?.type === "shell" &&
+      commandMayHaveChangedExternalState(item.detail.command)
+    ) {
+      const agent = this.agents.get(agentId);
+      if (agent) {
+        this.onWorkspaceStateMayHaveChanged?.({ cwd: agent.cwd });
+      }
+    }
+
     return event;
   }
 
@@ -4691,4 +4706,21 @@ export class AgentManager {
     }
     return agent;
   }
+}
+
+export function commandMayHaveChangedExternalState(command: string): boolean {
+  const normalized = command.toLowerCase();
+  // Commands that operate on remote state and do NOT trigger local file
+  // watchers. Local git mutations (commit, checkout, merge, rebase, reset,
+  // pull) are already caught by watchers on .git/HEAD and refs/heads/.
+  return (
+    // GitHub PR operations (merge, close, create, edit, comment, review)
+    /\bgh\s+pr\s+(merge|close|create|edit|comment|review)\b/.test(normalized) ||
+    // Pushes to remote — local refs unchanged, but remote state (PR checks,
+    // mergeable status) may shift immediately after.
+    /\bgit\s+push\b/.test(normalized) ||
+    // Fetches update refs/remotes/ which our watchers do not watch, so
+    // ahead/behind counts can drift stale until the next refresh.
+    /\bgit\s+fetch\b/.test(normalized)
+  );
 }

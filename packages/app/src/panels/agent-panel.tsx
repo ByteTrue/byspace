@@ -26,7 +26,7 @@ import { FileDropZone } from "@/components/file-drop/file-drop-zone";
 import { useRetainedPanelActive } from "@/components/retained-panel";
 import { SidebarCallout } from "@/components/sidebar-callout";
 import { Composer } from "@/composer";
-import { AgentModeControl } from "@/composer/agent-controls/mode-control";
+import { AgentModeControl, useLiveAgentModeControl } from "@/composer/agent-controls/mode-control";
 import { getActiveMessageSubmissions } from "@/composer/submission/model";
 import { RewindComposerRestoreProvider } from "@/components/rewind/composer-restore";
 import { getProviderIcon } from "@/components/provider-icons";
@@ -77,6 +77,7 @@ import {
   deriveRouteBottomAnchorRequest,
 } from "@/screens/agent/agent-ready-screen-bottom-anchor";
 import { WorkspaceDraftAgentTab } from "@/composer/draft/workspace-tab";
+import { AgentTaskList } from "@/composer/task-list";
 import { useCreateFlowStore } from "@/stores/create-flow-store";
 import { buildDraftStoreKey, generateDraftId } from "@/stores/draft-keys";
 import { usePanelStore } from "@/stores/panel-store";
@@ -1578,6 +1579,7 @@ function ActiveAgentComposer({
   onMessageSent: () => void;
 }) {
   const insets = useSafeAreaInsets();
+  const agentModeControl = useLiveAgentModeControl(serverId, agentId);
   const isCompactFormFactor = useIsCompactFormFactor();
   const { onLayout: onInputAreaLayout, isBelow: isCompactComposerLayout } = useContainerWidthBelow(
     COMPACT_FORM_FACTOR_WIDTH,
@@ -1692,19 +1694,15 @@ function ActiveAgentComposer({
 
   const composerFooter = useMemo(
     () =>
-      isCompactComposerLayout ? (
-        <AgentModeControl
-          serverId={serverId}
-          agentId={agentId}
-          placement="footer"
-          isCompactLayout={isCompactComposerLayout}
-        />
+      isCompactComposerLayout && agentModeControl ? (
+        <AgentModeControl surface="toolbar" {...agentModeControl} />
       ) : undefined,
-    [isCompactComposerLayout, serverId, agentId],
+    [agentModeControl, isCompactComposerLayout],
   );
 
   return (
     <View style={inputAreaStyle} onLayout={onInputAreaLayout}>
+      <AgentTaskList serverId={serverId} agentId={agentId} />
       <SubagentsTrack
         rows={subagentRows}
         onOpenSubagent={handleOpenSubagent}

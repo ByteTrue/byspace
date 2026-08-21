@@ -122,9 +122,7 @@ import {
   FileBackedWorkspaceRegistry,
   type WorkspaceArchiveContext,
 } from "./workspace-registry.js";
-import { FileBackedChatService } from "./chat/chat-service.js";
 import { CheckoutDiffManager } from "./checkout-diff-manager.js";
-import { LoopService } from "./loop-service.js";
 import { ScheduleService } from "./schedule/service.js";
 import { DaemonConfigStore, type MutableDaemonConfig } from "./daemon-config-store.js";
 import { WorkspaceGitServiceImpl } from "./workspace-git-service.js";
@@ -152,7 +150,11 @@ import {
   resolveBySpaceHostedRelease,
 } from "@bytetrue/byspace-protocol/release-channel";
 import type { AgentClient, AgentProvider } from "./agent/agent-sdk-types.js";
-import type { FirstAgentContext, TerminalProfile } from "@bytetrue/byspace-protocol/messages";
+import type {
+  AgentProfile,
+  FirstAgentContext,
+  TerminalProfile,
+} from "@bytetrue/byspace-protocol/messages";
 import type { BySpaceServicePortAllocation } from "@bytetrue/byspace-protocol/byspace-config-schema";
 import type {
   AgentProviderRuntimeSettingsMap,
@@ -343,6 +345,7 @@ export interface BySpaceDaemonConfig {
   terminalAgentHooks?: MutableDaemonConfig["terminalAgentHooks"];
   appendSystemPrompt?: string;
   terminalProfiles?: TerminalProfile[];
+  agentProfiles?: AgentProfile[];
   staticDir: string;
   mcpDebug: boolean;
   isDev?: boolean;
@@ -375,6 +378,7 @@ export interface BySpaceDaemonConfig {
   dictationRefineWithAgent?: boolean;
   downloadTokenTtlMs?: number;
   agentProviderSettings?: AgentProviderRuntimeSettingsMap;
+  providerCatalogRefreshTimeoutMs?: number;
   metadataGeneration?: {
     providers?: Array<{
       provider: string;
@@ -473,6 +477,10 @@ function createInitialMutableDaemonConfig(config: BySpaceDaemonConfig): MutableD
 
   if (config.terminalProfiles !== undefined) {
     initialConfig.terminalProfiles = config.terminalProfiles;
+  }
+
+  if (config.agentProfiles !== undefined) {
+    initialConfig.agentProfiles = config.agentProfiles;
   }
 
   return initialConfig;
@@ -762,10 +770,6 @@ export async function createBySpaceDaemon(
     path.join(config.byspaceHome, "projects", "workspaces.json"),
     logger,
   );
-  const chatService = new FileBackedChatService({
-    byspaceHome: config.byspaceHome,
-    logger,
-  });
   const github = createGitHubService();
   const workspaceGitService = new WorkspaceGitServiceImpl({
     logger,
@@ -778,6 +782,7 @@ export async function createBySpaceDaemon(
   const providerSnapshotLogger = logger.child({ module: "provider-snapshot-manager" });
   const providerSnapshotManager = new ProviderSnapshotManager({
     logger: providerSnapshotLogger,
+    refreshTimeoutMs: config.providerCatalogRefreshTimeoutMs,
     runtimeSettings: config.agentProviderSettings,
     providerOverrides: config.providerOverrides,
     workspaceGitService,
@@ -791,6 +796,9 @@ export async function createBySpaceDaemon(
     providerDefinitions: initialAgentManagerState.providerDefinitions,
     registry: agentStorage,
     appendSystemPrompt: config.appendSystemPrompt,
+    onWorkspaceStateMayHaveChanged: ({ cwd }) => {
+      workspaceGitService.onWorkspaceStateMayHaveChanged(cwd);
+    },
     cliAuthToken: agentCliToken,
     logger,
   });
@@ -834,9 +842,11 @@ export async function createBySpaceDaemon(
       logger.error({ err: error }, "Background workspace reconciliation failed");
     }
   })();
-  await chatService.initialize();
-  logger.info({ elapsed: elapsed() }, "Chat service initialized");
-  const checkoutDiffManager = new CheckoutDiffManager(workspaceGitService);
+  const checkoutDiffManager = new CheckoutDiffManager({
+    logger,
+    byspaceHome: config.byspaceHome,
+    workspaceGitService,
+  });
   const archiveWorkspaceRecordExternal = async (
     workspaceId: string,
     context?: WorkspaceArchiveContext,
@@ -1038,15 +1048,6 @@ export async function createBySpaceDaemon(
   const createAgent = (input: Parameters<typeof createAgentCommand>[1]) =>
     createAgentCommand(createAgentCommandDependencies, input);
 
-  const loopService = new LoopService({
-    byspaceHome: config.byspaceHome,
-    logger,
-    agentManager,
-    createAgent,
-    ensureWorkspaceForCreate: ensureWorkspaceForCreateAndBroadcastExternal,
-  });
-  await loopService.initialize();
-  logger.info({ elapsed: elapsed() }, "Loop service initialized");
   const createScheduleLocalWorkspaceExternal = async (input: {
     cwd: string;
     firstAgentContext: FirstAgentContext;
@@ -1178,6 +1179,7 @@ export async function createBySpaceDaemon(
     getDaemonTcpPort: () => (boundListenTarget?.type === "tcp" ? boundListenTarget.port : null),
     scheduleService,
     providerSnapshotManager,
+    daemonConfigStore,
     github,
     workspaceGitService,
     findWorkspaceIdForCwd: findWorkspaceIdForCwdExternal,
@@ -1474,8 +1476,6 @@ export async function createBySpaceDaemon(
               },
               projectRegistry,
               workspaceRegistry,
-              chatService,
-              loopService,
               scheduleService,
               checkoutDiffManager,
               serviceProxy,

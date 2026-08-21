@@ -3,7 +3,7 @@ import type { ReactNode, Ref } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { Modal, Pressable, ScrollView, Text, TextInput, View } from "react-native";
-import type { TextInputProps } from "react-native";
+import type { StyleProp, TextInputProps, ViewStyle } from "react-native";
 import { StyleSheet, useUnistyles, withUnistyles } from "react-native-unistyles";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import {
@@ -132,9 +132,13 @@ const styles = StyleSheet.create((theme) => ({
   // Horizontal padding matches the model picker's row indent: the picker uses
   // children mode (desktopChildrenScrollContent, no scroll padding), so the
   // row content starts at item.paddingHorizontal = spacing[3].
+  // The search row below owns the gap under the title: the input already
+  // carries its own vertical padding, so a paddingBottom here would stack on
+  // top of two more and push the title far off the field.
   inlineHeaderRow: {
     paddingHorizontal: theme.spacing[3],
-    paddingVertical: theme.spacing[2],
+    paddingTop: theme.spacing[2],
+    paddingBottom: 0,
     flexDirection: "row",
     alignItems: "center",
     gap: theme.spacing[2],
@@ -439,12 +443,15 @@ export interface AdaptiveModalSheetProps {
   children: ReactNode;
   /** Sticky footer rendered below the scrollable content. */
   footer?: ReactNode;
+  footerContainerStyle?: StyleProp<ViewStyle>;
   snapPoints?: string[];
   testID?: string;
   /** Override the max width of the desktop card. */
   desktopMaxWidth?: number;
   scrollable?: boolean;
   presentation?: "push" | "replace";
+  contentStyle?: StyleProp<ViewStyle>;
+  sizeContentToCurrentSnapPoint?: boolean;
 }
 
 export function AdaptiveModalSheet({
@@ -454,11 +461,13 @@ export function AdaptiveModalSheet({
   onDismiss,
   children,
   footer,
+  footerContainerStyle,
   snapPoints,
   testID,
   desktopMaxWidth,
   scrollable = true,
   presentation,
+  contentStyle,
 }: AdaptiveModalSheetProps) {
   const { theme } = useUnistyles();
   const { t } = useTranslation();
@@ -479,29 +488,32 @@ export function AdaptiveModalSheet({
   const bottomSheetContentStyle = useMemo(
     () => [
       styles.bottomSheetContent,
+      contentStyle,
       compactSafeAreaPadding.contentPaddingBottom != null
         ? { paddingBottom: compactSafeAreaPadding.contentPaddingBottom }
         : null,
     ],
-    [compactSafeAreaPadding.contentPaddingBottom],
+    [compactSafeAreaPadding.contentPaddingBottom, contentStyle],
   );
   const bottomSheetStaticContentStyle = useMemo(
     () => [
       styles.bottomSheetStaticContent,
+      contentStyle,
       compactSafeAreaPadding.contentPaddingBottom != null
         ? { paddingBottom: compactSafeAreaPadding.contentPaddingBottom }
         : null,
     ],
-    [compactSafeAreaPadding.contentPaddingBottom],
+    [compactSafeAreaPadding.contentPaddingBottom, contentStyle],
   );
   const footerStyle = useMemo(
     () => [
       styles.footer,
+      footerContainerStyle,
       compactSafeAreaPadding.footerPaddingBottom != null
         ? { paddingBottom: compactSafeAreaPadding.footerPaddingBottom }
         : null,
     ],
-    [compactSafeAreaPadding.footerPaddingBottom],
+    [compactSafeAreaPadding.footerPaddingBottom, footerContainerStyle],
   );
   const handleIndicatorStyle = useMemo(
     () => ({ backgroundColor: theme.colors.palette.zinc[600] }),
@@ -634,7 +646,7 @@ export function AdaptiveModalSheet({
         <View style={styles.desktopScrollContainer}>
           <ScrollView
             style={styles.desktopScroll}
-            contentContainerStyle={styles.desktopContent}
+            contentContainerStyle={[styles.desktopContent, contentStyle]}
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator
           >
@@ -642,7 +654,7 @@ export function AdaptiveModalSheet({
           </ScrollView>
         </View>
       ) : (
-        <View style={styles.desktopStaticContent}>{children}</View>
+        <View style={[styles.desktopStaticContent, contentStyle]}>{children}</View>
       )}
       {footer ? <View style={footerStyle}>{footer}</View> : null}
     </OverlayLayerProvider>

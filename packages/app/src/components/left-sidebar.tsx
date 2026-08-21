@@ -2,6 +2,7 @@ import { router } from "expo-router";
 import {
   CircleAlert,
   FolderPlus,
+  GitBranch,
   Home,
   Plus,
   Search,
@@ -33,7 +34,7 @@ import { SidebarHelpMenu } from "@/components/sidebar/sidebar-help-menu";
 import { SidebarResizeHandle } from "@/components/sidebar-resize-handle";
 import { Shortcut } from "@/components/ui/shortcut";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { HEADER_INNER_HEIGHT, useIsCompactFormFactor } from "@/constants/layout";
+import { useIsCompactFormFactor } from "@/constants/layout";
 import { isWeb } from "@/constants/platform";
 import { useOpenAddProject } from "@/hooks/use-open-add-project";
 import { useOpenNewWorkspace } from "@/hooks/use-global-new-workspace-action";
@@ -59,6 +60,8 @@ import { SidebarCalloutSlot } from "./sidebar-callout-slot";
 import { SidebarWorkspaceList } from "./sidebar-workspace-list";
 
 type SidebarTheme = ReturnType<typeof useUnistyles>["theme"];
+
+const DEV_BUILD_LABEL = process.env.EXPO_PUBLIC_BYSPACE_DEV_BUILD_LABEL?.trim() || null;
 
 interface SidebarSharedProps {
   theme: SidebarTheme;
@@ -683,6 +686,19 @@ function DesktopSidebar({
         <View style={styles.sidebarDragArea}>
           <View style={styles.sidebarHeaderGroup} testID="sidebar-pages-header">
             <SidebarPagesMenu />
+            {DEV_BUILD_LABEL ? (
+              <View
+                pointerEvents="none"
+                style={styles.devBuildBadge}
+                testID="dev-build-label"
+                accessibilityLabel={`Development build: ${DEV_BUILD_LABEL}`}
+              >
+                <GitBranch size={12} color={theme.colors.accentForeground} />
+                <Text numberOfLines={1} ellipsizeMode="tail" style={styles.devBuildBadgeText}>
+                  {DEV_BUILD_LABEL}
+                </Text>
+              </View>
+            ) : null}
           </View>
         </View>
 
@@ -896,6 +912,26 @@ const styles = StyleSheet.create((theme) => ({
   sidebarHeaderGroupBelowChrome: {
     paddingTop: 0,
   },
+  devBuildBadge: {
+    alignSelf: "flex-end",
+    maxWidth: "60%",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[1],
+    marginTop: theme.spacing[1],
+    marginHorizontal: theme.spacing[3],
+    paddingHorizontal: theme.spacing[2],
+    paddingVertical: 2,
+    borderRadius: theme.borderRadius.full,
+    backgroundColor: theme.colors.accent,
+  },
+  devBuildBadgeText: {
+    minWidth: 0,
+    flexShrink: 1,
+    color: theme.colors.accentForeground,
+    fontSize: theme.fontSize.xs,
+    fontWeight: theme.fontWeight.medium,
+  },
   workspacesSectionHeader: {
     flexDirection: "row",
     alignItems: "center",
@@ -970,14 +1006,6 @@ const styles = StyleSheet.create((theme) => ({
   },
   sidebarDragArea: {
     position: "relative",
-  },
-  desktopChromeRow: {
-    position: "relative",
-    height: HEADER_INNER_HEIGHT,
-    flexDirection: "row",
-    alignItems: "center",
-    borderBottomWidth: theme.borderWidth[1],
-    borderBottomColor: "transparent",
   },
   sidebarFooter: {
     flexDirection: "row",

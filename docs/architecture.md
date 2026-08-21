@@ -61,14 +61,13 @@ All paths are under `packages/server/src/`.
 | `server/agent/tools/`             | Transport-neutral BySpace tool catalog for subagents, permissions, worktrees |
 | `server/agent/mcp-server.ts`      | Thin MCP adapter that registers the BySpace tool catalog with the MCP SDK    |
 | `server/agent/providers/`         | Provider adapters (see "Agent providers" below)                              |
-| `server/workspace-git-service.ts` | Demand-driven Workspace Git/forge snapshots and cache                        |
+| `server/workspace-git-service.ts` | Observed Workspace Git/forge snapshots and cache                             |
+| `server/file-observer/`           | Cross-platform filesystem observation with liveness recovery                 |
 | `server/relay-transport.ts`       | Outbound relay connection with E2E encryption                                |
 | `server/remote-web-service/`      | Private HTTP/SSE/WebSocket mappings over the daemon-hosted Data Relay        |
 | `server/schedule/`                | Cron-based scheduled agents                                                  |
-| `server/loop-service.ts`          | Looping agent runs that retry until an exit condition                        |
-| `server/chat/`                    | Chat rooms for agent-to-agent and human-to-agent messaging                   |
 
-Workspace Git and forge metadata is daemon-owned but demand-driven. Workspace registration is passive: filesystem changes, timers, background fetch, adaptive PR polling, and Agent output do not start Git work. The daemon reads on first client demand, explicit `checkout.refresh`, an authoritative mutation safety preflight, or after a successful BySpace-owned Git mutation; checkout diffs follow the same first-demand and explicit-refresh model. A manual checkout refresh publishes the forced local Git snapshot and schedules the diff before continuing the forced Forge refresh in the background; the later snapshot update carries pull-request status, so Forge latency cannot block Changes and a newly discovered pull request still appears without another refresh. External changes intentionally remain stale until manual refresh. Per-Workspace refreshes coalesce concurrent intent, and checkout status carries an optional opaque `commitsVersion` so dirty-only updates do not invalidate commit history on current daemons while older daemons retain conservative invalidation.
+Workspace Git and forge metadata is daemon-owned and observer-driven. The custom file observer debounces relevant working-tree and Git metadata changes before refreshing snapshots; healthy, quiet workspaces perform no periodic full Git refresh. A liveness canary checks the observer without spawning Git work, while a failed observer enters bounded degraded polling until it recovers. Background fetch and adaptive Forge refresh remain enabled, and the Git process scheduler bounds concurrency, rate, and priority so observer work cannot starve interactive daemon requests. Explicit `checkout.refresh` still forces a local snapshot and diff before the Forge result arrives. Per-Workspace refreshes coalesce concurrent intent, and checkout status carries an optional opaque `commitsVersion` so dirty-only updates do not invalidate commit history on current daemons while older daemons retain conservative invalidation.
 
 ### `packages/protocol` — Wire schemas and shared protocol types
 
@@ -102,10 +101,8 @@ Commander.js CLI with Docker-style commands. Common agent operations are also ex
 
 - `byspace agent ls/run/import/attach/logs/stop/delete/send/inspect/wait/archive/reload/update/mode`
 - `byspace daemon start/stop/restart/status/pair/set-password`
-- `byspace chat ls/create/inspect/post/read/wait/delete`
 - `byspace terminal ls/create/capture/send-keys/kill`
 - `byspace script ls/start/stop`
-- `byspace loop run/ls/inspect/logs/stop`
 - `byspace schedule create/ls/inspect/update/pause/resume/run-once/logs/delete`
 - `byspace permit allow/deny/ls`
 - `byspace provider ls/models`
@@ -310,9 +307,7 @@ $BYSPACE_HOME/
 ├── agents/{cwd-with-dashes}/{agent-id}.json   # Agent record + persisted timeline rows
 ├── projects/projects.json                      # Project registry
 ├── projects/workspaces.json                    # Workspace registry
-├── chat/                                       # Chat rooms
 ├── schedules/                                  # Scheduled-agent definitions and runs
-├── loops/                                      # Loop runs and logs
 ├── config.json                                 # Daemon config (mutable)
 ├── daemon-keypair.json                         # Daemon identity for relay/E2EE
 ├── push-tokens.json                            # Mobile push tokens

@@ -1194,9 +1194,8 @@ function ProjectTitleIcon({
     <ProjectIconView
       iconDataUri={iconDataUri}
       initial={initial}
-      projectKey={projectKey}
-      imageStyle={styles.titleIcon}
-      fallbackStyle={styles.titleIconFallback}
+      projectViewKey={projectKey}
+      size={28}
       textStyle={styles.titleIconFallbackText}
     />
   );

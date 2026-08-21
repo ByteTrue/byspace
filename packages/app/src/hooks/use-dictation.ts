@@ -115,7 +115,7 @@ export function useDictation(options: UseDictationOptions): UseDictationResult {
   }, []);
 
   const startNewStream = useCallback(async () => {
-    await senderRef.current?.restartStream();
+    await senderRef.current?.restartStream("new-recording");
   }, []);
 
   const ensureFinalTranscript = useCallback(async (finalSeq: number): Promise<string> => {
@@ -423,6 +423,7 @@ export function useDictation(options: UseDictationOptions): UseDictationResult {
       }
       stopDurationTracking();
       void audioStop.current().catch(() => undefined);
+      senderRef.current?.dispose();
     };
   }, [stopDurationTracking]);
 

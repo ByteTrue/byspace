@@ -10,7 +10,6 @@ export const BYSPACE_ORCHESTRATION_SKILL_NAMES = [
   "byspace-advisor",
   "byspace-committee",
   "byspace-handoff",
-  "byspace-loop",
   "byspace-project-setup",
 ] as const;
 

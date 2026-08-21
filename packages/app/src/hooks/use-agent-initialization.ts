@@ -6,6 +6,8 @@ import {
   createInitDeferred,
   getInitDeferred,
   getInitKey,
+  INIT_TIMEOUT_MS,
+  refreshInitTimeout,
   rejectInitDeferred,
 } from "@/utils/agent-initialization";
 import { getHostRuntimeStore, type HostRuntimeStore } from "@/runtime/host-runtime";
@@ -13,6 +15,24 @@ import { planInitialAgentTimelineSync } from "@/timeline/timeline-sync-plan";
 import { i18n } from "@/i18n/i18next";
 
 export type SetAgentInitializing = (agentId: string, initializing: boolean) => void;
+
+export function createHistorySyncTimeoutError(): Error {
+  return new Error(`History sync timed out after ${Math.round(INIT_TIMEOUT_MS / 1000)}s`);
+}
+
+export function refreshAgentInitializationTimeout(input: {
+  key: string;
+  agentId: string;
+  setAgentInitializing: SetAgentInitializing;
+}): void {
+  refreshInitTimeout({
+    key: input.key,
+    onTimeout: () => {
+      input.setAgentInitializing(input.agentId, false);
+      rejectInitDeferred(input.key, createHistorySyncTimeoutError());
+    },
+  });
+}
 
 export interface EnsureAgentIsInitializedInput {
   serverId: string;

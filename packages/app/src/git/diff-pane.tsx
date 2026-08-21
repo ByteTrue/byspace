@@ -11,8 +11,6 @@ import {
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import { DiffStat } from "@/components/diff-stat";
-import { FileActionsMenu } from "@/components/file-actions-menu";
-import { addWorkspaceFileToFocusedChat } from "@/composer/add-workspace-file-to-chat";
 import {
   View,
   Text,
@@ -28,13 +26,7 @@ import {
   type TextStyle,
 } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
-import {
-  BORDER_WIDTH,
-  DEFAULT_MONO_FONT_STACK,
-  ICON_SIZE,
-  SPACING,
-  type Theme,
-} from "@/styles/theme";
+import { BORDER_WIDTH, ICON_SIZE, SPACING, type Theme } from "@/styles/theme";
 import { useIsCompactFormFactor, WORKSPACE_SECONDARY_HEADER_HEIGHT } from "@/constants/layout";
 import {
   AlignJustify,
@@ -44,25 +36,25 @@ import {
   List,
   ListChevronsDownUp,
   ListChevronsUpDown,
-  PanelRight,
+  Maximize2,
   Pilcrow,
   RotateCw,
   WrapText,
 } from "lucide-react-native";
-import {
-  useCheckoutDiffQuery,
-  type ParsedDiffFile,
-  type DiffLine,
-  type HighlightToken,
-} from "@/git/use-diff-query";
-import { DiffTooLargeState } from "@/git/diff-too-large-state";
+import { type ParsedDiffFile, type DiffLine, type HighlightToken } from "@/git/use-diff-query";
 import { buildDiffFlatItems, sumHeightsBefore, type DiffFlatItem } from "@/git/diff-flat-items";
 import { buildDiffTree, collectDirPaths, compressSingleChildChains } from "@/git/diff-tree";
 import { DiffFolderRow } from "@/git/diff-folder-row";
-import { TreeIndentGuides, treeRowPaddingLeft } from "@/components/tree-primitives";
-import { SvgXml } from "react-native-svg";
-import { getFileIconSvg } from "@/components/material-file-icons";
-import { useCheckoutStatusQuery } from "@/git/use-status-query";
+import {
+  TreeIndentGuides,
+  treeRowPaddingLeft,
+  WORKSPACE_FILE_ROW_TRAILING_PADDING,
+  WORKSPACE_FILE_ROW_VERTICAL_PADDING,
+  WORKSPACE_TREE_ICON_LABEL_GAP,
+  WORKSPACE_TREE_ICON_SIZE,
+} from "@/components/tree-primitives";
+import { MaterialFileIcon } from "@/components/material-file-icon";
+import { FileChangeIcon } from "@/components/file-change-icon";
 import { useCheckoutPrStatusQuery } from "@/git/use-pr-status-query";
 import { CommitsSection } from "@/git/commits-section/commits-section";
 import { useChangesPreferences } from "@/hooks/use-changes-preferences";
@@ -85,6 +77,12 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import * as Clipboard from "expo-clipboard";
+import { FileActionsContextMenuContent } from "@/components/file-actions-menu";
+import { ContextMenu, ContextMenuTrigger } from "@/components/ui/context-menu";
+import { useFileDownload } from "@/hooks/use-file-download";
+import { useIsLocalDaemon } from "@/hooks/use-is-local-daemon";
+import { buildAbsoluteExplorerPath } from "@/utils/explorer-paths";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { lineNumberGutterWidth } from "@/components/code-insets";
 import { GitActionsSplitButton } from "@/git/actions-split-button";
@@ -97,11 +95,13 @@ import type { ForgeAuthState } from "@bytetrue/byspace-protocol/messages";
 import { useCheckoutGitActionsStore } from "@/git/actions-store";
 import { useToast } from "@/contexts/toast-context";
 import { useSessionStore } from "@/stores/session-store";
+import { confirmDialog } from "@/utils/confirm-dialog";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
+import { useOverlayFlatListScrollbar } from "@/components/ui/overlay-scrollbar/use-overlay-flat-list-scrollbar";
 import { inlineUnistylesStyle } from "@/styles/unistyles-inline-style";
 import { usePanelStore } from "@/stores/panel-store";
-import { useWorkspaceLayoutStore } from "@/stores/workspace-layout-store";
-import { buildWorkspaceTabPersistenceKey } from "@/stores/workspace-tabs-store";
+import { collectAllTabs, useWorkspaceLayoutStore } from "@/stores/workspace-layout-store";
+import { buildWorkspaceTabPersistenceKey } from "@/stores/workspace-tabs-store/state";
 import { buildWorkspaceExplorerStateKey } from "@/hooks/use-file-explorer-actions";
 import {
   formatDiffContentText,
@@ -109,30 +109,37 @@ import {
   hasVisibleDiffTokens,
 } from "@/utils/diff-rendering";
 import { isWeb, isNative } from "@/constants/platform";
+import { useWorkspaceFileDragSource } from "@/attachments/use-workspace-file-drag-source";
 import {
-  buildWorkspaceAttachmentScopeKey,
-  useWorkspaceAttachmentsStore,
-} from "@/attachments/workspace-attachments-store";
-import {
-  buildReviewDraftScopeKey,
-  buildReviewDraftKey,
-  useReviewAttachmentSnapshot,
-  useResolvedDiffMode,
-  useSetDiffModeOverride,
   type ReviewDraftComment,
   getInlineReviewThreadState,
   getSplitInlineReviewThreadState,
   InlineReviewGutterCell,
   InlineReviewThread,
   isInlineReviewEditorForTarget,
-  useInlineReviewController,
   type InlineReviewActions,
 } from "@/review";
+import { usePublishWorkingDiffAttachment, useWorkingDiff } from "@/git/use-working-diff";
+import { DiffTooLargeState } from "@/git/diff-too-large-state";
+import { openDesktopTarget, useDesktopOpenTargets } from "@/workspace/desktop-open-targets";
 
 export type { GitActionId, GitAction, GitActions } from "@/git/policy";
 
-function fileHeaderPressableStyle({ pressed }: PressableStateCallbackType) {
-  return [styles.fileHeader, pressed && styles.fileHeaderPressed];
+export function resolveDiffLayout(
+  layout: "unified" | "split",
+  canUseSplitLayout: boolean,
+): "unified" | "split" {
+  return canUseSplitLayout ? layout : "unified";
+}
+
+function fileHeaderPressableStyle(
+  { hovered, pressed }: PressableStateCallbackType & { hovered?: boolean },
+  isSelected: boolean,
+) {
+  return [
+    styles.fileHeader,
+    (Boolean(hovered) || pressed || isSelected) && styles.fileHeaderActive,
+  ];
 }
 
 interface HighlightedTextProps {
@@ -205,21 +212,83 @@ function HighlightedText({
 
 interface DiffFileSectionProps {
   file: ParsedDiffFile;
+  workspaceFileDragScope?: { serverId: string; workspaceId: string };
   isExpanded: boolean;
+  isSelected?: boolean;
   /** Tree indentation level (0 on the flat/mobile path). */
   depth?: number;
   /** Show the muted directory suffix (flat list); false inside the folder tree. */
   showDir?: boolean;
   interactive?: boolean;
   onToggle?: (path: string) => void;
-  onHeaderHeightChange?: (path: string, height: number) => void;
+  onSelect?: (path: string) => void;
+  onOpenFile?: (path: string) => void;
   onAddToChat?: (path: string) => void;
+  onCopyPath?: (path: string) => void;
+  onCopyRelativePath?: (path: string) => void;
+  onReveal?: (path: string) => void;
+  revealTargetName?: string;
+  onDownload?: (path: string) => void;
+  onDuplicate?: (path: string) => void;
+  onRevert?: (path: string, oldPath?: string) => void;
+  onHeaderHeightChange?: (path: string, height: number) => void;
   testID?: string;
 }
 
 const EMPTY_COMMENTS: readonly ReviewDraftComment[] = [];
 
 function noopStartComment(): void {}
+
+function useDiscardChangesAction({
+  serverId,
+  cwd,
+  diffMode,
+}: {
+  serverId: string;
+  cwd: string;
+  diffMode: "uncommitted" | "base";
+}): ((path: string, oldPath?: string) => void) | undefined {
+  const { t } = useTranslation();
+  const toast = useToast();
+  const discardChanges = useCheckoutGitActionsStore((state) => state.discardChanges);
+  // COMPAT(checkoutDiscardChanges): added in v0.6.0, remove gate after 2027-02-21.
+  const discardSupported = useSessionStore(
+    (s) => s.sessions[serverId]?.serverInfo?.features?.checkoutDiscardChanges === true,
+  );
+  const discardPath = useCallback(
+    async (path: string, oldPath?: string) => {
+      const confirmed = await confirmDialog({
+        title: t("workspace.fileActions.confirmRevert.title"),
+        message: t("workspace.fileActions.confirmRevert.message", { name: path }),
+        confirmLabel: t("workspace.fileActions.confirmRevert.confirm"),
+        cancelLabel: t("workspace.fileActions.confirmRevert.cancel"),
+        destructive: true,
+      });
+      if (!confirmed) {
+        return;
+      }
+      try {
+        await discardChanges({
+          serverId,
+          cwd,
+          paths: oldPath ? [path, oldPath] : [path],
+        });
+      } catch (cause) {
+        toast.error(
+          cause instanceof Error ? cause.message : t("workspace.fileActions.confirmRevert.failed"),
+        );
+      }
+    },
+    [cwd, discardChanges, serverId, t, toast],
+  );
+  const handleDiscardPath = useCallback(
+    (path: string, oldPath?: string) => {
+      void discardPath(path, oldPath);
+    },
+    [discardPath],
+  );
+  return discardSupported && diffMode === "uncommitted" ? handleDiscardPath : undefined;
+}
 
 const DIFF_LINE_HOVER_STYLE = isWeb ? ({ cursor: "auto" } as const) : null;
 
@@ -242,6 +311,10 @@ function LongPressableLine({
 }) {
   const onStartComment = reviewActions?.onStartComment;
   const handlePress = useCallback(() => {
+    const selection = isWeb ? window.getSelection() : null;
+    if (selection && !selection.isCollapsed && selection.toString().length > 0) {
+      return;
+    }
     if (reviewTarget && onStartComment) {
       onStartComment(reviewTarget);
     }
@@ -907,29 +980,116 @@ function SplitDiffColumn({
   );
 }
 
+function DiffFileActionsContextMenuContent({
+  file,
+  onOpenFile,
+  onAddToChat,
+  onCopyPath,
+  onCopyRelativePath,
+  onReveal,
+  revealTargetName,
+  onDownload,
+  onDuplicate,
+  onRevert,
+  testID,
+}: Pick<
+  DiffFileSectionProps,
+  | "file"
+  | "onOpenFile"
+  | "onAddToChat"
+  | "onCopyPath"
+  | "onCopyRelativePath"
+  | "onReveal"
+  | "revealTargetName"
+  | "onDownload"
+  | "onDuplicate"
+  | "onRevert"
+  | "testID"
+>) {
+  const handleOpenFile = useCallback(() => onOpenFile?.(file.path), [file.path, onOpenFile]);
+  const handleAddToChat = useCallback(() => onAddToChat?.(file.path), [file.path, onAddToChat]);
+  const handleCopyPath = useCallback(() => onCopyPath?.(file.path), [file.path, onCopyPath]);
+  const handleCopyRelativePath = useCallback(
+    () => onCopyRelativePath?.(file.path),
+    [file.path, onCopyRelativePath],
+  );
+  const handleReveal = useCallback(() => onReveal?.(file.path), [file.path, onReveal]);
+  const handleDownload = useCallback(() => onDownload?.(file.path), [file.path, onDownload]);
+  const handleDuplicate = useCallback(() => onDuplicate?.(file.path), [file.path, onDuplicate]);
+  const handleRevert = useCallback(
+    () => onRevert?.(file.path, file.oldPath),
+    [file.oldPath, file.path, onRevert],
+  );
+
+  return (
+    <FileActionsContextMenuContent
+      fileKind="file"
+      fileExists={!file.isDeleted}
+      onOpenFile={onOpenFile ? handleOpenFile : undefined}
+      onCopyPath={onCopyPath ? handleCopyPath : undefined}
+      onCopyRelativePath={onCopyRelativePath ? handleCopyRelativePath : undefined}
+      onReveal={onReveal ? handleReveal : undefined}
+      revealTargetName={revealTargetName}
+      onDownload={onDownload ? handleDownload : undefined}
+      onAddToChat={onAddToChat ? handleAddToChat : undefined}
+      onDuplicate={!file.isDeleted && onDuplicate ? handleDuplicate : undefined}
+      onRevert={onRevert ? handleRevert : undefined}
+      testIDPrefix={testID}
+    />
+  );
+}
+
 const DiffFileHeader = memo(function DiffFileHeader({
   file,
+  workspaceFileDragScope,
   isExpanded,
+  isSelected = false,
   depth = 0,
   showDir = true,
   interactive = true,
   onToggle,
-  onHeaderHeightChange,
+  onSelect,
+  onOpenFile,
   onAddToChat,
+  onCopyPath,
+  onCopyRelativePath,
+  onReveal,
+  revealTargetName,
+  onDownload,
+  onDuplicate,
+  onRevert,
+  onHeaderHeightChange,
   testID,
 }: DiffFileSectionProps) {
-  const { t } = useTranslation();
+  const dragSourceRef = useWorkspaceFileDragSource({
+    enabled: interactive,
+    disabled: file.isDeleted,
+    workspaceId: null,
+    path: file.path,
+    ...workspaceFileDragScope,
+  });
   const layoutYRef = useRef<number | null>(null);
   const pressHandledRef = useRef(false);
   const pressInRef = useRef<{ ts: number; pageX: number; pageY: number } | null>(null);
+
+  const handleSelect = useCallback(() => {
+    if (interactive) {
+      onSelect?.(file.path);
+    }
+  }, [file.path, interactive, onSelect]);
 
   const toggleExpanded = useCallback(() => {
     if (!interactive) {
       return;
     }
+    const selection = isWeb ? window.getSelection() : null;
+    if (selection && !selection.isCollapsed && selection.toString().length > 0) {
+      return;
+    }
     pressHandledRef.current = true;
+    handleSelect();
     onToggle?.(file.path);
-  }, [file.path, interactive, onToggle]);
+  }, [file.path, handleSelect, interactive, onToggle]);
 
   const handleLayout = useCallback(
     (event: LayoutChangeEvent) => {
@@ -947,6 +1107,11 @@ const DiffFileHeader = memo(function DiffFileHeader({
       pageY: event.nativeEvent.pageY,
     };
   }, []);
+
+  const handleLongPress = useCallback(() => {
+    pressHandledRef.current = true;
+    handleSelect();
+  }, [handleSelect]);
 
   const handlePressOut = useCallback(
     (event: { nativeEvent: { pageX: number; pageY: number } }) => {
@@ -973,26 +1138,32 @@ const DiffFileHeader = memo(function DiffFileHeader({
     () => [styles.fileSectionHeaderContainer, isExpanded && styles.fileSectionHeaderExpanded],
     [isExpanded],
   );
+  const accessibilityState = useMemo(
+    () => ({ expanded: isExpanded, selected: isSelected }),
+    [isExpanded, isSelected],
+  );
 
   const headerPressableStyle = useCallback(
     (state: PressableStateCallbackType) =>
       depth > 0
         ? [
-            fileHeaderPressableStyle(state),
+            fileHeaderPressableStyle(state, isSelected),
             inlineUnistylesStyle({ paddingLeft: treeRowPaddingLeft(depth) }),
           ]
-        : fileHeaderPressableStyle(state),
-    [depth],
+        : fileHeaderPressableStyle(state, isSelected),
+    [depth, isSelected],
   );
 
   const fileName = file.path.split("/").pop() ?? file.path;
-  const handleAddToChat = useCallback(() => onAddToChat?.(file.path), [file.path, onAddToChat]);
   const headerContent = (
     <>
-      <View style={styles.fileHeaderLeft}>
+      <View
+        ref={dragSourceRef}
+        style={showDir ? styles.fileHeaderLeft : [styles.fileHeaderLeft, styles.fileHeaderLeftTree]}
+      >
         {showDir ? null : (
           <View style={styles.fileIcon}>
-            <SvgXml xml={getFileIconSvg(fileName)} width={16} height={16} />
+            <MaterialFileIcon fileName={fileName} size={WORKSPACE_TREE_ICON_SIZE} />
           </View>
         )}
         <Text style={styles.fileName} numberOfLines={1}>
@@ -1007,59 +1178,77 @@ const DiffFileHeader = memo(function DiffFileHeader({
           // stays right-aligned next to the diff stats, as in the flat list.
           <View style={styles.fileDirSpacer} />
         )}
-        {file.isNew && (
-          <View style={styles.newBadge}>
-            <Text style={styles.newBadgeText}>{t("workspace.git.diff.newFile")}</Text>
-          </View>
-        )}
-        {file.isDeleted && (
-          <View style={styles.deletedBadge}>
-            <Text style={styles.deletedBadgeText}>{t("workspace.git.diff.deletedFile")}</Text>
-          </View>
-        )}
+        {file.isNew && <FileChangeIcon change="added" />}
+        {file.isDeleted && <FileChangeIcon change="deleted" />}
       </View>
       <View style={styles.fileHeaderRight}>
-        <DiffStat additions={file.additions} deletions={file.deletions} />
-        {onAddToChat ? (
-          <FileActionsMenu
-            fileKind="file"
-            fileExists={!file.isDeleted}
-            onAddToChat={handleAddToChat}
-            accessibilityLabel={t("workspace.fileExplorer.context.actionsFor", { name: fileName })}
-            testIDPrefix={testID}
-          />
-        ) : null}
+        <DiffStat
+          additions={file.additions}
+          deletions={file.deletions}
+          testID={testID ? `${testID}-stat` : undefined}
+        />
       </View>
     </>
   );
 
+  let trigger: ReactElement;
+  if (!interactive) {
+    trigger = (
+      <View
+        {...{
+          onContextMenu: (event: { preventDefault?: () => void }) => event.preventDefault?.(),
+        }}
+        style={headerPressableStyle({ hovered: false, pressed: false })}
+      >
+        {headerContent}
+      </View>
+    );
+  } else {
+    trigger = (
+      <ContextMenuTrigger
+        testID={testID ? `${testID}-toggle` : undefined}
+        style={headerPressableStyle}
+        // Android: prevent parent pan/scroll gestures from canceling the tap release.
+        cancelable={false}
+        onPressIn={handlePressIn}
+        onPressOut={handlePressOut}
+        onLongPress={handleLongPress}
+        onContextMenu={handleSelect}
+        onPress={toggleExpanded}
+        accessibilityState={accessibilityState}
+        aria-selected={isSelected}
+      >
+        {headerContent}
+      </ContextMenuTrigger>
+    );
+  }
+
   return (
     <View style={containerStyle} onLayout={handleLayout} testID={testID}>
       <TreeIndentGuides depth={depth} />
-      <Tooltip delayDuration={300} enabledOnDesktop enabledOnMobile={false}>
-        <TooltipTrigger asChild>
-          {interactive ? (
-            <Pressable
-              testID={testID ? `${testID}-toggle` : undefined}
-              style={headerPressableStyle}
-              // Android: prevent parent pan/scroll gestures from canceling the tap release.
-              cancelable={false}
-              onPressIn={handlePressIn}
-              onPressOut={handlePressOut}
-              onPress={toggleExpanded}
-            >
-              {headerContent}
-            </Pressable>
-          ) : (
-            <View style={headerPressableStyle({ hovered: false, pressed: false })}>
-              {headerContent}
-            </View>
-          )}
-        </TooltipTrigger>
-        <TooltipContent side="bottom" align="start" offset={6} maxWidth={520}>
-          <Text style={styles.tooltipText}>{file.path}</Text>
-        </TooltipContent>
-      </Tooltip>
+      <ContextMenu>
+        <Tooltip delayDuration={300} enabledOnDesktop enabledOnMobile={false}>
+          <TooltipTrigger asChild>{trigger}</TooltipTrigger>
+          <TooltipContent side="bottom" align="start" offset={6} maxWidth={520}>
+            <Text style={styles.tooltipText}>{file.path}</Text>
+          </TooltipContent>
+        </Tooltip>
+        {interactive ? (
+          <DiffFileActionsContextMenuContent
+            file={file}
+            onOpenFile={onOpenFile}
+            onAddToChat={onAddToChat}
+            onCopyPath={onCopyPath}
+            onCopyRelativePath={onCopyRelativePath}
+            onReveal={onReveal}
+            revealTargetName={revealTargetName}
+            onDownload={onDownload}
+            onDuplicate={onDuplicate}
+            onRevert={onRevert}
+            testID={testID}
+          />
+        ) : null}
+      </ContextMenu>
     </View>
   );
 });
@@ -1260,6 +1449,8 @@ interface GitDiffPaneProps {
   asWorkspaceTab?: boolean;
   focusPath?: string;
   focusRequestId?: number;
+  onOpenFile?: (path: string) => void;
+  onAddToChat?: (path: string) => void;
 }
 
 type PressableStyleFn = (
@@ -1277,30 +1468,34 @@ const ThemedListChevronsDownUp = withUnistyles(ListChevronsDownUp);
 const ThemedListChevronsUpDown = withUnistyles(ListChevronsUpDown);
 const ThemedFolderTree = withUnistyles(FolderTree);
 const ThemedList = withUnistyles(List);
+const ThemedMaximize2 = withUnistyles(Maximize2);
 const ThemedChevronDown = withUnistyles(ChevronDown);
-const ThemedPanelRight = withUnistyles(PanelRight);
-
 const DIFF_OPTIONS_WHITESPACE_ICON = (
   <ThemedPilcrow size={14} uniProps={foregroundMutedIconColorMapping} />
 );
 const DIFF_OPTIONS_WRAP_ICON = (
   <ThemedWrapText size={14} uniProps={foregroundMutedIconColorMapping} />
 );
-const DIFF_OPTIONS_SPLIT_ICON = (
-  <ThemedColumns2 size={14} uniProps={foregroundMutedIconColorMapping} />
-);
-const DIFF_OPTIONS_UNIFIED_ICON = (
-  <ThemedAlignJustify size={14} uniProps={foregroundMutedIconColorMapping} />
-);
 
 interface DiffLayoutToggleProps {
   layout: "unified" | "split";
   isMobile: boolean;
-  toggleStyle: PressableStyleFn;
+  testID?: string;
+  toggleStyle?: PressableStyleFn;
   onToggle: () => void;
 }
 
-function DiffLayoutToggle({ layout, isMobile, toggleStyle, onToggle }: DiffLayoutToggleProps) {
+export function DiffLayoutToggle({
+  layout,
+  isMobile,
+  testID = "changes-toggle-layout",
+  toggleStyle,
+  onToggle,
+}: DiffLayoutToggleProps) {
+  const defaultToggleStyle = useMemo(
+    () => buildToggleButtonStyle(false, styles.expandAllButton),
+    [],
+  );
   const { t } = useTranslation();
   const label =
     layout === "unified"
@@ -1312,9 +1507,9 @@ function DiffLayoutToggle({ layout, isMobile, toggleStyle, onToggle }: DiffLayou
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={label}
-          testID="changes-toggle-layout"
+          testID={testID}
           onPress={onToggle}
-          style={toggleStyle}
+          style={toggleStyle ?? defaultToggleStyle}
         >
           {layout === "unified" ? (
             <ThemedColumns2 size={isMobile ? 18 : 14} uniProps={foregroundMutedIconColorMapping} />
@@ -1324,6 +1519,98 @@ function DiffLayoutToggle({ layout, isMobile, toggleStyle, onToggle }: DiffLayou
               uniProps={foregroundMutedIconColorMapping}
             />
           )}
+        </Pressable>
+      </TooltipTrigger>
+      <TooltipContent side="bottom">
+        <Text style={styles.tooltipText}>{label}</Text>
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
+interface ChangesTabToggleProps {
+  isMobile: boolean;
+  selected: boolean;
+  onPress: () => void;
+}
+
+interface DiffModeMenuProps {
+  diffMode: "uncommitted" | "base";
+  committedDescription?: string;
+  testIDPrefix?: string;
+  onSelectUncommitted: () => void;
+  onSelectBase: () => void;
+}
+
+export function DiffModeMenu({
+  diffMode,
+  committedDescription,
+  testIDPrefix = "changes-diff",
+  onSelectUncommitted,
+  onSelectBase,
+}: DiffModeMenuProps) {
+  const { t } = useTranslation();
+  const triggerStyle = useMemo(() => buildDiffModeTriggerStyle(), []);
+  const uncommittedLabel = t("workspace.git.diff.uncommitted");
+  const committedLabel = t("workspace.git.diff.committed");
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        testID={`${testIDPrefix}-status-trigger`}
+        style={triggerStyle}
+        accessibilityRole="button"
+        accessibilityLabel={t("workspace.git.diff.diffMode")}
+      >
+        <Text style={styles.diffStatusText} numberOfLines={1}>
+          {diffMode === "uncommitted" ? uncommittedLabel : committedLabel}
+        </Text>
+        <ThemedChevronDown size={12} uniProps={foregroundMutedIconColorMapping} />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" width={260} testID={`${testIDPrefix}-status-menu`}>
+        <DropdownMenuItem
+          testID={`${testIDPrefix}-mode-uncommitted`}
+          selected={diffMode === "uncommitted"}
+          onSelect={onSelectUncommitted}
+        >
+          {uncommittedLabel}
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem
+          testID={`${testIDPrefix}-mode-committed`}
+          selected={diffMode === "base"}
+          description={committedDescription}
+          onSelect={onSelectBase}
+        >
+          {committedLabel}
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+function ChangesTabToggle({ isMobile, selected, onPress }: ChangesTabToggleProps) {
+  const { t } = useTranslation();
+  const buttonStyle = useMemo(
+    () => buildToggleButtonStyle(selected, styles.expandAllButton),
+    [selected],
+  );
+  const label = t(
+    selected ? "workspace.git.diff.closeChangesTab" : "workspace.git.diff.openChangesTab",
+  );
+  if (isMobile) {
+    return null;
+  }
+  return (
+    <Tooltip delayDuration={300}>
+      <TooltipTrigger asChild>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={label}
+          testID="changes-open-tab"
+          onPress={onPress}
+          style={buttonStyle}
+        >
+          <ThemedMaximize2 size={14} uniProps={foregroundMutedIconColorMapping} />
         </Pressable>
       </TooltipTrigger>
       <TooltipContent side="bottom">
@@ -1381,16 +1668,19 @@ function DiffViewModeToggle({
 interface DiffFilesToolbarProps {
   allFileDiffsExpanded: boolean;
   isMobile: boolean;
-  expandAllToggleStyle: PressableStyleFn;
+  testID?: string;
+  expandAllToggleStyle?: PressableStyleFn;
   onToggleExpandAll: () => void;
 }
 
-function DiffFilesToolbar({
+export function DiffFilesToolbar({
   allFileDiffsExpanded,
   isMobile,
+  testID,
   expandAllToggleStyle,
   onToggleExpandAll,
 }: DiffFilesToolbarProps) {
+  const defaultToggleStyle = useMemo(() => buildExpandAllButtonStyle(), []);
   const { t } = useTranslation();
   const expandAllLabel = allFileDiffsExpanded
     ? t("workspace.git.diff.collapseAll")
@@ -1402,7 +1692,8 @@ function DiffFilesToolbar({
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={expandAllLabel}
-            style={expandAllToggleStyle}
+            testID={testID}
+            style={expandAllToggleStyle ?? defaultToggleStyle}
             onPress={onToggleExpandAll}
           >
             {allFileDiffsExpanded ? (
@@ -1426,79 +1717,35 @@ function DiffFilesToolbar({
   );
 }
 
-interface DiffRefreshButtonProps {
-  brand: string;
-  isMobile: boolean;
-  isRefreshing: boolean;
-  toggleStyle: PressableStyleFn;
-  onRefresh: () => void;
-}
-
-function DiffRefreshButton({
-  brand,
-  isMobile,
-  isRefreshing,
-  toggleStyle,
-  onRefresh,
-}: DiffRefreshButtonProps) {
-  const { t } = useTranslation();
-  const label = isRefreshing
-    ? t("workspace.git.diff.refreshing")
-    : t("workspace.git.diff.refreshState", { brand });
-
-  return (
-    <Tooltip delayDuration={300}>
-      <TooltipTrigger asChild>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={label}
-          disabled={isRefreshing}
-          testID="changes-refresh"
-          onPress={onRefresh}
-          style={toggleStyle}
-        >
-          {isRefreshing ? (
-            <ThemedLoadingSpinner
-              size={isMobile ? 18 : ICON_SIZE.sm}
-              uniProps={foregroundMutedIconColorMapping}
-            />
-          ) : (
-            <ThemedRotateCw
-              size={isMobile ? 18 : ICON_SIZE.sm}
-              uniProps={foregroundMutedIconColorMapping}
-            />
-          )}
-        </Pressable>
-      </TooltipTrigger>
-      <TooltipContent side="bottom">
-        <Text style={styles.tooltipText}>{label}</Text>
-      </TooltipContent>
-    </Tooltip>
-  );
-}
-
 interface DiffOptionsMenuProps {
+  brand?: string;
   hideWhitespace: boolean;
   isMobile: boolean;
-  layout?: "unified" | "split";
-  overflowToggleStyle: PressableStyleFn;
+  isRefreshing?: boolean;
+  overflowToggleStyle?: PressableStyleFn;
+  refreshSupported?: boolean;
+  testIDPrefix?: string;
   wrapLines: boolean;
+  onRefresh?: () => void;
   onToggleHideWhitespace: () => void;
-  onToggleLayout?: () => void;
   onToggleWrapLines: () => void;
 }
 
-function DiffOptionsMenu({
+export function DiffOptionsMenu({
+  brand,
   hideWhitespace,
   isMobile,
-  layout,
+  isRefreshing = false,
   overflowToggleStyle,
+  refreshSupported = false,
+  testIDPrefix = "changes",
   wrapLines,
+  onRefresh,
   onToggleHideWhitespace,
-  onToggleLayout,
   onToggleWrapLines,
 }: DiffOptionsMenuProps) {
   const { t } = useTranslation();
+  const defaultToggleStyle = useMemo(() => buildOverflowButtonStyle(), []);
   const whitespaceLabel = hideWhitespace
     ? t("workspace.git.diff.showWhitespace")
     : t("workspace.git.diff.hideWhitespace");
@@ -1506,6 +1753,21 @@ function DiffOptionsMenu({
     ? t("workspace.git.diff.scrollLongLines")
     : t("workspace.git.diff.wrapLongLines");
   const optionsLabel = t("workspace.git.diff.options");
+  let refreshLabel = t("workspace.git.diff.refresh");
+  if (isRefreshing) {
+    refreshLabel = t("workspace.git.diff.refreshing");
+  } else if (brand) {
+    refreshLabel = t("workspace.git.diff.refreshState", { brand });
+  }
+  const refreshIcon = useMemo(
+    () =>
+      isRefreshing ? (
+        <ThemedLoadingSpinner size={ICON_SIZE.sm} uniProps={foregroundMutedIconColorMapping} />
+      ) : (
+        <ThemedRotateCw size={ICON_SIZE.sm} uniProps={foregroundMutedIconColorMapping} />
+      ),
+    [isRefreshing],
+  );
 
   return (
     <DropdownMenu>
@@ -1514,8 +1776,8 @@ function DiffOptionsMenu({
           <DropdownMenuTrigger
             accessibilityRole="button"
             accessibilityLabel={optionsLabel}
-            testID="changes-options-menu"
-            style={overflowToggleStyle}
+            testID={`${testIDPrefix}-options-menu`}
+            style={overflowToggleStyle ?? defaultToggleStyle}
           >
             <ThemedChevronDown
               size={isMobile ? 18 : 14}
@@ -1527,11 +1789,11 @@ function DiffOptionsMenu({
           <Text style={styles.tooltipText}>{optionsLabel}</Text>
         </TooltipContent>
       </Tooltip>
-      <DropdownMenuContent align="end" width={240} testID="changes-options-menu-content">
+      <DropdownMenuContent align="end" width={240} testID={`${testIDPrefix}-options-menu-content`}>
         <DropdownMenuItem
           leading={DIFF_OPTIONS_WHITESPACE_ICON}
           selected={hideWhitespace}
-          testID="changes-toggle-whitespace"
+          testID={`${testIDPrefix}-toggle-whitespace`}
           onSelect={onToggleHideWhitespace}
         >
           {whitespaceLabel}
@@ -1539,124 +1801,26 @@ function DiffOptionsMenu({
         <DropdownMenuItem
           leading={DIFF_OPTIONS_WRAP_ICON}
           selected={wrapLines}
-          testID="changes-toggle-wrap-lines"
+          testID={`${testIDPrefix}-toggle-wrap-lines`}
           onSelect={onToggleWrapLines}
         >
           {wrapLinesLabel}
         </DropdownMenuItem>
-        {layout === undefined || onToggleLayout === undefined ? null : (
+        {refreshSupported && onRefresh ? (
           <>
             <DropdownMenuSeparator />
             <DropdownMenuItem
-              leading={layout === "unified" ? DIFF_OPTIONS_SPLIT_ICON : DIFF_OPTIONS_UNIFIED_ICON}
-              testID="changes-toggle-layout"
-              onSelect={onToggleLayout}
+              leading={refreshIcon}
+              disabled={isRefreshing}
+              testID={`${testIDPrefix}-refresh`}
+              onSelect={onRefresh}
             >
-              {layout === "unified"
-                ? t("workspace.git.diff.switchToSplit")
-                : t("workspace.git.diff.switchToUnified")}
+              {refreshLabel}
             </DropdownMenuItem>
           </>
-        )}
+        ) : null}
       </DropdownMenuContent>
     </DropdownMenu>
-  );
-}
-
-interface DiffStatusButtonsProps {
-  allFileDiffsExpanded: boolean;
-  brand: string;
-  canUseSplitLayout: boolean;
-  expandAllToggleStyle: PressableStyleFn;
-  hasFiles: boolean;
-  hideWhitespace: boolean;
-  isMobile: boolean;
-  isRefreshing: boolean;
-  layout: "unified" | "split";
-  overflowToggleStyle: PressableStyleFn;
-  refreshSupported: boolean;
-  viewMode: "flat" | "tree";
-  viewModeToggleStyle: PressableStyleFn;
-  wrapLines: boolean;
-  onRefresh: () => void;
-  onToggleExpandAll: () => void;
-  onToggleHideWhitespace: () => void;
-  onToggleLayout: () => void;
-  onToggleViewMode: () => void;
-  onToggleWrapLines: () => void;
-}
-
-function DiffStatusButtons({
-  allFileDiffsExpanded,
-  brand,
-  canUseSplitLayout,
-  expandAllToggleStyle,
-  hasFiles,
-  hideWhitespace,
-  isMobile,
-  isRefreshing,
-  layout,
-  overflowToggleStyle,
-  refreshSupported,
-  viewMode,
-  viewModeToggleStyle,
-  wrapLines,
-  onRefresh,
-  onToggleExpandAll,
-  onToggleHideWhitespace,
-  onToggleLayout,
-  onToggleViewMode,
-  onToggleWrapLines,
-}: DiffStatusButtonsProps) {
-  const showLayoutToggleInToolbar = canUseSplitLayout && !refreshSupported;
-  const showLayoutToggleInMenu = canUseSplitLayout && refreshSupported;
-
-  return (
-    <View style={styles.diffStatusButtons}>
-      {showLayoutToggleInToolbar ? (
-        <DiffLayoutToggle
-          layout={layout}
-          isMobile={isMobile}
-          toggleStyle={expandAllToggleStyle}
-          onToggle={onToggleLayout}
-        />
-      ) : null}
-      {refreshSupported ? (
-        <DiffRefreshButton
-          brand={brand}
-          isMobile={isMobile}
-          isRefreshing={isRefreshing}
-          toggleStyle={expandAllToggleStyle}
-          onRefresh={onRefresh}
-        />
-      ) : null}
-      {hasFiles ? (
-        <DiffViewModeToggle
-          viewMode={viewMode}
-          isMobile={isMobile}
-          toggleStyle={viewModeToggleStyle}
-          onToggle={onToggleViewMode}
-        />
-      ) : null}
-      {hasFiles ? (
-        <DiffFilesToolbar
-          allFileDiffsExpanded={allFileDiffsExpanded}
-          isMobile={isMobile}
-          expandAllToggleStyle={expandAllToggleStyle}
-          onToggleExpandAll={onToggleExpandAll}
-        />
-      ) : null}
-      <DiffOptionsMenu
-        hideWhitespace={hideWhitespace}
-        isMobile={isMobile}
-        layout={showLayoutToggleInMenu ? layout : undefined}
-        overflowToggleStyle={overflowToggleStyle}
-        wrapLines={wrapLines}
-        onToggleHideWhitespace={onToggleHideWhitespace}
-        onToggleLayout={showLayoutToggleInMenu ? onToggleLayout : undefined}
-        onToggleWrapLines={onToggleWrapLines}
-      />
-    </View>
   );
 }
 
@@ -1665,22 +1829,38 @@ const ThemedRotateCw = withUnistyles(RotateCw);
 type DiffFlatItemLayoutGetter = NonNullable<FlatListProps<DiffFlatItem>["getItemLayout"]>;
 const EMPTY_PATH_LIST: string[] = [];
 
-function getUnifiedDiffLineCount(file: ParsedDiffFile): number {
-  let lineCount = 0;
-  for (const hunk of file.hunks) {
-    lineCount += hunk.lines.length;
-  }
-  return lineCount;
+interface DiffFileMetrics {
+  contentLength: number;
+  splitLineCount?: number;
+  unifiedLineCount: number;
 }
 
-function getDiffContentLength(file: ParsedDiffFile): number {
+const diffFileMetricsCache = new WeakMap<ParsedDiffFile, DiffFileMetrics>();
+
+function getDiffFileMetrics(file: ParsedDiffFile): DiffFileMetrics {
+  const cached = diffFileMetricsCache.get(file);
+  if (cached) {
+    return cached;
+  }
   let contentLength = 0;
+  let unifiedLineCount = 0;
   for (const hunk of file.hunks) {
+    unifiedLineCount += hunk.lines.length;
     for (const line of hunk.lines) {
       contentLength += line.content.length;
     }
   }
-  return contentLength;
+  const metrics = { contentLength, unifiedLineCount };
+  diffFileMetricsCache.set(file, metrics);
+  return metrics;
+}
+
+function getSplitDiffLineCount(file: ParsedDiffFile): number {
+  const metrics = getDiffFileMetrics(file);
+  if (metrics.splitLineCount === undefined) {
+    metrics.splitLineCount = buildSplitDiffRows(file).length;
+  }
+  return metrics.splitLineCount;
 }
 
 function computeEmptyMessage(
@@ -1780,9 +1960,6 @@ function DiffBodyContent({
 
 interface SharedDiffViewProps {
   files: ParsedDiffFile[];
-  onAddToChat?: (path: string) => void;
-  focusPath?: string;
-  focusRequestId?: number;
   displayPreferences: {
     layout: "unified" | "split";
     wrapLines: boolean;
@@ -1796,22 +1973,35 @@ interface SharedDiffViewProps {
         expandedPaths: string[];
         collapsedFolders: string[];
         reviewActions?: InlineReviewActions;
+        onFilePress?: (path: string) => void;
+        workspaceFileDragScope?: { serverId: string; workspaceId: string };
+        onOpenFile?: (path: string) => void;
+        onAddToChat?: (path: string) => void;
+        onCopyPath?: (path: string) => void;
+        onCopyRelativePath?: (path: string) => void;
+        onReveal?: (path: string) => void;
+        revealTargetName?: string;
+        onDownload?: (path: string) => void;
+        onDuplicate?: (path: string) => void;
+        onRevert?: (path: string, oldPath?: string) => void;
         onExpandedPathsChange: (paths: string[]) => void;
         onCollapsedFoldersChange: (paths: string[]) => void;
+      }
+    | {
+        kind: "working_tab";
+        expandedPaths: string[] | null;
+        reviewActions: InlineReviewActions;
+        focusPath?: string;
+        focusRequestId?: number;
+        onExpandedPathsChange: (paths: string[]) => void;
       }
     | {
         kind: "commit";
       };
 }
 
-export function SharedDiffView({
-  files,
-  displayPreferences,
-  mode,
-  onAddToChat,
-  focusPath,
-  focusRequestId,
-}: SharedDiffViewProps) {
+export function SharedDiffView({ files, displayPreferences, mode }: SharedDiffViewProps) {
+  const isCompact = useIsCompactFormFactor();
   const { layout, wrapLines, codeFontSize, monoFontFamily } = displayPreferences;
   const diffBodyLineHeight = Math.round(codeFontSize * 1.5);
   const typographyKey = [monoFontFamily, codeFontSize, diffBodyLineHeight].join(":");
@@ -1824,25 +2014,61 @@ export function SharedDiffView({
     };
   }, [codeFontSize, diffBodyLineHeight, monoFontFamily]);
   const viewMode = mode.kind === "working_tree" ? mode.viewMode : "flat";
-  const expandedPathsArray = useMemo(
-    () => (mode.kind === "working_tree" ? mode.expandedPaths : files.map((file) => file.path)),
-    [files, mode],
-  );
+  const expandedPathsArray = useMemo(() => {
+    if (mode.kind === "working_tree") {
+      return mode.expandedPaths;
+    }
+    if (mode.kind === "working_tab" && mode.expandedPaths !== null) {
+      return mode.expandedPaths;
+    }
+    return files.map((file) => file.path);
+  }, [files, mode]);
   const expandedPaths = useMemo(() => new Set(expandedPathsArray), [expandedPathsArray]);
   const collapsedFoldersArray =
     mode.kind === "working_tree" ? mode.collapsedFolders : EMPTY_PATH_LIST;
   const collapsedFolders = useMemo(() => new Set(collapsedFoldersArray), [collapsedFoldersArray]);
-  const stickyHeaders = mode.kind === "working_tree";
-  const interactive = mode.kind === "working_tree";
-  const reviewActions = mode.kind === "working_tree" ? mode.reviewActions : undefined;
+  const stickyHeaders = mode.kind !== "commit";
+  const interactive = mode.kind !== "commit";
+  const reviewActions = mode.kind === "commit" ? undefined : mode.reviewActions;
+  const onFilePress = mode.kind === "working_tree" ? mode.onFilePress : undefined;
+  const focusPath = mode.kind === "working_tab" ? mode.focusPath : undefined;
+  const focusRequestId = mode.kind === "working_tab" ? mode.focusRequestId : undefined;
+  const onOpenFile = mode.kind === "working_tree" ? mode.onOpenFile : undefined;
+  const onAddToChat = mode.kind === "working_tree" ? mode.onAddToChat : undefined;
+  const workspaceFileDragScope =
+    mode.kind === "working_tree" ? mode.workspaceFileDragScope : undefined;
+  const onCopyPath = mode.kind === "working_tree" ? mode.onCopyPath : undefined;
+  const onCopyRelativePath = mode.kind === "working_tree" ? mode.onCopyRelativePath : undefined;
+  const onReveal = mode.kind === "working_tree" ? mode.onReveal : undefined;
+  const revealTargetName = mode.kind === "working_tree" ? mode.revealTargetName : undefined;
+  const onDownload = mode.kind === "working_tree" ? mode.onDownload : undefined;
+  const onDuplicate = mode.kind === "working_tree" ? mode.onDuplicate : undefined;
+  const onRevert = mode.kind === "working_tree" ? mode.onRevert : undefined;
+  // Keep selection independent from expansion so future keyboard actions (such as R to rename)
+  // can target the current VCS file or folder without changing its open state.
+  const [selectedPath, setSelectedPath] = useState<string | null>(null);
+  const handleSelectPath = useCallback((path: string) => setSelectedPath(path), []);
   const compressedTree = useMemo(() => compressSingleChildChains(buildDiffTree(files)), [files]);
   const allFolderPaths = useMemo(() => collectDirPaths(compressedTree), [compressedTree]);
   const allFolderPathSet = useMemo(() => new Set(allFolderPaths), [allFolderPaths]);
+  useEffect(() => {
+    if (
+      selectedPath &&
+      !allFolderPathSet.has(selectedPath) &&
+      !files.some((file) => file.path === selectedPath)
+    ) {
+      setSelectedPath(null);
+    }
+  }, [allFolderPathSet, files, selectedPath]);
   const effectiveCollapsedFolders = useMemo(
     () => new Set(Array.from(collapsedFolders).filter((path) => allFolderPathSet.has(path))),
     [allFolderPathSet, collapsedFolders],
   );
   const diffListRef = useRef<FlatList<DiffFlatItem>>(null);
+  const scrollbar = useOverlayFlatListScrollbar(diffListRef, { enabled: !isCompact });
+  const { onLayout: updateScrollbarLayout, onScroll: updateScrollbarOffset } = scrollbar;
+  const consumedFocusRequestRef = useRef<string | null>(null);
+  const pendingFocusRequestRef = useRef<string | null>(null);
   const diffListScrollOffsetRef = useRef(0);
   const diffListViewportHeightRef = useRef(0);
   const headerHeightByPathRef = useRef<Record<string, number>>({});
@@ -1850,6 +2076,24 @@ export function SharedDiffView({
   const folderRowHeightRef = useRef<number>(0);
   const defaultHeaderHeightRef = useRef<number>(44);
   const [heightVersion, setHeightVersion] = useState(0);
+  const heightVersionFrameRef = useRef<number | null>(null);
+  const scheduleHeightVersionUpdate = useCallback(() => {
+    if (heightVersionFrameRef.current !== null) {
+      return;
+    }
+    heightVersionFrameRef.current = requestAnimationFrame(() => {
+      heightVersionFrameRef.current = null;
+      setHeightVersion((version) => version + 1);
+    });
+  }, []);
+  useEffect(
+    () => () => {
+      if (heightVersionFrameRef.current !== null) {
+        cancelAnimationFrame(heightVersionFrameRef.current);
+      }
+    },
+    [],
+  );
   const diffBodyChromeHeight = BORDER_WIDTH[1] * 2;
   const statusBodyHeightEstimate = diffBodyChromeHeight + SPACING[4] * 2 + diffBodyLineHeight;
 
@@ -1873,6 +2117,7 @@ export function SharedDiffView({
         return `${layout}:${wrapLines ? "wrap" : "scroll"}:${typographyKey}:${file.path}:${file.status}`;
       }
 
+      const metrics = getDiffFileMetrics(file);
       return [
         layout,
         wrapLines ? "wrap" : "scroll",
@@ -1882,8 +2127,8 @@ export function SharedDiffView({
         file.additions,
         file.deletions,
         file.hunks.length,
-        getUnifiedDiffLineCount(file),
-        getDiffContentLength(file),
+        metrics.unifiedLineCount,
+        metrics.contentLength,
       ].join(":");
     },
     [layout, typographyKey, wrapLines],
@@ -1896,7 +2141,9 @@ export function SharedDiffView({
       }
 
       const lineCount =
-        layout === "split" ? buildSplitDiffRows(file).length : getUnifiedDiffLineCount(file);
+        layout === "split"
+          ? getSplitDiffLineCount(file)
+          : getDiffFileMetrics(file).unifiedLineCount;
       return diffBodyChromeHeight + lineCount * diffBodyLineHeight;
     },
     [diffBodyChromeHeight, diffBodyLineHeight, layout, statusBodyHeightEstimate],
@@ -1916,33 +2163,39 @@ export function SharedDiffView({
     [estimateBodyHeight, getBodyHeightKey],
   );
 
-  const handleFolderRowHeightChange = useCallback((height: number) => {
-    if (!Number.isFinite(height) || height <= 0) {
-      return;
-    }
-    const previousHeight = folderRowHeightRef.current;
-    if (previousHeight > 0 && Math.abs(previousHeight - height) <= DIFF_HEIGHT_CHANGE_EPSILON) {
-      return;
-    }
-    folderRowHeightRef.current = height;
-    setHeightVersion((version) => version + 1);
-  }, []);
+  const handleFolderRowHeightChange = useCallback(
+    (height: number) => {
+      if (!Number.isFinite(height) || height <= 0) {
+        return;
+      }
+      const previousHeight = folderRowHeightRef.current;
+      if (previousHeight > 0 && Math.abs(previousHeight - height) <= DIFF_HEIGHT_CHANGE_EPSILON) {
+        return;
+      }
+      folderRowHeightRef.current = height;
+      scheduleHeightVersionUpdate();
+    },
+    [scheduleHeightVersionUpdate],
+  );
 
-  const handleHeaderHeightChange = useCallback((path: string, height: number) => {
-    if (!Number.isFinite(height) || height <= 0) {
-      return;
-    }
-    const previousHeight = headerHeightByPathRef.current[path];
-    if (
-      previousHeight !== undefined &&
-      Math.abs(previousHeight - height) <= DIFF_HEIGHT_CHANGE_EPSILON
-    ) {
-      return;
-    }
-    headerHeightByPathRef.current[path] = height;
-    defaultHeaderHeightRef.current = height;
-    setHeightVersion((version) => version + 1);
-  }, []);
+  const handleHeaderHeightChange = useCallback(
+    (path: string, height: number) => {
+      if (!Number.isFinite(height) || height <= 0) {
+        return;
+      }
+      const previousHeight = headerHeightByPathRef.current[path];
+      if (
+        previousHeight !== undefined &&
+        Math.abs(previousHeight - height) <= DIFF_HEIGHT_CHANGE_EPSILON
+      ) {
+        return;
+      }
+      headerHeightByPathRef.current[path] = height;
+      defaultHeaderHeightRef.current = height;
+      scheduleHeightVersionUpdate();
+    },
+    [scheduleHeightVersionUpdate],
+  );
 
   const handleBodyHeightChange = useCallback(
     (file: ParsedDiffFile, height: number) => {
@@ -1958,22 +2211,30 @@ export function SharedDiffView({
         return;
       }
       bodyHeightByKeyRef.current[heightKey] = height;
-      setHeightVersion((version) => version + 1);
+      scheduleHeightVersionUpdate();
     },
-    [getBodyHeightKey],
+    [getBodyHeightKey, scheduleHeightVersionUpdate],
   );
 
-  const handleDiffListScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
-    diffListScrollOffsetRef.current = event.nativeEvent.contentOffset.y;
-  }, []);
+  const handleDiffListScroll = useCallback(
+    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+      diffListScrollOffsetRef.current = event.nativeEvent.contentOffset.y;
+      updateScrollbarOffset(event);
+    },
+    [updateScrollbarOffset],
+  );
 
-  const handleDiffListLayout = useCallback((event: LayoutChangeEvent) => {
-    const height = event.nativeEvent.layout.height;
-    if (!Number.isFinite(height) || height <= 0) {
-      return;
-    }
-    diffListViewportHeightRef.current = height;
-  }, []);
+  const handleDiffListLayout = useCallback(
+    (event: LayoutChangeEvent) => {
+      const height = event.nativeEvent.layout.height;
+      if (!Number.isFinite(height) || height <= 0) {
+        return;
+      }
+      diffListViewportHeightRef.current = height;
+      updateScrollbarLayout(event);
+    },
+    [updateScrollbarLayout],
+  );
 
   const computeItemOffset = useCallback(
     (predicate: (item: DiffFlatItem) => boolean): number | null => {
@@ -1992,9 +2253,43 @@ export function SharedDiffView({
     [computeItemOffset],
   );
 
+  useEffect(() => {
+    if (!focusPath) {
+      return;
+    }
+    const focusRequestKey = `${focusRequestId ?? "initial"}:${focusPath}`;
+    if (
+      consumedFocusRequestRef.current === focusRequestKey ||
+      pendingFocusRequestRef.current === focusRequestKey
+    ) {
+      return;
+    }
+    const hasTarget = flatItems.some(
+      (item) => item.type === "header" && item.file.path === focusPath,
+    );
+    if (!hasTarget) {
+      return;
+    }
+    pendingFocusRequestRef.current = focusRequestKey;
+    const frame = requestAnimationFrame(() => {
+      diffListRef.current?.scrollToOffset({
+        offset: computeHeaderOffset(focusPath),
+        animated: false,
+      });
+      consumedFocusRequestRef.current = focusRequestKey;
+      pendingFocusRequestRef.current = null;
+    });
+    return () => {
+      cancelAnimationFrame(frame);
+      if (pendingFocusRequestRef.current === focusRequestKey) {
+        pendingFocusRequestRef.current = null;
+      }
+    };
+  }, [computeHeaderOffset, flatItems, focusPath, focusRequestId]);
+
   const handleToggleExpanded = useCallback(
     (path: string) => {
-      if (mode.kind !== "working_tree") {
+      if (mode.kind === "commit") {
         return;
       }
       const isCurrentlyExpanded = expandedPaths.has(path);
@@ -2060,44 +2355,39 @@ export function SharedDiffView({
     [computeItemOffset, effectiveCollapsedFolders, mode],
   );
 
-  const handledFocusRequestRef = useRef<string | null>(null);
-  useEffect(() => {
-    if (!focusPath) {
-      return;
-    }
-    const focusRequest = `${focusRequestId ?? 0}:${focusPath}`;
-    if (handledFocusRequestRef.current === focusRequest) {
-      return;
-    }
-    if (mode.kind === "working_tree") {
-      const visibleFolders = Array.from(effectiveCollapsedFolders).filter(
-        (folderPath) => !focusPath.startsWith(`${folderPath}/`),
-      );
-      if (visibleFolders.length !== effectiveCollapsedFolders.size) {
-        mode.onCollapsedFoldersChange(visibleFolders);
+  const handleCollapseFolder = useCallback(
+    (dirPath: string) => {
+      if (mode.kind !== "working_tree") {
         return;
       }
-    }
-    const targetOffset = computeItemOffset(
-      (item) => item.type === "header" && item.file.path === focusPath,
-    );
-    if (targetOffset === null) {
-      return;
-    }
-    if (mode.kind === "working_tree" && !expandedPaths.has(focusPath)) {
-      mode.onExpandedPathsChange([...expandedPaths, focusPath]);
-      return;
-    }
-    diffListRef.current?.scrollToOffset({ offset: targetOffset, animated: false });
-    handledFocusRequestRef.current = focusRequest;
-  }, [
-    computeItemOffset,
-    effectiveCollapsedFolders,
-    expandedPaths,
-    focusPath,
-    focusRequestId,
-    mode,
-  ]);
+      const targetOffset = computeItemOffset(
+        (item) => item.type === "folder" && item.dirPath === dirPath,
+      );
+      const folderHeight = folderRowHeightRef.current || defaultHeaderHeightRef.current;
+      if (
+        targetOffset !== null &&
+        shouldAnchorHeaderBeforeCollapse({
+          headerOffset: targetOffset,
+          headerHeight: folderHeight,
+          viewportOffset: diffListScrollOffsetRef.current,
+          viewportHeight: diffListViewportHeightRef.current,
+        })
+      ) {
+        diffListRef.current?.scrollToOffset({ offset: targetOffset, animated: false });
+      }
+
+      const pathPrefix = `${dirPath}/`;
+      mode.onCollapsedFoldersChange([
+        ...new Set([
+          ...effectiveCollapsedFolders,
+          ...allFolderPaths.filter(
+            (folderPath) => folderPath === dirPath || folderPath.startsWith(pathPrefix),
+          ),
+        ]),
+      ]);
+    },
+    [allFolderPaths, computeItemOffset, effectiveCollapsedFolders, mode],
+  );
 
   const renderFlatItem = useCallback(
     ({ item }: { item: DiffFlatItem }) => {
@@ -2108,10 +2398,19 @@ export function SharedDiffView({
             displayName={item.displayName}
             depth={item.depth}
             collapsed={item.collapsed}
+            isSelected={selectedPath === item.dirPath}
             additions={item.additions}
             deletions={item.deletions}
             onToggle={handleToggleFolder}
+            onCollapse={handleCollapseFolder}
+            onSelect={handleSelectPath}
             onHeightChange={handleFolderRowHeightChange}
+            onCopyPath={onCopyPath}
+            onCopyRelativePath={onCopyRelativePath}
+            onReveal={onReveal}
+            revealTargetName={revealTargetName}
+            onDuplicate={onDuplicate}
+            onRevert={onRevert}
             testID={`diff-folder-${item.dirPath}`}
           />
         );
@@ -2120,13 +2419,24 @@ export function SharedDiffView({
         return (
           <DiffFileHeader
             file={item.file}
+            workspaceFileDragScope={workspaceFileDragScope}
             isExpanded={item.isExpanded}
+            isSelected={selectedPath === item.file.path}
             depth={item.depth}
             showDir={viewMode === "flat"}
             interactive={interactive}
-            onToggle={interactive ? handleToggleExpanded : undefined}
-            onHeaderHeightChange={handleHeaderHeightChange}
+            onToggle={interactive ? (onFilePress ?? handleToggleExpanded) : undefined}
+            onSelect={handleSelectPath}
+            onOpenFile={onOpenFile}
             onAddToChat={onAddToChat}
+            onCopyPath={onCopyPath}
+            onCopyRelativePath={onCopyRelativePath}
+            onReveal={onReveal}
+            revealTargetName={revealTargetName}
+            onDownload={onDownload}
+            onDuplicate={onDuplicate}
+            onRevert={onRevert}
+            onHeaderHeightChange={handleHeaderHeightChange}
             testID={`diff-file-${item.fileIndex}`}
           />
         );
@@ -2149,15 +2459,28 @@ export function SharedDiffView({
       handleBodyHeightChange,
       handleFolderRowHeightChange,
       handleHeaderHeightChange,
+      handleCollapseFolder,
+      handleSelectPath,
       handleToggleExpanded,
       handleToggleFolder,
       layout,
-      onAddToChat,
       reviewActions,
+      workspaceFileDragScope,
       textMetricsStyle,
       viewMode,
       wrapLines,
       interactive,
+      onFilePress,
+      onOpenFile,
+      onAddToChat,
+      onCopyPath,
+      onCopyRelativePath,
+      onReveal,
+      revealTargetName,
+      onDownload,
+      onDuplicate,
+      onRevert,
+      selectedPath,
     ],
   );
 
@@ -2187,6 +2510,7 @@ export function SharedDiffView({
       viewMode,
       wrapLines,
       reviewActions,
+      workspaceFileDragScope,
     }),
     [
       expandedPathsArray,
@@ -2196,79 +2520,37 @@ export function SharedDiffView({
       reviewActions,
       typographyKey,
       viewMode,
+      workspaceFileDragScope,
       wrapLines,
     ],
   );
 
   return (
-    <FlatList
-      ref={diffListRef}
-      data={flatItems}
-      renderItem={renderFlatItem}
-      keyExtractor={flatKeyExtractor}
-      getItemLayout={getFlatItemLayout}
-      stickyHeaderIndices={stickyHeaderIndices}
-      extraData={flatExtraData}
-      style={styles.scrollView}
-      contentContainerStyle={styles.contentContainer}
-      testID="git-diff-scroll"
-      onLayout={handleDiffListLayout}
-      onScroll={handleDiffListScroll}
-      scrollEventThrottle={16}
-      showsVerticalScrollIndicator
-      removeClippedSubviews={false}
-      initialNumToRender={12}
-      maxToRenderPerBatch={12}
-      windowSize={10}
-    />
+    <View style={styles.scrollContainer}>
+      <FlatList
+        ref={diffListRef}
+        data={flatItems}
+        renderItem={renderFlatItem}
+        keyExtractor={flatKeyExtractor}
+        getItemLayout={getFlatItemLayout}
+        stickyHeaderIndices={stickyHeaderIndices}
+        extraData={flatExtraData}
+        style={styles.scrollView}
+        contentContainerStyle={styles.contentContainer}
+        testID="git-diff-scroll"
+        onLayout={handleDiffListLayout}
+        onScroll={handleDiffListScroll}
+        onContentSizeChange={scrollbar.onContentSizeChange}
+        scrollEventThrottle={16}
+        showsVerticalScrollIndicator={!scrollbar.enabled}
+        removeClippedSubviews={false}
+        initialNumToRender={12}
+        maxToRenderPerBatch={12}
+        windowSize={10}
+      />
+      {scrollbar.overlay}
+    </View>
   );
-}
-
-interface DeriveStatusStateInputs {
-  status: ReturnType<typeof useCheckoutStatusQuery>["status"];
-  isStatusLoading: boolean;
-  isStatusError: boolean;
-  statusError: unknown;
-}
-
-interface DerivedStatusState {
-  gitStatus: NonNullable<ReturnType<typeof useCheckoutStatusQuery>["status"]> | null;
-  isGit: boolean;
-  notGit: boolean;
-  statusErrorMessage: string | null;
-  baseRef: string | undefined;
-  hasUncommittedChanges: boolean;
-  actionsDisabled: boolean;
-  currentBranchName: string | null;
-}
-
-function deriveStatusState({
-  status,
-  isStatusLoading,
-  isStatusError,
-  statusError,
-}: DeriveStatusStateInputs): DerivedStatusState {
-  const gitStatus = status && status.isGit ? status : null;
-  const isGit = Boolean(gitStatus);
-  const notGit = status !== null && !status.isGit && !status.error;
-  const statusErrorMessage =
-    status?.error?.message ??
-    (isStatusError && statusError instanceof Error ? statusError.message : null);
-  const baseRef = gitStatus?.baseRef ?? undefined;
-  const hasUncommittedChanges = Boolean(gitStatus?.isDirty);
-  const actionsDisabled = !isGit || Boolean(status?.error) || isStatusLoading;
-  const currentBranchName =
-    gitStatus?.currentBranch && gitStatus.currentBranch !== "HEAD" ? gitStatus.currentBranch : null;
-  return {
-    gitStatus,
-    isGit,
-    notGit,
-    statusErrorMessage,
-    baseRef,
-    hasUncommittedChanges,
-    actionsDisabled,
-    currentBranchName,
-  };
 }
 
 function computeBaseRefLabel(baseRef: string | undefined, fallbackLabel: string): string {
@@ -2332,11 +2614,14 @@ function parseForgeHost(url: string | null | undefined): string | null {
 }
 
 function buildForgeSetupMessage(input: {
-  action: Exclude<ForgeSetupAction, null>;
+  action: ForgeSetupAction;
   forge: Forge;
   host: string | null;
   t: TFunction;
-}): string {
+}): string | null {
+  if (!input.action) {
+    return null;
+  }
   const { brandLabel, signInCli } = getForgePresentation(input.forge);
   // A forge with no known CLI (an unknown/third-party forge rendered neutrally)
   // has no install/sign-in command to interpolate — show neutral guidance
@@ -2365,6 +2650,13 @@ function buildExpandAllButtonStyle(): PressableStyleFn {
   ];
 }
 
+function buildOverflowButtonStyle(): PressableStyleFn {
+  return ({ hovered, pressed }) => [
+    styles.overflowButton,
+    (Boolean(hovered) || pressed) && styles.toggleButtonSelected,
+  ];
+}
+
 function buildToggleButtonStyle(
   selected: boolean,
   baseStyles: StyleProp<ViewStyle> | StyleProp<ViewStyle>[],
@@ -2375,10 +2667,183 @@ function buildToggleButtonStyle(
   ];
 }
 
-function shouldEnableCheckoutDiff(input: { paneEnabled: boolean; isGit: boolean }): boolean {
-  return input.paneEnabled && input.isGit;
+function useChangesTreeState({
+  workspaceId,
+  cwd,
+  files,
+  viewMode,
+  changesTabOpen,
+  onViewModeChange,
+}: {
+  workspaceId?: string | null;
+  cwd: string;
+  files: ParsedDiffFile[];
+  viewMode: "flat" | "tree";
+  changesTabOpen: boolean;
+  onViewModeChange: (viewMode: "flat" | "tree") => void;
+}) {
+  const workspaceStateKey = useMemo(
+    () =>
+      buildWorkspaceExplorerStateKey({
+        workspaceId,
+        workspaceRoot: cwd.trim(),
+      }),
+    [cwd, workspaceId],
+  );
+  const expandedPaths = usePanelStore((state) =>
+    workspaceStateKey ? state.diffExpandedPathsByWorkspace[workspaceStateKey] : undefined,
+  );
+  const collapsedFolders = usePanelStore((state) =>
+    workspaceStateKey ? state.diffCollapsedFoldersByWorkspace[workspaceStateKey] : undefined,
+  );
+  const setExpandedPaths = usePanelStore((state) => state.setDiffExpandedPathsForWorkspace);
+  const setCollapsedFolders = usePanelStore((state) => state.setDiffCollapsedFoldersForWorkspace);
+  const stableExpandedPaths = expandedPaths ?? EMPTY_PATH_LIST;
+  const stableCollapsedFolders = collapsedFolders ?? EMPTY_PATH_LIST;
+  const folderPaths = useMemo(
+    () => collectDirPaths(compressSingleChildChains(buildDiffTree(files))),
+    [files],
+  );
+  const folderPathSet = useMemo(() => new Set(folderPaths), [folderPaths]);
+  const allExpanded = useMemo(() => {
+    if (files.length === 0 || changesTabOpen) {
+      return false;
+    }
+    const everyFileExpanded = files.every((file) => stableExpandedPaths.includes(file.path));
+    const everyFolderExpanded =
+      viewMode !== "tree" ||
+      stableCollapsedFolders.every((folderPath) => !folderPathSet.has(folderPath));
+    return everyFileExpanded && everyFolderExpanded;
+  }, [changesTabOpen, files, folderPathSet, stableCollapsedFolders, stableExpandedPaths, viewMode]);
+  const toggleViewMode = useCallback(() => {
+    const nextViewMode = viewMode === "flat" ? "tree" : "flat";
+    if (nextViewMode === "tree" && workspaceStateKey) {
+      setCollapsedFolders(workspaceStateKey, []);
+    }
+    onViewModeChange(nextViewMode);
+  }, [onViewModeChange, setCollapsedFolders, viewMode, workspaceStateKey]);
+  const toggleExpandAll = useCallback(() => {
+    if (!workspaceStateKey) {
+      return;
+    }
+    if (allExpanded) {
+      setExpandedPaths(workspaceStateKey, []);
+      if (viewMode === "tree") {
+        setCollapsedFolders(workspaceStateKey, folderPaths);
+      }
+      return;
+    }
+    setExpandedPaths(
+      workspaceStateKey,
+      files.map((file) => file.path),
+    );
+    if (viewMode === "tree") {
+      setCollapsedFolders(workspaceStateKey, []);
+    }
+  }, [
+    allExpanded,
+    files,
+    folderPaths,
+    setCollapsedFolders,
+    setExpandedPaths,
+    viewMode,
+    workspaceStateKey,
+  ]);
+  const updateExpandedPaths = useCallback(
+    (paths: string[]) => {
+      if (workspaceStateKey) {
+        setExpandedPaths(workspaceStateKey, paths);
+      }
+    },
+    [setExpandedPaths, workspaceStateKey],
+  );
+  const updateCollapsedFolders = useCallback(
+    (paths: string[]) => {
+      if (workspaceStateKey) {
+        setCollapsedFolders(workspaceStateKey, paths);
+      }
+    },
+    [setCollapsedFolders, workspaceStateKey],
+  );
+
+  return {
+    expandedPaths: changesTabOpen ? EMPTY_PATH_LIST : stableExpandedPaths,
+    collapsedFolders: stableCollapsedFolders,
+    allExpanded,
+    toggleViewMode,
+    toggleExpandAll,
+    updateExpandedPaths,
+    updateCollapsedFolders,
+  };
 }
 
+function useDiffTabNavigation({
+  serverId,
+  workspaceId,
+  cwd,
+  isMobile,
+}: {
+  serverId: string;
+  workspaceId?: string | null;
+  cwd: string;
+  isMobile: boolean;
+}) {
+  const openWorkspaceTabFocused = useWorkspaceLayoutStore((state) => state.openTabFocused);
+  const closeWorkspaceTab = useWorkspaceLayoutStore((state) => state.closeTab);
+  const persistenceKey = useMemo(
+    () => buildWorkspaceTabPersistenceKey({ serverId, workspaceId: workspaceId ?? cwd }),
+    [cwd, serverId, workspaceId],
+  );
+  const changesTabId = useWorkspaceLayoutStore((state) => {
+    if (!persistenceKey) {
+      return null;
+    }
+    const layout = state.layoutByWorkspace[persistenceKey];
+    return (
+      layout && collectAllTabs(layout.root).find((tab) => tab.target.kind === "working_diff")?.tabId
+    );
+  });
+  const changesTabOpen = !isMobile && Boolean(changesTabId);
+  const openChanges = useCallback(
+    (path?: string) => {
+      if (!persistenceKey || isMobile) {
+        return;
+      }
+      openWorkspaceTabFocused(persistenceKey, {
+        kind: "working_diff",
+        ...(path ? { focusPath: path, focusRequestId: Date.now() } : {}),
+      });
+    },
+    [isMobile, openWorkspaceTabFocused, persistenceKey],
+  );
+  const toggleChanges = useCallback(() => {
+    if (!persistenceKey || isMobile) {
+      return;
+    }
+    if (changesTabId) {
+      closeWorkspaceTab(persistenceKey, changesTabId);
+      return;
+    }
+    openChanges();
+  }, [changesTabId, closeWorkspaceTab, isMobile, openChanges, persistenceKey]);
+  const openCommit = useCallback(
+    (sha: string) => {
+      if (persistenceKey) {
+        openWorkspaceTabFocused(persistenceKey, { kind: "commit_diff", sha });
+      }
+    },
+    [openWorkspaceTabFocused, persistenceKey],
+  );
+  return {
+    changesTabOpen,
+    openChanges,
+    toggleChanges,
+    openCommit,
+    onChangesFilePress: changesTabOpen ? openChanges : undefined,
+  };
+}
+
+// oxlint-disable-next-line complexity
 export function GitDiffPane({
   serverId,
   workspaceId,
@@ -2387,6 +2852,8 @@ export function GitDiffPane({
   asWorkspaceTab = false,
   focusPath,
   focusRequestId,
+  onOpenFile,
+  onAddToChat,
 }: GitDiffPaneProps) {
   const { settings: appSettings } = useAppSettings();
   const { t } = useTranslation();
@@ -2396,7 +2863,7 @@ export function GitDiffPane({
     useChangesPreferences();
   const wrapLines = changesPreferences.wrapLines;
   const viewMode = changesPreferences.viewMode;
-  const effectiveLayout = canUseSplitLayout ? changesPreferences.layout : "unified";
+  const effectiveLayout = resolveDiffLayout(changesPreferences.layout, canUseSplitLayout);
 
   const handleToggleWrapLines = useCallback(() => {
     void updateChangesPreferences({ wrapLines: !wrapLines });
@@ -2413,7 +2880,10 @@ export function GitDiffPane({
   }, [changesPreferences.layout, updateChangesPreferences]);
 
   const codeFontSize = appSettings.codeFontSize;
-  const diffModeTriggerStyle = useMemo(() => buildDiffModeTriggerStyle(), []);
+  const layoutToggleStyle = useMemo(
+    () => buildToggleButtonStyle(false, styles.expandAllButton),
+    [],
+  );
 
   const viewModeToggleStyle = useMemo(
     () => buildToggleButtonStyle(viewMode === "tree", styles.expandAllButton),
@@ -2422,34 +2892,27 @@ export function GitDiffPane({
 
   const expandAllToggleStyle = useMemo(() => buildExpandAllButtonStyle(), []);
 
-  const overflowToggleStyle = useMemo(() => buildExpandAllButtonStyle(), []);
+  const overflowToggleStyle = useMemo(() => buildOverflowButtonStyle(), []);
 
   const toast = useToast();
-  const openWorkspaceTabFocused = useWorkspaceLayoutStore((state) => state.openTabFocused);
-  const commitDiffPersistenceKey = useMemo(
-    () => buildWorkspaceTabPersistenceKey({ serverId, workspaceId: workspaceId ?? cwd }),
-    [cwd, serverId, workspaceId],
-  );
-  const handleCommitPress = useCallback(
-    (sha: string) => {
-      if (!commitDiffPersistenceKey) {
-        return;
-      }
-      openWorkspaceTabFocused(commitDiffPersistenceKey, {
-        kind: "commit_diff",
-        sha,
-      });
-    },
-    [commitDiffPersistenceKey, openWorkspaceTabFocused],
-  );
-  const handleOpenChangesTab = useCallback(() => {
-    if (!commitDiffPersistenceKey) {
-      return;
-    }
-    openWorkspaceTabFocused(commitDiffPersistenceKey, { kind: "working_diff" });
-  }, [commitDiffPersistenceKey, openWorkspaceTabFocused]);
+  const isLocalDaemon = useIsLocalDaemon(serverId);
+  const { targets: desktopOpenTargets } = useDesktopOpenTargets({
+    isLocalExecution: isLocalDaemon,
+  });
+  const fileManagerTarget = desktopOpenTargets.find((target) => target.kind === "file-manager");
+  const {
+    changesTabOpen,
+    toggleChanges: handleToggleChangesTab,
+    openCommit: handleCommitPress,
+    onChangesFilePress,
+  } = useDiffTabNavigation({ serverId, workspaceId, cwd, isMobile });
   const refreshSupported = useSessionStore(
     (s) => s.sessions[serverId]?.serverInfo?.features?.checkoutRefresh === true,
+  );
+  const client = useSessionStore((state) => state.sessions[serverId]?.client);
+  // COMPAT(fsEntryDuplicate): added in v0.6.0, remove gate after 2027-02-21.
+  const fsEntryDuplicateEnabled = useSessionStore(
+    (state) => state.sessions[serverId]?.serverInfo?.features?.fsEntryDuplicate === true,
   );
   const runRefresh = useCheckoutGitActionsStore((s) => s.refresh);
   const isRefreshing =
@@ -2467,107 +2930,35 @@ export function GitDiffPane({
 
   const {
     status,
-    isLoading: isStatusLoading,
-    isError: isStatusError,
-    error: statusError,
-  } = useCheckoutStatusQuery({ serverId, cwd });
-  const statusState = deriveStatusState({ status, isStatusLoading, isStatusError, statusError });
-  const { isGit, notGit, statusErrorMessage, baseRef, hasUncommittedChanges, currentBranchName } =
-    statusState;
-
-  const reviewDraftScopeKey = useMemo(
-    () =>
-      buildReviewDraftScopeKey({
-        serverId,
-        workspaceId,
-        cwd,
-        baseRef,
-        ignoreWhitespace: changesPreferences.hideWhitespace,
-      }),
-    [baseRef, changesPreferences.hideWhitespace, cwd, serverId, workspaceId],
-  );
-  const diffMode = useResolvedDiffMode({
-    scopeKey: reviewDraftScopeKey,
-    hasUncommittedChanges,
-  });
-  const setDiffModeOverride = useSetDiffModeOverride();
-
-  const {
+    isStatusLoading,
+    isGit,
+    notGit,
+    statusErrorMessage,
+    baseRef,
+    currentBranchName,
+    diffMode,
+    selectUncommitted: handleSelectUncommitted,
+    selectBase: handleSelectBase,
     files,
-    payloadError: diffPayloadError,
+    diffPayloadError,
     diffTooLarge,
-    isLoading: isDiffLoading,
-  } = useCheckoutDiffQuery({
-    serverId,
-    cwd,
-    mode: diffMode,
-    baseRef,
-    ignoreWhitespace: changesPreferences.hideWhitespace,
-    enabled: shouldEnableCheckoutDiff({ paneEnabled: enabled !== false, isGit }),
-  });
-  const reviewDraftKey = useMemo(
-    () =>
-      buildReviewDraftKey({
-        serverId,
-        workspaceId,
-        cwd,
-        mode: diffMode,
-        baseRef,
-        ignoreWhitespace: changesPreferences.hideWhitespace,
-      }),
-    [baseRef, changesPreferences.hideWhitespace, cwd, diffMode, serverId, workspaceId],
-  );
-
-  const handleSelectUncommitted = useCallback(() => {
-    setDiffModeOverride({
-      scopeKey: reviewDraftScopeKey,
-      override: { serverId, cwd, mode: "uncommitted", isDirtyAtSelection: hasUncommittedChanges },
-    });
-  }, [cwd, hasUncommittedChanges, reviewDraftScopeKey, serverId, setDiffModeOverride]);
-
-  const handleSelectBase = useCallback(() => {
-    setDiffModeOverride({
-      scopeKey: reviewDraftScopeKey,
-      override: { serverId, cwd, mode: "base", isDirtyAtSelection: hasUncommittedChanges },
-    });
-  }, [cwd, hasUncommittedChanges, reviewDraftScopeKey, serverId, setDiffModeOverride]);
-
-  const reviewActions = useInlineReviewController({
-    reviewDraftKey,
-  });
-  const reviewAttachment = useReviewAttachmentSnapshot({
-    key: reviewDraftKey,
-    diffFiles: files,
-    cwd,
-    mode: diffMode,
-    baseRef,
-  });
-  const workspaceAttachmentScopeKey = useMemo(
-    () => buildWorkspaceAttachmentScopeKey({ serverId, workspaceId, cwd }),
-    [cwd, serverId, workspaceId],
-  );
-  const setWorkspaceAttachments = useWorkspaceAttachmentsStore(
-    (state) => state.setWorkspaceAttachments,
-  );
-  const clearWorkspaceAttachments = useWorkspaceAttachmentsStore(
-    (state) => state.clearWorkspaceAttachments,
-  );
-
-  useEffect(() => {
-    setWorkspaceAttachments({
-      scopeKey: workspaceAttachmentScopeKey,
-      attachments: reviewAttachment ? [reviewAttachment] : [],
-    });
-
-    return () => {
-      clearWorkspaceAttachments({ scopeKey: workspaceAttachmentScopeKey });
-    };
-  }, [
-    clearWorkspaceAttachments,
+    isDiffLoading,
+    reviewActions,
     reviewAttachment,
-    setWorkspaceAttachments,
-    workspaceAttachmentScopeKey,
-  ]);
+  } = useWorkingDiff({
+    serverId,
+    workspaceId: workspaceId ?? undefined,
+    cwd,
+    ignoreWhitespace: changesPreferences.hideWhitespace,
+    enabled: enabled !== false,
+  });
+  usePublishWorkingDiffAttachment({
+    serverId,
+    workspaceId: workspaceId ?? undefined,
+    cwd,
+    attachment: reviewAttachment,
+    enabled: !changesTabOpen,
+  });
   const {
     githubFeaturesEnabled,
     forge,
@@ -2588,111 +2979,150 @@ export function GitDiffPane({
   });
   const forgeSetupMessage = useMemo(
     () =>
-      forgeSetupAction
-        ? buildForgeSetupMessage({
-            action: forgeSetupAction,
-            forge,
-            host: parseForgeHost(status?.remoteUrl),
-            t,
-          })
-        : null,
+      buildForgeSetupMessage({
+        action: forgeSetupAction,
+        forge,
+        host: parseForgeHost(status?.remoteUrl),
+        t,
+      }),
     [forgeSetupAction, forge, status?.remoteUrl, t],
   );
-  const normalizedWorkspaceRoot = useMemo(() => cwd.trim(), [cwd]);
-  const workspaceStateKey = useMemo(
-    () =>
-      buildWorkspaceExplorerStateKey({
-        workspaceId,
-        workspaceRoot: normalizedWorkspaceRoot,
-      }),
-    [normalizedWorkspaceRoot, workspaceId],
+  const handleViewModeChange = useCallback(
+    (nextViewMode: "flat" | "tree") => {
+      void updateChangesPreferences({ viewMode: nextViewMode });
+    },
+    [updateChangesPreferences],
   );
-  const expandedPathsArray = usePanelStore((state) =>
-    workspaceStateKey ? state.diffExpandedPathsByWorkspace[workspaceStateKey] : undefined,
-  );
-  const setDiffExpandedPathsForWorkspace = usePanelStore(
-    (state) => state.setDiffExpandedPathsForWorkspace,
-  );
-  const expandedPaths = useMemo(() => new Set(expandedPathsArray ?? []), [expandedPathsArray]);
-  // The Changes view groups files into a directory tree on every form factor,
-  // consistent with the Files explorer (which is also a tree on mobile).
-  const collapsedFoldersArray = usePanelStore((state) =>
-    workspaceStateKey ? state.diffCollapsedFoldersByWorkspace[workspaceStateKey] : undefined,
-  );
-  const setDiffCollapsedFoldersForWorkspace = usePanelStore(
-    (state) => state.setDiffCollapsedFoldersForWorkspace,
-  );
-  const stableExpandedPathsArray = expandedPathsArray ?? EMPTY_PATH_LIST;
-  const stableCollapsedFoldersArray = collapsedFoldersArray ?? EMPTY_PATH_LIST;
+  const changesTree = useChangesTreeState({
+    workspaceId,
+    cwd,
+    files,
+    viewMode,
+    changesTabOpen,
+    onViewModeChange: handleViewModeChange,
+  });
   const sharedDisplayPreferences = useMemo(
     () => ({
       layout: effectiveLayout,
       wrapLines,
       codeFontSize,
-      monoFontFamily: DEFAULT_MONO_FONT_STACK,
+      monoFontFamily: appSettings.monoFontFamily,
     }),
-    [codeFontSize, effectiveLayout, wrapLines],
+    [appSettings.monoFontFamily, codeFontSize, effectiveLayout, wrapLines],
   );
-  const handleToggleViewMode = useCallback(() => {
-    const nextViewMode = viewMode === "flat" ? "tree" : "flat";
-    if (nextViewMode === "tree" && workspaceStateKey) {
-      setDiffCollapsedFoldersForWorkspace(workspaceStateKey, []);
-    }
-    void updateChangesPreferences({ viewMode: nextViewMode });
-  }, [setDiffCollapsedFoldersForWorkspace, updateChangesPreferences, viewMode, workspaceStateKey]);
-  const allFileDiffsExpanded = useMemo(() => {
-    if (files.length === 0) return false;
-    return files.every((file) => expandedPaths.has(file.path));
-  }, [expandedPaths, files]);
-
-  const handleToggleExpandAll = useCallback(() => {
-    if (!workspaceStateKey) {
-      return;
-    }
-    if (allFileDiffsExpanded) {
-      setDiffExpandedPathsForWorkspace(workspaceStateKey, []);
-    } else {
-      setDiffExpandedPathsForWorkspace(
-        workspaceStateKey,
-        files.map((file) => file.path),
+  const downloadFile = useFileDownload({ serverId, workspaceId, workspaceRoot: cwd });
+  const handleCopyPath = useCallback(
+    (path: string) => {
+      void Clipboard.setStringAsync(
+        buildAbsoluteExplorerPath({ workspaceRoot: cwd, entryPath: path }),
       );
-    }
-  }, [allFileDiffsExpanded, files, setDiffExpandedPathsForWorkspace, workspaceStateKey]);
-  const handleExpandedPathsChange = useCallback(
-    (nextPaths: string[]) => {
-      if (!workspaceStateKey) {
+    },
+    [cwd],
+  );
+  const handleCopyRelativePath = useCallback((path: string) => {
+    void Clipboard.setStringAsync(path);
+  }, []);
+  const handleRevealPath = useCallback(
+    async (path: string) => {
+      if (!fileManagerTarget) {
         return;
       }
-      setDiffExpandedPathsForWorkspace(workspaceStateKey, nextPaths);
+      try {
+        await openDesktopTarget({
+          editorId: fileManagerTarget.id,
+          workspacePath: cwd,
+          filePath: buildAbsoluteExplorerPath({ workspaceRoot: cwd, entryPath: path }),
+        });
+      } catch (cause) {
+        toast.error(
+          cause instanceof Error ? cause.message : t("workspace.fileExplorer.errors.revealFailed"),
+        );
+      }
     },
-    [setDiffExpandedPathsForWorkspace, workspaceStateKey],
+    [cwd, fileManagerTarget, t, toast],
   );
-  const handleCollapsedFoldersChange = useCallback(
-    (nextPaths: string[]) => {
-      if (!workspaceStateKey) {
+  const handleDownloadPath = useCallback(
+    (path: string) => {
+      downloadFile({ fileName: path.split("/").pop() ?? path, path });
+    },
+    [downloadFile],
+  );
+  const handleDuplicatePath = useCallback(
+    async (path: string) => {
+      if (!client) {
         return;
       }
-      setDiffCollapsedFoldersForWorkspace(workspaceStateKey, nextPaths);
+      try {
+        const payload = await client.duplicateFileEntry({ cwd, path });
+        if (!payload.success) {
+          toast.error(payload.error ?? t("workspace.fileExplorer.errors.duplicateFailed"));
+        }
+      } catch (cause) {
+        toast.error(cause instanceof Error ? cause.message : String(cause));
+      }
     },
-    [setDiffCollapsedFoldersForWorkspace, workspaceStateKey],
+    [client, cwd, t, toast],
   );
+  const onRevertPath = useDiscardChangesAction({ serverId, cwd, diffMode });
   const workingTreeMode = useMemo(
     () => ({
       kind: "working_tree" as const,
       viewMode,
-      expandedPaths: stableExpandedPathsArray,
-      collapsedFolders: stableCollapsedFoldersArray,
+      expandedPaths: changesTree.expandedPaths,
+      collapsedFolders: changesTree.collapsedFolders,
       reviewActions,
-      onExpandedPathsChange: handleExpandedPathsChange,
-      onCollapsedFoldersChange: handleCollapsedFoldersChange,
+      onFilePress: onChangesFilePress,
+      workspaceFileDragScope: workspaceId ? { serverId, workspaceId } : undefined,
+      onOpenFile,
+      onAddToChat,
+      onCopyPath: handleCopyPath,
+      onCopyRelativePath: handleCopyRelativePath,
+      onReveal: fileManagerTarget ? handleRevealPath : undefined,
+      revealTargetName: fileManagerTarget?.label,
+      onDownload: handleDownloadPath,
+      onDuplicate: fsEntryDuplicateEnabled ? handleDuplicatePath : undefined,
+      onRevert: onRevertPath,
+      onExpandedPathsChange: changesTree.updateExpandedPaths,
+      onCollapsedFoldersChange: changesTree.updateCollapsedFolders,
     }),
     [
       viewMode,
-      stableExpandedPathsArray,
-      stableCollapsedFoldersArray,
+      changesTree.expandedPaths,
+      changesTree.collapsedFolders,
       reviewActions,
-      handleExpandedPathsChange,
-      handleCollapsedFoldersChange,
+      onChangesFilePress,
+      serverId,
+      workspaceId,
+      onOpenFile,
+      onAddToChat,
+      handleCopyPath,
+      handleCopyRelativePath,
+      handleDownloadPath,
+      handleDuplicatePath,
+      handleRevealPath,
+      fileManagerTarget,
+      fsEntryDuplicateEnabled,
+      onRevertPath,
+      changesTree.updateExpandedPaths,
+      changesTree.updateCollapsedFolders,
+    ],
+  );
+
+  const workingTabMode = useMemo(
+    () => ({
+      kind: "working_tab" as const,
+      expandedPaths: changesTree.expandedPaths,
+      reviewActions,
+      focusPath,
+      focusRequestId,
+      onExpandedPathsChange: changesTree.updateExpandedPaths,
+    }),
+    [
+      changesTree.expandedPaths,
+      changesTree.updateExpandedPaths,
+      focusPath,
+      focusRequestId,
+      reviewActions,
     ],
   );
 
@@ -2712,22 +3142,6 @@ export function GitDiffPane({
     () => computeCommittedDiffDescription(branchLabel, baseRefLabel),
     [baseRefLabel, branchLabel],
   );
-  const uncommittedLabel = t("workspace.git.diff.uncommitted");
-  const committedLabel = t("workspace.git.diff.committed");
-  const handleAddFileToChat = useCallback(
-    (path: string) => {
-      void addWorkspaceFileToFocusedChat({
-        serverId,
-        workspaceId: workspaceId ?? cwd,
-        attachment: { kind: "workspace_file", path, selection: { kind: "whole_file" } },
-      }).then((added) => {
-        if (!added) toast.error(t("workspace.fileActions.focusChatFirst"));
-        return undefined;
-      });
-    },
-    [cwd, serverId, t, toast, workspaceId],
-  );
-
   const emptyMessage = computeEmptyMessage(
     changesPreferences.hideWhitespace,
     diffMode,
@@ -2754,17 +3168,19 @@ export function GitDiffPane({
     >
       <SharedDiffView
         files={files}
-        onAddToChat={handleAddFileToChat}
-        focusPath={focusPath}
-        focusRequestId={focusRequestId}
         displayPreferences={sharedDisplayPreferences}
-        mode={workingTreeMode}
+        mode={asWorkspaceTab ? workingTabMode : workingTreeMode}
       />
     </DiffBodyContent>
   );
 
   return (
-    <View style={styles.container}>
+    <View
+      {...{
+        onContextMenu: (event: { preventDefault?: () => void }) => event.preventDefault?.(),
+      }}
+      style={styles.container}
+    >
       {isGit && (currentBranchName || isMobile) ? (
         <View style={styles.header} testID="changes-header">
           <BranchSwitcher
@@ -2775,86 +3191,64 @@ export function GitDiffPane({
             isGitCheckout={isGit}
             testID="changes-branch-switcher"
           />
-          <View style={styles.headerActions}>
-            {!isMobile && !asWorkspaceTab ? (
-              <Tooltip delayDuration={300}>
-                <TooltipTrigger asChild>
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel={t("workspace.git.diff.openChangesTab")}
-                    testID="changes-open-workspace-tab"
-                    onPress={handleOpenChangesTab}
-                    style={styles.expandAllButton}
-                  >
-                    <ThemedPanelRight size={14} uniProps={foregroundMutedIconColorMapping} />
-                  </Pressable>
-                </TooltipTrigger>
-                <TooltipContent side="bottom">
-                  <Text style={styles.tooltipText}>{t("workspace.git.diff.openChangesTab")}</Text>
-                </TooltipContent>
-              </Tooltip>
-            ) : null}
-            {isMobile ? <GitActionsSplitButton gitActions={gitActions} /> : null}
-          </View>
+          {isMobile ? <GitActionsSplitButton gitActions={gitActions} /> : null}
         </View>
       ) : null}
 
       {isGit ? (
         <View style={styles.diffStatusContainer}>
           <View style={styles.diffStatusInner}>
-            <DropdownMenu>
-              <DropdownMenuTrigger
-                style={diffModeTriggerStyle}
-                testID="changes-diff-status"
-                accessibilityRole="button"
-                accessibilityLabel={t("workspace.git.diff.diffMode")}
-              >
-                <Text style={styles.diffStatusText} numberOfLines={1}>
-                  {diffMode === "uncommitted" ? uncommittedLabel : committedLabel}
-                </Text>
-                <ThemedChevronDown size={12} uniProps={foregroundMutedIconColorMapping} />
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" width={260} testID="changes-diff-status-menu">
-                <DropdownMenuItem
-                  testID="changes-diff-mode-uncommitted"
-                  selected={diffMode === "uncommitted"}
-                  onSelect={handleSelectUncommitted}
-                >
-                  {uncommittedLabel}
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  testID="changes-diff-mode-committed"
-                  selected={diffMode === "base"}
-                  description={committedDiffDescription}
-                  onSelect={handleSelectBase}
-                >
-                  {committedLabel}
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-            <DiffStatusButtons
-              allFileDiffsExpanded={allFileDiffsExpanded}
-              brand={getForgePresentation(forge).brandLabel}
-              canUseSplitLayout={canUseSplitLayout}
-              expandAllToggleStyle={expandAllToggleStyle}
-              hasFiles={hasChanges}
-              hideWhitespace={changesPreferences.hideWhitespace}
-              isMobile={isMobile}
-              isRefreshing={isRefreshing}
-              layout={changesPreferences.layout}
-              overflowToggleStyle={overflowToggleStyle}
-              refreshSupported={refreshSupported}
-              viewMode={viewMode}
-              viewModeToggleStyle={viewModeToggleStyle}
-              wrapLines={wrapLines}
-              onRefresh={handleRefresh}
-              onToggleExpandAll={handleToggleExpandAll}
-              onToggleHideWhitespace={handleToggleHideWhitespace}
-              onToggleLayout={handleToggleLayout}
-              onToggleViewMode={handleToggleViewMode}
-              onToggleWrapLines={handleToggleWrapLines}
+            <DiffModeMenu
+              diffMode={diffMode}
+              committedDescription={committedDiffDescription}
+              onSelectUncommitted={handleSelectUncommitted}
+              onSelectBase={handleSelectBase}
             />
+            <View style={styles.diffStatusButtons}>
+              {!asWorkspaceTab ? (
+                <ChangesTabToggle
+                  isMobile={isMobile}
+                  selected={changesTabOpen}
+                  onPress={handleToggleChangesTab}
+                />
+              ) : null}
+              {canUseSplitLayout && !changesTabOpen ? (
+                <DiffLayoutToggle
+                  layout={changesPreferences.layout}
+                  isMobile={isMobile}
+                  toggleStyle={layoutToggleStyle}
+                  onToggle={handleToggleLayout}
+                />
+              ) : null}
+              {files.length > 0 ? (
+                <DiffViewModeToggle
+                  viewMode={viewMode}
+                  isMobile={isMobile}
+                  toggleStyle={viewModeToggleStyle}
+                  onToggle={changesTree.toggleViewMode}
+                />
+              ) : null}
+              {files.length > 0 && !changesTabOpen ? (
+                <DiffFilesToolbar
+                  allFileDiffsExpanded={changesTree.allExpanded}
+                  isMobile={isMobile}
+                  expandAllToggleStyle={expandAllToggleStyle}
+                  onToggleExpandAll={changesTree.toggleExpandAll}
+                />
+              ) : null}
+              <DiffOptionsMenu
+                brand={getForgePresentation(forge).brandLabel}
+                hideWhitespace={changesPreferences.hideWhitespace}
+                isMobile={isMobile}
+                isRefreshing={isRefreshing}
+                overflowToggleStyle={overflowToggleStyle}
+                refreshSupported={refreshSupported}
+                wrapLines={wrapLines}
+                onRefresh={handleRefresh}
+                onToggleHideWhitespace={handleToggleHideWhitespace}
+                onToggleWrapLines={handleToggleWrapLines}
+              />
+            </View>
           </View>
         </View>
       ) : null}
@@ -2888,11 +3282,6 @@ const styles = StyleSheet.create((theme) => ({
     paddingVertical: theme.spacing[2],
     borderBottomWidth: 1,
     borderBottomColor: theme.colors.border,
-  },
-  headerActions: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: theme.spacing[2],
   },
   diffStatusContainer: {
     height: WORKSPACE_SECONDARY_HEADER_HEIGHT,
@@ -2971,6 +3360,18 @@ const styles = StyleSheet.create((theme) => ({
     borderRadius: theme.borderRadius.base,
     flexShrink: 0,
   },
+  overflowButton: {
+    width: ICON_SIZE.sm + 2 * SPACING[1],
+    height: {
+      xs: 32,
+      sm: 32,
+      md: 24,
+    },
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: theme.borderRadius.base,
+    flexShrink: 0,
+  },
   actionErrorText: {
     paddingHorizontal: theme.spacing[3],
     paddingBottom: theme.spacing[1],
@@ -2998,6 +3399,11 @@ const styles = StyleSheet.create((theme) => ({
   },
   scrollView: {
     flex: 1,
+  },
+  scrollContainer: {
+    flex: 1,
+    minHeight: 0,
+    position: "relative",
   },
   contentContainer: {
     paddingBottom: theme.spacing[8],
@@ -3059,15 +3465,15 @@ const styles = StyleSheet.create((theme) => ({
     flexDirection: "row",
     alignItems: "center",
     paddingLeft: theme.spacing[3],
-    paddingRight: theme.spacing[2],
-    paddingVertical: theme.spacing[2],
+    paddingRight: WORKSPACE_FILE_ROW_TRAILING_PADDING,
+    paddingVertical: WORKSPACE_FILE_ROW_VERTICAL_PADDING,
     gap: theme.spacing[1],
     minWidth: 0,
     zIndex: 2,
     elevation: 2,
   },
-  fileHeaderPressed: {
-    opacity: 0.7,
+  fileHeaderActive: {
+    backgroundColor: theme.colors.surfaceSidebarHover,
   },
   fileHeaderLeft: {
     flexDirection: "row",
@@ -3076,6 +3482,9 @@ const styles = StyleSheet.create((theme) => ({
     flex: 1,
     minWidth: 0,
   },
+  fileHeaderLeftTree: {
+    gap: WORKSPACE_TREE_ICON_LABEL_GAP,
+  },
   fileHeaderRight: {
     flexDirection: "row",
     alignItems: "center",
@@ -3083,6 +3492,8 @@ const styles = StyleSheet.create((theme) => ({
     flexShrink: 0,
   },
   fileIcon: {
+    width: WORKSPACE_TREE_ICON_SIZE,
+    height: WORKSPACE_TREE_ICON_SIZE,
     flexShrink: 0,
     alignItems: "center",
     justifyContent: "center",
@@ -3093,6 +3504,7 @@ const styles = StyleSheet.create((theme) => ({
     color: theme.colors.foreground,
     flexShrink: 1,
     minWidth: 0,
+    userSelect: "none",
   },
   fileDir: {
     fontSize: theme.fontSize.sm,
@@ -3100,44 +3512,11 @@ const styles = StyleSheet.create((theme) => ({
     color: theme.colors.foregroundMuted,
     flex: 1,
     minWidth: 0,
+    userSelect: "none",
   },
   fileDirSpacer: {
     flex: 1,
     minWidth: 0,
-  },
-  newBadge: {
-    backgroundColor: "rgba(46, 160, 67, 0.2)",
-    paddingHorizontal: theme.spacing[2],
-    paddingVertical: theme.spacing[1],
-    borderRadius: theme.borderRadius.md,
-    flexShrink: 0,
-  },
-  newBadgeText: {
-    fontSize: theme.fontSize.xs,
-    fontWeight: theme.fontWeight.normal,
-    color: theme.colors.diffAddition,
-  },
-  deletedBadge: {
-    backgroundColor: "rgba(248, 81, 73, 0.2)",
-    paddingHorizontal: theme.spacing[2],
-    paddingVertical: theme.spacing[1],
-    borderRadius: theme.borderRadius.md,
-    flexShrink: 0,
-  },
-  deletedBadgeText: {
-    fontSize: theme.fontSize.xs,
-    fontWeight: theme.fontWeight.normal,
-    color: theme.colors.diffDeletion,
-  },
-  additions: {
-    fontSize: theme.fontSize.xs,
-    fontWeight: theme.fontWeight.normal,
-    color: theme.colors.diffAddition,
-  },
-  deletions: {
-    fontSize: theme.fontSize.xs,
-    fontWeight: theme.fontWeight.normal,
-    color: theme.colors.diffDeletion,
   },
   diffContent: {
     borderTopWidth: theme.borderWidth[1],

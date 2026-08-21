@@ -44,6 +44,7 @@ import type { WorktreeCreationIntent } from "./resolve-worktree-creation-intent.
 import { resolveFirstAgentPromptTitle } from "./agent/create-agent-title.js";
 import { buildAgentBranchNameSeed } from "./agent/prompt-attachments.js";
 import type { FirstAgentContext } from "@bytetrue/byspace-protocol/messages";
+import { runWithGitCommandPriority } from "../utils/run-git-command.js";
 
 export interface CreateBySpaceWorktreeInput extends CreateWorktreeCoreInput {
   projectId?: string;
@@ -87,8 +88,8 @@ export async function createBySpaceWorktree(
   input: CreateBySpaceWorktreeInput,
   deps: CreateBySpaceWorktreeDeps,
 ): Promise<CreateBySpaceWorktreeResult> {
-  return workspaceLifecycleCoordinator.runExclusive(() =>
-    createBySpaceWorktreeUnlocked(input, deps),
+  return runWithGitCommandPriority("high", () =>
+    workspaceLifecycleCoordinator.runExclusive(() => createBySpaceWorktreeUnlocked(input, deps)),
   );
 }
 

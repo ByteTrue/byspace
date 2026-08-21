@@ -1,3 +1,6 @@
+import { createElement, useMemo } from "react";
+import { useTranslation } from "react-i18next";
+
 const HTML_PREVIEW_CSP = [
   "default-src 'none'",
   "script-src 'unsafe-inline' 'unsafe-eval' blob:",
@@ -23,4 +26,24 @@ export function createHtmlPreviewDocument(source: string): string {
 
 export function isHtmlPreviewPath(path: string): boolean {
   return /\.html?$/i.test(path);
+}
+
+const IFRAME_STYLE = {
+  flex: 1,
+  minHeight: 0,
+  border: "none",
+  backgroundColor: "white",
+} as const;
+
+export function FileHtmlPreview({ html, testID }: { html: string; testID?: string }) {
+  const { t } = useTranslation();
+  const document = useMemo(() => createHtmlPreviewDocument(html), [html]);
+  return createElement("iframe", {
+    "data-testid": testID,
+    title: t("panels.file.editor.preview"),
+    srcDoc: document,
+    sandbox: "allow-scripts",
+    referrerPolicy: "no-referrer",
+    style: IFRAME_STYLE,
+  });
 }

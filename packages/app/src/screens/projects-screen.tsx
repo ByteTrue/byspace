@@ -159,9 +159,8 @@ function ProjectRowIcon({
     <ProjectIconView
       iconDataUri={iconDataUri}
       initial={initial}
-      projectKey={projectKey}
-      imageStyle={styles.iconImage}
-      fallbackStyle={styles.iconFallback}
+      projectViewKey={projectKey}
+      size={16}
       textStyle={styles.iconFallbackText}
     />
   );

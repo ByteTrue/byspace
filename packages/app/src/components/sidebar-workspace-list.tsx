@@ -654,9 +654,8 @@ function ProjectIcon({
     <ProjectIconView
       iconDataUri={iconDataUri}
       initial={placeholderInitial}
-      projectKey={projectKey}
-      imageStyle={styles.projectIcon}
-      fallbackStyle={styles.projectIconFallback}
+      projectViewKey={projectKey}
+      size={16}
       textStyle={styles.projectIconFallbackText}
     />
   );

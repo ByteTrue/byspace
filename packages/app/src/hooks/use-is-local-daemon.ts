@@ -23,3 +23,7 @@ export function useLocalDaemonServerId(): string | null {
     [hosts],
   );
 }
+
+export function useIsLocalDaemon(serverId: string): boolean {
+  return useLocalDaemonServerId() === serverId;
+}

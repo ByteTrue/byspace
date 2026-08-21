@@ -115,6 +115,27 @@ export class AgentStorage {
     return this.cache.get(agentId) ?? null;
   }
 
+  async listByProviderSession(
+    provider: string,
+    providerHandleId: string,
+  ): Promise<StoredAgentRecord[]> {
+    await this.load();
+    return Array.from(this.cache.values()).filter(
+      (record) =>
+        !this.deleting.has(record.id) &&
+        record.persistence?.provider === provider &&
+        (record.persistence.sessionId === providerHandleId ||
+          record.persistence.nativeHandle === providerHandleId),
+    );
+  }
+
+  async listByWorkspace(workspaceId: string): Promise<StoredAgentRecord[]> {
+    await this.load();
+    return Array.from(this.cache.values()).filter(
+      (record) => !this.deleting.has(record.id) && record.workspaceId === workspaceId,
+    );
+  }
+
   async upsert(record: StoredAgentRecord): Promise<void> {
     await this.load();
     await this.queueRecordWrite(record);

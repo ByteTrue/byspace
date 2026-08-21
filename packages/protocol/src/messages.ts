@@ -129,6 +129,35 @@ export const TerminalProfileSchema = z
 
 export type TerminalProfile = z.infer<typeof TerminalProfileSchema>;
 
+/**
+ * A named launch bundle: a provider plus the agent-config values a client would
+ * otherwise set one control at a time. Field names mirror `AgentSessionConfig`
+ * so applying a profile is a copy rather than a translation table.
+ *
+ * There is deliberately no system prompt here. `AgentSessionConfig.systemPrompt`
+ * is creation-only, so a profile carrying one would apply when starting a new
+ * agent and silently do nothing when applied to a running one.
+ */
+export const AgentProfileSchema = z
+  .object({
+    id: z.string(),
+    name: z.string(),
+    /** A key into the client's icon registry, not a glyph. Unknown keys draw the default. */
+    icon: z.string().optional(),
+    /** An identity colour name shared with host badges. Unknown values draw unthemed. */
+    color: z.string().optional(),
+    provider: z.string(),
+    model: z.string().optional(),
+    modeId: z.string().optional(),
+    thinkingOptionId: z.string().optional(),
+    featureValues: z.record(z.string(), z.unknown()).optional(),
+    /** Free text, surfaced to orchestrating agents by the `list_profiles` MCP tool. */
+    notes: z.string().optional(),
+  })
+  .passthrough();
+
+export type AgentProfile = z.infer<typeof AgentProfileSchema>;
+
 export const TerminalAgentHookSettingsSchema = z
   .object({
     claude: z.boolean().optional(),
@@ -169,6 +198,7 @@ export const MutableDaemonConfigSchema = z
     terminalAgentHooks: TerminalAgentHookSettingsSchema.optional(),
     appendSystemPrompt: z.string().default(""),
     terminalProfiles: z.array(TerminalProfileSchema).optional(),
+    agentProfiles: z.array(AgentProfileSchema).optional(),
   })
   .passthrough();
 
@@ -192,6 +222,7 @@ export const MutableDaemonConfigPatchSchema = z
     terminalAgentHooks: TerminalAgentHookSettingsSchema.optional(),
     appendSystemPrompt: z.string().optional(),
     terminalProfiles: z.array(TerminalProfileSchema).optional(),
+    agentProfiles: z.array(AgentProfileSchema).optional(),
   })
   .partial()
   .passthrough();
@@ -641,6 +672,9 @@ export const AgentTimelineItemPayloadSchema: z.ZodType<AgentTimelineItem, unknow
       z.object({
         text: z.string(),
         completed: z.boolean(),
+        id: z.string().optional(),
+        status: z.enum(["pending", "in_progress", "completed"]).optional(),
+        activeForm: z.string().optional(),
       }),
     ),
   }),
@@ -1619,6 +1653,28 @@ export const SetAgentFeatureResponseMessageSchema = z.object({
   payload: AgentActionResponsePayloadSchema,
 });
 
+/** Every agent-config value a client can change in one shot. */
+export const AgentConfigApplySchema = z.object({
+  modelId: z.string().nullable().optional(),
+  modeId: z.string().optional(),
+  thinkingOptionId: z.string().nullable().optional(),
+  featureValues: z.record(z.string(), z.unknown()).optional(),
+});
+
+export type AgentConfigApply = z.infer<typeof AgentConfigApplySchema>;
+
+export const AgentConfigApplyRequestMessageSchema = z.object({
+  type: z.literal("agent.config.apply.request"),
+  agentId: z.string(),
+  config: AgentConfigApplySchema,
+  requestId: z.string(),
+});
+
+export const AgentConfigApplyResponseMessageSchema = z.object({
+  type: z.literal("agent.config.apply.response"),
+  payload: AgentActionResponsePayloadSchema,
+});
+
 export const AgentDetachRequestMessageSchema = z.object({
   type: z.literal("agent.detach.request"),
   agentId: z.string(),
@@ -1850,6 +1906,13 @@ export const CheckoutPushRequestSchema = z.object({
 export const CheckoutRefreshRequestSchema = z.object({
   type: z.literal("checkout.refresh.request"),
   cwd: z.string(),
+  requestId: z.string(),
+});
+
+export const CheckoutDiscardChangesRequestSchema = z.object({
+  type: z.literal("checkout.discard_changes.request"),
+  cwd: z.string(),
+  paths: z.array(z.string()).min(1),
   requestId: z.string(),
 });
 
@@ -2278,6 +2341,7 @@ const DiffHunkSchema = z.object({
 
 const ParsedDiffFileSchema = z.object({
   path: z.string(),
+  oldPath: z.string().optional(),
   isNew: z.boolean(),
   isDeleted: z.boolean(),
   additions: z.number(),
@@ -2362,6 +2426,37 @@ export const FileWriteRequestSchema = z.object({
   content: z.string(),
   expectedModifiedAt: z.string(),
   expectedRevision: z.string().optional(),
+  requestId: z.string(),
+});
+
+export const FileEntryCreateRequestSchema = z.object({
+  type: z.literal("fs.entry.create.request"),
+  cwd: z.string(),
+  parentPath: z.string(),
+  name: z.string(),
+  kind: z.enum(["file", "directory"]),
+  requestId: z.string(),
+});
+
+export const FileEntryRenameRequestSchema = z.object({
+  type: z.literal("fs.entry.rename.request"),
+  cwd: z.string(),
+  path: z.string(),
+  name: z.string(),
+  requestId: z.string(),
+});
+
+export const FileEntryDuplicateRequestSchema = z.object({
+  type: z.literal("fs.entry.duplicate.request"),
+  cwd: z.string(),
+  path: z.string(),
+  requestId: z.string(),
+});
+
+export const FileEntryDeleteRequestSchema = z.object({
+  type: z.literal("fs.entry.delete.request"),
+  cwd: z.string(),
+  path: z.string(),
   requestId: z.string(),
 });
 
@@ -2706,6 +2801,7 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   SetAgentModelRequestMessageSchema,
   SetAgentThinkingRequestMessageSchema,
   SetAgentFeatureRequestMessageSchema,
+  AgentConfigApplyRequestMessageSchema,
   AgentDetachRequestMessageSchema,
   AgentRewindRequestMessageSchema,
   AgentPermissionResponseMessageSchema,
@@ -2718,6 +2814,7 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   CheckoutPullRequestSchema,
   CheckoutPushRequestSchema,
   CheckoutRefreshRequestSchema,
+  CheckoutDiscardChangesRequestSchema,
   CheckoutPrCreateRequestSchema,
   CheckoutPrMergeRequestSchema,
   CheckoutForgeSetAutoMergeRequestSchema,
@@ -2756,6 +2853,10 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   FileSubscribeRequestSchema,
   FileUnsubscribeRequestSchema,
   FileWriteRequestSchema,
+  FileEntryCreateRequestSchema,
+  FileEntryRenameRequestSchema,
+  FileEntryDuplicateRequestSchema,
+  FileEntryDeleteRequestSchema,
   ProjectIconRequestSchema,
   ProjectIconGetRequestSchema,
   FileDownloadTokenRequestSchema,
@@ -3019,7 +3120,13 @@ export const ServerInfoStatusPayloadSchema = z
         providerOptions: z.boolean().optional(),
         // COMPAT(remoteWebServices): added in v0.6.0; remove the gate after 2027-02-20.
         remoteWebServices: z.boolean().optional(),
+        // COMPAT(agentProfiles): added in v0.6.0; remove the gate after 2027-02-21.
+        agentProfiles: z.boolean().optional(),
+        // COMPAT(agentConfigApply): added in v0.6.0; remove the gate after 2027-02-21.
+        agentConfigApply: z.boolean().optional(),
         providersSnapshot: z.boolean().optional(),
+        // COMPAT(providersSnapshotCwd): added in v0.6.0, remove after 2027-02-21.
+        providersSnapshotCwd: z.boolean().optional(),
         // COMPAT(checkoutForgeSetAutoMerge): added in v0.1.106, remove old
         // checkoutGithubSetAutoMerge fallback after 2026-12-28.
         checkoutForgeSetAutoMerge: z.boolean().optional(),
@@ -3102,6 +3209,12 @@ export const ServerInfoStatusPayloadSchema = z
         projectList: z.boolean().optional(),
         // COMPAT(projectCustomIcon): added in v0.5.0, remove after 2027-02-08.
         projectCustomIcon: z.boolean().optional(),
+        // COMPAT(fsEntryOps): added in v0.6.0, remove after 2027-02-21.
+        fsEntryOps: z.boolean().optional(),
+        // COMPAT(fsEntryDuplicate): added in v0.6.0, remove after 2027-02-21.
+        fsEntryDuplicate: z.boolean().optional(),
+        // COMPAT(checkoutDiscardChanges): added in v0.6.0, remove after 2027-02-21.
+        checkoutDiscardChanges: z.boolean().optional(),
         // COMPAT(commitsList): added in v0.1.110, remove gate after 2027-01-16.
         commitsList: z.boolean().optional(),
         // COMPAT(commitBaseClassification): added in v0.2.0, remove gate after 2027-01-23.
@@ -4204,6 +4317,7 @@ export const ReadProjectConfigResponseMessageSchema = z.object({
       ok: z.literal(true),
       config: BySpaceConfigRawSchema.nullable(),
       revision: BySpaceConfigRevisionSchema.nullable(),
+      hasUncommittedWorktreeSetupChanges: z.boolean().optional(),
     }),
     z.object({
       requestId: z.string(),
@@ -4225,6 +4339,7 @@ export const WriteProjectConfigResponseMessageSchema = z.object({
       ok: z.literal(true),
       config: BySpaceConfigRawSchema,
       revision: BySpaceConfigRevisionSchema,
+      hasUncommittedWorktreeSetupChanges: z.boolean().optional(),
     }),
     z.object({
       requestId: z.string(),
@@ -4614,6 +4729,16 @@ export const CheckoutGithubSetAutoMergeResponseSchema = z.object({
   payload: z.object({
     cwd: z.string(),
     enabled: z.boolean(),
+    success: z.boolean(),
+    error: CheckoutErrorSchema.nullable(),
+    requestId: z.string(),
+  }),
+});
+
+export const CheckoutDiscardChangesResponseSchema = z.object({
+  type: z.literal("checkout.discard_changes.response"),
+  payload: z.object({
+    cwd: z.string(),
     success: z.boolean(),
     error: CheckoutErrorSchema.nullable(),
     requestId: z.string(),
@@ -5082,6 +5207,53 @@ export const FileWriteResponseSchema = z.object({
   }),
 });
 
+export const FileEntryCreateResponseSchema = z.object({
+  type: z.literal("fs.entry.create.response"),
+  payload: z.object({
+    cwd: z.string(),
+    parentPath: z.string(),
+    path: z.string().nullable(),
+    success: z.boolean(),
+    error: z.string().nullable(),
+    requestId: z.string(),
+  }),
+});
+
+export const FileEntryRenameResponseSchema = z.object({
+  type: z.literal("fs.entry.rename.response"),
+  payload: z.object({
+    cwd: z.string(),
+    path: z.string(),
+    renamedPath: z.string().nullable(),
+    success: z.boolean(),
+    error: z.string().nullable(),
+    requestId: z.string(),
+  }),
+});
+
+export const FileEntryDuplicateResponseSchema = z.object({
+  type: z.literal("fs.entry.duplicate.response"),
+  payload: z.object({
+    cwd: z.string(),
+    path: z.string(),
+    duplicatedPath: z.string().nullable(),
+    success: z.boolean(),
+    error: z.string().nullable(),
+    requestId: z.string(),
+  }),
+});
+
+export const FileEntryDeleteResponseSchema = z.object({
+  type: z.literal("fs.entry.delete.response"),
+  payload: z.object({
+    cwd: z.string(),
+    path: z.string(),
+    success: z.boolean(),
+    error: z.string().nullable(),
+    requestId: z.string(),
+  }),
+});
+
 export const FileUpdateSchema = z.object({
   type: z.literal("fs.file.update"),
   payload: z.object({
@@ -5191,6 +5363,7 @@ export const ListAvailableProvidersResponseSchema = z.object({
 export const GetProvidersSnapshotResponseMessageSchema = z.object({
   type: z.literal("get_providers_snapshot_response"),
   payload: z.object({
+    cwd: z.string().optional(),
     entries: z.array(ProviderSnapshotEntrySchema),
     compactSnapshot: CompactProviderSnapshotSchema.optional(),
     snapshotHash: z.string().optional(),
@@ -5605,6 +5778,7 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   SetAgentModelResponseMessageSchema,
   SetAgentThinkingResponseMessageSchema,
   SetAgentFeatureResponseMessageSchema,
+  AgentConfigApplyResponseMessageSchema,
   AgentDetachResponseMessageSchema,
   AgentRewindResponseMessageSchema,
   UpdateAgentResponseMessageSchema,
@@ -5631,6 +5805,7 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   CheckoutPullResponseSchema,
   CheckoutPushResponseSchema,
   CheckoutRefreshResponseSchema,
+  CheckoutDiscardChangesResponseSchema,
   CheckoutPrCreateResponseSchema,
   CheckoutPrMergeResponseSchema,
   CheckoutForgeSetAutoMergeResponseSchema,
@@ -5658,6 +5833,10 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   FileSubscribeResponseSchema,
   FileUnsubscribeResponseSchema,
   FileWriteResponseSchema,
+  FileEntryCreateResponseSchema,
+  FileEntryRenameResponseSchema,
+  FileEntryDuplicateResponseSchema,
+  FileEntryDeleteResponseSchema,
   FileUpdateSchema,
   ProjectIconResponseSchema,
   ProjectIconGetResponseSchema,
@@ -5806,6 +5985,7 @@ export type SetAgentModeResponseMessage = z.infer<typeof SetAgentModeResponseMes
 export type SetAgentModelResponseMessage = z.infer<typeof SetAgentModelResponseMessageSchema>;
 export type SetAgentThinkingResponseMessage = z.infer<typeof SetAgentThinkingResponseMessageSchema>;
 export type SetAgentFeatureResponseMessage = z.infer<typeof SetAgentFeatureResponseMessageSchema>;
+export type AgentConfigApplyResponseMessage = z.infer<typeof AgentConfigApplyResponseMessageSchema>;
 export type AgentDetachResponseMessage = z.infer<typeof AgentDetachResponseMessageSchema>;
 export type AgentRewindResponseMessage = z.infer<typeof AgentRewindResponseMessageSchema>;
 export type UpdateAgentResponseMessage = z.infer<typeof UpdateAgentResponseMessageSchema>;
@@ -5982,6 +6162,7 @@ export type SetAgentModeRequestMessage = z.infer<typeof SetAgentModeRequestMessa
 export type SetAgentModelRequestMessage = z.infer<typeof SetAgentModelRequestMessageSchema>;
 export type SetAgentThinkingRequestMessage = z.infer<typeof SetAgentThinkingRequestMessageSchema>;
 export type SetAgentFeatureRequestMessage = z.infer<typeof SetAgentFeatureRequestMessageSchema>;
+export type AgentConfigApplyRequestMessage = z.infer<typeof AgentConfigApplyRequestMessageSchema>;
 export type AgentDetachRequestMessage = z.infer<typeof AgentDetachRequestMessageSchema>;
 export type AgentPermissionResponseMessage = z.infer<typeof AgentPermissionResponseMessageSchema>;
 export type CheckoutStatusRequest = z.infer<typeof CheckoutStatusRequestSchema>;
@@ -6003,6 +6184,8 @@ export type CheckoutPushRequest = z.infer<typeof CheckoutPushRequestSchema>;
 export type CheckoutPushResponse = z.infer<typeof CheckoutPushResponseSchema>;
 export type CheckoutRefreshRequest = z.infer<typeof CheckoutRefreshRequestSchema>;
 export type CheckoutRefreshResponse = z.infer<typeof CheckoutRefreshResponseSchema>;
+export type CheckoutDiscardChangesRequest = z.infer<typeof CheckoutDiscardChangesRequestSchema>;
+export type CheckoutDiscardChangesResponse = z.infer<typeof CheckoutDiscardChangesResponseSchema>;
 export type CheckoutCommitFile = z.infer<typeof CheckoutCommitFileSchema>;
 export type CheckoutCommit = z.infer<typeof CheckoutCommitSchema>;
 export type CheckoutCommitsListRequest = z.infer<typeof CheckoutCommitsListRequestSchema>;
@@ -6106,6 +6289,14 @@ export type FileUnsubscribeRequest = z.infer<typeof FileUnsubscribeRequestSchema
 export type FileUnsubscribeResponse = z.infer<typeof FileUnsubscribeResponseSchema>;
 export type FileWriteRequest = z.infer<typeof FileWriteRequestSchema>;
 export type FileWriteResponse = z.infer<typeof FileWriteResponseSchema>;
+export type FileEntryCreateRequest = z.infer<typeof FileEntryCreateRequestSchema>;
+export type FileEntryCreateResponse = z.infer<typeof FileEntryCreateResponseSchema>;
+export type FileEntryRenameRequest = z.infer<typeof FileEntryRenameRequestSchema>;
+export type FileEntryRenameResponse = z.infer<typeof FileEntryRenameResponseSchema>;
+export type FileEntryDuplicateRequest = z.infer<typeof FileEntryDuplicateRequestSchema>;
+export type FileEntryDuplicateResponse = z.infer<typeof FileEntryDuplicateResponseSchema>;
+export type FileEntryDeleteRequest = z.infer<typeof FileEntryDeleteRequestSchema>;
+export type FileEntryDeleteResponse = z.infer<typeof FileEntryDeleteResponseSchema>;
 export type FileWriteResult = z.infer<typeof FileWriteResultSchema>;
 export type FileUpdate = z.infer<typeof FileUpdateSchema>;
 export type ProjectIconRequest = z.infer<typeof ProjectIconRequestSchema>;

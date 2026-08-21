@@ -1,15 +1,20 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { darkHighlightColors, resolveSyntaxColors } from "@bytetrue/byspace-highlight";
-import { DEFAULT_MONO_FONT_STACK, DEFAULT_UI_FONT_STACK } from "@/styles/theme";
+import { DEFAULT_UI_FONT_STACK, REGISTERED_THEMES } from "@/styles/theme";
 import { applyAppearance, type AppearanceInput } from "./apply-appearance";
 
 // Override the global react-native-unistyles mock (vitest.setup.ts) so that
 // UnistylesRuntime.updateTheme is a spy that records (themeName, updater) calls.
-const { updateTheme } = vi.hoisted(() => ({ updateTheme: vi.fn() }));
-vi.mock("react-native-unistyles", () => ({ UnistylesRuntime: { updateTheme } }));
+const { runtime, updateTheme } = vi.hoisted(() => {
+  const updateThemeSpy = vi.fn();
+  return {
+    runtime: { themeName: undefined as string | undefined, updateTheme: updateThemeSpy },
+    updateTheme: updateThemeSpy,
+  };
+});
+vi.mock("react-native-unistyles", () => ({ UnistylesRuntime: runtime }));
 
-// The two registered Unistyles theme keys, in the order applyAppearance patches them.
-const ALL_THEME_KEYS = ["light", "dark"] as const;
+const ALL_THEME_KEYS = Object.keys(REGISTERED_THEMES);
 
 // The signature of the updater passed to UnistylesRuntime.updateTheme.
 type ThemeUpdater = (theme: FakeTheme) => FakeTheme;
@@ -57,8 +62,11 @@ function makeFakeTheme(): FakeTheme {
 
 function makeInput(overrides: Partial<AppearanceInput> = {}): AppearanceInput {
   return {
+    uiFontFamily: "",
+    monoFontFamily: "",
     uiFontSize: 16,
-    codeFontSize: 14,
+    codeFontSize: 12,
+    syntaxTheme: "one",
     ...overrides,
   };
 }
@@ -72,21 +80,37 @@ function runCapturedUpdater(call = 0): FakeTheme {
 describe("applyAppearance", () => {
   beforeEach(() => {
     updateTheme.mockClear();
+    runtime.themeName = undefined;
   });
 
   it("patches every registered Unistyles theme exactly once", () => {
     applyAppearance(makeInput());
 
-    expect(updateTheme).toHaveBeenCalledTimes(2);
+    expect(updateTheme).toHaveBeenCalledTimes(ALL_THEME_KEYS.length);
     expect(updateTheme.mock.calls.map((call) => call[0])).toEqual([...ALL_THEME_KEYS]);
   });
 
-  it("always uses the platform default font stacks (fonts are not user-configurable)", () => {
-    applyAppearance(makeInput());
+  it("patches the active theme before inactive registry entries", () => {
+    runtime.themeName = "darkPureBlack";
 
-    const { fontFamily } = runCapturedUpdater();
-    expect(fontFamily.ui).toBe(DEFAULT_UI_FONT_STACK);
-    expect(fontFamily.mono).toBe(DEFAULT_MONO_FONT_STACK);
+    applyAppearance(makeInput({ uiFontSize: 17 }));
+
+    expect(updateTheme.mock.calls.map((call) => call[0])).toEqual([
+      "darkPureBlack",
+      ...ALL_THEME_KEYS.filter((key) => key !== "darkPureBlack"),
+    ]);
+  });
+
+  it("resolves an empty UI font family to the default stack", () => {
+    applyAppearance(makeInput({ uiFontFamily: "" }));
+
+    expect(runCapturedUpdater().fontFamily.ui).toBe(DEFAULT_UI_FONT_STACK);
+  });
+
+  it("passes a non-empty UI font family through trimmed", () => {
+    applyAppearance(makeInput({ uiFontFamily: "  Menlo  " }));
+
+    expect(runCapturedUpdater().fontFamily.ui).toBe("Menlo");
   });
 
   it("scales the whole UI ramp proportionally while preserving ratios", () => {
@@ -145,8 +169,15 @@ describe("applyAppearance", () => {
     expect(runCapturedUpdater().lineHeight.diff).toBe(Math.round(18 * 1.5)); // 27
   });
 
-  it("always applies the github syntax palette (syntax theme is not user-configurable)", () => {
-    applyAppearance(makeInput());
+  it("swaps colors.syntax to the resolved palette for the named theme", () => {
+    applyAppearance(makeInput({ syntaxTheme: "dracula" }));
+
+    const { colors } = runCapturedUpdater();
+    expect(colors.syntax).toEqual(resolveSyntaxColors("dracula", "dark"));
+  });
+
+  it("resolves a syntax theme using the theme's own color scheme", () => {
+    applyAppearance(makeInput({ syntaxTheme: "github" }));
 
     // makeFakeTheme().colorScheme === "dark" -> github resolves to the dark palette.
     expect(runCapturedUpdater().colors.syntax).toEqual(darkHighlightColors);

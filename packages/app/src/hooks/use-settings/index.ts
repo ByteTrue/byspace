@@ -22,6 +22,7 @@ import {
   normalizeAppSettings,
   parseClampedFontSize,
   parseTerminalScrollbackLines,
+  sanitizeFontFamily,
   saveAppSettings as saveAppSettingsPure,
   type AppSettings,
   type KeyValueStorage,
@@ -48,6 +49,7 @@ export {
   MIN_UI_FONT_SIZE,
   parseClampedFontSize,
   parseTerminalScrollbackLines,
+  sanitizeFontFamily,
 };
 export type {
   AppSettings,

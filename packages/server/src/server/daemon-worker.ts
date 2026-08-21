@@ -27,10 +27,6 @@ interface SupervisorHeartbeatMessage {
   type: "byspace:supervisor-heartbeat";
 }
 
-interface WorkerHeartbeatMessage {
-  type: "byspace:worker-heartbeat";
-}
-
 interface BootstrapResult {
   byspaceHome: string;
   logger: ReturnType<typeof createRootLogger>;
@@ -229,13 +225,6 @@ async function main() {
     const supervisorPid = process.ppid;
     let lastSupervisorHeartbeatAt = Date.now();
     let supervisorExitRequested = false;
-    const sendWorkerHeartbeat = () => {
-      try {
-        process.send?.({ type: "byspace:worker-heartbeat" } satisfies WorkerHeartbeatMessage);
-      } catch {
-        // The disconnect handler below owns supervisor-loss shutdown.
-      }
-    };
     const exitAfterSupervisorLoss = (reason: string) => {
       if (supervisorExitRequested) {
         return;
@@ -268,10 +257,6 @@ async function main() {
       }
     });
     process.on("disconnect", () => exitAfterSupervisorLoss("ipc_disconnect_event"));
-
-    sendWorkerHeartbeat();
-    const workerHeartbeat = setInterval(sendWorkerHeartbeat, 1_000);
-    workerHeartbeat.unref();
 
     const timer = setInterval(() => {
       const ipcConnected = typeof process.connected === "boolean" ? process.connected : true;

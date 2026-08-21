@@ -89,7 +89,7 @@ describe("curateAgentActivity", () => {
         name: "terminal",
         detail: {
           type: "plain_text",
-          label: `skills/byspace-chat/bin/chat.sh post --room storage-revamp --body $'first line
+          label: `scripts/notify.sh --channel storage-revamp --body $'first line
 
 second line'`,
           icon: "square_terminal",
@@ -100,7 +100,7 @@ second line'`,
     const result = curateAgentActivity(timeline);
 
     expect(result).toContain(
-      "[Terminal] skills/byspace-chat/bin/chat.sh post --room storage-revamp --body $'first line second line'",
+      "[Terminal] scripts/notify.sh --channel storage-revamp --body $'first line second line'",
     );
     expect(result).not.toContain("[Interacted with terminal]");
   });

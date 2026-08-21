@@ -25,10 +25,6 @@ $BYSPACE_HOME/
 │       └── {agentId}.json               # One file per agent
 ├── schedules/
 │   └── {scheduleId}.json                # One file per schedule
-├── chat/
-│   └── rooms.json                       # All rooms + messages
-├── loops/
-│   └── loops.json                       # All loop records
 ├── projects/
 │   ├── projects.json                    # Project registry
 │   └── workspaces.json                  # Workspace registry
@@ -70,7 +66,7 @@ Each agent is stored as a separate JSON file, grouped by project directory.
 | `requiresAttention`  | `boolean?`                               | Whether the agent needs user attention                                                                                                                                                                                                                                                                                                                                              |
 | `attentionReason`    | `"finished" \| "error" \| "permission"?` | Why attention is needed                                                                                                                                                                                                                                                                                                                                                             |
 | `attentionTimestamp` | `string?` (ISO 8601)                     | When attention was flagged                                                                                                                                                                                                                                                                                                                                                          |
-| `internal`           | `boolean?`                               | Whether this is a system-internal agent (loop workers, etc.)                                                                                                                                                                                                                                                                                                                        |
+| `internal`           | `boolean?`                               | Whether this is a system-internal agent                                                                                                                                                                                                                                                                                                                                             |
 | `archivedAt`         | `string?` (ISO 8601)                     | Soft-delete timestamp                                                                                                                                                                                                                                                                                                                                                               |
 
 ### Nested: SerializableConfig
@@ -283,11 +279,13 @@ One file per schedule. ID is 8 hex characters.
 
 ---
 
-## 4. Chat
+## Removed legacy stores
 
-**Path:** `$BYSPACE_HOME/chat/rooms.json`
+Chat rooms and Agent loops were removed from the runtime during the v0.4 upstream synchronization. Their structural wire schemas remain temporarily parseable for mixed-version compatibility, but current daemons do not create or read the following files. These record shapes are retained here only as historical reference until the compatibility schemas are removed.
 
-Single file containing all rooms and messages.
+### Legacy Chat record
+
+**Former path:** `$BYSPACE_HOME/chat/rooms.json`
 
 ```json
 {
@@ -320,11 +318,11 @@ Single file containing all rooms and messages.
 
 ---
 
-## 5. Loop
+### Legacy Loop record
 
-**Path:** `$BYSPACE_HOME/loops/loops.json`
+**Former path:** `$BYSPACE_HOME/loops/loops.json`
 
-Single file containing an array of all loop records. Writes are direct (not atomic) and serialized through an in-memory queue. On daemon startup any record with `status: "running"` is recovered as `"stopped"` with an interruption log entry.
+The removed store contained an array of loop records.
 
 | Field                   | Type                                                | Description                                |
 | ----------------------- | --------------------------------------------------- | ------------------------------------------ |
@@ -409,7 +407,7 @@ Single file containing an array of all loop records. Writes are direct (not atom
 
 ---
 
-## 6. Project Registry
+## 4. Project Registry
 
 **Path:** `$BYSPACE_HOME/projects/projects.json`
 
@@ -433,7 +431,7 @@ emptied duplicate.
 
 ---
 
-## 7. Workspace Registry
+## 5. Workspace Registry
 
 **Path:** `$BYSPACE_HOME/projects/workspaces.json`
 
@@ -463,7 +461,7 @@ than treating it as valid.
 
 ---
 
-## 8. Push Token Store
+## 6. Push Token Store
 
 **Path:** `$BYSPACE_HOME/push-tokens.json`
 
@@ -477,7 +475,7 @@ Simple set of Expo push notification tokens. Loaded with permissive parsing (fil
 
 ---
 
-## 9. Daemon meta files
+## 7. Daemon meta files
 
 These small files are not validated as full Zod schemas but are persisted under `$BYSPACE_HOME` for daemon identity and runtime coordination.
 

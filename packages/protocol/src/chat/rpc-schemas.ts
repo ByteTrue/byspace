@@ -1,6 +1,8 @@
 import { z } from "zod";
 import { ChatMessageSchema, ChatRoomDetailSchema } from "./types.js";
 
+// COMPAT(chatRooms): legacy RPC parsing retained in v0.6.0 after runtime removal; remove after 2027-02-21.
+
 export const ChatCreateRequestSchema = z.object({
   type: z.literal("chat/create"),
   requestId: z.string(),

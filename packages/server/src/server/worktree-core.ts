@@ -3,7 +3,6 @@ import { createNameId } from "mnemonic-id";
 import type { ForgeService } from "../services/forge-service.js";
 import {
   createWorktree,
-  resolveExistingWorktreeForSlug,
   slugify,
   validateBranchSlug,
   type WorktreeConfig,
@@ -19,6 +18,7 @@ import type {
   FirstAgentContext,
 } from "@bytetrue/byspace-protocol/messages";
 import type { WorkspaceGitService } from "./workspace-git-service.js";
+import { runWithGitCommandPriority } from "../utils/run-git-command.js";
 
 export interface CreateWorktreeCoreInput {
   cwd: string;
@@ -51,6 +51,13 @@ export interface CreateWorktreeCoreResult {
 }
 
 export async function createWorktreeCore(
+  input: CreateWorktreeCoreInput,
+  deps: CreateWorktreeCoreDeps,
+): Promise<CreateWorktreeCoreResult> {
+  return runWithGitCommandPriority("high", () => createWorktreeCoreWithPriority(input, deps));
+}
+
+async function createWorktreeCoreWithPriority(
   input: CreateWorktreeCoreInput,
   deps: CreateWorktreeCoreDeps,
 ): Promise<CreateWorktreeCoreResult> {
@@ -111,16 +118,6 @@ export async function createWorktreeCore(
         requestedWorktreeSlug ?? normalizeWorktreeSlug(intent.localBranchName ?? intent.headRef);
       break;
     }
-  }
-
-  const existingWorktree = await resolveExistingWorktreeForSlug({
-    slug: normalizedSlug,
-    repoRoot,
-    byspaceHome: input.byspaceHome,
-    worktreesRoot: input.worktreesRoot,
-  });
-  if (existingWorktree) {
-    return { worktree: existingWorktree, intent, repoRoot, created: false };
   }
 
   return {

@@ -47,6 +47,7 @@ $env:BYSPACE_CORS_ORIGINS = "http://localhost:8081"
 
 # Configure the app to auto-connect to this daemon on localhost
 $env:APP_VARIANT = "development"
+$env:EXPO_PUBLIC_BYSPACE_DEV_BUILD_LABEL = (git branch --show-current).Trim()
 $env:EXPO_PUBLIC_LOCAL_DAEMON = "localhost:6768"
 $env:BYSPACE_LISTEN = "127.0.0.1:6768"
 $env:BROWSER = "none"

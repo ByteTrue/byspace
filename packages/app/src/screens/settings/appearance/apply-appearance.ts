@@ -1,24 +1,25 @@
 import { UnistylesRuntime } from "react-native-unistyles";
-import { resolveSyntaxColors } from "@bytetrue/byspace-highlight";
+import { resolveSyntaxColors, type SyntaxThemeId } from "@bytetrue/byspace-highlight";
 import {
   DEFAULT_UI_FONT_STACK,
   DEFAULT_MONO_FONT_STACK,
   FONT_SIZE,
+  REGISTERED_THEMES,
   type Theme,
 } from "@/styles/theme";
 import { applyRootUiFont } from "./apply-root-font";
 
-// The two registered Unistyles keys — pinned literal (greppable, type-checked).
-// The `as const` element types are exactly `keyof UnistylesThemes`, so each key
-// is assignable to `UnistylesRuntime.updateTheme`'s first argument with no cast.
-const ALL_THEME_KEYS = ["light", "dark"] as const;
+const ALL_THEME_KEYS = Object.keys(REGISTERED_THEMES) as (keyof typeof REGISTERED_THEMES)[];
 
 // The UI font size at which the FONT_SIZE ramp is authored (1.0 scale factor).
 const BASE_UI_REFERENCE = FONT_SIZE.base; // 16
 
 export interface AppearanceInput {
+  uiFontFamily: string; // "" -> default stack
+  monoFontFamily: string; // "" -> default stack
   uiFontSize: number; // already clamped
   codeFontSize: number; // already clamped
+  syntaxTheme: SyntaxThemeId;
 }
 
 /**
@@ -47,27 +48,28 @@ function scaleFontSize(uiSize: number, codeSize: number): Theme["fontSize"] {
 
 /**
  * Patch every registered Unistyles theme with the user's appearance choices.
- * Both keys are patched because the active theme can change and adaptive mode
- * can flip light/dark — patching all keys keeps the active key always current and
- * makes ordering vs `setTheme`/`setAdaptiveThemes` irrelevant.
+ * All keys in `ALL_THEME_KEYS` are patched because the active theme can change
+ * and adaptive mode can flip light/dark — patching all keys keeps the active key
+ * always current and makes ordering vs `setTheme`/`setAdaptiveThemes` irrelevant.
+ *
+ * The updater preserves the active theme wholesale (surfaces, accents,
+ * terminal) and only patches the font ramp and syntax palette.
+ * `updateTheme` replaces the stored theme rather than merging, so we spread
+ * `...t` first.
  */
 export function applyAppearance(input: AppearanceInput): void {
-  // Font families are not user-configurable; always use each platform's system
-  // default stack (ui-monospace / system-ui via DEFAULT_*_FONT_STACK).
-  const ui = DEFAULT_UI_FONT_STACK;
-  const mono = DEFAULT_MONO_FONT_STACK;
+  const ui = input.uiFontFamily.trim() || DEFAULT_UI_FONT_STACK;
+  const mono = input.monoFontFamily.trim() || DEFAULT_MONO_FONT_STACK;
   const diffLineHeight = Math.round(input.codeFontSize * 1.5); // couple to code size
+  const activeTheme = UnistylesRuntime.themeName;
+  // Unistyles web emits after each registry patch. Updating the mounted theme
+  // first ensures subscribers receive its new numeric tokens in this render;
+  // updating it last makes Pure black appear one committed value behind.
+  const themeKeys = activeTheme
+    ? [activeTheme, ...ALL_THEME_KEYS.filter((key) => key !== activeTheme)]
+    : ALL_THEME_KEYS;
 
-  for (const key of ALL_THEME_KEYS) {
-    // Spread `...t` first — `updateTheme` replaces the stored theme, it does not
-    // merge; an omitted key would be dropped. `syntax` follows the theme's own
-    // scheme for `auto`; named palettes ignore it. `colors.base`/plain text stays
-    // `theme.colors.foreground` (owned by `syntaxTokenStyles.base`, not patched).
-    //
-    // Narrow on the `colorScheme` discriminant before spreading: the updater must
-    // return the theme union, and a spread of the union widens `colorScheme` to
-    // `"light" | "dark"`, assignable to neither concrete member. Each branch spreads
-    // a single narrowed theme type.
+  for (const key of themeKeys) {
     UnistylesRuntime.updateTheme(key, (t) => {
       const fontFamily = { ui, mono };
       const fontSize = scaleFontSize(input.uiFontSize, input.codeFontSize);
@@ -78,7 +80,7 @@ export function applyAppearance(input: AppearanceInput): void {
           fontFamily,
           fontSize,
           lineHeight,
-          colors: { ...t.colors, syntax: resolveSyntaxColors("github", t.colorScheme) },
+          colors: { ...t.colors, syntax: resolveSyntaxColors(input.syntaxTheme, t.colorScheme) },
         };
       }
       return {
@@ -86,7 +88,7 @@ export function applyAppearance(input: AppearanceInput): void {
         fontFamily,
         fontSize,
         lineHeight,
-        colors: { ...t.colors, syntax: resolveSyntaxColors("github", t.colorScheme) },
+        colors: { ...t.colors, syntax: resolveSyntaxColors(input.syntaxTheme, t.colorScheme) },
       };
     });
   }

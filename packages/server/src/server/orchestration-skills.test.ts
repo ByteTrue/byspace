@@ -105,7 +105,7 @@ describe("orchestration skills", () => {
     await setOrchestrationSkillsInstalled(true, targets);
     await fs.writeFile(path.join(targets.installDirs[0], "byspace", "SKILL.md"), "locally edited");
     await fs.writeFile(path.join(targets.installDirs[0], "byspace", "obsolete.md"), "stale");
-    await fs.rm(path.join(targets.installDirs[1], "byspace-loop"), {
+    await fs.rm(path.join(targets.installDirs[1], "byspace-handoff"), {
       recursive: true,
       force: true,
     });

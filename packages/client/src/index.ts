@@ -17,15 +17,9 @@ import type {
   SendAgentMessageRequest,
   SessionOutboundMessage,
   WorkspaceDescriptorPayload,
+  WorkspaceCreateRequest,
 } from "@bytetrue/byspace-protocol/messages";
 import { DaemonClient } from "./daemon-client.js";
-import type {
-  FetchAgentTimelineCursor,
-  FetchAgentTimelineDirection,
-  FetchAgentTimelinePayload,
-  FetchAgentTimelineProjection,
-} from "./daemon-client.js";
-
 export { DaemonClient };
 export type {
   DaemonClientConfig,
@@ -33,6 +27,22 @@ export type {
   WebSocketFactory,
   WebSocketLike,
 } from "./daemon-client.js";
+import type {
+  FetchAgentsEntry,
+  FetchAgentsOptions,
+  FetchAgentsPageInfo,
+  FetchAgentTimelineCursor,
+  FetchAgentTimelineDirection,
+  FetchAgentTimelinePayload,
+  FetchAgentTimelineProjection,
+  WaitForFinishResult,
+} from "./daemon-client.js";
+
+/**
+ * Coding turns routinely run for minutes, so the handle waits far longer than
+ * the transport's own conservative default.
+ */
+const DEFAULT_WAIT_FOR_FINISH_MS = 10 * 60_000;
 
 export type ConnectionState =
   | { status: "idle" }
@@ -74,6 +84,14 @@ export interface BySpaceClientConfig {
 
 export type BySpaceWorkspace = WorkspaceDescriptorPayload;
 export type BySpaceAgent = AgentSnapshotPayload;
+export type BySpaceAgentListOptions = FetchAgentsOptions;
+
+export interface BySpaceAgentListResult {
+  requestId: string;
+  subscriptionId?: string | null;
+  entries: FetchAgentsEntry[];
+  pageInfo: FetchAgentsPageInfo;
+}
 export type BySpaceWorkspaceListOptions = Omit<
   FetchWorkspacesRequestMessage,
   "type" | "requestId"
@@ -93,11 +111,9 @@ export interface BySpaceWorkspaceOpenOptions {
   requestId?: string;
 }
 
-export interface BySpaceWorkspaceOpenResult {
-  requestId: string;
-  workspace: BySpaceWorkspaceHandle | null;
-  error: string | null;
-}
+export type BySpaceWorkspaceCreateOptions = Omit<WorkspaceCreateRequest, "type" | "requestId"> & {
+  requestId?: string;
+};
 
 export interface BySpaceWorkspaceArchiveResult {
   requestId: string;
@@ -113,19 +129,17 @@ export type BySpaceWorkspaceUpdate = Extract<
 
 export type BySpaceWorkspaceUpdateHandler = (update: BySpaceWorkspaceUpdate) => void;
 
-/**
- * A handle is a stable typed reference to a daemon resource. Its identity is the
- * daemon id, and `latest()` only returns the most recent snapshot this handle has
- * seen through construction, `refetch()`, or this handle's local subscription.
- */
 export interface BySpaceWorkspaceHandle {
   readonly id: string;
-  latest(): BySpaceWorkspace | null;
-  /**
-   * Fetches a fresh workspace snapshot through the existing workspace list RPC,
-   * exact-matches this handle id from the result, and updates `latest()`.
-   */
-  refetch(options?: { requestId?: string }): Promise<BySpaceWorkspace | null>;
+  readonly projectId: string | null;
+  readonly directory: string | null;
+  readonly name: string | null;
+  readonly status: BySpaceWorkspace["status"] | null;
+  readonly agents: {
+    create(options: BySpaceWorkspaceAgentCreateOptions): Promise<BySpaceAgentHandle>;
+  };
+  current(): BySpaceWorkspace | null;
+  refresh(options?: { requestId?: string }): Promise<BySpaceWorkspace | null>;
   archive(requestId?: string): Promise<BySpaceWorkspaceArchiveResult>;
   /**
    * Subscribes to already-emitted daemon workspace_update events for this id.
@@ -142,11 +156,8 @@ export interface BySpaceWorkspaceActions {
   open(
     input: string | BySpaceWorkspaceOpenOptions,
     requestId?: string,
-  ): Promise<BySpaceWorkspaceOpenResult>;
-  create(
-    input: string | BySpaceWorkspaceOpenOptions,
-    requestId?: string,
-  ): Promise<BySpaceWorkspaceOpenResult>;
+  ): Promise<BySpaceWorkspaceHandle>;
+  create(options: BySpaceWorkspaceCreateOptions): Promise<BySpaceWorkspaceHandle>;
   archive(
     workspace: string | BySpaceWorkspaceHandle,
     requestId?: string,
@@ -159,25 +170,41 @@ export interface BySpaceWorkspaceActions {
 }
 
 type BySpaceAgentSessionConfig = CreateAgentRequestMessage["config"];
-type BySpaceAgentProvider = BySpaceAgentSessionConfig["provider"];
-type BySpaceAgentConfigOverrides = Partial<Omit<BySpaceAgentSessionConfig, "provider" | "cwd">>;
+export type BySpaceAgentProvider = BySpaceAgentSessionConfig["provider"];
 
-export interface BySpaceAgentCreateOptions extends BySpaceAgentConfigOverrides {
-  config?: BySpaceAgentSessionConfig;
-  provider?: CreateAgentRequestMessage["config"]["provider"];
-  cwd?: string;
-  workspaceId?: string;
-  initialPrompt?: string;
+export type BySpaceProviderFeatureValues = Record<string, unknown>;
+
+export interface BySpaceAgentConfig {
+  /** Provider and model in `provider/model` format. */
+  provider: string;
+  modeId?: BySpaceAgentSessionConfig["modeId"];
+  thinkingOptionId?: BySpaceAgentSessionConfig["thinkingOptionId"];
+  featureValues?: BySpaceProviderFeatureValues;
+  /** JSON-safe provider-native settings, validated by the selected provider. */
+  options?: BySpaceAgentSessionConfig["providerOptions"];
+  systemPrompt?: BySpaceAgentSessionConfig["systemPrompt"];
+  mcpServers?: BySpaceAgentSessionConfig["mcpServers"];
+}
+
+export interface BySpaceAgentCreateOptions {
+  config: BySpaceAgentConfig;
+  cwd: string;
+  parent?: string | BySpaceAgentHandle;
+  title?: BySpaceAgentSessionConfig["title"];
+  env?: CreateAgentRequestMessage["env"];
+  prompt?: string;
   clientMessageId?: string;
-  callerAgentId?: string;
   outputSchema?: Record<string, unknown>;
   images?: CreateAgentRequestMessage["images"];
   attachments?: CreateAgentRequestMessage["attachments"];
   git?: CreateAgentRequestMessage["git"];
-  worktreeName?: string;
+  worktree?: CreateAgentRequestMessage["worktree"];
+  autoArchive?: CreateAgentRequestMessage["autoArchive"];
   requestId?: string;
   labels?: Record<string, string>;
 }
+
+export type BySpaceWorkspaceAgentCreateOptions = Omit<BySpaceAgentCreateOptions, "cwd">;
 
 export interface BySpaceAgentRefetchResult {
   agent: BySpaceAgent;
@@ -198,6 +225,12 @@ export interface BySpaceAgentSendOptions {
   attachments?: SendAgentMessageRequest["attachments"];
 }
 
+export interface BySpaceAgentRunOptions extends BySpaceAgentSendOptions {
+  timeoutMs?: number;
+}
+
+export type BySpaceAgentRunResult = WaitForFinishResult;
+
 export type BySpaceAgentUpdate = Extract<
   SessionOutboundMessage,
   { type: "agent_update" }
@@ -213,8 +246,8 @@ export type BySpaceAgentUpdateHandler = (update: BySpaceAgentUpdate) => void;
 export interface BySpaceAgentTimelineHandle {
   /**
    * Fetches a fresh timeline page through the existing daemon RPC. If the daemon
-   * includes an agent snapshot in the response, the parent handle's `latest()`
-   * is updated to that snapshot.
+   * includes an agent snapshot in the response, the parent handle is updated to
+   * that value.
    */
   refetch(options?: BySpaceAgentTimelineRefetchOptions): Promise<FetchAgentTimelinePayload>;
   /**
@@ -224,24 +257,26 @@ export interface BySpaceAgentTimelineHandle {
   subscribe(handler: (event: BySpaceAgentStream) => void): () => void;
 }
 
-/**
- * Agent handles follow the same identity/snapshot rule as workspace handles:
- * `id` is stable, while `latest()` is only the newest snapshot observed by this
- * handle through construction, `refetch()`, timeline refetch, archive, or local
- * agent_update subscription.
- */
 export interface BySpaceAgentHandle {
   readonly id: string;
+  readonly workspaceId: string | null;
+  readonly cwd: string | null;
+  readonly status: BySpaceAgent["status"] | null;
   readonly timeline: BySpaceAgentTimelineHandle;
-  latest(): BySpaceAgent | null;
-  refetch(requestId?: string): Promise<BySpaceAgentRefetchResult | null>;
+  current(): BySpaceAgent | null;
+  refresh(requestId?: string): Promise<BySpaceAgentRefetchResult | null>;
   send(text: string, options?: BySpaceAgentSendOptions): Promise<void>;
+  /** Sends a prompt and resolves when that turn finishes or needs attention. */
+  run(text: string, options?: BySpaceAgentRunOptions): Promise<BySpaceAgentRunResult>;
+  /** Waits for the current turn, including one started with `prompt`. */
+  waitForFinish(timeoutMs?: number): Promise<BySpaceAgentRunResult>;
   archive(): Promise<{ archivedAt: string }>;
   detach(): Promise<void>;
   subscribe(handler: (update: BySpaceAgentUpdate) => void): () => void;
 }
 
 export interface BySpaceAgentActions {
+  list(options?: BySpaceAgentListOptions): Promise<BySpaceAgentListResult>;
   ref(agent: string | BySpaceAgent): BySpaceAgentHandle;
   create(options: BySpaceAgentCreateOptions): Promise<BySpaceAgentHandle>;
   /**
@@ -251,21 +286,16 @@ export interface BySpaceAgentActions {
   subscribe(handler: BySpaceAgentUpdateHandler): () => void;
 }
 
-export interface BySpaceProviderConfig extends BySpaceProviderConfigInput {
-  provider: BySpaceAgentProvider;
-}
-export type BySpaceProviderFeatureValues = Record<string, unknown>;
-
-export interface BySpaceProviderConfigInput {
-  model?: string;
-  modeId?: string;
-  thinkingOptionId?: string;
-  featureValues?: BySpaceProviderFeatureValues;
-}
-
 export type BySpaceProviderModelsResult = ListProviderModelsResponseMessage["payload"];
 export type BySpaceProviderModesResult = ListProviderModesResponseMessage["payload"];
-export type BySpaceProviderFeaturesInput = ListProviderFeaturesRequestMessage["draftConfig"];
+type BySpaceProviderFeaturesDraft = ListProviderFeaturesRequestMessage["draftConfig"];
+export interface BySpaceProviderFeaturesInput extends Omit<
+  BySpaceProviderFeaturesDraft,
+  "provider" | "model"
+> {
+  /** Provider and model in `provider/model` format. */
+  provider: string;
+}
 export type BySpaceProviderFeaturesResult = ListProviderFeaturesResponseMessage["payload"];
 export type BySpaceProviderAvailabilityResult = ListAvailableProvidersResponse["payload"];
 export type BySpaceProviderSnapshotResult = GetProvidersSnapshotResponseMessage["payload"];
@@ -287,12 +317,11 @@ export interface BySpaceProviderRefreshOptions {
   requestId?: string;
 }
 
+export interface BySpaceProviderWaitOptions extends BySpaceProviderListOptions {
+  timeoutMs?: number;
+}
+
 export interface BySpaceProviderActions {
-  codex(input?: BySpaceProviderConfigInput): BySpaceProviderConfig;
-  claude(input?: BySpaceProviderConfigInput): BySpaceProviderConfig;
-  opencode(input?: BySpaceProviderConfigInput): BySpaceProviderConfig;
-  copilot(input?: BySpaceProviderConfigInput): BySpaceProviderConfig;
-  config(provider: BySpaceAgentProvider, input?: BySpaceProviderConfigInput): BySpaceProviderConfig;
   listModels(
     provider: BySpaceAgentProvider,
     options?: BySpaceProviderListOptions,
@@ -307,6 +336,8 @@ export interface BySpaceProviderActions {
   ): Promise<BySpaceProviderFeaturesResult>;
   listAvailable(options?: { requestId?: string }): Promise<BySpaceProviderAvailabilityResult>;
   snapshot(options?: BySpaceProviderListOptions): Promise<BySpaceProviderSnapshotResult>;
+  /** Resolves after the daemon's lazy provider discovery has finished. */
+  waitForReady(options?: BySpaceProviderWaitOptions): Promise<BySpaceProviderSnapshotResult>;
   refresh(options?: BySpaceProviderRefreshOptions): Promise<BySpaceProviderRefreshResult>;
   diagnostic(
     provider: BySpaceAgentProvider,
@@ -352,8 +383,32 @@ export function createBySpaceClient(config: BySpaceClientConfig): BySpaceClient 
     clientId: config.clientId ?? createGeneratedClientId(),
     clientType: "cli",
   });
-  const createWorkspaceHandle = createWorkspaceHandleFactory(daemonClient);
   const createAgentHandle = createAgentHandleFactory(daemonClient);
+  const createAgent = async (
+    options: BySpaceAgentCreateOptions,
+    placement?: { workspaceId: string; cwd: string },
+  ) => {
+    const { config: agentConfig, cwd, parent, title, prompt, ...requestOptions } = options;
+    const { provider: providerModel, options: providerOptions, ...runtimeConfig } = agentConfig;
+    const { provider, model } = parseProviderModel(providerModel);
+    const effectiveCwd = placement?.cwd ?? cwd;
+    const agent = await daemonClient.createAgent({
+      ...requestOptions,
+      config: {
+        ...runtimeConfig,
+        provider,
+        model,
+        cwd: effectiveCwd,
+        ...(title !== undefined ? { title } : {}),
+        ...(providerOptions !== undefined ? { providerOptions } : {}),
+      },
+      ...(placement ? { workspaceId: placement.workspaceId } : {}),
+      ...(parent ? { callerAgentId: resolveAgentId(parent) } : {}),
+      ...(prompt !== undefined ? { initialPrompt: prompt } : {}),
+    });
+    return createAgentHandle(agent);
+  };
+  const createWorkspaceHandle = createWorkspaceHandleFactory(daemonClient, createAgent);
 
   return {
     workspaces: {
@@ -361,8 +416,13 @@ export function createBySpaceClient(config: BySpaceClientConfig): BySpaceClient 
       ref: (workspace) => createWorkspaceHandle(workspace),
       open: (input, requestId) =>
         openWorkspace(daemonClient, createWorkspaceHandle, input, requestId),
-      create: (input, requestId) =>
-        openWorkspace(daemonClient, createWorkspaceHandle, input, requestId),
+      create: async ({ requestId, ...options }) => {
+        const result = await daemonClient.createWorkspace(options, requestId);
+        if (result.error || !result.workspace) {
+          throw new Error(result.error ?? "The daemon did not create a workspace");
+        }
+        return createWorkspaceHandle(result.workspace);
+      },
       archive: (workspace, requestId) =>
         daemonClient.archiveWorkspace(resolveWorkspaceId(workspace), requestId),
       subscribe: (handler) =>
@@ -371,28 +431,24 @@ export function createBySpaceClient(config: BySpaceClientConfig): BySpaceClient 
         }),
     },
     agents: {
+      list: (options) => daemonClient.fetchAgents(options),
       ref: (agent) => createAgentHandle(agent),
-      create: async (options) => {
-        const agent = await daemonClient.createAgent(options);
-        return createAgentHandle(agent);
-      },
+      create: (options) => createAgent(options),
       subscribe: (handler) =>
         daemonClient.on("agent_update", (message) => {
           handler(message.payload);
         }),
     },
     providers: {
-      codex: (input) => providerConfig("codex", input),
-      claude: (input) => providerConfig("claude", input),
-      opencode: (input) => providerConfig("opencode", input),
-      copilot: (input) => providerConfig("copilot", input),
-      config: (provider, input) => providerConfig(provider, input),
       listModels: (provider, options) => daemonClient.listProviderModels(provider, options),
       listModes: (provider, options) => daemonClient.listProviderModes(provider, options),
-      listFeatures: (draftConfig, options) =>
-        daemonClient.listProviderFeatures(draftConfig, options),
+      listFeatures: ({ provider: providerModel, ...draftConfig }, options) => {
+        const { provider, model } = parseProviderModel(providerModel);
+        return daemonClient.listProviderFeatures({ ...draftConfig, provider, model }, options);
+      },
       listAvailable: (options) => daemonClient.listAvailableProviders(options),
       snapshot: (options) => daemonClient.getProvidersSnapshot(options),
+      waitForReady: (options) => waitForProvidersReady(daemonClient, options),
       refresh: (options) => daemonClient.refreshProvidersSnapshot(options),
       diagnostic: (provider, options) => daemonClient.getProviderDiagnostic(provider, options),
       subscribe: (handler) =>
@@ -413,30 +469,71 @@ export function createBySpaceClient(config: BySpaceClientConfig): BySpaceClient 
 
 type WorkspaceHandleFactory = (workspace: string | BySpaceWorkspace) => BySpaceWorkspaceHandle;
 type AgentHandleFactory = (agent: string | BySpaceAgent) => BySpaceAgentHandle;
+type CreateAgent = (
+  options: BySpaceAgentCreateOptions,
+  placement?: { workspaceId: string; cwd: string },
+) => Promise<BySpaceAgentHandle>;
 
-function createWorkspaceHandleFactory(daemonClient: DaemonClient): WorkspaceHandleFactory {
+function createWorkspaceHandleFactory(
+  daemonClient: DaemonClient,
+  createAgent: CreateAgent,
+): WorkspaceHandleFactory {
   return (workspace) => {
     const id = typeof workspace === "string" ? workspace : workspace.id;
-    let latest = typeof workspace === "string" ? null : workspace;
+    let current = typeof workspace === "string" ? null : workspace;
+
+    const refresh = async (options?: { requestId?: string }) => {
+      let cursor: string | undefined;
+      let requestId = options?.requestId;
+      do {
+        const result = await daemonClient.fetchWorkspaces({
+          requestId,
+          page: { limit: 200, ...(cursor ? { cursor } : {}) },
+        });
+        const match = result.entries.find((entry) => entry.id === id);
+        if (match) {
+          current = match;
+          return current;
+        }
+        cursor = result.pageInfo.nextCursor ?? undefined;
+        requestId = undefined;
+      } while (cursor);
+      current = null;
+      return current;
+    };
 
     return {
       id,
-      latest: () => latest,
-      refetch: async (options) => {
-        // Best-effort: fetches one page and matches by id client-side, so a workspace beyond
-        // the first page won't be found. TODO: add a "get workspace by id" lookup and resolve
-        // by exact id instead of paging.
-        const result = await daemonClient.fetchWorkspaces({
-          requestId: options?.requestId,
-          page: { limit: 25 },
-        });
-        latest = result.entries.find((entry) => entry.id === id) ?? null;
-        return latest;
+      get projectId() {
+        return current?.projectId ?? null;
       },
+      get directory() {
+        return current?.workspaceDirectory ?? null;
+      },
+      get name() {
+        return current?.name ?? null;
+      },
+      get status() {
+        return current?.status ?? null;
+      },
+      agents: {
+        create: async (options) => {
+          const snapshot = current ?? (await refresh());
+          if (!snapshot?.workspaceDirectory) {
+            throw new Error(`Workspace ${id} has no available directory`);
+          }
+          return createAgent(
+            { ...options, cwd: snapshot.workspaceDirectory },
+            { workspaceId: id, cwd: snapshot.workspaceDirectory },
+          );
+        },
+      },
+      current: () => current,
+      refresh,
       archive: async (requestId) => {
         const result = await daemonClient.archiveWorkspace(id, requestId);
-        if (latest) {
-          latest = { ...latest, archivingAt: result.archivedAt };
+        if (current) {
+          current = { ...current, archivingAt: result.archivedAt };
         }
         return result;
       },
@@ -444,11 +541,11 @@ function createWorkspaceHandleFactory(daemonClient: DaemonClient): WorkspaceHand
         daemonClient.on("workspace_update", (message) => {
           const update = message.payload;
           if (update.kind === "upsert" && update.workspace.id === id) {
-            latest = update.workspace;
+            current = update.workspace;
             handler(update);
           }
           if (update.kind === "remove" && update.id === id) {
-            latest = null;
+            current = null;
             handler(update);
           }
         }),
@@ -459,7 +556,7 @@ function createWorkspaceHandleFactory(daemonClient: DaemonClient): WorkspaceHand
 function createAgentHandleFactory(daemonClient: DaemonClient): AgentHandleFactory {
   return (agent) => {
     const id = typeof agent === "string" ? agent : agent.id;
-    let latest = typeof agent === "string" ? null : agent;
+    let current = typeof agent === "string" ? null : agent;
 
     const handle: BySpaceAgentHandle = {
       id,
@@ -467,7 +564,7 @@ function createAgentHandleFactory(daemonClient: DaemonClient): AgentHandleFactor
         refetch: async (options) => {
           const result = await daemonClient.fetchAgentTimeline(id, options);
           if (result.agent) {
-            latest = result.agent;
+            current = result.agent;
           }
           return result;
         },
@@ -478,19 +575,50 @@ function createAgentHandleFactory(daemonClient: DaemonClient): AgentHandleFactor
             }
           }),
       },
-      latest: () => latest,
-      refetch: async (requestId) => {
+      get workspaceId() {
+        return current?.workspaceId ?? null;
+      },
+      get cwd() {
+        return current?.cwd ?? null;
+      },
+      get status() {
+        return current?.status ?? null;
+      },
+      current: () => current,
+      refresh: async (requestId) => {
         const result = await daemonClient.fetchAgent({ agentId: id, requestId });
-        latest = result?.agent ?? null;
+        current = result?.agent ?? null;
         return result;
       },
       send: async (text, options) => {
         await daemonClient.sendAgentMessage(id, text, options);
       },
+      run: async (text, options) => {
+        const { timeoutMs, ...sendOptions } = options ?? {};
+        await daemonClient.sendAgentMessage(id, text, sendOptions);
+        const result = await daemonClient.waitForFinish(
+          id,
+          timeoutMs ?? DEFAULT_WAIT_FOR_FINISH_MS,
+        );
+        if (result.final) {
+          current = result.final;
+        }
+        return result;
+      },
+      waitForFinish: async (timeoutMs) => {
+        const result = await daemonClient.waitForFinish(
+          id,
+          timeoutMs ?? DEFAULT_WAIT_FOR_FINISH_MS,
+        );
+        if (result.final) {
+          current = result.final;
+        }
+        return result;
+      },
       archive: async () => {
         const result = await daemonClient.archiveAgent(id);
-        if (latest) {
-          latest = { ...latest, archivedAt: result.archivedAt };
+        if (current) {
+          current = { ...current, archivedAt: result.archivedAt };
         }
         return result;
       },
@@ -501,11 +629,11 @@ function createAgentHandleFactory(daemonClient: DaemonClient): AgentHandleFactor
         daemonClient.on("agent_update", (message) => {
           const update = message.payload;
           if (update.kind === "upsert" && update.agent.id === id) {
-            latest = update.agent;
+            current = update.agent;
             handler(update);
           }
           if (update.kind === "remove" && update.agentId === id) {
-            latest = null;
+            current = null;
             handler(update);
           }
         }),
@@ -520,30 +648,114 @@ async function openWorkspace(
   createWorkspaceHandle: WorkspaceHandleFactory,
   input: string | BySpaceWorkspaceOpenOptions,
   requestId?: string,
-): Promise<BySpaceWorkspaceOpenResult> {
+): Promise<BySpaceWorkspaceHandle> {
   const options = typeof input === "string" ? { cwd: input, requestId } : input;
   const result = await daemonClient.openProject(options.cwd, options.requestId);
-  return {
-    ...result,
-    workspace: result.workspace ? createWorkspaceHandle(result.workspace) : null,
-  };
+  if (result.error || !result.workspace) {
+    throw new Error(result.error ?? `The daemon did not open a workspace for ${options.cwd}`);
+  }
+  return createWorkspaceHandle(result.workspace);
 }
 
 function resolveWorkspaceId(workspace: string | BySpaceWorkspaceHandle): string {
   return typeof workspace === "string" ? workspace : workspace.id;
 }
 
-function providerConfig(
-  provider: BySpaceAgentProvider,
-  input: BySpaceProviderConfigInput = {},
-): BySpaceProviderConfig {
+function resolveAgentId(agent: string | BySpaceAgentHandle): string {
+  return typeof agent === "string" ? agent : agent.id;
+}
+
+function parseProviderModel(selection: string): { provider: string; model: string } {
+  const separator = selection.indexOf("/");
+  if (separator <= 0 || separator === selection.length - 1) {
+    throw new Error('Expected config.provider in "provider/model" format');
+  }
   return {
-    provider,
-    ...(input.model !== undefined ? { model: input.model } : {}),
-    ...(input.modeId !== undefined ? { modeId: input.modeId } : {}),
-    ...(input.thinkingOptionId !== undefined ? { thinkingOptionId: input.thinkingOptionId } : {}),
-    ...(input.featureValues !== undefined ? { featureValues: input.featureValues } : {}),
+    provider: selection.slice(0, separator),
+    model: selection.slice(separator + 1),
   };
+}
+
+function waitForProvidersReady(
+  daemonClient: DaemonClient,
+  options: BySpaceProviderWaitOptions = {},
+): Promise<BySpaceProviderSnapshotResult> {
+  // COMPAT(providersSnapshotCwd): added in v0.6.0, remove gate after 2027-02-21.
+  if (daemonClient.getLastServerInfoMessage()?.features?.providersSnapshotCwd !== true) {
+    return Promise.reject(new Error("Update the host to wait for provider discovery."));
+  }
+
+  const { timeoutMs = 60_000, ...snapshotOptions } = options;
+
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    let requestId: string | null = null;
+    let snapshotCwd: string | undefined;
+    const pendingUpdates = new Map<string | undefined, BySpaceProviderSnapshotUpdate>();
+    let latestEntries: BySpaceProviderSnapshotResult["entries"] = [];
+
+    const cleanup = () => {
+      clearTimeout(timeout);
+      unsubscribe();
+    };
+    const finish = (snapshot: BySpaceProviderSnapshotResult) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      resolve(snapshot);
+    };
+    const fail = (error: unknown) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      reject(error instanceof Error ? error : new Error(String(error)));
+    };
+    const updateMatches = (update: BySpaceProviderSnapshotUpdate) => update.cwd === snapshotCwd;
+
+    const unsubscribe = daemonClient.on("providers_snapshot_update", (message) => {
+      const update = message.payload;
+      if (!requestId) {
+        pendingUpdates.set(update.cwd, update);
+        return;
+      }
+      if (!updateMatches(update)) return;
+      latestEntries = update.entries;
+      if (update.entries.some((entry) => entry.status === "loading")) return;
+      finish({ ...update, requestId });
+    });
+
+    const timeout = setTimeout(() => {
+      const loading = latestEntries
+        .filter((entry) => entry.status === "loading")
+        .map((entry) => entry.provider)
+        .join(", ");
+      fail(
+        new Error(
+          loading
+            ? `Timed out waiting for providers: ${loading}`
+            : "Timed out waiting for provider discovery",
+        ),
+      );
+    }, timeoutMs);
+
+    void daemonClient
+      .getProvidersSnapshot(snapshotOptions)
+      .then((snapshot) => {
+        requestId = snapshot.requestId;
+        snapshotCwd = snapshot.cwd;
+        latestEntries = snapshot.entries;
+        if (!snapshot.entries.some((entry) => entry.status === "loading")) {
+          finish(snapshot);
+          return;
+        }
+        const pendingUpdate = pendingUpdates.get(snapshotCwd);
+        if (pendingUpdate && !pendingUpdate.entries.some((entry) => entry.status === "loading")) {
+          finish({ ...pendingUpdate, requestId });
+        }
+        return undefined;
+      })
+      .catch(fail);
+  });
 }
 
 function createGeneratedClientId(): string {

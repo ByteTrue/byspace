@@ -36,6 +36,8 @@ Users can also detach an existing subagent from the subagents track. Detach remo
 
 `notifyOnFinish` defaults to `true` for agent-scoped creation and background prompt follow-ups because most delegated work needs to report back to the creating agent. Set it to `false` only for truly fire-and-forget agents or prompts.
 
+Permission requests are notification checkpoints, not the end of that subscription. The caller is notified again after a permission response when the child finishes, errors, or requests another permission. The permission notification includes the normalized request plus the child and request IDs, so the caller can inspect it and respond without fetching agent status. A watched child that closes before its finish event also notifies the caller so delegated work cannot disappear silently during archive or workspace teardown.
+
 ## Provider-managed child agents
 
 Some providers can create their own child sessions inside one provider runtime. OMP's task tool reports these with `child_session` events; `AgentManager` imports the live provider handle, stamps `byspace.parent-agent-id`, and surfaces the result as a normal subagent in the parent's subagents track.

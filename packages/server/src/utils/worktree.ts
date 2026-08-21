@@ -1,4 +1,4 @@
-import { copyFile as copyProjectConfig, stat as statProjectConfig } from "node:fs/promises";
+import { copyFile as copyProjectConfig } from "node:fs/promises";
 import { resolve as resolveProjectPath } from "node:path";
 import {
   getRealpathAwareRelativePath as getProjectRelativePath,
@@ -6,7 +6,14 @@ import {
 } from "./path.js";
 import { execFile } from "child_process";
 import { promisify } from "util";
-import { existsSync, mkdirSync, realpathSync, rmSync, statSync } from "fs";
+import {
+  constants as fsConstants,
+  existsSync,
+  mkdirSync,
+  realpathSync,
+  rmSync,
+  statSync,
+} from "fs";
 import { copyFile, rm, stat } from "fs/promises";
 import { join, basename, dirname, isAbsolute, resolve, sep } from "path";
 import net from "node:net";
@@ -213,13 +220,6 @@ export interface CreateWorktreeOptions {
   worktreeSlug: string;
   source: WorktreeSource;
   runSetup: boolean;
-  byspaceHome?: string;
-  worktreesRoot?: string;
-}
-
-interface ResolveExistingWorktreeForSlugOptions {
-  slug: string;
-  repoRoot: string;
   byspaceHome?: string;
   worktreesRoot?: string;
 }
@@ -1033,38 +1033,6 @@ export async function listBySpaceWorktrees({
     );
 }
 
-export async function resolveExistingWorktreeForSlug({
-  slug,
-  repoRoot,
-  byspaceHome,
-  worktreesRoot,
-}: ResolveExistingWorktreeForSlugOptions): Promise<WorktreeConfig | null> {
-  const worktrees = await listBySpaceWorktrees({
-    cwd: repoRoot,
-    byspaceHome,
-    worktreesRoot,
-  });
-  const slugSuffix = `${sep}${slug}`;
-  const existingWorktree = worktrees.find((worktree) => worktree.path.endsWith(slugSuffix));
-  if (!existingWorktree) {
-    return null;
-  }
-
-  const { stdout } = await runGitCommand(["branch", "--show-current"], {
-    cwd: existingWorktree.path,
-    envOverlay: READ_ONLY_GIT_ENV,
-  });
-  const branchName = stdout.trim();
-  if (!branchName) {
-    throw new Error(`Unable to resolve branch for existing worktree: ${existingWorktree.path}`);
-  }
-
-  return {
-    branchName,
-    worktreePath: existingWorktree.path,
-  };
-}
-
 export async function resolveBySpaceWorktreeRootForCwd(
   cwd: string,
   options?: WorktreeRootOptions,
@@ -1386,7 +1354,12 @@ async function resolveWorktreeSourcePlan({
         }
       }
       if (await isBranchCheckedOut(cwd, source.branchName)) {
-        throw new BranchAlreadyCheckedOutError(source.branchName);
+        const branchName = await resolveUniqueLocalBranchName(cwd, source.branchName);
+        return {
+          branchName,
+          metadataBaseRefName: source.branchName,
+          addArguments: ["-b", branchName, "--no-track", source.branchName],
+        };
       }
 
       return {
@@ -1720,15 +1693,12 @@ export async function seedBySpaceConfigFile(options: {
 }): Promise<void> {
   const sourceConfigPath = resolveProjectPath(options.sourceCwd, "byspace.json");
   const targetConfigPath = resolveProjectPath(options.targetCwd, "byspace.json");
-  try {
-    await statProjectConfig(targetConfigPath);
-    return;
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
-  }
-  await copyProjectConfig(sourceConfigPath, targetConfigPath).catch((error) => {
-    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
-  });
+  await copyProjectConfig(sourceConfigPath, targetConfigPath, fsConstants.COPYFILE_EXCL).catch(
+    (error) => {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (code !== "EEXIST" && code !== "ENOENT") throw error;
+    },
+  );
 }
 
 export function mapWorkspaceCwdToWorktree(input: {

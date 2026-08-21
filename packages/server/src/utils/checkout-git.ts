@@ -59,8 +59,10 @@ export type GitMutationRefreshReason =
   | "create-branch"
   | "stash-push"
   | "stash-pop"
+  | "discard-changes"
   | "create-worktree";
 
+const DISCARD_CHANGES_TIMEOUT_MS = 120_000;
 const DEFAULT_PULL_REQUEST_STATUS_CACHE_TTL_MS = 30_000;
 const PULL_REQUEST_STATUS_CACHE_MAX = 1_000;
 const DEFAULT_SHORTSTAT_CACHE_TTL_MS = 15_000;
@@ -1693,8 +1695,17 @@ async function getAheadBehind(
   if (!comparisonBaseRef) {
     return null;
   }
+  return getAheadBehindForComparisonRef(cwd, comparisonBaseRef, currentBranch, context);
+}
+
+async function getAheadBehindForComparisonRef(
+  cwd: string,
+  comparisonRef: string,
+  currentBranch: string,
+  context?: CheckoutContext,
+): Promise<AheadBehind | null> {
   const { stdout } = await runGitCommand(
-    ["rev-list", "--left-right", "--count", `${comparisonBaseRef}...${currentBranch}`],
+    ["rev-list", "--left-right", "--count", `${comparisonRef}...${currentBranch}`],
     { cwd, envOverlay: READ_ONLY_GIT_ENV, logger: context?.logger },
   );
   const [behindRaw, aheadRaw] = stdout.trim().split(/\s+/);
@@ -2179,6 +2190,7 @@ function buildPlaceholderParsedDiffFile(
 ): ParsedDiffFile {
   return {
     path: change.path,
+    ...(change.oldPath ? { oldPath: change.oldPath } : {}),
     isNew: change.isNew,
     isDeleted: change.isDeleted,
     additions: options.stat?.additions ?? 0,
@@ -2656,7 +2668,7 @@ function parseCheckoutShortstat(text: string): CheckoutShortstat | null {
 
 const UNTRACKED_SHORTSTAT_MAX_FILES = 500;
 
-async function countUntrackedAdditions(cwd: string): Promise<number> {
+async function countUntrackedAdditions(cwd: string, throwOnGitError = false): Promise<number> {
   try {
     const { stdout } = await runGitCommand(["ls-files", "--others", "--exclude-standard"], {
       cwd,
@@ -2684,14 +2696,25 @@ async function countUntrackedAdditions(cwd: string): Promise<number> {
       }
     }
     return additions;
-  } catch {
+  } catch (error) {
+    if (throwOnGitError) {
+      throw error;
+    }
     return 0;
   }
+}
+
+function handleShortstatGitError(error: unknown, throwOnGitError = false): null {
+  if (throwOnGitError) {
+    throw error;
+  }
+  return null;
 }
 
 async function getCheckoutShortstatUncached(
   cwd: string,
   context?: CheckoutContext,
+  options?: { throwOnGitError?: boolean },
 ): Promise<CheckoutShortstat | null> {
   if (context?.facts?.isGit === false) {
     return null;
@@ -2734,7 +2757,7 @@ async function getCheckoutShortstatUncached(
         cwd,
         envOverlay: READ_ONLY_GIT_ENV,
       }),
-      countUntrackedAdditions(cwd),
+      countUntrackedAdditions(cwd, options?.throwOnGitError),
     ]);
 
     const tracked = parseCheckoutShortstat(stdout);
@@ -2746,8 +2769,8 @@ async function getCheckoutShortstatUncached(
       return { additions: untrackedAdditions, deletions: 0 };
     }
     return null;
-  } catch {
-    return null;
+  } catch (error) {
+    return handleShortstatGitError(error, options?.throwOnGitError);
   }
 }
 
@@ -2813,6 +2836,133 @@ export async function getCheckoutShortstat(
   options?: CheckoutReadCacheOptions,
 ): Promise<CheckoutShortstat | null> {
   return getOrLoadCheckoutShortstat(cwd, context, options);
+}
+
+export interface CheckoutRefDerivedState {
+  aheadBehind: AheadBehind | null;
+  diffStat: CheckoutShortstat | null;
+  upstreamStatus: UpstreamStatus | null;
+}
+
+function normalizeRemoteTrackingRef(ref: string): string {
+  return ref.startsWith("refs/remotes/") ? ref.slice("refs/remotes/".length) : ref;
+}
+
+function checkoutFactsConfiguredRemoteRef(
+  facts: Extract<CheckoutSnapshotFacts, { isGit: true }>,
+): string | null {
+  const trackedBranch = facts.branchMergeRef?.startsWith("refs/heads/")
+    ? facts.branchMergeRef.slice("refs/heads/".length)
+    : null;
+  return facts.branchRemoteName && facts.branchRemoteName !== "." && trackedBranch
+    ? `${facts.branchRemoteName}/${trackedBranch}`
+    : null;
+}
+
+function getCheckoutRefMovement(
+  facts: Extract<CheckoutSnapshotFacts, { isGit: true }>,
+  movedRemoteRefs: ReadonlySet<string>,
+): {
+  baseMoved: boolean;
+  comparisonRef: string | null;
+  currentBranch: string | null;
+  normalizedResolvedBase: string | null;
+  upstreamMoved: boolean;
+  upstreamRef: string | null;
+} {
+  const currentBranch = facts.currentBranch;
+  const comparisonRef = facts.comparisonBaseRef;
+  const normalizedMoves = new Set([...movedRemoteRefs].map(normalizeRemoteTrackingRef));
+  const normalizedResolvedBase = facts.resolvedBaseRef
+    ? branchNameFromRef(facts.resolvedBaseRef)
+    : null;
+  const shortstatRemoteRef =
+    currentBranch && (!normalizedResolvedBase || normalizedResolvedBase === currentBranch)
+      ? `origin/${currentBranch}`
+      : null;
+  const baseMoved = [facts.storedBaseRef, facts.resolvedBaseRef, comparisonRef, shortstatRemoteRef]
+    .filter((ref): ref is string => Boolean(ref))
+    .map(normalizeRemoteTrackingRef)
+    .some((ref) => normalizedMoves.has(ref));
+  const upstreamRef = facts.upstreamStatus?.ref ?? checkoutFactsConfiguredRemoteRef(facts);
+  const upstreamMoved = upstreamRef
+    ? normalizedMoves.has(normalizeRemoteTrackingRef(upstreamRef))
+    : false;
+  return {
+    baseMoved,
+    comparisonRef,
+    currentBranch,
+    normalizedResolvedBase,
+    upstreamMoved,
+    upstreamRef,
+  };
+}
+
+export async function getCheckoutRefDerivedState(
+  cwd: string,
+  facts: Extract<CheckoutSnapshotFacts, { isGit: true }>,
+  current: Pick<CheckoutRefDerivedState, "aheadBehind" | "diffStat">,
+  movedRemoteRefs: ReadonlySet<string>,
+  context?: CheckoutContext,
+): Promise<CheckoutRefDerivedState> {
+  const {
+    baseMoved,
+    comparisonRef,
+    currentBranch,
+    normalizedResolvedBase,
+    upstreamMoved,
+    upstreamRef,
+  } = getCheckoutRefMovement(facts, movedRemoteRefs);
+
+  let aheadBehind = current.aheadBehind;
+  let diffStat = current.diffStat;
+  if (baseMoved && currentBranch && facts.resolvedBaseRef) {
+    aheadBehind = await getAheadBehind(cwd, facts.resolvedBaseRef, currentBranch, {
+      ...context,
+      facts,
+    });
+  }
+  if (baseMoved || (upstreamMoved && currentBranch === normalizedResolvedBase)) {
+    diffStat = await getCheckoutShortstatUncached(
+      cwd,
+      { ...context, facts },
+      { throwOnGitError: true },
+    );
+  }
+
+  let upstreamStatus = facts.upstreamStatus;
+  if (upstreamMoved && currentBranch && upstreamRef) {
+    const normalizedUpstream = normalizeRemoteTrackingRef(upstreamRef);
+    const normalizedComparison = comparisonRef ? normalizeRemoteTrackingRef(comparisonRef) : null;
+    const upstreamAheadBehind =
+      baseMoved && normalizedComparison === normalizedUpstream
+        ? aheadBehind
+        : await getAheadBehindForComparisonRef(cwd, upstreamRef, currentBranch, context);
+    upstreamStatus = upstreamAheadBehind
+      ? {
+          ref: facts.upstreamStatus?.ref ?? `refs/remotes/${normalizedUpstream}`,
+          aheadBehind: upstreamAheadBehind,
+        }
+      : null;
+  }
+
+  return { aheadBehind, diffStat, upstreamStatus };
+}
+
+export interface CheckoutWorktreeState {
+  isDirty: boolean;
+  diffStat: CheckoutShortstat | null;
+}
+
+export async function getCheckoutWorktreeState(
+  cwd: string,
+  context: CheckoutContext,
+): Promise<CheckoutWorktreeState> {
+  const [isDirty, diffStat] = await Promise.all([
+    isWorkingTreeDirty(cwd, context),
+    getCheckoutShortstat(cwd, context, { force: true }),
+  ]);
+  return { isDirty, diffStat };
 }
 
 export function getCachedCheckoutShortstat(cwd: string): CheckoutShortstat | null | undefined {
@@ -2956,6 +3106,7 @@ async function appendStructuredTrackedDiffs(
       const file = {
         ...parsedFile,
         path: change.path,
+        ...(change.oldPath ? { oldPath: change.oldPath } : {}),
         isNew: change.isNew,
         isDeleted: change.isDeleted,
         status: "ok",
@@ -2975,6 +3126,7 @@ async function appendStructuredTrackedDiffs(
 
     const file = {
       path: change.path,
+      ...(change.oldPath ? { oldPath: change.oldPath } : {}),
       isNew: change.isNew,
       isDeleted: change.isDeleted,
       additions: stat?.additions ?? 0,
@@ -3046,6 +3198,7 @@ async function processUntrackedChange(input: ProcessUntrackedChangeInput): Promi
     parsed[0] ??
     ({
       path: change.path,
+      ...(change.oldPath ? { oldPath: change.oldPath } : {}),
       isNew: change.isNew,
       isDeleted: change.isDeleted,
       additions: stat?.additions ?? 0,
@@ -3056,6 +3209,7 @@ async function processUntrackedChange(input: ProcessUntrackedChangeInput): Promi
   const file = {
     ...parsedFile,
     path: change.path,
+    ...(change.oldPath ? { oldPath: change.oldPath } : {}),
     isNew: change.isNew,
     isDeleted: change.isDeleted,
     status: "ok",
@@ -3319,6 +3473,71 @@ export async function commitChanges(
 
 export async function commitAll(cwd: string, message: string): Promise<void> {
   await commitChanges(cwd, { message, addAll: true });
+}
+
+export async function discardChanges(cwd: string, pathspecs: string[]): Promise<void> {
+  await requireGitRepo(cwd);
+  if (pathspecs.length === 0) {
+    return;
+  }
+  try {
+    await runGitCommand(["--literal-pathspecs", "reset", "-q", "HEAD", "--", ...pathspecs], {
+      cwd,
+      timeout: DISCARD_CHANGES_TIMEOUT_MS,
+    });
+  } catch {
+    // Why: unborn HEAD has no commit for reset, so remove the paths directly from the index.
+    await runGitCommand(
+      ["--literal-pathspecs", "rm", "--cached", "-r", "-q", "--ignore-unmatch", "--", ...pathspecs],
+      {
+        cwd,
+        timeout: DISCARD_CHANGES_TIMEOUT_MS,
+      },
+    );
+  }
+  // With everything unstaged, the remaining state is only worktree
+  // modifications/deletions (restore from the index) and untracked files
+  // (clean). Classify from porcelain so each path gets the command that
+  // actually applies to it.
+  const status = await runGitCommand(
+    ["--literal-pathspecs", "status", "--porcelain=v1", "-z", "--", ...pathspecs],
+    {
+      cwd,
+      timeout: DISCARD_CHANGES_TIMEOUT_MS,
+    },
+  );
+  const tracked: string[] = [];
+  const untracked: string[] = [];
+  const tokens = status.stdout.split("\0");
+  for (let index = 0; index < tokens.length; index++) {
+    const token = tokens[index];
+    if (token.length < 4) {
+      continue;
+    }
+    const state = token.slice(0, 2);
+    const filePath = token.slice(3);
+    if (state.startsWith("R") || state.startsWith("C")) {
+      // Rename/copy entries carry the source path as the next NUL token.
+      index += 1;
+    }
+    if (state === "??") {
+      untracked.push(filePath);
+      continue;
+    }
+    tracked.push(filePath);
+  }
+  if (tracked.length > 0) {
+    await runGitCommand(["--literal-pathspecs", "checkout", "-q", "--", ...tracked], {
+      cwd,
+      timeout: DISCARD_CHANGES_TIMEOUT_MS,
+    });
+  }
+  if (untracked.length > 0) {
+    await runGitCommand(["--literal-pathspecs", "clean", "-fd", "-q", "--", ...untracked], {
+      cwd,
+      timeout: DISCARD_CHANGES_TIMEOUT_MS,
+    });
+  }
 }
 
 interface DetectMergeToBaseConflictInput {

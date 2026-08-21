@@ -272,7 +272,6 @@ try {
     "byspace-advisor",
     "byspace-committee",
     "byspace-handoff",
-    "byspace-loop",
     "byspace-project-setup",
   ];
   const installedBundledSkills = readdirSync(installedSkillsRoot, { withFileTypes: true })

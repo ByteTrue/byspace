@@ -649,4 +649,72 @@ describe("DaemonConfigStore", () => {
     expect(store.get().dictation?.refineWithAgent).toBe(true);
     expect(loadPersistedConfig(byspaceHome).features?.dictation?.refineWithAgent).toBe(true);
   });
+
+  test("patch round-trips agent profiles through persisted config", () => {
+    const byspaceHome = mkdtempSync(path.join(tmpdir(), "byspace-daemon-config-store-"));
+    tempDirs.push(byspaceHome);
+    const store = new DaemonConfigStore(byspaceHome, {
+      relay: { enabled: false },
+      mcp: { injectIntoAgents: false },
+      providers: {},
+      metadataGeneration: { providers: [] },
+      autoArchiveAfterMerge: false,
+      enableTerminalAgentHooks: false,
+      appendSystemPrompt: "",
+    });
+
+    store.patch({
+      agentProfiles: [
+        {
+          id: "profile_ui",
+          name: "UI work",
+          icon: "🎨",
+          provider: "claude",
+          model: "claude-opus-5",
+          modeId: "plan",
+          thinkingOptionId: "think-hard",
+          featureValues: { webSearch: true },
+          notes: "Use for components, layout and design tokens.",
+        },
+      ],
+    });
+
+    expect(loadPersistedConfig(byspaceHome).daemon?.agentProfiles).toEqual([
+      {
+        id: "profile_ui",
+        name: "UI work",
+        icon: "🎨",
+        provider: "claude",
+        model: "claude-opus-5",
+        modeId: "plan",
+        thinkingOptionId: "think-hard",
+        featureValues: { webSearch: true },
+        notes: "Use for components, layout and design tokens.",
+      },
+    ]);
+    expect(store.get().agentProfiles).toHaveLength(1);
+  });
+
+  test("patch replaces the whole agent profile list", () => {
+    const byspaceHome = mkdtempSync(path.join(tmpdir(), "byspace-daemon-config-store-"));
+    tempDirs.push(byspaceHome);
+    const store = new DaemonConfigStore(byspaceHome, {
+      relay: { enabled: false },
+      mcp: { injectIntoAgents: false },
+      providers: {},
+      metadataGeneration: { providers: [] },
+      autoArchiveAfterMerge: false,
+      enableTerminalAgentHooks: false,
+      appendSystemPrompt: "",
+      agentProfiles: [
+        { id: "a", name: "Keep", provider: "claude" },
+        { id: "b", name: "Drop", provider: "codex" },
+      ],
+    });
+
+    store.patch({ agentProfiles: [{ id: "a", name: "Keep", provider: "claude" }] });
+
+    expect(store.get().agentProfiles).toEqual([{ id: "a", name: "Keep", provider: "claude" }]);
+    expect(loadPersistedConfig(byspaceHome).daemon?.agentProfiles).toHaveLength(1);
+  });
 });

@@ -25,8 +25,8 @@ export interface OpenCodeServerAcquisition {
 }
 
 export interface OpenCodeServerManagerLike {
-  acquireCurrent(): Promise<OpenCodeServerAcquisition>;
-  acquireNew(): Promise<OpenCodeServerAcquisition>;
+  acquireCurrent(signal?: AbortSignal): Promise<OpenCodeServerAcquisition>;
+  acquireNew(signal?: AbortSignal): Promise<OpenCodeServerAcquisition>;
   acquireDedicated(env: Record<string, string>): Promise<OpenCodeServerAcquisition>;
   acquireExisting(url: string): OpenCodeServerAcquisition | null;
   shutdown(): Promise<void>;
@@ -134,15 +134,18 @@ export class OpenCodeServerManager implements OpenCodeServerManagerLike {
     process.on("SIGINT", cleanup);
   }
 
-  async acquireCurrent(): Promise<OpenCodeServerAcquisition> {
+  async acquireCurrent(signal?: AbortSignal): Promise<OpenCodeServerAcquisition> {
+    signal?.throwIfAborted();
     const current = this.currentServer;
     const server =
       !this.newServerPromise && !this.startPromise && current && this.isServerLive(current)
         ? current
-        : await this.getCurrentServer();
+        : await waitForServerAcquisition(this.getCurrentServer(), signal);
+    signal?.throwIfAborted();
     const acquisition = this.acquireServer(server);
     try {
-      await server.ready;
+      await waitForServerAcquisition(server.ready, signal);
+      signal?.throwIfAborted();
       return acquisition;
     } catch (error) {
       await acquisition.release();
@@ -150,8 +153,10 @@ export class OpenCodeServerManager implements OpenCodeServerManagerLike {
     }
   }
 
-  async acquireNew(): Promise<OpenCodeServerAcquisition> {
-    const server = await this.getNewServer();
+  async acquireNew(signal?: AbortSignal): Promise<OpenCodeServerAcquisition> {
+    signal?.throwIfAborted();
+    const server = await waitForServerAcquisition(this.getNewServer(), signal);
+    signal?.throwIfAborted();
     return this.acquireServer(server);
   }
 
@@ -533,6 +538,23 @@ export class OpenCodeServerManager implements OpenCodeServerManagerLike {
     } catch (error) {
       this.logger.warn({ err: error, id }, "Failed to remove OpenCode helper process record");
     }
+  }
+}
+
+async function waitForServerAcquisition<T>(
+  operation: Promise<T>,
+  signal: AbortSignal | undefined,
+): Promise<T> {
+  if (!signal) return await operation;
+  let handleAbort: (() => void) | undefined;
+  const aborted = new Promise<never>((_resolve, reject) => {
+    handleAbort = () => reject(signal.reason);
+    signal.addEventListener("abort", handleAbort, { once: true });
+  });
+  try {
+    return await Promise.race([operation, aborted]);
+  } finally {
+    if (handleAbort) signal.removeEventListener("abort", handleAbort);
   }
 }
 

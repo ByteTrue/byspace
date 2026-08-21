@@ -139,6 +139,25 @@ function findLayoutItem(layout: StreamLayout, id: string): StreamLayoutItem {
 }
 
 describe("layoutStream", () => {
+  it("marks only the active live-head assistant block as streaming", () => {
+    const completed = assistantMessage("turn:block:0", 2, { groupId: "turn", index: 0 });
+    const live = assistantMessage("turn:block:1", 3, { groupId: "turn", index: 1 });
+    const active = layoutFor({
+      isTurnActive: true,
+      tail: [userMessage("u1", 1), completed],
+      head: [live],
+    });
+    const complete = layoutFor({
+      isTurnActive: false,
+      tail: [userMessage("u1", 1), completed],
+      head: [live],
+    });
+
+    expect(findLayoutItem(active, completed.id).phase).toBe("complete");
+    expect(findLayoutItem(active, live.id).phase).toBe("streaming");
+    expect(findLayoutItem(complete, live.id).phase).toBe("complete");
+  });
+
   it("keeps split assistant block spacing identical to unsplit history", () => {
     const firstBlock = assistantMessage("turn:block:0", 2, { groupId: "turn", index: 0 });
     const secondBlock = assistantMessage("turn:block:1", 3, { groupId: "turn", index: 1 });

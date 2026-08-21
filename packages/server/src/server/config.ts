@@ -446,6 +446,20 @@ function resolveAppendSystemPrompt(persisted: ReturnType<typeof loadPersistedCon
   return persisted.daemon?.appendSystemPrompt ?? "";
 }
 
+function resolveProviderCatalogRefreshTimeout(
+  persisted: ReturnType<typeof loadPersistedConfig>,
+): number | undefined {
+  return persisted.agents?.catalogRefreshTimeoutMs;
+}
+
+/** Preserve undefined so an explicit empty profile list keeps its meaning. */
+function resolveProfileLists(persisted: ReturnType<typeof loadPersistedConfig>) {
+  return {
+    terminalProfiles: persisted.daemon?.terminalProfiles,
+    agentProfiles: persisted.daemon?.agentProfiles,
+  };
+}
+
 function resolveStaticLoadConfigSettings(
   env: NodeJS.ProcessEnv,
   cli: CliConfigOverrides | undefined,
@@ -456,7 +470,7 @@ function resolveStaticLoadConfigSettings(
     mcpEnabled: cli?.mcpEnabled ?? persisted.daemon?.mcp?.enabled ?? true,
     autoArchiveAfterMerge: persisted.daemon?.autoArchiveAfterMerge ?? false,
     appendSystemPrompt: resolveAppendSystemPrompt(persisted),
-    terminalProfiles: persisted.daemon?.terminalProfiles,
+    ...resolveProfileLists(persisted),
     hostnames: mergeHostnames([
       persisted.daemon?.hostnames,
       parseHostnamesEnv(env.BYSPACE_HOSTNAMES ?? env.BYSPACE_ALLOWED_HOSTS),
@@ -489,6 +503,7 @@ export function loadConfig(
     autoArchiveAfterMerge,
     appendSystemPrompt,
     terminalProfiles,
+    agentProfiles,
     hostnames,
     trustedProxies,
     appBaseUrl,
@@ -531,6 +546,7 @@ export function loadConfig(
     terminalAgentHooks: persisted.daemon?.terminalAgentHooks,
     appendSystemPrompt,
     terminalProfiles,
+    agentProfiles,
     mcpDebug: env.MCP_DEBUG === "1",
     isDev: resolveBySpaceNodeEnv(env) === "development",
     agentStoragePath: path.join(byspaceHome, "agents"),
@@ -550,6 +566,7 @@ export function loadConfig(
     speech,
     dictationRefineWithAgent: Boolean(persisted.features?.dictation?.refineWithAgent),
     agentProviderSettings: extractAgentProviderSettings(providerOverrides),
+    providerCatalogRefreshTimeoutMs: resolveProviderCatalogRefreshTimeout(persisted),
     metadataGeneration: persisted.agents?.metadataGeneration,
     providerOverrides,
     log: resolveLogConfigFromEnv(env, persisted),

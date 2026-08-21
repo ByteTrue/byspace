@@ -1,39 +1,32 @@
-import { memo, useCallback, useMemo, useRef, useState, type ReactElement } from "react";
+import { useCallback, useMemo, useRef, useState, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
-import { Text, View, type PressableStateCallbackType } from "react-native";
+import { Text, View } from "react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { useShallow } from "zustand/shallow";
 import { useStoreWithEqualityFn } from "zustand/traditional";
-import { getAgentModeIcon, getAgentModeOptionIcon } from "@/agent-controls/icons";
-import { formatAgentModeLabel } from "@/agent-controls/labels";
-import { ComboboxTrigger } from "@/components/ui/combobox-trigger";
 import { type SheetHeader } from "@/components/adaptive-modal-sheet";
 import { Combobox, ComboboxItem, type ComboboxOption } from "@/components/ui/combobox";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Shortcut } from "@/components/ui/shortcut";
-import { useSessionStore } from "@/stores/session-store";
-import { useProvidersSnapshot } from "@/hooks/use-providers-snapshot";
-import { mergeProviderPreferences, useFormPreferences } from "@/hooks/use-form-preferences";
-import { resolveProviderDefinition } from "@/utils/provider-definitions";
-import { useToast } from "@/contexts/toast-context";
-import { useIsCompactFormFactor } from "@/constants/layout";
-import { toErrorMessage } from "@/utils/error-messages";
-import { showProviderNoticeToast } from "@/utils/provider-notice-toast";
+import { formatAgentModeLabel } from "@/agent-controls/labels";
 import { getAgentControlHintKey } from "@/composer/agent-controls/utils";
 import { useShortcutKeys } from "@/hooks/use-shortcut-keys";
 import { useKeyboardActionHandler } from "@/hooks/use-keyboard-action-handler";
 import type { KeyboardActionDefinition } from "@/keyboard/keyboard-action-dispatcher";
 import { resolveNextAgentModeId } from "@/composer/agent-controls/mode";
 import { useComposerKeyboardScope } from "@/composer/keyboard-scope";
-import type { AgentMode, AgentProvider } from "@bytetrue/byspace-protocol/agent-types";
+import { useComposerControlLayout } from "@/composer/agent-controls/layout-context";
+import { AgentControlTrigger } from "@/composer/agent-controls/control";
+import { useSessionStore } from "@/stores/session-store";
+import { useProvidersSnapshot } from "@/hooks/use-providers-snapshot";
+import { mergeProviderPreferences, useFormPreferences } from "@/hooks/use-form-preferences";
+import { resolveProviderDefinition } from "@/utils/provider-definitions";
+import { useToast } from "@/contexts/toast-context";
+import { toErrorMessage } from "@/utils/error-messages";
+import { showProviderNoticeToast } from "@/utils/provider-notice-toast";
+import type { AgentMode } from "@bytetrue/byspace-protocol/agent-types";
 import type { AgentProviderDefinition } from "@bytetrue/byspace-protocol/provider-manifest";
-
-export type AgentModeControlPlacement = "toolbar" | "footer";
-
-function shouldRenderForPlacement(placement: AgentModeControlPlacement, isCompact: boolean) {
-  return placement === "footer" ? isCompact : !isCompact;
-}
-
+import { getAgentModeIcon, getAgentModeOptionIcon } from "@/agent-controls/icons";
 interface ModeComboboxOptionProps {
   option: ComboboxOption;
   selected: boolean;
@@ -82,20 +75,24 @@ function normalizeSearchQuery(value: string): string {
   return value.trim().toLowerCase();
 }
 
-function AgentModeControlView({
+export function AgentModeControl({
   provider,
   providerDefinitions,
   modeOptions,
   selectedModeId,
   onSelectMode,
   disabled = false,
-}: AgentModeControlValue) {
+  surface = "toolbar",
+  onClose,
+}: AgentModeControlValue & { surface?: "toolbar" | "sheet"; onClose?: () => void }) {
   const { theme } = useUnistyles();
+  const { presentation } = useComposerControlLayout();
   const { t } = useTranslation();
   const { isActiveComposer } = useComposerKeyboardScope();
   const cycleShortcutKeys = useShortcutKeys("cycle-agent-mode");
   const anchorRef = useRef<View>(null);
   const keyboardHandlerIdRef = useRef(`mode-control:${Math.random().toString(36).slice(2)}`);
+  const openRef = useRef(false);
   const [open, setOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -118,10 +115,18 @@ function AgentModeControlView({
     return allOptions.filter((o) => o.label.toLowerCase().includes(q));
   }, [allOptions, searchQuery]);
 
-  const handleOpenChange = useCallback((next: boolean) => {
-    setOpen(next);
-    if (!next) setSearchQuery("");
-  }, []);
+  const handleOpenChange = useCallback(
+    (next: boolean) => {
+      const wasOpen = openRef.current;
+      openRef.current = next;
+      setOpen(next);
+      if (!next) {
+        setSearchQuery("");
+        if (wasOpen) onClose?.();
+      }
+    },
+    [onClose],
+  );
 
   const handlePress = useCallback(() => handleOpenChange(!open), [handleOpenChange, open]);
   const handleSelect = useCallback(
@@ -172,18 +177,6 @@ function AgentModeControlView({
     [provider, providerDefinitions, theme.colors.foreground],
   );
 
-  const pressableStyle = useCallback(
-    ({ pressed, hovered }: PressableStateCallbackType) => [
-      styles.chip,
-      hovered && styles.chipHovered,
-      (pressed || open) && styles.chipPressed,
-      disabled && styles.chipDisabled,
-    ],
-    [open, disabled],
-  );
-
-  const labelStyle = styles.chipLabel;
-
   const sheetHeader = useMemo<SheetHeader>(
     () => ({
       title: t("agentControls.mode.title"),
@@ -202,21 +195,23 @@ function AgentModeControlView({
     <>
       <Tooltip delayDuration={0} enabledOnDesktop enabledOnMobile={false}>
         <TooltipTrigger asChild triggerRefProp="ref">
-          <ComboboxTrigger
+          <AgentControlTrigger
             ref={anchorRef}
-            collapsable={false}
+            icon={Icon}
+            iconColor={iconColor}
+            surface={surface}
+            label={t("agentControls.mode.title")}
+            value={selectedModeLabel}
+            showToolbarLabel={presentation.showModeLabel}
+            showCaret={surface === "toolbar" && presentation.showCarets}
+            open={open}
             disabled={disabled}
             onPress={handlePress}
-            style={pressableStyle}
-            accessibilityRole="button"
             accessibilityLabel={t("agentControls.mode.selectWithValue", {
               value: selectedModeLabel,
             })}
             testID="mode-control"
-          >
-            {Icon ? <Icon size={theme.iconSize.md} color={iconColor} /> : null}
-            <Text style={labelStyle}>{selectedModeLabel}</Text>
-          </ComboboxTrigger>
+          />
         </TooltipTrigger>
         <TooltipContent side="top" align="center" offset={8}>
           <View style={styles.tooltipRow}>
@@ -233,6 +228,7 @@ function AgentModeControlView({
         onOpenChange={handleOpenChange}
         anchorRef={anchorRef}
         desktopPlacement="top-start"
+        desktopMinWidth={260}
         header={sheetHeader}
         renderOption={renderOption}
       />
@@ -240,17 +236,42 @@ function AgentModeControlView({
   );
 }
 
+/** Retained BySpace create-workspace surfaces provide draft values directly. */
+export function DraftAgentModeControl({
+  placement: _placement,
+  providerDefinitions,
+  selectedProvider,
+  modeOptions,
+  selectedMode,
+  onSelectMode,
+  disabled,
+}: {
+  placement?: "footer" | "inline";
+  providerDefinitions: AgentProviderDefinition[];
+  selectedProvider: string | null;
+  modeOptions: AgentMode[];
+  selectedMode: string;
+  onSelectMode: (modeId: string) => void;
+  disabled?: boolean;
+}) {
+  if (!selectedProvider) return null;
+  return (
+    <AgentModeControl
+      provider={selectedProvider}
+      providerDefinitions={providerDefinitions}
+      modeOptions={modeOptions}
+      selectedModeId={selectedMode}
+      onSelectMode={onSelectMode}
+      disabled={disabled}
+      surface="toolbar"
+    />
+  );
+}
+
 const EMPTY_MODES: AgentMode[] = [];
 
 function compareAvailableModes(a: AgentMode[], b: AgentMode[]): boolean {
   return a === b || JSON.stringify(a) === JSON.stringify(b);
-}
-
-interface AgentModeControlProps {
-  serverId: string;
-  agentId: string;
-  placement: AgentModeControlPlacement;
-  isCompactLayout?: boolean;
 }
 
 export function useLiveAgentModeControl(
@@ -320,80 +341,7 @@ export function useLiveAgentModeControl(
   }, [availableModes, client, handleSelectMode, providerDefinitions, slice]);
 }
 
-export const AgentModeControl = memo(function AgentModeControl({
-  serverId,
-  agentId,
-  placement,
-  isCompactLayout,
-}: AgentModeControlProps) {
-  const isCompactFormFactor = useIsCompactFormFactor();
-  const isCompact = isCompactLayout ?? isCompactFormFactor;
-  const control = useLiveAgentModeControl(serverId, agentId);
-  if (!control || !shouldRenderForPlacement(placement, isCompact)) return null;
-  return <AgentModeControlView {...control} />;
-});
-
-export interface DraftAgentModeControlProps {
-  selectedProvider: AgentProvider | null;
-  providerDefinitions: AgentProviderDefinition[];
-  modeOptions: AgentMode[];
-  selectedMode: string;
-  onSelectMode: (modeId: string) => void;
-  disabled?: boolean;
-  placement: AgentModeControlPlacement;
-  isCompactLayout?: boolean;
-}
-
-export function DraftAgentModeControl({
-  selectedProvider,
-  providerDefinitions,
-  modeOptions,
-  selectedMode,
-  onSelectMode,
-  disabled,
-  placement,
-  isCompactLayout,
-}: DraftAgentModeControlProps) {
-  const isCompactFormFactor = useIsCompactFormFactor();
-  const isCompact = isCompactLayout ?? isCompactFormFactor;
-  if (!selectedProvider || modeOptions.length === 0) return null;
-  if (!shouldRenderForPlacement(placement, isCompact)) return null;
-  return (
-    <AgentModeControlView
-      provider={selectedProvider}
-      providerDefinitions={providerDefinitions}
-      modeOptions={modeOptions}
-      selectedModeId={selectedMode}
-      onSelectMode={onSelectMode}
-      disabled={disabled}
-    />
-  );
-}
-
 const styles = StyleSheet.create((theme) => ({
-  chip: {
-    height: 28,
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "transparent",
-    gap: theme.spacing[1],
-    paddingHorizontal: theme.spacing[2],
-    borderRadius: theme.borderRadius["2xl"],
-  },
-  chipHovered: {
-    backgroundColor: theme.colors.surface2,
-  },
-  chipPressed: {
-    backgroundColor: theme.colors.surface0,
-  },
-  chipDisabled: {
-    opacity: 0.5,
-  },
-  chipLabel: {
-    color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.sm,
-    fontWeight: theme.fontWeight.normal,
-  },
   tooltipRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -401,6 +349,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   tooltipText: {
     color: theme.colors.foreground,
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
+    lineHeight: theme.fontSize.sm * 1.4,
   },
 }));

@@ -19,6 +19,10 @@ Root checkout dev is intentionally split across terminals:
 
 `npm run dev` is only a shorthand for `npm run dev:server`. Keep `127.0.0.1:6777` for production-style `~/.byspace` state.
 
+The Web dev launchers pass the current Git branch to Expo as
+`EXPO_PUBLIC_BYSPACE_DEV_BUILD_LABEL`. The expanded sidebar shows it next to the
+BySpace title. Production builds leave the variable unset and show no label.
+
 ### BYSPACE_HOME
 
 `BYSPACE_HOME` is the directory that holds runtime state (agents, worktrees, workspace config, sockets, daemon log). Resolution rules:

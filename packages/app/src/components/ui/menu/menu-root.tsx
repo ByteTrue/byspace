@@ -1,9 +1,11 @@
 import {
+  forwardRef,
   useCallback,
   useState,
   type PropsWithChildren,
   type ReactElement,
   type ReactNode,
+  type Ref,
 } from "react";
 import {
   Pressable,
@@ -50,17 +52,31 @@ export interface MenuTriggerProps extends Omit<PressableProps, "style" | "childr
   children: ReactNode | ((state: MenuTriggerState) => ReactNode);
 }
 
+function assignRef<T>(ref: Ref<T> | undefined, value: T | null): void {
+  if (!ref) return;
+  if (typeof ref === "function") {
+    ref(value);
+    return;
+  }
+  Object.assign(ref, { current: value });
+}
+
 /** Canonical Browser hover ownership: a plain View wraps the inner Pressable. */
-export function MenuTrigger({
-  children,
-  disabled,
-  style,
-  ...props
-}: MenuTriggerProps): ReactElement {
+export const MenuTrigger = forwardRef<View, MenuTriggerProps>(function MenuTrigger(
+  { children, disabled, style, ...props },
+  forwardedRef,
+): ReactElement {
   const ctx = useMenuContext("MenuTrigger");
   const [hovered, setHovered] = useState(false);
   const handlePointerEnter = useCallback(() => setHovered(true), []);
   const handlePointerLeave = useCallback(() => setHovered(false), []);
+  const handleTriggerRef = useCallback(
+    (node: View | null) => {
+      assignRef(ctx.triggerRef, node);
+      assignRef(forwardedRef, node);
+    },
+    [ctx.triggerRef, forwardedRef],
+  );
 
   const handlePress = useCallback(() => {
     if (disabled) return;
@@ -87,7 +103,7 @@ export function MenuTrigger({
 
   return (
     <View
-      ref={ctx.triggerRef}
+      ref={handleTriggerRef}
       collapsable={false}
       onPointerEnter={handlePointerEnter}
       onPointerLeave={handlePointerLeave}
@@ -97,4 +113,4 @@ export function MenuTrigger({
       </Pressable>
     </View>
   );
-}
+});

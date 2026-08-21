@@ -29,7 +29,6 @@ const expectedSkillTracePaths = [
   "packages/server/dist/skills/byspace-advisor/SKILL.md",
   "packages/server/dist/skills/byspace-committee/SKILL.md",
   "packages/server/dist/skills/byspace-handoff/SKILL.md",
-  "packages/server/dist/skills/byspace-loop/SKILL.md",
   "packages/server/dist/skills/byspace-project-setup/SKILL.md",
   "packages/server/dist/skills/byspace-project-setup/references/byspace-json.md",
   "packages/server/dist/skills/byspace-project-setup/references/project-readiness.md",

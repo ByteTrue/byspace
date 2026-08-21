@@ -50,6 +50,7 @@ import { AudioProvider } from "@/contexts/audio-context";
 import { shouldRunStartupGiveUpTimer } from "@/navigation/host-runtime-bootstrap";
 import { registerWorkspaceRouteNavigationRef } from "@/navigation/workspace-route-navigation";
 import { ThemedStack } from "@/navigation/themed-stack";
+import { legacyFavoriteProfileMigration } from "@/agent-profiles/migration";
 import { useActiveWorktreeNewAction } from "@/hooks/use-active-worktree-new-action";
 import { useGlobalNewWorkspaceAction } from "@/hooks/use-global-new-workspace-action";
 import { useFaviconStatus } from "@/hooks/use-favicon-status";
@@ -67,12 +68,14 @@ import {
   getHostRuntimeStore,
   useHostMutations,
   useHostRuntimeClient,
+  useHostRuntimeIsConnected,
   useHosts,
 } from "@/runtime/host-runtime";
 import { applyAppearance } from "@/screens/settings/appearance/apply-appearance";
 import { selectIsAgentListOpen, usePanelStore } from "@/stores/panel-store";
 import { flushDraftPersistStorage } from "@/stores/draft-store";
-import { THEME_TO_UNISTYLES } from "@/styles/theme";
+import { getNextThemePreference, THEME_TO_UNISTYLES } from "@/styles/theme";
+import { useSessionStore } from "@/stores/session-store";
 import { installWebScrollbarStyles } from "@/styles/install-web-scrollbar-styles";
 import type { HostProfile } from "@/types/host-connection";
 import { toggleDesktopSidebarsWithCheckoutIntent } from "@/utils/desktop-sidebar-toggle";
@@ -140,9 +143,31 @@ function ManagedDaemonSession({ daemon }: { daemon: HostProfile }) {
 
   return (
     <SessionProvider key={daemon.serverId} serverId={daemon.serverId} client={client}>
-      {null}
+      <LegacyFavoriteProfileMigrationBootstrap serverId={daemon.serverId} client={client} />
     </SessionProvider>
   );
+}
+
+function LegacyFavoriteProfileMigrationBootstrap({
+  serverId,
+  client,
+}: {
+  serverId: string;
+  client: NonNullable<ReturnType<typeof useHostRuntimeClient>>;
+}) {
+  const serverInfo = useSessionStore((state) => state.sessions[serverId]?.serverInfo ?? null);
+  const isConnected = useHostRuntimeIsConnected(serverId);
+
+  useEffect(() => {
+    if (!serverInfo || !isConnected) {
+      return;
+    }
+    void legacyFavoriteProfileMigration.migrateHost(serverId, client).catch((error) => {
+      console.warn("[AgentProfiles] Failed to migrate legacy favourites", error);
+    });
+  }, [client, isConnected, serverId, serverInfo]);
+
+  return null;
 }
 
 function HostSessionManager() {
@@ -253,7 +278,7 @@ function AppContainer({ children, chromeEnabled: chromeEnabledOverride }: AppCon
   const { width: viewportWidth } = useWindowDimensions();
 
   const cycleTheme = useCallback(() => {
-    void updateSettings({ theme: settings.theme === "light" ? "dark" : "light" });
+    void updateSettings({ theme: getNextThemePreference(settings.theme) });
   }, [settings.theme, updateSettings]);
 
   const isCompactLayout = useIsCompactFormFactor();
@@ -419,10 +444,20 @@ function ProvidersWrapper({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (settingsLoading) return;
     applyAppearance({
+      uiFontFamily: settings.uiFontFamily,
+      monoFontFamily: settings.monoFontFamily,
       uiFontSize: settings.uiFontSize,
       codeFontSize: settings.codeFontSize,
+      syntaxTheme: settings.syntaxTheme,
     });
-  }, [settingsLoading, settings.uiFontSize, settings.codeFontSize]);
+  }, [
+    settingsLoading,
+    settings.uiFontFamily,
+    settings.monoFontFamily,
+    settings.uiFontSize,
+    settings.codeFontSize,
+    settings.syntaxTheme,
+  ]);
 
   return (
     <AudioProvider>

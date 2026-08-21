@@ -125,7 +125,7 @@ const EXTENSION_TO_ICON: Record<string, string> = {
   zig: "zig",
 };
 
-export function getFileIconSvg(fileName: string): string {
+export function getRawFileIconSvg(fileName: string): string {
   const ext = getExtension(fileName);
   if (ext) {
     const iconName = EXTENSION_TO_ICON[ext];

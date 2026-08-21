@@ -68,7 +68,85 @@ async function withEnv(key: string, value: string, run: () => Promise<void>): Pr
   }
 }
 
+function waitUntilAborted(signal?: AbortSignal): Promise<boolean> {
+  return new Promise((_resolve, reject) => {
+    signal?.addEventListener("abort", () => reject(signal.reason), { once: true });
+  });
+}
+
 describe("ProviderSnapshotManager public surface", () => {
+  test("defaults provider refreshes to a two-minute deadline", async () => {
+    vi.useFakeTimers();
+    const manager = new ProviderSnapshotManager({
+      logger: createTestLogger(),
+      providerOverrides: {
+        claude: { enabled: false },
+        copilot: { enabled: false },
+        opencode: { enabled: false },
+        pi: { enabled: false },
+      },
+      extraClients: {
+        codex: createExtraClient("codex", { isAvailable: waitUntilAborted }),
+      },
+    });
+
+    try {
+      const entryPromise = manager.getProvider({
+        cwd: "/tmp/project",
+        provider: "codex",
+        wait: true,
+      });
+
+      await vi.advanceTimersByTimeAsync(120_000);
+
+      await expect(entryPromise).resolves.toMatchObject({
+        status: "error",
+        error: "Timed out refreshing Codex after 120000ms; pending: availability",
+      });
+    } finally {
+      manager.destroy();
+      vi.useRealTimers();
+    }
+  });
+
+  test("one refresh timeout covers availability and catalog discovery", async () => {
+    vi.useFakeTimers();
+    const manager = new ProviderSnapshotManager({
+      logger: createTestLogger(),
+      refreshTimeoutMs: 100,
+      extraClients: {
+        codex: createExtraClient("codex", {
+          isAvailable: () =>
+            new Promise((settle) => {
+              setTimeout(() => settle(true), 60);
+            }),
+          fetchCatalog: () =>
+            new Promise((settle) => {
+              setTimeout(() => settle({ models: [], modes: [] }), 60);
+            }),
+        }),
+      },
+    });
+
+    try {
+      const entryPromise = manager.getProvider({
+        cwd: "/tmp/project",
+        provider: "codex",
+        wait: true,
+      });
+
+      await vi.advanceTimersByTimeAsync(120);
+
+      await expect(entryPromise).resolves.toMatchObject({
+        provider: "codex",
+        status: "error",
+        error: "Timed out refreshing Codex after 100ms",
+      });
+    } finally {
+      manager.destroy();
+      vi.useRealTimers();
+    }
+  });
   test("listRegisteredProviderIds includes the built-in providers", () => {
     const manager = new ProviderSnapshotManager({ logger: createTestLogger() });
     try {
@@ -600,7 +678,10 @@ describe("ProviderSnapshotManager public surface", () => {
       extraClients: {
         codex: createExtraClient("codex", {
           isAvailable: async () => true,
-          fetchCatalog: async () => new Promise(() => {}),
+          fetchCatalog: async (_options, context) => {
+            await context?.runActivity("model/list", () => waitUntilAborted(context.signal));
+            return { models: [], modes: [] };
+          },
           getDiagnostic: async () => {
             diagnosticStarted = true;
             return { diagnostic: "codex diagnostics available" };
@@ -643,9 +724,10 @@ describe("ProviderSnapshotManager public surface", () => {
       extraClients: {
         codex: createExtraClient("codex", {
           isAvailable: async () => true,
-          fetchCatalog: async () => {
+          fetchCatalog: async (_options, context) => {
             snapshotStarted = true;
-            return new Promise(() => {});
+            await context?.runActivity("model/list", () => waitUntilAborted(context.signal));
+            return { models: [], modes: [] };
           },
           getDiagnostic: async () => {
             diagnosticStarted = true;

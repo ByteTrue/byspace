@@ -3,7 +3,7 @@ import { AppState } from "react-native";
 import { useQueryClient } from "@tanstack/react-query";
 import { useClientActivity } from "@/hooks/use-client-activity";
 import { useAppVisible } from "@/hooks/use-app-visible";
-import { generateMessageId, type StreamItem } from "@/types/stream";
+import type { StreamItem } from "@/types/stream";
 import type { AgentAttachment, SessionOutboundMessage } from "@bytetrue/byspace-protocol/messages";
 import { parseServerInfoStatusPayload } from "@bytetrue/byspace-protocol/messages";
 import {
@@ -17,7 +17,7 @@ import type { AgentSessionConfig } from "@bytetrue/byspace-protocol/agent-types"
 import type { GitSetupOptions } from "@bytetrue/byspace-protocol/messages";
 import type { AgentPermissionResponse } from "@bytetrue/byspace-protocol/agent-types";
 import { getHostRuntimeStore, useHostRuntimeIsConnected } from "@/runtime/host-runtime";
-import { useSessionStore, type MessageEntry, type SessionState } from "@/stores/session-store";
+import { useSessionStore, type SessionState } from "@/stores/session-store";
 import { useWorkspaceSetupStore } from "@/stores/workspace-setup-store";
 import { sendOsNotification } from "@/utils/os-notifications";
 import { getIsAppActivelyVisible } from "@/utils/app-visibility";
@@ -35,7 +35,6 @@ import { revalidateSessionAfterResume } from "@/contexts/session-resume-revalida
 // Re-export types from session-store and draft-store for backward compatibility
 export type { DraftInput } from "@/stores/draft-store";
 export type {
-  MessageEntry,
   Agent,
   ExplorerEntry,
   ExplorerFile,
@@ -119,30 +118,6 @@ type WorkspaceSetupProgressPayload = Extract<
   { type: "workspace_setup_progress" }
 >["payload"];
 
-function applyToolResultToMessages(
-  toolCallId: string,
-  result: unknown,
-): (prev: MessageEntry[]) => MessageEntry[] {
-  return (prev) =>
-    prev.map((msg) =>
-      msg.type === "tool_call" && msg.id === toolCallId
-        ? { ...msg, result, status: "completed" as const }
-        : msg,
-    );
-}
-
-function applyToolErrorToMessages(
-  toolCallId: string,
-  error: unknown,
-): (prev: MessageEntry[]) => MessageEntry[] {
-  return (prev) =>
-    prev.map((msg) =>
-      msg.type === "tool_call" && msg.id === toolCallId
-        ? { ...msg, error, status: "failed" as const }
-        : msg,
-    );
-}
-
 interface SessionProviderSharedProps {
   children: ReactNode;
   serverId: string;
@@ -173,8 +148,6 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
   const toast = useToast();
 
   // Zustand store actions
-  const setMessages = useSessionStore((state) => state.setMessages);
-  const setCurrentAssistantMessage = useSessionStore((state) => state.setCurrentAssistantMessage);
   const setInitializingAgents = useSessionStore((state) => state.setInitializingAgents);
   const bumpHistorySyncGeneration = useSessionStore((state) => state.bumpHistorySyncGeneration);
   const setWorkspaces = useSessionStore((state) => state.setWorkspaces);
@@ -432,100 +405,6 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
       });
     });
 
-    const unsubActivity = client.on("activity_log", (message) => {
-      if (message.type !== "activity_log") return;
-      const data = message.payload;
-      if (data.type === "system" && data.content.includes("Transcribing")) {
-        return;
-      }
-
-      if (data.type === "tool_call" && data.metadata) {
-        const toolCallId =
-          typeof data.metadata.toolCallId === "string" ? data.metadata.toolCallId : "";
-        const toolName = typeof data.metadata.toolName === "string" ? data.metadata.toolName : "";
-        const args = data.metadata.arguments;
-
-        setMessages(serverId, (prev) => [
-          ...prev,
-          {
-            type: "tool_call",
-            id: toolCallId,
-            timestamp: Date.now(),
-            toolName,
-            args,
-            status: "executing",
-          },
-        ]);
-        return;
-      }
-
-      if (data.type === "tool_result" && data.metadata) {
-        const toolCallId =
-          typeof data.metadata.toolCallId === "string" ? data.metadata.toolCallId : "";
-        const result = data.metadata.result;
-
-        const applyToolResult = applyToolResultToMessages(toolCallId, result);
-        setMessages(serverId, applyToolResult);
-        return;
-      }
-
-      if (data.type === "error" && data.metadata && "toolCallId" in data.metadata) {
-        const toolCallId =
-          typeof data.metadata.toolCallId === "string" ? data.metadata.toolCallId : "";
-        const error = data.metadata.error;
-
-        const applyToolError = applyToolErrorToMessages(toolCallId, error);
-        setMessages(serverId, applyToolError);
-      }
-
-      let activityType: "system" | "info" | "success" | "error" = "info";
-      if (data.type === "error") activityType = "error";
-
-      if (data.type === "transcript") {
-        setMessages(serverId, (prev) => [
-          ...prev,
-          {
-            type: "user",
-            id: generateMessageId(),
-            timestamp: Date.now(),
-            message: data.content,
-          },
-        ]);
-        return;
-      }
-
-      if (data.type === "assistant") {
-        setMessages(serverId, (prev) => [
-          ...prev,
-          {
-            type: "assistant",
-            id: generateMessageId(),
-            timestamp: Date.now(),
-            message: data.content,
-          },
-        ]);
-        setCurrentAssistantMessage(serverId, "");
-        return;
-      }
-
-      setMessages(serverId, (prev) => [
-        ...prev,
-        {
-          type: "activity",
-          id: generateMessageId(),
-          timestamp: Date.now(),
-          activityType,
-          message: data.content,
-          metadata: data.metadata,
-        },
-      ]);
-    });
-
-    const unsubChunk = client.on("assistant_chunk", (message) => {
-      if (message.type !== "assistant_chunk") return;
-      setCurrentAssistantMessage(serverId, (prev) => prev + message.payload.chunk);
-    });
-
     const unsubTerminalAttention = client.on("terminal_attention_required", (message) => {
       if (message.type !== "terminal_attention_required") {
         return;
@@ -558,16 +437,12 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
       unsubPermissionRequest();
       unsubPermissionResolved();
       unsubAudioOutput();
-      unsubActivity();
-      unsubChunk();
       unsubTerminalAttention();
     };
   }, [
     client,
     queryClient,
     serverId,
-    setMessages,
-    setCurrentAssistantMessage,
     setInitializingAgents,
     setWorkspaces,
     setPendingPermissions,
