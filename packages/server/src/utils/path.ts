@@ -88,8 +88,8 @@ export function isRealpathInsideRoot(root: string, candidate: string): boolean {
 function getRelativePathInsideRoot(root: string, candidate: string): string | null {
   const compareAsWindows = shouldCompareAsWindows(root, candidate);
   const platformPath = compareAsWindows ? nodePath.win32 : nodePath.posix;
-  const normalizedRoot = normalizePathForComparison(root, compareAsWindows);
-  const normalizedCandidate = normalizePathForComparison(candidate, compareAsWindows);
+  const normalizedRoot = normalizePath(root, compareAsWindows);
+  const normalizedCandidate = normalizePath(candidate, compareAsWindows);
   const relative = platformPath.relative(normalizedRoot, normalizedCandidate);
 
   return relative === "" || (!relative.startsWith("..") && !platformPath.isAbsolute(relative))
@@ -133,15 +133,19 @@ function looksLikeDefiniteWindowsPath(value: string): boolean {
 }
 
 function normalizePathForComparison(value: string, compareAsWindows: boolean): string {
+  const normalized = normalizePath(value, compareAsWindows);
+  return compareAsWindows ? normalized.toLowerCase() : normalized;
+}
+
+function normalizePath(value: string, compareAsWindows: boolean): string {
   const platformPath = compareAsWindows ? nodePath.win32 : nodePath.posix;
   const comparableValue = compareAsWindows ? stripWindowsNamespacePrefix(value) : value;
   const platformNormalized = platformPath.normalize(comparableValue);
-  const normalized = stripTrailingSeparators(
+  return stripTrailingSeparators(
     platformNormalized,
     platformPath.parse(platformNormalized).root,
     compareAsWindows,
   );
-  return compareAsWindows ? normalized.toLowerCase() : normalized;
 }
 
 function stripWindowsNamespacePrefix(value: string): string {

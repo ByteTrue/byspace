@@ -47,6 +47,10 @@ describe("path equivalence", () => {
     );
   });
 
+  test("preserves the casing of a Windows relative suffix", () => {
+    expect(getRealpathAwareRelativePath("C:\\Repo\\.git", "c:\\repo\\.git\\HEAD")).toBe("HEAD");
+  });
+
   test.skipIf(process.platform === "win32")(
     "derives the contained suffix from a realpath-equivalent root",
     () => {

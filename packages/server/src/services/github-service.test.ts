@@ -3483,7 +3483,10 @@ describe("ForgeService", () => {
 
   it("throws when the workspace repository cannot be resolved for pull request creation", async () => {
     const runner = createRunner([JSON.stringify({})]);
-    const service = createGitHubService({ runner: runner.runner });
+    const service = createGitHubService({
+      runner: runner.runner,
+      resolveRepoSlug: async () => null,
+    });
 
     await expect(
       service.createPullRequest({
