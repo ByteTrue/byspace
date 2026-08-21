@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.6.0 - 2026-08-21
+
+- Adds Private Remote Web Services for securely exposing loopback HTTP, SSE, and WebSocket services between trusted daemons through an optional standalone E2EE Data Relay and `*.remote.localhost` routes.
+- Adds reusable Agent Profiles that apply provider, model, mode, thinking, and feature settings together, with new profile appearance controls and a streamlined model browser and composer.
+- Expands the File Explorer with daemon-backed create, rename, duplicate, delete, and search actions; richer Material file icons; Markdown and HTML previews; and sandboxed Mermaid rendering.
+- Reworks Git Changes around incremental file observation, batched diff highlighting, discard actions, scheduling, and cross-platform watcher recovery for faster and more reliable updates.
+- Extends Claude, Codex, OpenCode, OMP, Pi, and generic ACP runtimes with stronger task-state mapping, diagnostics, catalog-refresh deadlines, JSONL process handling, and model and tool translation.
+- Expands the TypeScript SDK and CLI with broader agent, provider, workspace, event, diagnostic, and workspace-renaming APIs and examples.
+- Improves project and workspace navigation with a compact sidebar page menu, persistent section state, drag-and-drop ordering, automatic shared-host labels, schedule access, and full worktree paths in hover details.
+- Removes the legacy Chat room and Loop command/service surfaces while preserving wire parsing compatibility; recurring automation continues through Schedules.
+- Adds the official BySpace landing site and moves the hosted App, Docs, and Relay channels to the `byspace.cc.cd` domain.
+- Hardens Windows Forge command execution and Git metadata casing, provider status refresh, daemon supervision, Relay framing, session recovery, and workspace observation under load.
+
 ## 0.5.0 - 2026-08-12
 
 - Adds project-first workspace navigation, attention ordering, project icons, worktree labels, unified workspace creation, agent-guided project setup, and safe agent-guided workspace and branch renaming.
