@@ -1492,8 +1492,8 @@ export class PiRpcAgentSession implements AgentSession {
   private readonly logger: Logger;
   private readonly usagePoller: PiUsagePoller;
   private closed = false;
-  // Pi can deliver the interrupted turn's aborted terminal after abort resolves,
-  // including after the next turn has started.
+  // Pi reports an aborted OpenAI Responses stream before the abort RPC resolves.
+  // Keep the turn active until that RPC acknowledges the user-requested cancellation.
   private interruptingTurnId: string | null = null;
   private lastInterruptedTurnId: string | null = null;
   private interruptedTerminalError: { turnId: string; error: string } | null = null;
@@ -1563,6 +1563,7 @@ export class PiRpcAgentSession implements AgentSession {
     const turnId = randomUUID();
     this.activeTurnId = turnId;
     this.usagePoller.startTurn();
+    this.lastInterruptedTurnId = null;
     this.activeClientMessageId = options?.clientMessageId ?? null;
     this.activeAssistantMessageId = null;
     this.activeTurnStarted = false;
@@ -1725,8 +1726,9 @@ export class PiRpcAgentSession implements AgentSession {
     try {
       await this.runtimeSession.abort();
     } catch (error) {
-      if (this.interruptingTurnId === turnId) this.interruptingTurnId = null;
-      if (this.lastInterruptedTurnId === turnId) this.lastInterruptedTurnId = null;
+      if (this.interruptingTurnId === turnId) {
+        this.interruptingTurnId = null;
+      }
       if (this.interruptedTerminalError?.turnId === turnId) {
         const terminalError = this.interruptedTerminalError;
         this.interruptedTerminalError = null;
@@ -2821,15 +2823,12 @@ export class PiRpcAgentSession implements AgentSession {
       };
       return;
     }
-    if (isPiAbortedTerminalResponse(messages) && this.lastInterruptedTurnId !== null) {
-      // The runtime event has no provider turn id, so an old terminal may be
-      // attributed to a newer active turn. Consume only the first aborted
-      // terminal after an acknowledged interrupt and leave that turn intact.
+    if (
+      isPiAbortedTerminalResponse(messages) &&
+      (turnId === this.lastInterruptedTurnId || (!turnId && this.lastInterruptedTurnId !== null))
+    ) {
       this.lastInterruptedTurnId = null;
       return;
-    }
-    if (turnId && turnId !== this.lastInterruptedTurnId) {
-      this.lastInterruptedTurnId = null;
     }
     this.activeTurnId = null;
     this.activeClientMessageId = null;

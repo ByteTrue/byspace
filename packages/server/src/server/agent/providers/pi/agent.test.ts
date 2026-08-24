@@ -1119,55 +1119,60 @@ describe("PiRpcAgentSession", () => {
     );
   });
 
-  test("reports a delayed aborted terminal when the interrupt request fails", async () => {
+  test("treats Pi's aborted terminal response as cancellation after an interrupt", async () => {
     const { pi, session, events } = await createSession();
     const fakeSession = pi.latestSession();
     fakeSession.abort = async () => {
-      throw new Error("abort failed");
+      fakeSession.finishTurn({
+        role: "assistant",
+        provider: "openai-responses",
+        model: "gpt-5.6-terra",
+        responseId: "resp-aborted",
+        stopReason: "aborted",
+        errorMessage: "OpenAI Responses stream ended before a terminal response event",
+        content: [],
+      });
     };
 
-    const turn = await session.startTurn("keep this turn active");
-    await expect(session.interrupt()).rejects.toThrow("abort failed");
-    fakeSession.finishTurn({
-      role: "assistant",
-      provider: "openai-responses",
-      model: "gpt-5.6-terra",
-      responseId: "resp-abort-failed",
-      stopReason: "aborted",
-      errorMessage: "OpenAI Responses stream ended before a terminal response event",
-      content: [],
-    });
+    const { turnId } = await session.startTurn("stop this turn");
+    await session.interrupt();
 
-    await expect(events.nextTurnFailure()).resolves.toMatchObject({ turnId: turn.turnId });
-    await expect(session.startTurn("next request")).resolves.toBeDefined();
+    await expect(events.nextTurnCancellation()).resolves.toEqual({
+      type: "turn_canceled",
+      provider: "pi",
+      reason: "interrupted",
+      turnId,
+    });
   });
 
-  test("suppresses an old aborted terminal after the next turn starts", async () => {
+  test("suppresses late aborted terminal response arriving after interrupt resolves", async () => {
     const { pi, session, events } = await createSession();
     const fakeSession = pi.latestSession();
     fakeSession.abort = async () => {};
 
-    const first = await session.startTurn("stop this turn");
+    const { turnId } = await session.startTurn("stop this turn");
     await session.interrupt();
-    await expect(events.nextTurnCancellation()).resolves.toMatchObject({ turnId: first.turnId });
 
-    const second = await session.startTurn("new turn");
+    await expect(events.nextTurnCancellation()).resolves.toEqual({
+      type: "turn_canceled",
+      provider: "pi",
+      reason: "interrupted",
+      turnId,
+    });
+
     fakeSession.finishTurn({
       role: "assistant",
       provider: "openai-responses",
       model: "gpt-5.6-terra",
-      responseId: "resp-old-aborted",
+      responseId: "resp-aborted",
       stopReason: "aborted",
       errorMessage: "OpenAI Responses stream ended before a terminal response event",
       content: [],
     });
 
-    await session.interrupt();
-    const recorded = (events as unknown as { events: AgentStreamEvent[] }).events;
-    expect(recorded).toContainEqual(
-      expect.objectContaining({ type: "turn_canceled", turnId: second.turnId }),
-    );
-    expect(recorded.map((event) => event.type)).not.toContain("turn_failed");
+    expect(
+      (events as unknown as { events: AgentStreamEvent[] }).events.map((e) => e.type),
+    ).not.toContain("turn_failed");
   });
 
   test("adds Pi assistant context to generic provider finish errors", async () => {
