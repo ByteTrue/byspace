@@ -10,12 +10,12 @@ import {
 } from "./helpers/settings";
 
 const ACP_PROVIDER = {
-  id: "hermes",
-  name: "Hermes",
+  id: "minimax-code",
+  name: "MiniMax Code",
 };
 
 test.describe("ACP provider catalog", () => {
-  test("adds a catalog provider from settings", async ({ page }) => {
+  test("adds MiniMax Code from settings", async ({ page }) => {
     await gotoAppShell(page);
     await openSettings(page);
     await openSettingsHost(page, getServerId());
