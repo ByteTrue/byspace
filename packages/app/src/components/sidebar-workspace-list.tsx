@@ -51,7 +51,7 @@ import { DraggableList, type DraggableRenderItemInfo } from "./draggable-list";
 import type { DraggableListDragHandleProps } from "./draggable-list.types";
 import { getHostRuntimeStore, useHosts } from "@/runtime/host-runtime";
 import { useHostBadges } from "@/hosts/use-host-badges";
-import type { HostBadgeModel } from "@/hosts/appearance";
+import { type HostBadgeModel, resolveWorkspaceHostBadge } from "@/hosts/appearance";
 import { useSidebarMetaPreferences } from "@/components/sidebar/display-preferences/model";
 import { useHostFeature, useHostFeatureMap } from "@/runtime/host-features";
 import { useIsCompactFormFactor } from "@/constants/layout";
@@ -140,15 +140,6 @@ const workspaceKeyExtractor = (workspace: SidebarWorkspacePlacement) => workspac
 const WORKSPACE_STATUS_DOT_WIDTH = 14;
 const DEFAULT_STATUS_DOT_SIZE = 6;
 
-function resolveWorkspaceHostBadge(input: {
-  badge: HostBadgeModel | null;
-  showAutoLabel: boolean;
-}): HostBadgeModel | null {
-  if (!input.badge || input.badge.display !== "auto" || !input.showAutoLabel) {
-    return input.badge;
-  }
-  return { ...input.badge, showLabel: true };
-}
 const DEFAULT_STATUS_DOT_OFFSET = 0;
 const ThemedExternalLink = withUnistyles(ExternalLink);
 const ThemedGitPullRequest = withUnistyles(GitPullRequest);

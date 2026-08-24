@@ -1477,6 +1477,69 @@ const DIFF_OPTIONS_WRAP_ICON = (
   <ThemedWrapText size={14} uniProps={foregroundMutedIconColorMapping} />
 );
 
+interface DiffRefreshButtonProps {
+  brand?: string;
+  isMobile: boolean;
+  isRefreshing?: boolean;
+  refreshSupported?: boolean;
+  testID?: string;
+  refreshStyle?: PressableStyleFn;
+  onRefresh?: () => void;
+}
+
+export function DiffRefreshButton({
+  brand,
+  isMobile,
+  isRefreshing = false,
+  refreshSupported = false,
+  testID = "changes-refresh",
+  refreshStyle,
+  onRefresh,
+}: DiffRefreshButtonProps) {
+  const defaultRefreshStyle = useMemo(
+    () => buildToggleButtonStyle(false, styles.expandAllButton),
+    [],
+  );
+  const { t } = useTranslation();
+  let refreshLabel = t("workspace.git.diff.refresh");
+  if (isRefreshing) {
+    refreshLabel = t("workspace.git.diff.refreshing");
+  } else if (brand) {
+    refreshLabel = t("workspace.git.diff.refreshState", { brand });
+  }
+
+  if (!refreshSupported || !onRefresh) {
+    return null;
+  }
+
+  return (
+    <Tooltip delayDuration={300}>
+      <TooltipTrigger asChild>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={refreshLabel}
+          testID={testID}
+          onPress={onRefresh}
+          disabled={isRefreshing}
+          style={refreshStyle ?? defaultRefreshStyle}
+        >
+          {isRefreshing ? (
+            <ThemedLoadingSpinner
+              size={isMobile ? 18 : 14}
+              uniProps={foregroundMutedIconColorMapping}
+            />
+          ) : (
+            <ThemedRotateCw size={isMobile ? 18 : 14} uniProps={foregroundMutedIconColorMapping} />
+          )}
+        </Pressable>
+      </TooltipTrigger>
+      <TooltipContent side="bottom">
+        <Text style={styles.tooltipText}>{refreshLabel}</Text>
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
 interface DiffLayoutToggleProps {
   layout: "unified" | "split";
   isMobile: boolean;
@@ -1717,30 +1780,35 @@ export function DiffFilesToolbar({
   );
 }
 
+const DIFF_OPTIONS_SPLIT_ICON = (
+  <ThemedColumns2 size={14} uniProps={foregroundMutedIconColorMapping} />
+);
+const DIFF_OPTIONS_UNIFIED_ICON = (
+  <ThemedAlignJustify size={14} uniProps={foregroundMutedIconColorMapping} />
+);
+
 interface DiffOptionsMenuProps {
-  brand?: string;
   hideWhitespace: boolean;
   isMobile: boolean;
-  isRefreshing?: boolean;
+  layout?: "unified" | "split";
+  canUseSplitLayout?: boolean;
   overflowToggleStyle?: PressableStyleFn;
-  refreshSupported?: boolean;
   testIDPrefix?: string;
   wrapLines: boolean;
-  onRefresh?: () => void;
+  onToggleLayout?: () => void;
   onToggleHideWhitespace: () => void;
   onToggleWrapLines: () => void;
 }
 
 export function DiffOptionsMenu({
-  brand,
   hideWhitespace,
   isMobile,
-  isRefreshing = false,
+  layout,
+  canUseSplitLayout = false,
   overflowToggleStyle,
-  refreshSupported = false,
   testIDPrefix = "changes",
   wrapLines,
-  onRefresh,
+  onToggleLayout,
   onToggleHideWhitespace,
   onToggleWrapLines,
 }: DiffOptionsMenuProps) {
@@ -1753,21 +1821,11 @@ export function DiffOptionsMenu({
     ? t("workspace.git.diff.scrollLongLines")
     : t("workspace.git.diff.wrapLongLines");
   const optionsLabel = t("workspace.git.diff.options");
-  let refreshLabel = t("workspace.git.diff.refresh");
-  if (isRefreshing) {
-    refreshLabel = t("workspace.git.diff.refreshing");
-  } else if (brand) {
-    refreshLabel = t("workspace.git.diff.refreshState", { brand });
-  }
-  const refreshIcon = useMemo(
-    () =>
-      isRefreshing ? (
-        <ThemedLoadingSpinner size={ICON_SIZE.sm} uniProps={foregroundMutedIconColorMapping} />
-      ) : (
-        <ThemedRotateCw size={ICON_SIZE.sm} uniProps={foregroundMutedIconColorMapping} />
-      ),
-    [isRefreshing],
-  );
+  const layoutLabel =
+    layout === "unified"
+      ? t("workspace.git.diff.switchToSplit")
+      : t("workspace.git.diff.switchToUnified");
+  const layoutIcon = layout === "unified" ? DIFF_OPTIONS_SPLIT_ICON : DIFF_OPTIONS_UNIFIED_ICON;
 
   return (
     <DropdownMenu>
@@ -1790,6 +1848,16 @@ export function DiffOptionsMenu({
         </TooltipContent>
       </Tooltip>
       <DropdownMenuContent align="end" width={240} testID={`${testIDPrefix}-options-menu-content`}>
+        {canUseSplitLayout && onToggleLayout ? (
+          <DropdownMenuItem
+            leading={layoutIcon}
+            selected={layout === "split"}
+            testID={`${testIDPrefix}-toggle-layout`}
+            onSelect={onToggleLayout}
+          >
+            {layoutLabel}
+          </DropdownMenuItem>
+        ) : null}
         <DropdownMenuItem
           leading={DIFF_OPTIONS_WHITESPACE_ICON}
           selected={hideWhitespace}
@@ -1806,19 +1874,6 @@ export function DiffOptionsMenu({
         >
           {wrapLinesLabel}
         </DropdownMenuItem>
-        {refreshSupported && onRefresh ? (
-          <>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              leading={refreshIcon}
-              disabled={isRefreshing}
-              testID={`${testIDPrefix}-refresh`}
-              onSelect={onRefresh}
-            >
-              {refreshLabel}
-            </DropdownMenuItem>
-          </>
-        ) : null}
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -2884,7 +2939,7 @@ export function GitDiffPane({
   }, [changesPreferences.layout, updateChangesPreferences]);
 
   const codeFontSize = appSettings.codeFontSize;
-  const layoutToggleStyle = useMemo(
+  const refreshButtonStyle = useMemo(
     () => buildToggleButtonStyle(false, styles.expandAllButton),
     [],
   );
@@ -3216,12 +3271,14 @@ export function GitDiffPane({
                   onPress={handleToggleChangesTab}
                 />
               ) : null}
-              {canUseSplitLayout && !changesTabOpen ? (
-                <DiffLayoutToggle
-                  layout={changesPreferences.layout}
+              {refreshSupported ? (
+                <DiffRefreshButton
+                  brand={getForgePresentation(forge).brandLabel}
                   isMobile={isMobile}
-                  toggleStyle={layoutToggleStyle}
-                  onToggle={handleToggleLayout}
+                  isRefreshing={isRefreshing}
+                  refreshSupported={refreshSupported}
+                  refreshStyle={refreshButtonStyle}
+                  onRefresh={handleRefresh}
                 />
               ) : null}
               {files.length > 0 ? (
@@ -3241,14 +3298,13 @@ export function GitDiffPane({
                 />
               ) : null}
               <DiffOptionsMenu
-                brand={getForgePresentation(forge).brandLabel}
                 hideWhitespace={changesPreferences.hideWhitespace}
                 isMobile={isMobile}
-                isRefreshing={isRefreshing}
+                layout={changesPreferences.layout}
+                canUseSplitLayout={canUseSplitLayout && !changesTabOpen}
                 overflowToggleStyle={overflowToggleStyle}
-                refreshSupported={refreshSupported}
                 wrapLines={wrapLines}
-                onRefresh={handleRefresh}
+                onToggleLayout={handleToggleLayout}
                 onToggleHideWhitespace={handleToggleHideWhitespace}
                 onToggleWrapLines={handleToggleWrapLines}
               />

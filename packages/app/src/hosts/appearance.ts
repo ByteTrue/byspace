@@ -65,3 +65,19 @@ export function selectHostBadges(input: {
   }
   return badges;
 }
+
+export function resolveWorkspaceHostBadge(input: {
+  badge: HostBadgeModel | null;
+  showAutoLabel: boolean;
+}): HostBadgeModel | null {
+  if (!input.badge) {
+    return null;
+  }
+  if (input.badge.display === "auto") {
+    if (!input.showAutoLabel) {
+      return null;
+    }
+    return { ...input.badge, showLabel: true };
+  }
+  return input.badge;
+}

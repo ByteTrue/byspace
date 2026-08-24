@@ -222,12 +222,12 @@ export class DaemonSession {
   async handleOrchestrationSkillsGetStatusRequest(
     msg: Extract<SessionInboundMessage, { type: "daemon.orchestration_skills.get_status.request" }>,
   ): Promise<void> {
-    const state = await getOrchestrationSkillsStatus(
+    const result = await getOrchestrationSkillsStatus(
       resolveOrchestrationSkillsTargets(this.byspaceHome),
     );
     this.host.emit({
       type: "daemon.orchestration_skills.get_status.response",
-      payload: { requestId: msg.requestId, state },
+      payload: { requestId: msg.requestId, ...result },
     });
   }
 
@@ -237,13 +237,17 @@ export class DaemonSession {
       { type: "daemon.orchestration_skills.set_installed.request" }
     >,
   ): Promise<void> {
-    const state = await setOrchestrationSkillsInstalled(
-      msg.installed,
+    const result = await setOrchestrationSkillsInstalled(
+      {
+        installed: msg.installed,
+        skillNames: msg.skillNames,
+        targets: msg.targets,
+      },
       resolveOrchestrationSkillsTargets(this.byspaceHome),
     );
     this.host.emit({
       type: "daemon.orchestration_skills.set_installed.response",
-      payload: { requestId: msg.requestId, state },
+      payload: { requestId: msg.requestId, ...result },
     });
   }
 

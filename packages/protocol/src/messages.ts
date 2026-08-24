@@ -1530,10 +1530,15 @@ export const DaemonOrchestrationSkillsGetStatusRequestSchema = z.object({
   requestId: z.string(),
 });
 
+export const OrchestrationSkillTargetKindSchema = z.enum(["agents", "claude"]);
+export type OrchestrationSkillTargetKind = z.infer<typeof OrchestrationSkillTargetKindSchema>;
+
 export const DaemonOrchestrationSkillsSetInstalledRequestSchema = z.object({
   type: z.literal("daemon.orchestration_skills.set_installed.request"),
   installed: z.boolean(),
   requestId: z.string(),
+  skillNames: z.array(z.string()).optional(),
+  targets: z.array(OrchestrationSkillTargetKindSchema).optional(),
 });
 
 export const OrchestrationToolsListRequestSchema = z.object({
@@ -5661,11 +5666,21 @@ export type DaemonUpdateResponse = z.infer<typeof DaemonUpdateResponseSchema>;
 export const OrchestrationSkillsStateSchema = z.enum(["not-installed", "up-to-date", "drift"]);
 export type OrchestrationSkillsState = z.infer<typeof OrchestrationSkillsStateSchema>;
 
+export const OrchestrationSkillItemStateSchema = z.object({
+  name: z.string(),
+  description: z.string().optional(),
+  installedTargets: z.array(OrchestrationSkillTargetKindSchema),
+  state: OrchestrationSkillsStateSchema,
+});
+export type OrchestrationSkillItemState = z.infer<typeof OrchestrationSkillItemStateSchema>;
+
 export const DaemonOrchestrationSkillsGetStatusResponseSchema = z.object({
   type: z.literal("daemon.orchestration_skills.get_status.response"),
   payload: z.object({
     requestId: z.string(),
     state: OrchestrationSkillsStateSchema,
+    skills: z.array(OrchestrationSkillItemStateSchema).optional(),
+    installedTargets: z.array(OrchestrationSkillTargetKindSchema).optional(),
   }),
 });
 export type DaemonOrchestrationSkillsGetStatusResponse = z.infer<
@@ -5677,6 +5692,8 @@ export const DaemonOrchestrationSkillsSetInstalledResponseSchema = z.object({
   payload: z.object({
     requestId: z.string(),
     state: OrchestrationSkillsStateSchema,
+    skills: z.array(OrchestrationSkillItemStateSchema).optional(),
+    installedTargets: z.array(OrchestrationSkillTargetKindSchema).optional(),
   }),
 });
 export type DaemonOrchestrationSkillsSetInstalledResponse = z.infer<

@@ -21,12 +21,15 @@ async function writeSkill(directory: string, name: string, content: string): Pro
 
 beforeEach(async () => {
   root = await fs.mkdtemp(path.join(os.tmpdir(), "byspace-orchestration-skills-"));
+  const agentsDir = path.join(root, "home", ".agents", "skills");
+  const claudeDir = path.join(root, "home", ".claude", "skills");
   targets = {
     sourceDir: path.join(root, "bundle"),
-    installDirs: [
-      path.join(root, "home", ".agents", "skills"),
-      path.join(root, "home", ".claude", "skills"),
-    ],
+    installDirsByKind: {
+      agents: agentsDir,
+      claude: claudeDir,
+    },
+    installDirs: [agentsDir, claudeDir],
     manifestPath: path.join(root, "byspace-home", "managed-orchestration-skills.json"),
   };
   for (const name of BYSPACE_ORCHESTRATION_SKILL_NAMES) {
@@ -57,9 +60,11 @@ describe("orchestration skills", () => {
   it("reports missing skills, installs all targets, and preserves unrelated skills", async () => {
     await writeSkill(targets.installDirs[0], "user-skill", "keep me");
 
-    expect(await getOrchestrationSkillsStatus(targets)).toBe("not-installed");
+    expect((await getOrchestrationSkillsStatus(targets)).state).toBe("not-installed");
 
-    expect(await setOrchestrationSkillsInstalled(true, targets)).toBe("up-to-date");
+    const installResult = await setOrchestrationSkillsInstalled(true, targets);
+    expect(installResult.state).toBe("up-to-date");
+    expect(installResult.installedTargets).toEqual(expect.arrayContaining(["agents", "claude"]));
     for (const installDir of targets.installDirs) {
       for (const name of BYSPACE_ORCHESTRATION_SKILL_NAMES) {
         expect(await fs.readFile(path.join(installDir, name, "SKILL.md"), "utf8")).toBe(
@@ -88,7 +93,7 @@ describe("orchestration skills", () => {
       await fs.writeFile(fullPath, "generated");
     }
 
-    expect(await setOrchestrationSkillsInstalled(true, targets)).toBe("up-to-date");
+    expect((await setOrchestrationSkillsInstalled(true, targets)).state).toBe("up-to-date");
     for (const installDir of targets.installDirs) {
       for (const relativePath of ignoredPaths) {
         await expect(
@@ -98,7 +103,7 @@ describe("orchestration skills", () => {
     }
 
     await fs.writeFile(path.join(source, ignoredPaths[0]), "changed generated output");
-    expect(await getOrchestrationSkillsStatus(targets)).toBe("up-to-date");
+    expect((await getOrchestrationSkillsStatus(targets)).state).toBe("up-to-date");
   });
 
   it("detects edited content and a missing provider copy, then converges on update", async () => {
@@ -110,8 +115,8 @@ describe("orchestration skills", () => {
       force: true,
     });
 
-    expect(await getOrchestrationSkillsStatus(targets)).toBe("drift");
-    expect(await setOrchestrationSkillsInstalled(true, targets)).toBe("up-to-date");
+    expect((await getOrchestrationSkillsStatus(targets)).state).toBe("drift");
+    expect((await setOrchestrationSkillsInstalled(true, targets)).state).toBe("up-to-date");
     await expect(
       fs.stat(path.join(targets.installDirs[0], "byspace", "obsolete.md")),
     ).rejects.toMatchObject({ code: "ENOENT" });
@@ -121,11 +126,67 @@ describe("orchestration skills", () => {
     await setOrchestrationSkillsInstalled(true, targets);
     await writeSkill(targets.installDirs[1], "user-skill", "keep me");
 
-    expect(await setOrchestrationSkillsInstalled(false, targets)).toBe("not-installed");
-    expect(await setOrchestrationSkillsInstalled(false, targets)).toBe("not-installed");
+    expect((await setOrchestrationSkillsInstalled(false, targets)).state).toBe("not-installed");
+    expect((await setOrchestrationSkillsInstalled(false, targets)).state).toBe("not-installed");
     expect(
       await fs.readFile(path.join(targets.installDirs[1], "user-skill", "SKILL.md"), "utf8"),
     ).toBe("keep me");
+  });
+
+  it("supports selective installation of specific skills and targets", async () => {
+    const selective = await setOrchestrationSkillsInstalled(
+      {
+        installed: true,
+        skillNames: ["byspace", "byspace-advisor"],
+        targets: ["agents"],
+      },
+      targets,
+    );
+
+    expect(selective.state).toBe("up-to-date");
+    expect(selective.installedTargets).toEqual(["agents"]);
+    const byspaceSkill = selective.skills.find((s) => s.name === "byspace");
+    expect(byspaceSkill?.installedTargets).toEqual(["agents"]);
+    expect(byspaceSkill?.state).toBe("up-to-date");
+
+    const committeeSkill = selective.skills.find((s) => s.name === "byspace-committee");
+    expect(committeeSkill?.installedTargets).toEqual([]);
+    expect(committeeSkill?.state).toBe("not-installed");
+
+    // Files on disk
+    expect(
+      await fs.readFile(path.join(targets.installDirs[0], "byspace", "SKILL.md"), "utf8"),
+    ).toBe("bundled byspace");
+    expect(
+      await fs.readFile(path.join(targets.installDirs[0], "byspace-advisor", "SKILL.md"), "utf8"),
+    ).toBe("bundled byspace-advisor");
+    // Claude directory has nothing
+    await expect(fs.stat(path.join(targets.installDirs[1], "byspace"))).rejects.toMatchObject({
+      code: "ENOENT",
+    });
+
+    // Now switch selection: add claude, change skills to only byspace-committee
+    const switched = await setOrchestrationSkillsInstalled(
+      {
+        installed: true,
+        skillNames: ["byspace-committee"],
+        targets: ["claude"],
+      },
+      targets,
+    );
+
+    expect(switched.state).toBe("up-to-date");
+    // Previously installed byspace & byspace-advisor in agents were cleaned up
+    await expect(fs.stat(path.join(targets.installDirs[0], "byspace"))).rejects.toMatchObject({
+      code: "ENOENT",
+    });
+    await expect(
+      fs.stat(path.join(targets.installDirs[0], "byspace-advisor")),
+    ).rejects.toMatchObject({ code: "ENOENT" });
+    // Committee is installed in claude
+    expect(
+      await fs.readFile(path.join(targets.installDirs[1], "byspace-committee", "SKILL.md"), "utf8"),
+    ).toBe("bundled byspace-committee");
   });
 
   it("refuses to overwrite or remove an unowned same-name skill", async () => {

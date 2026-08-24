@@ -13,6 +13,7 @@ import type { ProviderSelectorProvider } from "@/provider-selection/provider-sel
 import { ICON_SIZE, type Theme } from "@/styles/theme";
 
 const EMPTY_COMBOBOX_OPTIONS: ComboboxOption[] = [];
+const DEFAULT_COMBINED_MODEL_SELECTOR_DESKTOP_MIN_WIDTH = 360;
 const ThemedLoadingSpinner = withUnistyles(LoadingSpinner);
 
 const foregroundMutedMapping = (theme: Theme) => ({
@@ -78,7 +79,7 @@ export function CombinedModelSelector({
   disabled = false,
   serverId = null,
   desktopPlacement,
-  desktopMinWidth,
+  desktopMinWidth = DEFAULT_COMBINED_MODEL_SELECTOR_DESKTOP_MIN_WIDTH,
   triggerFill = false,
   toolbar,
 }: CombinedModelSelectorProps) {

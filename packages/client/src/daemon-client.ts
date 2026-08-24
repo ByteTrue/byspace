@@ -87,6 +87,7 @@ import type {
   DiagnosticsResponse,
   DaemonOrchestrationSkillsGetStatusResponse,
   DaemonOrchestrationSkillsSetInstalledResponse,
+  OrchestrationSkillTargetKind,
   OrchestrationToolCallResponse,
   OrchestrationToolsListResponse,
   AgentRewindResponseMessage,
@@ -4614,12 +4615,29 @@ export class DaemonClient {
   }
 
   async setOrchestrationSkillsInstalled(
-    installed: boolean,
-    requestId?: string,
+    options:
+      | boolean
+      | {
+          installed: boolean;
+          skillNames?: string[];
+          targets?: OrchestrationSkillTargetKind[];
+          requestId?: string;
+        },
+    legacyRequestId?: string,
   ): Promise<DaemonOrchestrationSkillsSetInstalledResponse["payload"]> {
+    const isBool = typeof options === "boolean";
+    const installed = isBool ? options : options.installed;
+    const skillNames = isBool ? undefined : options.skillNames;
+    const targets = isBool ? undefined : options.targets;
+    const requestId = isBool ? legacyRequestId : (options.requestId ?? legacyRequestId);
     return this.sendNamespacedCorrelatedSessionRequest({
       requestId,
-      message: { type: "daemon.orchestration_skills.set_installed.request", installed },
+      message: {
+        type: "daemon.orchestration_skills.set_installed.request",
+        installed,
+        ...(skillNames ? { skillNames } : {}),
+        ...(targets ? { targets } : {}),
+      },
     });
   }
 
