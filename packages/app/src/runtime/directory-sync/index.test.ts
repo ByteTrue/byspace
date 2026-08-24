@@ -1,26 +1,57 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import type {
   DaemonClient,
   FetchAgentsEntry,
 } from "@bytetrue/byspace-client/internal/daemon-client";
-import type { AgentSnapshotPayload } from "@bytetrue/byspace-protocol/messages";
-import { useSessionStore } from "@/stores/session-store";
+import type {
+  AgentSnapshotPayload,
+  SessionOutboundMessage,
+} from "@bytetrue/byspace-protocol/messages";
+import { normalizeProjectDescriptor, useSessionStore } from "@/stores/session-store";
 import { DirectoryRefreshSupersededError, DirectorySync } from "./index";
 
 class FakeDirectoryClient {
   fetchAgentsCalls = 0;
+  lastAgentOptions: unknown;
   fetchWorkspacesCalls = 0;
   fetchAgentsEntries: FetchAgentsEntry[] = [];
   readonly timelineRequests: Array<{
     resolve(page: Awaited<ReturnType<DaemonClient["fetchAgentTimeline"]>>): void;
   }> = [];
   listProjectsCalls = 0;
-  workspaceUpdateHandler: ((message: unknown) => void) | null = null;
-  listProjectsPromise: Promise<{ projects: never[] }> = Promise.resolve({ projects: [] });
+  lastProjectOptions: unknown;
+  projectResult: Awaited<ReturnType<DaemonClient["listProjects"]>> | null = null;
+  private pendingWorkspaceFetch: Promise<
+    Awaited<ReturnType<DaemonClient["fetchWorkspaces"]>>
+  > | null = null;
+  private readonly handlers = new Map<
+    SessionOutboundMessage["type"],
+    Set<(message: SessionOutboundMessage) => void>
+  >();
 
-  on(event: string, handler: (message: unknown) => void): () => void {
-    if (event === "workspace_update") this.workspaceUpdateHandler = handler;
-    return () => undefined;
+  on<TType extends SessionOutboundMessage["type"]>(
+    type: TType,
+    handler: (message: Extract<SessionOutboundMessage, { type: TType }>) => void,
+  ): () => void {
+    const handlers = this.handlers.get(type) ?? new Set();
+    const registered = handler as unknown as (message: SessionOutboundMessage) => void;
+    handlers.add(registered);
+    this.handlers.set(type, handlers);
+    return () => handlers.delete(registered);
+  }
+
+  emit<TType extends SessionOutboundMessage["type"]>(
+    message: Extract<SessionOutboundMessage, { type: TType }>,
+  ): void {
+    for (const handler of this.handlers.get(message.type) ?? []) handler(message);
+  }
+
+  holdWorkspaceFetch(): (result: Awaited<ReturnType<DaemonClient["fetchWorkspaces"]>>) => void {
+    let complete!: (result: Awaited<ReturnType<DaemonClient["fetchWorkspaces"]>>) => void;
+    this.pendingWorkspaceFetch = new Promise((resolve) => {
+      complete = resolve;
+    });
+    return complete;
   }
 
   getLastServerInfoMessage(): null {
@@ -29,8 +60,9 @@ class FakeDirectoryClient {
 
   async setAgentTimelineSubscription(): Promise<void> {}
 
-  async fetchAgents(): Promise<Awaited<ReturnType<DaemonClient["fetchAgents"]>>> {
+  async fetchAgents(options?: unknown): Promise<Awaited<ReturnType<DaemonClient["fetchAgents"]>>> {
     this.fetchAgentsCalls += 1;
+    this.lastAgentOptions = options;
     return {
       requestId: "agents",
       entries: this.fetchAgentsEntries,
@@ -44,6 +76,11 @@ class FakeDirectoryClient {
 
   async fetchWorkspaces(): Promise<Awaited<ReturnType<DaemonClient["fetchWorkspaces"]>>> {
     this.fetchWorkspacesCalls += 1;
+    if (this.pendingWorkspaceFetch) {
+      const pending = this.pendingWorkspaceFetch;
+      this.pendingWorkspaceFetch = null;
+      return pending;
+    }
     return {
       requestId: "workspaces",
       entries: [],
@@ -52,13 +89,24 @@ class FakeDirectoryClient {
     };
   }
 
-  async listProjects(): Promise<{ projects: never[] }> {
+  async listProjects(
+    options?: unknown,
+  ): Promise<Awaited<ReturnType<DaemonClient["listProjects"]>>> {
     this.listProjectsCalls += 1;
-    return this.listProjectsPromise;
-  }
-
-  emitWorkspaceUpdate(payload: Record<string, unknown>): void {
-    this.workspaceUpdateHandler?.({ type: "workspace_update", payload });
+    this.lastProjectOptions = options;
+    if (this.projectResult) return this.projectResult;
+    return {
+      requestId: "projects",
+      projects: [
+        {
+          projectId: "project-1",
+          projectKey: "remote:github.com/acme/app",
+          projectDisplayName: "acme/app",
+          projectRootPath: "/repo/app",
+          projectKind: "git",
+        },
+      ],
+    };
   }
 }
 
@@ -136,6 +184,127 @@ afterEach(() => {
 });
 
 describe("DirectorySync session readiness", () => {
+  it("uses the saved agent sequence while bounding the bootstrap page", async () => {
+    const serverId = "agent-list-sequence-page";
+    serverIds.add(serverId);
+    const client = new FakeDirectoryClient();
+    const directory = new DirectorySync(
+      serverId,
+      {
+        onAgentStoppedRunning: () => undefined,
+        markAgentLoading: () => undefined,
+        markAgentReady: () => undefined,
+        markAgentError: () => undefined,
+      },
+      {
+        readDirectoryCheckpoint: () => ({ agents: { generation: "generation", afterSeq: 12 } }),
+        writeDirectoryCheckpoint: () => undefined,
+      },
+    );
+    directory.connectionChanged({
+      client: client as unknown as DaemonClient,
+      status: "online",
+      source: { clientGeneration: 1, connectionEpoch: 1 },
+    });
+    const store = useSessionStore.getState();
+    store.initializeSession(serverId, client as unknown as DaemonClient, 1);
+    store.updateSessionServerInfo(serverId, {
+      serverId,
+      hostname: null,
+      version: "test",
+      features: { directorySync: true, workspaceMultiplicity: true },
+    });
+
+    await directory.refreshAgents({
+      subscribe: { subscriptionId: `app:${serverId}` },
+      page: { limit: 200 },
+    });
+
+    expect(client.lastAgentOptions).toEqual({
+      scope: "active",
+      sort: [{ key: "updated_at", direction: "desc" }],
+      subscribe: { subscriptionId: `app:${serverId}` },
+      page: { limit: 200 },
+      sync: { generation: "generation", afterSeq: 12 },
+    });
+    directory.dispose();
+  });
+
+  it("merges project changes from the existing list RPC and advances its cursor", async () => {
+    const serverId = "project-list-sequence";
+    serverIds.add(serverId);
+    const client = new FakeDirectoryClient();
+    const writes: unknown[] = [];
+    const directory = new DirectorySync(
+      serverId,
+      {
+        onAgentStoppedRunning: () => undefined,
+        markAgentLoading: () => undefined,
+        markAgentReady: () => undefined,
+        markAgentError: () => undefined,
+      },
+      {
+        readDirectoryCheckpoint: () => ({ projects: { generation: "generation", afterSeq: 4 } }),
+        writeDirectoryCheckpoint: (_serverId, checkpoint) => writes.push(checkpoint),
+      },
+    );
+    directory.connectionChanged({
+      client: client as unknown as DaemonClient,
+      status: "online",
+      source: { clientGeneration: 1, connectionEpoch: 1 },
+    });
+    const store = useSessionStore.getState();
+    store.initializeSession(serverId, client as unknown as DaemonClient, 1);
+    store.setProjects(serverId, [
+      normalizeProjectDescriptor({
+        projectId: "project-1",
+        projectDisplayName: "Old name",
+        projectRootPath: "/repo/one",
+        projectKind: "git",
+      }),
+      normalizeProjectDescriptor({
+        projectId: "project-2",
+        projectDisplayName: "Removed",
+        projectRootPath: "/repo/two",
+        projectKind: "git",
+      }),
+    ]);
+    store.updateSessionServerInfo(serverId, {
+      serverId,
+      hostname: null,
+      version: "test",
+      features: { workspaceMultiplicity: true, projectList: true, directorySync: true },
+    });
+    client.projectResult = {
+      requestId: "projects",
+      projects: [
+        {
+          projectId: "project-1",
+          projectDisplayName: "New name",
+          projectRootPath: "/repo/one",
+          projectKind: "git",
+          syncSeq: 5,
+        },
+      ],
+      sync: {
+        generation: "generation",
+        headSeq: 6,
+        mode: "changes",
+        removals: [{ id: "project-2", seq: 6 }],
+      },
+    };
+
+    await directory.refreshWorkspaces();
+
+    expect(client.lastProjectOptions).toEqual({
+      sync: { generation: "generation", afterSeq: 4 },
+    });
+    const projects = useSessionStore.getState().sessions[serverId]?.projects;
+    expect(Array.from(projects?.keys() ?? [])).toEqual(["project-1"]);
+    expect(projects?.get("project-1")?.projectDisplayName).toBe("New name");
+    expect(writes).toContainEqual({ projects: { generation: "generation", afterSeq: 6 } });
+    directory.dispose();
+  });
   it("waits for workspace capability metadata before choosing the workspace protocol", async () => {
     const serverId = "workspace-metadata";
     const { client, directory } = createDirectory(serverId);
@@ -237,14 +406,9 @@ describe("DirectorySync session readiness", () => {
     directory.dispose();
   });
 
-  it("reconciles a live project created while the authoritative project list is in flight", async () => {
-    const serverId = "project-list-live-create";
+  it("fetches the project descriptor channel when the daemon advertises it", async () => {
+    const serverId = "project-list";
     const { client, directory } = createDirectory(serverId);
-    let resolveProjects!: (value: { projects: never[] }) => void;
-    client.listProjectsPromise = new Promise((resolve) => {
-      resolveProjects = resolve;
-    });
-
     const store = useSessionStore.getState();
     store.initializeSession(serverId, client as unknown as DaemonClient, 1);
     store.updateSessionServerInfo(serverId, {
@@ -254,50 +418,120 @@ describe("DirectorySync session readiness", () => {
       features: { workspaceMultiplicity: true, projectList: true },
     });
 
+    await directory.refreshWorkspaces();
+
+    expect(client.listProjectsCalls).toBe(1);
+    expect(useSessionStore.getState().sessions[serverId]?.projects.get("project-1")).toMatchObject({
+      projectId: "project-1",
+      projectKey: "remote:github.com/acme/app",
+    });
+    directory.dispose();
+  });
+
+  it("buffers workspace and project updates in the same hydration transaction", async () => {
+    const serverId = "workspace-project-transaction";
+    const { client, directory } = createDirectory(serverId);
+    const store = useSessionStore.getState();
+    store.initializeSession(serverId, client as unknown as DaemonClient, 1);
+    store.updateSessionServerInfo(serverId, {
+      serverId,
+      hostname: null,
+      version: "test",
+      features: { workspaceMultiplicity: true },
+    });
+    const completeFetch = client.holdWorkspaceFetch();
+
     const refresh = directory.refreshWorkspaces({ subscribe: true });
-    await vi.waitFor(() => expect(client.listProjectsCalls).toBe(1));
-    client.emitWorkspaceUpdate({
-      kind: "upsert",
-      workspace: {
-        id: "wks_live",
-        projectId: "prj_live",
-        projectDisplayName: "acme/live",
-        projectCustomName: null,
-        projectRootPath: "/repo/live",
-        workspaceDirectory: "/repo/live",
-        projectKind: "git",
-        workspaceKind: "local_checkout",
-        name: "main",
-        status: "done",
-        statusEnteredAt: null,
-        activityAt: null,
-        archivingAt: null,
-        diffStat: null,
-        scripts: [],
-        project: {
-          projectKey: "remote:https://github.com/acme/live",
-          projectName: "acme/live",
-          checkout: {
-            cwd: "/repo/live",
-            isGit: true,
-            currentBranch: "main",
-            remoteUrl: "https://github.com/acme/live.git",
-            worktreeRoot: "/repo/live",
-            isBySpaceOwnedWorktree: false,
-            mainRepoRoot: null,
-          },
+    await Promise.resolve();
+    client.emit({
+      type: "workspace_update",
+      payload: {
+        kind: "remove",
+        id: "removed-workspace",
+        emptyProject: {
+          projectId: "workspace-project",
+          projectDisplayName: "Project from workspace update",
+          projectRootPath: "/repo/workspace-project",
+          projectKind: "git",
         },
       },
     });
-    resolveProjects({ projects: [] });
+    client.emit({
+      type: "project.update",
+      payload: {
+        kind: "upsert",
+        project: {
+          projectId: "snapshot-project",
+          projectDisplayName: "Renamed during hydration",
+          projectRootPath: "/moved/snapshot-project",
+          projectKind: "directory",
+        },
+      },
+    });
+    completeFetch({
+      requestId: "workspaces",
+      entries: [],
+      emptyProjects: [
+        {
+          projectId: "snapshot-project",
+          projectDisplayName: "Stale snapshot project",
+          projectRootPath: "/repo/snapshot-project",
+          projectKind: "git",
+        },
+      ],
+      pageInfo: { hasMore: false, nextCursor: null, prevCursor: null },
+    });
     await refresh;
 
-    expect(useSessionStore.getState().sessions[serverId]?.projects.get("prj_live")).toMatchObject({
-      projectId: "prj_live",
-      projectKey: "remote:https://github.com/acme/live",
+    const projects = useSessionStore.getState().sessions[serverId]?.projects;
+    expect(Array.from(projects?.keys() ?? [])).toEqual(["snapshot-project", "workspace-project"]);
+    expect(projects?.get("snapshot-project")).toMatchObject({
+      projectDisplayName: "Renamed during hydration",
+      projectRootPath: "/moved/snapshot-project",
+      projectKind: "directory",
     });
-    client.emitWorkspaceUpdate({ kind: "remove", id: "wks_live", removedProjectId: "prj_live" });
-    expect(useSessionStore.getState().sessions[serverId]?.projects.has("prj_live")).toBe(false);
+    expect(projects?.get("workspace-project")).toMatchObject({
+      projectDisplayName: "Project from workspace update",
+    });
+    directory.dispose();
+  });
+
+  it("buffers project updates from the online epoch before workspace hydration starts", async () => {
+    const serverId = "project-before-workspace-hydration";
+    const { client, directory } = createDirectory(serverId);
+    const store = useSessionStore.getState();
+    store.initializeSession(serverId, client as unknown as DaemonClient, 1);
+    store.updateSessionServerInfo(serverId, {
+      serverId,
+      hostname: null,
+      version: "test",
+      features: { workspaceMultiplicity: true },
+    });
+
+    client.emit({
+      type: "project.update",
+      payload: {
+        kind: "upsert",
+        project: {
+          projectId: "early-project",
+          projectDisplayName: "Early project",
+          projectRootPath: "/repo/early-project",
+          projectKind: "git",
+        },
+      },
+    });
+
+    expect(useSessionStore.getState().sessions[serverId]?.hasHydratedWorkspaces).toBe(false);
+
+    await directory.refreshWorkspaces({ subscribe: true });
+
+    expect(useSessionStore.getState().sessions[serverId]?.hasHydratedWorkspaces).toBe(true);
+    expect(
+      useSessionStore.getState().sessions[serverId]?.projects.get("early-project"),
+    ).toMatchObject({
+      projectDisplayName: "Early project",
+      projectRootPath: "/repo/early-project",
+    });
     directory.dispose();
   });
 

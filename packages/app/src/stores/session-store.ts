@@ -173,6 +173,7 @@ export interface EmptyProjectDescriptor {
   projectDisplayName: string;
   projectCustomName: string | null;
   projectCustomIconRevision?: string | null;
+  projectIconRevision?: string;
   projectRootPath: string;
   projectKind: WorkspaceDescriptorPayload["projectKind"];
 }
@@ -188,6 +189,7 @@ export function normalizeProjectDescriptor(
     projectDisplayName: payload.projectDisplayName,
     projectCustomName: payload.projectCustomName ?? null,
     projectCustomIconRevision: payload.projectCustomIconRevision ?? null,
+    projectIconRevision: payload.projectIconRevision,
     projectRootPath: payload.projectRootPath,
     projectKind: payload.projectKind,
   };
@@ -202,6 +204,7 @@ export function normalizeEmptyProjectDescriptor(
     projectDisplayName: payload.projectDisplayName,
     projectCustomName: payload.projectCustomName ?? null,
     projectCustomIconRevision: payload.projectCustomIconRevision ?? null,
+    projectIconRevision: payload.projectIconRevision,
     projectRootPath: payload.projectRootPath,
     projectKind: payload.projectKind,
   };
@@ -424,6 +427,7 @@ export interface SessionState {
   // Hydration status
   hasHydratedAgents: boolean;
   hasHydratedWorkspaces: boolean;
+  hasWorkspaceDirectorySnapshot: boolean;
 
   // Audio state
   isPlayingAudio: boolean;
@@ -682,6 +686,7 @@ function createInitialSessionState(
     serverInfo: null,
     hasHydratedAgents: false,
     hasHydratedWorkspaces: false,
+    hasWorkspaceDirectorySnapshot: false,
     isPlayingAudio: false,
     focusedAgentId: null,
     focusedTerminalId: null,
@@ -834,6 +839,7 @@ export const useSessionStore = create<SessionStore>()(
                 workspaces: replica.workspaces,
                 emptyProjects: replica.emptyProjects,
                 projects: replica.projects ?? session.projects,
+                hasWorkspaceDirectorySnapshot: true,
                 agentStreamTail,
                 agentTasks,
               },

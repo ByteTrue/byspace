@@ -1,6 +1,8 @@
 import type { Locator } from "@playwright/test";
 import { expect, test, type Page } from "./fixtures";
 import { openAgentRoute, seedMockAgentWorkspace } from "./helpers/mock-agent";
+import { installDaemonWebSocketGate } from "./helpers/daemon-websocket-gate";
+import { scrollChatAwayFromBottom } from "./helpers/agent-bottom-anchor";
 import {
   composerLocator,
   expectComposerDraft,
@@ -8,6 +10,7 @@ import {
   fillComposerDraft,
   submitMessage,
 } from "./helpers/composer";
+import { readReplicaCache, writeReplicaCache } from "./helpers/replica-cache-storage";
 
 // UI plumbing contract against the dev mock provider. Real-provider behavior is tested in `daemon-e2e/*-rewind.real.e2e.test.ts`.
 
@@ -23,7 +26,124 @@ async function expectUserMessageVisible(page: Page, text: string): Promise<void>
   await expect(userMessage(page, text)).toBeVisible();
 }
 
+async function rewriteCachedMessageAsLegacyRow(page: Page, prompt: string): Promise<void> {
+  await expect
+    .poll(async () => {
+      const cache = await readReplicaCache(page);
+      if (!cache) return false;
+      for (const host of cache.hosts ?? []) {
+        for (const item of host.timeline?.items ?? []) {
+          if (item.kind === "user_message" && item.text === prompt && item.messageId) {
+            return true;
+          }
+        }
+      }
+      return false;
+    })
+    .toBe(true);
+
+  const cache = await readReplicaCache(page);
+  if (!cache) throw new Error("Replica cache was not persisted");
+  const cachedMessage = cache.hosts
+    ?.flatMap((host) => host.timeline?.items ?? [])
+    .find((item) => item.kind === "user_message" && item.text === prompt);
+  if (!cachedMessage) throw new Error("Cached user message was not found");
+  delete cachedMessage.messageId;
+  await writeReplicaCache(page, cache);
+}
+
+async function waitForCurrentSubmissionExcludedFromCache(
+  page: Page,
+  prompt: string,
+): Promise<void> {
+  await expect
+    .poll(async () => {
+      const cache = await readReplicaCache(page);
+      if (!cache) return false;
+      return !cache.hosts
+        ?.flatMap((host) => host.timeline?.items ?? [])
+        .some(
+          (item) =>
+            item.kind === "user_message" &&
+            item.text === prompt &&
+            typeof item.clientMessageId === "string" &&
+            item.messageId === undefined,
+        );
+    })
+    .toBe(true);
+}
+
+async function waitForCachedMessageWithoutProviderId(page: Page, prompt: string): Promise<void> {
+  await expect
+    .poll(async () => {
+      const cache = await readReplicaCache(page);
+      if (!cache) return false;
+      return cache.hosts
+        ?.flatMap((host) => host.timeline?.items ?? [])
+        .some(
+          (item) =>
+            item.kind === "user_message" && item.text === prompt && item.messageId === undefined,
+        );
+    })
+    .toBe(true);
+}
+
+async function expectPendingSubmissionNotRestoredAfterReload(page: Page): Promise<void> {
+  const prompt = "Keep this cached submission pending.";
+  const gate = await installDaemonWebSocketGate(page);
+  const session = await seedMockAgentWorkspace({
+    repoPrefix: "rewind-current-cache-e2e-",
+    title: "Current cache submission e2e",
+  });
+
+  try {
+    await openAgentRoute(page, session);
+    await expectComposerVisible(page);
+    gate.holdNextClientRequest("send_agent_message_request");
+    await submitMessage(page, prompt);
+    await gate.waitForHeldClientRequest();
+    await waitForCurrentSubmissionExcludedFromCache(page, prompt);
+    await gate.drop();
+    await page.reload();
+
+    await expect(userMessage(page, prompt)).toHaveCount(0);
+  } finally {
+    gate.restore();
+    await session.cleanup();
+  }
+}
 test.describe("Rewind sheet", () => {
+  test("does not restore a local-only submission from the display cache", async ({ page }) => {
+    await expectPendingSubmissionNotRestoredAfterReload(page);
+  });
+
+  test("does not invent rewind identity for an ID-less cached message", async ({ page }) => {
+    const prompt = "Restore this rewind identity from the legacy cache.";
+    const gate = await installDaemonWebSocketGate(page);
+    const session = await seedMockAgentWorkspace({
+      repoPrefix: "rewind-cache-upgrade-e2e-",
+      title: "Rewind cache upgrade e2e",
+      initialPrompt: prompt,
+    });
+
+    try {
+      await openAgentRoute(page, session);
+      await expectUserMessageVisible(page, prompt);
+      await gate.drop();
+      await rewriteCachedMessageAsLegacyRow(page, prompt);
+      await page.reload();
+
+      const restoredMessage = userMessage(page, prompt);
+      await expect(restoredMessage).toBeVisible();
+      await restoredMessage.hover();
+      await expect(restoredMessage.getByTestId("rewind-menu-trigger")).toHaveCount(0);
+      await waitForCachedMessageWithoutProviderId(page, prompt);
+    } finally {
+      gate.restore();
+      await session.cleanup();
+    }
+  });
+
   test("rewinds from a user message sheet option", async ({ page }) => {
     const firstPrompt = "emit 1 coalesced agent stream updates for first rewind turn.";
     const secondPrompt = "Prepare deleted rewind turn assistant content.";
@@ -47,6 +167,10 @@ test.describe("Rewind sheet", () => {
       const finish = await session.client.waitForFinish(session.agentId, 30_000);
       expect(finish.status).toBe("idle");
 
+      await scrollChatAwayFromBottom(page, {
+        deltaY: -900,
+        minDistanceFromBottom: 300,
+      });
       await userMessage(page, firstPrompt).hover();
       await page.getByTestId("rewind-menu-trigger").first().click();
       const rewindSheet = page.getByTestId("rewind-menu-content");

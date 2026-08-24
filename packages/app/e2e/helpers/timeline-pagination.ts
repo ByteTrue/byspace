@@ -1,5 +1,6 @@
 import { expect, type Page } from "@playwright/test";
 import { buildAgentRoute, seedMockAgentWorkspace, type MockAgentWorkspace } from "./mock-agent";
+import { readReplicaCache } from "./replica-cache-storage";
 import {
   delayAgentOlderTimelineResponse,
   type AgentTimelineResponseGate,
@@ -73,6 +74,24 @@ export async function expectLoadedTimelineDoesNotScroll(page: Page): Promise<voi
       }),
     )
     .toBe(true);
+}
+
+export async function reloadAgentTimelineFromPersistedReplica(
+  page: Page,
+  agent: LongTimelineAgent,
+): Promise<void> {
+  await expect
+    .poll(async () => {
+      const cache = await readReplicaCache(page);
+      const timeline = cache?.hosts?.find(
+        (host) => host.timeline?.agentId === agent.agentId,
+      )?.timeline;
+      return timeline?.items?.length === 50;
+    })
+    .toBe(true);
+
+  await page.reload();
+  await expectTimelinePromptVisible(page, agent.newestPrompt);
 }
 
 export async function holdNextOlderTimelinePage(

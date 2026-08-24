@@ -47,6 +47,9 @@ function directoryForRequest(request: ClientRequest): keyof DirectoryBootstrapCo
 
 export async function installDaemonWebSocketGate(page: Page) {
   let acceptingConnections = true;
+  let heldClientRequestType: string | null = null;
+  let heldClientRequest: { server: WebSocketRoute; message: string | Buffer } | null = null;
+  let resolveHeldClientRequest: (() => void) | null = null;
   const activeSockets = new Set<WebSocketRoute>();
   const directoryStarts: DirectoryRequestStartCounts = {
     subscribed: { agents: 0, workspaces: 0 },
@@ -75,6 +78,12 @@ export async function installDaemonWebSocketGate(page: Page) {
     ws.onMessage((message) => {
       if (!acceptingConnections) return;
       const request = readSessionMessage(message);
+      if (request?.type === heldClientRequestType) {
+        heldClientRequest = { server, message };
+        resolveHeldClientRequest?.();
+        resolveHeldClientRequest = null;
+        return;
+      }
       if (typeof request?.type === "string") {
         clientRequestCounts.set(request.type, (clientRequestCounts.get(request.type) ?? 0) + 1);
         const responseType = responseTypeForNextClientRequest.get(request.type);
@@ -152,6 +161,22 @@ export async function installDaemonWebSocketGate(page: Page) {
     },
     blockServerMessageType(type: string): void {
       blockedServerMessageTypes.add(type);
+    },
+    holdNextClientRequest(type: string): void {
+      heldClientRequestType = type;
+      heldClientRequest = null;
+    },
+    waitForHeldClientRequest(): Promise<void> {
+      if (heldClientRequest) return Promise.resolve();
+      return new Promise<void>((resolve) => {
+        resolveHeldClientRequest = resolve;
+      });
+    },
+    releaseHeldClientRequest(): void {
+      if (!heldClientRequest) throw new Error("No held client request to release");
+      heldClientRequest.server.send(heldClientRequest.message);
+      heldClientRequest = null;
+      heldClientRequestType = null;
     },
     holdResponseForNextClientRequest(requestType: string, responseType: string): void {
       responseTypeForNextClientRequest.set(requestType, responseType);

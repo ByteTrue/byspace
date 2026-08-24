@@ -11,11 +11,12 @@ import {
 import type { TimelineDeliveryMode, ViewedTimelineUiBridge } from "@/timeline/viewed-timeline-sync";
 import type { ProjectedTimelineFetchPlan } from "@/timeline/timeline-sync-plan";
 import {
-  normalizeEmptyProjectDescriptor,
   normalizeProjectDescriptor,
   normalizeWorkspaceDescriptor,
   useSessionStore,
   type Agent,
+  type ProjectDescriptor,
+  type WorkspaceDescriptor,
 } from "@/stores/session-store";
 import {
   readLegacyDaemonWorkspaceDirectory,
@@ -41,10 +42,52 @@ const AGENT_SORT: NonNullable<FetchAgentsOptions["sort"]> = [
   { key: "updated_at", direction: "desc" },
 ];
 
+function resolveAgentNextPage(pageInfo: AgentPageInfo): {
+  hasMore: boolean;
+  nextCursor: string | null;
+} {
+  return {
+    hasMore: pageInfo.hasMore ?? pageInfo.hasMoreAfter ?? false,
+    nextCursor: pageInfo.nextCursor ?? pageInfo.afterCursor ?? null,
+  };
+}
+
 interface AgentSnapshot {
   entries: FetchAgentsEntry[];
   subscriptionId: string | null;
   legacy: boolean;
+  syncMode?: "snapshot" | "changes";
+  syncCursor?: DirectoryCursor;
+  syncRemovals: Array<{ id: string; seq: number }>;
+}
+
+interface AgentPageInfo {
+  hasMore?: boolean;
+  hasMoreAfter?: boolean;
+  nextCursor?: string | null;
+  afterCursor?: string | null;
+}
+
+interface DirectoryCursor {
+  generation: string;
+  afterSeq: number;
+}
+
+interface DirectoryCursors {
+  projects?: DirectoryCursor;
+  workspaces?: DirectoryCursor;
+  agents?: DirectoryCursor;
+}
+
+export interface DirectoryConnection {
+  client: DaemonClient | null;
+  status: "online" | "offline";
+  source: DirectorySourceToken;
+}
+
+export interface DirectoryCheckpointStorage {
+  readDirectoryCheckpoint(serverId: string): unknown;
+  writeDirectoryCheckpoint(serverId: string, checkpoint: unknown): void;
 }
 
 export interface DirectoryConnection {
@@ -97,6 +140,7 @@ export class DirectorySync {
       markAgentReady: () => void;
       markAgentError: (error: string) => void;
     },
+    private readonly checkpoints?: DirectoryCheckpointStorage,
   ) {
     this.agents = new AgentDirectoryReplica(serverId, callbacks.onAgentStoppedRunning);
     this.workspaces = new WorkspaceDirectoryReplica(serverId);
@@ -155,13 +199,26 @@ export class DirectorySync {
       }),
       client.on("agent_update", (message) => {
         if (message.type !== "agent_update" || !this.isCurrent(client, source)) return;
-        if (!this.agentTransactions.record(source, message.payload))
+        const recorded = this.agentTransactions.record(source, message.payload);
+        if (!recorded) {
           this.agents.applyDelta(message.payload);
+          this.noteLiveCursor("agents", message.payload);
+        }
       }),
       client.on("workspace_update", (message) => {
         if (message.type !== "workspace_update" || !this.isCurrent(client, source)) return;
-        if (!this.workspaceTransactions.record(source, message.payload)) {
+        const recorded = this.workspaceTransactions.record(source, message.payload);
+        if (!recorded) {
           this.workspaces.applyDelta(message.payload);
+          this.noteLiveCursor("workspaces", message.payload);
+        }
+      }),
+      client.on("project.update", (message) => {
+        if (message.type !== "project.update" || !this.isCurrent(client, source)) return;
+        const recorded = this.workspaceTransactions.record(source, message.payload);
+        if (!recorded) {
+          this.workspaces.applyDelta(message.payload);
+          this.noteLiveCursor("projects", message.payload);
         }
       }),
       client.on("agent_deleted", (message) => {
@@ -240,6 +297,7 @@ export class DirectorySync {
       entries: [],
       subscriptionId: null,
       legacy: false,
+      syncRemovals: [],
     }));
     this.callbacks.markAgentLoading();
     try {
@@ -273,8 +331,12 @@ export class DirectorySync {
       }
       if (completion.snapshot.legacy) {
         const store = useSessionStore.getState();
-        store.setWorkspaces(this.serverId, buildLegacyWorkspaces(completion.snapshot.entries));
-        store.setEmptyProjects(this.serverId, []);
+        const workspaces = buildLegacyWorkspaces(completion.snapshot.entries);
+        store.setWorkspaces(this.serverId, workspaces);
+        store.setProjects(
+          this.serverId,
+          Array.from(workspaces.values(), legacyProjectDescriptorFromWorkspace),
+        );
         store.setHasHydratedWorkspaces(this.serverId, true);
       }
       const deltas = completion.snapshot.legacy
@@ -284,7 +346,8 @@ export class DirectorySync {
               : delta,
           )
         : completion.deltas;
-      const agents = this.agents.commitSnapshot(completion.snapshot.entries, deltas);
+      const agents = this.commitAgentSnapshot(completion.snapshot, deltas);
+      this.persistAgentCursors(completion.snapshot, completion.deltas);
       this.callbacks.markAgentReady();
       return { agents, subscriptionId: completion.snapshot.subscriptionId };
     } catch (error) {
@@ -300,9 +363,9 @@ export class DirectorySync {
   async refreshWorkspaces(input?: { subscribe?: boolean }): Promise<void> {
     const { client, source } = this.requireOnline();
     const transaction = this.workspaceTransactions.begin(source, () => ({
-      workspaces: new Map(),
-      emptyProjects: new Map(),
-      projects: new Map(),
+      workspaces: new Map(useSessionStore.getState().sessions[this.serverId]?.workspaces),
+      projects: new Map(useSessionStore.getState().sessions[this.serverId]?.projects),
+      syncCursors: {},
     }));
     try {
       await this.waitForSessionMetadata(client, source);
@@ -312,24 +375,20 @@ export class DirectorySync {
         if (deltas) for (const delta of deltas) this.workspaces.applyDelta(delta);
         return;
       }
-      await this.fetchWorkspaceSnapshot(client, source, transaction, input?.subscribe === true);
-      if (serverInfo.features?.projectList === true) {
-        const payload = await client.listProjects();
-        this.assertWorkspaceTransactionCurrent(client, source, transaction);
-        transaction.snapshot.projects.clear();
-        for (const entry of payload.projects) {
-          const project = normalizeProjectDescriptor(entry);
-          transaction.snapshot.projects.set(project.projectId, project);
-        }
+      const supportsProjectList = serverInfo.features?.projectList === true;
+      const supportsDirectorySync = serverInfo.features?.directorySync === true;
+      if (supportsProjectList) {
+        await this.fetchProjectSnapshot(client, source, transaction, supportsDirectorySync);
       }
-      if (!this.isCurrent(client, source) || !this.hasMatchingSession(client, source)) {
-        throw new DirectoryRefreshSupersededError("workspace completion no longer current");
-      }
-      const completion = this.workspaceTransactions.complete(transaction);
-      if (completion.kind === "stale") {
-        throw new DirectoryRefreshSupersededError("workspace completion was superseded");
-      }
-      this.workspaces.commitSnapshot(completion.snapshot, completion.deltas);
+      await this.fetchWorkspaceSnapshot(
+        client,
+        source,
+        transaction,
+        input?.subscribe === true,
+        supportsDirectorySync,
+      );
+      if (!supportsProjectList) this.buildLegacyProjectSnapshot(transaction.snapshot);
+      this.completeWorkspaceRefresh(client, source, transaction);
     } catch (error) {
       const deltas = this.workspaceTransactions.fail(transaction);
       if (deltas) for (const delta of deltas) this.workspaces.applyDelta(delta);
@@ -342,6 +401,7 @@ export class DirectorySync {
     source: DirectorySourceToken,
     transaction: DirectoryTransaction<WorkspaceDirectorySnapshot, WorkspaceDirectoryDelta>,
     initialSubscribe: boolean,
+    supportsDirectorySync: boolean,
   ): Promise<void> {
     let cursor: string | null = null;
     let subscribe = initialSubscribe;
@@ -350,29 +410,39 @@ export class DirectorySync {
         sort: [{ key: "activity_at", direction: "desc" }],
         ...(subscribe ? { subscribe: {} } : {}),
         page: cursor ? { limit: PAGE_LIMIT, cursor } : { limit: PAGE_LIMIT },
+        ...(supportsDirectorySync ? { sync: this.readCursors().workspaces ?? {} } : {}),
       });
       this.assertWorkspaceTransactionCurrent(client, source, transaction);
+      if (payload.sync?.mode === "snapshot") transaction.snapshot.workspaces.clear();
       for (const entry of payload.entries) {
         const workspace = normalizeWorkspaceDescriptor(entry);
         transaction.snapshot.workspaces.set(workspace.id, workspace);
-        const existingProject = transaction.snapshot.projects.get(workspace.projectId);
-        transaction.snapshot.projects.set(workspace.projectId, {
-          projectId: workspace.projectId,
-          projectKey: workspace.project?.projectKey ?? existingProject?.projectKey ?? null,
-          projectDisplayName: workspace.projectDisplayName,
-          projectCustomName: workspace.projectCustomName ?? null,
-          projectRootPath: workspace.projectRootPath,
-          projectKind: workspace.projectKind,
-        });
+      }
+      for (const removal of payload.sync?.removals ?? []) {
+        transaction.snapshot.workspaces.delete(removal.id);
+      }
+      if (payload.sync) {
+        (transaction.snapshot.syncCursors ??= {}).workspaces = {
+          generation: payload.sync.generation,
+          afterSeq: payload.sync.headSeq,
+        };
       }
       for (const entry of payload.emptyProjects ?? []) {
-        const project = normalizeEmptyProjectDescriptor(entry);
-        transaction.snapshot.emptyProjects.set(project.projectId, project);
-        transaction.snapshot.projects.set(project.projectId, normalizeProjectDescriptor(entry));
+        const project = normalizeProjectDescriptor(entry);
+        transaction.snapshot.projects.set(project.projectId, project);
       }
       if (!payload.pageInfo.hasMore || !payload.pageInfo.nextCursor) return;
       cursor = payload.pageInfo.nextCursor;
       subscribe = false;
+    }
+  }
+
+  private buildLegacyProjectSnapshot(snapshot: WorkspaceDirectorySnapshot): void {
+    for (const workspace of snapshot.workspaces.values()) {
+      if (!snapshot.projects.has(workspace.projectId)) {
+        const project = legacyProjectDescriptorFromWorkspace(workspace);
+        snapshot.projects.set(project.projectId, project);
+      }
     }
   }
 
@@ -395,18 +465,15 @@ export class DirectorySync {
         sort: AGENT_SORT,
         ...(subscribe ? { subscribe } : {}),
         page: cursor ? { limit, cursor } : { limit },
+        ...(!input.filter && cursor === null && this.supportsDirectorySync()
+          ? { sync: this.readCursors().agents ?? {} }
+          : {}),
       });
       this.assertAgentTransactionCurrent(client, source, transaction);
       transaction.snapshot.entries.push(...payload.entries);
       transaction.snapshot.subscriptionId ??= payload.subscriptionId ?? null;
-      const pageInfo = payload.pageInfo as {
-        hasMore?: boolean;
-        hasMoreAfter?: boolean;
-        nextCursor?: string | null;
-        afterCursor?: string | null;
-      };
-      const hasMore = pageInfo.hasMore ?? pageInfo.hasMoreAfter ?? false;
-      const nextCursor = pageInfo.nextCursor ?? pageInfo.afterCursor ?? null;
+      this.recordAgentSync(transaction.snapshot, payload.sync);
+      const { hasMore, nextCursor } = resolveAgentNextPage(payload.pageInfo as AgentPageInfo);
       if (!hasMore || !nextCursor) break;
       cursor = nextCursor;
       subscribe = undefined;
@@ -440,6 +507,121 @@ export class DirectorySync {
     return { client: this.connection.client, source: this.connection.source };
   }
 
+  private supportsDirectorySync(): boolean {
+    return (
+      useSessionStore.getState().sessions[this.serverId]?.serverInfo?.features?.directorySync ===
+      true
+    );
+  }
+
+  private commitAgentSnapshot(
+    snapshot: AgentSnapshot,
+    deltas: readonly AgentDirectoryDelta[],
+  ): Map<string, Agent> {
+    return snapshot.syncMode === "changes"
+      ? this.agents.commitChanges(snapshot.entries, snapshot.syncRemovals, deltas)
+      : this.agents.commitSnapshot(snapshot.entries, deltas);
+  }
+
+  private persistAgentCursors(
+    snapshot: AgentSnapshot,
+    deltas: readonly AgentDirectoryDelta[],
+  ): void {
+    if (snapshot.syncCursor) this.writeCursor("agents", snapshot.syncCursor);
+    for (const delta of deltas) this.noteLiveCursor("agents", delta);
+  }
+
+  private async fetchProjectSnapshot(
+    client: DaemonClient,
+    source: DirectorySourceToken,
+    transaction: DirectoryTransaction<WorkspaceDirectorySnapshot, WorkspaceDirectoryDelta>,
+    supportsDirectorySync: boolean,
+  ): Promise<void> {
+    const payload = await client.listProjects(
+      supportsDirectorySync ? { sync: this.readCursors().projects ?? {} } : undefined,
+    );
+    this.assertWorkspaceTransactionCurrent(client, source, transaction);
+    if (payload.sync?.mode === "snapshot") transaction.snapshot.projects.clear();
+    for (const entry of payload.projects) {
+      const project = normalizeProjectDescriptor(entry);
+      transaction.snapshot.projects.set(project.projectId, project);
+    }
+    for (const removal of payload.sync?.removals ?? []) {
+      transaction.snapshot.projects.delete(removal.id);
+    }
+    if (payload.sync) {
+      (transaction.snapshot.syncCursors ??= {}).projects = {
+        generation: payload.sync.generation,
+        afterSeq: payload.sync.headSeq,
+      };
+    }
+  }
+
+  private completeWorkspaceRefresh(
+    client: DaemonClient,
+    source: DirectorySourceToken,
+    transaction: DirectoryTransaction<WorkspaceDirectorySnapshot, WorkspaceDirectoryDelta>,
+  ): void {
+    if (!this.isCurrent(client, source) || !this.hasMatchingSession(client, source)) {
+      throw new DirectoryRefreshSupersededError("workspace completion no longer current");
+    }
+    const completion = this.workspaceTransactions.complete(transaction);
+    if (completion.kind === "stale") {
+      throw new DirectoryRefreshSupersededError("workspace completion was superseded");
+    }
+    this.workspaces.commitSnapshot(completion.snapshot, completion.deltas);
+    for (const [entity, cursor] of Object.entries(completion.snapshot.syncCursors ?? {})) {
+      if (cursor) this.writeCursor(entity as "projects" | "workspaces", cursor);
+    }
+    for (const delta of completion.deltas) {
+      const entity = "projectId" in delta || "project" in delta ? "projects" : "workspaces";
+      this.noteLiveCursor(entity, delta);
+    }
+  }
+
+  private recordAgentSync(
+    snapshot: AgentSnapshot,
+    sync: Awaited<ReturnType<DaemonClient["fetchAgents"]>>["sync"],
+  ): void {
+    if (!sync) return;
+    snapshot.syncMode = sync.mode;
+    snapshot.syncRemovals.push(...sync.removals);
+    snapshot.syncCursor = { generation: sync.generation, afterSeq: sync.headSeq };
+  }
+
+  private noteLiveCursor(
+    entity: keyof DirectoryCursors,
+    payload: { generation?: string; seq?: number },
+  ): void {
+    if (!payload.generation || payload.seq === undefined) return;
+    this.writeCursor(entity, {
+      generation: payload.generation,
+      afterSeq: payload.seq,
+    });
+  }
+
+  private readCursors(): DirectoryCursors {
+    const value = this.checkpoints?.readDirectoryCheckpoint(this.serverId);
+    if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+    const cursors: DirectoryCursors = {};
+    for (const entity of ["projects", "workspaces", "agents"] as const) {
+      const cursor = (value as Record<string, unknown>)[entity];
+      if (!cursor || typeof cursor !== "object" || Array.isArray(cursor)) continue;
+      const { generation, afterSeq } = cursor as Record<string, unknown>;
+      if (typeof generation === "string" && typeof afterSeq === "number" && afterSeq >= 0) {
+        cursors[entity] = { generation, afterSeq };
+      }
+    }
+    return cursors;
+  }
+
+  private writeCursor(entity: keyof DirectoryCursors, cursor: DirectoryCursor): void {
+    if (!this.checkpoints) return;
+    const current = this.readCursors();
+    const previous = current[entity];
+    if (previous?.generation === cursor.generation && previous.afterSeq >= cursor.afterSeq) return;
+    this.checkpoints.writeDirectoryCheckpoint(this.serverId, { ...current, [entity]: cursor });
+  }
   private isCurrent(client: DaemonClient, source: DirectorySourceToken): boolean {
     return (
       this.connection.client === client &&
@@ -507,6 +689,18 @@ export class DirectorySync {
   private abortPendingSessionWaits(): void {
     for (const abort of this.abortSessionWaits) abort();
   }
+}
+
+function legacyProjectDescriptorFromWorkspace(workspace: WorkspaceDescriptor): ProjectDescriptor {
+  return {
+    projectId: workspace.projectId,
+    projectKey: null,
+    projectDisplayName: workspace.projectDisplayName,
+    projectCustomName: workspace.projectCustomName ?? null,
+    projectCustomIconRevision: workspace.projectCustomIconRevision ?? null,
+    projectRootPath: workspace.projectRootPath,
+    projectKind: workspace.projectKind,
+  };
 }
 
 export class DirectoryRefreshSupersededError extends Error {}

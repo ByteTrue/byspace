@@ -1,10 +1,8 @@
 import type { SessionOutboundMessage } from "@bytetrue/byspace-protocol/messages";
 import {
-  normalizeEmptyProjectDescriptor,
   normalizeProjectDescriptor,
   normalizeWorkspaceDescriptor,
   useSessionStore,
-  type EmptyProjectDescriptor,
   type ProjectDescriptor,
   type WorkspaceDescriptor,
 } from "@/stores/session-store";
@@ -16,13 +14,43 @@ import {
 
 export type WorkspaceDirectoryDelta = Extract<
   SessionOutboundMessage,
-  { type: "workspace_update" }
+  { type: "workspace_update" | "project.update" }
 >["payload"];
+type ProjectDirectoryDelta = Extract<SessionOutboundMessage, { type: "project.update" }>["payload"];
 
 export interface WorkspaceDirectorySnapshot {
   workspaces: Map<string, WorkspaceDescriptor>;
-  emptyProjects: Map<string, EmptyProjectDescriptor>;
   projects: Map<string, ProjectDescriptor>;
+  syncCursors?: Partial<
+    Record<"projects" | "workspaces", { generation: string; afterSeq: number }>
+  >;
+}
+
+function applyProjectDelta(
+  snapshot: WorkspaceDirectorySnapshot,
+  delta: ProjectDirectoryDelta,
+): void {
+  if (delta.kind === "remove") {
+    snapshot.projects.delete(delta.projectId);
+    for (const [workspaceId, workspace] of snapshot.workspaces) {
+      if (workspace.projectId === delta.projectId) snapshot.workspaces.delete(workspaceId);
+    }
+    return;
+  }
+
+  const project = normalizeProjectDescriptor(delta.project);
+  snapshot.projects.set(project.projectId, project);
+  for (const [workspaceId, workspace] of snapshot.workspaces) {
+    if (workspace.projectId !== project.projectId) continue;
+    snapshot.workspaces.set(workspaceId, {
+      ...workspace,
+      projectDisplayName: project.projectDisplayName,
+      projectCustomName: project.projectCustomName,
+      projectCustomIconRevision: project.projectCustomIconRevision,
+      projectRootPath: project.projectRootPath,
+      projectKind: project.projectKind,
+    });
+  }
 }
 
 export class WorkspaceDirectoryReplica {
@@ -30,7 +58,7 @@ export class WorkspaceDirectoryReplica {
 
   applyDelta(delta: WorkspaceDirectoryDelta): void {
     const state = this.reconcile(this.read(), [delta]);
-    this.commit(state, delta.kind === "remove" ? [delta.id] : []);
+    this.commit(state, delta.kind === "remove" && "id" in delta ? [delta.id] : []);
   }
 
   commitSnapshot(
@@ -38,16 +66,16 @@ export class WorkspaceDirectoryReplica {
     deltas: readonly WorkspaceDirectoryDelta[],
   ): void {
     const removedWorkspaceIds = deltas.flatMap((delta) =>
-      delta.kind === "remove" ? [delta.id] : [],
+      delta.kind === "remove" && "id" in delta ? [delta.id] : [],
     );
     this.commit(this.reconcile(snapshot, deltas), removedWorkspaceIds);
+    useSessionStore.getState().setHasHydratedWorkspaces(this.serverId, true);
   }
 
   private read(): WorkspaceDirectorySnapshot {
     const session = useSessionStore.getState().sessions[this.serverId];
     return {
       workspaces: new Map(session?.workspaces),
-      emptyProjects: new Map(session?.emptyProjects),
       projects: new Map(session?.projects),
     };
   }
@@ -57,7 +85,6 @@ export class WorkspaceDirectoryReplica {
     deltas: readonly WorkspaceDirectoryDelta[],
   ): WorkspaceDirectorySnapshot {
     const workspaces = new Map(snapshot.workspaces);
-    const emptyProjects = new Map(snapshot.emptyProjects);
     const projects = new Map(snapshot.projects);
     for (const [workspaceId, workspace] of workspaces) {
       if (shouldSuppressWorkspaceForLocalArchive({ serverId: this.serverId, workspace })) {
@@ -65,15 +92,17 @@ export class WorkspaceDirectoryReplica {
       }
     }
     for (const delta of deltas) {
+      if ("projectId" in delta || "project" in delta) {
+        applyProjectDelta({ workspaces, projects }, delta);
+        continue;
+      }
       if (delta.kind === "remove") {
         workspaces.delete(delta.id);
         if (delta.emptyProject) {
-          const project = normalizeEmptyProjectDescriptor(delta.emptyProject);
-          emptyProjects.set(project.projectId, project);
-          projects.set(project.projectId, normalizeProjectDescriptor(delta.emptyProject));
+          const project = normalizeProjectDescriptor(delta.emptyProject);
+          projects.set(project.projectId, project);
         }
         if (delta.removedProjectId) {
-          emptyProjects.delete(delta.removedProjectId);
           projects.delete(delta.removedProjectId);
         }
         continue;
@@ -83,52 +112,18 @@ export class WorkspaceDirectoryReplica {
         workspaces.delete(workspace.id);
       } else {
         workspaces.set(workspace.id, workspace);
-        emptyProjects.delete(workspace.projectId);
-        projects.set(
-          workspace.projectId,
-          projectDescriptorFromWorkspace(workspace, projects.get(workspace.projectId)),
-        );
       }
     }
-    for (const workspace of workspaces.values()) {
-      if (!projects.has(workspace.projectId)) {
-        projects.set(workspace.projectId, projectDescriptorFromWorkspace(workspace));
-      }
-    }
-    for (const emptyProject of emptyProjects.values()) {
-      if (!projects.has(emptyProject.projectId)) {
-        projects.set(emptyProject.projectId, {
-          ...emptyProject,
-          projectKey: emptyProject.projectKey ?? null,
-        });
-      }
-    }
-    return { workspaces, emptyProjects, projects };
+    return { workspaces, projects };
   }
 
   private commit(snapshot: WorkspaceDirectorySnapshot, removedWorkspaceIds: string[]): void {
     const store = useSessionStore.getState();
     store.setWorkspaces(this.serverId, snapshot.workspaces);
-    store.setEmptyProjects(this.serverId, snapshot.emptyProjects.values());
     store.setProjects(this.serverId, snapshot.projects.values());
-    store.setHasHydratedWorkspaces(this.serverId, true);
     for (const workspaceId of removedWorkspaceIds) {
       clearWorkspaceArchivePending({ serverId: this.serverId, workspaceId });
       useWorkspaceSetupStore.getState().removeWorkspace({ serverId: this.serverId, workspaceId });
     }
   }
-}
-
-function projectDescriptorFromWorkspace(
-  workspace: WorkspaceDescriptor,
-  existingProject?: ProjectDescriptor,
-): ProjectDescriptor {
-  return {
-    projectId: workspace.projectId,
-    projectKey: workspace.project?.projectKey ?? existingProject?.projectKey ?? null,
-    projectDisplayName: workspace.projectDisplayName,
-    projectCustomName: workspace.projectCustomName ?? null,
-    projectRootPath: workspace.projectRootPath,
-    projectKind: workspace.projectKind,
-  };
 }
