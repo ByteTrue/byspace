@@ -169,6 +169,19 @@ export const TerminalAgentHookSettingsSchema = z
 
 export type TerminalAgentHookSettings = z.infer<typeof TerminalAgentHookSettingsSchema>;
 
+export const PluginIdSchema = z.string().regex(/^[a-z][a-z0-9-]*$/);
+
+export const DirectoryPluginSourceSchema = z
+  .object({
+    source: z.literal("directory"),
+    path: z.string().min(1),
+    enabled: z.boolean().optional(),
+  })
+  .strict();
+
+export const PluginSourceSchema = z.discriminatedUnion("source", [DirectoryPluginSourceSchema]);
+export type PluginSource = z.infer<typeof PluginSourceSchema>;
+
 const MutableRelayConfigSchema = z
   .object({
     enabled: z.boolean(),
@@ -213,6 +226,8 @@ export const MutableDaemonConfigSchema = z
     terminalProfiles: z.array(TerminalProfileSchema).optional(),
     agentProfiles: z.array(AgentProfileSchema).optional(),
     dataRelay: MutableDataRelayConfigSchema.optional(),
+    pluginsEnabled: z.boolean().optional(),
+    plugins: z.record(PluginIdSchema, PluginSourceSchema).optional(),
   })
   .passthrough();
 
@@ -238,6 +253,8 @@ export const MutableDaemonConfigPatchSchema = z
     terminalProfiles: z.array(TerminalProfileSchema).optional(),
     agentProfiles: z.array(AgentProfileSchema).optional(),
     dataRelay: MutableDataRelayConfigSchema.partial().optional(),
+    pluginsEnabled: z.boolean().optional(),
+    plugins: z.record(PluginIdSchema, PluginSourceSchema).optional(),
   })
   .partial()
   .passthrough();
@@ -1033,6 +1050,16 @@ export const ForgeIssueAttachmentSchema = z.object({
   projectPath: z.string().optional(),
 });
 
+export const ExternalResourceAttachmentMetadataSchema = z.object({
+  provider: z.string(),
+  providerLabel: z.string(),
+  resourceType: z.string(),
+  id: z.string(),
+  identifier: z.string(),
+  title: z.string(),
+  url: z.string(),
+});
+
 export const TextAttachmentSchema = z
   .object({
     type: z.literal("text"),
@@ -1040,6 +1067,7 @@ export const TextAttachmentSchema = z
     contextKind: z.string().optional(),
     title: z.string().nullable().optional(),
     text: z.string(),
+    externalResource: ExternalResourceAttachmentMetadataSchema.optional(),
   })
   .transform(({ contextKind, ...attachment }) => ({
     ...attachment,
@@ -1279,6 +1307,52 @@ export const DaemonGetPairingOfferRequestSchema = z.object({
 export const DiagnosticsRequestSchema = z.object({
   type: z.literal("diagnostics.request"),
   requestId: z.string(),
+});
+
+export const PluginCatalogGetRequestSchema = z.object({
+  type: z.literal("plugin.catalog.get.request"),
+  requestId: z.string(),
+});
+
+export const PluginListRequestSchema = z.object({
+  type: z.literal("plugin.list.request"),
+  requestId: z.string(),
+});
+
+export const PluginLogsGetRequestSchema = z.object({
+  type: z.literal("plugin.logs.get.request"),
+  requestId: z.string(),
+  pluginId: PluginIdSchema,
+});
+
+export const PluginDirectoryInstallRequestSchema = z.object({
+  type: z.literal("plugin.directory.install.request"),
+  requestId: z.string(),
+  path: z.string().min(1),
+  id: PluginIdSchema.optional(),
+});
+
+export const PluginDirectoryInspectRequestSchema = z.object({
+  type: z.literal("plugin.directory.inspect.request"),
+  requestId: z.string(),
+  path: z.string().min(1),
+});
+
+function pluginIdRequest<const Type extends string>(type: Type) {
+  return z.object({ type: z.literal(type), requestId: z.string(), pluginId: PluginIdSchema });
+}
+
+export const PluginReloadRequestSchema = pluginIdRequest("plugin.reload.request");
+export const PluginEnableRequestSchema = pluginIdRequest("plugin.enable.request");
+export const PluginDisableRequestSchema = pluginIdRequest("plugin.disable.request");
+export const PluginRemoveRequestSchema = pluginIdRequest("plugin.remove.request");
+
+export const PluginRpcInvokeRequestSchema = z.object({
+  type: z.literal("plugin.rpc.invoke.request"),
+  requestId: z.string(),
+  pluginId: PluginIdSchema,
+  method: z.string().min(1),
+  input: z.unknown(),
 });
 
 export const GetDaemonConfigRequestMessageSchema = z.object({
@@ -2778,6 +2852,16 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   DaemonGetStatusRequestSchema,
   DaemonGetPairingOfferRequestSchema,
   DiagnosticsRequestSchema,
+  PluginCatalogGetRequestSchema,
+  PluginListRequestSchema,
+  PluginLogsGetRequestSchema,
+  PluginDirectoryInstallRequestSchema,
+  PluginDirectoryInspectRequestSchema,
+  PluginReloadRequestSchema,
+  PluginEnableRequestSchema,
+  PluginDisableRequestSchema,
+  PluginRemoveRequestSchema,
+  PluginRpcInvokeRequestSchema,
   GetDaemonConfigRequestMessageSchema,
   SetDaemonConfigRequestMessageSchema,
   ReadProjectConfigRequestMessageSchema,
@@ -3170,6 +3254,14 @@ export const ServerInfoStatusPayloadSchema = z
         daemonStatusRpc: z.boolean().optional(),
         // COMPAT(relayConfig): added in v0.5.0, remove gate after 2027-02-08.
         relayConfig: z.boolean().optional(),
+        // COMPAT(plugins): added in v0.6.0, remove after 2027-02-24.
+        plugins: z.boolean().optional(),
+        // COMPAT(pluginManagement): added in v0.6.0, remove after 2027-02-24.
+        pluginManagement: z.boolean().optional(),
+        // COMPAT(pluginLogs): added in v0.6.0, remove after 2027-02-24.
+        pluginLogs: z.boolean().optional(),
+        // COMPAT(pluginThemes): added in v0.6.0, remove after 2027-02-24.
+        pluginThemes: z.boolean().optional(),
         // COMPAT(terminalRestoreModes): added in v0.1.81, remove gate after 2026-11-23.
         "terminal-restore-modes": z.boolean().optional(),
         // COMPAT(terminalSizeOwnership): added in v0.5.0, remove after 2027-02-08.
@@ -3361,6 +3453,11 @@ export const DaemonConfigChangedStatusPayloadSchema = z
   })
   .passthrough();
 
+export const PluginCatalogChangedStatusPayloadSchema = z.object({
+  status: z.literal("plugin_catalog_changed"),
+  pluginId: PluginIdSchema,
+});
+
 export const KnownStatusPayloadSchema = z.discriminatedUnion("status", [
   AgentCreatedStatusPayloadSchema,
   AgentCreateFailedStatusPayloadSchema,
@@ -3369,6 +3466,7 @@ export const KnownStatusPayloadSchema = z.discriminatedUnion("status", [
   ShutdownRequestedStatusPayloadSchema,
   RestartRequestedStatusPayloadSchema,
   DaemonConfigChangedStatusPayloadSchema,
+  PluginCatalogChangedStatusPayloadSchema,
 ]);
 
 export type KnownStatusPayload = z.infer<typeof KnownStatusPayloadSchema>;
@@ -5740,7 +5838,89 @@ export const DaemonUpdateProgressMessageSchema = z.object({
 
 export type DaemonUpdateProgressMessage = z.infer<typeof DaemonUpdateProgressMessageSchema>;
 
+export const PluginCatalogGetResponseSchema = z.object({
+  type: z.literal("plugin.catalog.get.response"),
+  payload: z.object({
+    requestId: z.string(),
+    plugins: z.array(z.object({ id: PluginIdSchema, clientBundle: z.string() })),
+  }),
+});
+
+export const PluginStatusSchema = z.enum(["running", "disabled", "failed"]);
+export type PluginStatus = z.infer<typeof PluginStatusSchema>;
+
+export const PluginListItemSchema = z.object({
+  id: PluginIdSchema,
+  path: z.string(),
+  enabled: z.boolean(),
+  status: PluginStatusSchema,
+  error: z.string().optional(),
+});
+export type PluginListItem = z.infer<typeof PluginListItemSchema>;
+
+export const PluginLogEntrySchema = z.object({
+  sequence: z.number().int().nonnegative(),
+  timestamp: z.string().datetime(),
+  stream: z.enum(["stdout", "stderr"]),
+  message: z.string(),
+});
+export type PluginLogEntry = z.infer<typeof PluginLogEntrySchema>;
+
+export const PluginListResponseSchema = z.object({
+  type: z.literal("plugin.list.response"),
+  payload: z.object({ requestId: z.string(), plugins: z.array(PluginListItemSchema) }),
+});
+
+export const PluginLogsGetResponseSchema = z.object({
+  type: z.literal("plugin.logs.get.response"),
+  payload: z.object({
+    requestId: z.string(),
+    pluginId: PluginIdSchema,
+    entries: z.array(PluginLogEntrySchema),
+  }),
+});
+
+export const PluginDirectoryInstallResponseSchema = z.object({
+  type: z.literal("plugin.directory.install.response"),
+  payload: z.object({ requestId: z.string(), plugin: PluginListItemSchema }),
+});
+
+export const PluginDirectoryInspectResponseSchema = z.object({
+  type: z.literal("plugin.directory.inspect.response"),
+  payload: z.object({ requestId: z.string(), id: PluginIdSchema }),
+});
+
+function pluginActionResponse<const Type extends string>(type: Type) {
+  return z.object({
+    type: z.literal(type),
+    payload: z.object({ requestId: z.string(), plugin: PluginListItemSchema }),
+  });
+}
+
+export const PluginReloadResponseSchema = pluginActionResponse("plugin.reload.response");
+export const PluginEnableResponseSchema = pluginActionResponse("plugin.enable.response");
+export const PluginDisableResponseSchema = pluginActionResponse("plugin.disable.response");
+export const PluginRemoveResponseSchema = z.object({
+  type: z.literal("plugin.remove.response"),
+  payload: z.object({ requestId: z.string() }).strict(),
+});
+
+export const PluginRpcInvokeResponseSchema = z.object({
+  type: z.literal("plugin.rpc.invoke.response"),
+  payload: z.object({ requestId: z.string(), output: z.unknown() }),
+});
+
 export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
+  PluginCatalogGetResponseSchema,
+  PluginListResponseSchema,
+  PluginLogsGetResponseSchema,
+  PluginDirectoryInstallResponseSchema,
+  PluginDirectoryInspectResponseSchema,
+  PluginReloadResponseSchema,
+  PluginEnableResponseSchema,
+  PluginDisableResponseSchema,
+  PluginRemoveResponseSchema,
+  PluginRpcInvokeResponseSchema,
   ActivityLogMessageSchema,
   AssistantChunkMessageSchema,
   AudioOutputMessageSchema,

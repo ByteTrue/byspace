@@ -237,6 +237,7 @@ export class DaemonConfigStore {
       deepMerge(this.current, configPatch),
       parsedPatch,
     );
+    if (parsedPatch.plugins !== undefined) merged.plugins = parsedPatch.plugins;
     const next = MutableDaemonConfigSchema.parse(
       omitMetadataGenerationProvidersFromConfig(
         omitProvidersFromConfig(merged, removedProviders),
@@ -358,6 +359,8 @@ function mergeMutableConfigIntoPersistedConfig(params: {
 
   return {
     ...persisted,
+    pluginsEnabled: mutable.pluginsEnabled,
+    plugins: mutable.plugins,
     daemon: {
       ...persisted.daemon,
       ...(persistRelayEnabled && mutable.relay !== undefined

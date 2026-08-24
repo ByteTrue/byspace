@@ -11,6 +11,8 @@ import type { AgentProviderRuntimeSettingsMap } from "./agent/provider-launch-co
 import { ensurePrivateFile, writePrivateFileAtomicSync } from "./private-files.js";
 import {
   AgentProfileSchema,
+  PluginIdSchema,
+  PluginSourceSchema,
   TerminalAgentHookSettingsSchema,
   TerminalProfileSchema,
 } from "@bytetrue/byspace-protocol/messages";
@@ -247,6 +249,8 @@ export const PersistedConfigSchema = z
       .optional(),
 
     providers: ProvidersSchema.optional(),
+    pluginsEnabled: z.boolean().optional(),
+    plugins: z.record(PluginIdSchema, PluginSourceSchema).optional(),
     worktrees: WorktreesConfigSchema.optional(),
     agents: z
       .object({

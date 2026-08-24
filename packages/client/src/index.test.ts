@@ -1,5 +1,6 @@
 import { afterEach, expect, test, vi } from "vitest";
-import { createBySpaceClient } from "./index.js";
+import { createBySpaceApi, createBySpaceClient } from "./index.js";
+import { DaemonClient } from "./daemon-client.js";
 import type { BySpaceAgent, BySpaceClient, BySpaceWorkspace } from "./index.js";
 
 type FakeWebSocketHandler = (...args: unknown[]) => void;
@@ -212,6 +213,21 @@ test("createBySpaceClient exposes workspace list through the daemon client", asy
   expect(client.getConnectionState()).toEqual({ status: "connected" });
 
   await client.close();
+});
+
+test("createBySpaceApi borrows daemon capabilities without exposing connection ownership", () => {
+  const daemonClient = new DaemonClient({
+    url: "ws://daemon.test",
+    clientId: "borrowed-api",
+    reconnect: { enabled: false },
+  });
+
+  const byspace = createBySpaceApi(daemonClient);
+
+  expect(Object.keys(byspace).sort()).toEqual(["agents", "config", "providers", "workspaces"]);
+  expect("connect" in byspace).toBe(false);
+  expect("close" in byspace).toBe(false);
+  expect("skills" in byspace.agents).toBe(false);
 });
 
 test("agent actions list the daemon directory without exposing the low-level client", async () => {

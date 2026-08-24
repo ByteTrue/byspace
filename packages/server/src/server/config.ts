@@ -569,6 +569,8 @@ export function loadConfig(
     appendSystemPrompt,
     terminalProfiles,
     agentProfiles,
+    pluginsEnabled: Boolean(persisted.pluginsEnabled),
+    plugins: persisted.plugins,
     mcpDebug: env.MCP_DEBUG === "1",
     isDev: resolveBySpaceNodeEnv(env) === "development",
     agentStoragePath: path.join(byspaceHome, "agents"),

@@ -62,6 +62,7 @@ const entries = [
   "packages/server/dist/scripts/supervisor-entrypoint.js",
   "packages/server/dist/server/terminal/terminal-worker-process.js",
   "packages/server/dist/server/server/speech/providers/local/worker-process.js",
+  "packages/server/dist/server/server/plugins/plugin-process.js",
 ];
 
 // Files read at runtime via fs APIs rather than `require`. nft only

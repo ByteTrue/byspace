@@ -186,6 +186,7 @@ import {
   type CreateAgentCommandDependencies,
 } from "./agent/create-agent/create.js";
 
+import { PluginService } from "./plugins/index.js";
 const MAX_MCP_DEBUG_BATCH_ITEMS = 10;
 const REDACTED_LOG_VALUE = "[redacted]";
 const IDLE_AGENT_RUNTIME_TTL_MS = 30 * 60 * 1000;
@@ -347,6 +348,8 @@ export interface BySpaceDaemonConfig {
   appendSystemPrompt?: string;
   terminalProfiles?: TerminalProfile[];
   agentProfiles?: AgentProfile[];
+  pluginsEnabled?: boolean;
+  plugins?: MutableDaemonConfig["plugins"];
   staticDir: string;
   mcpDebug: boolean;
   isDev?: boolean;
@@ -475,6 +478,8 @@ function createInitialMutableDaemonConfig(config: BySpaceDaemonConfig): MutableD
     enableTerminalAgentHooks: config.enableTerminalAgentHooks ?? false,
     terminalAgentHooks: config.terminalAgentHooks,
     appendSystemPrompt: config.appendSystemPrompt ?? "",
+    pluginsEnabled: Boolean(config.pluginsEnabled),
+    plugins: config.plugins,
   };
 
   if (config.terminalProfiles !== undefined) {
@@ -613,6 +618,7 @@ export async function createBySpaceDaemon(
     logger,
     { relayEnabledMutable: config.relayEnabledMutable ?? true },
   );
+  const pluginRuntime = new PluginService(logger, daemonConfigStore);
 
   const serverId = getOrCreateServerId(config.byspaceHome, { logger });
   const agentCliToken = randomBytes(32).toString("base64url");
@@ -1590,7 +1596,10 @@ export async function createBySpaceDaemon(
               workspaceSetupRuntime,
               remoteWebServiceManager,
               daemonKeyPair.publicKeyB64,
+              pluginRuntime,
             );
+            pluginRuntime.bindBySpaceSessionHost(wsServer);
+            await pluginRuntime.start();
 
             relayRuntime = new RelayRuntime({
               logger,
@@ -1692,6 +1701,7 @@ export async function createBySpaceDaemon(
       speechService.start();
       scriptHealthMonitor.start();
     } catch (error) {
+      await pluginRuntime.stopAllPlugins().catch(() => undefined);
       await dataRelayRuntime?.stop().catch(() => undefined);
       dataRelayRuntime = null;
       await dataRelayHost?.stop().catch(() => undefined);
@@ -1706,6 +1716,7 @@ export async function createBySpaceDaemon(
   };
 
   const stop = async () => {
+    await pluginRuntime.stopAllPlugins();
     scriptHealthMonitor.stop();
     clearInterval(idleAgentCollectionTimer);
     await inFlightIdleAgentCollection;

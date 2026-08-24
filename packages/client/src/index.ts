@@ -140,6 +140,7 @@ export interface BySpaceWorkspaceHandle {
   };
   current(): BySpaceWorkspace | null;
   refresh(options?: { requestId?: string }): Promise<BySpaceWorkspace | null>;
+  setTitle(title: string | null, requestId?: string): Promise<{ title: string | null }>;
   archive(requestId?: string): Promise<BySpaceWorkspaceArchiveResult>;
   /**
    * Subscribes to already-emitted daemon workspace_update events for this id.
@@ -366,11 +367,14 @@ export interface BySpaceConfigActions {
   ): Promise<{ requestId: string; config: MutableDaemonConfig }>;
 }
 
-export interface BySpaceClient {
+export interface BySpaceApi {
   readonly workspaces: BySpaceWorkspaceActions;
   readonly agents: BySpaceAgentActions;
   readonly providers: BySpaceProviderActions;
   readonly config: BySpaceConfigActions;
+}
+
+export interface BySpaceClient extends BySpaceApi {
   connect(): Promise<void>;
   close(): Promise<void>;
   ensureConnected(): void;
@@ -383,6 +387,16 @@ export function createBySpaceClient(config: BySpaceClientConfig): BySpaceClient 
     clientId: config.clientId ?? createGeneratedClientId(),
     clientType: "cli",
   });
+  return {
+    ...createBySpaceApi(daemonClient),
+    connect: () => daemonClient.connect(),
+    close: () => daemonClient.close(),
+    ensureConnected: () => daemonClient.ensureConnected(),
+    getConnectionState: () => daemonClient.getConnectionState(),
+  };
+}
+
+export function createBySpaceApi(daemonClient: DaemonClient): BySpaceApi {
   const createAgentHandle = createAgentHandleFactory(daemonClient);
   const createAgent = async (
     options: BySpaceAgentCreateOptions,
@@ -460,10 +474,6 @@ export function createBySpaceClient(config: BySpaceClientConfig): BySpaceClient 
       get: (requestId) => daemonClient.getDaemonConfig(requestId),
       patch: (patch, requestId) => daemonClient.patchDaemonConfig(patch, requestId),
     },
-    connect: () => daemonClient.connect(),
-    close: () => daemonClient.close(),
-    ensureConnected: () => daemonClient.ensureConnected(),
-    getConnectionState: () => daemonClient.getConnectionState(),
   };
 }
 
@@ -530,6 +540,7 @@ function createWorkspaceHandleFactory(
       },
       current: () => current,
       refresh,
+      setTitle: (title, requestId) => daemonClient.setWorkspaceTitle(id, title, requestId),
       archive: async (requestId) => {
         const result = await daemonClient.archiveWorkspace(id, requestId);
         if (current) {

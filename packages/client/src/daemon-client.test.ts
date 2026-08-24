@@ -1114,6 +1114,51 @@ test("honors explicit getDaemonPairingOffer timeout below the session RPC defaul
   await expect(responsePromise).rejects.toThrow("Timeout waiting for message (1500ms)");
 });
 
+test("gets a structured plugin log snapshot", async () => {
+  const mock = createMockTransport();
+  const client = new DaemonClient({
+    url: "ws://test",
+    clientId: "clsk_unit_test",
+    logger: createMockLogger(),
+    reconnect: { enabled: false },
+    transportFactory: () => mock.transport,
+  });
+  clients.push(client);
+  const connectPromise = client.connect();
+  mock.triggerOpen({ features: { pluginLogs: true } });
+  await connectPromise;
+
+  const response = client.getPluginLogs("example");
+  const request = parseSentFrame(mock.sent[0]);
+  expect(request).toMatchObject({ type: "plugin.logs.get.request", pluginId: "example" });
+  mock.triggerMessage(
+    wrapSessionMessage({
+      type: "plugin.logs.get.response",
+      payload: {
+        requestId: request.requestId,
+        pluginId: "example",
+        entries: [
+          {
+            sequence: 3,
+            timestamp: "2026-08-16T12:00:00.000Z",
+            stream: "stdout",
+            message: "ready",
+          },
+        ],
+      },
+    }),
+  );
+
+  await expect(response).resolves.toEqual([
+    {
+      sequence: 3,
+      timestamp: "2026-08-16T12:00:00.000Z",
+      stream: "stdout",
+      message: "ready",
+    },
+  ]);
+});
+
 test("keeps waitForAgentUpsert initial fetch inside the requested deadline", async () => {
   useHeartbeatClock();
   const logger = createMockLogger();
