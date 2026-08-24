@@ -100,7 +100,6 @@ export async function startIsolatedHostDaemon(
     env: withDisabledE2ESpeechEnv({
       ...process.env,
       ...options.environment,
-      ...process.env,
       BYSPACE_HOME: byspaceHome,
       BYSPACE_ORCHESTRATION_SKILLS_HOME: byspaceHome,
       BYSPACE_SERVER_ID: serverId,
@@ -124,7 +123,9 @@ export async function startIsolatedHostDaemon(
     await waitForServer(port, child);
   } catch (error) {
     await stopProcess(child);
-    await rm(byspaceHome, { recursive: true, force: true });
+    if (!options.preserveHome) {
+      await rm(byspaceHome, { recursive: true, force: true });
+    }
     throw new Error(
       `${error instanceof Error ? error.message : String(error)}\nDaemon stderr:\n${stderr}`,
       { cause: error },
@@ -136,7 +137,9 @@ export async function startIsolatedHostDaemon(
     port,
     close: async () => {
       await stopProcess(child);
-      await rm(byspaceHome, { recursive: true, force: true });
+      if (!options.preserveHome) {
+        await rm(byspaceHome, { recursive: true, force: true });
+      }
     },
   };
 }
