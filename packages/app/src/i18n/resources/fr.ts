@@ -1,5 +1,5 @@
 import { pluginSettings } from "./plugin-settings";
-import type { TranslationResources } from "./en";
+import { en, type TranslationResources } from "./en";
 
 export const fr: TranslationResources = {
   common: {
@@ -2017,56 +2017,53 @@ export const fr: TranslationResources = {
         authorizationRepairFailed:
           "Impossible de restaurer l’autorisation de la cible pour un ou plusieurs services.",
       },
+      skills: {
+        ...en.settings.host.skills,
+        sectionTitle: "Compétences en orchestration",
+        title: "Compétences en orchestration",
+        description: "Apprenez à vos agents à orchestrer via leCLI",
+        updateAvailable: "Mise à jour disponible",
+        updateTitle: "Mettre à jour les compétences BySpace?",
+        updateFallback: "Synchronisez les compétences regroupées sur votre machine.",
+        uninstallTitle: "Désinstaller les compétences BySpace?",
+        uninstallMessage:
+          "Supprime toutes les compétences d'orchestration BySpace de ~/.agents, ~/.claude, ~/.codex.",
+        choose: "Choisir les compétences",
+        chooseAll: "Toutes les compétences",
+        chooseAllHint:
+          "Gardez installées toutes les compétences fournies, y compris celles ajoutées plus tard.",
+        chooseList: "Compétences fournies",
+        chooseEmpty: "Cette version ne fournit aucune compétence.",
+        removeTitle: "Supprimer les compétences décochées ?",
+        removeMessage:
+          "{{skills}} seront supprimées de ~/.agents, ~/.claude et ~/.codex. Tout ce que vous avez ajouté dans ces dossiers de compétences est également supprimé.",
+        saveFailed: "Impossible d'enregistrer votre sélection de compétences.",
+        statusFailed: "Impossible de vérifier l'état des compétences d'orchestration.",
+        updateFailed: "Impossible de mettre à jour les compétences d'orchestration.",
+        uninstallFailed: "Impossible de désinstaller les compétences d'orchestration.",
+        saveSelectionFailed:
+          "Impossible d'enregistrer la sélection des compétences d'orchestration.",
+        actions: {
+          install: "Installer",
+          installing: "Installation...",
+          installed: "Installé",
+          update: "Mise à jour",
+          working: "Fonctionnement...",
+          remove: "Supprimer",
+          uninstall: "Désinstaller",
+          save: "Enregistrer",
+          saving: "Enregistrement...",
+          cancel: "Annuler",
+        },
+        operations: {
+          add: "Ajouter une compétence",
+          update: "Mettre à jour la compétence",
+          delete: "Supprimer la compétence",
+        },
+      },
       orchestration: {
         title: "Orchestration",
         unavailable: "Connectez-vous à cet hôte pour gérer l'orchestration",
-        aiOperationsModel: {
-          title: "Modèle des opérations IA",
-          hint: "Utilisé pour les titres d’espaces de travail, le texte Git et la mise au propre des dictées",
-        },
-        skills: {
-          title: "Skills d’orchestration",
-          installHint: "Installe les skills BySpace inclus pour les agents compatibles",
-          installedHint: "Installés et à jour sur cet hôte",
-          updateHint: "Les skills installés diffèrent de cette version de BySpace",
-          updateHost: "Mettez à jour l’hôte pour gérer les skills d’orchestration",
-          install: "Installer",
-          update: "Mettre à jour",
-          uninstall: "Désinstaller",
-          saving: "Enregistrement...",
-          manage: "Gérer",
-          save: "Enregistrer",
-          modalTitle: "Skills d’orchestration",
-          targetsTitle: "Environnements cibles",
-          targetAgents: "~/.agents/skills (OpenCode, Codex, Pi, etc.)",
-          targetAgentsDesc:
-            "Répertoire standard de skills pour Pi, OpenCode, Codex et autres agents",
-          targetClaude: "~/.claude/skills (Claude Code)",
-          targetClaudeDesc: "Répertoire de skills pour Claude Code",
-          skillsTitle: "Skills à installer",
-          selectAll: "Tout sélectionner",
-          deselectAll: "Tout désélectionner",
-          noTargetSelected: "Veuillez sélectionner au moins un environnement cible.",
-          noSkillSelected: "Veuillez sélectionner au moins un skill.",
-          descriptions: {
-            byspace: "Outils CLI et d'espace de travail BySpace",
-            "byspace-advisor": "Agent conseiller (deuxième avis)",
-            "byspace-committee": "Planification en comité à deux agents",
-            "byspace-handoff": "Passation de tâches avec contexte",
-            "byspace-project-setup": "Configuration de projet et byspace.json",
-          },
-          installConfirmTitle: "Installer ou mettre à jour les skills d’orchestration ?",
-          installConfirmMessage:
-            "BySpace synchronisera ses skills inclus sur cet hôte. Les autres skills ne seront pas modifiés et les copies en conflit non gérées seront conservées.",
-          updateConfirmTitle: "Mettre à jour les skills d’orchestration ?",
-          updateConfirmMessage:
-            "BySpace remplacera ses copies gérées par les skills inclus dans cette version. Les autres skills ne seront pas modifiés.",
-          uninstallConfirmTitle: "Désinstaller les skills d’orchestration ?",
-          uninstallConfirmMessage:
-            "BySpace supprimera de cet hôte ses copies gérées non modifiées. Les copies modifiées seront conservées.",
-          errorTitle: "Impossible de gérer les skills d’orchestration",
-          unknownError: "Erreur inconnue",
-        },
         systemPrompt: {
           title: "Invite système",
           hint: "Ajoute une invite système à tous les agents",

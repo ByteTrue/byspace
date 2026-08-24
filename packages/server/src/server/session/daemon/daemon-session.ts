@@ -13,11 +13,6 @@ import type { ManagedAgent } from "../../agent/agent-manager.js";
 import type { PersistedProjectRecord, PersistedWorkspaceRecord } from "../../workspace-registry.js";
 import type { DaemonConfigReloadResult } from "../../daemon-config-store.js";
 
-import {
-  getOrchestrationSkillsStatus,
-  resolveOrchestrationSkillsTargets,
-  setOrchestrationSkillsInstalled,
-} from "../../orchestration-skills.js";
 export interface DaemonRuntimeConfig {
   listen: string | null;
   worktreesRoot?: string;
@@ -243,38 +238,6 @@ export class DaemonSession {
         },
       });
     }
-  }
-
-  async handleOrchestrationSkillsGetStatusRequest(
-    msg: Extract<SessionInboundMessage, { type: "daemon.orchestration_skills.get_status.request" }>,
-  ): Promise<void> {
-    const result = await getOrchestrationSkillsStatus(
-      resolveOrchestrationSkillsTargets(this.byspaceHome),
-    );
-    this.host.emit({
-      type: "daemon.orchestration_skills.get_status.response",
-      payload: { requestId: msg.requestId, ...result },
-    });
-  }
-
-  async handleOrchestrationSkillsSetInstalledRequest(
-    msg: Extract<
-      SessionInboundMessage,
-      { type: "daemon.orchestration_skills.set_installed.request" }
-    >,
-  ): Promise<void> {
-    const result = await setOrchestrationSkillsInstalled(
-      {
-        installed: msg.installed,
-        skillNames: msg.skillNames,
-        targets: msg.targets,
-      },
-      resolveOrchestrationSkillsTargets(this.byspaceHome),
-    );
-    this.host.emit({
-      type: "daemon.orchestration_skills.set_installed.response",
-      payload: { requestId: msg.requestId, ...result },
-    });
   }
 
   async handleUpdateRequest(

@@ -313,6 +313,7 @@ interface SessionForTestOptions {
   targetedMessages?: Array<{ source: object; message: SessionOutboundMessage }>;
   binaryMessages?: Uint8Array[];
   workspaceLabelService?: WorkspaceLabelService;
+  orchestrationSkills?: SessionOptions["orchestrationSkills"];
 }
 
 function createSessionForTest(options: SessionForTestOptions = {}): Session {
@@ -390,6 +391,7 @@ function createSessionForTest(options: SessionForTestOptions = {}): Session {
       ...options.workspaceRegistry,
     },
     workspaceLabelService: options.workspaceLabelService,
+    orchestrationSkills: options.orchestrationSkills,
     scheduleService: asScheduleService(),
     checkoutDiffManager: asCheckoutDiffManager(checkoutDiffManager),
     github: asGitHubService(github),
@@ -416,6 +418,45 @@ function createSessionForTest(options: SessionForTestOptions = {}): Session {
     daemonRuntimeConfig: options.daemonRuntimeConfig,
   });
 }
+
+test("routes host-scoped agent skills requests through the daemon owner", async () => {
+  const messages: SessionOutboundMessage[] = [];
+  const status = {
+    state: "up-to-date" as const,
+    ops: [],
+    available: ["byspace"],
+    installed: ["byspace"],
+    selection: { mode: "all" as const },
+  };
+  const orchestrationSkills: NonNullable<SessionOptions["orchestrationSkills"]> = {
+    getStatus: vi.fn(async () => status),
+    reconcile: vi.fn(async () => status),
+    uninstall: vi.fn(async () => status),
+    saveSelection: vi.fn(async () => ({ ...status, confirmationRequired: null })),
+    importLegacySelectionIfUnset: vi.fn(async (selection) => ({
+      imported: true,
+      selection,
+    })),
+    autoUpdate: vi.fn(async () => status),
+  };
+  const session = createSessionForTest({ messages, orchestrationSkills });
+
+  await session.handleMessage({
+    type: "agent.skills.save_selection.request",
+    requestId: "save-skills",
+    selection: { mode: "custom", skills: ["byspace"] },
+    confirmedRemovals: ["byspace-advisor"],
+  });
+
+  expect(orchestrationSkills.saveSelection).toHaveBeenCalledWith(
+    { mode: "custom", skills: ["byspace"] },
+    ["byspace-advisor"],
+  );
+  expect(messages).toContainEqual({
+    type: "agent.skills.save_selection.response",
+    payload: { requestId: "save-skills", ...status, confirmationRequired: null },
+  });
+});
 
 describe("workspace label subscriptions", () => {
   type LabelSubscription = Awaited<ReturnType<WorkspaceLabelService["subscribe"]>>;

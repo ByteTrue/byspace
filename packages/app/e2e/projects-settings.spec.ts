@@ -22,7 +22,6 @@ import {
   expectScriptRowCount,
   expectWriteFailedCalloutActions,
   installDaemonConnectionGate,
-  installOrchestrationSkillsStatus,
   installReadTransportFailure,
   navigateToProjectSettings,
   openProjectSettings,
@@ -38,12 +37,8 @@ import {
   openAddProjectFlow,
 } from "./helpers/add-project-flow";
 import { createTempGitRepo } from "./helpers/workspace";
-import { expectNewWorkspaceDraft } from "./helpers/new-workspace";
-import { getServerId } from "./helpers/server-id";
 
 const updatedSetup = ["npm install", "npm run build"];
-const projectSetupPrompt =
-  "Use the byspace-project-setup skill to inspect this repository and recommend the smallest evidence-based changes that make clean worktrees repeatable, common commands discoverable, and long-running services safe to run in parallel. Inspect first and show me the recommendations before changing files.";
 
 interface ProjectsSettingsProject {
   name: string;
@@ -180,7 +175,9 @@ async function openProjectSettingsFromSidebar(page: Page, projectKey: string): P
 }
 
 test.describe("Projects settings", () => {
-  test("real daemon opens a project-scoped setup draft", async ({ page }) => {
+  test("freshly-added project with no workspace is editable from the sidebar without a reload", async ({
+    page,
+  }) => {
     const repo = await createTempGitRepo("projects-settings-empty-");
     const client = await connectSeedClient();
     let projectId: string | null = null;
@@ -200,26 +197,6 @@ test.describe("Projects settings", () => {
 
       await expectProjectSettingsFormVisible(page);
       await expect(page.getByTestId("project-settings-back-button")).not.toBeVisible();
-      const action = page.getByTestId("project-setup-agent-action");
-      await expect(action).toHaveText("Configure with agent");
-      page.on("dialog", (dialog) => void dialog.accept());
-      await action.click();
-
-      await expect(page).toHaveURL(/\/new\?/);
-      const route = new URL(page.url());
-      expect(route.searchParams.get("serverId")).toBe(getServerId());
-      expect(route.searchParams.get("projectId")).toBe(projectId);
-      expect(route.searchParams.get("dir")).toBe(repo.path);
-      expect(route.searchParams.get("name")).toBe(listedProject.projectDisplayName);
-      await expectNewWorkspaceDraft(page, projectSetupPrompt);
-      const e2eHome = process.env.E2E_BYSPACE_HOME;
-      if (!e2eHome) throw new Error("E2E_BYSPACE_HOME is required");
-      expect(
-        await readFile(
-          path.join(e2eHome, ".agents", "skills", "byspace-project-setup", "SKILL.md"),
-          "utf8",
-        ),
-      ).toContain("name: byspace-project-setup");
     } finally {
       if (projectId) {
         await client.removeProject(projectId).catch(() => undefined);
@@ -246,118 +223,6 @@ test.describe("Projects settings", () => {
     await editWorktreeSetup(page, updatedSetup);
     await clickSaveProjectSettings(page);
     await expectProjectConfigSaved(gitlabRemoteProject);
-  });
-
-  test("agent setup entry opens a project-scoped draft without changing files", async ({
-    page,
-    editableProject,
-  }) => {
-    await installOrchestrationSkillsStatus(page, "not-installed");
-    await openProjects(page);
-    await openProjectSettings(page, editableProject.name);
-
-    const before = await readProjectConfigFile(editableProject);
-    const action = page.getByTestId("project-setup-agent-action");
-    await expect(action).toHaveText("Review with agent");
-    page.once("dialog", (dialog) => dialog.accept());
-    await action.click();
-
-    await expect(page).toHaveURL(/\/new\?/);
-    await expect.poll(() => new URL(page.url()).searchParams.get("dir")).toBe(editableProject.path);
-    const route = new URL(page.url());
-    expect(route.searchParams.get("serverId")).toBe(getServerId());
-    expect(route.searchParams.get("projectId")).toBe(editableProject.projectId);
-    expect(route.searchParams.get("name")).toBe(editableProject.name);
-    await expectNewWorkspaceDraft(page, projectSetupPrompt);
-    expect(await readProjectConfigFile(editableProject)).toBe(before);
-  });
-
-  test("skill install failure keeps project context and can be retried", async ({
-    page,
-    editableProject,
-  }) => {
-    await installOrchestrationSkillsStatus(page, "not-installed", true, true);
-    await openProjects(page);
-    await openProjectSettings(page, editableProject.name);
-
-    const before = await readProjectConfigFile(editableProject);
-    const action = page.getByTestId("project-setup-agent-action");
-    page.once("dialog", (dialog) => dialog.accept());
-    await action.click();
-
-    await expect(page.getByTestId("project-setup-agent-error")).toContainText(
-      "Test orchestration skill install failure.",
-    );
-    await expect(page).toHaveURL(/\/settings\/projects\//);
-    expect(await readProjectConfigFile(editableProject)).toBe(before);
-
-    page.once("dialog", (dialog) => dialog.accept());
-    await action.click();
-    await expect(page).toHaveURL(/\/new\?/);
-    expect(await readProjectConfigFile(editableProject)).toBe(before);
-  });
-
-  test("drifted skill updates before opening the project draft", async ({
-    page,
-    editableProject,
-  }) => {
-    await installOrchestrationSkillsStatus(page, "drift");
-    await openProjects(page);
-    await openProjectSettings(page, editableProject.name);
-
-    const action = page.getByTestId("project-setup-agent-action");
-    page.once("dialog", (dialog) => dialog.accept());
-    await action.click();
-
-    await expect(page).toHaveURL(/\/new\?/);
-    const route = new URL(page.url());
-    expect(route.searchParams.get("serverId")).toBe(getServerId());
-    expect(route.searchParams.get("projectId")).toBe(editableProject.projectId);
-    await expectNewWorkspaceDraft(page, projectSetupPrompt);
-  });
-
-  test("leaving settings during skill install prevents stale draft navigation", async ({
-    page,
-    editableProject,
-  }) => {
-    const install = await installOrchestrationSkillsStatus(
-      page,
-      "not-installed",
-      true,
-      false,
-      true,
-    );
-    await openProjects(page);
-    await openProjectSettings(page, editableProject.name);
-
-    const action = page.getByTestId("project-setup-agent-action");
-    page.once("dialog", (dialog) => dialog.accept());
-    await action.click();
-    await install.waitForInstallRequest();
-    await expect(action).toBeDisabled();
-    await page.goBack();
-    await expect(page).toHaveURL(/\/settings\/projects$/);
-    install.releaseInstallResponse();
-    await install.waitForInstallResponse();
-    await page.evaluate(async () => {
-      await new Promise<number>((resolve) => requestAnimationFrame(resolve));
-      await new Promise<number>((resolve) => requestAnimationFrame(resolve));
-    });
-    await expect(page).toHaveURL(/\/settings\/projects$/);
-  });
-
-  test("older hosts show an upgrade message without an unguided fallback", async ({
-    page,
-    editableProject,
-  }) => {
-    await installOrchestrationSkillsStatus(page, "up-to-date", false);
-    await openProjects(page);
-    await openProjectSettings(page, editableProject.name);
-
-    await expect(
-      page.getByText("Update the host to use agent-assisted project setup"),
-    ).toBeVisible();
-    await expect(page.getByTestId("project-setup-agent-action")).toHaveCount(0);
   });
 });
 

@@ -652,6 +652,7 @@ export function resolveConfigFromPersisted(
     ...staticSettings,
     terminalProfiles,
     agentProfiles,
+    skillSelection: persisted.agents?.skills?.selection,
     agentStoragePath: path.join(byspaceHome, "agents"),
     staticDir: "public",
     agentClients: {},

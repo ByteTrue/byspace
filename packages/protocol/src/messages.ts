@@ -1742,6 +1742,7 @@ export const DaemonUpdateRequestMessageSchema = z.object({
   requestId: z.string(),
 });
 
+// COMPAT(orchestrationSkillsRpc): legacy monolithic orchestration skills RPCs preserved for parsing wire compatibility; remove after 2027-02-25.
 export const DaemonOrchestrationSkillsGetStatusRequestSchema = z.object({
   type: z.literal("daemon.orchestration_skills.get_status.request"),
   requestId: z.string(),

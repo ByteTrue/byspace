@@ -1,5 +1,5 @@
 import { pluginSettings } from "./plugin-settings";
-import type { TranslationResources } from "./en";
+import { en, type TranslationResources } from "./en";
 
 export const ptBR: TranslationResources = {
   common: {
@@ -2006,55 +2006,52 @@ export const ptBR: TranslationResources = {
         authorizationRepairFailed:
           "Não foi possível restaurar a autorização do destino para um ou mais serviços.",
       },
+      skills: {
+        ...en.settings.host.skills,
+        sectionTitle: "Skills de orquestração",
+        title: "Skills de orquestração",
+        description: "Ensine seus agentes a orquestrar pela CLI",
+        updateAvailable: "Atualização disponível",
+        updateTitle: "Atualizar BySpace skills?",
+        updateFallback: "Sincronize as skills incluídas com sua máquina.",
+        uninstallTitle: "Desinstalar BySpace skills?",
+        uninstallMessage:
+          "Remove todas as skills de orquestração do BySpace de ~/.agents, ~/.claude e ~/.codex.",
+        choose: "Escolher skills",
+        chooseAll: "Todas as skills",
+        chooseAllHint:
+          "Mantenha instaladas todas as skills incluídas, inclusive as adicionadas depois.",
+        chooseList: "Skills incluídas",
+        chooseEmpty: "Esta versão não inclui skills.",
+        removeTitle: "Remover as skills desmarcadas?",
+        removeMessage:
+          "{{skills}} serão excluídas de ~/.agents, ~/.claude e ~/.codex. Tudo o que você adicionou dentro dessas pastas de skills também é excluído.",
+        saveFailed: "Não foi possível salvar sua seleção de skills.",
+        statusFailed: "Não foi possível verificar o status das skills de orquestração.",
+        updateFailed: "Não foi possível atualizar as skills de orquestração.",
+        uninstallFailed: "Não foi possível desinstalar as skills de orquestração.",
+        saveSelectionFailed: "Não foi possível salvar a seleção de skills de orquestração.",
+        actions: {
+          install: "Instalar",
+          installing: "Instalando...",
+          installed: "Instalado",
+          update: "Atualizar",
+          working: "Trabalhando...",
+          remove: "Remover",
+          uninstall: "Desinstalar",
+          save: "Salvar",
+          saving: "Salvando...",
+          cancel: "Cancelar",
+        },
+        operations: {
+          add: "Adicionar skill",
+          update: "Atualizar skill",
+          delete: "Excluir skill",
+        },
+      },
       orchestration: {
         title: "Orquestração",
         unavailable: "Conecte-se a este host para gerenciar a orquestração",
-        aiOperationsModel: {
-          title: "Modelo para operações de IA",
-          hint: "Usado para títulos de espaços de trabalho, texto do Git e revisão de ditado",
-        },
-        skills: {
-          title: "Skills de orquestração",
-          installHint: "Instale os skills incluídos do BySpace para agentes compatíveis",
-          installedHint: "Instalados e atualizados neste host",
-          updateHint: "Os skills instalados diferem desta versão do BySpace",
-          updateHost: "Atualize o host para gerenciar os skills de orquestração",
-          install: "Instalar",
-          update: "Atualizar",
-          uninstall: "Desinstalar",
-          saving: "Salvando...",
-          manage: "Gerenciar",
-          save: "Salvar",
-          modalTitle: "Skills de orquestração",
-          targetsTitle: "Ambientes de instalação",
-          targetAgents: "~/.agents/skills (OpenCode, Codex, Pi, etc.)",
-          targetAgentsDesc: "Diretório padrão de skills para Pi, OpenCode, Codex e outros agentes",
-          targetClaude: "~/.claude/skills (Claude Code)",
-          targetClaudeDesc: "Diretório de skills para o Claude Code",
-          skillsTitle: "Skills a instalar",
-          selectAll: "Selecionar todos",
-          deselectAll: "Desmarcar todos",
-          noTargetSelected: "Selecione pelo menos um ambiente de instalação.",
-          noSkillSelected: "Selecione pelo menos um skill.",
-          descriptions: {
-            byspace: "Ferramentas de CLI e espaço de trabalho do BySpace",
-            "byspace-advisor": "Agente consultor (segunda opinião)",
-            "byspace-committee": "Planejamento com comitê de dois agentes",
-            "byspace-handoff": "Repasse de tarefas com contexto",
-            "byspace-project-setup": "Configuração de projeto e byspace.json",
-          },
-          installConfirmTitle: "Instalar ou atualizar os skills de orquestração?",
-          installConfirmMessage:
-            "O BySpace sincronizará seus skills incluídos neste host. Outros skills não serão alterados, e cópias conflitantes não gerenciadas serão preservadas.",
-          updateConfirmTitle: "Atualizar os skills de orquestração?",
-          updateConfirmMessage:
-            "O BySpace substituirá suas cópias gerenciadas pelos skills incluídos nesta versão. Outros skills não serão alterados.",
-          uninstallConfirmTitle: "Desinstalar os skills de orquestração?",
-          uninstallConfirmMessage:
-            "O BySpace removerá deste host as cópias gerenciadas sem modificações. Cópias modificadas serão preservadas.",
-          errorTitle: "Não foi possível gerenciar os skills de orquestração",
-          unknownError: "Erro desconhecido",
-        },
         systemPrompt: {
           title: "Prompt do sistema",
           hint: "Adiciona um prompt do sistema a todos os agentes",

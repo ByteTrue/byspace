@@ -556,6 +556,7 @@ export interface SessionOptions {
     catalog(): Array<{ id: string; clientBundle: string }>;
     invokePluginRpc(pluginId: string, method: string, input: unknown): Promise<unknown>;
   };
+  orchestrationSkills?: import("./orchestration-skills/index.js").OrchestrationSkills;
   mcpBaseUrl?: string | null;
   terminalManager: TerminalManager | null;
   providerSnapshotManager: ProviderSnapshotManager;
@@ -790,6 +791,7 @@ export class Session {
   private readonly agentConfigSession: AgentConfigSession;
   private readonly projectConfigSession: ProjectConfigSession;
   private readonly daemonSession: DaemonSession;
+  private readonly orchestrationSkills: SessionOptions["orchestrationSkills"];
   private readonly workspaceScripts: WorkspaceScriptsService;
   private readonly createAgentLifecycleDispatch: CreateAgentLifecycleDispatch;
   private readonly serverId: string;
@@ -826,6 +828,7 @@ export class Session {
       workspaceAutoName,
       daemonConfigStore,
       pluginRuntime,
+      orchestrationSkills,
       terminalManager,
       providerSnapshotManager,
       providerUsageService,
@@ -849,6 +852,7 @@ export class Session {
     this.serverId = serverId ?? "unknown";
     this.dictationOptions = dictation;
     this.pluginRuntime = pluginRuntime;
+    this.orchestrationSkills = orchestrationSkills;
     this.unsubscribePluginChanges = this.subscribeToPluginChanges(pluginRuntime);
     this.appVersion = appVersion ?? null;
     this.clientCapabilities = parseClientCapabilities(clientCapabilities);
@@ -1859,6 +1863,7 @@ export class Session {
     }
   }
 
+  // eslint-disable-next-line complexity
   private async dispatchInboundMessage(msg: SessionInboundMessage, source?: object): Promise<void> {
     const promise =
       this.dispatchSpeechModelMessage(msg) ??
@@ -1869,6 +1874,7 @@ export class Session {
       this.dispatchAgentLifecycleMessage(msg) ??
       this.dispatchPluginMessage(msg) ??
       this.dispatchPluginDirectoryMessage(msg) ??
+      this.dispatchOrchestrationSkillsMessage(msg) ??
       this.dispatchAgentConfigMessage(msg) ??
       this.dispatchCheckoutMessage(msg) ??
       this.dispatchWorkspaceRecoveryMessage(msg) ??
@@ -2101,6 +2107,66 @@ export class Session {
     }
   }
 
+  private dispatchOrchestrationSkillsMessage(
+    msg: SessionInboundMessage,
+  ): Promise<void> | undefined {
+    if (!this.orchestrationSkills || !msg.type.startsWith("agent.skills.")) return undefined;
+    const emitStatus = (
+      type:
+        | "agent.skills.get_status.response"
+        | "agent.skills.reconcile.response"
+        | "agent.skills.uninstall.response",
+      requestId: string,
+      operation: Promise<import("./orchestration-skills/index.js").SkillsSnapshot>,
+    ) =>
+      operation.then((status) => {
+        this.emit({ type, payload: { requestId, ...status } });
+        return undefined;
+      });
+    switch (msg.type) {
+      case "agent.skills.get_status.request":
+        return emitStatus(
+          "agent.skills.get_status.response",
+          msg.requestId,
+          this.orchestrationSkills.getStatus(),
+        );
+      case "agent.skills.reconcile.request":
+        return emitStatus(
+          "agent.skills.reconcile.response",
+          msg.requestId,
+          this.orchestrationSkills.reconcile(),
+        );
+      case "agent.skills.uninstall.request":
+        return emitStatus(
+          "agent.skills.uninstall.response",
+          msg.requestId,
+          this.orchestrationSkills.uninstall(),
+        );
+      case "agent.skills.save_selection.request":
+        return this.orchestrationSkills
+          .saveSelection(msg.selection, msg.confirmedRemovals)
+          .then((result) => {
+            this.emit({
+              type: "agent.skills.save_selection.response",
+              payload: { requestId: msg.requestId, ...result },
+            });
+            return undefined;
+          });
+      case "agent.skills.import_legacy_selection.request":
+        return this.orchestrationSkills
+          .importLegacySelectionIfUnset(msg.selection)
+          .then((result) => {
+            this.emit({
+              type: "agent.skills.import_legacy_selection.response",
+              payload: { requestId: msg.requestId, ...result },
+            });
+            return undefined;
+          });
+      default:
+        return undefined;
+    }
+  }
+
   private dispatchPluginMessage(msg: SessionInboundMessage): Promise<void> | undefined {
     if (msg.type === "plugin.list.request") {
       this.emit({
@@ -2286,10 +2352,6 @@ export class Session {
       case "daemon.config.reload.request":
         this.daemonSession.handleConfigReloadRequest(msg);
         return undefined;
-      case "daemon.orchestration_skills.get_status.request":
-        return this.daemonSession.handleOrchestrationSkillsGetStatusRequest(msg);
-      case "daemon.orchestration_skills.set_installed.request":
-        return this.daemonSession.handleOrchestrationSkillsSetInstalledRequest(msg);
       case "orchestration.tools.list.request":
         return this.handleOrchestrationToolsListRequest(msg);
       case "orchestration.tools.call.request":

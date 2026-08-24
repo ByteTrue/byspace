@@ -568,6 +568,7 @@ export class VoiceAssistantWebSocketServer {
   private unsubscribeDaemonConfigChange: (() => void) | null = null;
   private readonly providerUsageService: ProviderUsageService;
   private readonly pluginRuntime: SessionOptions["pluginRuntime"];
+  private readonly orchestrationSkills: SessionOptions["orchestrationSkills"];
   private readonly workspaceLabelService: WorkspaceLabelService | null;
   private unsubscribeTerminalActivity: (() => void) | null = null;
   private acceptingConnections = true;
@@ -617,6 +618,7 @@ export class VoiceAssistantWebSocketServer {
     daemonPublicKeyB64?: string,
     pluginRuntime?: SessionOptions["pluginRuntime"],
     workspaceLabelService?: WorkspaceLabelService,
+    orchestrationSkills?: SessionOptions["orchestrationSkills"],
   ) {
     this.logger = logger.child({ module: "websocket-server" });
     this.workspaceSetupRuntime = workspaceSetupRuntime;
@@ -628,6 +630,7 @@ export class VoiceAssistantWebSocketServer {
     this.daemonPublicKeyB64 = daemonPublicKeyB64;
     this.daemonRuntimeConfig = daemonRuntimeConfig;
     this.pluginRuntime = pluginRuntime;
+    this.orchestrationSkills = orchestrationSkills;
     this.agentManager = agentManager;
     this.agentStorage = agentStorage;
     this.projectRegistry = projectRegistry ?? createNoopProjectRegistry();
@@ -1317,6 +1320,7 @@ export class VoiceAssistantWebSocketServer {
       workspaceAutoName: this.workspaceAutoName,
       daemonConfigStore: this.daemonConfigStore,
       pluginRuntime: this.pluginRuntime,
+      orchestrationSkills: this.orchestrationSkills,
       mcpBaseUrl: this.mcpBaseUrl,
       terminalManager: this.terminalManager,
       providerSnapshotManager: this.providerSnapshotManager,
@@ -1568,8 +1572,8 @@ export class VoiceAssistantWebSocketServer {
         agentHistorySearch: true,
         // COMPAT(terminalAgentHookProviders): added in v0.2.0, remove gate after 2027-01-21.
         terminalAgentHookProviders: true,
-        // COMPAT(orchestrationSkills): added in v0.2.0-beta.5, remove gate after 2027-01-22.
-        orchestrationSkills: true,
+        // COMPAT(skillManagement): added in v0.4.0, remove gate after 2027-08-16.
+        skillManagement: true,
         // COMPAT(projectSetupSkill): added in v0.5.0, remove gate after 2027-02-05.
         projectSetupSkill: true,
         // COMPAT(rewind): added in v0.1.X, drop the gate when floor >= v0.1.X.

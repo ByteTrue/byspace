@@ -6,6 +6,12 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { withDisabledE2ESpeechEnv } from "./speech-env";
 
+export interface IsolatedHostDaemonOptions {
+  environment?: NodeJS.ProcessEnv;
+  byspaceHome?: string;
+  preserveHome?: boolean;
+}
+
 export interface IsolatedHostDaemon {
   serverId: string;
   port: number;
@@ -74,7 +80,10 @@ async function stopProcess(child: ChildProcess): Promise<void> {
   }
 }
 
-export async function startIsolatedHostDaemon(serverId: string): Promise<IsolatedHostDaemon> {
+export async function startIsolatedHostDaemon(
+  serverId: string,
+  options: IsolatedHostDaemonOptions = {},
+): Promise<IsolatedHostDaemon> {
   const primaryPort = Number(process.env.E2E_DAEMON_PORT ?? 0);
   let port = await getAvailablePort();
   while (port === 6777 || port === primaryPort) port = await getAvailablePort();
@@ -82,12 +91,15 @@ export async function startIsolatedHostDaemon(serverId: string): Promise<Isolate
   const metroPort = process.env.E2E_METRO_PORT;
   if (!metroPort) throw new Error("E2E_METRO_PORT is required to start an isolated host daemon");
 
-  const byspaceHome = await mkdtemp(path.join(tmpdir(), "byspace-e2e-secondary-host-"));
+  const byspaceHome =
+    options.byspaceHome ?? (await mkdtemp(path.join(tmpdir(), "byspace-e2e-secondary-host-")));
   const serverDir = path.resolve(__dirname, "../../../server");
   const tsxBin = execSync("which tsx").toString().trim();
   const child = spawn(tsxBin, ["scripts/supervisor-entrypoint.ts", "--dev"], {
     cwd: serverDir,
     env: withDisabledE2ESpeechEnv({
+      ...process.env,
+      ...options.environment,
       ...process.env,
       BYSPACE_HOME: byspaceHome,
       BYSPACE_ORCHESTRATION_SKILLS_HOME: byspaceHome,

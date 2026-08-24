@@ -23,12 +23,7 @@ import {
   Trash2,
 } from "lucide-react-native";
 import type { TFunction } from "i18next";
-import type {
-  OrchestrationSkillItemState,
-  OrchestrationSkillTargetKind,
-  OrchestrationSkillsState,
-} from "@bytetrue/byspace-protocol/messages";
-import { OrchestrationSkillsModal } from "@/screens/settings/orchestration-skills-modal";
+import { AgentSkillsSection } from "@/agent-skills";
 import type { AgentProvider } from "@bytetrue/byspace-protocol/agent-types";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -236,7 +231,6 @@ export function HostAgentsPage({ serverId }: { serverId: string }) {
     <View>
       {isConnected ? (
         <SettingsSection title={t("settings.hostSections.agents")}>
-          <OrchestrationSkillsCard serverId={serverId} />
           <AiOperationsModelCard serverId={serverId} />
           <AppendSystemPromptCard serverId={serverId} />
         </SettingsSection>
@@ -245,6 +239,7 @@ export function HostAgentsPage({ serverId }: { serverId: string }) {
           <Text style={styles.emptyText}>{t("settings.host.agents.unavailable")}</Text>
         </View>
       )}
+      <AgentSkillsSection serverId={serverId} />
       <AgentProfilesSection serverId={serverId} />
     </View>
   );
@@ -1177,203 +1172,6 @@ function UpdateDaemonCard({ host }: { host: HostProfile }) {
         </View>
       ) : null}
     </View>
-  );
-}
-
-type OrchestrationSkillsViewState =
-  | { status: "loading" }
-  | {
-      status: "ready";
-      state: OrchestrationSkillsState;
-      skills?: OrchestrationSkillItemState[];
-      installedTargets?: OrchestrationSkillTargetKind[];
-    }
-  | {
-      status: "saving";
-      state: OrchestrationSkillsState;
-      skills?: OrchestrationSkillItemState[];
-      installedTargets?: OrchestrationSkillTargetKind[];
-    }
-  | { status: "failed"; message: string };
-
-function OrchestrationSkillsCard({ serverId }: { serverId: string }) {
-  const { t } = useTranslation();
-  const daemonClient = useHostRuntimeClient(serverId);
-  const isConnected = useHostRuntimeIsConnected(serverId);
-  const isSupported = useSessionStore(
-    (state) => state.sessions[serverId]?.serverInfo?.features?.orchestrationSkills === true,
-  );
-  const [view, setView] = useState<OrchestrationSkillsViewState>({ status: "loading" });
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const requestVersionRef = useRef(0);
-  const invalidateRequests = useCallback(() => {
-    requestVersionRef.current++;
-  }, []);
-
-  const loadStatus = useCallback(() => {
-    if (!daemonClient || !isConnected || !isSupported) return;
-    const requestVersion = ++requestVersionRef.current;
-    setView({ status: "loading" });
-    void (async () => {
-      try {
-        const result = await daemonClient.getOrchestrationSkillsStatus();
-        if (requestVersion === requestVersionRef.current) {
-          setView({
-            status: "ready",
-            state: result.state,
-            skills: result.skills,
-            installedTargets: result.installedTargets,
-          });
-        }
-      } catch (error) {
-        if (requestVersion === requestVersionRef.current) {
-          setView({
-            status: "failed",
-            message:
-              error instanceof Error
-                ? error.message
-                : t("settings.host.orchestration.skills.unknownError"),
-          });
-        }
-      }
-    })();
-  }, [daemonClient, isConnected, isSupported, t]);
-
-  useEffect(() => {
-    loadStatus();
-    return invalidateRequests;
-  }, [invalidateRequests, loadStatus]);
-
-  const handleSaveSelection = useCallback(
-    async (options: { skillNames: string[]; targets: OrchestrationSkillTargetKind[] }) => {
-      if (!daemonClient) return;
-      const requestVersion = ++requestVersionRef.current;
-      const currentState =
-        view.status === "ready" || view.status === "saving" ? view.state : "not-installed";
-      const currentSkills =
-        view.status === "ready" || view.status === "saving" ? view.skills : undefined;
-      const currentTargets =
-        view.status === "ready" || view.status === "saving" ? view.installedTargets : undefined;
-      setView({
-        status: "saving",
-        state: currentState,
-        skills: currentSkills,
-        installedTargets: currentTargets,
-      });
-      try {
-        const result = await daemonClient.setOrchestrationSkillsInstalled({
-          installed: true,
-          skillNames: options.skillNames,
-          targets: options.targets,
-        });
-        if (requestVersion === requestVersionRef.current) {
-          setView({
-            status: "ready",
-            state: result.state,
-            skills: result.skills,
-            installedTargets: result.installedTargets,
-          });
-        }
-      } catch (error) {
-        if (requestVersion === requestVersionRef.current) {
-          setView({
-            status: "failed",
-            message:
-              error instanceof Error
-                ? error.message
-                : t("settings.host.orchestration.skills.unknownError"),
-          });
-        }
-        throw error;
-      }
-    },
-    [daemonClient, t, view],
-  );
-
-  const handleOpenModal = useCallback(() => setIsModalOpen(true), []);
-  const handleCloseModal = useCallback(() => setIsModalOpen(false), []);
-  const handleActionPress = useCallback(() => {
-    if (view.status === "failed") {
-      loadStatus();
-    } else {
-      handleOpenModal();
-    }
-  }, [handleOpenModal, loadStatus, view.status]);
-
-  if (!isSupported) {
-    return (
-      <View style={settingsStyles.card} testID="host-orchestration-skills-unsupported">
-        <View style={settingsStyles.row}>
-          <View style={settingsStyles.rowContent}>
-            <Text style={settingsStyles.rowTitle}>
-              {t("settings.host.orchestration.skills.title")}
-            </Text>
-            <Text style={settingsStyles.rowHint}>
-              {t("settings.host.orchestration.skills.updateHost")}
-            </Text>
-          </View>
-        </View>
-      </View>
-    );
-  }
-
-  const state = view.status === "ready" || view.status === "saving" ? view.state : null;
-  const skills = view.status === "ready" || view.status === "saving" ? view.skills : undefined;
-  const installedTargets =
-    view.status === "ready" || view.status === "saving" ? view.installedTargets : undefined;
-
-  let actionLabel = t("settings.host.orchestration.skills.manage");
-  let hint = t("settings.host.orchestration.skills.installHint");
-  if (view.status === "saving") {
-    actionLabel = t("settings.host.orchestration.skills.saving");
-  } else if (state === "drift") {
-    actionLabel = t("settings.host.orchestration.skills.update");
-    hint = t("settings.host.orchestration.skills.updateHint");
-  } else if (state === "up-to-date") {
-    actionLabel = t("settings.host.orchestration.skills.manage");
-    hint = t("settings.host.orchestration.skills.installedHint");
-  }
-
-  return (
-    <>
-      <View style={settingsStyles.card} testID="host-orchestration-skills-card">
-        <View style={settingsStyles.row}>
-          <View style={settingsStyles.rowContent}>
-            <Text style={settingsStyles.rowTitle}>
-              {t("settings.host.orchestration.skills.title")}
-            </Text>
-            <Text style={settingsStyles.rowHint}>{hint}</Text>
-          </View>
-          <Button
-            variant="outline"
-            size="sm"
-            onPress={handleActionPress}
-            disabled={view.status === "loading" || view.status === "saving" || !daemonClient}
-            testID="host-orchestration-skills-action"
-          >
-            {view.status === "failed" ? t("common.actions.retry") : actionLabel}
-          </Button>
-        </View>
-        {view.status === "failed" ? (
-          <View style={styles.updateFailure}>
-            <InlineAlert
-              variant="error"
-              title={t("settings.host.orchestration.skills.errorTitle")}
-              description={view.message}
-            />
-          </View>
-        ) : null}
-      </View>
-
-      <OrchestrationSkillsModal
-        visible={isModalOpen}
-        onClose={handleCloseModal}
-        skills={skills}
-        installedTargets={installedTargets}
-        onSave={handleSaveSelection}
-        isSaving={view.status === "saving"}
-      />
-    </>
   );
 }
 

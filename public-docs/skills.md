@@ -14,13 +14,12 @@ Start with [Orchestration](/docs/orchestration) if you want the mental model, or
 
 ## Installation
 
-Install them with:
+Two ways to install:
 
-```bash
-npx skills add ByteTrue/byspace
-```
+- **BySpace app:** Connect to the host, then open Settings → Host → Agents → Orchestration skills. The selected host installs the skills on its own machine.
+- **Manual:** `npx skills add ByteTrue/byspace`, this installs to `~/.agents/skills/` and sets up symlinks for each agent.
 
-This installs to `~/.agents/skills/` and sets up symlinks for each supported agent. Run the same command again to update.
+When a daemon finds installed BySpace skills, it keeps the selected bundled skills up to date on startup without removing deselected directories. Use the host's Orchestration skills card to install, update, choose, or uninstall skills. Removal always asks for confirmation.
 
 ## `/byspace`, BySpace Reference
 

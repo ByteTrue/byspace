@@ -155,6 +155,7 @@ import type { AgentClient, AgentProvider } from "./agent/agent-sdk-types.js";
 import {
   MutableDaemonConfigSchema,
   type AgentProfile,
+  type AgentSkillSelection,
   type FirstAgentContext,
   type TerminalProfile,
 } from "@bytetrue/byspace-protocol/messages";
@@ -164,6 +165,7 @@ import type {
   ProviderOverride,
 } from "./agent/provider-launch-config.js";
 import { loadPersistedConfig, type PersistedConfig } from "./persisted-config.js";
+import { createOrchestrationSkills } from "./orchestration-skills/index.js";
 import { resolveConfigFromPersisted, type CliConfigOverrides } from "./config.js";
 import { configureGitProcessPolicy, type GitProcessPolicy } from "../utils/run-git-command.js";
 import { resolveGitProcessPolicy } from "../utils/git-process-scheduler.js";
@@ -354,6 +356,7 @@ export interface BySpaceDaemonConfig {
   appendSystemPrompt?: string;
   terminalProfiles?: TerminalProfile[];
   agentProfiles?: AgentProfile[];
+  skillSelection?: AgentSkillSelection;
   pluginsEnabled?: boolean;
   plugins?: MutableDaemonConfig["plugins"];
   staticDir: string;
@@ -521,6 +524,7 @@ function createInitialMutableDaemonConfig(config: BySpaceDaemonConfig): MutableD
     ...(dataRelay !== undefined ? { dataRelay } : {}),
     pluginsEnabled: Boolean(config.pluginsEnabled),
     plugins: config.plugins,
+    skills: { selection: config.skillSelection },
   };
 
   return MutableDaemonConfigSchema.parse(initialConfig);
@@ -653,6 +657,10 @@ export async function createBySpaceDaemon(
       },
     },
   );
+  const orchestrationSkills = createOrchestrationSkills(daemonConfigStore);
+  void orchestrationSkills.autoUpdate().catch((error) => {
+    logger.error({ err: error }, "Failed to maintain orchestration skills at startup");
+  });
   const pluginRuntime = new PluginService(logger, daemonConfigStore);
 
   const serverId = getOrCreateServerId(config.byspaceHome, { logger });
@@ -1671,6 +1679,7 @@ export async function createBySpaceDaemon(
               daemonKeyPair.publicKeyB64,
               pluginRuntime,
               workspaceLabelService,
+              orchestrationSkills,
             );
             pluginRuntime.bindBySpaceSessionHost(wsServer);
             await pluginRuntime.start();

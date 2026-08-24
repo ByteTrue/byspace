@@ -1,5 +1,5 @@
 import { pluginSettings } from "./plugin-settings";
-import type { TranslationResources } from "./en";
+import { en, type TranslationResources } from "./en";
 
 export const ru: TranslationResources = {
   common: {
@@ -2009,55 +2009,51 @@ export const ru: TranslationResources = {
         authorizationRepairFailed:
           "Не удалось восстановить авторизацию целевого хоста для одного или нескольких сервисов.",
       },
+      skills: {
+        ...en.settings.host.skills,
+        sectionTitle: "Навыки оркестровки",
+        title: "Навыки оркестровки",
+        description: "Научите своих агентов организовывать работу через CLI",
+        updateAvailable: "Доступно обновление",
+        updateTitle: "Обновить навыки BySpace?",
+        updateFallback: "Синхронизируйте связанные навыки с вашим компьютером.",
+        uninstallTitle: "Удалить навыки BySpace?",
+        uninstallMessage:
+          "Удаляет все навыки оркестровки BySpace из ~/.agents, ~/.claude, ~/.codex.",
+        choose: "Выбрать навыки",
+        chooseAll: "Все навыки",
+        chooseAllHint: "Держите установленными все входящие навыки, включая добавленные позже.",
+        chooseList: "Входящие навыки",
+        chooseEmpty: "В этой сборке нет навыков.",
+        removeTitle: "Удалить снятые навыки?",
+        removeMessage:
+          "{{skills}} будут удалены из ~/.agents, ~/.claude и ~/.codex. Всё, что вы добавили внутри этих папок навыков, тоже удаляется.",
+        saveFailed: "Не удалось сохранить выбор навыков.",
+        statusFailed: "Невозможно проверить статус навыков оркестровки.",
+        updateFailed: "Невозможно обновить навыки оркестровки.",
+        uninstallFailed: "Невозможно удалить навыки оркестровки.",
+        saveSelectionFailed: "Не удалось сохранить выбор навыков оркестровки.",
+        actions: {
+          install: "Установить",
+          installing: "Установка...",
+          installed: "Установлено",
+          update: "Обновлять",
+          working: "Работающий...",
+          remove: "Удалить",
+          uninstall: "Удалить",
+          save: "Сохранить",
+          saving: "Сохранение...",
+          cancel: "Отмена",
+        },
+        operations: {
+          add: "Добавить навык",
+          update: "Обновить навык",
+          delete: "Удалить навык",
+        },
+      },
       orchestration: {
         title: "оркестровка",
         unavailable: "Подключитесь к этому хосту, чтобы управлять оркестрацией.",
-        aiOperationsModel: {
-          title: "Модель для ИИ-операций",
-          hint: "Используется для названий рабочих пространств, текста Git и обработки диктовки",
-        },
-        skills: {
-          title: "Навыки оркестрации",
-          installHint: "Установить встроенные навыки BySpace для поддерживаемых агентов",
-          installedHint: "Установлены и актуальны на этом хосте",
-          updateHint: "Установленные навыки отличаются от этой версии BySpace",
-          updateHost: "Обновите хост, чтобы управлять навыками оркестрации",
-          install: "Установить",
-          update: "Обновить",
-          uninstall: "Удалить",
-          saving: "Сохранение...",
-          manage: "Управление",
-          save: "Сохранить",
-          modalTitle: "Навыки оркестрации",
-          targetsTitle: "Целевые среды",
-          targetAgents: "~/.agents/skills (OpenCode, Codex, Pi и др.)",
-          targetAgentsDesc: "Стандартный каталог навыков для Pi, OpenCode, Codex и других агентов",
-          targetClaude: "~/.claude/skills (Claude Code)",
-          targetClaudeDesc: "Каталог навыков для Claude Code",
-          skillsTitle: "Навыки для установки",
-          selectAll: "Выбрать все",
-          deselectAll: "Снять выбор",
-          noTargetSelected: "Выберите хотя бы одну целевую среду.",
-          noSkillSelected: "Выберите хотя бы один навык.",
-          descriptions: {
-            byspace: "Инструменты BySpace CLI и рабочих пространств",
-            "byspace-advisor": "Агент-консультант (второе мнение)",
-            "byspace-committee": "Планирование комитетом из двух агентов",
-            "byspace-handoff": "Передача задач с контекстом",
-            "byspace-project-setup": "Настройка проекта и byspace.json",
-          },
-          installConfirmTitle: "Установить или обновить навыки оркестрации?",
-          installConfirmMessage:
-            "BySpace синхронизирует встроенные навыки на этом хосте. Остальные навыки не изменятся, а конфликтующие неуправляемые копии будут сохранены.",
-          updateConfirmTitle: "Обновить навыки оркестрации?",
-          updateConfirmMessage:
-            "BySpace заменит управляемые копии навыками из этой версии. Остальные навыки не изменятся.",
-          uninstallConfirmTitle: "Удалить навыки оркестрации?",
-          uninstallConfirmMessage:
-            "BySpace удалит с этого хоста неизменённые управляемые копии. Изменённые копии будут сохранены.",
-          errorTitle: "Не удалось управлять навыками оркестрации",
-          unknownError: "Неизвестная ошибка",
-        },
         systemPrompt: {
           title: "Системная подсказка",
           hint: "Добавляет системное приглашение всем агентам",

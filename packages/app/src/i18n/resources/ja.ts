@@ -1,5 +1,5 @@
 import { pluginSettings } from "./plugin-settings";
-import type { TranslationResources } from "./en";
+import { en, type TranslationResources } from "./en";
 
 export const ja: TranslationResources = {
   common: {
@@ -1991,56 +1991,52 @@ export const ja: TranslationResources = {
           "対象の認可結果を確認できません。再試行または削除できるよう、接続元のマッピングを保持しました。",
         authorizationRepairFailed: "1 件以上のサービスで対象の認可を復元できませんでした。",
       },
+      skills: {
+        ...en.settings.host.skills,
+        sectionTitle: "オーケストレーションスキル",
+        title: "オーケストレーションスキル",
+        description: "エージェントがCLI経由でオーケストレーションできるようにします。",
+        updateAvailable: "更新が利用可能",
+        updateTitle: "BySpaceスキルを更新しますか？",
+        updateFallback: "バンドルされたスキルをマシンに同期します。",
+        uninstallTitle: "BySpaceスキルをアンインストールしますか？",
+        uninstallMessage:
+          "~/.agents、~/.claude、~/.codexからすべてのBySpaceオーケストレーションスキルを削除します。",
+        choose: "スキルを選択",
+        chooseAll: "すべてのスキル",
+        chooseAllHint:
+          "後から追加されるものも含め、バンドルされたスキルをすべてインストールしたままにします。",
+        chooseList: "バンドルされたスキル",
+        chooseEmpty: "このビルドにはスキルが含まれていません。",
+        removeTitle: "選択を外したスキルを削除しますか？",
+        removeMessage:
+          "{{skills}} を ~/.agents、~/.claude、~/.codex から削除します。それらのスキルフォルダー内に追加したものもすべて削除されます。",
+        saveFailed: "スキルの選択を保存できませんでした。",
+        statusFailed: "オーケストレーションスキルのステータスを確認できません。",
+        updateFailed: "オーケストレーションスキルを更新できません。",
+        uninstallFailed: "オーケストレーションスキルをアンインストールできません。",
+        saveSelectionFailed: "オーケストレーションスキルの選択を保存できません。",
+        actions: {
+          install: "インストール",
+          installing: "インストール中...",
+          installed: "インストール済み",
+          update: "更新",
+          working: "処理中...",
+          remove: "削除",
+          uninstall: "アンインストール",
+          save: "保存",
+          saving: "保存中...",
+          cancel: "キャンセル",
+        },
+        operations: {
+          add: "スキルを追加",
+          update: "スキルを更新",
+          delete: "スキルを削除",
+        },
+      },
       orchestration: {
         title: "オーケストレーション",
         unavailable: "オーケストレーションを管理するにはこのホストに接続してください",
-        aiOperationsModel: {
-          title: "AI 操作モデル",
-          hint: "ワークスペースのタイトル、Gitテキスト、音声入力の整理に使用します",
-        },
-        skills: {
-          title: "オーケストレーションスキル",
-          installHint:
-            "対応するコーディングエージェント向けに、BySpace同梱のスキルをインストールします",
-          installedHint: "このホストにインストール済みで、最新です",
-          updateHint: "インストール済みのスキルが現在のBySpaceバージョンと異なります",
-          updateHost: "オーケストレーションスキルを管理するにはホストを更新してください",
-          install: "インストール",
-          update: "更新",
-          uninstall: "アンインストール",
-          saving: "保存中...",
-          manage: "管理",
-          save: "保存",
-          modalTitle: "オーケストレーションスキル",
-          targetsTitle: "インストール先環境",
-          targetAgents: "~/.agents/skills (OpenCode, Codex, Pi など)",
-          targetAgentsDesc: "Pi、OpenCode、Codexなどのエージェント用標準スキルディレクトリ",
-          targetClaude: "~/.claude/skills (Claude Code)",
-          targetClaudeDesc: "Claude Code用スキルディレクトリ",
-          skillsTitle: "インストールするスキル",
-          selectAll: "すべて選択",
-          deselectAll: "すべて解除",
-          noTargetSelected: "インストール先を少なくとも1つ選択してください。",
-          noSkillSelected: "スキルを少なくとも1つ選択してください。",
-          descriptions: {
-            byspace: "BySpace CLI & ワークスペースツール",
-            "byspace-advisor": "セカンドオピニオンアドバイザーエージェント",
-            "byspace-committee": "2エージェント委員会プランニング",
-            "byspace-handoff": "コンテキスト付きタスク引き継ぎエージェント",
-            "byspace-project-setup": "プロジェクト & byspace.json セットアップ",
-          },
-          installConfirmTitle: "オーケストレーションスキルをインストールまたは更新しますか？",
-          installConfirmMessage:
-            "BySpace同梱のスキルをこのホストに同期します。ほかのスキルは変更せず、BySpaceが管理していない同名の競合コピーは保持します。",
-          updateConfirmTitle: "オーケストレーションスキルを更新しますか？",
-          updateConfirmMessage:
-            "BySpaceが管理するコピーを、このバージョンに同梱されたスキルで置き換えます。ほかのスキルは変更しません。",
-          uninstallConfirmTitle: "オーケストレーションスキルをアンインストールしますか？",
-          uninstallConfirmMessage:
-            "このホストから未変更の管理対象コピーを削除します。変更されたコピーは保持します。",
-          errorTitle: "オーケストレーションスキルを管理できませんでした",
-          unknownError: "不明なエラー",
-        },
         systemPrompt: {
           title: "システムプロンプト",
           hint: "すべてのエージェントにシステムプロンプトを追加します",

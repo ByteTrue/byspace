@@ -70,8 +70,8 @@ const entries = [
 const additionalInputs = [
   // Shell integration scripts loaded by the terminal manager
   "packages/server/dist/server/terminal/shell-integration/**",
-  // Bundled orchestration skills are loaded through filesystem paths.
-  "packages/server/dist/skills/**",
+  // Agent orchestration skill catalog loaded through filesystem paths
+  "packages/server/dist/server/skills/**",
   // Server runtime config files (read by path, not require)
   "packages/server/.env.example",
   // CLI shebang script wrapping dist/index.js

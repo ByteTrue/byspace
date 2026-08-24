@@ -1,5 +1,5 @@
 import { pluginSettings } from "./plugin-settings";
-import type { TranslationResources } from "./en";
+import { en, type TranslationResources } from "./en";
 
 export const ar: TranslationResources = {
   common: {
@@ -1973,55 +1973,50 @@ export const ar: TranslationResources = {
           "نتيجة تفويض الهدف غير معروفة. تم الاحتفاظ بتعيين المصدر لتتمكن من إعادة المحاولة أو إزالته.",
         authorizationRepairFailed: "تعذرت استعادة تفويض الهدف لخدمة واحدة أو أكثر.",
       },
+      skills: {
+        ...en.settings.host.skills,
+        sectionTitle: "مهارات التنسيق",
+        title: "مهارات التنسيق",
+        description: "قم بتعليم عملائك كيفية التنسيق من خلال CLI",
+        updateAvailable: "التحديث متاح",
+        updateTitle: "تحديث مهارات BySpace ؟",
+        updateFallback: "مزامنة المهارات المجمعة لجهازك.",
+        uninstallTitle: "إلغاء تثبيت مهارات BySpace ؟",
+        uninstallMessage: "يزيل جميع مهارات تنسيق BySpace من ~/.agents ، ~/.claude ، ~/.codex.",
+        choose: "اختيار المهارات",
+        chooseAll: "كل المهارات",
+        chooseAllHint: "أبقِ جميع المهارات المرفقة مثبتة، بما فيها ما يُضاف لاحقًا.",
+        chooseList: "المهارات المرفقة",
+        chooseEmpty: "لا تتضمن هذه النسخة أي مهارات.",
+        removeTitle: "إزالة المهارات غير المحددة؟",
+        removeMessage:
+          "سيتم حذف {{skills}} من ~/.agents و~/.claude و~/.codex. كما يُحذف كل ما أضفته داخل مجلدات المهارات تلك.",
+        saveFailed: "تعذر حفظ اختيار المهارات.",
+        statusFailed: "غير قادر على التحقق من حالة مهارات التنسيق.",
+        updateFailed: "غير قادر على تحديث مهارات التنسيق.",
+        uninstallFailed: "غير قادر على إلغاء تثبيت مهارات التنسيق.",
+        saveSelectionFailed: "غير قادر على حفظ اختيار مهارات التنسيق.",
+        actions: {
+          install: "ثَبَّتَ",
+          installing: "جارٍ التثبيت...",
+          installed: "تم التثبيت",
+          update: "تحديث",
+          working: "عمل...",
+          remove: "إزالة",
+          uninstall: "إلغاء التثبيت",
+          save: "حفظ",
+          saving: "جارٍ الحفظ...",
+          cancel: "يلغي",
+        },
+        operations: {
+          add: "أضف مهارة",
+          update: "تحديث المهارة",
+          delete: "حذف المهارة",
+        },
+      },
       orchestration: {
         title: "التنسيق",
         unavailable: "اتصل بهذا المضيف لإدارة التنسيق",
-        aiOperationsModel: {
-          title: "نموذج عمليات الذكاء الاصطناعي",
-          hint: "يُستخدم لعناوين مساحات العمل ونصوص Git وتنقيح الإملاء الصوتي",
-        },
-        skills: {
-          title: "مهارات التنسيق",
-          installHint: "تثبيت مهارات BySpace المضمنة للوكلاء المدعومين",
-          installedHint: "مثبتة ومحدّثة على هذا المضيف",
-          updateHint: "تختلف المهارات المثبتة عن إصدار BySpace الحالي",
-          updateHost: "حدّث المضيف لإدارة مهارات التنسيق",
-          install: "تثبيت",
-          update: "تحديث",
-          uninstall: "إلغاء التثبيت",
-          saving: "جارٍ الحفظ...",
-          manage: "إدارة",
-          save: "حفظ",
-          modalTitle: "مهارات التنسيق",
-          targetsTitle: "بيئات التثبيت",
-          targetAgents: "~/.agents/skills (OpenCode, Codex, Pi, إلخ)",
-          targetAgentsDesc: "دليل المهارات القياسي للوكلاء",
-          targetClaude: "~/.claude/skills (Claude Code)",
-          targetClaudeDesc: "دليل المهارات لـ Claude Code",
-          skillsTitle: "المهارات المتاحة للتثبيت",
-          selectAll: "تحديد الكل",
-          deselectAll: "إلغاء تحديد الكل",
-          noTargetSelected: "يرجى تحديد بيئة تثبيت واحدة على الأقل.",
-          noSkillSelected: "يرجى تحديد مهارة واحدة على الأقل.",
-          descriptions: {
-            byspace: "BySpace CLI وأدوات مساحات العمل",
-            "byspace-advisor": "وكيل المستشار (رأي ثانٍ)",
-            "byspace-committee": "تخطيط لجنة من وكيلين",
-            "byspace-handoff": "تسليم المهام مع السياق",
-            "byspace-project-setup": "إعداد المشروع و byspace.json",
-          },
-          installConfirmTitle: "تثبيت مهارات التنسيق أو تحديثها؟",
-          installConfirmMessage:
-            "سيزامن BySpace مهاراته المضمنة على هذا المضيف. لن تتغير المهارات الأخرى، وستُحفظ النسخ المتعارضة غير المُدارة.",
-          updateConfirmTitle: "تحديث مهارات التنسيق؟",
-          updateConfirmMessage:
-            "سيستبدل BySpace نسخه المُدارة بالمهارات المضمنة في هذا الإصدار. لن تتغير المهارات الأخرى.",
-          uninstallConfirmTitle: "إلغاء تثبيت مهارات التنسيق؟",
-          uninstallConfirmMessage:
-            "سيزيل BySpace النسخ المُدارة غير المعدّلة من هذا المضيف. وستُحفظ النسخ المعدّلة.",
-          errorTitle: "تعذّرت إدارة مهارات التنسيق",
-          unknownError: "خطأ غير معروف",
-        },
         systemPrompt: {
           title: "موجه النظام",
           hint: "إضافة موجه النظام إلى كافة الوكلاء",
