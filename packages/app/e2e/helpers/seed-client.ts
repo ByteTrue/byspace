@@ -47,6 +47,7 @@ export interface SeedDaemonClient {
   fetchWorkspaces(options?: { filter?: { projectId?: string } }): Promise<{
     entries: SeedWorkspaceDescriptor[];
   }>;
+  setWorkspacePinned(workspaceId: string, pinned: boolean): Promise<{ pinnedAt: string | null }>;
   createWorkspace(input: {
     source:
       | { kind: "directory"; path: string; projectId?: string }

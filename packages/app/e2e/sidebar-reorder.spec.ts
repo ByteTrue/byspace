@@ -17,7 +17,21 @@ async function visibleBoundingBox(row: Locator) {
   return box;
 }
 
-async function quickDragFirstRowAfterSecond(rows: Locator) {
+async function pressWorkspaceRow(rows: Locator) {
+  const solidScrimStop = rows
+    .nth(0)
+    .getByTestId("sidebar-workspace-trailing-scrim")
+    .locator("stop")
+    .nth(1);
+  const hoverScrimColor = await solidScrimStop.getAttribute("stop-color");
+  await rows.page().mouse.down();
+  await expect.poll(() => solidScrimStop.getAttribute("stop-color")).not.toBe(hoverScrimColor);
+}
+
+async function quickDragFirstRowAfterSecond(
+  rows: Locator,
+  pressRow: (rows: Locator) => Promise<void>,
+) {
   await expect(rows).toHaveCount(2);
   const before = await rowTestIds(rows);
   const sourceBox = await visibleBoundingBox(rows.nth(0));
@@ -28,8 +42,10 @@ async function quickDragFirstRowAfterSecond(rows: Locator) {
   const target = { x: targetBox.x + targetBox.width / 2, y: targetBox.y + targetBox.height / 2 };
 
   await page.mouse.move(source.x, source.y);
-  await page.mouse.down();
+  const trailingScrim = rows.nth(0).getByTestId("sidebar-workspace-trailing-scrim");
+  await pressRow(rows);
   await page.mouse.move(source.x, source.y + 7);
+  await expect(trailingScrim).toHaveCount(0);
   await page.mouse.move(target.x, target.y, { steps: 4 });
   await page.mouse.up();
 
@@ -60,6 +76,7 @@ test("workspaces reorder with an immediate mouse drag", async ({ page }) => {
       page.locator(
         `[data-testid="${firstWorkspaceTestId}"], [data-testid="${secondWorkspaceTestId}"]`,
       ),
+      pressWorkspaceRow,
     );
   } finally {
     await firstProject.cleanup();

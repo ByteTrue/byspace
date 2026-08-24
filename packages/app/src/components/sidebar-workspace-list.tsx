@@ -33,10 +33,7 @@ import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import type { Theme } from "@/styles/theme";
 import { type GestureType } from "react-native-gesture-handler";
 import * as Clipboard from "expo-clipboard";
-import {
-  hasSidebarWorkspaceTrailing,
-  SidebarWorkspaceTrailingContent,
-} from "@/components/sidebar/workspace-trailing";
+import { SidebarWorkspaceTrailingContent } from "@/components/sidebar/workspace-trailing";
 import {
   CircleAlert,
   ExternalLink,
@@ -99,6 +96,7 @@ import {
   SidebarWorkspaceTrailingActionBase,
   SidebarWorkspaceTrailingActionOverlay,
   SidebarWorkspaceTrailingActionSlot,
+  resolveTrailingActionVisibility,
 } from "@/components/sidebar/sidebar-workspace-row-content";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -554,6 +552,7 @@ function ProjectKebabMenu({
 
 function WorkspaceRowRightGroup({
   workspace,
+  backdrop,
   isHovered,
   isTouchPlatform,
   isCompactBreakpoint,
@@ -572,6 +571,7 @@ function WorkspaceRowRightGroup({
   onRenameWithAgent,
 }: {
   workspace: SidebarWorkspaceEntry;
+  backdrop: SidebarSurfaceBackdrop;
   isHovered: boolean;
   isTouchPlatform: boolean;
   isCompactBreakpoint: boolean;
@@ -592,24 +592,34 @@ function WorkspaceRowRightGroup({
   const { t } = useTranslation();
   const { trailing } = useSidebarMetaPreferences();
   const showShortcut = showShortcutBadge && shortcutNumber !== null;
-  const showKebab = Boolean(onArchive && (isHovered || isTouchPlatform || isCompactBreakpoint));
-  const showKebabInSlot = showKebab && !showShortcut;
-  const hasTrailing = hasSidebarWorkspaceTrailing({ workspace, trailing });
-  const shouldRenderActionSlot = Boolean(onArchive || hasTrailing);
+  const {
+    showTrailing,
+    showKebab: showKebabInSlot,
+    showScrim,
+    renderSlot,
+  } = resolveTrailingActionVisibility({
+    workspace,
+    trailing,
+    hasArchiveAction: Boolean(onArchive),
+    isHovered: isHovered || isCompactBreakpoint,
+    isTouchPlatform,
+    showShortcut,
+  });
 
   return (
     <>
       {isCreating ? (
         <Text style={styles.workspaceCreatingText}>{t("sidebar.workspace.status.creating")}</Text>
       ) : null}
-      {shouldRenderActionSlot ? (
+      {renderSlot ? (
         <SidebarWorkspaceTrailingActionSlot>
-          <SidebarWorkspaceTrailingActionBase
-            visible={hasTrailing && !showKebabInSlot && !showShortcut}
-          >
+          <SidebarWorkspaceTrailingActionBase visible={showTrailing}>
             <SidebarWorkspaceTrailingContent workspace={workspace} trailing={trailing} />
           </SidebarWorkspaceTrailingActionBase>
-          <SidebarWorkspaceTrailingActionOverlay visible={showKebabInSlot}>
+          <SidebarWorkspaceTrailingActionOverlay
+            visible={showKebabInSlot}
+            scrimBackdrop={showScrim ? backdrop : undefined}
+          >
             {onArchive ? (
               <SidebarWorkspaceMenu
                 workspaceKey={workspace.workspaceKey}
@@ -991,6 +1001,7 @@ function WorkspaceRowInner({
           selected,
           isHovered,
         });
+        const backdrop = getSidebarRowBackdrop({ isDragging, isPressed, selected, isHovered });
         return (
           <View
             {...dragAttributes}
@@ -1016,7 +1027,7 @@ function WorkspaceRowInner({
                 workspace={workspace}
                 hostBadge={subtitle}
                 serviceSummary={serviceSummary}
-                backdrop={getSidebarRowBackdrop({ isDragging, isPressed, selected, isHovered })}
+                backdrop={backdrop}
                 isHovered={isHovered}
                 isLoading={isArchiving || isCreating}
                 isCreating={isCreating}
@@ -1026,6 +1037,7 @@ function WorkspaceRowInner({
               >
                 <WorkspaceRowRightGroup
                   workspace={workspace}
+                  backdrop={backdrop}
                   isHovered={isHovered}
                   isTouchPlatform={isTouchPlatform}
                   isCompactBreakpoint={isCompactBreakpoint}

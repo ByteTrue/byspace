@@ -8,6 +8,7 @@ export function useLongPressDragInteraction(input: {
   drag: () => void;
   menuController: ReturnType<typeof useContextMenu> | null;
 }) {
+  const { drag, menuController } = input;
   const didLongPressRef = useRef(false);
   const dragArmedRef = useRef(false);
   const dragActivatedRef = useRef(false);
@@ -31,19 +32,19 @@ export function useLongPressDragInteraction(input: {
   }, []);
 
   const openContextMenuAtStartPoint = useCallback(() => {
-    if (!input.menuController || !touchStartRef.current) {
+    if (!menuController || !touchStartRef.current) {
       return;
     }
-    input.menuController.setAnchorRect({
+    menuController.setAnchorRect({
       x: touchStartRef.current.x,
       y: touchStartRef.current.y,
       width: 0,
       height: 0,
     });
-    input.menuController.setOpen(true);
+    menuController.setOpen(true);
     menuOpenedRef.current = true;
     didLongPressRef.current = true;
-  }, [input.menuController]);
+  }, [menuController]);
 
   const handleLongPress = useCallback(() => {
     // Manual timers own long-press behavior on mobile.
@@ -85,10 +86,10 @@ export function useLongPressDragInteraction(input: {
       dragArmedRef.current = true;
       dragActivatedRef.current = true;
       didLongPressRef.current = true;
-      input.drag();
+      drag();
     }, DRAG_ARM_DELAY_MS);
 
-    if (!input.menuController || platformIsWeb) {
+    if (!menuController || platformIsWeb) {
       return;
     }
 
@@ -109,7 +110,7 @@ export function useLongPressDragInteraction(input: {
       }
       openContextMenuAtStartPoint();
     }, CONTEXT_MENU_DELAY_MS);
-  }, [clearTimers, input, openContextMenuAtStartPoint]);
+  }, [clearTimers, drag, menuController, openContextMenuAtStartPoint]);
 
   const handleDragIntent = useCallback(
     (_details: { dx: number; dy: number; distance: number }) => {

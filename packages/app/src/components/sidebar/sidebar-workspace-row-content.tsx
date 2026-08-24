@@ -1,13 +1,15 @@
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
-import { memo, useCallback, useMemo, useState, type ReactNode } from "react";
+import { memo, useCallback, useId, useMemo, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Text, View, type ViewStyle } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
+import Svg, { Defs, LinearGradient as SvgLinearGradient, Rect, Stop } from "react-native-svg";
 import { CircleAlert, Folder, FolderGit2, Monitor } from "lucide-react-native";
 import { WorkspaceHoverCard } from "@/components/workspace-hover-card";
 import { StatusRing } from "@/components/status-ring";
 import type { SidebarWorkspaceEntry } from "@/hooks/use-sidebar-workspaces-list";
-import { useAppSettings } from "@/hooks/use-settings";
+import { useAppSettings, type SidebarWorkspaceTrailing } from "@/hooks/use-settings";
+import { hasSidebarWorkspaceTrailing } from "@/components/sidebar/workspace-trailing";
 import type { Theme } from "@/styles/theme";
 import type { SidebarSurfaceBackdrop } from "@/styles/surface-backdrop";
 import type { SidebarStateBucket } from "@/utils/sidebar-agent-state";
@@ -22,9 +24,42 @@ const EMPHASIZED_STATUS_DOT_SIZE = 9;
 const DEFAULT_STATUS_DOT_OFFSET = 0;
 const EMPHASIZED_STATUS_DOT_OFFSET = -1;
 
+const SCRIM_WIDTH = 48;
+const SCRIM_SOLID_OFFSET = "55%";
+
 const foregroundMutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
 const amberColorMapping = (theme: Theme) => ({ color: theme.colors.statusWarning });
 
+/**
+ * react-native-svg's extractGradient reads stopColor off the child elements structurally,
+ * without rendering them, so wrapping Stop itself in withUnistyles hides the color from it and
+ * the native gradient silently falls back to black. Theme the whole SVG instead and keep real
+ * Stop elements as direct children of the gradient.
+ */
+function TrailingActionScrimSvg({ gradientId, color }: { gradientId: string; color: string }) {
+  return (
+    <Svg width="100%" height="100%" preserveAspectRatio="none">
+      <Defs>
+        <SvgLinearGradient id={gradientId} x1="0%" y1="0%" x2="100%" y2="0%">
+          {/* Same color at both ends, varying only stopOpacity. Interpolating a hex toward
+              `transparent` goes through black in some engines and leaves a grey fringe. */}
+          <Stop offset="0%" stopColor={color} stopOpacity={0} />
+          <Stop offset={SCRIM_SOLID_OFFSET} stopColor={color} stopOpacity={1} />
+          <Stop offset="100%" stopColor={color} stopOpacity={1} />
+        </SvgLinearGradient>
+      </Defs>
+      <Rect x="0" y="0" width="100%" height="100%" fill={`url(#${gradientId})`} />
+    </Svg>
+  );
+}
+
+const ThemedTrailingActionScrimSvg = withUnistyles(TrailingActionScrimSvg);
+
+const scrimColorMappings: Record<SidebarSurfaceBackdrop, (theme: Theme) => { color: string }> = {
+  surfaceSidebar: (theme) => ({ color: theme.colors.surfaceSidebar }),
+  surfaceSidebarHover: (theme) => ({ color: theme.colors.surfaceSidebarHover }),
+  surface2: (theme) => ({ color: theme.colors.surface2 }),
+};
 const ThemedLoadingSpinner = withUnistyles(LoadingSpinner);
 const ThemedCircleAlert = withUnistyles(CircleAlert);
 const ThemedMonitor = withUnistyles(Monitor);
@@ -53,7 +88,7 @@ export function SidebarWorkspaceRowFrame({
 
   return (
     <WorkspaceHoverCard workspace={workspace} prHint={workspace.prHint} isDragging={isDragging}>
-      {children({ isHovered, hoverHandlers })}
+      {children({ isHovered: isHovered && !isDragging, hoverHandlers })}
     </WorkspaceHoverCard>
   );
 }
@@ -362,6 +397,13 @@ export const sidebarWorkspaceRowStyles = StyleSheet.create((theme) => ({
     top: 0,
     right: 0,
   },
+  trailingActionScrim: {
+    position: "absolute",
+    top: 0,
+    bottom: 0,
+    right: 0,
+    width: SCRIM_WIDTH,
+  },
 }));
 
 export function SidebarWorkspaceShortcutBadge({ number }: { number: number }) {
@@ -370,6 +412,41 @@ export function SidebarWorkspaceShortcutBadge({ number }: { number: number }) {
       <Text style={sidebarWorkspaceRowStyles.shortcutBadgeText}>{number}</Text>
     </View>
   );
+}
+
+/**
+ * What the trailing slot shows for a row. Derived in one place so row renderers
+ * share consistent visibility and fade under the scrim.
+ */
+export function resolveTrailingActionVisibility({
+  workspace,
+  trailing,
+  hasArchiveAction,
+  isHovered,
+  isTouchPlatform,
+  showShortcut,
+}: {
+  workspace: SidebarWorkspaceEntry;
+  trailing: SidebarWorkspaceTrailing;
+  hasArchiveAction: boolean;
+  isHovered: boolean;
+  isTouchPlatform: boolean;
+  showShortcut: boolean;
+}): {
+  showTrailing: boolean;
+  showKebab: boolean;
+  showScrim: boolean;
+  renderSlot: boolean;
+} {
+  const hasTrailing = hasSidebarWorkspaceTrailing({ workspace, trailing });
+  const showKebab = Boolean(hasArchiveAction && (isHovered || isTouchPlatform)) && !showShortcut;
+  const showTrailing = hasTrailing && !showShortcut && (isHovered || !showKebab);
+  return {
+    showTrailing,
+    showKebab,
+    showScrim: showKebab && isHovered,
+    renderSlot: Boolean(hasArchiveAction || hasTrailing),
+  };
 }
 
 export function SidebarWorkspaceTrailingActionSlot({ children }: { children: ReactNode }) {
@@ -389,13 +466,48 @@ export function SidebarWorkspaceTrailingActionBase({
 
 export function SidebarWorkspaceTrailingActionOverlay({
   visible,
+  scrimBackdrop,
   children,
 }: {
   visible: boolean;
+  /** Fade the row into the kebab when something (the diff stat) is still rendered behind it. */
+  scrimBackdrop?: SidebarSurfaceBackdrop;
   children: ReactNode;
 }) {
   if (!visible || !children) return null;
-  return <View style={sidebarWorkspaceRowStyles.trailingActionOverlay}>{children}</View>;
+  return (
+    <>
+      {scrimBackdrop ? <TrailingActionScrim backdrop={scrimBackdrop} /> : null}
+      <View style={sidebarWorkspaceRowStyles.trailingActionOverlay}>{children}</View>
+    </>
+  );
+}
+
+/**
+ * The row's own background, faded in from the right, sitting between the diff stat and the
+ * kebab. The kebab lands on fully opaque background while the diff dissolves underneath it
+ * rather than blinking out.
+ *
+ * Anchored to the trailing slot, which is position:relative. Wider than the slot on purpose:
+ * the fade has to start before the diff stat does or the diff's left edge cuts off hard.
+ */
+function TrailingActionScrim({ backdrop }: { backdrop: SidebarSurfaceBackdrop }) {
+  // useId's output contains characters that are not legal inside url(#...) — React 19 wraps
+  // ids in guillemets, React 18 in colons — and an unresolvable fill paints nothing at all.
+  // Keep the per-instance uniqueness, drop everything a fragment reference can't carry.
+  const gradientId = `sidebar-scrim-${useId().replace(/[^a-zA-Z0-9_-]/g, "")}`;
+  return (
+    <View
+      style={sidebarWorkspaceRowStyles.trailingActionScrim}
+      pointerEvents="none"
+      testID="sidebar-workspace-trailing-scrim"
+    >
+      <ThemedTrailingActionScrimSvg
+        gradientId={gradientId}
+        uniProps={scrimColorMappings[backdrop]}
+      />
+    </View>
+  );
 }
 
 const styles = StyleSheet.create((theme) => ({
