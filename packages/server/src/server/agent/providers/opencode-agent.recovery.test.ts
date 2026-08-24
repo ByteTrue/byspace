@@ -113,22 +113,21 @@ test("orders queued live deltas behind an incomplete recovery snapshot and suppr
   timing.advance();
   await upstream.connected(2);
   upstream.send(1, connectedRecord());
+  const worldDelta = new Promise<void>((resolve) => {
+    const unsubscribe = session.subscribe((event) => {
+      if (
+        event.type === "timeline" &&
+        event.item.type === "assistant_message" &&
+        event.item.text === " world"
+      ) {
+        unsubscribe();
+        resolve();
+      }
+    });
+  });
   upstream.send(1, textDeltaRecord("message-race", "part-race", " world"));
-  await new Promise((resolve) => setTimeout(resolve, 500));
-  // eslint-disable-next-line no-console
-  console.log(
-    "DEBUG observed:",
-    JSON.stringify(
-      observed.map((e) => ({
-        type: e.type,
-        item: "item" in e ? e.item : undefined,
-        turnId: "turnId" in e ? e.turnId : undefined,
-      })),
-      null,
-      0,
-    ),
-  );
-  await eventually(() => expect(assistantText(observed)).toEqual(["Hello", " world"]));
+  await worldDelta;
+  expect(assistantText(observed)).toEqual(["Hello", " world"]);
 
   upstream.setMessages([
     {
@@ -464,7 +463,7 @@ async function eventually(assertion: () => void): Promise<void> {
       assertion();
       return;
     } catch {
-      await new Promise<void>((resolve) => setTimeout(resolve, 10));
+      await new Promise<void>((resolve) => setImmediate(resolve));
     }
   }
   assertion();

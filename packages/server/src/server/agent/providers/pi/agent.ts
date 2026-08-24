@@ -2629,7 +2629,7 @@ export class PiRpcAgentSession implements AgentSession {
     turnId: string | undefined;
   }): void {
     if (event.type === "agent_end") {
-      // COMPAT(piAgentSettled): added in v0.5.0, remove after 2027-02-21 once the Pi
+      // COMPAT(piAgentSettled): added in v0.6.0, remove after 2027-02-24 once the Pi
       // floor emits agent_settled and willRetry.
       if (event.willRetry === undefined) {
         this.completeTurn(turnId, event.messages ?? []);
