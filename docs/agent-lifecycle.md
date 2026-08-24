@@ -124,6 +124,8 @@ parentAgentId === thisAgent.id  AND  !archivedAt
 
 - **Provider subagents** are child executions owned by Claude, Codex, or OpenCode. They are not inserted into `AgentManager` as managed agents. Providers emit a separate descriptor and timeline stream through `agent.provider_subagents.*`; the client keeps that state outside the normal agent store and merges only the presentation rows into the track.
 
+Claude task ids are session-scoped, not turn-scoped. A resumed task may be announced under a new `tool_use_id`; the first Task tool id remains the canonical provider-subagent descriptor, later ids route as aliases, and the resumed prompt is appended to that child's timeline.
+
 Clicking either kind opens a workspace tab. A BySpace subagent tab is a normal interactive agent pane. A provider subagent tab is a read-only timeline pane with no composer, archive, detach, rewind, or fork actions. Both panes use `AgentStreamView`, so message, reasoning, tool-call, and layout rendering stay identical.
 
 Provider timelines use the same structural timeline item format but deliberately have a separate lifecycle and transport. A provider thread/session identifier is not a BySpace agent identifier, and closing its tab is always layout-only.
