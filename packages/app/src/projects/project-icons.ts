@@ -1,7 +1,8 @@
 import { useMemo, useRef } from "react";
 import { useQueries } from "@tanstack/react-query";
 import type { ProjectIcon } from "@bytetrue/byspace-protocol/messages";
-import { useHostFeatureMap } from "@/runtime/host-features";
+import { useHostFeatureAvailabilityMap } from "@/runtime/host-features";
+import { projectIconCache } from "@/projects/icon-cache";
 import { getHostRuntimeStore, isHostRuntimeConnected } from "@/runtime/host-runtime";
 import {
   resolveProjectIconLookup,
@@ -27,60 +28,43 @@ export function useProjectIconDataByProjectKey(input: {
     () => [...new Set(input.projects.map((project) => project.serverId))],
     [input.projects],
   );
-  const supportsCustomIcons = useHostFeatureMap(serverIds, "projectCustomIcon");
+  const supportsCustomIcons = useHostFeatureAvailabilityMap(serverIds, "projectCustomIcon");
   const requests = useMemo(() => {
     const unique = new Map<string, ProjectIconRequestTarget>();
     for (const project of input.projects) {
       const lookup = resolveProjectIconLookup(
         project,
-        supportsCustomIcons.get(project.serverId) === true,
+        supportsCustomIcons.get(project.serverId) ?? null,
       );
-      const key =
-        lookup.kind === "project"
-          ? `${project.serverId}:project:${lookup.projectId}`
-          : `${project.serverId}:cwd:${lookup.cwd}`;
+      let key: string;
+      if (lookup === null) {
+        key = `${project.serverId}:pending:${project.projectId ?? project.iconWorkingDir}`;
+      } else if (lookup.kind === "project") {
+        key = `${project.serverId}:project:${lookup.projectId}`;
+      } else {
+        key = `${project.serverId}:cwd:${lookup.cwd}`;
+      }
       unique.set(key, project);
     }
     return Array.from(unique.values());
   }, [input.projects, supportsCustomIcons]);
 
   const queries = useQueries({
-    queries: requests.map((request) => {
-      const lookup = resolveProjectIconLookup(
-        request,
-        supportsCustomIcons.get(request.serverId) === true,
-      );
-      return {
-        queryKey:
-          lookup.kind === "project"
-            ? [
-                "projectIcon",
-                request.serverId,
-                lookup.projectId,
-                request.customIconRevision ?? "automatic",
-              ]
-            : ["projectIcon", request.serverId, "legacy", lookup.cwd],
-        queryFn: async () => {
-          const client = getHostRuntimeStore().getClient(request.serverId);
-          if (!client) return null;
-          const result =
-            lookup.kind === "project"
-              ? await client.getProjectIcon(lookup.projectId)
-              : await client.requestProjectIcon(lookup.cwd);
-          return result.icon;
+    queries: requests.map((request) => ({
+      ...projectIconCache.query(
+        {
+          serverId: request.serverId,
+          projectId: request.projectId ?? "",
+          iconWorkingDir: request.iconWorkingDir,
+          customIconRevision: request.customIconRevision,
+          iconRevision: request.iconRevision,
         },
-        select: iconDataUri,
-        enabled: Boolean(
-          getHostRuntimeStore().getClient(request.serverId) &&
-          isHostRuntimeConnected(getHostRuntimeStore().getSnapshot(request.serverId)),
-        ),
-        staleTime: Infinity,
-        gcTime: 1000 * 60 * 60,
-        refetchOnMount: false,
-        refetchOnWindowFocus: false,
-        refetchOnReconnect: false,
-      };
-    }),
+        supportsCustomIcons.get(request.serverId) ?? null,
+        () => getHostRuntimeStore().getClient(request.serverId),
+        isHostRuntimeConnected(getHostRuntimeStore().getSnapshot(request.serverId)),
+      ),
+      select: iconDataUri,
+    })),
   });
 
   const signature = queries.map((query) => query.data ?? "").join("\u0000");
@@ -97,11 +81,11 @@ export function useProjectIconDataByProjectKey(input: {
       const request = requests.find((candidate) => {
         const left = resolveProjectIconLookup(
           project,
-          supportsCustomIcons.get(project.serverId) === true,
+          supportsCustomIcons.get(project.serverId) ?? null,
         );
         const right = resolveProjectIconLookup(
           candidate,
-          supportsCustomIcons.get(candidate.serverId) === true,
+          supportsCustomIcons.get(candidate.serverId) ?? null,
         );
         return (
           project.serverId === candidate.serverId && JSON.stringify(left) === JSON.stringify(right)

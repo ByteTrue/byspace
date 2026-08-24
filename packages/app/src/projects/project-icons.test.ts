@@ -38,4 +38,7 @@ describe("project icon lookup", () => {
       projectId: "prj_host_local",
     });
   });
+  it("waits while custom-icon capability is unknown", () => {
+    expect(resolveProjectIconLookup(target, null)).toBeNull();
+  });
 });

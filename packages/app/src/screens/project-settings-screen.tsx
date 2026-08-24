@@ -263,7 +263,6 @@ function ProjectSettingsBody({
           />
           {supportsCustomIcon && selectedHost.projectId ? (
             <ProjectIconEditor
-              serverId={selectedHost.serverId}
               projectId={selectedHost.projectId}
               hasCustomIcon={Boolean(selectedHost.customIconRevision)}
               client={client}
@@ -946,12 +945,10 @@ function ProjectNameEditor({
 }
 
 function ProjectIconEditor({
-  serverId,
   projectId,
   hasCustomIcon,
   client,
 }: {
-  serverId: string;
   projectId: string;
   hasCustomIcon: boolean;
   client: DaemonClient;
@@ -965,7 +962,6 @@ function ProjectIconEditor({
       client.setProjectIcon(projectId, source),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["projects"] });
-      queryClient.invalidateQueries({ queryKey: ["projectIcon", serverId] });
     },
     onError: (error) => {
       toast.show(
