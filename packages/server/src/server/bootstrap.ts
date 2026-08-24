@@ -117,6 +117,7 @@ import {
 import type { BySpaceToolRuntimeContext } from "./agent/tools/types.js";
 import { ProviderSnapshotManager } from "./agent/provider-snapshot-manager.js";
 import { bootstrapWorkspaceRegistries } from "./workspace-registry-bootstrap.js";
+import { createWorkspaceLabelService } from "./workspace-labels/index.js";
 import { WorkspaceReconciliationService } from "./workspace-reconciliation-service.js";
 import {
   FileBackedProjectRegistry,
@@ -873,6 +874,10 @@ export async function createBySpaceDaemon(
     path.join(config.byspaceHome, "projects", "workspaces.json"),
     logger,
   );
+  const workspaceLabelService = createWorkspaceLabelService({
+    byspaceHome: config.byspaceHome,
+    workspaceRegistry,
+  });
   const github = createGitHubService();
   const workspaceGitService = new WorkspaceGitServiceImpl({
     logger,
@@ -922,6 +927,7 @@ export async function createBySpaceDaemon(
     workspaceGitService,
     logger,
   });
+  await workspaceLabelService.initialize();
   logger.info({ elapsed: elapsed() }, "Workspace registries bootstrapped");
   const workspaceReconciliation = new WorkspaceReconciliationService({
     serverId,
@@ -1597,6 +1603,7 @@ export async function createBySpaceDaemon(
               remoteWebServiceManager,
               daemonKeyPair.publicKeyB64,
               pluginRuntime,
+              workspaceLabelService,
             );
             pluginRuntime.bindBySpaceSessionHost(wsServer);
             await pluginRuntime.start();
