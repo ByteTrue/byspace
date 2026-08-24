@@ -1,6 +1,5 @@
 import { expect, it, test, vi } from "vitest";
 import pino, { type Logger } from "pino";
-
 import { createTestLogger } from "../../test-utils/test-logger.js";
 import { AgentManager } from "./agent-manager.js";
 import { AgentStorage } from "./agent-storage.js";
@@ -52,6 +51,7 @@ interface FinishNotificationScenario {
   finishChildAndReadParentPrompt(): Promise<string>;
   closeChildAndReadParentPrompt(): Promise<string>;
   parentPrompts(): string[];
+  steerAttemptCount(): number;
   wasParentPrompted(): boolean;
 }
 
@@ -61,6 +61,7 @@ function createFinishNotificationScenario(
   let subscriber: ((event: AgentManagerEvent) => void) | null = null;
   let resolveParentPrompt: ((prompt: string) => void) | null = null;
   let parentPrompted = false;
+  let steerAttemptCount = 0;
   const parentPrompts: string[] = [];
 
   const childAgent: ManagedAgent = Object.create(null);
@@ -96,6 +97,10 @@ function createFinishNotificationScenario(
   });
   Reflect.set(agentManager, "tryRunOutOfBand", () => false);
   Reflect.set(agentManager, "hasInFlightRun", () => Boolean(options?.parentPromptError));
+  Reflect.set(agentManager, "steerOrReplaceActiveTurn", async () => {
+    steerAttemptCount += 1;
+    return { status: "inactive" };
+  });
   Reflect.set(agentManager, "streamAgent", (_agentId: string, prompt: string) => {
     parentPrompted = true;
     parentPrompts.push(prompt);
@@ -227,6 +232,9 @@ function createFinishNotificationScenario(
     parentPrompts() {
       return parentPrompts;
     },
+    steerAttemptCount() {
+      return steerAttemptCount;
+    },
     wasParentPrompted() {
       return parentPrompted;
     },
@@ -295,6 +303,7 @@ test("finish notifications tell the parent the child's last assistant message", 
       "Agent child-agent (Child Agent) finished.\n\n<agent-response>\nImplemented the cleanup and all checks pass.\n</agent-response>",
     ),
   );
+  expect(scenario.steerAttemptCount()).toBe(1);
 });
 
 test("finish notifications truncate oversized child responses", async () => {

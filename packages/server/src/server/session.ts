@@ -6767,6 +6767,7 @@ export class Session {
           entries: selectedTimeline.entries.map((entry) => ({
             provider: agentPayload.provider,
             item: entry.item,
+            turnId: entry.turnId,
             timestamp: entry.timestamp,
             seqStart: entry.seqStart,
             seqEnd: entry.seqEnd,
@@ -7038,11 +7039,12 @@ export class Session {
         {
           agentId,
           messageId: msg.messageId,
+          activeTurnBehavior: msg.activeTurnBehavior,
           textPrefix: msg.text.slice(0, 80),
         },
         "agent.session.send_agent_message",
       );
-      let dispatchResult: { outOfBand: boolean };
+      let dispatchResult: { disposition: "out_of_band" | "steered" | "turn_started" };
       try {
         dispatchResult = await sendPromptToAgent({
           agentManager: this.agentManager,
@@ -7050,6 +7052,8 @@ export class Session {
           agentId,
           prompt,
           messageId: msg.messageId,
+          activeTurnBehavior: msg.activeTurnBehavior ?? "interrupt",
+          clearPendingPermissions: true,
           logger: this.sessionLogger,
         });
       } catch (error) {
@@ -7067,7 +7071,7 @@ export class Session {
         return;
       }
 
-      if (dispatchResult.outOfBand) {
+      if (dispatchResult.disposition !== "turn_started") {
         this.emit({
           type: "send_agent_message_response",
           payload: {

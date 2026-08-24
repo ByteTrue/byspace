@@ -12,6 +12,7 @@ import {
   type TextPartInput as OpenCodeTextPartInput,
 } from "@opencode-ai/sdk/v2/client";
 import fs from "node:fs/promises";
+import { randomBytes } from "node:crypto";
 import { createPathEquivalenceMatcher } from "../../../utils/path.js";
 import pLimit from "p-limit";
 import type { Logger } from "pino";
@@ -37,6 +38,8 @@ import {
   type AgentSession,
   type AgentSessionConfig,
   type AgentSlashCommand,
+  type SteerActiveTurnOptions,
+  type SteerResult,
   type AgentStreamEvent,
   type AgentTimelineItem,
   type AgentUsage,
@@ -125,6 +128,24 @@ const OPENCODE_CHILD_SESSION_HYDRATION_LIMIT = 100;
 const OPENCODE_CHILD_SESSION_SERVER_REGISTRY_LIMIT = 500;
 const OPENCODE_PERMISSION_ACTION_ALLOW_ONCE = "allow_once";
 const OPENCODE_PERMISSION_ACTION_ALLOW_ALWAYS = "allow_always";
+const OPENCODE_ID_ALPHABET = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+let lastOpenCodeMessageTimestamp = -1;
+let openCodeMessageCounter = 0;
+
+function createOpenCodeMessageId(
+  now = Date.now(),
+  random = (length: number) =>
+    Array.from(randomBytes(length), (value) => OPENCODE_ID_ALPHABET[value % 62]).join(""),
+): string {
+  if (now !== lastOpenCodeMessageTimestamp) openCodeMessageCounter = 0;
+  lastOpenCodeMessageTimestamp = now;
+  openCodeMessageCounter += 1;
+  const ascending = (BigInt(now) * 0x1000n + BigInt(openCodeMessageCounter))
+    .toString(16)
+    .padStart(12, "0")
+    .slice(-12);
+  return `msg_${ascending}${random(14)}`;
+}
 
 // OpenCode child sessions run on the server process that spawned them. Adoption
 // resumes must attach to that same helper server to receive live global events.
@@ -1019,6 +1040,12 @@ function getOpenCodeSessionTimestamp(session: OpenCodePersistedSession): number 
   return session.time?.updated ?? session.time?.created ?? 0;
 }
 
+function isOpenCodeDefinitiveSteerRejection(error: unknown, status?: number): boolean {
+  if (status === 404) return true;
+  const message = toDiagnosticErrorMessage(error).toLowerCase();
+  return /session\s+(?:is\s+)?(?:not found|inactive|not active|not running)/.test(message);
+}
+
 function resolveOpenCodeReplayTimestamp(params: {
   message: { time?: { created?: number; completed?: number } | undefined };
   part?: unknown;
@@ -1772,6 +1799,7 @@ export interface OpenCodeEventTranslationState {
   messageRoles: Map<string, OpenCodeMessageRole>;
   pendingUserMessageText?: string | null;
   pendingClientMessageId?: string | null;
+  pendingSteerSubmissions?: OpenCodePendingSteerSubmission[];
   emittedUserMessageIds?: Set<string>;
   accumulatedUsage: AgentUsage;
   sessionTotalCostUsd?: number;
@@ -1795,6 +1823,12 @@ export interface OpenCodeEventTranslationState {
 interface OpenCodeTraceData {
   turnId?: string;
   [key: string]: unknown;
+}
+
+interface OpenCodePendingSteerSubmission {
+  providerMessageId: string;
+  text: string;
+  clientMessageId: string | null;
 }
 
 type OpenCodeTraceMessage =
@@ -2552,11 +2586,19 @@ function appendOpenCodeUserMessageUpdated(
   state: OpenCodeEventTranslationState,
   events: AgentStreamEvent[],
 ): void {
-  const text = state.pendingUserMessageText;
+  const pendingSteerIndex = state.pendingSteerSubmissions?.findIndex(
+    (submission) => submission.providerMessageId === info.id,
+  );
+  const pendingSteer =
+    pendingSteerIndex !== undefined && pendingSteerIndex >= 0
+      ? state.pendingSteerSubmissions?.splice(pendingSteerIndex, 1)[0]
+      : undefined;
+  const text = pendingSteer?.text ?? state.pendingUserMessageText;
   if (!text || text.trim().length === 0 || state.emittedUserMessageIds?.has(info.id)) {
     return;
   }
   state.emittedUserMessageIds?.add(info.id);
+  const clientMessageId = pendingSteer?.clientMessageId ?? state.pendingClientMessageId;
   events.push({
     type: "timeline",
     provider: "opencode",
@@ -2564,7 +2606,7 @@ function appendOpenCodeUserMessageUpdated(
       type: "user_message",
       text,
       messageId: info.id,
-      ...(state.pendingClientMessageId ? { clientMessageId: state.pendingClientMessageId } : {}),
+      ...(clientMessageId ? { clientMessageId } : {}),
     },
   });
 }
@@ -3114,6 +3156,7 @@ class OpenCodeAgentSession implements AgentSession {
   private messageRoles = new Map<string, OpenCodeMessageRole>();
   private pendingUserMessageText: string | null = null;
   private pendingClientMessageId: string | null = null;
+  private pendingSteerSubmissions: OpenCodePendingSteerSubmission[] = [];
   private emittedUserMessageIds = new Set<string>();
   /** Tracks streamed textual part IDs to suppress final full-text echoes from OpenCode. */
   private streamedPartKeys = new Set<string>();
@@ -3295,6 +3338,97 @@ class OpenCodeAgentSession implements AgentSession {
       cwd: this.config.cwd,
       messageId: input.messageId,
     });
+  }
+
+  async steerActiveTurn(
+    prompt: AgentPromptInput,
+    options: SteerActiveTurnOptions,
+  ): Promise<SteerResult> {
+    if (this.closed || this.activeForegroundTurnId !== options.expectedTurnId) {
+      return { status: "unavailable" };
+    }
+    if (await this.resolveSlashCommandInvocation(prompt)) {
+      return { status: "unavailable" };
+    }
+    if (this.activeForegroundTurnId !== options.expectedTurnId) {
+      return { status: "unavailable" };
+    }
+
+    const promptId = createOpenCodeMessageId();
+    const pending: OpenCodePendingSteerSubmission = {
+      providerMessageId: promptId,
+      text: buildOpenCodeUserTimelineText(prompt),
+      clientMessageId: options.clientMessageId ?? null,
+    };
+    this.pendingSteerSubmissions.push(pending);
+
+    const parts = buildOpenCodePromptParts(prompt);
+    const systemPrompt = composeSystemPromptParts(
+      this.config.systemPrompt,
+      this.config.daemonAppendSystemPrompt,
+    );
+    const permission = buildOpenCodePermissionRules(this.config.providerOptions);
+    const model = this.parseModel(this.config.model);
+    const effectiveMode = resolveOpenCodeRuntimeAgentId(this.currentMode);
+    const effectiveVariant = this.config.thinkingOptionId ?? undefined;
+
+    try {
+      const response = await this.client.session.promptAsync({
+        sessionID: this.sessionId,
+        directory: this.config.cwd,
+        messageID: promptId,
+        parts,
+        ...(systemPrompt ? { system: systemPrompt } : {}),
+        ...(permission ? { permission } : {}),
+        ...(model ? { model } : {}),
+        ...(effectiveMode ? { agent: effectiveMode } : {}),
+        ...(effectiveVariant ? { variant: effectiveVariant } : {}),
+      });
+      if (response.error) {
+        if (
+          isOpenCodeDefinitiveSteerRejection(
+            response.error,
+            (response as unknown as { response?: { status?: number } }).response?.status,
+          )
+        ) {
+          this.removePendingSteerSubmission(promptId);
+          return { status: "unavailable" };
+        }
+        throw new Error(
+          `OpenCode steer request failed: ${toDiagnosticErrorMessage(response.error)}`,
+        );
+      }
+      if (options.clearPendingPermissions) {
+        await this.clearPendingPermissionsForSteer();
+      }
+      return { status: "accepted" };
+    } catch (error) {
+      if (isOpenCodeDefinitiveSteerRejection(error)) {
+        this.removePendingSteerSubmission(promptId);
+        return { status: "unavailable" };
+      }
+      throw error;
+    }
+  }
+
+  private removePendingSteerSubmission(providerMessageId: string): void {
+    const index = this.pendingSteerSubmissions.findIndex(
+      (submission) => submission.providerMessageId === providerMessageId,
+    );
+    if (index >= 0) {
+      this.pendingSteerSubmissions.splice(index, 1);
+    }
+  }
+
+  private async clearPendingPermissionsForSteer(): Promise<void> {
+    const requestIds = Array.from(this.pendingPermissions.keys());
+    for (const requestId of requestIds) {
+      if (!this.pendingPermissions.has(requestId)) continue;
+      await this.respondToPermission(requestId, {
+        behavior: "deny",
+        message: "The user answered with a message instead of approving. Their message follows.",
+      });
+    }
   }
 
   private takePendingInterruptTerminalEvent(
@@ -3996,6 +4130,7 @@ class OpenCodeAgentSession implements AgentSession {
     this.runningToolCalls.clear();
     this.subAgentsByCallId.clear();
     this.subAgentCallIdByChildSessionId.clear();
+    this.pendingSteerSubmissions = [];
     this.pendingUserMessageText = null;
     this.pendingClientMessageId = null;
     this.abortController = null;
@@ -4049,6 +4184,7 @@ class OpenCodeAgentSession implements AgentSession {
     }
     this.pendingUserMessageText = null;
     this.pendingClientMessageId = null;
+    this.pendingSteerSubmissions = [];
     this.turnState = { status: "idle" };
     this.abortController = null;
     this.notifySubscribers(event, turnId);
@@ -4061,6 +4197,7 @@ class OpenCodeAgentSession implements AgentSession {
     this.synthesizeInterruptedToolCalls(turnId);
     this.pendingUserMessageText = null;
     this.pendingClientMessageId = null;
+    this.pendingSteerSubmissions = [];
     this.abortController = null;
     this.interruptingTurnId = null;
     this.turnState = { status: "stopping", idle: createDeferred<void>() };
@@ -4476,6 +4613,7 @@ class OpenCodeAgentSession implements AgentSession {
       messageRoles: this.messageRoles,
       pendingUserMessageText: this.pendingUserMessageText,
       pendingClientMessageId: this.pendingClientMessageId,
+      pendingSteerSubmissions: this.pendingSteerSubmissions,
       emittedUserMessageIds: this.emittedUserMessageIds,
       accumulatedUsage: this.accumulatedUsage,
       sessionTotalCostUsd: this.sessionTotalCostUsd,
@@ -4509,6 +4647,7 @@ class OpenCodeAgentSession implements AgentSession {
       cwd: this.config.cwd,
       messageRoles: new Map(),
       emittedUserMessageIds: new Set(),
+      pendingSteerSubmissions: [],
       accumulatedUsage: {},
       streamedPartKeys: new Set(),
       emittedStructuredMessageIds: new Set(),

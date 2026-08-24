@@ -119,6 +119,8 @@ import {
   type ProviderCatalog,
   type ProviderRefreshContext,
   type ResolveAgentDefaultModeInput,
+  type SteerActiveTurnOptions,
+  type SteerResult,
 } from "../../agent-sdk-types.js";
 import { importSessionFromPersistence } from "../../provider-session-import.js";
 import { runProviderRefreshActivity } from "../../provider-refresh-deadline.js";
@@ -359,6 +361,8 @@ const CLAUDE_ROOT_ONLY_COMMANDS = new Set([
 const INTERRUPT_TOOL_USE_PLACEHOLDER = "[Request interrupted by user for tool use]";
 const INTERRUPT_PLACEHOLDER_PATTERN = /^\[Request interrupted by user(?:[^\]]*)\]$/;
 const NO_RESPONSE_REQUESTED_PLACEHOLDER = "No response requested.";
+const STEER_SUPERSEDED_PERMISSION_MESSAGE =
+  "The user answered with a message instead of approving. Their message follows.";
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 interface SlashCommandInvocation {
@@ -2016,6 +2020,17 @@ class ClaudeAgentSession implements AgentSession {
   private query: Query | null = null;
   private childProcess: ChildProcess | null = null;
   private input: AsyncMessageInput<SDKUserMessage> | null = null;
+  /** The exact SDK query/input pair that owns the current foreground turn. */
+  private activeForegroundQuery: Query | null = null;
+  private activeForegroundInput: AsyncMessageInput<SDKUserMessage> | null = null;
+  /**
+   * Steers pushed into the live SDK input that Claude may not have read yet. Interrupting the turn
+   * has to discard them, or the SDK dequeues one and resumes the turn we just stopped. SDK user
+   * UUIDs are provider-private; never let them escape the adapter boundary.
+   */
+  private readonly queuedSteerUuids = new Set<string>();
+  /** Human steers whose text has not reached Claude yet and therefore supersede blocking cards. */
+  private readonly permissionClearingSteerUuids = new Set<string>();
   private claudeSessionId: string | null;
   private persistence: AgentPersistenceHandle | null;
   private currentMode: PermissionMode;
@@ -2232,6 +2247,8 @@ class ClaudeAgentSession implements AgentSession {
         throw new Error("Claude session input stream not initialized");
       }
       this.startQueryPump();
+      this.activeForegroundQuery = this.query;
+      this.activeForegroundInput = this.input;
       this.input.push(sdkMessage);
       setTimeout(() => {
         if (this.activeForegroundTurnId === turnId) {
@@ -2245,6 +2262,64 @@ class ClaudeAgentSession implements AgentSession {
     }
 
     return { turnId };
+  }
+
+  async steerActiveTurn(
+    prompt: AgentPromptInput,
+    options: SteerActiveTurnOptions,
+  ): Promise<SteerResult> {
+    if (this.resolveSlashCommandInvocation(prompt)) {
+      return { status: "unavailable" };
+    }
+    const activeTurnId = this.activeForegroundTurnId ?? this.autonomousTurn?.id;
+    if (this.compacting || activeTurnId !== options.expectedTurnId) {
+      return { status: "unavailable" };
+    }
+
+    // Capture both ends of the live SDK stream before creating or delivering the message. There
+    // is deliberately no await below: a finished A cannot make this input point at a later B.
+    const query = this.activeForegroundQuery;
+    const input = this.activeForegroundInput;
+    if (!query || !input || this.query !== query || this.input !== input) {
+      return { status: "unavailable" };
+    }
+    const message = this.toSdkUserMessage(prompt);
+    message.priority = "next";
+    if (
+      (this.activeForegroundTurnId ?? this.autonomousTurn?.id) !== options.expectedTurnId ||
+      this.activeForegroundQuery !== query ||
+      this.activeForegroundInput !== input ||
+      this.query !== query ||
+      this.input !== input
+    ) {
+      return { status: "unavailable" };
+    }
+    this.enqueueSteer(input, message, options.clearPendingPermissions === true);
+    return { status: "accepted" };
+  }
+
+  private enqueueSteer(
+    input: AsyncMessageInput<SDKUserMessage>,
+    message: SDKUserMessage,
+    clearPendingPermissions: boolean,
+  ): void {
+    const uuid = message.uuid;
+    if (uuid) this.queuedSteerUuids.add(uuid);
+    if (uuid && clearPendingPermissions) {
+      this.permissionClearingSteerUuids.add(uuid);
+    }
+    try {
+      input.push(message);
+      if (clearPendingPermissions) {
+        this.denyPendingPermissionsSupersededBySteer();
+      }
+    } catch (error) {
+      if (uuid) {
+        this.queuedSteerUuids.delete(uuid);
+        this.permissionClearingSteerUuids.delete(uuid);
+      }
+      throw error;
+    }
   }
 
   subscribe(callback: (event: AgentStreamEvent) => void): () => void {
@@ -2450,26 +2525,8 @@ class ClaudeAgentSession implements AgentSession {
       };
       pending.resolve(result);
     } else {
-      if (pending.request.kind === "tool") {
-        this.pushToolCall(
-          mapClaudeFailedToolCall({
-            name: pending.request.name,
-            callId:
-              (typeof pending.request.metadata?.toolUseId === "string"
-                ? pending.request.metadata.toolUseId
-                : null) ?? pending.request.id,
-            input: pending.request.input ?? null,
-            output: null,
-            error: { message: response.message ?? "Permission denied" },
-          }),
-        );
-      }
-      const result: PermissionResult = {
-        behavior: "deny",
-        message: response.message ?? "Permission request denied",
-        interrupt: response.interrupt,
-      };
-      pending.resolve(result);
+      pending.resolve(this.resolveDeniedPermission(pending.request, response));
+      return;
     }
 
     this.pushEvent({
@@ -2478,6 +2535,78 @@ class ClaudeAgentSession implements AgentSession {
       requestId,
       resolution: response,
     });
+  }
+
+  private denyPendingPermissionsSupersededBySteer(): void {
+    for (const [requestId, pending] of this.pendingPermissions) {
+      this.pendingPermissions.delete(requestId);
+      pending.cleanup?.();
+      pending.resolve(
+        this.resolveDeniedPermission(pending.request, {
+          behavior: "deny",
+          message: STEER_SUPERSEDED_PERMISSION_MESSAGE,
+        }),
+      );
+    }
+  }
+
+  private resolveDeniedPermission(
+    request: AgentPermissionRequest,
+    response: Extract<AgentPermissionResponse, { behavior: "deny" }>,
+  ): PermissionResult {
+    this.recordDeniedPermissionTimeline(request, response);
+    this.pushEvent({
+      type: "permission_resolved",
+      provider: "claude",
+      requestId: request.id,
+      resolution: response,
+    });
+    return {
+      behavior: "deny",
+      message: response.message ?? "Permission request denied",
+      interrupt: response.interrupt,
+    };
+  }
+
+  private recordDeniedPermissionTimeline(
+    request: AgentPermissionRequest,
+    response: Extract<AgentPermissionResponse, { behavior: "deny" }>,
+  ): void {
+    if (request.kind === "tool") {
+      this.pushToolCall(
+        mapClaudeFailedToolCall({
+          name: request.name,
+          callId:
+            (typeof request.metadata?.toolUseId === "string" ? request.metadata.toolUseId : null) ??
+            request.id,
+          input: request.input ?? null,
+          output: null,
+          error: { message: response.message ?? "Permission denied" },
+        }),
+      );
+      return;
+    }
+    if (request.kind === "plan") {
+      let planText: string | null = null;
+      if (typeof request.metadata?.planText === "string") {
+        planText = request.metadata.planText;
+      } else if (typeof request.input?.plan === "string") {
+        planText = request.input.plan;
+      }
+      if (!planText) return;
+      this.pushToolCall({
+        type: "tool_call",
+        name: "plan_approval",
+        callId: request.id,
+        status: "completed",
+        error: null,
+        detail: { type: "plan", text: planText },
+        metadata: {
+          approved: false,
+          actionId: response.selectedActionId ?? "reject",
+        },
+      });
+    }
   }
 
   describePersistence(): AgentPersistenceHandle | null {
@@ -2515,6 +2644,8 @@ class ClaudeAgentSession implements AgentSession {
     this.cancelCurrentTurn?.();
     this.subscribers.clear();
     this.activeForegroundTurnId = null;
+    this.activeForegroundQuery = null;
+    this.activeForegroundInput = null;
     this.autonomousTurn = null;
     this.cancelCurrentTurn = null;
     this.turnState = "idle";
@@ -2628,7 +2759,10 @@ class ClaudeAgentSession implements AgentSession {
     if (!parsed) {
       return null;
     }
-    return parsed.commandName === REWIND_COMMAND_NAME ? parsed : null;
+    return parsed.commandName === REWIND_COMMAND_NAME ||
+      CLAUDE_ROOT_ONLY_COMMANDS.has(parsed.commandName)
+      ? parsed
+      : null;
   }
 
   private parseSlashCommandInput(text: string): SlashCommandInvocation | null {
@@ -3409,11 +3543,15 @@ class ClaudeAgentSession implements AgentSession {
     if (terminalSeen) {
       if (this.activeForegroundTurnId) {
         this.activeForegroundTurnId = null;
+        this.activeForegroundQuery = null;
+        this.activeForegroundInput = null;
         this.cancelCurrentTurn = null;
         this.activeTurnHasAssistantText = false;
         this.syncTurnState("foreground turn terminal");
       } else if (this.autonomousTurn) {
         this.autonomousTurn = null;
+        this.activeForegroundQuery = null;
+        this.activeForegroundInput = null;
         this.activeTurnHasAssistantText = false;
         this.syncTurnState("autonomous turn terminal");
       }
@@ -3427,6 +3565,8 @@ class ClaudeAgentSession implements AgentSession {
     this.autonomousTurn = {
       id: this.createTurnId("autonomous"),
     };
+    this.activeForegroundQuery = this.query;
+    this.activeForegroundInput = this.input;
     this.activeTurnHasAssistantText = false;
     this.contextUsage.beginTurn();
     this.notifySubscribers({ type: "turn_started", provider: "claude" });
@@ -3439,6 +3579,8 @@ class ClaudeAgentSession implements AgentSession {
     }
     this.notifySubscribers({ type: "turn_completed", provider: "claude" });
     this.autonomousTurn = null;
+    this.activeForegroundQuery = null;
+    this.activeForegroundInput = null;
     this.activeTurnHasAssistantText = false;
     this.syncTurnState("autonomous turn completed");
   }
@@ -3642,13 +3784,20 @@ class ClaudeAgentSession implements AgentSession {
     );
   }
 
+  private shouldStartAutonomousTurn(message: SDKMessage): boolean {
+    if (this.activeForegroundTurnId || this.pendingInterruptAbort) {
+      return false;
+    }
+    return this.isAssistantishMessage(message);
+  }
+
   private async routeSdkMessageFromPump(message: SDKMessage): Promise<void> {
     if (this.shouldSuppressStaleResult(message)) {
       return;
     }
 
     const isForeground = Boolean(this.activeForegroundTurnId);
-    if (!isForeground && this.isAssistantishMessage(message)) {
+    if (this.shouldStartAutonomousTurn(message)) {
       this.startAutonomousTurn();
     }
     if (!isForeground && !this.autonomousTurn && message.type === "result") {
@@ -3803,6 +3952,7 @@ class ClaudeAgentSession implements AgentSession {
       return;
     }
     this.pendingInterruptAbort = true;
+    await this.discardQueuedSteers(queryToInterrupt);
     try {
       await this.awaitWithTimeout(
         queryToInterrupt.interrupt(),
@@ -3810,6 +3960,32 @@ class ClaudeAgentSession implements AgentSession {
       );
     } catch (error) {
       this.logger.warn({ err: error }, "Failed to interrupt active turn");
+    }
+  }
+
+  /**
+   * Interrupt means interrupt: a steer Claude never read dies with the turn instead of resuming it.
+   * A steer already dequeued cannot be recalled, and does not need to be — the interrupt kills it.
+   */
+  private async discardQueuedSteers(query: Query): Promise<void> {
+    const uuids = [...this.queuedSteerUuids];
+    this.queuedSteerUuids.clear();
+    this.permissionClearingSteerUuids.clear();
+    if (uuids.length === 0) return;
+    // The SDK runtime supports this, but its public Query type has not caught up. Keep the
+    // compatibility escape hatch inside the Claude adapter.
+    const cancelAsyncMessage = (
+      query as Query & {
+        cancelAsyncMessage?: (uuid: string) => Promise<boolean>;
+      }
+    ).cancelAsyncMessage;
+    if (!cancelAsyncMessage) return;
+    for (const uuid of uuids) {
+      try {
+        await cancelAsyncMessage.call(query, uuid);
+      } catch (error) {
+        this.logger.warn({ err: error }, "Failed to discard a queued Claude steer");
+      }
     }
   }
 
@@ -3824,6 +4000,8 @@ class ClaudeAgentSession implements AgentSession {
     if (parentToolUseId) {
       return this.translateSidechainFrameToEvents(message, parentToolUseId);
     }
+
+    this.forgetReadSteer(message);
 
     const events: AgentStreamEvent[] = [];
     this.appendTaskStateEvent(message, events);
@@ -3889,6 +4067,14 @@ class ClaudeAgentSession implements AgentSession {
     }
 
     return events;
+  }
+
+  /** Once Claude has read a steer there is nothing left to discard on interrupt. */
+  private forgetReadSteer(message: unknown): void {
+    const lifecycle = readClaudeCommandLifecycle(message);
+    if (!lifecycle || lifecycle.state === "queued") return;
+    this.queuedSteerUuids.delete(lifecycle.commandUuid);
+    this.permissionClearingSteerUuids.delete(lifecycle.commandUuid);
   }
 
   private appendTaskStateEvent(message: SDKMessage, events: AgentStreamEvent[]): void {
@@ -4392,6 +4578,13 @@ class ClaudeAgentSession implements AgentSession {
       provider: "claude",
       request,
     });
+
+    if (this.permissionClearingSteerUuids.size > 0) {
+      return this.resolveDeniedPermission(request, {
+        behavior: "deny",
+        message: STEER_SUPERSEDED_PERMISSION_MESSAGE,
+      });
+    }
 
     return await new Promise<PermissionResult>((resolve, reject) => {
       const cleanupFns: Array<() => void> = [];
@@ -6027,4 +6220,25 @@ function extractClaudeUserText(messageRaw: unknown): string | null {
     }
   }
   return null;
+}
+
+interface ClaudeCommandLifecycle {
+  commandUuid: string;
+  state: "queued" | "started" | "completed";
+}
+
+/** Runtime-only Claude frames are validated here because the SDK's public union omits them. */
+function readClaudeCommandLifecycle(message: unknown): ClaudeCommandLifecycle | null {
+  const record = toObjectRecord(message);
+  if (record?.type !== "command_lifecycle") return null;
+  if (
+    typeof record.command_uuid !== "string" ||
+    !["queued", "started", "completed"].includes(String(record.state))
+  ) {
+    return null;
+  }
+  return {
+    commandUuid: record.command_uuid,
+    state: record.state as ClaudeCommandLifecycle["state"],
+  };
 }

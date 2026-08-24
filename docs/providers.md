@@ -44,7 +44,17 @@ OpenCode MCP injection is dynamic and session-scoped. Call OpenCode's `mcp.add` 
 
 OpenCode owns user message IDs. Do not pass BySpace-generated IDs to OpenCode prompt APIs; let OpenCode create `msg*` IDs and record the user timeline item from the `message.updated` event.
 
-Every provider adapter owns its canonical user-message timeline rows. When a foreground prompt is accepted, the adapter must emit exactly one `user_message` timeline item for that submitted prompt, using the same message ID it gives to or receives from the provider runtime. Optimistic client messages are UI-only and provider transcript echoes are optional; neither is allowed to be the only source of truth. If the provider later echoes the same submitted user message, dedupe it only within the active turn. Prefer provider-visible message IDs, but ACP runtimes may omit that ID or replace it with a provider-owned one; in that case suppress only echo chunks whose accumulated text is a prefix of the active submitted prompt. Do not perform global transcript text dedupe.
+`AgentManager` owns the one canonical timeline row for a foreground prompt carrying a BySpace `clientMessageId`. It records that row when `startTurn` accepts, with the wire `messageId` set to the same value. Provider adapters still emit their native user-message echo with the same `clientMessageId` when available; the manager records its provider identity on the internal row without changing or redispatching the wire item. If an adapter emits the echo before `startTurn` resolves, the manager records the provider identity with the row at acceptance. Provider adapters continue to own externally initiated user rows that have no BySpace client identity. Do not perform global transcript text dedupe.
+
+Active-turn steering is an optional `AgentSession.steerActiveTurn` operation. The manager owns admission against its exact foreground turn, canonical user-message creation, echo reconciliation, and falls back to the normal interrupt-and-replace path only when the adapter reports `unavailable`. An adapter error leaves the steer's fate ambiguous and must surface without an interrupt or retry. Codex calls `turn/steer` with the native expected turn and BySpace client user-message ID. Claude pushes an admitted steer into the exact active SDK query input; isolated control commands remain unavailable. OpenCode calls `session/prompt_async` with an OpenCode-generated message ID; the server queues the prompt while busy and the next LLM call in the same BySpace turn includes it. A missing session reports `unavailable` and uses the normal interrupt fallback.
+
+A steering adapter also owes its interrupt: stopping a turn must discard the steers the provider has not read yet, or one of them resumes the turn the user just stopped. Codex clears pending input when it aborts a turn; Claude does not, so its adapter cancels the SDK messages it queued before calling `query.interrupt()`.
+
+`SteerActiveTurnOptions.clearPendingPermissions` makes permission release part of the provider contract. A provider that accepts such a steer queues it first, denies permissions blocking its delivery, and stops once the steer is read. Steers without the flag leave permissions open. A denied plan remains in the timeline because the pending card was the only other copy of its text.
+
+Rewind accepts the canonical wire `messageId` and resolves it to the provider identity before calling the adapter. A submitted prompt cannot be rewound until its provider echo supplies that identity.
+
+Submitted user-message wire items carry the same BySpace ID in `messageId` and `clientMessageId`. Provider adapters attach `clientMessageId` only to the echo for that foreground submission; provider history and externally initiated user rows do not have a BySpace client ID.
 
 Draft metadata lookups should avoid creating provider sessions when the upstream provider has top-level APIs for that metadata. Prefer `AgentClient.fetchCatalog`, `listCommands`, or `listFeatures` over creating a scratch `AgentSession`; scratch sessions can show up as empty native sessions in provider import/history UIs. `fetchCatalog` is the single discovery API for models and modes — provider implementations may use one process, separate upstream calls, or static data internally, but callers outside the provider do not get separate runtime model/mode probes. Draft command listing and scratch-session feature listing require an explicit draft model. Do not resolve a default model through catalog discovery. A client-level `listFeatures` implementation may return features from an incomplete, model-less draft and owns which features are valid in that state.
 
@@ -374,6 +384,7 @@ interface AgentSession {
   readonly features?: AgentFeature[];
   run(prompt: AgentPromptInput, options?: AgentRunOptions): Promise<AgentRunResult>;
   startTurn(prompt: AgentPromptInput, options?: AgentRunOptions): Promise<{ turnId: string }>;
+  steerActiveTurn?(prompt: AgentPromptInput, options: SteerActiveTurnOptions): Promise<SteerResult>;
   subscribe(callback: (event: AgentStreamEvent) => void): () => void;
   streamHistory(): AsyncGenerator<AgentStreamEvent>;
   getRuntimeInfo(): Promise<AgentRuntimeInfo>;

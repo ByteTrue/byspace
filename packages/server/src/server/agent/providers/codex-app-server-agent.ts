@@ -35,6 +35,8 @@ import {
   type ProviderCatalog,
   type ProviderRefreshContext,
   type ResolveAgentDefaultModeInput,
+  type SteerActiveTurnOptions,
+  type SteerResult,
 } from "../agent-sdk-types.js";
 import { importSessionFromPersistence } from "../provider-session-import.js";
 import { runProviderRefreshActivity } from "../provider-refresh-deadline.js";
@@ -73,6 +75,7 @@ import { extractCodexTerminalSessionId, nonEmptyString } from "./tool-call-mappe
 import { buildCodexFeatures, codexModelSupportsFastMode } from "./codex-feature-definitions.js";
 import {
   CodexAppServerClient,
+  CodexAppServerRpcError,
   parseCodexThreadForkResponse,
   parseCodexThreadRollbackResponse,
   type CodexThreadForkParams,
@@ -252,6 +255,9 @@ interface CodexAppServerAgentDeps {
     extends: string;
   };
   customCodexConfig?: Record<string, unknown> | null;
+  resolveSlashCommandInvocation?: (
+    prompt: AgentPromptInput,
+  ) => Promise<{ commandName: string; args?: string } | null>;
   _createCodexClient?: (
     child: ChildProcessWithoutNullStreams,
     logger: Logger,
@@ -827,6 +833,24 @@ function toCodexMcpConfig(config: McpServerConfig): CodexMcpServerConfig {
 
 function toObjectRecord(value: unknown): Record<string, unknown> | undefined {
   return isRecord(value) ? value : undefined;
+}
+
+function isDefinitiveCodexSteerRejection(error: unknown): boolean {
+  if (!(error instanceof CodexAppServerRpcError)) return false;
+  if (error.code === -32601) return true;
+  if (error.code !== -32600) return false;
+
+  const data = toObjectRecord(error.data);
+  if (data && isRecord(toObjectRecord(data.codexErrorInfo)?.activeTurnNotSteerable)) return true;
+
+  // These app-server invalid-request messages describe requests that reached
+  // Codex but could not have submitted input. Keep this exact: a generic
+  // invalid-request, timeout, disconnect, or unknown error is ambiguous.
+  return (
+    error.message === "no active turn to steer" ||
+    /^expected active turn id `[^`]+` but found `[^`]+`$/.test(error.message) ||
+    error.message === "active turn uses a different output schema"
+  );
 }
 
 // Codex app-server API response types
@@ -1599,10 +1623,14 @@ function mapCodexThreadUserMessageItem(
   }
   const text = extractUserText(normalizedItem.content) ?? "";
   const messageId = nonEmptyString(normalizedItem.id);
+  const clientMessageId = nonEmptyString(
+    normalizedItem.clientId ?? normalizedItem.client_id ?? normalizedItem.clientUserMessageId,
+  );
   return {
     type: "user_message",
     text,
     ...(messageId ? { messageId } : {}),
+    ...(clientMessageId ? { clientMessageId } : {}),
   };
 }
 
@@ -3803,6 +3831,9 @@ export class CodexAppServerAgentSession implements AgentSession {
   private async resolveSlashCommandInvocation(
     prompt: AgentPromptInput,
   ): Promise<{ commandName: string; args?: string } | null> {
+    if (this.deps.resolveSlashCommandInvocation) {
+      return this.deps.resolveSlashCommandInvocation(prompt);
+    }
     if (typeof prompt !== "string") {
       return null;
     }
@@ -4091,6 +4122,66 @@ export class CodexAppServerAgentSession implements AgentSession {
     }
   }
 
+  async steerActiveTurn(
+    prompt: AgentPromptInput,
+    options: SteerActiveTurnOptions,
+  ): Promise<SteerResult> {
+    const client = this.client;
+    const threadId = this.currentThreadId;
+    const nativeTurnId = this.currentTurnId;
+    const foregroundTurnId = this.activeForegroundTurnId;
+    if (!client || !threadId || !nativeTurnId || foregroundTurnId !== options.expectedTurnId) {
+      return { status: "unavailable" };
+    }
+    if (await this.resolveSlashCommandInvocation(prompt)) return { status: "unavailable" };
+    if (!this.matchesSteerAdmission({ client, threadId, nativeTurnId, foregroundTurnId })) {
+      return { status: "unavailable" };
+    }
+    const input = await this.buildUserInput(prompt);
+    if (!this.matchesSteerAdmission({ client, threadId, nativeTurnId, foregroundTurnId })) {
+      return { status: "unavailable" };
+    }
+    try {
+      const response = await client.request(
+        "turn/steer",
+        {
+          threadId,
+          expectedTurnId: nativeTurnId,
+          input,
+          ...(options.clientMessageId ? { clientUserMessageId: options.clientMessageId } : {}),
+        },
+        TURN_START_TIMEOUT_MS,
+      );
+      const record = toObjectRecord(response);
+      const turn = record ? toObjectRecord(record.turn) : null;
+      const acknowledgedTurnId = nonEmptyString(record?.turnId) ?? nonEmptyString(turn?.id);
+      if (acknowledgedTurnId !== nativeTurnId) {
+        throw new Error("Codex returned an invalid steer acknowledgement");
+      }
+      if (options.clearPendingPermissions) {
+        await this.clearPendingPermissionsForSteer();
+      }
+      return { status: "accepted" };
+    } catch (error) {
+      if (isDefinitiveCodexSteerRejection(error)) return { status: "unavailable" };
+      throw error;
+    }
+  }
+
+  private matchesSteerAdmission(admission: {
+    client: CodexAppServerClientLike;
+    threadId: string;
+    nativeTurnId: string;
+    foregroundTurnId: string;
+  }): boolean {
+    return (
+      this.client === admission.client &&
+      this.currentThreadId === admission.threadId &&
+      this.currentTurnId === admission.nativeTurnId &&
+      this.activeForegroundTurnId === admission.foregroundTurnId
+    );
+  }
+
   private rememberCodexUserMessageTurn(messageId: string | null | undefined): boolean {
     if (typeof messageId !== "string" || messageId.length === 0) {
       return false;
@@ -4368,7 +4459,41 @@ export class CodexAppServerAgentSession implements AgentSession {
     }
   }
 
+  private async clearPendingPermissionsForSteer(): Promise<void> {
+    const requestIds = Array.from(this.pendingPermissionHandlers.keys());
+    for (const requestId of requestIds) {
+      if (!this.pendingPermissionHandlers.has(requestId)) continue;
+      await this.respondToPermission(requestId, {
+        behavior: "deny",
+        message: "The user answered with a message instead of approving. Their message follows.",
+      });
+    }
+  }
+
   private resolvePlanPermission(requestId: string, resolution: AgentPermissionResponse): void {
+    if (resolution.behavior === "deny") {
+      // Every route into a denial lands here — the response handler, a new
+      // prompt, and an accepted steer — so the transcript record belongs here
+      // rather than in handlePlanPermissionResponse.
+      const planText =
+        this.pendingPermissionHandlers.get(requestId)?.planText ??
+        this.pendingPermissions.get(requestId)?.metadata?.planText;
+      if (typeof planText === "string") {
+        this.emitEvent({
+          type: "timeline",
+          provider: CODEX_PROVIDER,
+          item: {
+            type: "tool_call",
+            callId: requestId,
+            name: "plan_approval",
+            status: "completed",
+            error: null,
+            detail: { type: "plan", text: planText },
+            metadata: { approved: false },
+          },
+        });
+      }
+    }
     this.pendingPermissionHandlers.delete(requestId);
     this.pendingPermissions.delete(requestId);
     this.resolvedPermissionRequests.add(requestId);
@@ -6224,9 +6349,8 @@ export class CodexAppServerAgentSession implements AgentSession {
     if (!this.rememberCodexUserMessageTurn(timelineItem.messageId)) {
       return;
     }
-    const item = this.activeClientMessageId
-      ? { ...timelineItem, clientMessageId: this.activeClientMessageId }
-      : timelineItem;
+    const clientMessageId = timelineItem.clientMessageId ?? this.activeClientMessageId;
+    const item = clientMessageId ? { ...timelineItem, clientMessageId } : timelineItem;
     this.activeClientMessageId = null;
     this.emitEvent({ type: "timeline", provider: CODEX_PROVIDER, item });
   }

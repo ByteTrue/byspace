@@ -13,6 +13,7 @@ import {
   ShutdownRequestedStatusPayloadSchema,
   DaemonUpdateResponseSchema,
   SessionInboundMessageSchema,
+  type ActiveTurnBehavior,
   type ServerInfoStatusPayload,
 } from "@bytetrue/byspace-protocol/messages";
 import { validateWSOutboundMessage } from "@bytetrue/byspace-protocol/validation/ws-outbound";
@@ -376,6 +377,7 @@ export interface DaemonClientConfig {
 
 export interface SendMessageOptions {
   messageId?: string;
+  activeTurnBehavior?: ActiveTurnBehavior;
   images?: Array<{ data: string; mimeType: string }>;
   attachments?: SendAgentMessageRequest["attachments"];
 }
@@ -2990,6 +2992,7 @@ export class DaemonClient {
       agentId,
       text,
       ...(messageId ? { messageId } : {}),
+      ...(options?.activeTurnBehavior ? { activeTurnBehavior: options.activeTurnBehavior } : {}),
       ...(options?.images ? { images: options.images } : {}),
       ...(options?.attachments ? { attachments: options.attachments } : {}),
     });

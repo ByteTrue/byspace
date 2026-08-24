@@ -10,6 +10,7 @@ import { fileURLToPath } from "node:url";
 
 import type {
   AgentLaunchContext,
+  AgentPromptInput,
   AgentSession,
   AgentSessionConfig,
   AgentSlashCommand,
@@ -124,6 +125,260 @@ function createProviderWithFakeAppServer(appServer: FakeCodexAppServer): CodexAp
   internals.spawnAppServer = async () => appServer.child;
   return provider;
 }
+
+async function startPublicSteeringSession(
+  appServer: FakeCodexAppServer,
+  resolveSlashCommandInvocation?: (prompt: AgentPromptInput) => Promise<{
+    commandName: string;
+    args?: string;
+  } | null>,
+): Promise<{ session: AgentSession; bySpaceTurnId: string }> {
+  const session = new CodexAppServerAgentSession(
+    createConfig({ cwd: "/workspace/project" }),
+    null,
+    createTestLogger(),
+    async () => appServer.child,
+    { resolveSlashCommandInvocation },
+  );
+  const started = await session.startTurn("first");
+  await appServer.waitForTurnStart();
+  appServer.startsTurn({ threadId: "thread-1", turnId: "native-A" });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  return { session, bySpaceTurnId: started.turnId };
+}
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((resolvePromise) => {
+    resolve = resolvePromise;
+  });
+  return { promise, resolve };
+}
+
+describe("Codex active-turn steering admission", () => {
+  test("a steer without the clearing contract leaves permissions open", async () => {
+    const appServer = createFakeCodexAppServer({
+      "turn/steer": () => ({ turn: { id: "native-A" } }),
+    });
+    const { session, bySpaceTurnId } = await startPublicSteeringSession(appServer);
+    castInternals<{ emitSyntheticPlanApprovalRequest: (planText: string) => void }>(
+      session,
+    ).emitSyntheticPlanApprovalRequest("Ship the thing");
+
+    await expect(
+      session.steerActiveTurn!("background notification", { expectedTurnId: bySpaceTurnId }),
+    ).resolves.toEqual({ status: "accepted" });
+    expect(session.getPendingPermissions()).toHaveLength(1);
+
+    const requestId = session.getPendingPermissions()[0]!.id;
+    await session.respondToPermission(requestId, { behavior: "deny", message: "test cleanup" });
+    await session.close();
+    appServer.assertNoErrors();
+  });
+
+  test("a clearing steer denies every pending permission through its provider handler", async () => {
+    const appServer = createFakeCodexAppServer({
+      "turn/steer": () => ({ turn: { id: "native-A" } }),
+    });
+    const { session, bySpaceTurnId } = await startPublicSteeringSession(appServer);
+    const events: AgentStreamEvent[] = [];
+    session.subscribe((event) => events.push(event));
+
+    const commandPermission = waitForNextPermission(session);
+    appServer.requestCommandApproval({
+      itemId: "command-1",
+      threadId: "thread-1",
+      turnId: "native-A",
+      command: "git status",
+      cwd: "/workspace/project",
+      reason: "Needs approval",
+    });
+    await commandPermission;
+
+    const filePermission = waitForNextPermission(session);
+    appServer.requestFileChangeApproval({
+      itemId: "file-1",
+      threadId: "thread-1",
+      turnId: "native-A",
+      reason: "Apply the patch",
+    });
+    await filePermission;
+
+    const questionPermission = waitForNextPermission(session);
+    appServer.requestUserInput({
+      itemId: "question-1",
+      threadId: "thread-1",
+      turnId: "native-A",
+      questions: [
+        {
+          id: "choice",
+          header: "Choice",
+          question: "Which option?",
+          options: [{ label: "One" }, { label: "Two" }],
+        },
+      ],
+    });
+    await questionPermission;
+
+    const mcpPermission = waitForNextPermission(session);
+    appServer.requestMcpElicitation({
+      threadId: "thread-1",
+      turnId: "native-A",
+      serverName: "browser",
+      message: "Open this page?",
+      requestedSchema: { type: "object", properties: {} },
+    });
+    await mcpPermission;
+
+    castInternals<{ emitSyntheticPlanApprovalRequest: (planText: string) => void }>(
+      session,
+    ).emitSyntheticPlanApprovalRequest("Ship the thing");
+    expect(session.getPendingPermissions()).toHaveLength(5);
+
+    await expect(
+      session.steerActiveTurn!("review this instead", {
+        expectedTurnId: bySpaceTurnId,
+        clearPendingPermissions: true,
+      }),
+    ).resolves.toEqual({ status: "accepted" });
+
+    expect(session.getPendingPermissions()).toEqual([]);
+    await expect(appServer.waitForApprovalDecision("command-1")).resolves.toEqual({
+      decision: "decline",
+    });
+    await expect(appServer.waitForApprovalDecision("file-1")).resolves.toEqual({
+      decision: "decline",
+    });
+    await expect(appServer.waitForApprovalDecision("question-1")).resolves.toEqual({ answers: {} });
+    await expect(appServer.waitForMcpElicitationDecision()).resolves.toEqual({
+      action: "decline",
+      content: null,
+      _meta: null,
+    });
+    expect(events).toContainEqual(
+      expect.objectContaining({
+        type: "timeline",
+        item: expect.objectContaining({
+          name: "plan_approval",
+          detail: { type: "plan", text: "Ship the thing" },
+          metadata: expect.objectContaining({ approved: false }),
+        }),
+      }),
+    );
+    await session.close();
+    appServer.assertNoErrors();
+  });
+
+  test("does not steer B when A completes while command resolution is pending", async () => {
+    const commandResolution = deferred<{ commandName: string } | null>();
+    const resolverEntered = deferred<void>();
+    const appServer = createFakeCodexAppServer();
+    const { session, bySpaceTurnId } = await startPublicSteeringSession(
+      appServer,
+      async (prompt) => {
+        if (prompt !== "/held") return null;
+        resolverEntered.resolve();
+        return commandResolution.promise;
+      },
+    );
+
+    const steer = session.steerActiveTurn!("/held", {
+      expectedTurnId: bySpaceTurnId,
+      clientMessageId: "steer-A",
+    });
+    await resolverEntered.promise;
+    appServer.completeTurn({ threadId: "thread-1" });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const startedB = await session.startTurn("second");
+    appServer.startsTurn({ threadId: "thread-1", turnId: "native-B" });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    commandResolution.resolve(null);
+
+    await expect(steer).resolves.toEqual({ status: "unavailable" });
+    expect(startedB.turnId).not.toBe(bySpaceTurnId);
+    expect(appServer.requests().filter((request) => request.method === "turn/steer")).toEqual([]);
+    await session.close();
+    appServer.assertNoErrors();
+  });
+
+  test.each([
+    ["method unavailable", -32601, "method not found", undefined, "unavailable"],
+    ["no active turn", -32600, "no active turn to steer", undefined, "unavailable"],
+    [
+      "expected turn mismatch",
+      -32600,
+      "expected active turn id `native-A` but found `native-B`",
+      undefined,
+      "unavailable",
+    ],
+    [
+      "output schema mismatch",
+      -32600,
+      "active turn uses a different output schema",
+      undefined,
+      "unavailable",
+    ],
+    [
+      "review turn",
+      -32600,
+      "cannot steer a review turn",
+      { codexErrorInfo: { activeTurnNotSteerable: { turnKind: "review" } } },
+      "unavailable",
+    ],
+    ["unknown invalid request", -32600, "input must not be empty", undefined, "throws"],
+  ] as const)("classifies JSON-RPC $0", async (_name, code, message, data, expected) => {
+    const appServer = createFakeCodexAppServer({
+      "turn/steer": () => ({ __jsonRpcError: { code, message, ...(data ? { data } : {}) } }),
+    });
+    const { session, bySpaceTurnId } = await startPublicSteeringSession(appServer);
+    const steer = session.steerActiveTurn!("follow up", {
+      expectedTurnId: bySpaceTurnId,
+      clientMessageId: "steer-frame",
+    });
+    if (expected === "unavailable") {
+      await expect(steer).resolves.toEqual({ status: "unavailable" });
+    } else {
+      await expect(steer).rejects.toThrow(message);
+    }
+    await session.close();
+    appServer.assertNoErrors();
+  });
+
+  test("leaves a JSON-RPC server error ambiguous", async () => {
+    const appServer = createFakeCodexAppServer({
+      "turn/steer": () => ({
+        __jsonRpcError: { code: -32000, message: "connection lost" },
+      }),
+    });
+    const { session, bySpaceTurnId } = await startPublicSteeringSession(appServer);
+    await expect(
+      session.steerActiveTurn!("follow up", {
+        expectedTurnId: bySpaceTurnId,
+        clientMessageId: "steer-transport",
+      }),
+    ).rejects.toThrow("connection lost");
+    await session.close();
+  });
+
+  test("rejects an in-flight steer when the app-server transport disconnects", async () => {
+    const appServer = createFakeCodexAppServer({
+      "turn/steer": () => new Promise<void>(() => undefined),
+    });
+    const { session, bySpaceTurnId } = await startPublicSteeringSession(appServer);
+    const steer = session.steerActiveTurn!("follow up", {
+      expectedTurnId: bySpaceTurnId,
+      clientMessageId: "steer-disconnect",
+    });
+    await appServer.waitForRequest("turn/steer");
+    appServer.disconnect();
+
+    await expect(steer).rejects.toThrow("Codex app-server exited");
+    expect(appServer.requests().filter((request) => request.method === "turn/steer")).toHaveLength(
+      1,
+    );
+    await session.close();
+  });
+});
 
 async function startCompactionTurnTest(): Promise<{
   appServer: FakeCodexAppServer;
@@ -5156,5 +5411,66 @@ describe("Codex importable sessions", () => {
       },
       { method: "thread/list", params: { limit: 50, cwd: "/workspace/project-a" } },
     ]);
+  });
+});
+
+describe("Codex denied plan approvals", () => {
+  function planApprovalRows(events: AgentStreamEvent[]) {
+    return events.filter(
+      (event) =>
+        event.type === "timeline" &&
+        event.item.type === "tool_call" &&
+        event.item.name === "plan_approval",
+    );
+  }
+
+  function createPlanSession(): { session: CodexTestSession; events: AgentStreamEvent[] } {
+    const session = createSession();
+    const events: AgentStreamEvent[] = [];
+    session.subscribe((event) => events.push(event));
+    castInternals<{ emitSyntheticPlanApprovalRequest: (planText: string) => void }>(
+      session,
+    ).emitSyntheticPlanApprovalRequest("Ship the thing");
+    return { session, events };
+  }
+
+  function pendingPlanRequestId(session: CodexTestSession): string {
+    const [request] = session.getPendingPermissions?.() ?? [];
+    if (!request) throw new Error("expected a pending plan permission");
+    return request.id;
+  }
+
+  test("answering the card with a denial records the plan decision", async () => {
+    const { session, events } = createPlanSession();
+    const requestId = pendingPlanRequestId(session);
+
+    await session.respondToPermission?.(requestId, {
+      behavior: "deny",
+      message: "The user answered with a message instead of approving.",
+    });
+
+    const [row] = planApprovalRows(events);
+    expect(row).toBeDefined();
+    expect((row as { item: { detail: unknown; metadata?: unknown } }).item).toMatchObject({
+      detail: { type: "plan", text: "Ship the thing" },
+      metadata: { approved: false },
+    });
+  });
+
+  test("a plan superseded by a new prompt records the same decision", () => {
+    const { session, events } = createPlanSession();
+
+    castInternals<{ dismissPendingPlanApprovals: (message: string) => void }>(
+      session,
+    ).dismissPendingPlanApprovals("Dismissed by a new prompt");
+
+    // dismissPendingPlanApprovals goes straight to resolvePlanPermission, so a
+    // row emitted from the response handler would miss this route entirely.
+    const [row] = planApprovalRows(events);
+    expect(row).toBeDefined();
+    expect((row as { item: { detail: unknown; metadata?: unknown } }).item).toMatchObject({
+      detail: { type: "plan", text: "Ship the thing" },
+      metadata: { approved: false },
+    });
   });
 });
