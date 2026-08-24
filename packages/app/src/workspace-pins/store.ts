@@ -15,27 +15,19 @@ const DEFAULT_PINNED_TARGETS: PinnedTabTarget[] = [{ kind: "terminal" }];
 const PinnedTabTargetSchema = z.discriminatedUnion("kind", [
   z.strictObject({ kind: z.literal("draft") }),
   z.strictObject({ kind: z.literal("terminal") }),
+  z.strictObject({ kind: z.literal("working_diff") }),
+  z.strictObject({ kind: z.literal("files") }),
+  z.strictObject({ kind: z.literal("pull_request") }),
   z.strictObject({ kind: z.literal("profile"), profileId: z.string() }),
 ]);
 const PinnedTargetsPersistedStateSchema = z.strictObject({
   pinned: z.array(PinnedTabTargetSchema),
 });
 
-function applyDefaultPinnedTargets(pinned: unknown[]): PinnedTabTarget[] {
+function applyDefaultPinnedTargets(pinned: PinnedTabTarget[]): PinnedTabTarget[] {
   const next = [...DEFAULT_PINNED_TARGETS];
   for (const target of pinned) {
-    if (!target || typeof target !== "object" || !("kind" in target)) continue;
-    if (target.kind !== "draft" && target.kind !== "terminal" && target.kind !== "profile")
-      continue;
-    if (
-      target.kind === "profile" &&
-      !("profileId" in target && typeof target.profileId === "string")
-    )
-      continue;
-    const supportedTarget = target as PinnedTabTarget;
-    if (!isTargetPinned(next, supportedTarget)) {
-      next.push(supportedTarget);
-    }
+    if (!isTargetPinned(next, target)) next.push(target);
   }
   return next;
 }
@@ -54,7 +46,7 @@ export const usePinnedTargetsStore = create<PinnedTargetsState>()(
         const result = PinnedTargetsPersistedStateSchema.safeParse(persistedState);
         return {
           ...currentState,
-          pinned: applyDefaultPinnedTargets(result.success ? result.data.pinned : []),
+          pinned: result.success ? result.data.pinned : applyDefaultPinnedTargets([]),
         };
       },
       storage: createValidatedPersistStorage(AsyncStorage, PinnedTargetsPersistedStateSchema),

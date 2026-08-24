@@ -4,7 +4,7 @@ import { useKeyboardShortcutsStore } from "@/stores/keyboard-shortcuts-store";
 import { usePanelStore } from "@/stores/panel-store";
 import { setCommandCenterFocusRestoreElement } from "@/utils/command-center-focus-restore";
 import { navigateToWorkspace } from "@/stores/navigation-active-workspace-store";
-import { keyboardActionDispatcher } from "@/keyboard/keyboard-action-dispatcher";
+import { useKeyboardActionDispatcher } from "@/keyboard/keyboard-action-dispatcher-context";
 import {
   type ChordState,
   type KeyboardShortcutInput,
@@ -28,6 +28,7 @@ import {
   navigateToLastWorkspace,
   useActiveWorkspaceSelection,
 } from "@/stores/navigation-active-workspace-store";
+import { dispatchTopWebOverlayKeyDown } from "@/lib/overlay-root";
 
 export function useKeyboardShortcuts({
   enabled,
@@ -42,6 +43,7 @@ export function useKeyboardShortcuts({
   toggleBothSidebars?: () => void;
   cycleTheme?: () => void;
 }) {
+  const keyboardActionDispatcher = useKeyboardActionDispatcher();
   const pathname = usePathname();
   const router = useRouter();
   const resetModifiers = useKeyboardShortcutsStore((s) => s.resetModifiers);
@@ -250,6 +252,10 @@ export function useKeyboardShortcuts({
         return;
       }
 
+      if (dispatchTopWebOverlayKeyDown(event)) {
+        return;
+      }
+
       // During IME composition, Enter confirms the candidate selection and must
       // not route through global shortcuts like message send.
       if (isImeComposingKeyboardEvent(event)) {
@@ -320,6 +326,7 @@ export function useKeyboardShortcuts({
     activeWorkspaceSelection,
     isMac,
     isMobile,
+    keyboardActionDispatcher,
     openProjectPickerAction,
     pathname,
     resetModifiers,

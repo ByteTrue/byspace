@@ -1,6 +1,6 @@
 import type { normalizeWorkspaceDescriptor } from "@/stores/session-store";
 import type { AgentAttachment } from "@bytetrue/byspace-protocol/messages";
-import type { WorkspaceTabTarget } from "@/stores/workspace-tabs-store";
+import type { WorkspaceTabTarget } from "@/workspace-tabs/model";
 import {
   profileTakesPrompt,
   substitutePrompt,

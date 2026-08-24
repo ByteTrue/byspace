@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { WorkspaceTabTarget } from "@/stores/workspace-tabs-store";
+import type { WorkspaceTabTarget } from "@/workspace-tabs/model";
 import { prepareWorkspaceTab } from "@/utils/prepare-workspace-tab";
 
 const SERVER_ID = "server-1";
@@ -22,7 +22,13 @@ function createFakeLayout() {
   return {
     openedTabs,
     pinnedAgents,
-    openTabFocused: (key: string, target: WorkspaceTabTarget) => {
+    openTab: ({
+      workspaceKey: key,
+      target,
+    }: {
+      workspaceKey: string;
+      target: WorkspaceTabTarget;
+    }) => {
       openedTabs.push({ key, target });
       return target.kind === "agent" ? target.agentId : null;
     },

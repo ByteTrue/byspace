@@ -116,7 +116,10 @@ function getFocusableElements(scope: HTMLElement): HTMLElement[] {
 }
 
 function focusFirstElement(scope: HTMLElement): void {
-  const first = getFocusableElements(scope)[0];
+  const firstMenuItem = scope.querySelector<HTMLElement>(
+    '[data-menu-item="true"]:not([data-menu-disabled="true"])',
+  );
+  const first = firstMenuItem ?? getFocusableElements(scope)[0];
   (first ?? scope).focus();
 }
 
@@ -138,10 +141,14 @@ function handleWebOverlayFocus(event: FocusEvent): void {
   });
 }
 
-function handleWebOverlayKeyDown(event: KeyboardEvent): void {
+/**
+ * Gives the top painted overlay first refusal on a key before app-wide shortcuts run.
+ * The window listener below is the fallback for keys nobody routes through the shortcut engine.
+ */
+export function dispatchTopWebOverlayKeyDown(event: KeyboardEvent): boolean {
   const top = getTopWebOverlay();
   const scope = top?.getScope();
-  if (!top || !scope) return;
+  if (!top || !scope) return false;
 
   if (event.key === "Tab") {
     const focusable = getFocusableElements(scope);
@@ -155,12 +162,17 @@ function handleWebOverlayKeyDown(event: KeyboardEvent): void {
       event.stopImmediatePropagation();
       (shouldWrapBackward ? last : first)?.focus();
       if (!first) scope.focus();
-      return;
+      return true;
     }
   }
 
-  if (!top.getKeyHandler()(event)) return;
+  if (!top.getKeyHandler()(event)) return false;
   event.stopImmediatePropagation();
+  return true;
+}
+
+function handleWebOverlayKeyDown(event: KeyboardEvent): void {
+  dispatchTopWebOverlayKeyDown(event);
 }
 
 function attachWebOverlayListeners(): void {
@@ -203,6 +215,7 @@ interface WebOverlayRegistration {
   active: boolean;
   layer: number;
   onKeyDown: WebOverlayKeyHandler;
+  restoreFocusRef?: React.RefObject<unknown>;
 }
 
 /**
@@ -210,12 +223,17 @@ interface WebOverlayRegistration {
  * Only the highest painted overlay receives keyboard input; focus is trapped
  * there and restored to the opener when that overlay closes.
  */
-export function useWebOverlayRegistration({ active, layer, onKeyDown }: WebOverlayRegistration) {
+export function useWebOverlayRegistration({
+  active,
+  layer,
+  onKeyDown,
+  restoreFocusRef: preferredRestoreFocusRef,
+}: WebOverlayRegistration) {
   const idRef = useRef(Symbol("web-overlay"));
   const scopeRef = useRef<HTMLElement | null>(null);
   const layerRef = useRef(layer);
   const keyHandlerRef = useRef(onKeyDown);
-  const restoreFocusRef = useRef<HTMLElement | null>(null);
+  const capturedRestoreFocusRef = useRef<HTMLElement | null>(null);
   const removeEntryRef = useRef<(() => void) | null>(null);
   const activeRef = useRef(active);
   const wasActiveRef = useRef(false);
@@ -224,8 +242,13 @@ export function useWebOverlayRegistration({ active, layer, onKeyDown }: WebOverl
   layerRef.current = layer;
   keyHandlerRef.current = onKeyDown;
   if (active && !wasActiveRef.current && typeof document !== "undefined") {
-    restoreFocusRef.current =
-      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const requestedRestoreTarget = preferredRestoreFocusRef?.current;
+    if (requestedRestoreTarget instanceof HTMLElement) {
+      capturedRestoreFocusRef.current = requestedRestoreTarget;
+    } else {
+      capturedRestoreFocusRef.current =
+        document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    }
   }
   wasActiveRef.current = active;
 
@@ -248,7 +271,7 @@ export function useWebOverlayRegistration({ active, layer, onKeyDown }: WebOverl
       getLayer: () => layerRef.current,
       getScope: () => scopeRef.current,
       getKeyHandler: () => keyHandlerRef.current,
-      restoreFocus: restoreFocusRef.current,
+      restoreFocus: capturedRestoreFocusRef.current,
     };
     removeEntryRef.current = addWebOverlay(entry);
   }, []);

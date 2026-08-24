@@ -42,6 +42,7 @@ import { useIsCompactFormFactor } from "@/constants/layout";
 import {
   canDesktopAppSidebarShare,
   resolveDesktopAppContentMinimum,
+  resolveDesktopSidebarVisibility,
 } from "@/components/desktop-sidebar-layout";
 import { isWeb } from "@/constants/platform";
 import { HorizontalScrollProvider } from "@/contexts/horizontal-scroll-context";
@@ -55,6 +56,7 @@ import { ThemedStack } from "@/navigation/themed-stack";
 import { legacyFavoriteProfileMigration } from "@/agent-profiles/migration";
 import { useActiveWorktreeNewAction } from "@/hooks/use-active-worktree-new-action";
 import { useGlobalNewWorkspaceAction } from "@/hooks/use-global-new-workspace-action";
+import { useLatchedBoolean } from "@/hooks/use-latched-boolean";
 import { useFaviconStatus } from "@/hooks/use-favicon-status";
 import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts";
 import { useCompactWebViewportZoomLock } from "@/hooks/use-compact-web-viewport-zoom-lock";
@@ -63,7 +65,10 @@ import { useStableEvent } from "@/hooks/use-stable-event";
 import { useOpenAgentListGesture } from "@/mobile-panels/gestures";
 import { MobilePanelsProvider } from "@/mobile-panels/provider";
 import { I18nProvider } from "@/i18n/provider";
-import { keyboardActionDispatcher } from "@/keyboard/keyboard-action-dispatcher";
+import {
+  KeyboardActionDispatcherProvider,
+  useKeyboardActionDispatcher,
+} from "@/keyboard/keyboard-action-dispatcher-context";
 import { polyfillCrypto } from "@/polyfills/crypto";
 import { queryClient } from "@/data/query-client";
 import {
@@ -79,7 +84,6 @@ import { getNextThemePreference } from "@/styles/theme";
 import { useSessionStore } from "@/stores/session-store";
 import { installWebScrollbarStyles } from "@/styles/install-web-scrollbar-styles";
 import type { HostProfile } from "@/types/host-connection";
-import { toggleDesktopSidebarsWithCheckoutIntent } from "@/utils/desktop-sidebar-toggle";
 import {
   buildOpenProjectRoute,
   parseHostWorkspaceRouteFromPathname,
@@ -266,18 +270,14 @@ interface AppContainerProps {
 }
 
 function AppContainer({ children, chromeEnabled: chromeEnabledOverride }: AppContainerProps) {
+  const keyboardActionDispatcher = useKeyboardActionDispatcher();
   const daemons = useHosts();
   const { settings, updateSettings } = useAppSettings();
   const toggleMobileAgentList = usePanelStore((state) => state.toggleMobileAgentList);
   const toggleDesktopAgentList = usePanelStore((state) => state.toggleDesktopAgentList);
-  const openDesktopAgentList = usePanelStore((state) => state.openDesktopAgentList);
-  const closeDesktopAgentList = usePanelStore((state) => state.closeDesktopAgentList);
-  const closeDesktopFileExplorer = usePanelStore((state) => state.closeDesktopFileExplorer);
   const isFocusModeEnabled = usePanelStore((state) => state.desktop.focusModeEnabled);
   const isDesktopAgentListOpen = usePanelStore((state) => state.desktop.agentListOpen);
-  const isDesktopFileExplorerOpen = usePanelStore((state) => state.desktop.fileExplorerOpen);
   const sidebarWidth = usePanelStore((state) => state.sidebarWidth);
-  const explorerWidth = usePanelStore((state) => state.explorerWidth);
   const { width: viewportWidth } = useWindowDimensions();
 
   const cycleTheme = useCallback(() => {
@@ -290,22 +290,19 @@ function AppContainer({ children, chromeEnabled: chromeEnabledOverride }: AppCon
   const isWorkspaceRoute = parseHostWorkspaceRouteFromPathname(pathname) !== null;
   const isWorkspaceFocusModeEnabled = isWorkspaceRoute && isFocusModeEnabled;
   const chromeEnabled = chromeEnabledOverride ?? daemons.length > 0;
+  const hasMountedDesktopSidebar = useLatchedBoolean(chromeEnabled);
   const toggleAgentList = isCompactLayout ? toggleMobileAgentList : toggleDesktopAgentList;
   const toggleDesktopSidebars = useCallback(() => {
-    const { desktop } = usePanelStore.getState();
-    toggleDesktopSidebarsWithCheckoutIntent({
-      isAgentListOpen: desktop.agentListOpen,
-      isFileExplorerOpen: desktop.fileExplorerOpen,
-      openAgentList: openDesktopAgentList,
-      closeAgentList: closeDesktopAgentList,
-      closeFileExplorer: closeDesktopFileExplorer,
-      toggleFocusedFileExplorer: () =>
-        keyboardActionDispatcher.dispatch({
-          id: "sidebar.toggle.right",
-          scope: "sidebar",
-        }),
-    });
-  }, [closeDesktopAgentList, closeDesktopFileExplorer, openDesktopAgentList]);
+    // The focused workspace owns its layout key, its checkout, and therefore the
+    // only correct answer to "is the explorer open". Let it decide when there is
+    // one: the pathname alone cannot identify the active workspace, because
+    // desktop cold-starts at "/" and restores the workspace from route params.
+    if (keyboardActionDispatcher.dispatch({ id: "sidebar.toggle.both", scope: "sidebar" })) {
+      return;
+    }
+    // Off a workspace route there is no explorer — only the agent list.
+    toggleAgentList();
+  }, [keyboardActionDispatcher, toggleAgentList]);
   // TODO: stop matching pathname here as a branch. `chromeEnabled` should not
   // conflate workspace/project-specific chrome (sidebar, mobile gesture) with
   // global concerns like keyboard shortcuts. Split those out so settings (and
@@ -325,20 +322,19 @@ function AppContainer({ children, chromeEnabled: chromeEnabledOverride }: AppCon
 
   const appContentMinimumWidth = resolveDesktopAppContentMinimum({
     isSettingsRoute: pathname.includes("/settings"),
-    isWorkspaceExplorerOpen: isWorkspaceRoute && isDesktopFileExplorerOpen,
-    requestedExplorerWidth: explorerWidth,
-    viewportWidth,
   });
-  const desktopSidebarMounted = chromeEnabled && !isWorkspaceFocusModeEnabled;
-  const desktopSidebarVisible =
-    !isCompactLayout &&
-    desktopSidebarMounted &&
-    isDesktopAgentListOpen &&
-    canDesktopAppSidebarShare({
+  const desktopSidebarMounted = hasMountedDesktopSidebar && !isWorkspaceFocusModeEnabled;
+  const desktopSidebarVisible = resolveDesktopSidebarVisibility({
+    chromeEnabled,
+    isCompactLayout,
+    isMounted: desktopSidebarMounted,
+    isOpen: isDesktopAgentListOpen,
+    canShare: canDesktopAppSidebarShare({
       contentMinimumWidth: appContentMinimumWidth,
       requestedSidebarWidth: sidebarWidth,
       viewportWidth,
-    });
+    }),
+  });
   const sidebarChrome = (
     <SidebarChrome
       mounted={isCompactLayout ? chromeEnabled : desktopSidebarMounted}
@@ -349,7 +345,7 @@ function AppContainer({ children, chromeEnabled: chromeEnabledOverride }: AppCon
   const workspaceChrome = (
     <View style={rowStyle}>
       {!isCompactLayout ? sidebarChrome : null}
-      {isCompactLayout && chromeEnabled ? (
+      {isCompactLayout ? (
         <CompactExplorerSidebarHost enabled={chromeEnabled}>
           <View style={flexStyle}>{children}</View>
         </CompactExplorerSidebarHost>
@@ -580,9 +576,11 @@ function RuntimeProviders({ children }: { children: ReactNode }) {
 // context and need one shared provider for sibling sheets to stack.
 function RootProviders({ children }: { children: ReactNode }) {
   return (
-    <PortalProvider>
-      <BottomSheetModalProvider>{children}</BottomSheetModalProvider>
-    </PortalProvider>
+    <KeyboardActionDispatcherProvider>
+      <PortalProvider>
+        <BottomSheetModalProvider>{children}</BottomSheetModalProvider>
+      </PortalProvider>
+    </KeyboardActionDispatcherProvider>
   );
 }
 

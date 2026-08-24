@@ -8,7 +8,7 @@ const PROFILES: readonly TerminalProfile[] = [
 ];
 
 interface RecordedLaunch {
-  action: "draft" | "terminal" | "profile";
+  action: "draft" | "terminal" | "changes" | "files" | "pull_request" | "profile";
   profile?: TerminalProfileInput;
 }
 
@@ -17,6 +17,9 @@ function recordingHandlers() {
   const handlers: TabTargetHandlers = {
     createDraft: () => launches.push({ action: "draft" }),
     createTerminal: () => launches.push({ action: "terminal" }),
+    openChanges: () => launches.push({ action: "changes" }),
+    openFiles: () => launches.push({ action: "files" }),
+    openPullRequest: () => launches.push({ action: "pull_request" }),
     createTerminalWithProfile: (profile) => launches.push({ action: "profile", profile }),
   };
   return { launches, handlers };
@@ -47,5 +50,14 @@ describe("runPinnedTabTarget", () => {
     const { launches, handlers } = recordingHandlers();
     runPinnedTabTarget({ kind: "profile", profileId: "missing" }, PROFILES, handlers);
     expect(launches).toEqual([]);
+  });
+  it.each([
+    [{ kind: "working_diff" } as const, "changes" as const],
+    [{ kind: "files" } as const, "files" as const],
+    [{ kind: "pull_request" } as const, "pull_request" as const],
+  ])("opens review target %s", (target, action) => {
+    const { launches, handlers } = recordingHandlers();
+    runPinnedTabTarget(target, PROFILES, handlers);
+    expect(launches).toEqual([{ action }]);
   });
 });

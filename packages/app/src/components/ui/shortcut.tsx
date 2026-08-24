@@ -33,6 +33,7 @@ export function Shortcut({
   if (displayChord.length === 1) {
     return (
       <View style={badgeStyle}>
+        <View style={styles.badgeBackground} />
         <Text style={textCombinedStyle}>{formatShortcut(singleCombo, shortcutOs)}</Text>
       </View>
     );
@@ -43,6 +44,7 @@ export function Shortcut({
       {displayChord.map(function (combo) {
         return (
           <View key={combo.join("+")} style={styles.badge}>
+            <View style={styles.badgeBackground} />
             <Text style={textCombinedStyle}>{formatShortcut(combo, shortcutOs)}</Text>
           </View>
         );
@@ -53,11 +55,17 @@ export function Shortcut({
 
 const styles = StyleSheet.create((theme) => ({
   badge: {
+    position: "relative",
     paddingHorizontal: theme.spacing[1],
     paddingVertical: 2,
     borderRadius: theme.borderRadius.md,
-    backgroundColor: theme.colors.surface2,
     borderWidth: 0,
+  },
+  badgeBackground: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: theme.borderRadius.md,
+    backgroundColor: theme.colors.surface3,
+    opacity: theme.opacity[50],
   },
   sequence: {
     flexDirection: "row",

@@ -74,6 +74,8 @@ export interface AppSettings {
   toolCallDetailLevel: ToolCallDetailLevel;
   chatOutlineEnabled: boolean;
   vimKeybindings: boolean;
+  /** Route implicitly opened supporting tabs into the Side panel. Desktop only. */
+  openSupportingTabsInSidePanel: boolean;
 }
 
 export type Settings = AppSettings;
@@ -110,6 +112,10 @@ const StoredAppSettingsSchema = z.strictObject({
   compactToolCalls: z.boolean().optional(),
   chatOutlineEnabled: z.boolean().optional(),
   vimKeybindings: z.boolean().optional(),
+  openSupportingTabsInSidePanel: z.boolean().optional(),
+  // COMPAT(rendererDesktopSettings): these fields used to share this renderer-owned key.
+  manageBuiltInDaemon: z.boolean().optional(),
+  releaseChannel: z.enum(["stable", "beta"]).optional(),
 });
 
 const LegacyRendererSettingsSchema = StoredAppSettingsSchema;
@@ -137,6 +143,7 @@ export const DEFAULT_CLIENT_SETTINGS: AppSettings = {
   toolCallDetailLevel: "detailed",
   chatOutlineEnabled: true,
   vimKeybindings: false,
+  openSupportingTabsInSidePanel: true,
 };
 
 export const DEFAULT_APP_SETTINGS: Settings = DEFAULT_CLIENT_SETTINGS;
@@ -232,7 +239,29 @@ function parseStoredSidebarChecksDisplay(stored: StoredAppSettings): SidebarChec
   return isChecksHiddenByLegacyRowItem(stored.sidebarRowItems) ? "none" : null;
 }
 
-function pickSidebarAppSettings(stored: StoredAppSettings): Partial<AppSettings> {
+function pickBooleanAppSettings(stored: StoredAppSettings): Partial<AppSettings> {
+  const result: Partial<AppSettings> = {};
+  if (typeof stored.useLegacyTerminalRenderer === "boolean") {
+    result.useLegacyTerminalRenderer = stored.useLegacyTerminalRenderer;
+  }
+  if (typeof stored.chatOutlineEnabled === "boolean") {
+    result.chatOutlineEnabled = stored.chatOutlineEnabled;
+  }
+  if (typeof stored.vimKeybindings === "boolean") {
+    result.vimKeybindings = stored.vimKeybindings;
+  }
+  if (typeof stored.openSupportingTabsInSidePanel === "boolean") {
+    result.openSupportingTabsInSidePanel = stored.openSupportingTabsInSidePanel;
+  }
+  return result;
+}
+
+/**
+ * The settings whose stored value only has to be a member of a fixed set. Grouped like the
+ * boolean settings are: the numeric and font settings need real parsing and clamping, these
+ * need a membership check and nothing else.
+ */
+function pickEnumAppSettings(stored: StoredAppSettings): Partial<AppSettings> {
   const result: Partial<AppSettings> = {};
   if (stored.sidebarRowItems !== undefined) {
     result.sidebarRowItems = parseSidebarRowItems(stored.sidebarRowItems);
@@ -276,9 +305,6 @@ function pickAppSettings(stored: StoredAppSettings): Partial<AppSettings> {
   if (terminalScrollbackLines !== null) {
     result.terminalScrollbackLines = terminalScrollbackLines;
   }
-  if (typeof stored.useLegacyTerminalRenderer === "boolean") {
-    result.useLegacyTerminalRenderer = stored.useLegacyTerminalRenderer;
-  }
   const uiFontFamily = sanitizeFontFamily(stored.uiFontFamily);
   if (uiFontFamily !== null) {
     result.uiFontFamily = uiFontFamily;
@@ -304,19 +330,14 @@ function pickAppSettings(stored: StoredAppSettings): Partial<AppSettings> {
   if (codeFontSize !== null) {
     result.codeFontSize = codeFontSize;
   }
-  if (typeof stored.vimKeybindings === "boolean") {
-    result.vimKeybindings = stored.vimKeybindings;
-  }
-  if (typeof stored.chatOutlineEnabled === "boolean") {
-    result.chatOutlineEnabled = stored.chatOutlineEnabled;
-  }
   if (
     typeof stored.workspaceTitleSource === "string" &&
     VALID_WORKSPACE_TITLE_SOURCES.has(stored.workspaceTitleSource)
   ) {
     result.workspaceTitleSource = stored.workspaceTitleSource;
   }
-  Object.assign(result, pickSidebarAppSettings(stored));
+  Object.assign(result, pickBooleanAppSettings(stored));
+  Object.assign(result, pickEnumAppSettings(stored));
   if (typeof stored.autoExpandReasoning === "boolean") {
     result.autoExpandReasoning = stored.autoExpandReasoning;
   }

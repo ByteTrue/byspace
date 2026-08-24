@@ -25,7 +25,8 @@ import { MAX_CONTENT_WIDTH, useIsCompactFormFactor } from "@/constants/layout";
 import { useMutation } from "@tanstack/react-query";
 import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
 import { Check, ChevronDown, X } from "lucide-react-native";
-import { usePanelStore } from "@/stores/panel-store";
+import { buildWorkspaceTabPersistenceKey } from "@/workspace-tabs/model";
+import { openSidePanelView } from "@/workspace-tabs/side-panel";
 import {
   AssistantMessage,
   SpeakMessage,
@@ -340,8 +341,6 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
     const [collapsedReasoningIds, setCollapsedReasoningIds] = useState<ReadonlySet<string>>(
       new Set(),
     );
-    const openFileExplorerForCheckout = usePanelStore((state) => state.openFileExplorerForCheckout);
-    const setExplorerTabForCheckout = usePanelStore((state) => state.setExplorerTabForCheckout);
 
     // Get serverId (fallback to agent's serverId if not provided)
     const resolvedServerId = serverId ?? context.serverId ?? "";
@@ -445,21 +444,24 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
           setCurrentPath: false,
         });
 
-        const checkout = {
-          serverId: resolvedServerId,
-          cwd: context.cwd,
-          isGit: context.projectPlacement?.checkout?.isGit ?? true,
-        };
-        setExplorerTabForCheckout({ ...checkout, tab: "files" });
-        openFileExplorerForCheckout({
+        openSidePanelView({
           isCompact: isMobile,
-          checkout,
+          workspaceKey: buildWorkspaceTabPersistenceKey({
+            serverId: resolvedServerId,
+            workspaceId: context.workspaceId ?? "",
+          }),
+          checkout: {
+            serverId: resolvedServerId,
+            cwd: context.cwd,
+            isGit: context.projectPlacement?.checkout?.isGit ?? true,
+          },
+          view: "files",
         });
       },
     );
 
     const handleToolCallOpenFile = useStableEvent((filePath: string) => {
-      handleInlinePathPress({ raw: filePath, path: filePath }, "main");
+      handleInlinePathPress({ raw: filePath, path: filePath }, "side");
     });
 
     const handleForkAssistantTurn: AssistantTurnForkHandler = useStableEvent(

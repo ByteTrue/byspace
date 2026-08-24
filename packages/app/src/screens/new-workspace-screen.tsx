@@ -82,7 +82,7 @@ import type { UserComposerAttachment } from "@/attachments/types";
 import type { AgentAttachment, ForgeSearchItem } from "@bytetrue/byspace-protocol/messages";
 import type { CreateBySpaceWorktreeInput } from "@bytetrue/byspace-client/internal/daemon-client";
 import type { AgentProvider } from "@bytetrue/byspace-protocol/agent-types";
-import type { WorkspaceDraftTabSetup, WorkspaceTabTarget } from "@/stores/workspace-tabs-store";
+import type { WorkspaceDraftTabSetup, WorkspaceTabTarget } from "@/workspace-tabs/model";
 import { isEmptyWorkspaceSubmission, runCreateEmptyWorkspace } from "./new-workspace-empty";
 import {
   getWorkspaceNamingAttachments,

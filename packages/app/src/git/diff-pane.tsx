@@ -100,8 +100,12 @@ import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { useOverlayFlatListScrollbar } from "@/components/ui/overlay-scrollbar/use-overlay-flat-list-scrollbar";
 import { inlineUnistylesStyle } from "@/styles/unistyles-inline-style";
 import { usePanelStore } from "@/stores/panel-store";
-import { collectAllTabs, useWorkspaceLayoutStore } from "@/stores/workspace-layout-store";
-import { buildWorkspaceTabPersistenceKey } from "@/stores/workspace-tabs-store/state";
+import {
+  collectAllTabs,
+  FOCUSED_PANE_PLACEMENT,
+  useWorkspaceLayoutStore,
+} from "@/stores/workspace-layout-store";
+import { buildWorkspaceTabPersistenceKey } from "@/workspace-tabs/model";
 import { buildWorkspaceExplorerStateKey } from "@/hooks/use-file-explorer-actions";
 import {
   formatDiffContentText,
@@ -2827,6 +2831,7 @@ function useChangesTreeState({
 
   return {
     expandedPaths: changesTabOpen ? EMPTY_PATH_LIST : stableExpandedPaths,
+    tabExpandedPaths: expandedPaths ?? null,
     collapsedFolders: stableCollapsedFolders,
     allExpanded,
     toggleViewMode,
@@ -2847,7 +2852,7 @@ function useDiffTabNavigation({
   cwd: string;
   isMobile: boolean;
 }) {
-  const openWorkspaceTabFocused = useWorkspaceLayoutStore((state) => state.openTabFocused);
+  const openWorkspaceTabFocused = useWorkspaceLayoutStore((state) => state.openTab);
   const closeWorkspaceTab = useWorkspaceLayoutStore((state) => state.closeTab);
   const persistenceKey = useMemo(
     () => buildWorkspaceTabPersistenceKey({ serverId, workspaceId: workspaceId ?? cwd }),
@@ -2868,9 +2873,14 @@ function useDiffTabNavigation({
       if (!persistenceKey || isMobile) {
         return;
       }
-      openWorkspaceTabFocused(persistenceKey, {
-        kind: "working_diff",
-        ...(path ? { focusPath: path, focusRequestId: Date.now() } : {}),
+      openWorkspaceTabFocused({
+        workspaceKey: persistenceKey,
+        intent: "reveal",
+        placement: FOCUSED_PANE_PLACEMENT,
+        target: {
+          kind: "working_diff",
+          ...(path ? { focusPath: path, focusRequestId: Date.now() } : {}),
+        },
       });
     },
     [isMobile, openWorkspaceTabFocused, persistenceKey],
@@ -2888,7 +2898,12 @@ function useDiffTabNavigation({
   const openCommit = useCallback(
     (sha: string) => {
       if (persistenceKey) {
-        openWorkspaceTabFocused(persistenceKey, { kind: "commit_diff", sha });
+        openWorkspaceTabFocused({
+          workspaceKey: persistenceKey,
+          intent: "reveal",
+          placement: FOCUSED_PANE_PLACEMENT,
+          target: { kind: "commit_diff", sha },
+        });
       }
     },
     [openWorkspaceTabFocused, persistenceKey],
@@ -3170,14 +3185,14 @@ export function GitDiffPane({
   const workingTabMode = useMemo(
     () => ({
       kind: "working_tab" as const,
-      expandedPaths: changesTree.expandedPaths,
+      expandedPaths: changesTree.tabExpandedPaths,
       reviewActions,
       focusPath,
       focusRequestId,
       onExpandedPathsChange: changesTree.updateExpandedPaths,
     }),
     [
-      changesTree.expandedPaths,
+      changesTree.tabExpandedPaths,
       changesTree.updateExpandedPaths,
       focusPath,
       focusRequestId,

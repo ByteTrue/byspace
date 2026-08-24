@@ -130,7 +130,7 @@ function PluginPanelUnavailable({
 }
 
 function usePluginPanelDescriptor(
-  target: Extract<import("@/stores/workspace-tabs-store").WorkspaceTabTarget, { kind: "plugin" }>,
+  target: Extract<import("@/workspace-tabs/model").WorkspaceTabTarget, { kind: "plugin" }>,
   context: { serverId: string },
 ): PanelDescriptor {
   const plugin = useInstalledPlugin(context.serverId, target.pluginId);
@@ -157,6 +157,9 @@ function usePluginPanelDescriptor(
 
 export const pluginPanelRegistration: PanelRegistration<"plugin"> = {
   kind: "plugin",
+  resourceKey: (target) =>
+    `${target.pluginId}:${target.panelId}:${target.context}:${"agentId" in target ? target.agentId : ""}`,
+
   component: PluginPanel,
   useDescriptor: usePluginPanelDescriptor,
 };

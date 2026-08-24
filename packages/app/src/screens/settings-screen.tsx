@@ -13,7 +13,6 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
-import { Buffer } from "buffer";
 import {
   ArrowLeft,
   Settings,
@@ -39,7 +38,6 @@ import { HostStatusDot } from "@/components/host-status-dot";
 import { ScreenTitle } from "@/components/headers/screen-title";
 import { HeaderIconBadge } from "@/components/headers/header-icon-badge";
 import { SettingsSection } from "@/screens/settings/settings-section";
-import { AppearanceSection } from "@/screens/settings/appearance/appearance-section";
 import {
   useAppSettings,
   parseTerminalScrollbackLines,
@@ -55,15 +53,13 @@ import { AddHostMethodModal } from "@/components/add-host-method-modal";
 import { AddHostModal } from "@/components/add-host-modal";
 import { PairLinkModal } from "@/components/pair-link-modal";
 import { KeyboardShortcutsSection } from "@/screens/settings/keyboard-shortcuts-section";
-import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
+import { supportsDesktopPaneSplits } from "@/constants/layout";
 import { CommunityLinks } from "@/components/community-links";
 import { SegmentedControl } from "@/components/ui/segmented-control";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { resolveAppVersion } from "@/utils/app-version";
 import { settingsStyles } from "@/styles/settings";
-import { THINKING_TONE_NATIVE_PCM_BASE64 } from "@/utils/thinking-tone.native-pcm";
-import { useAudioEngineOptional } from "@/contexts/audio-context";
 import {
   LANGUAGE_OPTIONS,
   formatLanguageOptionLabel,
@@ -209,7 +205,7 @@ interface GeneralSectionProps {
   handleSendBehaviorChange: (behavior: SendBehavior) => void;
   handleLanguageChange: (language: AppLanguage) => void;
   handleTerminalScrollbackLinesChange: (lines: number) => void;
-  handleVimKeybindingsChange: (enabled: boolean) => void;
+  handleSidePanelRoutingChange: (enabled: boolean) => void;
 }
 
 interface LanguageMenuItemProps {
@@ -241,7 +237,7 @@ function GeneralSection({
   handleSendBehaviorChange,
   handleLanguageChange,
   handleTerminalScrollbackLinesChange,
-  handleVimKeybindingsChange,
+  handleSidePanelRoutingChange,
 }: GeneralSectionProps) {
   const { t, i18n } = useTranslation();
   const activeLocale = getActiveLocale(i18n.language);
@@ -347,65 +343,23 @@ function GeneralSection({
             accessibilityLabel={t("settings.general.terminalScrollback.accessibilityLabel")}
           />
         </View>
-        <View style={[settingsStyles.row, settingsStyles.rowBorder]}>
-          <View style={settingsStyles.rowContent}>
-            <Text style={settingsStyles.rowTitle}>
-              {t("settings.general.vimKeybindings.label")}
-            </Text>
-            <Text style={settingsStyles.rowHint}>
-              {t("settings.general.vimKeybindings.description")}
-            </Text>
+        {supportsDesktopPaneSplits() ? (
+          <View style={[settingsStyles.row, settingsStyles.rowBorder]}>
+            <View style={settingsStyles.rowContent}>
+              <Text style={settingsStyles.rowTitle}>
+                {t("settings.general.sidePanelRouting.label")}
+              </Text>
+              <Text style={settingsStyles.rowHint}>
+                {t("settings.general.sidePanelRouting.description")}
+              </Text>
+            </View>
+            <Switch
+              value={settings.openSupportingTabsInSidePanel}
+              onValueChange={handleSidePanelRoutingChange}
+              accessibilityLabel={t("settings.general.sidePanelRouting.label")}
+            />
           </View>
-          <Switch
-            value={settings.vimKeybindings}
-            onValueChange={handleVimKeybindingsChange}
-            accessibilityLabel={t("settings.general.vimKeybindings.label")}
-          />
-        </View>
-      </View>
-    </SettingsSection>
-  );
-}
-
-interface DiagnosticsSectionProps {
-  audioEngine: ReturnType<typeof useAudioEngineOptional>;
-  isPlaybackTestRunning: boolean;
-  playbackTestResult: string | null;
-  handlePlaybackTest: () => Promise<void>;
-}
-
-function DiagnosticsSection({
-  audioEngine,
-  isPlaybackTestRunning,
-  playbackTestResult,
-  handlePlaybackTest,
-}: DiagnosticsSectionProps) {
-  const { t } = useTranslation();
-  const handlePlayPress = useCallback(() => {
-    void handlePlaybackTest();
-  }, [handlePlaybackTest]);
-
-  return (
-    <SettingsSection title={t("settings.diagnostics.title")}>
-      <View style={settingsStyles.card}>
-        <View style={settingsStyles.row}>
-          <View style={settingsStyles.rowContent}>
-            <Text style={settingsStyles.rowTitle}>{t("settings.diagnostics.testAudio")}</Text>
-            {playbackTestResult ? (
-              <Text style={settingsStyles.rowHint}>{playbackTestResult}</Text>
-            ) : null}
-          </View>
-          <Button
-            variant="secondary"
-            size="sm"
-            onPress={handlePlayPress}
-            disabled={!audioEngine || isPlaybackTestRunning}
-          >
-            {isPlaybackTestRunning
-              ? t("settings.diagnostics.playing")
-              : t("settings.diagnostics.playTest")}
-          </Button>
-        </View>
+        ) : null}
       </View>
     </SettingsSection>
   );
@@ -825,7 +779,11 @@ function SettingsSidebar({
               testID="settings-back-to-workspace"
             />
           </View>
-          <ScrollView style={sidebarStyles.scrollBody} showsVerticalScrollIndicator={false}>
+          <ScrollView
+            style={sidebarStyles.scrollBody}
+            showsVerticalScrollIndicator={false}
+            testID="settings-sidebar-scroll-body"
+          >
             {sidebarBody}
           </ScrollView>
         </View>
@@ -849,13 +807,10 @@ export default function SettingsScreen({ view, openAddHostIntent = null }: Setti
   const router = useRouter();
   const { theme } = useUnistyles();
   const { t } = useTranslation();
-  const audioEngine = useAudioEngineOptional();
   const { settings, isLoading: settingsLoading, updateSettings } = useAppSettings();
   const [isAddHostMethodVisible, setIsAddHostMethodVisible] = useState(false);
   const [isDirectHostVisible, setIsDirectHostVisible] = useState(false);
   const [isPasteLinkVisible, setIsPasteLinkVisible] = useState(false);
-  const [isPlaybackTestRunning, setIsPlaybackTestRunning] = useState(false);
-  const [playbackTestResult, setPlaybackTestResult] = useState<string | null>(null);
   const lastOpenedAddHostIntentRef = useRef<string | null>(null);
   const appVersion = resolveAppVersion();
   const appVersionText = appVersion ? `v${appVersion}` : "";
@@ -911,41 +866,12 @@ export default function SettingsScreen({ view, openAddHostIntent = null }: Setti
     [updateSettings],
   );
 
-  const handleVimKeybindingsChange = useCallback(
-    (vimKeybindings: boolean) => {
-      void updateSettings({ vimKeybindings });
+  const handleSidePanelRoutingChange = useCallback(
+    (openSupportingTabsInSidePanel: boolean) => {
+      void updateSettings({ openSupportingTabsInSidePanel });
     },
     [updateSettings],
   );
-
-  const handlePlaybackTest = useCallback(async () => {
-    if (!audioEngine || isPlaybackTestRunning) {
-      return;
-    }
-
-    setIsPlaybackTestRunning(true);
-    setPlaybackTestResult(null);
-
-    try {
-      const bytes = Buffer.from(THINKING_TONE_NATIVE_PCM_BASE64, "base64");
-      await audioEngine.initialize();
-      audioEngine.stop();
-      await audioEngine.play({
-        type: "audio/pcm;rate=16000;bits=16",
-        size: bytes.byteLength,
-        async arrayBuffer() {
-          return Uint8Array.from(bytes).buffer;
-        },
-      });
-      setPlaybackTestResult(null);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      console.error("[Settings] Playback test failed", error);
-      setPlaybackTestResult(t("settings.diagnostics.playbackFailed", { message }));
-    } finally {
-      setIsPlaybackTestRunning(false);
-    }
-  }, [audioEngine, isPlaybackTestRunning, t]);
 
   const closeAddConnectionFlow = useCallback(() => {
     setIsAddHostMethodVisible(false);
@@ -1108,22 +1034,13 @@ export default function SettingsScreen({ view, openAddHostIntent = null }: Setti
       switch (view.section) {
         case "preferences":
           return (
-            <>
-              <GeneralSection
-                settings={settings}
-                handleSendBehaviorChange={handleSendBehaviorChange}
-                handleLanguageChange={handleLanguageChange}
-                handleTerminalScrollbackLinesChange={handleTerminalScrollbackLinesChange}
-                handleVimKeybindingsChange={handleVimKeybindingsChange}
-              />
-              <AppearanceSection />
-              <DiagnosticsSection
-                audioEngine={audioEngine}
-                isPlaybackTestRunning={isPlaybackTestRunning}
-                playbackTestResult={playbackTestResult}
-                handlePlaybackTest={handlePlaybackTest}
-              />
-            </>
+            <GeneralSection
+              settings={settings}
+              handleSendBehaviorChange={handleSendBehaviorChange}
+              handleLanguageChange={handleLanguageChange}
+              handleTerminalScrollbackLinesChange={handleTerminalScrollbackLinesChange}
+              handleSidePanelRoutingChange={handleSidePanelRoutingChange}
+            />
           );
         case "shortcuts":
           return <KeyboardShortcutsSection />;

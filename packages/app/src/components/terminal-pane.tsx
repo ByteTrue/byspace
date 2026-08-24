@@ -1,5 +1,4 @@
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
-import { useRetainedPanelActive } from "@/components/retained-panel";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, Text, View, type PressableStateCallbackType } from "react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
@@ -209,8 +208,9 @@ export function TerminalPane({
   const scopeKey = useMemo(() => terminalScopeKey({ serverId, cwd }), [serverId, cwd]);
   const terminalStreamKey = useMemo(() => `${scopeKey}:${terminalId}`, [scopeKey, terminalId]);
   const focusClaimIdentity = isConnected ? `${connectionEpoch}:${terminalStreamKey}` : null;
-  const isPaneVisible = useRetainedPanelActive();
-  const isTerminalStreamActive = isWorkspaceFocused && isPaneVisible;
+  // Retained tabs keep their stream attached while the workspace remains focused;
+  // RetainedPanel controls presentation while focus ownership stays pane-local.
+  const isTerminalStreamActive = isWorkspaceFocused;
   // Keep the latest measured size for whichever client currently owns the pane,
   // but only dedupe resizes that this specific client has already pushed.
   const measuredTerminalSizeRef = useRef<{ rows: number; cols: number } | null>(null);

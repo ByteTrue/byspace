@@ -6,7 +6,7 @@ import { useSessionStore } from "@/stores/session-store";
 import { useWorkspaceDirectory } from "@/stores/session-store-hooks";
 import { useWorkspaceLayoutStore } from "@/stores/workspace-layout-store";
 import { clearCommandCenterFocusRestoreElement } from "@/utils/command-center-focus-restore";
-import { buildWorkspaceTabPersistenceKey } from "@/stores/workspace-tabs-store/state";
+import { buildWorkspaceTabPersistenceKey } from "@/workspace-tabs/model";
 import {
   describeWorkspaceFilePath,
   type WorkspaceFileSearchEntry,
@@ -132,7 +132,13 @@ export function useWorkspaceFileSearch(input: { enabled: boolean; query: string 
         filePath: path,
         persistenceKey: buildWorkspaceTabPersistenceKey({ serverId, workspaceId }),
         showMobileAgent: usePanelStore.getState().showMobileAgent,
-        openWorkspaceTabFocused: useWorkspaceLayoutStore.getState().openTabFocused,
+        openWorkspaceTabInFocusedPane: (workspaceKey, target, placement) =>
+          useWorkspaceLayoutStore.getState().openTab({
+            workspaceKey,
+            target,
+            intent: "reveal",
+            placement,
+          }),
         focusWorkspaceTab: useWorkspaceLayoutStore.getState().focusTab,
       });
     },

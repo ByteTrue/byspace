@@ -16,7 +16,7 @@ import { usePaneContext } from "@/panels/pane-context";
 import type { PanelDescriptor, PanelRegistration } from "@/panels/panel-registry";
 import { DEFAULT_MONO_FONT_STACK } from "@/styles/theme";
 import { useWorkspaceDirectory } from "@/stores/session-store-hooks";
-import type { WorkspaceTabTarget } from "@/stores/workspace-tabs-store";
+import type { WorkspaceTabTarget } from "@/workspace-tabs/model";
 
 const ThemedGitCommitHorizontal = withUnistyles(GitCommitHorizontal);
 
@@ -143,6 +143,8 @@ function useCommitDiffPanelDescriptor(
 
 export const commitDiffPanelRegistration: PanelRegistration<"commit_diff"> = {
   kind: "commit_diff",
+  resourceKey: (target) => target.sha,
+
   component: CommitDiffPanel,
   useDescriptor: useCommitDiffPanelDescriptor,
 };

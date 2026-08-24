@@ -209,6 +209,7 @@ export function MenuItem({
 }: PropsWithChildren<MenuItemProps>): ReactElement {
   const { selectItem } = useMenuContext("MenuItem");
   const [hovered, setHovered] = useState(false);
+  const [focused, setFocused] = useState(false);
 
   const isPending = status === "pending" || loading;
   const isSuccess = status === "success";
@@ -232,6 +233,8 @@ export function MenuItem({
   }, [isDisabled, selectItem, onSelect, closeOnSelect]);
   const handlePointerEnter = useCallback(() => setHovered(true), []);
   const handlePointerLeave = useCallback(() => setHovered(false), []);
+  const handleFocus = useCallback(() => setFocused(true), []);
+  const handleBlur = useCallback(() => setFocused(false), []);
 
   const itemPressableStyle = useCallback(
     ({ pressed }: PressableStateCallbackType) => [
@@ -240,9 +243,10 @@ export function MenuItem({
       isDisabled ? styles.itemDisabled : null,
       muted && !isDisabled ? styles.itemMuted : null,
       hovered && !pressed && !isDisabled ? styles.itemHovered : null,
+      focused && !isDisabled ? styles.itemHovered : null,
       pressed && !isDisabled ? styles.itemPressed : null,
     ],
-    [active, hovered, isDisabled, muted],
+    [active, focused, hovered, isDisabled, muted],
   );
 
   const itemTextStyle = useMemo(
@@ -254,6 +258,10 @@ export function MenuItem({
     ],
     [destructive, isSuccess, muted, isDisabled],
   );
+  const itemDataSet = useMemo(
+    () => ({ menuItem: "true", menuDisabled: isDisabled ? "true" : "false" }),
+    [isDisabled],
+  );
 
   const content = (
     <View
@@ -263,9 +271,12 @@ export function MenuItem({
     >
       <Pressable
         testID={testID}
-        accessibilityRole="button"
+        accessibilityRole="menuitem"
         disabled={isDisabled}
         onPress={handleItemPress}
+        onFocus={handleFocus}
+        onBlur={handleBlur}
+        dataSet={itemDataSet}
         style={itemPressableStyle}
       >
         {showSelectedCheck ? (
@@ -372,6 +383,8 @@ const styles = StyleSheet.create((theme) => ({
     borderWidth: theme.borderWidth[1],
     borderColor: "transparent",
     borderRadius: theme.borderRadius.md,
+    outlineWidth: 0,
+    outlineColor: "transparent",
   },
   itemHovered: {
     backgroundColor: theme.colors.surface2,

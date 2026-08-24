@@ -1,4 +1,5 @@
 import { useTranslation } from "react-i18next";
+import { View } from "react-native";
 import { FileDiff } from "lucide-react-native";
 import { withUnistyles } from "react-native-unistyles";
 import invariant from "tiny-invariant";
@@ -9,6 +10,7 @@ import type { PanelDescriptor, PanelRegistration } from "@/panels/panel-registry
 import { useWorkspaceDirectory } from "@/stores/session-store-hooks";
 
 const ThemedFileDiff = withUnistyles(FileDiff);
+const FILL_STYLE = { flex: 1 } as const;
 
 function WorkingDiffPanel() {
   const { serverId, workspaceId, target } = usePaneContext();
@@ -20,15 +22,17 @@ function WorkingDiffPanel() {
     return null;
   }
   return (
-    <GitDiffPane
-      serverId={serverId}
-      workspaceId={workspaceId}
-      cwd={cwd}
-      enabled={isActive}
-      asWorkspaceTab
-      focusPath={target.focusPath}
-      focusRequestId={target.focusRequestId}
-    />
+    <View style={FILL_STYLE} testID="working-diff-panel">
+      <GitDiffPane
+        serverId={serverId}
+        workspaceId={workspaceId}
+        cwd={cwd}
+        enabled={isActive}
+        asWorkspaceTab
+        focusPath={target.focusPath}
+        focusRequestId={target.focusRequestId}
+      />
+    </View>
   );
 }
 
@@ -45,6 +49,8 @@ function useWorkingDiffPanelDescriptor(): PanelDescriptor {
 
 export const workingDiffPanelRegistration: PanelRegistration<"working_diff"> = {
   kind: "working_diff",
+  resourceKey: () => "working_diff",
+
   component: WorkingDiffPanel,
   useDescriptor: useWorkingDiffPanelDescriptor,
 };

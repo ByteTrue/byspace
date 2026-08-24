@@ -229,6 +229,7 @@ const styles = StyleSheet.create((theme) => ({
 
 export const providerSubagentPanelRegistration: PanelRegistration<"provider_subagent"> = {
   kind: "provider_subagent",
+  resourceKey: (target) => `${target.parentAgentId}:${target.subagentId}`,
   component: ProviderSubagentPanel,
   useDescriptor: useProviderSubagentDescriptor,
 };

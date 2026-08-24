@@ -1,6 +1,6 @@
 import type { PluginWorkspacePanelContribution } from "@bytetrue/byspace-plugin";
 import type { InstalledPlugin } from "../types";
-import type { PluginWorkspaceTabTarget } from "@/stores/workspace-tabs-store";
+import type { PluginWorkspaceTabTarget } from "@/workspace-tabs/model";
 
 export function resolvePluginWorkspacePanel(
   plugin: InstalledPlugin | null,

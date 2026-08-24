@@ -2,9 +2,7 @@ import { describe, expect, it } from "vitest";
 import { normalizeLayout, type WorkspaceLayout } from "@/stores/workspace-layout-store";
 import { getFocusedAgentId } from "./context";
 
-function layout(
-  target: import("@/stores/workspace-tabs-store").WorkspaceTabTarget,
-): WorkspaceLayout {
+function layout(target: import("@/workspace-tabs/model").WorkspaceTabTarget): WorkspaceLayout {
   return normalizeLayout({
     focusedPaneId: "main",
     root: {

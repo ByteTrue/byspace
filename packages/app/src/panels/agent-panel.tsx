@@ -1,3 +1,4 @@
+import { openSidePanelView } from "@/workspace-tabs/side-panel";
 import { Button } from "@/components/ui/button";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import type { DaemonClient } from "@bytetrue/byspace-client/internal/daemon-client";
@@ -79,7 +80,6 @@ import { WorkspaceDraftAgentTab } from "@/composer/draft/workspace-tab";
 import { AgentTaskList } from "@/composer/task-list";
 import { useCreateFlowStore } from "@/stores/create-flow-store";
 import { buildDraftStoreKey, generateDraftId } from "@/stores/draft-keys";
-import { usePanelStore } from "@/stores/panel-store";
 import {
   selectAgentTimelineState,
   selectAgentTurnPresentation,
@@ -87,7 +87,7 @@ import {
   useSessionStore,
 } from "@/stores/session-store";
 import { useWorkspaceLayoutStore } from "@/stores/workspace-layout-store";
-import { buildWorkspaceTabPersistenceKey } from "@/stores/workspace-tabs-store";
+import { buildWorkspaceTabPersistenceKey } from "@/workspace-tabs/model";
 import type { Theme } from "@/styles/theme";
 import {
   useHideFinishedProviderSubagents,
@@ -431,6 +431,7 @@ export function AgentConversationPanel() {
 
 export const agentPanelRegistration: PanelRegistration<"agent"> = {
   kind: "agent",
+  resourceKey: (target) => target.agentId,
   component: AgentConversationPanel,
   useDescriptor: useAgentPanelDescriptor,
 };
@@ -1623,28 +1624,19 @@ function ActiveAgentComposer({
     () => [workspaceAttachmentScopeKey],
     [workspaceAttachmentScopeKey],
   );
-  const openFileExplorerForCheckout = usePanelStore((state) => state.openFileExplorerForCheckout);
-  const setExplorerTabForCheckout = usePanelStore((state) => state.setExplorerTabForCheckout);
   const handleOpenWorkspaceAttachment = useCallback(
     (attachment: WorkspaceComposerAttachment) => {
       if (attachment.kind !== "review") {
         return;
       }
-      const checkout = {
-        serverId,
-        cwd: attachment.attachment.cwd,
-        isGit: true,
-      };
-      openFileExplorerForCheckout({
-        checkout,
+      openSidePanelView({
         isCompact: isCompactFormFactor,
-      });
-      setExplorerTabForCheckout({
-        ...checkout,
-        tab: "changes",
+        workspaceKey: buildWorkspaceTabPersistenceKey({ serverId, workspaceId }),
+        checkout: { serverId, cwd: attachment.attachment.cwd, isGit: true },
+        view: "changes",
       });
     },
-    [isCompactFormFactor, openFileExplorerForCheckout, serverId, setExplorerTabForCheckout],
+    [isCompactFormFactor, serverId, workspaceId],
   );
 
   const handleClientSlashCommand = useCallback(

@@ -5,6 +5,18 @@ import {
   workspaceTabTargetsEqual,
 } from "./identity";
 
+describe("New tab identity", () => {
+  it("stays outside deterministic target identity", () => {
+    const target = { kind: "new_tab" } as const;
+
+    expect(normalizeWorkspaceTabTarget(target)).toEqual(target);
+    expect(workspaceTabTargetsEqual(target, target)).toBe(false);
+    expect(() => buildDeterministicWorkspaceTabId(target)).toThrow(
+      "New tabs do not have deterministic target identities",
+    );
+  });
+});
+
 describe("provider subagent tab identity", () => {
   test("normalizes and compares the parent and provider child as one tab identity", () => {
     const target = normalizeWorkspaceTabTarget({
@@ -68,6 +80,19 @@ describe("working diff tab identity", () => {
     expect(buildDeterministicWorkspaceTabId(target)).toBe("working_diff");
     expect(buildDeterministicWorkspaceTabId(nextFocus)).toBe("working_diff");
   });
+});
+
+describe("workspace utility panel identity", () => {
+  it.each(["files", "pull_request"] as const)(
+    "normalizes and deterministically keys %s",
+    (kind) => {
+      const target = { kind };
+
+      expect(normalizeWorkspaceTabTarget(target)).toEqual(target);
+      expect(buildDeterministicWorkspaceTabId(target)).toBe(kind);
+      expect(workspaceTabTargetsEqual(target, target)).toBe(true);
+    },
+  );
 });
 
 describe("commit diff tab identity", () => {

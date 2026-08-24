@@ -6,6 +6,10 @@ import type { PinnedTabTarget } from "@/workspace-pins/target";
 export interface TabTargetHandlers {
   createDraft: () => void;
   createTerminal: () => void;
+  openChanges: () => void;
+  openFiles: () => void;
+  openPullRequest: () => void;
+
   createTerminalWithProfile: (profile: TerminalProfileInput) => void;
 }
 
@@ -22,6 +26,19 @@ export function runPinnedTabTarget(
     handlers.createTerminal();
     return;
   }
+  if (target.kind === "working_diff") {
+    handlers.openChanges();
+    return;
+  }
+  if (target.kind === "files") {
+    handlers.openFiles();
+    return;
+  }
+  if (target.kind === "pull_request") {
+    handlers.openPullRequest();
+    return;
+  }
+
   const profile = profiles.find((entry) => entry.id === target.profileId);
   if (!profile) {
     return;

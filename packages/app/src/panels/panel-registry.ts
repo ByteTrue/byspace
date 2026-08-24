@@ -1,5 +1,5 @@
 import type { ComponentType } from "react";
-import type { WorkspaceTabTarget } from "@/stores/workspace-tabs-store";
+import type { WorkspaceTabTarget } from "@/workspace-tabs/model";
 import type { SidebarStateBucket } from "@/utils/sidebar-agent-state";
 
 export interface PanelIconProps {
@@ -29,10 +29,7 @@ export interface PanelRegistration<
     target: Extract<WorkspaceTabTarget, { kind: K }>,
     context: PanelDescriptorContext,
   ): PanelDescriptor;
-  confirmClose?(
-    target: Extract<WorkspaceTabTarget, { kind: K }>,
-    context: PanelDescriptorContext,
-  ): Promise<boolean>;
+  resourceKey(target: Extract<WorkspaceTabTarget, { kind: K }>): string;
 }
 
 const panelRegistry = new Map<WorkspaceTabTarget["kind"], PanelRegistration>();
