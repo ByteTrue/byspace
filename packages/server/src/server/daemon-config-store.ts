@@ -378,6 +378,9 @@ function mergeMutableConfigIntoPersistedConfig(params: {
         ? { terminalAgentHooks: mutable.terminalAgentHooks }
         : {}),
       appendSystemPrompt: mutable.appendSystemPrompt,
+      ...(mutable.defaultTerminalShell !== undefined
+        ? { defaultTerminalShell: mutable.defaultTerminalShell }
+        : {}),
       ...(mutable.terminalProfiles !== undefined
         ? { terminalProfiles: mutable.terminalProfiles }
         : {}),

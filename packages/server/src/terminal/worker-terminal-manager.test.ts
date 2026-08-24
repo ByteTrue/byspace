@@ -540,6 +540,40 @@ it("lists subdirectory terminals when querying the workspace root", async () => 
   expect(rootTerminals.map((terminal) => terminal.id)).toEqual([created.id]);
 });
 
+it("applies the configured default shell only when no shell is specified", async () => {
+  const worker = new FakeTerminalWorker();
+  manager = createWorkerTerminalManager({
+    forkWorker: () => worker,
+    getDefaultTerminalShell: () => "pwsh.exe",
+  });
+  const createPromise = manager.createTerminal({ cwd: "/workspace", workspaceId: "ws-test" });
+  await waitForCondition(
+    () => worker.sentMessages.some((message) => message.type === "createTerminal"),
+    1000,
+  );
+  const createMessage = worker.sentMessages.find((message) => message.type === "createTerminal");
+  if (!createMessage || createMessage.type !== "createTerminal") {
+    throw new Error("createTerminal request was not sent");
+  }
+  expect(createMessage.options.shell).toBe("pwsh.exe");
+  worker.emitWorkerMessage({
+    type: "response",
+    requestId: createMessage.requestId,
+    ok: true,
+    result: {
+      terminal: {
+        id: "terminal-default-shell",
+        name: "Terminal 1",
+        cwd: "/workspace",
+        workspaceId: "ws-test",
+        activity: null,
+      },
+      state: createTerminalState(),
+    },
+  });
+  await createPromise;
+});
+
 it("lists terminals locally without waiting on the worker", async () => {
   const worker = new FakeTerminalWorker();
   manager = createWorkerTerminalManager({

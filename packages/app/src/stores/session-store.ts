@@ -321,6 +321,7 @@ export interface DaemonServerInfo {
   daemonPublicKeyB64?: string;
   dataRelay?: ServerInfoStatusPayload["dataRelay"];
   capabilities?: ServerCapabilities;
+  availableTerminalShells?: ServerInfoStatusPayload["availableTerminalShells"];
   features?: ServerInfoStatusPayload["features"];
 }
 
@@ -731,6 +732,7 @@ function isSessionServerInfoUnchanged(input: {
   nextDaemonPublicKeyB64: string | undefined;
   nextDataRelay: ServerInfoStatusPayload["dataRelay"] | undefined;
   nextCapabilities: ServerCapabilities | undefined;
+  nextAvailableTerminalShells: ServerInfoStatusPayload["availableTerminalShells"];
   nextFeatures: ServerInfoStatusPayload["features"] | undefined;
   nextServerId: string;
 }): boolean {
@@ -741,19 +743,22 @@ function isSessionServerInfoUnchanged(input: {
     nextDaemonPublicKeyB64,
     nextDataRelay,
     nextCapabilities,
+    nextAvailableTerminalShells,
     nextFeatures,
   } = input;
   const prevHostname = currentServerInfo?.hostname?.trim() || null;
   const prevVersion = currentServerInfo?.version?.trim() || null;
-  return (
-    currentServerInfo?.serverId === input.nextServerId &&
-    prevHostname === nextHostname &&
-    prevVersion === nextVersion &&
-    currentServerInfo?.daemonPublicKeyB64 === nextDaemonPublicKeyB64 &&
-    currentServerInfo?.dataRelay?.configured === nextDataRelay?.configured &&
-    areServerCapabilitiesEqual(currentServerInfo?.capabilities, nextCapabilities) &&
-    areServerInfoFeaturesEqual(currentServerInfo?.features, nextFeatures)
-  );
+  return [
+    currentServerInfo?.serverId === input.nextServerId,
+    prevHostname === nextHostname,
+    prevVersion === nextVersion,
+    currentServerInfo?.daemonPublicKeyB64 === nextDaemonPublicKeyB64,
+    currentServerInfo?.dataRelay?.configured === nextDataRelay?.configured,
+    areServerCapabilitiesEqual(currentServerInfo?.capabilities, nextCapabilities),
+    JSON.stringify(currentServerInfo?.availableTerminalShells ?? null) ===
+      JSON.stringify(nextAvailableTerminalShells ?? null),
+    areServerInfoFeaturesEqual(currentServerInfo?.features, nextFeatures),
+  ].every(Boolean);
 }
 
 export const useSessionStore = create<SessionStore>()(
@@ -931,6 +936,7 @@ export const useSessionStore = create<SessionStore>()(
           const nextDaemonPublicKeyB64 = info.daemonPublicKeyB64?.trim() || undefined;
           const nextDataRelay = info.dataRelay;
           const nextCapabilities = info.capabilities;
+          const nextAvailableTerminalShells = info.availableTerminalShells;
           const nextFeatures = info.features;
 
           if (
@@ -941,6 +947,7 @@ export const useSessionStore = create<SessionStore>()(
               nextDaemonPublicKeyB64,
               nextDataRelay,
               nextCapabilities,
+              nextAvailableTerminalShells,
               nextFeatures,
               nextServerId: info.serverId,
             })
@@ -961,6 +968,9 @@ export const useSessionStore = create<SessionStore>()(
                   ...(nextDaemonPublicKeyB64 ? { daemonPublicKeyB64: nextDaemonPublicKeyB64 } : {}),
                   ...(nextDataRelay ? { dataRelay: nextDataRelay } : {}),
                   ...(nextCapabilities ? { capabilities: nextCapabilities } : {}),
+                  ...(nextAvailableTerminalShells
+                    ? { availableTerminalShells: nextAvailableTerminalShells }
+                    : {}),
                   ...(nextFeatures ? { features: nextFeatures } : {}),
                 },
               },

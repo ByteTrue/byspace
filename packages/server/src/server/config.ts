@@ -456,6 +456,7 @@ function resolveProviderCatalogRefreshTimeout(
 function resolveProfileLists(persisted: ReturnType<typeof loadPersistedConfig>) {
   return {
     terminalProfiles: persisted.daemon?.terminalProfiles,
+    defaultTerminalShell: persisted.daemon?.defaultTerminalShell,
     agentProfiles: persisted.daemon?.agentProfiles,
   };
 }
@@ -503,6 +504,7 @@ export function loadConfig(
     autoArchiveAfterMerge,
     appendSystemPrompt,
     terminalProfiles,
+    defaultTerminalShell,
     agentProfiles,
     hostnames,
     trustedProxies,
@@ -546,6 +548,7 @@ export function loadConfig(
     terminalAgentHooks: persisted.daemon?.terminalAgentHooks,
     appendSystemPrompt,
     terminalProfiles,
+    defaultTerminalShell,
     agentProfiles,
     mcpDebug: env.MCP_DEBUG === "1",
     isDev: resolveBySpaceNodeEnv(env) === "development",

@@ -9,6 +9,10 @@ import type { AgentManager, AgentMetricsSnapshot } from "./agent/agent-manager.j
 import type { AgentStorage } from "./agent/agent-storage.js";
 import type { DownloadTokenStore } from "./file-download/token-store.js";
 import type { TerminalManager } from "../terminal/terminal-manager.js";
+import {
+  getAvailableTerminalShells,
+  type AvailableTerminalShell,
+} from "../terminal/terminal-shells.js";
 import type pino from "pino";
 import type { ProjectRegistry, WorkspaceRegistry } from "./workspace-registry.js";
 import type { ScheduleService } from "./schedule/service.js";
@@ -523,6 +527,7 @@ export class VoiceAssistantWebSocketServer {
     | ((workspaceId: string, oldBranch: string | null, newBranch: string | null) => void)
     | null;
   private serverCapabilities: ServerCapabilities | undefined;
+  private readonly availableTerminalShells: AvailableTerminalShell[];
   private readonly runtimeMetrics = new WebSocketRuntimeMetricsWindow();
   private lastRuntimeMetricsSnapshot: WebSocketRuntimeDiagnosticPayload | null = null;
   private runtimeMetricsInterval: ReturnType<typeof setInterval> | null = null;
@@ -587,6 +592,7 @@ export class VoiceAssistantWebSocketServer {
     }
     this.daemonVersion = daemonVersion.trim();
     this.daemonPublicKeyB64 = daemonPublicKeyB64;
+    this.availableTerminalShells = getAvailableTerminalShells();
     this.daemonRuntimeConfig = daemonRuntimeConfig;
     this.agentManager = agentManager;
     this.agentStorage = agentStorage;
@@ -1412,6 +1418,7 @@ export class VoiceAssistantWebSocketServer {
       version: this.daemonVersion,
       ...(this.daemonPublicKeyB64 ? { daemonPublicKeyB64: this.daemonPublicKeyB64 } : {}),
       dataRelay: { configured: this.remoteWebServiceManager?.isDataRelayConfigured() ?? false },
+      availableTerminalShells: this.availableTerminalShells,
       ...(this.serverCapabilities ? { capabilities: this.serverCapabilities } : {}),
       features: {
         // COMPAT(providerOptions): added in v0.5.0-beta.1 on 2026-08-12; remove the gate after 2027-02-12.
@@ -1422,6 +1429,8 @@ export class VoiceAssistantWebSocketServer {
         agentProfiles: true,
         // COMPAT(agentConfigApply): added in v0.6.0; remove the gate after 2027-02-21.
         agentConfigApply: true,
+        // COMPAT(defaultTerminalShell): added in v0.6.0; remove the gate after 2027-02-21.
+        defaultTerminalShell: true,
         // COMPAT(speechModelSelection): added in v0.5.0, remove gate after 2027-02-04.
         speechModelSelection: true,
         // COMPAT(dictationRefinement): added in v0.5.0, remove gate after 2027-02-04.

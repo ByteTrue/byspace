@@ -28,6 +28,7 @@ export interface WorkerCreateTerminalOptions {
   name?: string;
   title?: string;
   env?: Record<string, string>;
+  shell?: string;
   command?: string;
   args?: string[];
   rows?: number;

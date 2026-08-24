@@ -191,6 +191,7 @@ export const PersistedConfigSchema = z
         terminalAgentHooks: TerminalAgentHookSettingsSchema.optional(),
         appendSystemPrompt: z.string().optional(),
         terminalProfiles: z.array(TerminalProfileSchema).optional(),
+        defaultTerminalShell: z.string().min(1).nullable().optional(),
         agentProfiles: z.array(AgentProfileSchema).optional(),
         cors: z
           .object({

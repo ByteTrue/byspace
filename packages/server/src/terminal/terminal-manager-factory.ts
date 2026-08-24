@@ -3,6 +3,7 @@ import { createWorkerTerminalManager } from "./worker-terminal-manager.js";
 
 export interface ConfiguredTerminalManagerOptions {
   getTerminalActivityUrl?: () => string | null;
+  getDefaultTerminalShell?: () => string | null | undefined;
   agentCliToken?: string;
 }
 

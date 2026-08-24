@@ -50,7 +50,10 @@ import {
   useHosts,
 } from "@/runtime/host-runtime";
 import { ProvidersSection } from "@/screens/settings/providers-section";
-import { OtherTerminalProfilesSection } from "@/screens/settings/provider-terminal-settings";
+import {
+  DefaultTerminalShellSection,
+  OtherTerminalProfilesSection,
+} from "@/screens/settings/provider-terminal-settings";
 import { ProviderUsageSettingsSection } from "@/provider-usage/settings-section";
 import { useProviderUsage } from "@/provider-usage/use-provider-usage";
 import { SettingsSection } from "@/screens/settings/settings-section";
@@ -277,6 +280,7 @@ export function HostProvidersPage({ serverId }: { serverId: string }) {
   return (
     <View>
       <ProvidersSection serverId={serverId} />
+      <DefaultTerminalShellSection serverId={serverId} />
       <OtherTerminalProfilesSection serverId={serverId} />
     </View>
   );

@@ -56,6 +56,7 @@ vi.mock("react-native", () => ({
     onHoverOut,
     accessibilityRole,
     accessibilityLabel,
+    accessibilityState,
     disabled,
     testID,
   }: {
@@ -67,6 +68,7 @@ vi.mock("react-native", () => ({
     onHoverOut?: () => void;
     accessibilityRole?: string;
     accessibilityLabel?: string;
+    accessibilityState?: { expanded?: boolean };
     disabled?: boolean;
     testID?: string;
   }) =>
@@ -76,6 +78,10 @@ vi.mock("react-native", () => ({
         role: accessibilityRole,
         "aria-label": accessibilityLabel,
         "aria-disabled": disabled ? "true" : undefined,
+        "aria-expanded":
+          accessibilityState?.expanded === undefined
+            ? undefined
+            : String(accessibilityState.expanded),
         "data-testid": testID,
         onClick: disabled ? undefined : onPress,
         onMouseEnter: onHoverIn,
@@ -98,6 +104,7 @@ vi.mock("lucide-react-native", () => {
   const icon = (name: string) => () => React.createElement("span", { "data-icon": name });
   return {
     ChevronRight: icon("ChevronRight"),
+    ChevronDown: icon("ChevronDown"),
     MoreHorizontal: icon("MoreHorizontal"),
     Trash2: icon("Trash2"),
   };
@@ -239,7 +246,7 @@ vi.mock("@/stores/provider-settings-store", () => ({
 }));
 
 vi.mock("@/components/provider-catalog-list", () => ({
-  ProviderCatalogList: () => null,
+  ProviderCatalogList: () => React.createElement("div", { "data-testid": "provider-catalog-list" }),
 }));
 
 vi.mock("@/hooks/use-providers-snapshot", () => ({
@@ -456,5 +463,21 @@ describe("ProvidersSection", () => {
     expect(patchConfigMock).toHaveBeenCalledWith({
       providers: { claude: { enabled: false } },
     });
+  });
+
+  it("keeps the provider catalog collapsed until requested", () => {
+    snapshotState.entries = [claudeEntry];
+    configState.config = makeConfig();
+    render();
+    expect(container?.querySelector('[data-testid="provider-catalog-list"]')).toBeNull();
+    const toggle = container?.querySelector<HTMLElement>(
+      '[data-testid="host-page-add-provider-toggle"]',
+    );
+    expect(toggle?.getAttribute("aria-expanded")).toBe("false");
+    act(() => {
+      toggle?.dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+    });
+    expect(container?.querySelector('[data-testid="provider-catalog-list"]')).not.toBeNull();
+    expect(toggle?.getAttribute("aria-expanded")).toBe("true");
   });
 });

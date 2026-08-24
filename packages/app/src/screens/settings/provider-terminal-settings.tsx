@@ -32,6 +32,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Switch } from "@/components/ui/switch";
 import { useDaemonConfig } from "@/hooks/use-daemon-config";
+import { useHostFeature } from "@/runtime/host-features";
 import { useHostRuntimeIsConnected } from "@/runtime/host-runtime";
 import { SettingsSection } from "@/screens/settings/settings-section";
 import {
@@ -48,6 +49,40 @@ import { settingsStyles } from "@/styles/settings";
 import { confirmDialog } from "@/utils/confirm-dialog";
 import { useTranslation } from "react-i18next";
 import type { Theme } from "@/styles/theme";
+
+interface DefaultTerminalShellOption {
+  value: string | null;
+  key: string;
+}
+
+const DEFAULT_TERMINAL_SHELL_OPTIONS: readonly DefaultTerminalShellOption[] = [
+  { value: null, key: "systemDefault" },
+  { value: "pwsh.exe", key: "powerShell7" },
+  { value: "powershell.exe", key: "windowsPowerShell" },
+  { value: "cmd.exe", key: "commandPrompt" },
+  { value: "bash", key: "bash" },
+  { value: "zsh", key: "zsh" },
+];
+
+function resolveDefaultTerminalShellOptions(
+  availableTerminalShells: readonly string[] | undefined,
+): DefaultTerminalShellOption[] {
+  if (!availableTerminalShells) {
+    return [...DEFAULT_TERMINAL_SHELL_OPTIONS];
+  }
+
+  const options: DefaultTerminalShellOption[] = [DEFAULT_TERMINAL_SHELL_OPTIONS[0]];
+  for (const command of availableTerminalShells) {
+    const option = DEFAULT_TERMINAL_SHELL_OPTIONS.find((candidate) => candidate.value === command);
+    if (option && !options.some((candidate) => candidate.value === option.value)) {
+      options.push(option);
+    }
+    if (command === "pwsh") {
+      options.push({ value: command, key: "powerShell7" });
+    }
+  }
+  return options;
+}
 
 const EMPTY_PROFILE_DRAFT: ProfileDraft = { name: "", command: "", args: "" };
 
@@ -502,6 +537,119 @@ function ProviderTerminalHook({
   );
 }
 
+interface DefaultTerminalShellOptionProps {
+  option: (typeof DEFAULT_TERMINAL_SHELL_OPTIONS)[number];
+  selected: boolean;
+  onSelect: (value: string | null) => void | Promise<void>;
+  label: string;
+}
+
+function DefaultTerminalShellOption({
+  option,
+  selected,
+  onSelect,
+  label,
+}: DefaultTerminalShellOptionProps) {
+  const handleSelect = useCallback(() => void onSelect(option.value), [onSelect, option.value]);
+  return (
+    <DropdownMenuItem selected={selected} onSelect={handleSelect}>
+      {label}
+    </DropdownMenuItem>
+  );
+}
+
+export function DefaultTerminalShellSection({ serverId }: { serverId: string }) {
+  const { t } = useTranslation();
+  const isConnected = useHostRuntimeIsConnected(serverId);
+  const { config, patchConfig } = useDaemonConfig(serverId);
+  const supportsDefaultTerminalShell = useHostFeature(serverId, "defaultTerminalShell");
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const availableTerminalShells = useSessionStore(
+    (state) => state.sessions[serverId]?.serverInfo?.availableTerminalShells,
+  );
+  const shellOptions = useMemo(
+    () => resolveDefaultTerminalShellOptions(availableTerminalShells),
+    [availableTerminalShells],
+  );
+  const selectedShell =
+    typeof config?.defaultTerminalShell === "string" ? config.defaultTerminalShell : null;
+  const selectedOption = shellOptions.find((option) => option.value === selectedShell);
+  const selectedLabel = selectedOption
+    ? String(t(`settings.providers.terminal.defaultShell.options.${selectedOption.key}`))
+    : (selectedShell ??
+      String(t("settings.providers.terminal.defaultShell.options.systemDefault")));
+  const handleSelect = useCallback(
+    async (value: string | null) => {
+      if (!isConnected || config == null) return;
+      setIsSaving(true);
+      setSaveError(null);
+      try {
+        await patchConfig({ defaultTerminalShell: value });
+      } catch (error) {
+        setSaveError(error instanceof Error ? error.message : t("common.errors.unableToSave"));
+      } finally {
+        setIsSaving(false);
+      }
+    },
+    [config, isConnected, patchConfig, t],
+  );
+
+  if (isConnected && !supportsDefaultTerminalShell) {
+    return null;
+  }
+
+  return (
+    <SettingsSection title={t("settings.providers.terminal.defaultShell.sectionTitle")}>
+      <View style={settingsStyles.card} testID="default-terminal-shell-card">
+        <View style={settingsStyles.row}>
+          <View style={settingsStyles.rowContent}>
+            <Text style={settingsStyles.rowTitle}>
+              {t("settings.providers.terminal.defaultShell.label")}
+            </Text>
+            <Text style={settingsStyles.rowHint}>
+              {t("settings.providers.terminal.defaultShell.hint")}
+            </Text>
+          </View>
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              style={styles.defaultShellTrigger}
+              accessibilityRole="button"
+              accessibilityLabel={t("settings.providers.terminal.defaultShell.accessibilityLabel", {
+                value: selectedLabel,
+              })}
+            >
+              <Text style={styles.defaultShellValue} numberOfLines={1}>
+                {isSaving ? t("settings.providers.terminal.defaultShell.saving") : selectedLabel}
+              </Text>
+              <ThemedChevronRight uniProps={mutedIconProps} />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" width={220}>
+              {shellOptions.map((option) => (
+                <DefaultTerminalShellOption
+                  key={option.key + String(option.value)}
+                  option={option}
+                  selected={option.value === selectedShell}
+                  label={t(`settings.providers.terminal.defaultShell.options.${option.key}`)}
+                  onSelect={handleSelect}
+                />
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </View>
+        {saveError ? (
+          <InlineAlert
+            variant="error"
+            title={t("common.errors.unableToSave")}
+            description={saveError}
+            testID="default-terminal-shell-save-error"
+          />
+        ) : null}
+      </View>
+    </SettingsSection>
+  );
+}
+
 export function OtherTerminalProfilesSection({ serverId }: { serverId: string }) {
   const { t } = useTranslation();
   const isConnected = useHostRuntimeIsConnected(serverId);
@@ -584,6 +732,19 @@ export function OtherTerminalProfilesSection({ serverId }: { serverId: string })
 }
 
 const styles = StyleSheet.create((theme) => ({
+  defaultShellTrigger: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    maxWidth: 220,
+    minWidth: 120,
+  },
+  defaultShellValue: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.sm,
+    flexShrink: 1,
+  },
+
   providerBody: {
     gap: theme.spacing[6],
   },

@@ -345,6 +345,7 @@ export interface BySpaceDaemonConfig {
   terminalAgentHooks?: MutableDaemonConfig["terminalAgentHooks"];
   appendSystemPrompt?: string;
   terminalProfiles?: TerminalProfile[];
+  defaultTerminalShell?: string | null;
   agentProfiles?: AgentProfile[];
   staticDir: string;
   mcpDebug: boolean;
@@ -473,6 +474,7 @@ function createInitialMutableDaemonConfig(config: BySpaceDaemonConfig): MutableD
     enableTerminalAgentHooks: config.enableTerminalAgentHooks ?? false,
     terminalAgentHooks: config.terminalAgentHooks,
     appendSystemPrompt: config.appendSystemPrompt ?? "",
+    defaultTerminalShell: config.defaultTerminalShell,
   };
 
   if (config.terminalProfiles !== undefined) {
@@ -548,6 +550,10 @@ export async function createBySpaceDaemon(
   let workspaceRegistry: FileBackedWorkspaceRegistry | null = null;
   const terminalManager = createConfiguredTerminalManager({
     getTerminalActivityUrl: () => createTerminalActivityUrl(boundListenTarget),
+    getDefaultTerminalShell: () => {
+      const shell: unknown = daemonConfigStore.get().defaultTerminalShell;
+      return typeof shell === "string" ? shell : null;
+    },
     agentCliToken,
   });
   applyTerminalAgentHookSetting({ store: daemonConfigStore, logger });

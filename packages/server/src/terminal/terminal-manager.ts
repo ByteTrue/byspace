@@ -61,6 +61,7 @@ export interface TerminalManager {
     name?: string;
     title?: string;
     env?: Record<string, string>;
+    shell?: string;
     command?: string;
     args?: string[];
     rows?: number;
@@ -98,6 +99,20 @@ export interface TerminalManager {
 
 export interface TerminalManagerOptions {
   getTerminalActivityUrl?: () => string | null;
+  getDefaultTerminalShell?: () => string | null | undefined;
+}
+
+function resolveConfiguredTerminalShell(
+  options: { shell?: string; command?: string },
+  getDefaultTerminalShell: TerminalManagerOptions["getDefaultTerminalShell"],
+): string | undefined {
+  if (options.shell !== undefined) {
+    return options.shell;
+  }
+  if (options.command !== undefined) {
+    return undefined;
+  }
+  return getDefaultTerminalShell?.() ?? undefined;
 }
 
 function createActivityToken(): string {
@@ -324,6 +339,7 @@ export function createTerminalManager(
       cols?: number;
       activityToken?: string;
       activityUrl?: string | null;
+      shell?: string;
     }): Promise<TerminalSession> {
       assertAbsolutePath(options.cwd);
 
@@ -343,6 +359,10 @@ export function createTerminalManager(
         BYSPACE_ACTIVITY_TOKEN: activityToken,
         ...(terminalActivityUrl ? { BYSPACE_TERMINAL_ACTIVITY_URL: terminalActivityUrl } : {}),
       };
+      const configuredShell = resolveConfiguredTerminalShell(
+        options,
+        managerOptions.getDefaultTerminalShell,
+      );
       terminalActivityTokenById.set(terminalId, activityToken);
       let session: TerminalSession;
       try {
@@ -355,6 +375,7 @@ export function createTerminalManager(
             ...(options.title ? { title: options.title } : {}),
             ...(options.command ? { command: options.command } : {}),
             ...(options.args ? { args: options.args } : {}),
+            ...(configuredShell ? { shell: configuredShell } : {}),
             ...(options.rows !== undefined ? { rows: options.rows } : {}),
             ...(options.cols !== undefined ? { cols: options.cols } : {}),
             ...(mergedEnv ? { env: mergedEnv } : {}),

@@ -6,7 +6,9 @@ import { windowsExecutableResolution } from "./windows.js";
 
 export { quoteWindowsArgument, quoteWindowsCommand } from "../utils/windows-command.js";
 
-type Which = (command: string, options: { all: true }) => Promise<string[]>;
+type Which = ((command: string, options: { all: true }) => Promise<string[]>) & {
+  sync: (command: string) => string;
+};
 
 const require = createRequire(import.meta.url);
 const which = require("which") as Which;
@@ -141,4 +143,12 @@ export async function findExecutable(
 
 export async function isCommandAvailable(command: string): Promise<boolean> {
   return (await findExecutable(command)) !== null;
+}
+
+export function isCommandAvailableSync(command: string): boolean {
+  try {
+    return Boolean(which.sync(command));
+  } catch {
+    return false;
+  }
 }

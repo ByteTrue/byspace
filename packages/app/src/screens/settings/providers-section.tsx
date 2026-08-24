@@ -35,7 +35,7 @@ import { SettingsSection } from "@/screens/settings/settings-section";
 import { useProviderSettingsStore } from "@/stores/provider-settings-store";
 import { confirmDialog } from "@/utils/confirm-dialog";
 import { filterSelectableModels } from "@/provider-selection/model-catalog";
-import { ChevronRight, MoreHorizontal, Trash2 } from "lucide-react-native";
+import { ChevronDown, ChevronRight, MoreHorizontal, Trash2 } from "lucide-react-native";
 
 type ProviderDefinition = ReturnType<typeof buildProviderDefinitions>[number];
 type ProviderEntry = NonNullable<ReturnType<typeof useProvidersSnapshot>["entries"]>[number];
@@ -324,6 +324,7 @@ export interface ProvidersSectionProps {
 
 export function ProvidersSection({ serverId }: ProvidersSectionProps) {
   const { t } = useTranslation();
+  const { theme } = useUnistyles();
   const isConnected = useHostRuntimeIsConnected(serverId);
   const supportsProviderRemoval = useHostFeature(serverId, "providerRemoval");
   const { entries, isLoading, refresh } = useProvidersSnapshot(serverId);
@@ -333,6 +334,7 @@ export function ProvidersSection({ serverId }: ProvidersSectionProps) {
   const [removingProviderId, setRemovingProviderId] = useState<string | null>(null);
   const removingProviderIdRef = useRef<string | null>(null);
   const [installingProviderId, setInstallingProviderId] = useState<string | null>(null);
+  const [isAddProviderOpen, setIsAddProviderOpen] = useState(false);
 
   const providerDefinitions = useMemo(() => buildProviderDefinitions(entries), [entries]);
   const hasServer = serverId.length > 0;
@@ -411,6 +413,43 @@ export function ProvidersSection({ serverId }: ProvidersSectionProps) {
     },
     [installingProviderId, patchConfig, refresh, t],
   );
+  const addProviderToggleStyle = useCallback(
+    ({ pressed, hovered }: PressableStateCallbackType & { hovered?: boolean }) => [
+      styles.menuButton,
+      (hovered || pressed) && styles.menuButtonHovered,
+      pressed && styles.menuButtonPressed,
+    ],
+    [],
+  );
+  const handleAddProviderToggle = useCallback(() => {
+    setIsAddProviderOpen((open) => !open);
+  }, []);
+  const addProviderToggleAccessibilityState = useMemo(
+    () => ({ expanded: isAddProviderOpen }),
+    [isAddProviderOpen],
+  );
+  const addProviderToggle = useMemo(() => {
+    const Chevron = isAddProviderOpen ? ChevronDown : ChevronRight;
+    return (
+      <Pressable
+        onPress={handleAddProviderToggle}
+        style={addProviderToggleStyle}
+        accessibilityRole="button"
+        accessibilityLabel={t("settings.providers.addProvider")}
+        accessibilityState={addProviderToggleAccessibilityState}
+        testID="host-page-add-provider-toggle"
+      >
+        <Chevron size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />
+      </Pressable>
+    );
+  }, [
+    addProviderToggleAccessibilityState,
+    addProviderToggleStyle,
+    handleAddProviderToggle,
+    isAddProviderOpen,
+    t,
+    theme,
+  ]);
 
   return (
     <>
@@ -459,12 +498,15 @@ export function ProvidersSection({ serverId }: ProvidersSectionProps) {
           title={t("settings.providers.addProvider")}
           testID="host-page-add-provider-card"
           style={styles.addProviderSection}
+          trailing={addProviderToggle}
         >
-          <ProviderCatalogList
-            serverId={serverId}
-            installingProviderId={installingProviderId}
-            onInstall={handleInstall}
-          />
+          {isAddProviderOpen ? (
+            <ProviderCatalogList
+              serverId={serverId}
+              installingProviderId={installingProviderId}
+              onInstall={handleInstall}
+            />
+          ) : null}
         </SettingsSection>
       ) : null}
     </>

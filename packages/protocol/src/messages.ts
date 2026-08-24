@@ -198,6 +198,7 @@ export const MutableDaemonConfigSchema = z
     terminalAgentHooks: TerminalAgentHookSettingsSchema.optional(),
     appendSystemPrompt: z.string().default(""),
     terminalProfiles: z.array(TerminalProfileSchema).optional(),
+    defaultTerminalShell: z.string().min(1).nullable().optional(),
     agentProfiles: z.array(AgentProfileSchema).optional(),
   })
   .passthrough();
@@ -222,6 +223,7 @@ export const MutableDaemonConfigPatchSchema = z
     terminalAgentHooks: TerminalAgentHookSettingsSchema.optional(),
     appendSystemPrompt: z.string().optional(),
     terminalProfiles: z.array(TerminalProfileSchema).optional(),
+    defaultTerminalShell: z.string().min(1).nullable().optional(),
     agentProfiles: z.array(AgentProfileSchema).optional(),
   })
   .partial()
@@ -3112,6 +3114,10 @@ export const ServerInfoStatusPayloadSchema = z
     daemonPublicKeyB64: z.string().trim().min(1).optional(),
     // COMPAT(remoteWebServices): added in v0.6.0; remove the gate after 2027-02-20.
     dataRelay: z.object({ configured: z.boolean() }).optional(),
+    // COMPAT(availableTerminalShells): added in v0.6.0; old daemons omit the host probe result.
+    availableTerminalShells: z
+      .array(z.enum(["pwsh.exe", "powershell.exe", "cmd.exe", "pwsh", "bash", "zsh"]))
+      .optional(),
     capabilities: ServerCapabilitiesFromUnknownSchema.optional(),
     // COMPAT(providersSnapshot): added in v0.1.48, remove gating when all clients use snapshot
     features: z
@@ -3124,6 +3130,8 @@ export const ServerInfoStatusPayloadSchema = z
         agentProfiles: z.boolean().optional(),
         // COMPAT(agentConfigApply): added in v0.6.0; remove the gate after 2027-02-21.
         agentConfigApply: z.boolean().optional(),
+        // COMPAT(defaultTerminalShell): added in v0.6.0; remove the gate after 2027-02-21.
+        defaultTerminalShell: z.boolean().optional(),
         providersSnapshot: z.boolean().optional(),
         // COMPAT(providersSnapshotCwd): added in v0.6.0, remove after 2027-02-21.
         providersSnapshotCwd: z.boolean().optional(),

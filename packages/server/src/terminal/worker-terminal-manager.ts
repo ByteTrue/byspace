@@ -100,6 +100,7 @@ interface WorkerTerminalManagerOptions {
   requestTimeoutMs?: number;
   forkWorker?: () => TerminalWorkerProcess;
   getTerminalActivityUrl?: () => string | null;
+  getDefaultTerminalShell?: () => string | null | undefined;
   agentCliToken?: string;
 }
 
@@ -700,6 +701,7 @@ export function createWorkerTerminalManager(
     async createTerminal(
       options: WorkerCreateTerminalOptions & { workspaceId: string },
     ): Promise<TerminalSession> {
+      const { shell: requestedShell, ...terminalOptions } = options;
       const terminalId = options.id ?? randomUUID();
       const activityToken = createActivityToken();
       const terminalActivityUrl = managerOptions.getTerminalActivityUrl?.() ?? null;
@@ -709,10 +711,16 @@ export function createWorkerTerminalManager(
         state: TerminalState;
       };
       try {
+        const defaultShell =
+          requestedShell == null && options.command === undefined
+            ? (managerOptions.getDefaultTerminalShell?.() ?? undefined)
+            : undefined;
+        const configuredShell = requestedShell ?? defaultShell;
         result = (await sendRequest({
           type: "createTerminal",
           options: {
-            ...options,
+            ...terminalOptions,
+            shell: configuredShell,
             env: {
               ...options.env,
               ...(managerOptions.agentCliToken
