@@ -285,7 +285,6 @@ test.describe("Half-screen desktop layout", () => {
         page.getByTestId("explorer-tab-files").filter({ visible: true }).first(),
       ).toBeVisible();
       await expect(page.getByTestId("workspace-explorer-toggle").first()).toBeVisible();
-      await expect(page.getByTestId("explorer-close")).toBeVisible();
       await expect(page.getByTestId("sidebar-pages")).not.toBeVisible();
 
       const centerBounds = await page.getByTestId("workspace-tabs-row").first().boundingBox();
@@ -315,7 +314,7 @@ test.describe("Half-screen desktop layout", () => {
         )
         .toBeGreaterThanOrEqual(400);
 
-      await page.getByTestId("explorer-close").click();
+      await page.getByTestId("workspace-explorer-toggle").first().click();
       await expect(page.getByTestId("explorer-tab-files")).not.toBeVisible();
       await expect(page.getByTestId("workspace-explorer-toggle").first()).toBeVisible();
     } finally {

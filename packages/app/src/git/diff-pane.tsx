@@ -3240,7 +3240,7 @@ export function GitDiffPane({
       }}
       style={styles.container}
     >
-      {isGit && (currentBranchName || isMobile) ? (
+      {isGit && (asWorkspaceTab || isMobile) && currentBranchName ? (
         <View style={styles.header} testID="changes-header">
           <BranchSwitcher
             currentBranchName={currentBranchName}
