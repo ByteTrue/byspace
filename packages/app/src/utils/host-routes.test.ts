@@ -266,6 +266,7 @@ describe("host settings section slugs", () => {
     expect(normalizeHostSectionSlug("providers")).toBe("providers");
     expect(normalizeHostSectionSlug("terminals")).toBe("providers");
     expect(normalizeHostSectionSlug("usage")).toBe("usage");
+    expect(normalizeHostSectionSlug("plugins")).toBe("plugins");
     expect(normalizeHostSectionSlug("host")).toBe("host");
   });
 

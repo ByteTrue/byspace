@@ -1,7 +1,7 @@
 import { isSyntaxThemeId, type SyntaxThemeId } from "@bytetrue/byspace-highlight";
 import type { QueryClient } from "@tanstack/react-query";
 import { parseAppLanguage, type AppLanguage } from "@/i18n/locales";
-import { THEME_OPTIONS, type ThemePreference } from "@/styles/theme";
+import { PLUGIN_THEME_PREFERENCE, THEME_OPTIONS, type ThemePreference } from "@/styles/theme";
 import {
   DEFAULT_SIDEBAR_CHECKS_DISPLAY,
   parseSidebarChecksDisplay,
@@ -26,8 +26,13 @@ export type WorkspaceTitleSource = "title" | "branch";
 export type SidebarWorkspaceTrailing = "diff" | "timestamp" | "none";
 export type ToolCallDetailLevel = "overview" | "detailed";
 
-const VALID_THEMES = new Set<string>(THEME_OPTIONS.map((option) => option.name));
-const ThemePreferenceSchema = z.enum(THEME_OPTIONS.map((option) => option.name));
+const ThemePreferenceSchema = z.enum([
+  ...THEME_OPTIONS.map((option) => option.name),
+  PLUGIN_THEME_PREFERENCE,
+]);
+const VALID_THEMES = new Set<string>(ThemePreferenceSchema.options);
+/** Where the theme picker lands when the persisted preference cannot be honoured. */
+export const DEFAULT_THEME_PREFERENCE = "auto" satisfies ThemePreference;
 const VALID_SERVICE_URL_BEHAVIORS = new Set<ServiceUrlBehavior>(["ask", "in-app", "external"]);
 const VALID_WORKSPACE_TITLE_SOURCES = new Set<WorkspaceTitleSource>(["title", "branch"]);
 const VALID_SIDEBAR_WORKSPACE_TRAILINGS = new Set<SidebarWorkspaceTrailing>([
@@ -49,6 +54,8 @@ export const MAX_FONT_FAMILY_LENGTH = 200;
 
 export interface AppSettings {
   theme: ThemePreference;
+  /** Which contributed theme `theme: "plugin"` selects. */
+  pluginThemeId: string | null;
   language: AppLanguage;
   sendBehavior: SendBehavior;
   serviceUrlBehavior: ServiceUrlBehavior;
@@ -81,6 +88,7 @@ const SidebarRowItemsSchema = z.strictObject({
 
 const StoredAppSettingsSchema = z.strictObject({
   theme: ThemePreferenceSchema.optional(),
+  pluginThemeId: z.string().nullish(),
   language: z
     .enum(["system", "ar", "en", "es", "fr", "ja", "ko", "pt-BR", "ru", "zh-CN"])
     .optional(),
@@ -109,7 +117,8 @@ const LegacyRendererSettingsSchema = StoredAppSettingsSchema;
 type StoredAppSettings = z.infer<typeof StoredAppSettingsSchema>;
 
 export const DEFAULT_CLIENT_SETTINGS: AppSettings = {
-  theme: "auto",
+  theme: DEFAULT_THEME_PREFERENCE,
+  pluginThemeId: null,
   language: "system",
   sendBehavior: "interrupt",
   serviceUrlBehavior: "ask",
@@ -246,6 +255,9 @@ function pickAppSettings(stored: StoredAppSettings): Partial<AppSettings> {
   const result: Partial<AppSettings> = {};
   if (typeof stored.theme === "string" && VALID_THEMES.has(stored.theme)) {
     result.theme = stored.theme;
+  }
+  if (typeof stored.pluginThemeId === "string") {
+    result.pluginThemeId = stored.pluginThemeId;
   }
   const language = parseAppLanguage(stored.language);
   if (language !== null) {

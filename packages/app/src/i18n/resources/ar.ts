@@ -1,3 +1,4 @@
+import { pluginSettings } from "./plugin-settings";
 import type { TranslationResources } from "./en";
 
 export const ar: TranslationResources = {
@@ -1564,7 +1565,9 @@ export const ar: TranslationResources = {
       usage: "الاستخدام",
       terminals: "Terminals",
       host: "نظرة عامة",
+      plugins: "Plugins",
     },
+    plugins: pluginSettings.ar,
     general: {
       title: "عام",
       defaultSend: {

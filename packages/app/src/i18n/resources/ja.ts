@@ -1,3 +1,4 @@
+import { pluginSettings } from "./plugin-settings";
 import type { TranslationResources } from "./en";
 
 export const ja: TranslationResources = {
@@ -1579,7 +1580,9 @@ export const ja: TranslationResources = {
       usage: "使用状況",
       terminals: "ターミナル",
       host: "概要",
+      plugins: "プラグイン",
     },
+    plugins: pluginSettings.ja,
     general: {
       title: "一般",
       defaultSend: {

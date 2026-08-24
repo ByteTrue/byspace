@@ -55,6 +55,7 @@ import {
   buildSettingsHostSectionRoute,
   buildSettingsRoute,
 } from "@/utils/host-routes";
+import { PluginSidebarItems } from "@/plugins";
 import { SidebarAgentListSkeleton } from "./sidebar-agent-list-skeleton";
 import { SidebarCalloutSlot } from "./sidebar-callout-slot";
 import { SidebarWorkspaceList } from "./sidebar-workspace-list";
@@ -523,6 +524,7 @@ function MobileSidebar({
       <View style={styles.sidebarContent} pointerEvents="auto">
         <View style={styles.sidebarHeaderGroup} testID="sidebar-pages-header">
           <SidebarPagesMenu onNavigate={closeSidebar} />
+          <PluginSidebarItems onBeforeNavigate={closeSidebar} />
         </View>
         {/* pointerEvents must be a prop: RNW's StyleSheet compiler drops it from styles, so the
             full-width overlay row would otherwise swallow clicks on the sidebar header beneath it. */}
@@ -686,6 +688,7 @@ function DesktopSidebar({
         <View style={styles.sidebarDragArea}>
           <View style={styles.sidebarHeaderGroup} testID="sidebar-pages-header">
             <SidebarPagesMenu />
+            <PluginSidebarItems />
             {DEV_BUILD_LABEL ? (
               <View
                 pointerEvents="none"

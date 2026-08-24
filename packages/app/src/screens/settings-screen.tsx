@@ -28,6 +28,7 @@ import {
   Plus,
   FolderGit2,
   Mic,
+  Blocks,
 } from "lucide-react-native";
 import { DropdownTrigger } from "@/components/ui/dropdown-trigger";
 import { ComboboxTrigger } from "@/components/ui/combobox-trigger";
@@ -79,6 +80,7 @@ import {
   HostUsagePage,
   HostWorkspacesPage,
 } from "@/screens/settings/host-page";
+import { HostPluginsPage } from "@/screens/settings/plugins-page";
 import ProjectsScreen from "@/screens/projects-screen";
 import ProjectSettingsScreen from "@/screens/project-settings-screen";
 import { SETTINGS_DESKTOP_SIDEBAR_WIDTH, useIsCompactFormFactor } from "@/constants/layout";
@@ -139,6 +141,7 @@ const HOST_SECTION_ITEMS: HostSectionItem[] = [
   { id: "workspaces", labelKey: "settings.hostSections.workspaces", icon: FolderGit2 },
   { id: "providers", labelKey: "settings.hostSections.providers", icon: Boxes },
   { id: "usage", labelKey: "settings.hostSections.usage", icon: Gauge },
+  { id: "plugins", labelKey: "settings.hostSections.plugins", icon: Blocks },
 ];
 
 function renderHostSettingsContent(
@@ -158,6 +161,8 @@ function renderHostSettingsContent(
       return <HostProvidersPage serverId={view.serverId} />;
     case "usage":
       return <HostUsagePage serverId={view.serverId} />;
+    case "plugins":
+      return <HostPluginsPage serverId={view.serverId} />;
     case "host":
       return <HostSettingsPage serverId={view.serverId} onHostRemoved={onHostRemoved} />;
   }

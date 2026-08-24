@@ -1,3 +1,4 @@
+import { pluginSettings } from "./plugin-settings";
 import type { TranslationResources } from "./en";
 
 export const zhCN: TranslationResources = {
@@ -1550,7 +1551,9 @@ export const zhCN: TranslationResources = {
       usage: "使用情况",
       terminals: "Terminals",
       host: "概览",
+      plugins: "插件",
     },
+    plugins: pluginSettings["zh-CN"],
     general: {
       title: "通用",
       defaultSend: {

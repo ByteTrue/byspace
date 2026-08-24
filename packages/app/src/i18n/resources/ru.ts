@@ -1,3 +1,4 @@
+import { pluginSettings } from "./plugin-settings";
 import type { TranslationResources } from "./en";
 
 export const ru: TranslationResources = {
@@ -1592,7 +1593,9 @@ export const ru: TranslationResources = {
       usage: "Использование",
       terminals: "Terminals",
       host: "Обзор",
+      plugins: "Плагины",
     },
+    plugins: pluginSettings.ru,
     general: {
       title: "Общий",
       defaultSend: {

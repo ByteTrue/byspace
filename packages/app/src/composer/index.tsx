@@ -97,6 +97,7 @@ import { useCheckoutStatusQuery } from "@/git/use-status-query";
 import { useCheckoutPrStatusQuery } from "@/git/use-pr-status-query";
 import { getForgePresentation } from "@/git/forge";
 import { ForgeBrandIcon } from "@/git/forge-icon";
+import { PluginResourceAttachmentPill, usePluginAttachmentPicker } from "@/plugins";
 import { useComposerGithubAutoAttach } from "./github/auto-attach";
 import { resolveClientSlashCommand, type ClientSlashCommand } from "@/client-slash-commands";
 import {
@@ -373,6 +374,20 @@ function renderComposerAttachmentPill(args: RenderComposerAttachmentPillArgs): R
       onOpen,
       onRemove,
     });
+  }
+  if (attachment.kind === "plugin_resource") {
+    return (
+      <PluginResourceAttachmentPill
+        key={`${attachment.pluginId}:${attachment.sourceId}:${attachment.item.id}`}
+        attachment={attachment}
+        index={index}
+        disabled={disabled}
+        onOpen={onOpen}
+        onRemove={onRemove}
+        openLabel={labels.openGithub}
+        removeLabel={labels.removeGithub}
+      />
+    );
   }
   return (
     <GithubAttachmentPill
@@ -970,6 +985,14 @@ export function Composer({
   const [lightboxMetadata, setLightboxMetadata] = useState<AttachmentMetadata | null>(null);
   const attachButtonRef = useRef<View | null>(null);
   const messageInputRef = useRef<MessageInputRef>(null);
+  const pluginAttachments = usePluginAttachmentPicker({
+    serverId,
+    client,
+    connected: isConnected,
+    attachments,
+    onChangeAttachments: setSelectedAttachments,
+    anchorRef: attachButtonRef,
+  });
   const isComposerLocked = resolveIsComposerLocked(submitBehavior, isSubmitLoading);
   const keyboardHandlerIdRef = useRef(
     `message-input:${serverId}:${agentId}:${Math.random().toString(36).slice(2)}`,
@@ -1632,6 +1655,7 @@ export function Composer({
           setIsGithubPickerOpen(true);
         },
       },
+      ...pluginAttachments.menuItems,
       {
         id: "file",
         label: t("composer.attachments.addFile"),
@@ -1641,7 +1665,7 @@ export function Composer({
         },
       },
     ],
-    [handlePickImage, handlePickFile, t, forgePresentation],
+    [forgePresentation, handlePickFile, handlePickImage, pluginAttachments.menuItems, t],
   );
 
   const handleToggleGithubItem = useCallback(
@@ -1895,6 +1919,7 @@ export function Composer({
                 emptyText={githubEmptyText}
                 renderOption={renderGithubPickerOption}
               />
+              {pluginAttachments.picker}
             </View>
           </View>
         </View>

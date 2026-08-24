@@ -17,11 +17,13 @@ import {
 import { AppState, useWindowDimensions, View } from "react-native";
 import { GestureDetector, GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
-import { StyleSheet, UnistylesRuntime } from "react-native-unistyles";
+import { StyleSheet } from "react-native-unistyles";
+import { AppearanceProvider } from "@/appearance/provider";
 import { CommandCenter } from "@/command-center/command-center";
 import { CommandCenterRootActions } from "@/command-center/root-registration";
 import { CommandCenterProvider } from "@/command-center/provider";
 import { CommandCenterWorkspaceActions } from "@/command-center/workspace-registration";
+import { PluginCommandCenterActions } from "@/plugins/command-center/registration";
 import { AddProjectFlowHost } from "@/components/add-project-flow-host";
 import { AppearanceStyleBoundary } from "@/components/appearance-style-boundary";
 import { WorktreeSetupCalloutSource } from "@/components/worktree-setup-callout-source";
@@ -71,10 +73,9 @@ import {
   useHostRuntimeIsConnected,
   useHosts,
 } from "@/runtime/host-runtime";
-import { applyAppearance } from "@/screens/settings/appearance/apply-appearance";
 import { selectIsAgentListOpen, usePanelStore } from "@/stores/panel-store";
 import { flushDraftPersistStorage } from "@/stores/draft-store";
-import { getNextThemePreference, THEME_TO_UNISTYLES } from "@/styles/theme";
+import { getNextThemePreference } from "@/styles/theme";
 import { useSessionStore } from "@/stores/session-store";
 import { installWebScrollbarStyles } from "@/styles/install-web-scrollbar-styles";
 import type { HostProfile } from "@/types/host-connection";
@@ -86,6 +87,7 @@ import {
 } from "@/utils/host-routes";
 import { buildNotificationRoute, resolveNotificationTarget } from "@/utils/notification-routing";
 import { navigateToAgent } from "@/utils/navigate-to-agent";
+import { PluginCatalogSync } from "@/plugins";
 import {
   WEB_NOTIFICATION_CLICK_EVENT,
   type WebNotificationClickDetail,
@@ -144,6 +146,7 @@ function ManagedDaemonSession({ daemon }: { daemon: HostProfile }) {
   return (
     <SessionProvider key={daemon.serverId} serverId={daemon.serverId} client={client}>
       <LegacyFavoriteProfileMigrationBootstrap serverId={daemon.serverId} client={client} />
+      <PluginCatalogSync serverId={daemon.serverId} client={client} />
     </SessionProvider>
   );
 }
@@ -365,6 +368,7 @@ function AppContainer({ children, chromeEnabled: chromeEnabledOverride }: AppCon
       <WorktreeSetupCalloutSource />
       <CommandCenterRootActions />
       <CommandCenterWorkspaceActions />
+      <PluginCommandCenterActions />
       <CommandCenter />
       <AddProjectFlowHost />
       <HostChooserModal />
@@ -424,48 +428,17 @@ function MobileGestureWrapper({
 }
 
 function ProvidersWrapper({ children }: { children: ReactNode }) {
-  const { settings, isLoading: settingsLoading } = useAppSettings();
   const { upsertConnectionFromOfferUrl } = useHostMutations();
 
-  // Apply theme setting on mount and when it changes
-  useEffect(() => {
-    if (settingsLoading) return;
-    if (settings.theme === "auto") {
-      UnistylesRuntime.setAdaptiveThemes(true);
-    } else {
-      UnistylesRuntime.setAdaptiveThemes(false);
-      UnistylesRuntime.setTheme(THEME_TO_UNISTYLES[settings.theme]);
-    }
-  }, [settingsLoading, settings.theme]);
-
-  // Apply font / size / syntax appearance settings on mount and when they change.
-  // Sibling to the theme effect above; order is irrelevant because both patch all
-  // registered theme keys, so the active key is always current.
-  useEffect(() => {
-    if (settingsLoading) return;
-    applyAppearance({
-      uiFontFamily: settings.uiFontFamily,
-      monoFontFamily: settings.monoFontFamily,
-      uiFontSize: settings.uiFontSize,
-      codeFontSize: settings.codeFontSize,
-      syntaxTheme: settings.syntaxTheme,
-    });
-  }, [
-    settingsLoading,
-    settings.uiFontFamily,
-    settings.monoFontFamily,
-    settings.uiFontSize,
-    settings.codeFontSize,
-    settings.syntaxTheme,
-  ]);
-
   return (
-    <AudioProvider>
-      <OfferLinkListener upsertDaemonFromOfferUrl={upsertConnectionFromOfferUrl} />
-      <HostSessionManager />
-      <FaviconStatusSync />
-      <AppearanceStyleBoundary>{children}</AppearanceStyleBoundary>
-    </AudioProvider>
+    <AppearanceProvider>
+      <AudioProvider>
+        <OfferLinkListener upsertDaemonFromOfferUrl={upsertConnectionFromOfferUrl} />
+        <HostSessionManager />
+        <FaviconStatusSync />
+        <AppearanceStyleBoundary>{children}</AppearanceStyleBoundary>
+      </AudioProvider>
+    </AppearanceProvider>
   );
 }
 

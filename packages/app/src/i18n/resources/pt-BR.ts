@@ -1,3 +1,4 @@
+import { pluginSettings } from "./plugin-settings";
 import type { TranslationResources } from "./en";
 
 export const ptBR: TranslationResources = {
@@ -1590,7 +1591,9 @@ export const ptBR: TranslationResources = {
       usage: "Uso",
       terminals: "Terminais",
       host: "Visão geral",
+      plugins: "Plugins",
     },
+    plugins: pluginSettings["pt-BR"],
     general: {
       title: "Geral",
       defaultSend: {

@@ -28,6 +28,7 @@ Configuration and local state live under `BYSPACE_HOME` (defaults to `~/.byspace
 - [Workspaces](/docs/workspaces), the project, workspace, and session model BySpace is built around.
 - [Providers](/docs/providers), what a provider is and how BySpace wraps existing CLIs.
 - [Orchestration](/docs/orchestration), let one agent delegate work to other providers and models.
+- [Plugins](/docs/plugins), add trusted local surfaces, sidebar actions, daemon behavior, and composer attachments.
 - [CLI reference](/docs/cli), every command.
 - [Self-hosting the web UI](/docs/web-ui), serve the browser app from your own daemon.
 - [GitHub repo](https://github.com/ByteTrue/byspace)

@@ -22,6 +22,7 @@ import {
 export { buildWorkspaceTabPersistenceKey } from "./state";
 export type {
   WorkspaceDraftTabSetup,
+  PluginWorkspaceTabTarget,
   WorkspaceTab,
   WorkspaceTabTarget,
   WorkspaceWorkingDiffTabTarget,

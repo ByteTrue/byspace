@@ -101,6 +101,23 @@ byspace schedule ls
 byspace schedule pause <id>
 ```
 
+## Plugins
+
+Create and manage trusted local plugins on a daemon:
+
+```bash
+byspace plugin init /absolute/path/to/plugin
+byspace plugin install /absolute/path/to/plugin
+byspace plugin ls
+byspace plugin reload my-plugin
+byspace plugin logs my-plugin
+byspace plugin disable my-plugin
+byspace plugin enable my-plugin
+byspace plugin remove my-plugin
+```
+
+`byspace plugin logs <id>` returns the plugin's recent daemon-side stdout and stderr. Add `--json` for structured entries or `--host <target>` for another daemon. See the [Plugin reference](/docs/plugins/reference) for installation, trust, lifecycle, and log-retention behavior.
+
 ## Permissions
 
 Agents may request permission for certain actions. Manage these from the CLI:

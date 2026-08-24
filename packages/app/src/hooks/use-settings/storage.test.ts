@@ -225,6 +225,21 @@ describe("saveAppSettings", () => {
       toolCallDetailLevel: "overview",
     });
   });
+
+  it("persists a selected plugin theme", async () => {
+    const deps = makeDeps();
+    const queryClient = new QueryClient();
+
+    await saveAppSettings({
+      queryClient,
+      updates: { theme: "plugin", pluginThemeId: "catppuccin/theme/mocha" },
+      deps,
+    });
+
+    const loaded = await loadAppSettingsFromStorage(deps);
+    expect(loaded.theme).toBe("plugin");
+    expect(loaded.pluginThemeId).toBe("catppuccin/theme/mocha");
+  });
 });
 
 describe("parseTerminalScrollbackLines", () => {

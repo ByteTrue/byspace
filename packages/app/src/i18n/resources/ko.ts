@@ -1,3 +1,4 @@
+import { pluginSettings } from "./plugin-settings";
 import { en, type TranslationResources } from "./en";
 
 type TranslationShape = string | { readonly [key: string]: TranslationShape };
@@ -1754,7 +1755,9 @@ const koTranslations = {
       usage: "사용량",
       terminals: "터미널",
       host: "개요",
+      plugins: "플러그인",
     },
+    plugins: pluginSettings.ko,
     general: {
       title: "일반",
       browserData: {
