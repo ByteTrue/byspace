@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Text, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
 import type { RemoteWebService } from "@bytetrue/byspace-protocol/messages";
 import {
@@ -18,6 +18,7 @@ import { useSessionStore } from "@/stores/session-store";
 import { settingsStyles } from "@/styles/settings";
 import type { HostProfile } from "@/types/host-connection";
 import { confirmDialog } from "@/utils/confirm-dialog";
+import { copyToClipboard } from "@/utils/copy-to-clipboard";
 import { useTranslation } from "react-i18next";
 
 const FLEX_ONE_STYLE = { flex: 1 } as const;
@@ -30,6 +31,36 @@ interface TargetHost {
   daemonPublicKeyB64: string;
 }
 
+interface PresetItem {
+  label: string;
+  port: string;
+  defaultName: string;
+}
+
+function PresetPill({
+  preset,
+  onPress,
+  disabled,
+}: {
+  preset: PresetItem;
+  onPress: (preset: PresetItem) => void;
+  disabled: boolean;
+}) {
+  const handlePress = useCallback(() => onPress(preset), [onPress, preset]);
+  return (
+    <Pressable style={styles.presetPill} onPress={handlePress} disabled={disabled}>
+      <Text style={styles.presetPillText}>{preset.label}</Text>
+    </Pressable>
+  );
+}
+
+const COMMON_PRESETS = [
+  { label: "Vite (5173)", port: "5173", defaultName: "dev-web" },
+  { label: "Next.js (3000)", port: "3000", defaultName: "app-web" },
+  { label: "AI Gateway (8317)", port: "8317", defaultName: "office-ai" },
+  { label: "Ollama (11434)", port: "11434", defaultName: "ollama" },
+];
+
 function resolveRelayPublicKey(host: HostProfile): string | null {
   return (
     host.connections.find((connection) => connection.type === "relay")?.daemonPublicKeyB64 ?? null
@@ -39,14 +70,17 @@ function resolveRelayPublicKey(host: HostProfile): string | null {
 function resolveEmptyMessage(input: {
   isConnected: boolean;
   isDataRelayConfigured: boolean;
+  hasOtherHosts: boolean;
   hasTargets: boolean;
   disconnected: string;
   empty: string;
+  noOtherHosts: string;
   noCompatibleTargets: string;
   relayNotConfigured: string;
 }): string {
   if (!input.isConnected) return input.disconnected;
   if (!input.isDataRelayConfigured) return input.relayNotConfigured;
+  if (!input.hasOtherHosts) return input.noOtherHosts;
   if (!input.hasTargets) return input.noCompatibleTargets;
   return input.empty;
 }
@@ -63,7 +97,25 @@ function RemoteWebServiceRow({
   onRemove: (service: RemoteWebService) => void;
 }) {
   const { t } = useTranslation();
+  const toast = useToast();
+  const [hasCopied, setHasCopied] = useState(false);
   const handleRemove = useCallback(() => onRemove(service), [onRemove, service]);
+  const url = service.localUrl ?? `http://${service.hostname}`;
+
+  const handleCopyUrl = useCallback(() => {
+    void copyToClipboard(url).then(() => {
+      setHasCopied(true);
+      setTimeout(() => setHasCopied(false), 2000);
+      toast.show(t("settings.host.remoteWebServices.urlCopied"));
+      return undefined;
+    });
+  }, [t, toast, url]);
+
+  const handleOpenUrl = useCallback(() => {
+    if (typeof window !== "undefined") {
+      window.open(url, "_blank", "noopener,noreferrer");
+    }
+  }, [url]);
 
   return (
     <View
@@ -73,7 +125,7 @@ function RemoteWebServiceRow({
       <View style={settingsStyles.rowContent}>
         <Text style={settingsStyles.rowTitle}>{service.name}</Text>
         <Text style={settingsStyles.rowHint} selectable>
-          {service.localUrl ?? service.hostname}
+          {url}
         </Text>
         <Text style={styles.targetHint}>
           {t("settings.host.remoteWebServices.targetSummary", {
@@ -82,20 +134,40 @@ function RemoteWebServiceRow({
           })}
         </Text>
       </View>
-      <Button
-        variant="ghost"
-        size="sm"
-        onPress={handleRemove}
-        disabled={isRemoving}
-        accessibilityLabel={t("settings.host.remoteWebServices.removeTitle", {
-          name: service.name,
-        })}
-        testID={`remote-web-service-remove-${service.id}`}
-      >
-        {isRemoving
-          ? t("settings.host.remoteWebServices.removing")
-          : t("settings.host.remoteWebServices.remove")}
-      </Button>
+      <View style={styles.rowActions}>
+        <Button
+          variant="ghost"
+          size="sm"
+          onPress={handleCopyUrl}
+          accessibilityLabel={t("settings.host.remoteWebServices.copyUrl")}
+          testID={`remote-web-service-copy-${service.id}`}
+        >
+          {hasCopied ? t("common.actions.copied") : t("common.actions.copy")}
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          onPress={handleOpenUrl}
+          accessibilityLabel={t("settings.host.remoteWebServices.openUrl")}
+          testID={`remote-web-service-open-${service.id}`}
+        >
+          {t("settings.host.remoteWebServices.open")}
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          onPress={handleRemove}
+          disabled={isRemoving}
+          accessibilityLabel={t("settings.host.remoteWebServices.removeTitle", {
+            name: service.name,
+          })}
+          testID={`remote-web-service-remove-${service.id}`}
+        >
+          {isRemoving
+            ? t("settings.host.remoteWebServices.removing")
+            : t("settings.host.remoteWebServices.remove")}
+        </Button>
+      </View>
     </View>
   );
 }
@@ -134,6 +206,11 @@ function AddRemoteWebServiceSheet({
 
   const handleOpenTargetPicker = useCallback(() => setTargetPickerOpen(true), []);
 
+  const handleApplyPreset = useCallback((preset: (typeof COMMON_PRESETS)[number]) => {
+    setPort(preset.port);
+    setName((current) => (current.trim() ? current : preset.defaultName));
+  }, []);
+
   const handleSave = useCallback(() => {
     const parsedPort = Number(port.trim());
     if (!name.trim()) {
@@ -165,6 +242,21 @@ function AddRemoteWebServiceSheet({
       <Text style={styles.helper}>
         {t("settings.host.remoteWebServices.addHint", { source: sourceHost.label })}
       </Text>
+
+      {/* Presets */}
+      <View style={styles.presetsContainer}>
+        <Text style={styles.presetsLabel}>{t("settings.host.remoteWebServices.presets")}:</Text>
+        <View style={styles.presetsRow}>
+          {COMMON_PRESETS.map((preset) => (
+            <PresetPill
+              key={preset.port}
+              preset={preset}
+              onPress={handleApplyPreset}
+              disabled={isSaving}
+            />
+          ))}
+        </View>
+      </View>
 
       <View style={styles.field}>
         <Text style={styles.label}>{t("settings.host.remoteWebServices.nameLabel")}</Text>
@@ -228,6 +320,16 @@ function AddRemoteWebServiceSheet({
           testID="remote-web-service-port-input"
         />
         <Text style={styles.helper}>{t("settings.host.remoteWebServices.portHint")}</Text>
+      </View>
+
+      {/* URL Preview */}
+      <View style={styles.previewContainer}>
+        <Text style={styles.previewLabel}>
+          {t("settings.host.remoteWebServices.previewLabel")}:
+        </Text>
+        <Text style={styles.previewUrl} numberOfLines={1}>
+          http://{name.trim() || "service"}.remote.localhost
+        </Text>
       </View>
 
       {error ? (
@@ -385,12 +487,19 @@ export function RemoteWebServicesSection({ host }: { host: HostProfile }) {
     [connectionStatuses, host.serverId, hosts, sessions],
   );
 
+  const otherHosts = useMemo(
+    () => hosts.filter((candidate) => candidate.serverId !== host.serverId),
+    [host.serverId, hosts],
+  );
+
   const emptyMessage = resolveEmptyMessage({
     isConnected,
     isDataRelayConfigured,
+    hasOtherHosts: otherHosts.length > 0,
     hasTargets: targetHosts.length > 0,
     disconnected: t("settings.host.remoteWebServices.disconnected"),
     empty: t("settings.host.remoteWebServices.empty"),
+    noOtherHosts: t("settings.host.remoteWebServices.noOtherHosts"),
     noCompatibleTargets: t("settings.host.remoteWebServices.noCompatibleTargets"),
     relayNotConfigured: t("settings.host.remoteWebServices.relayNotConfigured"),
   });
@@ -494,13 +603,47 @@ const styles = StyleSheet.create((theme) => ({
   targetHint: {
     color: theme.colors.foregroundMuted,
     fontSize: theme.fontSize.xs,
+    marginTop: 2,
+  },
+  rowActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[1],
   },
   helper: {
     color: theme.colors.foregroundMuted,
     fontSize: theme.fontSize.sm,
+    marginBottom: theme.spacing[2],
+  },
+  presetsContainer: {
+    marginBottom: theme.spacing[3],
+  },
+  presetsLabel: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.xs,
+    marginBottom: theme.spacing[1.5],
+  },
+  presetsRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: theme.spacing[2],
+  },
+  presetPill: {
+    backgroundColor: theme.colors.surface2,
+    paddingHorizontal: theme.spacing[3],
+    paddingVertical: theme.spacing[1.5],
+    borderRadius: theme.borderRadius.full,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+  },
+  presetPillText: {
+    color: theme.colors.foreground,
+    fontSize: theme.fontSize.xs,
+    fontWeight: theme.fontWeight.medium,
   },
   field: {
-    gap: theme.spacing[2],
+    gap: theme.spacing[1.5],
+    marginBottom: theme.spacing[3],
   },
   label: {
     color: theme.colors.foregroundMuted,
@@ -514,6 +657,8 @@ const styles = StyleSheet.create((theme) => ({
     paddingVertical: theme.spacing[3],
     borderWidth: 1,
     borderColor: theme.colors.border,
+    color: theme.colors.foreground,
+    fontSize: theme.fontSize.sm,
   },
   selector: {
     minHeight: 44,
@@ -534,9 +679,26 @@ const styles = StyleSheet.create((theme) => ({
     color: theme.colors.foregroundMuted,
     fontSize: theme.fontSize.sm,
   },
+  previewContainer: {
+    backgroundColor: theme.colors.surface2,
+    padding: theme.spacing[3],
+    borderRadius: theme.borderRadius.md,
+    marginBottom: theme.spacing[3],
+    gap: 4,
+  },
+  previewLabel: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.xs,
+  },
+  previewUrl: {
+    color: theme.colors.foreground,
+    fontSize: theme.fontSize.sm,
+    fontFamily: theme.fontFamily.mono,
+  },
   error: {
     color: theme.colors.destructive,
     fontSize: theme.fontSize.sm,
+    marginBottom: theme.spacing[2],
   },
   actions: {
     flexDirection: "row",

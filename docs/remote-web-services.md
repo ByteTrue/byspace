@@ -45,9 +45,20 @@ A browser → home-web.remote.localhost → B:127.0.0.1:5173
 
 Only B's Data Relay listener is exposed through the tunnel. Do not expose ports `6777`, `5173`, or `8317`.
 
-### 1. Generate one access token
+### 1. Configure Data Relay in the Web UI (Recommended)
 
-Use the same token on the relay host and every participating daemon:
+You can configure Data Relay completely in the Web app without editing files or environment variables:
+
+1. Go to **Host settings → Connections**.
+2. Under **Data Relay**, click **Set up Data Relay**.
+3. On the relay host (e.g. Host B): choose **Host a Relay**, click **Generate** to create a random access token, fill in the public endpoint if available, and click **Save & Apply**.
+4. On the client host (e.g. Host A): choose **Connect to Relay**, enter the relay endpoint and the same access token, and click **Save & Apply**.
+
+Changes take effect dynamically without restarting the daemon.
+
+### CLI / Environment Variable Configuration (Alternative)
+
+You can also generate an access token via CLI:
 
 ```bash
 openssl rand -base64 32

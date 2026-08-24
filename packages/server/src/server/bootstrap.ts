@@ -10,6 +10,7 @@ import {
   startStandaloneRelayServer,
   type StandaloneRelayServer,
 } from "@bytetrue/byspace-relay/standalone";
+import type { KeyPair } from "@bytetrue/byspace-relay/e2ee";
 import type { Logger } from "pino";
 import { z } from "zod";
 import { createBranchChangeRouteHandler } from "./script-route-branch-handler.js";
@@ -395,6 +396,7 @@ export interface BySpaceDaemonConfig {
 
 export interface BySpaceDaemon {
   config: BySpaceDaemonConfig;
+  daemonConfigStore: DaemonConfigStore;
   agentManager: AgentManager;
   agentStorage: AgentStorage;
   terminalManager: TerminalManager;
@@ -483,6 +485,21 @@ function createInitialMutableDaemonConfig(config: BySpaceDaemonConfig): MutableD
     initialConfig.agentProfiles = config.agentProfiles;
   }
 
+  if (
+    config.dataRelayListen !== undefined ||
+    config.dataRelayEndpoint !== undefined ||
+    config.dataRelayAccessToken !== undefined
+  ) {
+    initialConfig.dataRelay = {
+      listen: config.dataRelayListen ?? null,
+      endpoint: config.dataRelayEndpoint ?? null,
+      publicEndpoint: config.dataRelayPublicEndpoint ?? null,
+      useTls: config.dataRelayUseTls ?? true,
+      publicUseTls: config.dataRelayPublicUseTls ?? true,
+      accessToken: config.dataRelayAccessToken ?? null,
+    };
+  }
+
   return initialConfig;
 }
 
@@ -499,6 +516,86 @@ function resolveDataRelayListenTarget(
     );
   }
   return listenTarget;
+}
+
+async function reconcileDataRelayHost(
+  currentHost: StandaloneRelayServer | null,
+  listen: string | null,
+  accessToken: string | null,
+  publicEndpoint: string | null,
+  logger: Logger,
+): Promise<StandaloneRelayServer | null> {
+  if (listen && accessToken) {
+    const nextListenTarget = parseListenString(listen);
+    if (nextListenTarget.type === "tcp") {
+      const isSameHost =
+        currentHost &&
+        currentHost.host === nextListenTarget.host &&
+        currentHost.port === nextListenTarget.port;
+      if (!isSameHost) {
+        await currentHost?.stop().catch(() => undefined);
+        try {
+          const newHost = await startStandaloneRelayServer({
+            host: nextListenTarget.host,
+            port: nextListenTarget.port,
+            accessToken,
+          });
+          logger.info(
+            { host: newHost.host, port: newHost.port, publicEndpoint },
+            "Data Relay server started from config update",
+          );
+          return newHost;
+        } catch (err) {
+          logger.error({ err }, "Failed to start Data Relay server on config update");
+          return null;
+        }
+      }
+      return currentHost;
+    }
+  } else if (currentHost) {
+    await currentHost.stop().catch(() => undefined);
+    logger.info("Data Relay server stopped from config update");
+    return null;
+  }
+  return currentHost;
+}
+
+async function reconcileDataRelayRuntime(
+  currentRuntime: RelayRuntime | null,
+  endpoint: string | null,
+  accessToken: string | null,
+  useTls: boolean,
+  serverId: string,
+  daemonKeyPair: KeyPair,
+  acceptor: RemoteWebServiceTargetAcceptor,
+  logger: Logger,
+): Promise<RelayRuntime | null> {
+  if (endpoint && accessToken) {
+    await currentRuntime?.stop().catch(() => undefined);
+    try {
+      const newRuntime = new RelayRuntime({
+        logger: logger.child({ component: "data-relay-runtime" }),
+        attachSocket: async (ws) => acceptor.attachSocket(ws),
+        relayEndpoint: endpoint,
+        relayUseTls: useTls,
+        relayAccessToken: accessToken,
+        serverId,
+        daemonKeyPair,
+        initialEnabled: true,
+      });
+      await newRuntime.start();
+      logger.info({ endpoint }, "Data Relay runtime connected from config update");
+      return newRuntime;
+    } catch (err) {
+      logger.error({ err }, "Failed to connect Data Relay runtime on config update");
+      return null;
+    }
+  } else if (currentRuntime) {
+    await currentRuntime.stop().catch(() => undefined);
+    logger.info("Data Relay runtime disconnected from config update");
+    return null;
+  }
+  return currentRuntime;
 }
 
 export async function createBySpaceDaemon(
@@ -1535,6 +1632,44 @@ export async function createBySpaceDaemon(
               });
               await dataRelayRuntime.start();
             }
+
+            daemonConfigStore.onFieldChange("dataRelay", async (rawVal) => {
+              const nextDataRelay = rawVal as MutableDaemonConfig["dataRelay"];
+              const nextListen = nextDataRelay?.listen?.trim() || null;
+              const nextAccessToken = nextDataRelay?.accessToken?.trim() || null;
+              const nextEndpoint = nextDataRelay?.endpoint?.trim() || null;
+              const nextUseTls = nextDataRelay?.useTls ?? true;
+              const nextPublicEndpoint = nextDataRelay?.publicEndpoint?.trim() || nextEndpoint;
+
+              dataRelayHost = await reconcileDataRelayHost(
+                dataRelayHost,
+                nextListen,
+                nextAccessToken,
+                nextPublicEndpoint,
+                logger,
+              );
+
+              dataRelayRuntime = await reconcileDataRelayRuntime(
+                dataRelayRuntime,
+                nextEndpoint,
+                nextAccessToken,
+                nextUseTls,
+                serverId,
+                daemonKeyPair.keyPair,
+                remoteWebServiceTargetAcceptor,
+                logger,
+              );
+
+              const nextClientConfig =
+                nextEndpoint && nextAccessToken
+                  ? { endpoint: nextEndpoint, useTls: nextUseTls, accessToken: nextAccessToken }
+                  : null;
+              remoteWebServiceManager.setDataRelay(nextClientConfig);
+
+              if (wsServer) {
+                wsServer.broadcastServerInfo();
+              }
+            });
           };
 
           logAndResolve().then(resolve, reject);
@@ -1612,6 +1747,7 @@ export async function createBySpaceDaemon(
 
   return {
     config,
+    daemonConfigStore,
     agentManager,
     agentStorage,
     terminalManager,

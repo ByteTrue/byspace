@@ -1405,13 +1405,21 @@ export class VoiceAssistantWebSocketServer {
   }
 
   private buildServerInfoStatusPayload(): ServerInfoStatusPayload {
+    const dataRelayConfig = this.daemonConfigStore.get().dataRelay;
+    const isConfigured = this.remoteWebServiceManager?.isDataRelayConfigured() ?? false;
     return {
       status: "server_info",
       serverId: this.serverId,
       hostname: getHostname(),
       version: this.daemonVersion,
       ...(this.daemonPublicKeyB64 ? { daemonPublicKeyB64: this.daemonPublicKeyB64 } : {}),
-      dataRelay: { configured: this.remoteWebServiceManager?.isDataRelayConfigured() ?? false },
+      dataRelay: {
+        configured: isConfigured || Boolean(dataRelayConfig?.listen || dataRelayConfig?.endpoint),
+        listen: dataRelayConfig?.listen ?? null,
+        endpoint: dataRelayConfig?.endpoint ?? null,
+        publicEndpoint: dataRelayConfig?.publicEndpoint ?? null,
+        useTls: dataRelayConfig?.useTls ?? true,
+      },
       ...(this.serverCapabilities ? { capabilities: this.serverCapabilities } : {}),
       features: {
         // COMPAT(providerOptions): added in v0.5.0-beta.1 on 2026-08-12; remove the gate after 2027-02-12.
@@ -1554,6 +1562,10 @@ export class VoiceAssistantWebSocketServer {
         config,
       },
     });
+  }
+
+  public broadcastServerInfo(): void {
+    this.broadcast(this.createServerInfoMessage());
   }
 
   private broadcastCapabilitiesUpdate(): void {
