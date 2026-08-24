@@ -152,10 +152,11 @@ import {
   resolveBySpaceHostedRelease,
 } from "@bytetrue/byspace-protocol/release-channel";
 import type { AgentClient, AgentProvider } from "./agent/agent-sdk-types.js";
-import type {
-  AgentProfile,
-  FirstAgentContext,
-  TerminalProfile,
+import {
+  MutableDaemonConfigSchema,
+  type AgentProfile,
+  type FirstAgentContext,
+  type TerminalProfile,
 } from "@bytetrue/byspace-protocol/messages";
 import type { BySpaceServicePortAllocation } from "@bytetrue/byspace-protocol/byspace-config-schema";
 import type {
@@ -163,6 +164,9 @@ import type {
   ProviderOverride,
 } from "./agent/provider-launch-config.js";
 import { loadPersistedConfig, type PersistedConfig } from "./persisted-config.js";
+import { resolveConfigFromPersisted, type CliConfigOverrides } from "./config.js";
+import { configureGitProcessPolicy, type GitProcessPolicy } from "../utils/run-git-command.js";
+import { resolveGitProcessPolicy } from "../utils/git-process-scheduler.js";
 import { createServiceProxySubsystem, type ServiceProxySubsystem } from "./service-proxy.js";
 import { ScriptHealthMonitor } from "./script-health-monitor.js";
 import { createScriptStatusEmitter } from "./script-status-projection.js";
@@ -343,6 +347,7 @@ export interface BySpaceDaemonConfig {
   hostnames?: HostnamesConfig;
   trustedProxies?: true | string[];
   mcpEnabled?: boolean;
+  mcpInjectIntoAgents?: boolean;
   autoArchiveAfterMerge?: boolean;
   enableTerminalAgentHooks?: boolean;
   terminalAgentHooks?: MutableDaemonConfig["terminalAgentHooks"];
@@ -396,6 +401,15 @@ export interface BySpaceDaemonConfig {
   onLifecycleIntent?: (intent: DaemonLifecycleIntent) => void;
   pushNotificationSender?: PushNotificationSender;
   managedProcesses?: ManagedProcessRegistry;
+  browserToolsEnabled?: boolean;
+  git?: GitProcessPolicy;
+  configReload?: {
+    env: NodeJS.ProcessEnv;
+    cli?: CliConfigOverrides;
+    overrideControlledPaths: string[];
+    relayEnabledFallback: boolean;
+    startupPersisted: PersistedConfig;
+  };
 }
 
 export interface BySpaceDaemon {
@@ -453,60 +467,63 @@ function resolveExpressTrustProxySetting(config: BySpaceDaemonConfig): true | st
   return config.trustedProxies ?? ["loopback"];
 }
 
+function resolveInitialDataRelay(
+  config: BySpaceDaemonConfig,
+): MutableDaemonConfig["dataRelay"] | undefined {
+  if (
+    config.dataRelayListen === undefined &&
+    config.dataRelayEndpoint === undefined &&
+    config.dataRelayAccessToken === undefined
+  ) {
+    return undefined;
+  }
+  return {
+    listen: config.dataRelayListen ?? null,
+    endpoint: config.dataRelayEndpoint ?? null,
+    publicEndpoint: config.dataRelayPublicEndpoint ?? null,
+    useTls: config.dataRelayUseTls ?? true,
+    publicUseTls: config.dataRelayPublicUseTls ?? true,
+    accessToken: config.dataRelayAccessToken ?? null,
+  };
+}
+
 function createInitialMutableDaemonConfig(config: BySpaceDaemonConfig): MutableDaemonConfig {
-  const providers: MutableDaemonConfig["providers"] = Object.fromEntries(
-    Object.entries(config.providerOverrides ?? {}).map(([providerId, override]) => {
-      const providerConfig: MutableDaemonConfig["providers"][string] = {};
-      if (override.enabled !== undefined) {
-        providerConfig.enabled = override.enabled;
-      }
-      if (override.additionalModels) {
-        providerConfig.additionalModels = override.additionalModels;
-      }
-      return [providerId, providerConfig];
-    }),
-  );
+  const providers = config.providerOverrides ?? {};
+  const dataRelay = resolveInitialDataRelay(config);
 
   const initialConfig: MutableDaemonConfig = {
     relay: { enabled: config.relayEnabled ?? true },
-    mcp: { injectIntoAgents: false },
+    mcp: {
+      enabled: config.mcpEnabled ?? true,
+      injectIntoAgents: false,
+    },
+    ...(config.hostnames !== undefined ? { hostnames: config.hostnames } : {}),
+    cors: { allowedOrigins: config.corsAllowedOrigins },
+    trustedProxies: config.trustedProxies ?? ["loopback"],
+    git: config.git ?? resolveGitProcessPolicy({ env: process.env }),
+    app: { baseUrl: config.appBaseUrl ?? "https://app.byspace.sh" },
+    ...(config.providerCatalogRefreshTimeoutMs !== undefined
+      ? { catalogRefreshTimeoutMs: config.providerCatalogRefreshTimeoutMs }
+      : {}),
+    browserTools: { enabled: config.browserToolsEnabled ?? false },
     providers,
     metadataGeneration: {
-      providers: config.metadataGeneration?.providers ?? [],
+      providers: (config.metadataGeneration?.providers ??
+        []) as MutableDaemonConfig["metadataGeneration"]["providers"],
     },
     dictation: { refineWithAgent: config.dictationRefineWithAgent ?? false },
     autoArchiveAfterMerge: config.autoArchiveAfterMerge ?? false,
     enableTerminalAgentHooks: config.enableTerminalAgentHooks ?? false,
     terminalAgentHooks: config.terminalAgentHooks,
     appendSystemPrompt: config.appendSystemPrompt ?? "",
+    ...(config.terminalProfiles !== undefined ? { terminalProfiles: config.terminalProfiles } : {}),
+    ...(config.agentProfiles !== undefined ? { agentProfiles: config.agentProfiles } : {}),
+    ...(dataRelay !== undefined ? { dataRelay } : {}),
     pluginsEnabled: Boolean(config.pluginsEnabled),
     plugins: config.plugins,
   };
 
-  if (config.terminalProfiles !== undefined) {
-    initialConfig.terminalProfiles = config.terminalProfiles;
-  }
-
-  if (config.agentProfiles !== undefined) {
-    initialConfig.agentProfiles = config.agentProfiles;
-  }
-
-  if (
-    config.dataRelayListen !== undefined ||
-    config.dataRelayEndpoint !== undefined ||
-    config.dataRelayAccessToken !== undefined
-  ) {
-    initialConfig.dataRelay = {
-      listen: config.dataRelayListen ?? null,
-      endpoint: config.dataRelayEndpoint ?? null,
-      publicEndpoint: config.dataRelayPublicEndpoint ?? null,
-      useTls: config.dataRelayUseTls ?? true,
-      publicUseTls: config.dataRelayPublicUseTls ?? true,
-      accessToken: config.dataRelayAccessToken ?? null,
-    };
-  }
-
-  return initialConfig;
+  return MutableDaemonConfigSchema.parse(initialConfig);
 }
 
 function resolveDataRelayListenTarget(
@@ -613,11 +630,28 @@ export async function createBySpaceDaemon(
   const elapsed = () => `${(performance.now() - bootstrapStart).toFixed(0)}ms`;
   const daemonVersion = config.daemonVersion ?? resolveDaemonVersion(import.meta.url);
   const hostedRelease = resolveBySpaceHostedRelease(daemonVersion);
+  const initialMutableConfig = createInitialMutableDaemonConfig(config);
   const daemonConfigStore = new DaemonConfigStore(
     config.byspaceHome,
-    createInitialMutableDaemonConfig(config),
+    initialMutableConfig,
     logger,
-    { relayEnabledMutable: config.relayEnabledMutable ?? true },
+    {
+      relayEnabledMutable: config.relayEnabledMutable ?? true,
+      startupPersisted: config.configReload?.startupPersisted,
+      reloadSource: {
+        resolve: (persisted) => {
+          const reloaded = resolveConfigFromPersisted(config.byspaceHome, persisted, {
+            env: config.configReload?.env ?? process.env,
+            cli: config.configReload?.cli,
+            relayEnabledFallback: config.configReload?.relayEnabledFallback,
+          });
+          return {
+            mutable: createInitialMutableDaemonConfig(reloaded),
+            overrideControlledPaths: reloaded.configReload?.overrideControlledPaths ?? [],
+          };
+        },
+      },
+    },
   );
   const pluginRuntime = new PluginService(logger, daemonConfigStore);
 
@@ -648,6 +682,9 @@ export async function createBySpaceDaemon(
 
   const app = express();
   app.set("trust proxy", resolveExpressTrustProxySetting(config));
+  daemonConfigStore.onFieldChange("trustedProxies", (value) => {
+    app.set("trust proxy", (value as true | string[] | undefined) ?? ["loopback"]);
+  });
   let boundListenTarget: ListenTarget | null = null;
   let workspaceRegistry: FileBackedWorkspaceRegistry | null = null;
   const terminalManager = createConfiguredTerminalManager({
@@ -683,7 +720,14 @@ export async function createBySpaceDaemon(
   );
   const scriptRuntimeStore = new WorkspaceScriptRuntimeStore();
   const workspaceSetupRuntime = new WorkspaceSetupRuntime();
-  const configuredHostnames = config.hostnames ?? config.allowedHosts;
+  let configuredHostnames = config.hostnames ?? config.allowedHosts;
+  let appBaseUrl = config.appBaseUrl ?? hostedRelease.appBaseUrl;
+  daemonConfigStore.onFieldChange("hostnames", (value) => {
+    configuredHostnames = value as HostnamesConfig | undefined;
+  });
+  daemonConfigStore.onFieldChange("app.baseUrl", (value) => {
+    appBaseUrl = typeof value === "string" ? value : hostedRelease.appBaseUrl;
+  });
   let wsServer: VoiceAssistantWebSocketServer | null = null;
   let serviceProxyListenTarget: ListenTarget | null = null;
   const scriptHealthMonitor = new ScriptHealthMonitor({
@@ -729,8 +773,7 @@ export async function createBySpaceDaemon(
   }
 
   // CORS - allow same-origin + configured origins
-  const allowedOrigins = new Set([
-    ...config.corsAllowedOrigins,
+  const fixedAllowedOrigins = [
     // Packaged desktop renderers use the custom byspace:// protocol scheme.
     "byspace://app",
     // For TCP, add localhost variants
@@ -741,7 +784,14 @@ export async function createBySpaceDaemon(
           `http://127.0.0.1:${listenTarget.port}`,
         ]
       : []),
-  ]);
+  ];
+  const allowedOrigins = new Set([...config.corsAllowedOrigins, ...fixedAllowedOrigins]);
+  daemonConfigStore.onFieldChange("cors.allowedOrigins", (value) => {
+    allowedOrigins.clear();
+    for (const origin of [...((value as string[] | undefined) ?? []), ...fixedAllowedOrigins]) {
+      allowedOrigins.add(origin);
+    }
+  });
 
   app.use((req, res, next) => {
     const origin = req.headers.origin;
@@ -897,6 +947,20 @@ export async function createBySpaceDaemon(
     managedProcesses,
     isDev: config.isDev === true,
     extraClients: config.agentClients,
+  });
+  daemonConfigStore.onFieldChange("catalogRefreshTimeoutMs", (value) => {
+    providerSnapshotManager.setRefreshTimeoutMs(typeof value === "number" ? value : undefined);
+  });
+  daemonConfigStore.onFieldChange("git.maxProcessesPerSecond", () => {
+    const git = daemonConfigStore.get().git;
+    if (git) configureGitProcessPolicy(git);
+  });
+  daemonConfigStore.onFieldChange("git.maxProcessConcurrency", () => {
+    const git = daemonConfigStore.get().git;
+    if (git) configureGitProcessPolicy(git);
+  });
+  daemonConfigStore.onFieldChange("mcp.enabled", (value) => {
+    mcpEnabled = value !== false;
   });
   const initialAgentManagerState = providerSnapshotManager.getAgentManagerProviderState();
   const agentManager = new AgentManager({
@@ -1344,8 +1408,8 @@ export async function createBySpaceDaemon(
     createBySpaceToolCatalog(createAgentToolHostDependencies(runtime));
   agentManager.setBySpaceToolCatalogFactory(createAgentToolCatalog);
 
-  const mcpEnabled = config.mcpEnabled ?? true;
-  if (mcpEnabled) {
+  let mcpEnabled = config.mcpEnabled ?? true;
+  {
     const agentMcpRoute = "/mcp/agents";
 
     const createAgentMcpSession = async (callerAgentId?: string) => {
@@ -1378,6 +1442,10 @@ export async function createBySpaceDaemon(
       req: express.Request,
       res: express.Response,
     ): Promise<void> => {
+      if (!mcpEnabled) {
+        res.status(404).json({ error: "Agent MCP endpoint disabled" });
+        return;
+      }
       if (config.mcpDebug) {
         logger.debug(
           {
@@ -1445,9 +1513,7 @@ export async function createBySpaceDaemon(
     app.post(agentMcpRoute, handleAgentMcpRequest);
     app.get(agentMcpRoute, handleAgentMcpRequest);
     app.delete(agentMcpRoute, handleAgentMcpRequest);
-    logger.info({ route: agentMcpRoute }, "Agent MCP server mounted on main app");
-  } else {
-    logger.info("Agent MCP HTTP endpoint disabled");
+    logger.info({ route: agentMcpRoute, enabled: mcpEnabled }, "Agent MCP route mounted");
   }
 
   const speechService = createSpeechService({
@@ -1517,13 +1583,14 @@ export async function createBySpaceDaemon(
               (config.relayUseTls === undefined && isBySpaceHostedRelayEndpoint(relayPublicEndpoint)
                 ? true
                 : relayUseTls);
-            const appBaseUrl = config.appBaseUrl ?? hostedRelease.appBaseUrl;
 
             const daemonRuntimeConfig = {
               listen: formatListenTarget(boundListenTarget ?? listenTarget),
               worktreesRoot: config.worktreesRoot,
               workspaceServicePorts: config.workspaceServicePorts,
-              appBaseUrl,
+              get appBaseUrl() {
+                return appBaseUrl;
+              },
               relay: {
                 enabled: relayEnabled,
                 endpoint: relayEndpoint,
@@ -1567,7 +1634,7 @@ export async function createBySpaceDaemon(
               config.byspaceHome,
               daemonConfigStore,
               null,
-              { allowedOrigins, hostnames: configuredHostnames },
+              { getAllowedOrigins: () => allowedOrigins, getHostnames: () => configuredHostnames },
               workspaceAutoName,
               runtimeAuth,
               speechService,

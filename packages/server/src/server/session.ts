@@ -1009,6 +1009,7 @@ export class Session {
       listProjects: () => this.projectRegistry.list(),
       listWorkspaces: () => this.workspaceRegistry.list(),
       logger: this.sessionLogger,
+      reloadConfig: () => daemonConfigStore.reload(),
     });
     this.daemonConfigStore = daemonConfigStore;
     this.terminalManager = terminalManager;
@@ -2282,6 +2283,9 @@ export class Session {
         return this.daemonSession.handleGetStatusRequest(msg);
       case "daemon.get_pairing_offer.request":
         return this.daemonSession.handleGetPairingOfferRequest(msg);
+      case "daemon.config.reload.request":
+        this.daemonSession.handleConfigReloadRequest(msg);
+        return undefined;
       case "daemon.orchestration_skills.get_status.request":
         return this.daemonSession.handleOrchestrationSkillsGetStatusRequest(msg);
       case "daemon.orchestration_skills.set_installed.request":

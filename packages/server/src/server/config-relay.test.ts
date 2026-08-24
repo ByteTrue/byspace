@@ -7,7 +7,7 @@ import {
   STABLE_HOSTED_RELEASE,
 } from "@bytetrue/byspace-protocol/release-channel";
 
-import { loadConfig } from "./config.js";
+import { loadConfig, resolveConfigFromPersisted } from "./config.js";
 
 const roots: string[] = [];
 
@@ -33,6 +33,38 @@ describe("daemon relay config", () => {
 
     const legacyHome = await createBySpaceHome({ version: 1, daemon: {} });
     expect(loadConfig(legacyHome, { env: {} }).relayEnabled).toBe(true);
+  });
+  test("removing enabled from a modern config keeps relay disabled", async () => {
+    const home = await createBySpaceHome({
+      version: 1,
+      daemon: { relay: { enabled: false } },
+    });
+    const startup = loadConfig(home, { env: {} });
+    const reloaded = resolveConfigFromPersisted(
+      home,
+      { version: 1, daemon: { relay: {} } },
+      {
+        env: startup.configReload?.env,
+        relayEnabledFallback: startup.configReload?.relayEnabledFallback,
+      },
+    );
+
+    expect(reloaded.relayEnabled).toBe(false);
+  });
+
+  test("legacy configs retain relay-on compatibility when enabled remains absent", async () => {
+    const home = await createBySpaceHome({ version: 1, daemon: { relay: {} } });
+    const startup = loadConfig(home, { env: {} });
+    const reloaded = resolveConfigFromPersisted(
+      home,
+      { version: 1, daemon: { relay: {} } },
+      {
+        env: startup.configReload?.env,
+        relayEnabledFallback: startup.configReload?.relayEnabledFallback,
+      },
+    );
+
+    expect(reloaded.relayEnabled).toBe(true);
   });
 
   test.each([

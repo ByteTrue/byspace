@@ -19,6 +19,7 @@ import {
   resolveGitProcessPolicy,
   type GitProcessPolicy,
 } from "./git-process-scheduler.js";
+export type { GitProcessPolicy } from "./git-process-scheduler.js";
 
 const DEFAULT_TIMEOUT_MS = 30_000;
 const DEFAULT_MAX_OUTPUT_BYTES = 20 * 1024 * 1024; // 20MB

@@ -1,6 +1,7 @@
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { z } from "zod";
 import { resolveBySpaceNodeEnv } from "./byspace-env.js";
 import { expandTilde } from "../utils/path.js";
 
@@ -28,6 +29,7 @@ import {
 } from "@bytetrue/byspace-protocol/release-channel";
 import { resolveDaemonVersion } from "./daemon-version.js";
 import { normalizeHostPort } from "@bytetrue/byspace-protocol/daemon-endpoints";
+import { resolveGitProcessPolicy } from "../utils/git-process-scheduler.js";
 
 const DEFAULT_PORT = 6777;
 const DEFAULT_TRUSTED_PROXIES = ["loopback"];
@@ -96,6 +98,7 @@ export type CliConfigOverrides = Partial<{
   relayEnabled: boolean;
   relayUseTls: boolean;
   mcpEnabled: boolean;
+  mcpInjectIntoAgents: boolean;
   webUiEnabled: boolean;
   hostnames: HostnamesConfig;
 }>;
@@ -104,20 +107,84 @@ type TrustedProxiesConfig = true | string[];
 
 function resolveLogConfigFromEnv(
   env: NodeJS.ProcessEnv,
-  persisted: ReturnType<typeof loadPersistedConfig>,
+  persisted: PersistedConfig,
 ): PersistedConfig["log"] {
-  const envLogLevel = LogLevelSchema.safeParse(normalizeLogEnv(env.BYSPACE_LOG_LEVEL));
-  const envLogFormat = LogFormatSchema.safeParse(normalizeLogEnv(env.BYSPACE_LOG_FORMAT));
+  const level = parseLogLevelEnv(env.BYSPACE_LOG_LEVEL ?? env.BYSPACE_LOG);
+  const format = parseLogFormatEnv(env.BYSPACE_LOG_FORMAT);
+  const console = resolveConsoleLogConfigFromEnv(env, persisted.log?.console);
+  const file = resolveFileLogConfigFromEnv(env, persisted.log?.file);
 
-  if (!envLogLevel.success && !envLogFormat.success) {
+  if (level === undefined && format === undefined && !console && !file) {
     return persisted.log;
   }
 
   return {
     ...persisted.log,
-    ...(envLogLevel.success ? { level: envLogLevel.data } : {}),
-    ...(envLogFormat.success ? { format: envLogFormat.data } : {}),
+    ...(level !== undefined ? { level } : {}),
+    ...(format !== undefined ? { format } : {}),
+    ...(console ? { console } : {}),
+    ...(file ? { file } : {}),
   };
+}
+
+function resolveConsoleLogConfigFromEnv(
+  env: NodeJS.ProcessEnv,
+  persisted: NonNullable<PersistedConfig["log"]>["console"],
+): NonNullable<PersistedConfig["log"]>["console"] {
+  const level = parseLogLevelEnv(env.BYSPACE_LOG_CONSOLE_LEVEL);
+  const format = parseLogFormatEnv(env.BYSPACE_LOG_CONSOLE_FORMAT);
+  if (level === undefined && format === undefined) return undefined;
+  return {
+    ...persisted,
+    ...(level !== undefined ? { level } : {}),
+    ...(format !== undefined ? { format } : {}),
+  };
+}
+
+function resolveFileLogConfigFromEnv(
+  env: NodeJS.ProcessEnv,
+  persisted: NonNullable<PersistedConfig["log"]>["file"],
+): NonNullable<PersistedConfig["log"]>["file"] {
+  const level = parseLogLevelEnv(env.BYSPACE_LOG_FILE_LEVEL);
+  const filePath = nonEmptyEnv(env.BYSPACE_LOG_FILE_PATH);
+  const maxSize = nonEmptyEnv(env.BYSPACE_LOG_FILE_ROTATE_SIZE);
+  const maxFiles = parsePositiveIntegerEnv(env.BYSPACE_LOG_FILE_ROTATE_COUNT);
+  const hasRotateOverride = maxSize !== undefined || maxFiles !== undefined;
+  if (level === undefined && filePath === undefined && !hasRotateOverride) return undefined;
+  return {
+    ...persisted,
+    ...(level !== undefined ? { level } : {}),
+    ...(filePath !== undefined ? { path: filePath } : {}),
+    ...(hasRotateOverride
+      ? {
+          rotate: {
+            ...persisted?.rotate,
+            ...(maxSize !== undefined ? { maxSize } : {}),
+            ...(maxFiles !== undefined ? { maxFiles } : {}),
+          },
+        }
+      : {}),
+  };
+}
+
+function parseLogLevelEnv(value: string | undefined): z.infer<typeof LogLevelSchema> | undefined {
+  const parsed = LogLevelSchema.safeParse(normalizeLogEnv(value));
+  return parsed.success ? parsed.data : undefined;
+}
+
+function parseLogFormatEnv(value: string | undefined): z.infer<typeof LogFormatSchema> | undefined {
+  const parsed = LogFormatSchema.safeParse(normalizeLogEnv(value));
+  return parsed.success ? parsed.data : undefined;
+}
+
+function nonEmptyEnv(value: string | undefined): string | undefined {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : undefined;
+}
+
+function parsePositiveIntegerEnv(value: string | undefined): number | undefined {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : undefined;
 }
 
 function extractProviderOverrides(
@@ -171,10 +238,10 @@ function extractAgentProviderSettings(
 
 interface ResolveRelayInput {
   env: NodeJS.ProcessEnv;
-  persisted: ReturnType<typeof loadPersistedConfig>;
+  persisted: PersistedConfig;
   cliRelayEnabled: boolean | undefined;
   cliRelayUseTls: boolean | undefined;
-  configCreated: boolean;
+  enabledFallback: boolean;
   hostedRelease: BySpaceHostedRelease;
 }
 
@@ -215,10 +282,7 @@ function resolveDataRelayTls(
   return { useTls, publicUseTls };
 }
 
-function resolveDataRelayConfig(
-  env: NodeJS.ProcessEnv,
-  persisted: ReturnType<typeof loadPersistedConfig>,
-) {
+function resolveDataRelayConfig(env: NodeJS.ProcessEnv, persisted: PersistedConfig) {
   const persistedDataRelay = persisted.daemon?.dataRelay;
   const endpoint = parseDataRelayEndpoint(
     env.BYSPACE_DATA_RELAY_ENDPOINT ?? persistedDataRelay?.endpoint ?? undefined,
@@ -287,7 +351,7 @@ function resolveRelayConfig(input: ResolveRelayInput): ResolvedRelay {
     input.cliRelayEnabled ??
     parseBooleanEnv(input.env.BYSPACE_RELAY_ENABLED) ??
     input.persisted.daemon?.relay?.enabled ??
-    input.configCreated;
+    input.enabledFallback;
   const endpoint =
     input.env.BYSPACE_RELAY_ENDPOINT ??
     mapHostedRelayEndpoint(input.persisted.daemon?.relay?.endpoint, input.hostedRelease) ??
@@ -322,7 +386,7 @@ function resolveServiceProxyPublicBaseUrl(value: string | null): string | null {
 
 function resolveServiceProxyConfig(
   env: NodeJS.ProcessEnv,
-  persisted: ReturnType<typeof loadPersistedConfig>,
+  persisted: PersistedConfig,
 ): ResolvedServiceProxy {
   const enabledShim =
     parseBooleanEnv(env.BYSPACE_SERVICE_PROXY_ENABLED) ?? persisted.daemon?.serviceProxy?.enabled;
@@ -353,7 +417,7 @@ function resolveWebUiConfig(
   byspaceHome: string,
   env: NodeJS.ProcessEnv,
   cli: CliConfigOverrides | undefined,
-  persisted: ReturnType<typeof loadPersistedConfig>,
+  persisted: PersistedConfig,
 ): ResolvedWebUi {
   const enabled =
     cli?.webUiEnabled ??
@@ -373,7 +437,7 @@ function resolveWebUiConfig(
 
 function resolveCorsAllowedOrigins(
   env: NodeJS.ProcessEnv,
-  persisted: ReturnType<typeof loadPersistedConfig>,
+  persisted: PersistedConfig,
   hostedRelease: BySpaceHostedRelease,
 ): string[] {
   const envCorsOrigins = env.BYSPACE_CORS_ORIGINS
@@ -409,7 +473,7 @@ function parseTrustedProxiesEnv(value: string | undefined): TrustedProxiesConfig
 
 function resolveTrustedProxiesConfig(
   env: NodeJS.ProcessEnv,
-  persisted: ReturnType<typeof loadPersistedConfig>,
+  persisted: PersistedConfig,
 ): TrustedProxiesConfig {
   return (
     parseTrustedProxiesEnv(env.BYSPACE_TRUSTED_PROXIES) ??
@@ -426,7 +490,7 @@ function resolveTrustedProxiesConfig(
 function resolveListenAddress(
   env: NodeJS.ProcessEnv,
   cli: CliConfigOverrides | undefined,
-  persisted: ReturnType<typeof loadPersistedConfig>,
+  persisted: PersistedConfig,
 ): string {
   return (
     cli?.listen ??
@@ -438,7 +502,7 @@ function resolveListenAddress(
 
 function resolveAuthConfig(
   env: NodeJS.ProcessEnv,
-  persisted: ReturnType<typeof loadPersistedConfig>,
+  persisted: PersistedConfig,
 ): BySpaceDaemonConfig["auth"] {
   const envPassword = env.BYSPACE_PASSWORD?.trim();
   if (envPassword) {
@@ -449,10 +513,7 @@ function resolveAuthConfig(
     : undefined;
 }
 
-function resolveWorktreesRoot(
-  byspaceHome: string,
-  persisted: ReturnType<typeof loadPersistedConfig>,
-): string | undefined {
+function resolveWorktreesRoot(byspaceHome: string, persisted: PersistedConfig): string | undefined {
   const configuredRoot = persisted.worktrees?.root?.trim();
   if (!configuredRoot) {
     return undefined;
@@ -464,18 +525,16 @@ function resolveWorktreesRoot(
     : path.resolve(byspaceHome, expandedRoot);
 }
 
-function resolveAppendSystemPrompt(persisted: ReturnType<typeof loadPersistedConfig>): string {
+function resolveAppendSystemPrompt(persisted: PersistedConfig): string {
   return persisted.daemon?.appendSystemPrompt ?? "";
 }
 
-function resolveProviderCatalogRefreshTimeout(
-  persisted: ReturnType<typeof loadPersistedConfig>,
-): number | undefined {
+function resolveProviderCatalogRefreshTimeout(persisted: PersistedConfig): number | undefined {
   return persisted.agents?.catalogRefreshTimeoutMs;
 }
 
 /** Preserve undefined so an explicit empty profile list keeps its meaning. */
-function resolveProfileLists(persisted: ReturnType<typeof loadPersistedConfig>) {
+function resolveProfileLists(persisted: PersistedConfig) {
   return {
     terminalProfiles: persisted.daemon?.terminalProfiles,
     agentProfiles: persisted.daemon?.agentProfiles,
@@ -485,11 +544,13 @@ function resolveProfileLists(persisted: ReturnType<typeof loadPersistedConfig>) 
 function resolveStaticLoadConfigSettings(
   env: NodeJS.ProcessEnv,
   cli: CliConfigOverrides | undefined,
-  persisted: ReturnType<typeof loadPersistedConfig>,
+  persisted: PersistedConfig,
   hostedRelease: BySpaceHostedRelease,
 ) {
   return {
     mcpEnabled: cli?.mcpEnabled ?? persisted.daemon?.mcp?.enabled ?? true,
+    mcpInjectIntoAgents:
+      cli?.mcpInjectIntoAgents ?? persisted.daemon?.mcp?.injectIntoAgents ?? false,
     autoArchiveAfterMerge: persisted.daemon?.autoArchiveAfterMerge ?? false,
     appendSystemPrompt: resolveAppendSystemPrompt(persisted),
     ...resolveProfileLists(persisted),
@@ -506,42 +567,64 @@ function resolveStaticLoadConfigSettings(
   };
 }
 
-export function loadConfig(
+export interface ResolveConfigFromPersistedOptions {
+  env?: NodeJS.ProcessEnv;
+  cli?: CliConfigOverrides;
+  releaseVersion?: string;
+  relayEnabledFallback?: boolean;
+}
+
+function resolveStaticDaemonSettings(persisted: PersistedConfig, env: NodeJS.ProcessEnv) {
+  return {
+    browserToolsEnabled: persisted.daemon?.browserTools?.enabled ?? false,
+    git: resolveGitProcessPolicy({ env, persisted: persisted.daemon?.git }),
+    autoArchiveAfterMerge: persisted.daemon?.autoArchiveAfterMerge ?? false,
+    enableTerminalAgentHooks: persisted.daemon?.enableTerminalAgentHooks ?? false,
+    terminalAgentHooks: persisted.daemon?.terminalAgentHooks,
+    appendSystemPrompt: resolveAppendSystemPrompt(persisted),
+    pluginsEnabled: Boolean(persisted.pluginsEnabled),
+    plugins: persisted.plugins,
+    mcpDebug: env.MCP_DEBUG === "1",
+    isDev: resolveBySpaceNodeEnv(env) === "development",
+  };
+}
+
+export function resolveConfigFromPersisted(
   byspaceHome: string,
-  options?: {
-    env?: NodeJS.ProcessEnv;
-    cli?: CliConfigOverrides;
-    releaseVersion?: string;
-  },
+  persisted: PersistedConfig,
+  options?: ResolveConfigFromPersistedOptions,
 ): BySpaceDaemonConfig {
-  const env = options?.env ?? process.env;
-  const daemonVersion = options?.releaseVersion ?? resolveDaemonVersion();
+  const resolvedOptions = options ?? {};
+  const env = resolvedOptions.env ?? process.env;
+  const cli = resolvedOptions.cli;
+  const daemonVersion = resolvedOptions.releaseVersion ?? resolveDaemonVersion();
   const hostedRelease = resolveBySpaceHostedRelease(daemonVersion);
-  const configCreated = existsSync(path.join(byspaceHome, "config.json"));
-  const persisted = loadPersistedConfig(byspaceHome);
-  const listen = resolveListenAddress(env, options?.cli, persisted);
+  const relayEnabledFallback =
+    resolvedOptions.relayEnabledFallback ?? persisted.daemon?.relay?.enabled === undefined;
+
+  const listen = resolveListenAddress(env, cli, persisted);
   const {
     mcpEnabled,
-    autoArchiveAfterMerge,
-    appendSystemPrompt,
+    mcpInjectIntoAgents,
     terminalProfiles,
     agentProfiles,
     hostnames,
     trustedProxies,
     appBaseUrl,
-  } = resolveStaticLoadConfigSettings(env, options?.cli, persisted, hostedRelease);
+  } = resolveStaticLoadConfigSettings(env, cli, persisted, hostedRelease);
+  const staticSettings = resolveStaticDaemonSettings(persisted, env);
 
   const relay = resolveRelayConfig({
     env,
     persisted,
-    cliRelayEnabled: options?.cli?.relayEnabled,
-    cliRelayUseTls: options?.cli?.relayUseTls,
-    configCreated,
+    cliRelayEnabled: cli?.relayEnabled,
+    cliRelayUseTls: cli?.relayUseTls,
+    enabledFallback: relayEnabledFallback,
     hostedRelease,
   });
   const serviceProxy = resolveServiceProxyConfig(env, persisted);
   const dataRelay = resolveDataRelayConfig(env, persisted);
-  const webUi = resolveWebUiConfig(byspaceHome, env, options?.cli, persisted);
+  const webUi = resolveWebUiConfig(byspaceHome, env, cli, persisted);
 
   const speech = resolveSpeechConfig({
     byspaceHome,
@@ -553,6 +636,8 @@ export function loadConfig(
     persisted.agents?.providers as Record<string, unknown> | undefined,
   );
 
+  const overrideControlledPaths = resolveOverrideControlledPaths(env, cli);
+
   return {
     listen,
     byspaceHome,
@@ -563,16 +648,10 @@ export function loadConfig(
     hostnames,
     trustedProxies,
     mcpEnabled,
-    autoArchiveAfterMerge,
-    enableTerminalAgentHooks: persisted.daemon?.enableTerminalAgentHooks ?? false,
-    terminalAgentHooks: persisted.daemon?.terminalAgentHooks,
-    appendSystemPrompt,
+    mcpInjectIntoAgents,
+    ...staticSettings,
     terminalProfiles,
     agentProfiles,
-    pluginsEnabled: Boolean(persisted.pluginsEnabled),
-    plugins: persisted.plugins,
-    mcpDebug: env.MCP_DEBUG === "1",
-    isDev: resolveBySpaceNodeEnv(env) === "development",
     agentStoragePath: path.join(byspaceHome, "agents"),
     staticDir: "public",
     agentClients: {},
@@ -594,5 +673,176 @@ export function loadConfig(
     metadataGeneration: persisted.agents?.metadataGeneration,
     providerOverrides,
     log: resolveLogConfigFromEnv(env, persisted),
+    configReload: {
+      env: { ...env },
+      cli: cli ? { ...cli } : undefined,
+      overrideControlledPaths,
+      relayEnabledFallback,
+      startupPersisted: persisted,
+    },
   };
+}
+
+export function loadConfig(
+  byspaceHome: string,
+  options?: Omit<ResolveConfigFromPersistedOptions, "relayEnabledFallback">,
+): BySpaceDaemonConfig {
+  const persisted = loadPersistedConfig(byspaceHome);
+  return resolveConfigFromPersisted(byspaceHome, persisted, options);
+}
+
+export function resolveOverrideControlledPaths(
+  env: NodeJS.ProcessEnv,
+  cli: CliConfigOverrides | undefined,
+): string[] {
+  return Array.from(
+    new Set([
+      ...resolveDaemonOverrideControlledPaths(env, cli),
+      ...resolveLogOverrideControlledPaths(env),
+      ...resolveSpeechOverrideControlledPaths(env),
+    ]),
+  ).sort();
+}
+
+function resolveDaemonOverrideControlledPaths(
+  env: NodeJS.ProcessEnv,
+  cli: CliConfigOverrides | undefined,
+): string[] {
+  return [
+    ...resolveCoreDaemonOverridePaths(env, cli),
+    ...resolveRelayOverridePaths(env, cli),
+    ...resolveDataRelayOverridePaths(env),
+    ...resolveServiceAndWebUiOverridePaths(env, cli),
+    ...resolveAgentOverridePaths(env),
+  ];
+}
+
+function resolveCoreDaemonOverridePaths(
+  env: NodeJS.ProcessEnv,
+  cli: CliConfigOverrides | undefined,
+): string[] {
+  const paths: string[] = [];
+  if (cli?.listen !== undefined || env.BYSPACE_LISTEN !== undefined) {
+    paths.push("daemon.listen");
+  }
+  if (cli?.mcpEnabled !== undefined) paths.push("daemon.mcp.enabled");
+  if (cli?.mcpInjectIntoAgents !== undefined) paths.push("daemon.mcp.injectIntoAgents");
+  // Hostname sources append instead of replacing one another, so a launch value
+  // does not prevent a persisted hostname edit from taking effect.
+  if (parseTrustedProxiesEnv(env.BYSPACE_TRUSTED_PROXIES) !== undefined) {
+    paths.push("daemon.trustedProxies");
+  }
+  if (parsePositiveIntegerEnv(env.BYSPACE_GIT_MAX_PROCESSES_PER_SECOND)) {
+    paths.push("daemon.git.maxProcessesPerSecond");
+  }
+  if (
+    parsePositiveIntegerEnv(env.BYSPACE_GIT_MAX_PROCESS_CONCURRENCY ?? env.BYSPACE_GIT_CONCURRENCY)
+  ) {
+    paths.push("daemon.git.maxProcessConcurrency");
+  }
+  if (env.BYSPACE_APP_BASE_URL !== undefined) paths.push("app.baseUrl");
+  if (env.BYSPACE_PASSWORD?.trim()) paths.push("daemon.auth.password");
+  return paths;
+}
+
+function resolveRelayOverridePaths(
+  env: NodeJS.ProcessEnv,
+  cli: CliConfigOverrides | undefined,
+): string[] {
+  const paths: string[] = [];
+  if (cli?.relayEnabled !== undefined || parseBooleanEnv(env.BYSPACE_RELAY_ENABLED) !== undefined) {
+    paths.push("daemon.relay.enabled");
+  }
+  if (env.BYSPACE_RELAY_ENDPOINT !== undefined) paths.push("daemon.relay.endpoint");
+  if (env.BYSPACE_RELAY_PUBLIC_ENDPOINT !== undefined) {
+    paths.push("daemon.relay.publicEndpoint");
+  }
+  if (cli?.relayUseTls !== undefined || env.BYSPACE_RELAY_USE_TLS !== undefined) {
+    paths.push("daemon.relay.useTls");
+  }
+  if (env.BYSPACE_RELAY_PUBLIC_USE_TLS !== undefined) {
+    paths.push("daemon.relay.publicUseTls");
+  }
+  return paths;
+}
+
+function resolveDataRelayOverridePaths(env: NodeJS.ProcessEnv): string[] {
+  const paths: string[] = [];
+  if (env.BYSPACE_DATA_RELAY_LISTEN !== undefined) paths.push("daemon.dataRelay.listen");
+  if (env.BYSPACE_DATA_RELAY_ENDPOINT !== undefined) paths.push("daemon.dataRelay.endpoint");
+  if (env.BYSPACE_DATA_RELAY_PUBLIC_ENDPOINT !== undefined) {
+    paths.push("daemon.dataRelay.publicEndpoint");
+  }
+  if (env.BYSPACE_DATA_RELAY_USE_TLS !== undefined) paths.push("daemon.dataRelay.useTls");
+  if (env.BYSPACE_DATA_RELAY_PUBLIC_USE_TLS !== undefined) {
+    paths.push("daemon.dataRelay.publicUseTls");
+  }
+  if (env.BYSPACE_DATA_RELAY_ACCESS_TOKEN !== undefined) {
+    paths.push("daemon.dataRelay.accessToken");
+  }
+  return paths;
+}
+
+function resolveServiceAndWebUiOverridePaths(
+  env: NodeJS.ProcessEnv,
+  cli: CliConfigOverrides | undefined,
+): string[] {
+  const paths: string[] = [];
+  const serviceProxyEnabled = parseBooleanEnv(env.BYSPACE_SERVICE_PROXY_ENABLED);
+  if (serviceProxyEnabled !== undefined) paths.push("daemon.serviceProxy.enabled");
+  if (env.BYSPACE_SERVICE_PROXY_LISTEN !== undefined || serviceProxyEnabled === false) {
+    paths.push("daemon.serviceProxy.listen");
+  }
+  if (env.BYSPACE_SERVICE_PROXY_PUBLIC_BASE_URL !== undefined || serviceProxyEnabled === false) {
+    paths.push("daemon.serviceProxy.publicBaseUrl");
+  }
+
+  if (
+    cli?.webUiEnabled !== undefined ||
+    parseBooleanEnv(env.BYSPACE_WEB_UI_ENABLED) !== undefined
+  ) {
+    paths.push("features.webUi.enabled");
+  }
+  if (env.BYSPACE_WEB_UI_DIST_DIR !== undefined) paths.push("features.webUi.distDir");
+  return paths;
+}
+
+function resolveAgentOverridePaths(env: NodeJS.ProcessEnv): string[] {
+  const paths: string[] = [];
+  if (env.BYSPACE_PROVIDER_REFRESH_TIMEOUT_MS !== undefined) {
+    paths.push("agents.catalogRefreshTimeoutMs");
+  }
+  return paths;
+}
+
+function resolveLogOverrideControlledPaths(env: NodeJS.ProcessEnv): string[] {
+  const paths: string[] = [];
+  if (parseLogLevelEnv(env.BYSPACE_LOG_LEVEL ?? env.BYSPACE_LOG) !== undefined) {
+    paths.push("log.level");
+  }
+  if (parseLogFormatEnv(env.BYSPACE_LOG_FORMAT) !== undefined) paths.push("log.format");
+  if (parseLogLevelEnv(env.BYSPACE_LOG_CONSOLE_LEVEL) !== undefined) {
+    paths.push("log.console.level");
+  }
+  if (parseLogFormatEnv(env.BYSPACE_LOG_CONSOLE_FORMAT) !== undefined) {
+    paths.push("log.console.format");
+  }
+  if (parseLogLevelEnv(env.BYSPACE_LOG_FILE_LEVEL) !== undefined) paths.push("log.file.level");
+  if (nonEmptyEnv(env.BYSPACE_LOG_FILE_PATH) !== undefined) paths.push("log.file.path");
+  if (nonEmptyEnv(env.BYSPACE_LOG_FILE_ROTATE_SIZE) !== undefined) {
+    paths.push("log.file.rotate.maxSize");
+  }
+  if (parsePositiveIntegerEnv(env.BYSPACE_LOG_FILE_ROTATE_COUNT) !== undefined) {
+    paths.push("log.file.rotate.maxFiles");
+  }
+  return paths;
+}
+
+function resolveSpeechOverrideControlledPaths(env: NodeJS.ProcessEnv): string[] {
+  const paths: string[] = [];
+  if (env.BYSPACE_DICTATION_ENABLED !== undefined) paths.push("features.dictation.enabled");
+  if (env.BYSPACE_DICTATION_LOCAL_STT_MODEL !== undefined)
+    paths.push("features.dictation.stt.model");
+  if (env.BYSPACE_LOCAL_MODELS_DIR !== undefined) paths.push("providers.local.modelsDir");
+  return paths;
 }
