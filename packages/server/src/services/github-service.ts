@@ -1052,7 +1052,10 @@ export function createGitHubService(options: CreateGitHubServiceOptions = {}): G
     },
 
     defaultCheckoutRefs({ changeRequestNumber }) {
-      return [{ remoteName: "origin", remoteRef: `refs/pull/${changeRequestNumber}/head` }];
+      return [
+        { remoteName: "origin", remoteRef: `refs/pull/${changeRequestNumber}/head` },
+        { remoteName: "upstream", remoteRef: `refs/pull/${changeRequestNumber}/head` },
+      ];
     },
 
     buildPrLocalBranchName({ headRef, checkoutTarget }) {
@@ -2353,7 +2356,10 @@ function toPullRequestCheckoutTarget(
     number: pullRequest.number,
     baseRefName: pullRequest.baseRefName,
     headRefName: pullRequest.headRefName,
-    checkoutRefs: [{ remoteName: "origin", remoteRef: `refs/pull/${pullRequest.number}/head` }],
+    checkoutRefs: [
+      { remoteName: "origin", remoteRef: `refs/pull/${pullRequest.number}/head` },
+      { remoteName: "upstream", remoteRef: `refs/pull/${pullRequest.number}/head` },
+    ],
     headOwnerLogin: pullRequest.headRepositoryOwner?.login || null,
     headRepositorySshUrl: pullRequest.headRepository?.sshUrl || null,
     headRepositoryUrl: pullRequest.headRepository?.url || null,

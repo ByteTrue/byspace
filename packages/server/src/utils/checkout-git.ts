@@ -1927,6 +1927,12 @@ function buildInitialPullRequestLookupTarget(input: {
     return null;
   }
 
+  // BySpace worktree metadata owns PR identity. A checkout drift must not fall
+  // through to branch config and silently retarget the workspace.
+  if (input.metadata) {
+    return buildPullRequestLookupTargetFromMetadata(input.metadata, input.currentBranch);
+  }
+
   const hasConfiguredBranchTarget = Boolean(
     input.branchRemoteName && parseBranchMergeHeadRef(input.branchMergeRef),
   );
@@ -1952,6 +1958,47 @@ function buildInitialPullRequestLookupTarget(input: {
       resolvedBaseRef: input.resolvedBaseRef,
     })
   );
+}
+
+async function resolveFactsPullRequestLookupTarget(input: {
+  cwd: string;
+  inspected: CheckoutInspectionContext;
+  metadata: BySpaceWorktreeMetadata | null;
+  branchRemoteName: string | null;
+  branchMergeRef: string | null;
+  branchRemoteUrl: string | null;
+  resolvedBaseRef: string | null;
+  context?: CheckoutContext;
+}): Promise<PullRequestStatusLookupTarget | null> {
+  const { cwd, inspected, metadata, context } = input;
+  if (inspected.byspaceWorktree.isBySpaceOwnedWorktree) {
+    return buildPullRequestLookupTargetFromMetadata(metadata, inspected.currentBranch ?? "");
+  }
+
+  let target = buildInitialPullRequestLookupTarget({
+    currentBranch: inspected.currentBranch,
+    metadata,
+    branchRemoteName: input.branchRemoteName,
+    branchMergeRef: input.branchMergeRef,
+    branchRemoteUrl: input.branchRemoteUrl,
+    originRemoteUrl: inspected.remoteUrl,
+    resolvedBaseRef: input.resolvedBaseRef,
+  });
+  if (
+    inspected.currentBranch &&
+    target?.headRef === inspected.currentBranch &&
+    !target.headRepositoryOwner
+  ) {
+    target =
+      (await resolvePullRequestLookupTargetFromPushConfig(
+        cwd,
+        inspected.currentBranch,
+        inspected.remoteUrl,
+        input.resolvedBaseRef,
+        context,
+      )) ?? target;
+  }
+  return target;
 }
 
 async function resolvePullRequestLookupTargetFromPushConfig(
@@ -2041,29 +2088,16 @@ export async function getCheckoutSnapshotFacts(
       ]);
     }
   }
-  let pullRequestLookupTarget = buildInitialPullRequestLookupTarget({
-    currentBranch: inspected.currentBranch,
+  let pullRequestLookupTarget = await resolveFactsPullRequestLookupTarget({
+    cwd,
+    inspected,
     metadata: byspaceWorktreeMetadata,
     branchRemoteName,
     branchMergeRef,
     branchRemoteUrl,
-    originRemoteUrl: inspected.remoteUrl,
     resolvedBaseRef,
+    context,
   });
-  if (
-    inspected.currentBranch &&
-    pullRequestLookupTarget?.headRef === inspected.currentBranch &&
-    !pullRequestLookupTarget.headRepositoryOwner
-  ) {
-    pullRequestLookupTarget =
-      (await resolvePullRequestLookupTargetFromPushConfig(
-        cwd,
-        inspected.currentBranch,
-        inspected.remoteUrl,
-        resolvedBaseRef,
-        context,
-      )) ?? pullRequestLookupTarget;
-  }
 
   pullRequestLookupTarget = await addHeadShaToPullRequestLookupTarget(
     cwd,
@@ -4101,9 +4135,8 @@ async function getPullRequestStatusUncached(
   context?: CheckoutContext,
   headSha?: string | null,
 ): Promise<PullRequestStatusResult> {
-  if (context?.facts?.isGit === false) {
-    return buildPullRequestStatusResult(null, "no_remote");
-  }
+  const unavailable = getUnavailablePullRequestStatus(context?.facts);
+  if (unavailable) return unavailable;
   if (!context?.facts?.isGit) {
     await requireGitRepo(cwd);
   }
@@ -4143,4 +4176,20 @@ async function getPullRequestStatusUncached(
     }
     throw error;
   }
+}
+
+function getUnavailablePullRequestStatus(
+  facts: CheckoutSnapshotFacts | null | undefined,
+): PullRequestStatusResult | null {
+  if (facts?.isGit === false) {
+    return buildPullRequestStatusResult(null, "no_remote");
+  }
+  if (
+    facts?.isGit === true &&
+    facts.byspaceWorktree.isBySpaceOwnedWorktree &&
+    facts.pullRequestLookupTarget === null
+  ) {
+    return buildPullRequestStatusResult(null, "authenticated");
+  }
+  return null;
 }

@@ -7,7 +7,6 @@ import {
   archiveByScope,
   type ActiveWorkspaceRef,
   killTerminalsForWorkspace,
-  resolveWorkspaceIdAtPath,
 } from "../workspace-archive-service.js";
 import type {
   WorkspaceGitRuntimeSnapshot,
@@ -39,127 +38,92 @@ export interface AutoArchiveArchiveOptions {
 
 export interface ArchiveIfSafeDependencies {
   archiveByScope: typeof archiveByScope;
-  resolveWorkspaceIdAtPath: typeof resolveWorkspaceIdAtPath;
   isBySpaceOwnedWorktreeCwd: typeof isBySpaceOwnedWorktreeCwd;
   killTerminalsForWorkspace: typeof killTerminalsForWorkspace;
 }
 
 const defaultDependencies: ArchiveIfSafeDependencies = {
   archiveByScope,
-  resolveWorkspaceIdAtPath,
   isBySpaceOwnedWorktreeCwd,
   killTerminalsForWorkspace,
 };
 
 export async function archiveIfSafe(input: {
-  cwd: string;
-  pullRequest: WorkspaceGitRuntimeSnapshot["forge"]["pullRequest"];
-  inFlight: Set<string>;
+  workspaceId: string;
+  snapshot: WorkspaceGitRuntimeSnapshot;
   options: AutoArchiveArchiveOptions;
   log: Logger;
   deps?: ArchiveIfSafeDependencies;
 }): Promise<void> {
-  const { cwd, pullRequest, inFlight, options, log } = input;
+  const { workspaceId, snapshot, options, log } = input;
   const deps = input.deps ?? defaultDependencies;
+  const cwd = snapshot.cwd;
+  const pullRequest = snapshot.forge.pullRequest;
 
   if (!pullRequest?.isMerged) {
     return;
   }
-  if (options.daemonConfigStore.get().autoArchiveAfterMerge !== true) {
+  if (snapshot.git.isDirty === true) {
     return;
   }
-  if (inFlight.has(cwd)) {
+  if (typeof snapshot.git.aheadOfOrigin === "number" && snapshot.git.aheadOfOrigin > 0) {
     return;
   }
 
-  inFlight.add(cwd);
+  const ownership = await deps.isBySpaceOwnedWorktreeCwd(cwd, {
+    byspaceHome: options.byspaceHome,
+    worktreesRoot: options.byspaceWorktreesBaseRoot,
+  });
+  if (!ownership.allowed) {
+    return;
+  }
+
   try {
-    let snapshot: Awaited<ReturnType<typeof options.workspaceGitService.getSnapshot>> | null;
-    try {
-      snapshot = await options.workspaceGitService.getSnapshot(cwd, {
-        reason: "auto-archive-on-merge",
-      });
-    } catch (error) {
-      log.warn({ err: error, cwd }, "Failed to read snapshot for auto-archive; skipping");
-      return;
-    }
-    if (!snapshot) {
+    const autoArchivedChangeRequestUrl = await options.getAutoArchivedChangeRequestUrl(workspaceId);
+    if (autoArchivedChangeRequestUrl === pullRequest.url) {
       return;
     }
 
-    if (snapshot.git.isDirty === true) {
-      return;
-    }
-    if (typeof snapshot.git.aheadOfOrigin === "number" && snapshot.git.aheadOfOrigin > 0) {
-      return;
-    }
-
-    const ownership = await deps.isBySpaceOwnedWorktreeCwd(cwd, {
-      byspaceHome: options.byspaceHome,
-      worktreesRoot: options.byspaceWorktreesBaseRoot,
-    });
-    if (!ownership.allowed) {
-      return;
-    }
-
-    try {
-      const workspaceId = await deps.resolveWorkspaceIdAtPath(
-        {
-          findWorkspaceIdForCwd: options.findWorkspaceIdForCwd,
-          listActiveWorkspaces: options.listActiveWorkspaces,
-        },
-        cwd,
-      );
-      if (!workspaceId) {
-        log.warn({ cwd }, "Auto-archive could not resolve a workspace for cwd; skipping");
-        return;
-      }
-      const autoArchivedChangeRequestUrl =
-        await options.getAutoArchivedChangeRequestUrl(workspaceId);
-      if (autoArchivedChangeRequestUrl === pullRequest.url) {
-        return;
-      }
-
-      await deps.archiveByScope(
-        {
-          byspaceHome: options.byspaceHome,
-          byspaceWorktreesBaseRoot: options.byspaceWorktreesBaseRoot,
-          github: options.github,
-          workspaceGitService: options.workspaceGitService,
-          agentManager: options.agentManager,
-          agentStorage: options.agentStorage,
-          findWorkspaceIdForCwd: options.findWorkspaceIdForCwd,
-          listActiveWorkspaces: options.listActiveWorkspaces,
-          archiveWorkspaceRecord: (workspaceIdToArchive) =>
-            options.archiveWorkspaceRecord(workspaceIdToArchive, {
-              autoArchivedChangeRequestUrl: pullRequest.url,
-            }),
-          emitWorkspaceUpdatesForWorkspaceIds: options.emitWorkspaceUpdatesForWorkspaceIds,
-          markWorkspaceArchiving: options.markWorkspaceArchiving,
-          clearWorkspaceArchiving: options.clearWorkspaceArchiving,
-          killTerminalsForWorkspace: (workspaceIdToKill) =>
-            deps.killTerminalsForWorkspace(
-              {
-                terminalManager: options.terminalManager,
-                sessionLogger: log,
-              },
-              workspaceIdToKill,
-            ),
-          stopWorkspaceSetup: options.stopWorkspaceSetup,
-          sessionLogger: log,
-        },
-        {
-          scope: { kind: "workspace", workspaceId },
-          repoRoot: ownership.repoRoot ?? null,
-          byspaceWorktreesBaseRoot: options.byspaceWorktreesBaseRoot,
-          requestId: "auto-archive-on-merge",
-        },
-      );
-      log.info({ cwd }, "Auto-archived worktree after PR merge");
-    } catch (error) {
-      log.warn({ err: error, cwd }, "Auto-archive after merge failed");
-    }
-  } finally {
-    inFlight.delete(cwd);
+    await deps.archiveByScope(
+      {
+        byspaceHome: options.byspaceHome,
+        byspaceWorktreesBaseRoot: options.byspaceWorktreesBaseRoot,
+        github: options.github,
+        workspaceGitService: options.workspaceGitService,
+        agentManager: options.agentManager,
+        agentStorage: options.agentStorage,
+        findWorkspaceIdForCwd: options.findWorkspaceIdForCwd,
+        listActiveWorkspaces: options.listActiveWorkspaces,
+        archiveWorkspaceRecord: (workspaceIdToArchive) =>
+          options.archiveWorkspaceRecord(workspaceIdToArchive, {
+            autoArchivedChangeRequestUrl: pullRequest.url,
+          }),
+        emitWorkspaceUpdatesForWorkspaceIds: options.emitWorkspaceUpdatesForWorkspaceIds,
+        markWorkspaceArchiving: options.markWorkspaceArchiving,
+        clearWorkspaceArchiving: options.clearWorkspaceArchiving,
+        killTerminalsForWorkspace: (workspaceIdToKill) =>
+          deps.killTerminalsForWorkspace(
+            {
+              terminalManager: options.terminalManager,
+              sessionLogger: log,
+            },
+            workspaceIdToKill,
+          ),
+        stopWorkspaceSetup: options.stopWorkspaceSetup,
+        sessionLogger: log,
+      },
+      {
+        scope: { kind: "workspace", workspaceId },
+        repoRoot: ownership.repoRoot ?? null,
+        byspaceWorktreesBaseRoot: options.byspaceWorktreesBaseRoot,
+        requestId: "auto-archive-on-merge",
+      },
+    );
+    log.info(
+      { workspaceId, cwd, branch: pullRequest.headRefName, pullRequestUrl: pullRequest.url },
+      "Auto-archived worktree after PR merge",
+    );
+  } catch (error) {
+    log.warn({ err: error, cwd }, "Auto-archive after merge failed");
   }
 }

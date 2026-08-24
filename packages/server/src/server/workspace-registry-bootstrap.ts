@@ -10,6 +10,7 @@ import {
 } from "./workspace-registry-model.js";
 import { backfillWorkspaceIdForLegacyAgents } from "./migrations/backfill-workspace-id.migration.js";
 import type { WorkspaceGitService } from "./workspace-git-service.js";
+import { pinBySpaceWorktreeBranchIdentityIfMissing } from "../utils/worktree-metadata.js";
 import {
   createPersistedWorkspaceRecord,
   type ProjectRegistry,
@@ -59,6 +60,28 @@ export async function bootstrapWorkspaceRegistries(options: {
   ]);
 
   await Promise.all([options.projectRegistry.initialize(), options.workspaceRegistry.initialize()]);
+
+  // COMPAT(worktree-branch-identity): added in v0.6.0 on 2026-08-24; remove after
+  // 2027-02-24. Older worktrees did not pin branch-off/check-out branch identity.
+  // Seed it from the registry value clients already display, never from live Git.
+  for (const workspace of await options.workspaceRegistry.list()) {
+    if (
+      workspace.archivedAt ||
+      !workspace.isBySpaceOwnedWorktree ||
+      !workspace.worktreeRoot ||
+      !workspace.branch
+    ) {
+      continue;
+    }
+    try {
+      pinBySpaceWorktreeBranchIdentityIfMissing(workspace.worktreeRoot, workspace.branch);
+    } catch (error) {
+      options.logger.warn(
+        { err: error, workspaceId: workspace.workspaceId },
+        "Failed to pin legacy worktree branch identity; PR association remains disabled",
+      );
+    }
+  }
 
   if (projectsExists && workspacesExists) {
     await backfillWorkspaceIdForLegacyAgents(options);

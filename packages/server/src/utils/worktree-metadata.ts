@@ -106,8 +106,32 @@ export function rebindBySpaceWorktreeChangeRequestHint(
     ...metadata,
     changeRequestLookupTarget: {
       ...target,
+      ...(target.headRef === previousBranch &&
+      !target.headRepositoryOwner &&
+      target.changeRequestNumber === undefined
+        ? { headRef: currentBranch }
+        : {}),
       localBranchName: currentBranch,
     },
+  });
+  return true;
+}
+
+export function pinBySpaceWorktreeBranchIdentityIfMissing(
+  worktreeRoot: string,
+  branch: string,
+): boolean {
+  const metadata = readBySpaceWorktreeMetadata(worktreeRoot);
+  if (!metadata || metadata.changeRequestLookupTarget) {
+    return false;
+  }
+  const target = createBySpaceWorktreeChangeRequestHint({
+    headRef: branch,
+    localBranchName: branch,
+  });
+  writeBySpaceWorktreeMetadataFile(worktreeRoot, {
+    ...metadata,
+    changeRequestLookupTarget: target,
   });
   return true;
 }

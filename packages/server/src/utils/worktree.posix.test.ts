@@ -21,7 +21,10 @@ import {
   type WorktreeConfig,
 } from "./worktree";
 import type { BySpaceConfig } from "@bytetrue/byspace-protocol/byspace-config-schema";
-import { getBySpaceWorktreeMetadataPath } from "./worktree-metadata.js";
+import {
+  getBySpaceWorktreeMetadataPath,
+  readBySpaceWorktreeMetadata,
+} from "./worktree-metadata.js";
 import {
   getCheckoutDiff,
   getCheckoutStatus,
@@ -125,7 +128,11 @@ describe.skipIf(isPlatform("win32"))("worktree POSIX-only", () => {
       const metadataPath = getBySpaceWorktreeMetadataPath(result.worktreePath);
       expect(existsSync(metadataPath)).toBe(true);
       const metadata = JSON.parse(readFileSync(metadataPath, "utf8"));
-      expect(metadata).toMatchObject({ version: 1, baseRefName: "main" });
+      expect(metadata).toMatchObject({
+        version: 1,
+        baseRefName: "main",
+        changeRequestLookupTarget: { headRef: "hello-world", localBranchName: "hello-world" },
+      });
     });
 
     it("creates and owns worktrees under a configured root", async () => {
@@ -251,7 +258,11 @@ describe.skipIf(isPlatform("win32"))("worktree POSIX-only", () => {
 
       const metadataPath = getBySpaceWorktreeMetadataPath(result.worktreePath);
       const metadata = JSON.parse(readFileSync(metadataPath, "utf8"));
-      expect(metadata).toMatchObject({ version: 1, baseRefName: "main" });
+      expect(metadata).toMatchObject({
+        version: 1,
+        baseRefName: "main",
+        changeRequestLookupTarget: { headRef: "feature/x", localBranchName: "feature/x" },
+      });
     });
 
     it("checks out an existing local branch that is not checked out elsewhere", async () => {
@@ -275,7 +286,11 @@ describe.skipIf(isPlatform("win32"))("worktree POSIX-only", () => {
 
       const metadataPath = getBySpaceWorktreeMetadataPath(result.worktreePath);
       const metadata = JSON.parse(readFileSync(metadataPath, "utf8"));
-      expect(metadata).toMatchObject({ version: 1, baseRefName: "dev" });
+      expect(metadata).toMatchObject({
+        version: 1,
+        baseRefName: "dev",
+        changeRequestLookupTarget: { headRef: "dev", localBranchName: "dev" },
+      });
     });
 
     it("checks out an existing local branch whose name contains uppercase letters and dots", async () => {
@@ -309,6 +324,10 @@ describe.skipIf(isPlatform("win32"))("worktree POSIX-only", () => {
 
       expect(result.branchName).toBe("main-1");
       expect(existsSync(result.worktreePath)).toBe(true);
+      expect(readBySpaceWorktreeMetadata(result.worktreePath)?.changeRequestLookupTarget).toEqual({
+        headRef: "main-1",
+        localBranchName: "main-1",
+      });
     });
 
     it("fetches a GitHub PR branch, checks it out, writes metadata, and runs setup", async () => {
@@ -637,15 +656,15 @@ describe.skipIf(isPlatform("win32"))("worktree POSIX-only", () => {
       ).rejects.toThrow("Base branch not found: does-not-exist");
     });
 
-    it("fails with invalid branch name", async () => {
+    it("fails with a Git-invalid branch name", async () => {
       await expect(
         createLegacyWorktreeForTest({
-          branchName: "INVALID_UPPERCASE",
+          branchName: "bad..name",
           cwd: repoDir,
           baseBranch: "main",
           worktreeSlug: "test",
         }),
-      ).rejects.toThrow("Invalid branch name");
+      ).rejects.toThrow("Git rejected ref name 'bad..name'");
     });
 
     it("throws a typed error when checking out an invalid existing branch name", async () => {

@@ -6045,6 +6045,7 @@ export class Session {
         worktreeSlug: source.worktreeSlug,
         action: source.action,
         refName: source.refName,
+        branchName: source.branchName,
         checkoutSource: source.checkoutSource,
         githubPrNumber: source.githubPrNumber,
         firstAgentContext: request.firstAgentContext,
