@@ -82,7 +82,9 @@ only the route's explicit Unarchive or Restore action changes the archived works
 Authoritative timeline catch-up may load provider history with a runtime-only `history` resume
 purpose, which must leave both BySpace's `archivedAt` and the provider's native archive state
 unchanged. **Unarchive** remains the only transition back to an interactive runtime: it runs the
-provider's native unarchive hook before the normal agent resume and timeline hydration flow.
+provider's native unarchive hook before the normal agent resume and timeline hydration flow. A
+provider session can be archived outside BySpace while its BySpace agent remains active. Interactive
+resume repairs that drift through the provider's native unarchive hook; history resume does not.
 
 Provider session connection owns every process it spawns until the session is registered with
 `AgentManager`. If initialization, persisted-session resume, or initial history hydration fails,

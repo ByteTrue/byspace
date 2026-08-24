@@ -644,6 +644,11 @@ export interface AgentSession {
     response: AgentPermissionResponse,
   ): Promise<AgentPermissionResult | void>;
   describePersistence(): AgentPersistenceHandle | null;
+  /**
+   * Resolve once every foreground turn that predates this call can no longer run or become active.
+   * Calling while already idle is a successful no-op. Reject only when foreground ownership is
+   * still uncertain.
+   */
   interrupt(): Promise<void>;
   close(): Promise<void>;
   listCommands?(): Promise<AgentSlashCommand[]>;

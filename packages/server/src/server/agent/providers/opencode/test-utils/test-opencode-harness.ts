@@ -1,6 +1,7 @@
 import type { OpencodeClient } from "@opencode-ai/sdk/v2/client";
 
 import type { OpenCodeServerAcquisition, OpenCodeServerManagerLike } from "../server-manager.js";
+import type { OpenCodeEventSourceInput } from "../event-consumer.js";
 
 interface OpenCodeResponse {
   data?: unknown;
@@ -17,10 +18,21 @@ export class TestOpenCodeHarness implements OpenCodeServerManagerLike {
   }> = [];
   readonly clientCreations: Array<{ baseUrl: string; directory: string }> = [];
   private readonly clients: TestOpenCodeClient[] = [];
+  private readonly eventListeners = new Set<(input: OpenCodeEventSourceInput) => void>();
+  readonly events = {
+    ready: async () => undefined,
+    subscribe: (listener: (input: OpenCodeEventSourceInput) => void) => {
+      this.eventListeners.add(listener);
+      return () => this.eventListeners.delete(listener);
+    },
+  };
 
   server = { port: 1234, url: "http://127.0.0.1:1234" };
 
   enqueueClient(client: TestOpenCodeClient): void {
+    client.observeEvents((event) => {
+      for (const listener of this.eventListeners) listener(event as OpenCodeEventSourceInput);
+    });
     this.clients.push(client);
   }
 
@@ -54,6 +66,7 @@ export class TestOpenCodeHarness implements OpenCodeServerManagerLike {
     this.acquisitions.push(acquisition);
     return {
       server: this.server,
+      events: this.events,
       release: async () => {
         acquisition.releaseCount += 1;
       },
@@ -126,6 +139,7 @@ export class TestOpenCodeClient {
   sessionCommandEvents: unknown[] = [idleEvent()];
   sessionCommandResponse: OpenCodeResponse = {};
   sessionCreateResponse: OpenCodeResponse = { data: { id: "session-1" } };
+  sessionCreateImplementation: ((parameters: unknown) => Promise<OpenCodeResponse>) | null = null;
   sessionDeleteResponse: OpenCodeResponse = {};
   sessionChildrenResponses: OpenCodeResponse[] = [];
   sessionChildrenImplementation: ((parameters: unknown) => Promise<OpenCodeResponse>) | null = null;
@@ -137,6 +151,9 @@ export class TestOpenCodeClient {
   sessionPromptAsyncImplementation: ((parameters: unknown) => Promise<OpenCodeResponse>) | null =
     null;
   sessionPromptAsyncResponse: OpenCodeResponse = {};
+  sessionStatusImplementation:
+    | ((parameters: unknown, options: unknown) => Promise<OpenCodeResponse>)
+    | null = null;
   sessionStatusResponse: OpenCodeResponse = { data: {} };
   sessionSummarizeEvents: unknown[] = [idleEvent()];
   sessionSummarizeResponse: OpenCodeResponse = { data: {} };
@@ -147,8 +164,15 @@ export class TestOpenCodeClient {
     this.eventStream = this.queuedEventStream.stream;
   }
 
+  private eventObserver: ((event: unknown) => void) | null = null;
+
   emitEvent(event: unknown): void {
     this.queuedEventStream.emit(event);
+    this.eventObserver?.(event);
+  }
+
+  observeEvents(observer: (event: unknown) => void): void {
+    this.eventObserver = observer;
   }
 
   asSdkClient(): OpencodeClient {
@@ -249,6 +273,9 @@ export class TestOpenCodeClient {
         },
         create: async (parameters: unknown) => {
           this.calls.sessionCreate.push(parameters);
+          if (this.sessionCreateImplementation) {
+            return await this.sessionCreateImplementation(parameters);
+          }
           return this.sessionCreateResponse;
         },
         delete: async (parameters: unknown) => {
@@ -280,9 +307,11 @@ export class TestOpenCodeClient {
           }
           return this.sessionPromptAsyncResponse;
         },
-        status: async (parameters: unknown) => {
+        status: async (parameters: unknown, options: unknown) => {
           this.calls.sessionStatus.push(parameters);
-          return this.sessionStatusResponse;
+          return this.sessionStatusImplementation
+            ? await this.sessionStatusImplementation(parameters, options)
+            : this.sessionStatusResponse;
         },
         summarize: async (parameters: unknown) => {
           this.calls.sessionSummarize.push(parameters);
