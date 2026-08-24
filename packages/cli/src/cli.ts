@@ -3,6 +3,7 @@ import { createAgentCommand } from "./commands/agent/index.js";
 import { createDaemonCommand } from "./commands/daemon/index.js";
 import { createPermitCommand } from "./commands/permit/index.js";
 import { createPluginCommand } from "./commands/plugin/index.js";
+import { createProjectCommand } from "./commands/project/index.js";
 import { createProviderCommand } from "./commands/provider/index.js";
 import { createScheduleCommand } from "./commands/schedule/index.js";
 import { createSpeechCommand } from "./commands/speech/index.js";
@@ -197,6 +198,7 @@ export function createCli(): Command {
   program.addCommand(createSpeechCommand());
 
   // Workspace commands
+  program.addCommand(createProjectCommand());
   program.addCommand(createWorkspaceCommand());
   // COMPAT(worktreeCli): legacy command alias added before workspace was the product unit.
   // Added in v0.2.0; remove after 2027-01-17.
