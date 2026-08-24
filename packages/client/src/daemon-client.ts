@@ -85,6 +85,7 @@ import type {
   ProviderUsageListResponseMessage,
   DaemonGetStatusResponse,
   DaemonGetPairingOfferResponse,
+  DaemonConfigReloadResponse,
   DiagnosticsResponse,
   DaemonOrchestrationSkillsGetStatusResponse,
   DaemonOrchestrationSkillsSetInstalledResponse,
@@ -4790,6 +4791,14 @@ export class DaemonClient {
     });
   }
 
+  async reloadDaemonConfig(requestId?: string): Promise<DaemonConfigReloadResponse["payload"]> {
+    this.requireDaemonConfigReloadSupport();
+    return this.sendNamespacedCorrelatedSessionRequest({
+      requestId,
+      message: { type: "daemon.config.reload.request" },
+    });
+  }
+
   async collectDiagnostics(requestId?: string): Promise<DiagnosticsPayload> {
     return this.sendNamespacedCorrelatedSessionRequest({
       requestId,
@@ -5533,6 +5542,13 @@ export class DaemonClient {
 
   getLastServerInfoMessage(): ServerInfoStatusPayload | null {
     return this.lastServerInfoMessage;
+  }
+
+  private requireDaemonConfigReloadSupport(): void {
+    // COMPAT(daemonConfigReload): added in v0.4.0, remove gate after 2027-02-14.
+    if (this.lastServerInfoMessage?.features?.daemonConfigReload !== true) {
+      throw new Error("Update the host to reload daemon configuration.");
+    }
   }
 
   private resolveTransportUrlForAttempt(): string {
