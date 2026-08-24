@@ -1404,6 +1404,23 @@ export class VoiceAssistantWebSocketServer {
     );
   }
 
+  private buildServerInfoDataRelayPayload(): ServerInfoStatusPayload["dataRelay"] {
+    let dataRelayConfig: MutableDaemonConfig["dataRelay"] | undefined;
+    try {
+      dataRelayConfig = this.daemonConfigStore?.get?.()?.dataRelay;
+    } catch {
+      dataRelayConfig = undefined;
+    }
+    const isConfigured = this.remoteWebServiceManager?.isDataRelayConfigured() ?? false;
+    return {
+      configured: isConfigured || Boolean(dataRelayConfig?.listen || dataRelayConfig?.endpoint),
+      listen: dataRelayConfig?.listen ?? null,
+      endpoint: dataRelayConfig?.endpoint ?? null,
+      publicEndpoint: dataRelayConfig?.publicEndpoint ?? null,
+      useTls: dataRelayConfig?.useTls ?? true,
+    };
+  }
+
   private buildServerInfoStatusPayload(): ServerInfoStatusPayload {
     return {
       status: "server_info",
@@ -1411,7 +1428,7 @@ export class VoiceAssistantWebSocketServer {
       hostname: getHostname(),
       version: this.daemonVersion,
       ...(this.daemonPublicKeyB64 ? { daemonPublicKeyB64: this.daemonPublicKeyB64 } : {}),
-      dataRelay: { configured: this.remoteWebServiceManager?.isDataRelayConfigured() ?? false },
+      dataRelay: this.buildServerInfoDataRelayPayload(),
       ...(this.serverCapabilities ? { capabilities: this.serverCapabilities } : {}),
       features: {
         // COMPAT(providerOptions): added in v0.5.0-beta.1 on 2026-08-12; remove the gate after 2027-02-12.
@@ -1554,6 +1571,10 @@ export class VoiceAssistantWebSocketServer {
         config,
       },
     });
+  }
+
+  public broadcastServerInfo(): void {
+    this.broadcast(this.createServerInfoMessage());
   }
 
   private broadcastCapabilitiesUpdate(): void {

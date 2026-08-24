@@ -30,12 +30,20 @@ export class RemoteWebServiceManager {
   }
 
   private readonly serviceProxy: ServiceProxySubsystem;
-  private readonly dataRelay: DataRelayClientConfig | null;
+  private dataRelay: DataRelayClientConfig | null;
   private readonly daemonKeyPair: KeyPair;
   private readonly logger: pino.Logger;
 
   isDataRelayConfigured(): boolean {
     return this.dataRelay !== null;
+  }
+
+  setDataRelay(dataRelay: DataRelayClientConfig | null): void {
+    this.dataRelay = dataRelay;
+  }
+
+  getDataRelay(): DataRelayClientConfig | null {
+    return this.dataRelay;
   }
 
   initialize(): Promise<void> {

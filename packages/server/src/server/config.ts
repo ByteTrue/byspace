@@ -202,23 +202,45 @@ function parseDataRelayEndpoint(value: string | undefined, variable: string): st
   }
 }
 
-function resolveDataRelayConfig(env: NodeJS.ProcessEnv) {
+function resolveDataRelayTls(
+  env: NodeJS.ProcessEnv,
+  persistedDataRelay: { useTls?: boolean; publicUseTls?: boolean } | undefined,
+) {
+  const useTls =
+    parseBooleanEnv(env.BYSPACE_DATA_RELAY_USE_TLS) ?? persistedDataRelay?.useTls ?? true;
+  const publicUseTls =
+    parseBooleanEnv(env.BYSPACE_DATA_RELAY_PUBLIC_USE_TLS) ??
+    persistedDataRelay?.publicUseTls ??
+    useTls;
+  return { useTls, publicUseTls };
+}
+
+function resolveDataRelayConfig(
+  env: NodeJS.ProcessEnv,
+  persisted: ReturnType<typeof loadPersistedConfig>,
+) {
+  const persistedDataRelay = persisted.daemon?.dataRelay;
   const endpoint = parseDataRelayEndpoint(
-    env.BYSPACE_DATA_RELAY_ENDPOINT,
+    env.BYSPACE_DATA_RELAY_ENDPOINT ?? persistedDataRelay?.endpoint ?? undefined,
     "BYSPACE_DATA_RELAY_ENDPOINT",
   );
   const publicEndpoint = parseDataRelayEndpoint(
-    env.BYSPACE_DATA_RELAY_PUBLIC_ENDPOINT,
+    env.BYSPACE_DATA_RELAY_PUBLIC_ENDPOINT ?? persistedDataRelay?.publicEndpoint ?? undefined,
     "BYSPACE_DATA_RELAY_PUBLIC_ENDPOINT",
   );
-  const useTls = parseBooleanEnv(env.BYSPACE_DATA_RELAY_USE_TLS) ?? true;
+  const { useTls, publicUseTls } = resolveDataRelayTls(env, persistedDataRelay);
+  const listen =
+    env.BYSPACE_DATA_RELAY_LISTEN?.trim() || persistedDataRelay?.listen?.trim() || null;
+  const accessToken =
+    env.BYSPACE_DATA_RELAY_ACCESS_TOKEN?.trim() || persistedDataRelay?.accessToken?.trim() || null;
+
   return {
-    dataRelayListen: env.BYSPACE_DATA_RELAY_LISTEN?.trim() || null,
+    dataRelayListen: listen,
     dataRelayEndpoint: endpoint,
     dataRelayPublicEndpoint: publicEndpoint ?? endpoint,
     dataRelayUseTls: useTls,
-    dataRelayPublicUseTls: parseBooleanEnv(env.BYSPACE_DATA_RELAY_PUBLIC_USE_TLS) ?? useTls,
-    dataRelayAccessToken: env.BYSPACE_DATA_RELAY_ACCESS_TOKEN?.trim() || null,
+    dataRelayPublicUseTls: publicUseTls,
+    dataRelayAccessToken: accessToken,
   };
 }
 
@@ -518,7 +540,7 @@ export function loadConfig(
     hostedRelease,
   });
   const serviceProxy = resolveServiceProxyConfig(env, persisted);
-  const dataRelay = resolveDataRelayConfig(env);
+  const dataRelay = resolveDataRelayConfig(env, persisted);
   const webUi = resolveWebUiConfig(byspaceHome, env, options?.cli, persisted);
 
   const speech = resolveSpeechConfig({

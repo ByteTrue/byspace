@@ -382,6 +382,14 @@ function mergeMutableConfigIntoPersistedConfig(params: {
         ? { terminalProfiles: mutable.terminalProfiles }
         : {}),
       ...(mutable.agentProfiles !== undefined ? { agentProfiles: mutable.agentProfiles } : {}),
+      ...(mutable.dataRelay !== undefined
+        ? {
+            dataRelay: {
+              ...persisted.daemon?.dataRelay,
+              ...mutable.dataRelay,
+            },
+          }
+        : {}),
     },
     features: {
       ...persisted.features,

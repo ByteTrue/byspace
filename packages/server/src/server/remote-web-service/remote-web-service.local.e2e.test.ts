@@ -4,6 +4,7 @@ import { WebSocket, WebSocketServer } from "ws";
 import { startStandaloneRelayServer } from "@bytetrue/byspace-relay/standalone";
 import { loadOrCreateDaemonKeyPair } from "../daemon-keypair.js";
 import { getOrCreateServerId } from "../server-id.js";
+import { findFreePort } from "../service-proxy.js";
 import { createTestBySpaceDaemon } from "../test-utils/byspace-daemon.js";
 
 const ACCESS_TOKEN = "remote-web-service-e2e-token";
@@ -162,5 +163,86 @@ describe("Remote Web Service daemon-to-daemon path", () => {
     await expect(requestRemote(source.port, mapping.hostname)).resolves.toMatchObject({
       status: 502,
     });
+  });
+  it("dynamically configures Data Relay via daemon config store and tunnels HTTP/WebSocket", async () => {
+    const upstream = http.createServer(handleUpstreamRequest);
+    const upstreamWebSockets = new WebSocketServer({ noServer: true });
+    attachUpstreamWebSockets(upstream, upstreamWebSockets);
+    await new Promise<void>((resolve) => upstream.listen(0, "127.0.0.1", resolve));
+    cleanup.push(() => closeHttpServer(upstream));
+    const upstreamAddress = upstream.address();
+    if (!upstreamAddress || typeof upstreamAddress === "string") {
+      throw new Error("Expected upstream TCP address");
+    }
+
+    // Start source and target with NO Data Relay initially
+    const source = await createTestBySpaceDaemon();
+    cleanup.push(() => source.close());
+    const target = await createTestBySpaceDaemon();
+    cleanup.push(() => target.close());
+
+    expect(source.daemon.remoteWebServiceManager.isDataRelayConfigured()).toBe(false);
+    expect(target.daemon.remoteWebServiceManager.isDataRelayConfigured()).toBe(false);
+
+    // Find a free port for Data Relay listener on source host
+    const dataRelayPort = await findFreePort();
+    const relayEndpoint = `127.0.0.1:${dataRelayPort}`;
+
+    // Dynamically patch source to host Data Relay and connect locally
+    source.daemon.daemonConfigStore.patch({
+      dataRelay: {
+        listen: relayEndpoint,
+        endpoint: relayEndpoint,
+        useTls: false,
+        accessToken: ACCESS_TOKEN,
+      },
+    });
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(source.daemon.remoteWebServiceManager.isDataRelayConfigured()).toBe(true);
+
+    // Dynamically patch target to connect to source's Data Relay
+    target.daemon.daemonConfigStore.patch({
+      dataRelay: {
+        endpoint: relayEndpoint,
+        useTls: false,
+        accessToken: ACCESS_TOKEN,
+      },
+    });
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(target.daemon.remoteWebServiceManager.isDataRelayConfigured()).toBe(true);
+
+    const targetKey = await loadOrCreateDaemonKeyPair(target.byspaceHome);
+    const sourceKey = await loadOrCreateDaemonKeyPair(source.byspaceHome);
+    const mapping = await source.daemon.remoteWebServiceManager.create({
+      name: "dynamic-web",
+      target: {
+        serverId: getOrCreateServerId(target.byspaceHome),
+        label: "target-host",
+        port: upstreamAddress.port,
+        daemonPublicKeyB64: targetKey.publicKeyB64,
+      },
+    });
+    await target.daemon.remoteWebServiceManager.grant({
+      serviceId: mapping.id,
+      sourceDaemonPublicKeyB64: sourceKey.publicKeyB64,
+      targetPort: upstreamAddress.port,
+    });
+
+    // Test HTTP request through the dynamically established tunnel
+    const response = await requestEventually(source.port, mapping.hostname);
+    expect(response.status).toBe(200);
+    expect(response.body).toContain("data: one");
+    expect(response.body).toContain("data: two");
+
+    // Test WebSocket connection through the dynamically established tunnel
+    const webSocket = new WebSocket(`ws://127.0.0.1:${source.port}/socket`, {
+      headers: { Host: mapping.hostname },
+    });
+    cleanup.push(() => closeWebSocket(webSocket));
+    await connectWebSocket(webSocket);
+    const echoed = nextWebSocketMessage(webSocket);
+    webSocket.send("dynamic-hmr");
+    await expect(echoed).resolves.toBe("echo:dynamic-hmr");
+    await closeWebSocket(webSocket);
   });
 });

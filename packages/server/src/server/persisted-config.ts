@@ -208,6 +208,17 @@ export const PersistedConfigSchema = z
           })
           .strict()
           .optional(),
+        dataRelay: z
+          .object({
+            listen: z.string().nullable().optional(),
+            endpoint: z.string().nullable().optional(),
+            publicEndpoint: z.string().nullable().optional(),
+            useTls: z.boolean().optional(),
+            publicUseTls: z.boolean().optional(),
+            accessToken: z.string().nullable().optional(),
+          })
+          .strict()
+          .optional(),
         serviceProxy: z
           .object({
             // COMPAT(serviceProxyEnabled): added 2026-06-02, remove after 2026-12-02.

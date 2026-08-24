@@ -175,6 +175,19 @@ const MutableRelayConfigSchema = z
   })
   .passthrough();
 
+export const MutableDataRelayConfigSchema = z
+  .object({
+    listen: z.string().nullable().optional(),
+    endpoint: z.string().nullable().optional(),
+    publicEndpoint: z.string().nullable().optional(),
+    useTls: z.boolean().optional(),
+    publicUseTls: z.boolean().optional(),
+    accessToken: z.string().nullable().optional(),
+  })
+  .passthrough();
+
+export type MutableDataRelayConfig = z.infer<typeof MutableDataRelayConfigSchema>;
+
 export const MutableDaemonConfigSchema = z
   .object({
     // COMPAT(relayConfig): added in v0.5.0, remove after 2027-02-08 when old daemons are unsupported.
@@ -199,6 +212,7 @@ export const MutableDaemonConfigSchema = z
     appendSystemPrompt: z.string().default(""),
     terminalProfiles: z.array(TerminalProfileSchema).optional(),
     agentProfiles: z.array(AgentProfileSchema).optional(),
+    dataRelay: MutableDataRelayConfigSchema.optional(),
   })
   .passthrough();
 
@@ -223,6 +237,7 @@ export const MutableDaemonConfigPatchSchema = z
     appendSystemPrompt: z.string().optional(),
     terminalProfiles: z.array(TerminalProfileSchema).optional(),
     agentProfiles: z.array(AgentProfileSchema).optional(),
+    dataRelay: MutableDataRelayConfigSchema.partial().optional(),
   })
   .partial()
   .passthrough();
@@ -3111,7 +3126,16 @@ export const ServerInfoStatusPayloadSchema = z
     // COMPAT(remoteWebServices): added in v0.6.0; old daemons omit their data-plane key.
     daemonPublicKeyB64: z.string().trim().min(1).optional(),
     // COMPAT(remoteWebServices): added in v0.6.0; remove the gate after 2027-02-20.
-    dataRelay: z.object({ configured: z.boolean() }).optional(),
+    dataRelay: z
+      .object({
+        configured: z.boolean(),
+        listen: z.string().nullable().optional(),
+        endpoint: z.string().nullable().optional(),
+        publicEndpoint: z.string().nullable().optional(),
+        useTls: z.boolean().optional(),
+      })
+      .passthrough()
+      .optional(),
     capabilities: ServerCapabilitiesFromUnknownSchema.optional(),
     // COMPAT(providersSnapshot): added in v0.1.48, remove gating when all clients use snapshot
     features: z

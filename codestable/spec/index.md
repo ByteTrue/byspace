@@ -41,9 +41,9 @@ Data Relay access token 是整个 Relay 的带宽与可用性门，不授予目�
 
 ### 持久性、部署与失败语义
 
-Relay endpoint、TLS 选择和 access token 都是 daemon 运行配置，不写入 mapping 或 grant。当前可以让家里设备 B 托管 Data Relay 并通过自己的入口暴露；以后迁移到 VPS 时，只需在 VPS 安装普通 daemon、启用独立 Data Relay listener、配置 Caddy/nginx，并修改参与 daemon 的 endpoint/token 后重启。已有 mapping、grant 与 `.remote.localhost` URL 不变。
+Relay endpoint、TLS 选择和 access token 均可通过 Web UI（Host 设置 → Connections → Data Relay）纯界面化配置与随机生成，并支持环境变量（`BYSPACE_DATA_RELAY_*`）覆盖。修改通过 DaemonConfigStore 持久化并由 Daemon 动态重载中继监听器和客户端运行时，无需手动重启进程。已有 mapping、grant 与 `.remote.localhost` URL 在中继端点变化后保持不变。
 
-源 daemon 重启后恢复映射与 hostname；Data Relay 或目标暂时离线不会删除它们。网络断开会立即终止当前 HTTP/SSE/WebSocket 流并有界清理两端资源，后续新请求重新建链。系统不缓存、重放、断点续传或恢复活动请求。
+源 daemon 重启后恢复映射与 hostname；Data Relay 或目标暂时离线不会删除它们。网络断开会立即终止当前 HTTP/SSE/WebSocket 流并有界清理两端资源，后续新请求重新建链。系统不缓存、重放、断点续传或恢复活动请求。Web UI 提供常用开发场景端口预设（Vite、Next.js、AI Gateway、Ollama）、生成的 .remote.localhost 地址实时预览，以及一键复制 URL / 浏览器直接打开快捷操作。
 
 该能力通过 `server_info.features.remoteWebServices` 集中检测；新客户端面对不支持的 daemon 只提示升级，不用旧 RPC 模拟降级路径。它不提供公共 preview URL、浏览器直连、任意 TCP/UDP、SSH、数据库代理、P2P/TURN、NAT 打洞、TUN/native helper、AI 专属类型、Provider 自动配置或 API Key 托管。
 
