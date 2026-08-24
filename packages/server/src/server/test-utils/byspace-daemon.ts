@@ -43,6 +43,7 @@ interface TestBySpaceDaemonOptions {
   serviceProxy?: BySpaceDaemonConfig["serviceProxy"];
   webUi?: BySpaceDaemonConfig["webUi"];
   trustedProxies?: BySpaceDaemonConfig["trustedProxies"];
+  autoArchiveAfterMerge?: boolean;
 }
 
 export interface TestBySpaceDaemon {
@@ -195,6 +196,7 @@ async function prepareTestDaemonConfig(
     },
     dictationFinalTimeoutMs: options.dictationFinalTimeoutMs,
     downloadTokenTtlMs: options.downloadTokenTtlMs,
+    autoArchiveAfterMerge: options.autoArchiveAfterMerge,
   };
   return { config, byspaceHomeRoot, byspaceHome, staticDir };
 }
