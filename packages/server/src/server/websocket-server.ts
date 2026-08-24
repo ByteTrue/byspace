@@ -25,6 +25,8 @@ import {
   type WSOutboundMessage,
   wrapSessionMessage,
 } from "./messages.js";
+import type { ProjectUpdate } from "./workspace-reconciliation-service.js";
+import { DirectorySyncService } from "./directory-sync/index.js";
 import { asUint8Array, decodeBinaryFrame } from "@bytetrue/byspace-protocol/binary-frames/index";
 import { CLIENT_CAPS } from "@bytetrue/byspace-protocol/client-capabilities";
 import type { TerminalActivity } from "@bytetrue/byspace-protocol/terminal-activity";
@@ -572,6 +574,7 @@ export class VoiceAssistantWebSocketServer {
   private readonly workspaceLabelService: WorkspaceLabelService | null;
   private unsubscribeTerminalActivity: (() => void) | null = null;
   private acceptingConnections = true;
+  private readonly directorySync = new DirectorySyncService();
 
   constructor(
     server: HTTPServer,
@@ -922,6 +925,16 @@ export class VoiceAssistantWebSocketServer {
         ),
       ),
     );
+  }
+
+  public publishProjectUpdate(update: ProjectUpdate): void {
+    for (const session of this.listActiveSessions()) {
+      void session
+        .emitProjectUpdate(update)
+        .catch((error: unknown) =>
+          this.logger.warn({ err: error }, "Failed to publish project update"),
+        );
+    }
   }
 
   public publishSpeechReadiness(readiness: SpeechReadinessSnapshot | null): void {
@@ -1312,6 +1325,7 @@ export class VoiceAssistantWebSocketServer {
       agentStorage: this.agentStorage,
       projectRegistry: this.projectRegistry,
       workspaceRegistry: this.workspaceRegistry,
+      directorySync: this.directorySync,
       workspaceLabelService: this.workspaceLabelService ?? undefined,
       scheduleService: this.scheduleService,
       checkoutDiffManager: this.checkoutDiffManager,
@@ -1522,6 +1536,8 @@ export class VoiceAssistantWebSocketServer {
       dataRelay: this.buildServerInfoDataRelayPayload(),
       ...(this.serverCapabilities ? { capabilities: this.serverCapabilities } : {}),
       features: {
+        // COMPAT(directorySync): added in v0.5.1, remove gate after 2027-02-12.
+        directorySync: true,
         // COMPAT(providerOptions): added in v0.5.0-beta.1 on 2026-08-12; remove the gate after 2027-02-12.
         providerOptions: true,
         // COMPAT(remoteWebServices): added in v0.6.0; remove the gate after 2027-02-20.

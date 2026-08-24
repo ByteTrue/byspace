@@ -56,6 +56,7 @@ All paths are under `packages/server/src/`.
 | `server/bootstrap.ts`             | Daemon initialization: HTTP server, WS server, agent manager, storage, relay   |
 | `server/websocket-server.ts`      | WebSocket connection management, hello handshake, binary frame routing         |
 | `server/session.ts`               | Per-client session state, timeline subscriptions, terminal operations          |
+| `server/directory-sync/`          | Daemon-global latest-state sequences for projects, workspaces, and agents      |
 | `server/agent/agent-manager.ts`   | Agent lifecycle state machine, timeline tracking, subscriber management        |
 | `server/agent/agent-storage.ts`   | File-backed JSON persistence at `$BYSPACE_HOME/agents/`                        |
 | `server/agent/tools/`             | Transport-neutral BySpace tool catalog for subagents, permissions, worktrees   |
@@ -69,6 +70,8 @@ All paths are under `packages/server/src/`.
 | `server/schedule/`                | Cron-based scheduled agents                                                    |
 
 Workspace Git and forge metadata is daemon-owned and observer-driven. The custom file observer debounces relevant working-tree and Git metadata changes before refreshing snapshots; healthy, quiet workspaces perform no periodic full Git refresh. A liveness canary checks the observer without spawning Git work, while a failed observer enters bounded degraded polling until it recovers. Background fetch and adaptive Forge refresh remain enabled, and the Git process scheduler bounds concurrency, rate, and priority so observer work cannot starve interactive daemon requests. Explicit `checkout.refresh` still forces a local snapshot and diff before the Forge result arrives. Per-Workspace refreshes coalesce concurrent intent, and checkout status carries an optional opaque `commitsVersion` so dirty-only updates do not invalidate commit history on current daemons while older daemons retain conservative invalidation.
+
+The three directory entity types have independent monotonic sequences and share one daemon generation. The daemon retains only the latest projection per entity and bounded tombstones, not an event log. A missing, expired, or previous-generation cursor receives a full snapshot. Projects are independent records; a project with no workspaces does not need a workspace placeholder.
 
 ### `packages/protocol` — Wire schemas and shared protocol types
 

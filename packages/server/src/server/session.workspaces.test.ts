@@ -14,6 +14,7 @@ import { setImmediate as waitForImmediate } from "node:timers/promises";
 import { afterEach, expect, test, vi } from "vitest";
 import { z } from "zod";
 
+import { CLIENT_CAPS } from "@bytetrue/byspace-protocol/client-capabilities";
 import { createTestLogger } from "../test-utils/test-logger.js";
 import { Session } from "./session.js";
 import type { SessionOptions } from "./session.js";
@@ -767,6 +768,55 @@ function createSessionForWorkspaceTests(
   );
   return session;
 }
+
+test("project.list.request catches up by sequence on the existing RPC", async () => {
+  const emitted: SessionOutboundMessage[] = [];
+  let project = createPersistedProjectRecord({
+    projectId: "project-sequenced",
+    rootPath: "/repo/sequenced",
+    kind: "git",
+    displayName: "Before",
+    createdAt: "2026-08-12T08:00:00.000Z",
+    updatedAt: "2026-08-12T08:00:00.000Z",
+  });
+  const session = createSessionForWorkspaceTests({
+    onMessage: (message) => emitted.push(message),
+    projectRegistry: {
+      initialize: async () => {},
+      existsOnDisk: async () => true,
+      list: async () => [project],
+      get: async () => project,
+      getOrCreateActiveByRoot: async () => project,
+      upsert: async () => {},
+      archive: async () => {},
+      remove: async () => {},
+    },
+  });
+
+  await session.handleMessage({
+    type: "project.list.request",
+    requestId: "initial",
+    sync: {},
+  });
+  const initial = findByType(emitted, "project.list.response")?.payload;
+  expect(initial?.sync).toMatchObject({ mode: "snapshot", headSeq: 1 });
+
+  project = { ...project, displayName: "After", updatedAt: "2026-08-12T08:01:00.000Z" };
+  await session.handleMessage({
+    type: "project.list.request",
+    requestId: "catch-up",
+    sync: {
+      generation: initial?.sync?.generation,
+      afterSeq: initial?.sync?.headSeq,
+    },
+  });
+  const responses = filterByType(emitted, "project.list.response");
+  expect(responses.at(-1)?.payload).toMatchObject({
+    requestId: "catch-up",
+    projects: [{ projectId: "project-sequenced", projectDisplayName: "After", syncSeq: 2 }],
+    sync: { mode: "changes", headSeq: 2, removals: [] },
+  });
+});
 
 test("agent updates preserve queued live transitions across stored metadata reads", async () => {
   const running = makeManagedAgent({
@@ -7204,6 +7254,7 @@ test("project.rename.request updates a project with no workspaces", async () => 
   const session = asTestSession(
     createSessionForWorkspaceTests({ onMessage: (message) => emitted.push(message) }),
   );
+  session.updateClientCapabilities({ [CLIENT_CAPS.projectUpdates]: true });
 
   const project = createPersistedProjectRecord({
     projectId: "prj_empty",
@@ -7214,16 +7265,8 @@ test("project.rename.request updates a project with no workspaces", async () => 
     updatedAt: "2026-07-20T12:00:00.000Z",
   });
   session.projectRegistry.get = async () => project;
-  session.projectRegistry.list = async () => [project];
   session.projectRegistry.upsert = async () => project;
   session.workspaceRegistry.list = async () => [];
-
-  await session.handleMessage({
-    type: "fetch_workspaces_request",
-    requestId: "req-empty-projects",
-    subscribe: { subscriptionId: "sub-empty-projects" },
-  });
-  emitted.length = 0;
 
   await session.handleMessage({
     type: "project.rename.request",
@@ -7232,10 +7275,9 @@ test("project.rename.request updates a project with no workspaces", async () => 
     requestId: "req-rename-empty",
   });
 
-  expect(findByType(emitted, "workspace_update")?.payload).toMatchObject({
-    kind: "remove",
-    id: `project:${project.projectId}`,
-    emptyProject: {
+  expect(findByType(emitted, "project.update")?.payload).toMatchObject({
+    kind: "upsert",
+    project: {
       projectId: project.projectId,
       projectDisplayName: "Renamed empty project",
       projectCustomName: "Renamed empty project",

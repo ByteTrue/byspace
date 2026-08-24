@@ -1246,6 +1246,26 @@ export const SendAgentMessageSchema = z.object({
 // Agent RPCs (requestId-correlated)
 // ============================================================================
 
+const DirectorySyncRequestSchema = z.object({
+  generation: z.string().optional(),
+  afterSeq: z.number().int().nonnegative().optional(),
+});
+
+const DirectorySyncRemovalSchema = z.object({
+  id: z.string(),
+  seq: z.number().int().positive(),
+});
+
+const DirectorySyncMetadataSchema = z.object({
+  generation: z.string(),
+  headSeq: z.number().int().nonnegative(),
+  mode: z.enum(["snapshot", "changes"]),
+  reason: z
+    .enum(["no_cursor", "generation_changed", "cursor_expired", "changes_too_large"])
+    .optional(),
+  removals: z.array(DirectorySyncRemovalSchema),
+});
+
 export const FetchAgentsRequestMessageSchema = z.object({
   type: z.literal("fetch_agents_request"),
   requestId: z.string(),
@@ -1270,6 +1290,8 @@ export const FetchAgentsRequestMessageSchema = z.object({
       subscriptionId: z.string().optional(),
     })
     .optional(),
+  // COMPAT(directorySync): added in v0.5.1, remove optional after 2027-02-12.
+  sync: DirectorySyncRequestSchema.optional(),
 });
 
 const WorkspaceStateBucketSchema = z.enum([
@@ -1310,11 +1332,15 @@ export const FetchWorkspacesRequestMessageSchema = z.object({
       subscriptionId: z.string().optional(),
     })
     .optional(),
+  // COMPAT(directorySync): added in v0.5.1, remove optional after 2027-02-12.
+  sync: DirectorySyncRequestSchema.optional(),
 });
 
 export const ProjectListRequestMessageSchema = z.object({
   type: z.literal("project.list.request"),
   requestId: z.string(),
+  // COMPAT(directorySync): added in v0.5.1, remove optional after 2027-02-12.
+  sync: DirectorySyncRequestSchema.optional(),
 });
 
 export const AGENT_HISTORY_SEARCH_MAX_LENGTH = 200;
@@ -3398,6 +3424,8 @@ export const ServerInfoStatusPayloadSchema = z
         // COMPAT(workspaceLabels): added in v0.5.0, remove after 2027-08-14.
         workspaceLabels: z.boolean().optional(),
         providersSnapshot: z.boolean().optional(),
+        // COMPAT(directorySync): added in v0.5.1, remove gate after 2027-02-12.
+        directorySync: z.boolean().optional(),
         // COMPAT(providersSnapshotCwd): added in v0.6.0, remove after 2027-02-21.
         providersSnapshotCwd: z.boolean().optional(),
         // COMPAT(checkoutForgeSetAutoMerge): added in v0.1.106, remove old
@@ -3848,6 +3876,8 @@ export const WorkspaceDescriptorPayloadSchema = z
     // Old daemons omit it; absent means the client falls back to GitHub.
     forge: z.string().optional(),
     project: ProjectPlacementPayloadSchema.optional(),
+    // COMPAT(directorySync): sequence of this latest directory projection.
+    syncSeq: z.number().int().positive().optional(),
   })
   .transform((workspace) => ({
     ...workspace,
@@ -3861,10 +3891,14 @@ export const AgentUpdateMessageSchema = z.object({
       kind: z.literal("upsert"),
       agent: AgentSnapshotPayloadSchema,
       project: ProjectPlacementPayloadSchema.nullable().optional(),
+      generation: z.string().optional(),
+      seq: z.number().int().positive().optional(),
     }),
     z.object({
       kind: z.literal("remove"),
       agentId: z.string(),
+      generation: z.string().optional(),
+      seq: z.number().int().positive().optional(),
     }),
   ]),
 });
@@ -3922,6 +3956,8 @@ const AgentDirectoryResponseEntrySchema = z.object({
   // anyway; sending it keeps the client from re-deriving a second opinion that
   // could disagree with the ranking it is explaining.
   searchMatches: z.array(AgentSearchMatchSchema).optional(),
+  // COMPAT(directorySync): sequence of this latest directory projection.
+  syncSeq: z.number().int().positive().optional(),
 });
 
 const AgentDirectoryPageInfoSchema = z.object({
@@ -3937,6 +3973,7 @@ export const FetchAgentsResponseMessageSchema = z.object({
     subscriptionId: z.string().nullable().optional(),
     entries: z.array(AgentDirectoryResponseEntrySchema),
     pageInfo: AgentDirectoryPageInfoSchema,
+    sync: DirectorySyncMetadataSchema.optional(),
   }),
 });
 
@@ -3977,8 +4014,14 @@ export const WorkspaceProjectDescriptorPayloadSchema = z.object({
   projectCustomName: z.string().nullable().optional(),
   // COMPAT(projectCustomIcon): added in v0.5.0, remove after 2027-02-08.
   projectCustomIconRevision: z.string().nullable().optional(),
+  // Fingerprints the effective icon, including automatic discovery and the
+  // absence of an icon. Clients may persist icon results against this value.
+  // COMPAT(projectIconCache): added in v0.5.1, remove optional after 2027-02-12.
+  projectIconRevision: z.string().optional(),
   projectRootPath: z.string(),
   projectKind: z.enum(["git", "non_git", "directory"]),
+  // COMPAT(directorySync): sequence of this latest directory projection.
+  syncSeq: z.number().int().positive().optional(),
 });
 
 export const FetchWorkspacesResponseMessageSchema = z.object({
@@ -3996,6 +4039,7 @@ export const FetchWorkspacesResponseMessageSchema = z.object({
       prevCursor: z.string().nullable(),
       hasMore: z.boolean(),
     }),
+    sync: DirectorySyncMetadataSchema.optional(),
   }),
 });
 
@@ -4005,6 +4049,8 @@ export const WorkspaceUpdateMessageSchema = z.object({
     z.object({
       kind: z.literal("upsert"),
       workspace: WorkspaceDescriptorPayloadSchema,
+      generation: z.string().optional(),
+      seq: z.number().int().positive().optional(),
     }),
     z.object({
       kind: z.literal("remove"),
@@ -4019,6 +4065,8 @@ export const WorkspaceUpdateMessageSchema = z.object({
       // Project removal is represented on the existing workspace update channel
       // so old clients can still parse the message and ignore the extra field.
       removedProjectId: z.string().optional(),
+      generation: z.string().optional(),
+      seq: z.number().int().positive().optional(),
     }),
   ]),
 });
@@ -4086,11 +4134,30 @@ export const WorkspaceLabelDeleteInspectResponseSchema = z.object({
   }),
 });
 
+export const ProjectUpdateMessageSchema = z.object({
+  type: z.literal("project.update"),
+  payload: z.discriminatedUnion("kind", [
+    z.object({
+      kind: z.literal("upsert"),
+      project: WorkspaceProjectDescriptorPayloadSchema,
+      generation: z.string().optional(),
+      seq: z.number().int().positive().optional(),
+    }),
+    z.object({
+      kind: z.literal("remove"),
+      projectId: z.string(),
+      generation: z.string().optional(),
+      seq: z.number().int().positive().optional(),
+    }),
+  ]),
+});
+
 export const ProjectListResponseMessageSchema = z.object({
   type: z.literal("project.list.response"),
   payload: z.object({
     requestId: z.string(),
     projects: z.array(WorkspaceProjectDescriptorPayloadSchema),
+    sync: DirectorySyncMetadataSchema.optional(),
   }),
 });
 
@@ -6217,6 +6284,7 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   ArtifactMessageSchema,
   AgentUpdateMessageSchema,
   WorkspaceUpdateMessageSchema,
+  ProjectUpdateMessageSchema,
   WorkspaceLabelListResponseSchema,
   WorkspaceLabelUpdateSchema,
   WorkspaceLabelAssignmentSetResponseSchema,
@@ -6409,6 +6477,8 @@ export type ServerInfoStatusPayload = z.infer<typeof ServerInfoStatusPayloadSche
 export type RpcErrorMessage = z.infer<typeof RpcErrorMessageSchema>;
 export type ArtifactMessage = z.infer<typeof ArtifactMessageSchema>;
 export type AgentUpdateMessage = z.infer<typeof AgentUpdateMessageSchema>;
+export type ProjectUpdateMessage = z.infer<typeof ProjectUpdateMessageSchema>;
+export type ProjectUpdatePayload = ProjectUpdateMessage["payload"];
 export type WorkspaceSetupProgressMessage = z.infer<typeof WorkspaceSetupProgressMessageSchema>;
 export type WorkspaceSetupSnapshot = z.infer<typeof WorkspaceSetupSnapshotSchema>;
 export type WorkspaceSetupStatusResponseMessage = z.infer<
@@ -6886,6 +6956,7 @@ export const WSHelloMessageSchema = z.object({
       [CLIENT_CAPS.customModeIcons]: z.boolean().optional(),
       [CLIENT_CAPS.terminalReflowableSnapshot]: z.boolean().optional(),
       [CLIENT_CAPS.providerSubagents]: z.boolean().optional(),
+      [CLIENT_CAPS.projectUpdates]: z.boolean().optional(),
       [CLIENT_CAPS.compactProviderSnapshots]: z.boolean().optional(),
     })
     .passthrough()

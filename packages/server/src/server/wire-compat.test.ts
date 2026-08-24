@@ -17,6 +17,9 @@ import type { AgentTimelineRow } from "./agent/agent-manager.js";
 import { handleCreateBySpaceWorktreeRequest } from "./worktree-session.js";
 import { InMemoryAgentTimelineStore } from "./agent/agent-timeline-store.js";
 import type { AgentTimelineFetchOptions } from "./agent/agent-timeline-store-types.js";
+import { DirectorySyncService } from "./directory-sync/index.js";
+import { createPersistedProjectRecord } from "./workspace-registry.js";
+import { SessionOutboundMessageSchema } from "@bytetrue/byspace-protocol/messages";
 
 const LegacyTimelineEntryPayloadSchema = z.object({
   provider: z.enum(["claude", "codex", "opencode"]),
@@ -215,6 +218,7 @@ class InMemoryWorktreeWorkflow {
 
 function createSessionForWireCompatTest(options?: {
   clientCapabilities?: Record<string, unknown> | null;
+  directorySync?: DirectorySyncService;
   messages?: SessionOutboundMessage[];
   rows?: AgentTimelineRow[];
 }): Session {
@@ -252,6 +256,7 @@ function createSessionForWireCompatTest(options?: {
     projectRegistry: new EmptyProjectRegistry() as unknown as SessionOptions["projectRegistry"],
     workspaceRegistry:
       new EmptyWorkspaceRegistry() as unknown as SessionOptions["workspaceRegistry"],
+    directorySync: options?.directorySync,
     scheduleService: {} as SessionOptions["scheduleService"],
     checkoutDiffManager: {
       scheduleRefreshForCwd() {},
@@ -338,6 +343,104 @@ async function emitTimelineResponse(options?: {
 }
 
 describe("wire compatibility", () => {
+  test("sends project updates only to clients that declare support", async () => {
+    const project = createPersistedProjectRecord({
+      projectId: "project-1",
+      rootPath: "/tmp/project",
+      kind: "git",
+      displayName: "Favorite project",
+      createdAt: "2026-07-15T00:00:00.000Z",
+      updatedAt: "2026-07-15T00:00:00.000Z",
+    });
+    const legacyMessages: SessionOutboundMessage[] = [];
+    const capableMessages: SessionOutboundMessage[] = [];
+    const legacy = createSessionForWireCompatTest({
+      clientCapabilities: {},
+      messages: legacyMessages,
+    });
+    const capable = createSessionForWireCompatTest({
+      clientCapabilities: { [CLIENT_CAPS.projectUpdates]: true },
+      messages: capableMessages,
+    });
+
+    await Promise.all([
+      legacy.emitProjectUpdate({ kind: "upsert", project }),
+      legacy.emitProjectUpdate({ kind: "remove", projectId: project.projectId }),
+      capable.emitProjectUpdate({ kind: "upsert", project }),
+      capable.emitProjectUpdate({ kind: "remove", projectId: project.projectId }),
+    ]);
+
+    expect(legacyMessages).toEqual([]);
+    expect(capableMessages.map((message) => SessionOutboundMessageSchema.parse(message))).toEqual([
+      {
+        type: "project.update",
+        payload: {
+          kind: "upsert",
+          project: {
+            projectId: "project-1",
+            projectKey: "project-1",
+            projectDisplayName: "Favorite project",
+            projectCustomName: null,
+            projectCustomIconRevision: null,
+            projectIconRevision: "automatic:none:v1",
+            projectRootPath: "/tmp/project",
+            projectKind: "git",
+          },
+        },
+      },
+      {
+        type: "project.update",
+        payload: {
+          kind: "remove",
+          projectId: "project-1",
+        },
+      },
+    ]);
+  });
+
+  test("publishes rapid project mutations in order before incremental reconciliation", async () => {
+    const directorySync = new DirectorySyncService("generation");
+    const initial = directorySync.synchronizeProjects([], {});
+    const messages: SessionOutboundMessage[] = [];
+    const session = createSessionForWireCompatTest({
+      clientCapabilities: { [CLIENT_CAPS.projectUpdates]: true },
+      directorySync,
+      messages,
+    });
+    const project = createPersistedProjectRecord({
+      projectId: "project-ordered",
+      rootPath: "/tmp/project-ordered",
+      kind: "git",
+      displayName: "Ordered project",
+      createdAt: "2026-07-15T00:00:00.000Z",
+      updatedAt: "2026-07-15T00:00:00.000Z",
+    });
+
+    await Promise.all([
+      session.emitProjectUpdate({ kind: "upsert", project }),
+      session.emitProjectUpdate({ kind: "remove", projectId: project.projectId }),
+    ]);
+
+    expect(
+      messages.flatMap((message) =>
+        message.type === "project.update" ? [message.payload.kind] : [],
+      ),
+    ).toEqual(["upsert", "remove"]);
+    expect(
+      directorySync.synchronizeProjects([], {
+        generation: initial.sync.generation,
+        afterSeq: initial.sync.headSeq,
+      }),
+    ).toEqual({
+      projects: [],
+      sync: {
+        generation: "generation",
+        mode: "changes",
+        headSeq: 2,
+        removals: [{ id: "project-ordered", seq: 2 }],
+      },
+    });
+  });
   test("server info strips unknown legacy features while accepting former turn identity", () => {
     const parsed = ServerInfoStatusPayloadSchema.parse({
       status: "server_info",

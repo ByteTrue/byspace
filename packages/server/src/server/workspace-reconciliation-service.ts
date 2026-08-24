@@ -25,6 +25,10 @@ function deriveWorkspaceKindFromMetadata(metadata: {
   return "local_checkout";
 }
 
+export type ProjectUpdate =
+  | { kind: "upsert"; project: PersistedProjectRecord }
+  | { kind: "remove"; projectId: string };
+
 export type ReconciliationChange =
   | { kind: "workspace_archived"; workspaceId: string; directory: string; reason: string }
   | { kind: "project_archived"; projectId: string; directory: string; reason: string }

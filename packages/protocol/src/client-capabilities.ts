@@ -18,6 +18,8 @@ export const CLIENT_CAPS = {
   // COMPAT(providerSubagents): added in v0.1.107. The daemon emits provider-owned
   // child descriptors and timelines only to clients that understand the new messages.
   providerSubagents: "provider_subagents",
+  // COMPAT(projectUpdates): added in v0.5.1, remove gate after 2027-01-15.
+  projectUpdates: "project_updates",
   // COMPAT(compactProviderSnapshots): added in v0.5.0. Capable clients receive
   // provider catalogs with shared thinking sets and may revalidate by content hash.
   // Remove the legacy snapshot encoding after 2027-02-04.

@@ -725,6 +725,15 @@ describe("CheckoutSession", () => {
         },
       ]);
     });
+    it("does not emit the same checkout status twice", () => {
+      const { checkout, emitted } = makeCheckoutSession();
+      const snapshot = createGitSnapshot("/repo", "main");
+
+      checkout.emitStatusUpdate("/repo", snapshot);
+      checkout.emitStatusUpdate("/repo", snapshot);
+
+      expect(emitted).toHaveLength(1);
+    });
   });
 
   describe("switch branch", () => {

@@ -67,6 +67,7 @@ import {
   normalizeClientRestartRpcReason,
 } from "./lifecycle-reasons.js";
 
+import { DirectorySyncService } from "./directory-sync/index.js";
 import { serializeBySpaceToolInputParameters } from "./agent/tools/byspace-tool-serialization.js";
 import {
   WorkspaceLabelError,
@@ -147,9 +148,10 @@ import {
   type WorkspaceArchiveContext,
   type WorkspaceRegistry,
 } from "./workspace-registry.js";
+import type { ProjectUpdate } from "./workspace-reconciliation-service.js";
 import { DictationStreamManager } from "./dictation/dictation-stream-manager.js";
 import {
-  readProjectIcon,
+  ProjectIconReader,
   removeProjectCustomIcon,
   setProjectCustomIcon,
 } from "../utils/project-custom-icon.js";
@@ -465,6 +467,7 @@ type WorkspaceUpdatePayload = Extract<
 >["payload"];
 interface WorkspaceUpdatesSubscriptionState {
   subscriptionId: string;
+  syncEnabled?: boolean;
   filter?: WorkspaceUpdatesFilter;
   isBootstrapping: boolean;
   pendingUpdatesByWorkspaceId: Map<string, WorkspaceUpdatePayload>;
@@ -522,6 +525,7 @@ export interface SessionOptions {
   agentStorage: AgentStorage;
   projectRegistry: ProjectRegistry;
   workspaceRegistry: WorkspaceRegistry;
+  directorySync?: DirectorySyncService;
   workspaceLabelService?: WorkspaceLabelService;
   filesystem?: SessionFileSystem;
   scheduleService: ScheduleService;
@@ -619,6 +623,11 @@ export type SessionLifecycleIntent =
       requestId: string;
       reason: string;
     };
+export type { ProjectUpdate };
+
+function resolveDirectorySync(service: DirectorySyncService | undefined): DirectorySyncService {
+  return service ?? new DirectorySyncService();
+}
 
 function resolveWorkspaceLabelService(
   service: WorkspaceLabelService | undefined,
@@ -721,12 +730,14 @@ export class Session {
     | null;
   private readonly sessionLogger: pino.Logger;
   private readonly byspaceHome: string;
+  private readonly projectIcons: ProjectIconReader;
   private readonly worktreesRoot: string | undefined;
 
   private agentManager: AgentManager;
   private readonly agentStorage: AgentStorage;
   private readonly projectRegistry: ProjectRegistry;
   private readonly workspaceRegistry: WorkspaceRegistry;
+  private readonly directorySync: DirectorySyncService;
   private readonly filesystem: SessionFileSystem;
   private readonly github: ForgeService;
   private readonly renameCurrentBranch: typeof renameCurrentBranchDefault;
@@ -743,15 +754,18 @@ export class Session {
   private unsubscribeProjectMutations: (() => void) | null = null;
   private unsubscribeWorkspaceMutations: (() => void) | null = null;
   private registryMutationQueue: Promise<void> = Promise.resolve();
+  private projectUpdateQueue: Promise<void> = Promise.resolve();
   private isCleanedUp = false;
   private readonly activeOrchestrationToolCalls = new Set<AbortController>();
   private viewedTimelineAgentIds = new Set<string>();
   private readonly viewedTimelineAgentIdsBySource = new Map<object, Set<string>>();
   private readonly selectiveTimelineCapabilityBySource = new Map<object, boolean>();
+  private readonly clientCapabilitiesBySource = new Map<object, ReadonlySet<ClientCapability>>();
   private readonly defaultTimelineSubscriptionSource = {};
   private unsubscribeTerminalWorkspaceContributionEvents: (() => void) | null = null;
   private readonly agentUpdates: AgentUpdatesService;
   private workspaceUpdatesSubscription: WorkspaceUpdatesSubscriptionState | null = null;
+  private projectSyncEnabled = false;
   private readonly workspaceLabelService: WorkspaceLabelService | null;
   private workspaceLabelSubscription: {
     owner: object;
@@ -818,6 +832,7 @@ export class Session {
       agentStorage,
       projectRegistry,
       workspaceRegistry,
+      directorySync,
       workspaceLabelService,
       filesystem,
       scheduleService,
@@ -866,6 +881,7 @@ export class Session {
     this.onWorkspaceRecovered = onWorkspaceRecovered ?? null;
     this.pushTokenStore = pushTokenStore;
     this.byspaceHome = byspaceHome;
+    this.projectIcons = new ProjectIconReader(byspaceHome);
     this.worktreesRoot = worktreesRoot;
     this.sessionLogger = logger.child({
       module: "session",
@@ -886,6 +902,7 @@ export class Session {
     this.agentStorage = agentStorage;
     this.projectRegistry = projectRegistry;
     this.workspaceRegistry = workspaceRegistry;
+    this.directorySync = resolveDirectorySync(directorySync);
     this.workspaceLabelService = resolveWorkspaceLabelService(workspaceLabelService);
     this.filesystem = filesystem ?? nodeSessionFileSystem;
     this.github = github ?? createGitHubService();
@@ -1038,6 +1055,13 @@ export class Session {
         this.buildProjectPlacementForWorkspaceId(workspaceId),
       emitWorkspaceUpdateForWorkspaceId: (workspaceId) =>
         this.emitWorkspaceUpdateForWorkspaceId(workspaceId),
+      sequenceAgentUpdate: (payload, agent, project, agentId, includeSequence) =>
+        this.directorySync.sequenceAgentUpdate(
+          payload,
+          agent && project ? { agent, project } : null,
+          agentId,
+          includeSequence,
+        ),
       logger: this.sessionLogger,
     });
     this.createAgentLifecycleDispatch = new CreateAgentLifecycleDispatch({
@@ -1128,6 +1152,7 @@ export class Session {
   updateClientCapabilities(capabilities: Record<string, unknown> | null, source?: object): void {
     this.clientCapabilities = parseClientCapabilities(capabilities);
     if (source) {
+      this.clientCapabilitiesBySource.set(source, this.clientCapabilities);
       this.selectiveTimelineCapabilityBySource.set(
         source,
         this.supports(CLIENT_CAPS.selectiveAgentTimeline),
@@ -1140,6 +1165,7 @@ export class Session {
   }
 
   clearAgentTimelineSubscription(source: object): void {
+    this.clientCapabilitiesBySource.delete(source);
     this.selectiveTimelineCapabilityBySource.delete(source);
     if (this.viewedTimelineAgentIdsBySource.delete(source)) {
       this.rebuildViewedTimelineAgentIds();
@@ -1231,10 +1257,37 @@ export class Session {
   }
 
   supportsForSource(capability: ClientCapability, source: object): boolean {
-    if (capability === CLIENT_CAPS.selectiveAgentTimeline) {
-      return this.selectiveTimelineCapabilityBySource.get(source) ?? this.supports(capability);
+    return (
+      this.clientCapabilitiesBySource.get(source)?.has(capability) ?? this.supports(capability)
+    );
+  }
+
+  emitProjectUpdate(update: ProjectUpdate): Promise<void> {
+    const queued = this.projectUpdateQueue
+      .catch(() => undefined)
+      .then(() => this.publishProjectUpdate(update));
+    this.projectUpdateQueue = queued;
+    return queued;
+  }
+
+  private async publishProjectUpdate(update: ProjectUpdate): Promise<void> {
+    const projectedPayload =
+      update.kind === "upsert"
+        ? { kind: "upsert" as const, project: await this.buildProjectDescriptor(update.project) }
+        : update;
+    const message: SessionOutboundMessage = {
+      type: "project.update",
+      payload: this.directorySync.sequenceProjectUpdate(projectedPayload, this.projectSyncEnabled),
+    };
+    if (this.clientCapabilitiesBySource.size === 0 || !this.onMessageToSource) {
+      if (this.supports(CLIENT_CAPS.projectUpdates)) this.emit(message);
+      return;
     }
-    return this.supports(capability);
+    for (const [source, capabilities] of this.clientCapabilitiesBySource) {
+      if (capabilities.has(CLIENT_CAPS.projectUpdates)) {
+        this.onMessageToSource(source, message);
+      }
+    }
   }
 
   async syncWorkspaceGitObserverForWorkspace(workspace: PersistedWorkspaceRecord): Promise<void> {
@@ -1590,7 +1643,7 @@ export class Session {
         const update: WorkspaceUpdatePayload = {
           kind: "remove",
           id: `project:${mutation.projectId}`,
-          emptyProject: this.buildProjectDescriptor(mutation.project),
+          emptyProject: await this.buildProjectDescriptor(mutation.project),
         };
         if (!equal(subscription.lastEmittedByWorkspaceId.get(update.id), update)) {
           this.bufferOrEmitWorkspaceUpdate(subscription, update);
@@ -2451,7 +2504,7 @@ export class Session {
       case "fetch_workspaces_request":
         return this.handleFetchWorkspacesRequest(msg);
       case "project.list.request":
-        return this.handleProjectListRequest(msg.requestId);
+        return this.handleProjectListRequest(msg);
       case "byspace_worktree_list_request":
         return this.handleBySpaceWorktreeListRequest(msg);
       case "byspace_worktree_archive_request":
@@ -3147,6 +3200,10 @@ export class Session {
         },
       });
 
+      // Emit a project.update so clients that track the project as an empty
+      // project (no workspaces yet) receive the resolved name immediately.
+      await this.emitProjectUpdate({ kind: "upsert", project: updated });
+
       // Re-emit descriptors for every workspace under this project so the new
       // resolved name lands in the UI immediately.
       const workspaces = await this.workspaceRegistry.list();
@@ -3157,17 +3214,6 @@ export class Session {
         await this.emitWorkspaceUpdatesForWorkspaceIds(affectedWorkspaceIds, {
           skipReconcile: true,
         });
-      } else if (this.workspaceUpdatesSubscription) {
-        const update: WorkspaceUpdatePayload = {
-          kind: "remove",
-          id: `project:${projectId}`,
-          emptyProject: this.buildProjectDescriptor(updated),
-        };
-        if (
-          !equal(this.workspaceUpdatesSubscription.lastEmittedByWorkspaceId.get(update.id), update)
-        ) {
-          this.bufferOrEmitWorkspaceUpdate(this.workspaceUpdatesSubscription, update);
-        }
       }
     } catch (error) {
       this.sessionLogger.error(
@@ -3211,18 +3257,14 @@ export class Session {
         type: "project.icon.set.response",
         payload: { requestId, projectId, accepted: true, error: null },
       });
+      await this.emitProjectUpdate({ kind: "upsert", project: updated });
+
       const affectedWorkspaceIds = (await this.workspaceRegistry.list())
         .filter((workspace) => workspace.projectId === projectId)
         .map((workspace) => workspace.workspaceId);
       if (affectedWorkspaceIds.length > 0) {
         await this.emitWorkspaceUpdatesForWorkspaceIds(affectedWorkspaceIds, {
           skipReconcile: true,
-        });
-      } else if (this.workspaceUpdatesSubscription) {
-        this.bufferOrEmitWorkspaceUpdate(this.workspaceUpdatesSubscription, {
-          kind: "remove",
-          id: `project:${projectId}`,
-          emptyProject: this.buildProjectDescriptor(updated),
         });
       }
     } catch (error) {
@@ -3242,7 +3284,7 @@ export class Session {
     try {
       const project = await this.projectRegistry.get(projectId);
       if (!project) throw new Error("Project not found");
-      const icon = await readProjectIcon({ byspaceHome: this.byspaceHome, project });
+      const icon = await this.projectIcons.read(project);
       this.emit({
         type: "project.icon.get.response",
         payload: { projectId, icon, error: null, requestId },
@@ -5218,9 +5260,10 @@ export class Session {
     }
   }
 
-  private buildProjectDescriptor(
+  private async buildProjectDescriptor(
     project: PersistedProjectRecord,
-  ): WorkspaceProjectDescriptorPayload {
+  ): Promise<WorkspaceProjectDescriptorPayload> {
+    const icon = await this.projectIcons.snapshot(project);
     return {
       projectId: project.projectId,
       projectKey: project.projectId,
@@ -5228,29 +5271,75 @@ export class Session {
       projectDisplayName: resolveProjectDisplayName(project),
       projectCustomName: project.customName ?? null,
       projectCustomIconRevision: project.customIconRevision ?? null,
+      projectIconRevision: icon.revision,
       projectRootPath: project.rootPath,
       projectKind: project.kind,
     };
   }
 
-  private async handleProjectListRequest(requestId: string): Promise<void> {
+  private async handleProjectListRequest(
+    request: Extract<SessionInboundMessage, { type: "project.list.request" }>,
+  ): Promise<void> {
     try {
-      const projects = (await this.projectRegistry.list())
-        .filter((project) => !project.archivedAt)
-        .map((project) => this.buildProjectDescriptor(project));
-      this.emit({ type: "project.list.response", payload: { requestId, projects } });
+      const projects = await Promise.all(
+        (await this.projectRegistry.list())
+          .filter((project) => !project.archivedAt)
+          .map((project) => this.buildProjectDescriptor(project)),
+      );
+      const synchronized = request.sync
+        ? this.directorySync.synchronizeProjects(projects, request.sync)
+        : null;
+      if (synchronized) this.projectSyncEnabled = true;
+      this.emit({
+        type: "project.list.response",
+        payload: {
+          requestId: request.requestId,
+          ...(synchronized ?? { projects }),
+        },
+      });
     } catch (error) {
       this.sessionLogger.error({ err: error }, "Failed to handle project.list.request");
       this.emit({
         type: "rpc_error",
         payload: {
-          requestId,
+          requestId: request.requestId,
           requestType: "project.list.request",
           error: error instanceof Error ? error.message : "Failed to list projects",
           code: "project_list_failed",
         },
       });
     }
+  }
+
+  private async readAgentDirectorySync(
+    request: Extract<SessionInboundMessage, { type: "fetch_agents_request" }>,
+  ) {
+    if (request.scope !== "active" || request.filter) {
+      throw new SessionRequestError(
+        "invalid_request",
+        "Sequenced agent directory reads require scope=active and no filter.",
+      );
+    }
+    const snapshot = await this.listFetchAgentsEntries({
+      ...request,
+      page: { limit: Number.MAX_SAFE_INTEGER },
+    });
+    return this.directorySync.synchronizeAgents(snapshot.entries, request.sync ?? {});
+  }
+
+  private async readWorkspaceDirectorySync(
+    request: Extract<SessionInboundMessage, { type: "fetch_workspaces_request" }>,
+  ) {
+    if (request.filter) {
+      throw new SessionRequestError(
+        "invalid_request",
+        "Sequenced workspace directory reads do not support filters.",
+      );
+    }
+    return this.directorySync.synchronizeWorkspaces(
+      await this.workspaceDirectory.listDescriptors(),
+      request.sync ?? {},
+    );
   }
 
   private async restoreWorkspaceAndEmit(workspaceId: string): Promise<void> {
@@ -5538,17 +5627,28 @@ export class Session {
           return;
         }
         subscription.lastEmittedByWorkspaceId.delete(workspaceId);
+        const removePayload = await this.buildWorkspaceRemoveUpdatePayload(
+          workspaceId,
+          options?.removedProjectId,
+        );
         this.bufferOrEmitWorkspaceUpdate(
           subscription,
-          await this.buildWorkspaceRemoveUpdatePayload(workspaceId, options?.removedProjectId),
+          this.directorySync.sequenceWorkspaceUpdate(
+            removePayload,
+            workspace ?? null,
+            workspaceId,
+            subscription.syncEnabled === true,
+          ),
         );
         continue;
       }
 
-      const nextPayload: WorkspaceUpdatePayload = {
-        kind: "upsert",
-        workspace: nextWorkspace,
-      };
+      const nextPayload: WorkspaceUpdatePayload = this.directorySync.sequenceWorkspaceUpdate(
+        { kind: "upsert", workspace: nextWorkspace },
+        workspace ?? null,
+        workspaceId,
+        subscription.syncEnabled === true,
+      );
 
       if (
         lastEmitted &&
@@ -5657,10 +5757,13 @@ export class Session {
         this.agentUpdates.beginSubscription({
           subscriptionId,
           filter: request.filter,
+          syncEnabled: Boolean(request.sync),
         });
       }
 
-      const payload = await this.listFetchAgentsEntries(request);
+      const payload = request.sync
+        ? await this.readAgentDirectorySync(request)
+        : await this.listFetchAgentsEntries(request);
       const snapshotUpdatedAtByAgentId = new Map<string, number>();
       for (const entry of payload.entries) {
         const parsedUpdatedAt = Date.parse(entry.agent.updatedAt);
@@ -5791,6 +5894,7 @@ export class Session {
       if (subscriptionId) {
         this.workspaceUpdatesSubscription = {
           subscriptionId,
+          syncEnabled: Boolean(request.sync),
           filter: request.filter,
           isBootstrapping: true,
           pendingUpdatesByWorkspaceId: new Map(),
@@ -5799,7 +5903,9 @@ export class Session {
         };
       }
 
-      const payload = await this.listFetchWorkspacesEntries(request);
+      const payload = request.sync
+        ? await this.readWorkspaceDirectorySync(request)
+        : await this.listFetchWorkspacesEntries(request);
       this.workspaceGitObserver.syncObservers(payload.entries);
       this.sessionLogger.debug(
         {
@@ -6221,7 +6327,7 @@ export class Session {
         type: "project.add.response",
         payload: {
           requestId: request.requestId,
-          project: this.buildProjectDescriptor(project),
+          project: await this.buildProjectDescriptor(project),
           error: null,
         },
       });
@@ -6256,7 +6362,7 @@ export class Session {
         payload: {
           requestId: request.requestId,
           directoryPath: result.directoryPath,
-          project: this.buildProjectDescriptor(result.project),
+          project: await this.buildProjectDescriptor(result.project),
           error: null,
           errorCode: null,
         },
@@ -6421,7 +6527,7 @@ export class Session {
           requestId: request.requestId,
           repo: repo.displayName,
           checkoutPath,
-          project: this.buildProjectDescriptor(project),
+          project: await this.buildProjectDescriptor(project),
           error: null,
         },
       });

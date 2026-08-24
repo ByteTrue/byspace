@@ -153,6 +153,7 @@ export class CheckoutSession {
   private readonly worktreesRoot: string | undefined;
   private readonly logger: pino.Logger;
   private readonly diffSubscriptions = new Map<string, () => void>();
+  private readonly statusUpdateFingerprints = new Map<string, string>();
 
   constructor(options: CheckoutSessionOptions) {
     this.host = options.host;
@@ -536,16 +537,20 @@ export class CheckoutSession {
             requestId,
             snapshot,
           });
+      const payload = {
+        ...buildCheckoutStatusPayloadFromSnapshot({
+          cwd,
+          requestId,
+          snapshot,
+        }),
+        ...(prStatus ? { prStatus } : {}),
+      };
+      const fingerprint = JSON.stringify(payload);
+      if (this.statusUpdateFingerprints.get(cwd) === fingerprint) return;
+      this.statusUpdateFingerprints.set(cwd, fingerprint);
       this.host.emit({
         type: "checkout_status_update",
-        payload: {
-          ...buildCheckoutStatusPayloadFromSnapshot({
-            cwd,
-            requestId,
-            snapshot,
-          }),
-          ...(prStatus ? { prStatus } : {}),
-        },
+        payload,
       });
     } catch (error) {
       this.logger.warn({ err: error, cwd }, "Failed to emit workspace checkout status update");
@@ -1452,6 +1457,7 @@ export class CheckoutSession {
       unsubscribe();
     }
     this.diffSubscriptions.clear();
+    this.statusUpdateFingerprints.clear();
   }
 }
 
