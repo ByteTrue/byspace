@@ -76,6 +76,41 @@ describe("ensureAgentIsInitialized", () => {
     expect(runtime.ensured).toEqual([]);
   });
 
+  it("does nothing when the restored canonical replica range is already present", async () => {
+    const client = new FakeDaemonClient();
+    const runtime = new FakeTimelineRuntime();
+    useSessionStore.getState().restoreSessionReplica(serverId, {
+      agents: new Map(),
+      workspaces: new Map(),
+      emptyProjects: new Map(),
+      projects: new Map(),
+      timeline: {
+        agentId,
+        items: [
+          {
+            kind: "assistant_message",
+            id: "canonical-item",
+            text: "Canonical before restart",
+            timelineCursor: { epoch: "epoch-1", seq: 12 },
+            timestamp: new Date("2026-07-27T10:00:00.000Z"),
+          },
+        ],
+        range: { epoch: "epoch-1", startSeq: 10, endSeq: 12 },
+        hasOlder: true,
+      },
+    });
+
+    await ensureAgentIsInitialized({
+      serverId,
+      agentId,
+      client: client as never,
+      runtime,
+      setAgentInitializing: bindSetAgentInitializing(),
+    });
+
+    expect(runtime.ensured).toEqual([]);
+  });
+
   it("rejects without a connected client", async () => {
     const runtime = new FakeTimelineRuntime();
     useSessionStore.getState().initializeSession(serverId, null);

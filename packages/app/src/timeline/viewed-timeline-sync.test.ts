@@ -67,6 +67,12 @@ class TimelineWorld {
       this.releaseFetchWaiters();
       return result.promise;
     },
+    fetchLatestTail: (agentId) =>
+      this.fetchTimeline(agentId, {
+        direction: "tail",
+        limit: 40,
+        projection: "projected",
+      }),
     reportError: (error) => {
       this.errors.push(error instanceof Error ? error.message : String(error));
       const waiter = this.errorWaiters.shift();
@@ -99,6 +105,26 @@ class TimelineWorld {
   private readonly errorWaiters: Array<(message: string) => void> = [];
   private readonly scheduled: Array<{ task: () => void; delayMs: number }> = [];
   private readonly retryWaiters: Array<(retry: () => void) => void> = [];
+
+  private fetchTimeline(
+    agentId: string,
+    request: ProjectedTimelineForwardFetchPlan,
+  ): Promise<{ hasNewer: boolean; endCursor: { epoch: string; seq: number } | null }> {
+    const result = deferred<{
+      hasNewer: boolean;
+      endCursor: { epoch: string; seq: number } | null;
+    }>();
+    this.fetches.push({
+      agentId,
+      request,
+      dedupe: true,
+      respond: ({ hasNewer, seq = 1 }) =>
+        result.resolve({ hasNewer, endCursor: { epoch: `epoch-${agentId}`, seq } }),
+      fail: (message) => result.reject(new Error(message)),
+    });
+    this.releaseFetchWaiters();
+    return result.promise;
+  }
 
   setCursor(agentId: string, endSeq: number): void {
     this.cursors.set(agentId, { epoch: `epoch-${agentId}`, startSeq: 1, endSeq });
@@ -174,6 +200,41 @@ test("uses a tail fetch when a live cursor is not authoritative", async () => {
   const fetch = await world.nextFetch("agent-a");
   expect(fetch.request).toEqual({ direction: "tail", limit: 40, projection: "projected" });
   fetch.respond({ hasNewer: false });
+});
+
+test("catches up after the restored cursor when an agent becomes visible", async () => {
+  const world = new TimelineWorld();
+  world.setCursor("agent-a", 42);
+  world.sync.setConnected(true);
+  world.sync.replaceVisibleAgentIds("workspace", ["agent-a"]);
+  const membership = await world.nextMembership();
+  membership.succeed();
+
+  const fetch = await world.nextFetch("agent-a");
+  expect(fetch.request).toEqual({
+    direction: "after",
+    cursor: { epoch: "epoch-agent-a", seq: 42 },
+    limit: 40,
+    projection: "projected",
+  });
+  fetch.respond({ hasNewer: false });
+});
+
+test("falls back to the latest tail when a restored cursor has more than one catch-up page", async () => {
+  const world = new TimelineWorld();
+  world.setCursor("agent-a", 42);
+  world.sync.setConnected(true);
+  world.sync.replaceVisibleAgentIds("workspace", ["agent-a"]);
+  const membership = await world.nextMembership();
+  membership.succeed();
+
+  const probe = await world.nextFetch("agent-a");
+  expect(probe.request.direction).toBe("after");
+  probe.respond({ hasNewer: true, seq: 82 });
+
+  const fallback = await world.nextFetch("agent-a");
+  expect(fallback.request).toEqual({ direction: "tail", limit: 40, projection: "projected" });
+  fallback.respond({ hasNewer: false });
 });
 
 test("unchanged visible-set publication does not cancel paged catch-up", async () => {

@@ -3,6 +3,7 @@ import {
   planInitialAgentTimelineSync,
   planResumeTimelineSync,
   planTimelineCatchUpAfter,
+  planTimelineTailFetch,
   type ProjectedTimelineForwardFetchPlan,
 } from "./timeline-sync-plan";
 
@@ -21,6 +22,7 @@ interface ViewedTimelineSyncPorts {
     request: ProjectedTimelineForwardFetchPlan,
     options: { dedupe?: boolean; intentGeneration: number },
   ): Promise<TimelinePageResult>;
+  fetchLatestTail?: (agentId: string) => Promise<TimelinePageResult>;
   reportError(error: unknown): void;
   schedule(task: () => void, delayMs: number): () => void;
 }
@@ -132,6 +134,12 @@ export function createViewedTimelineSync(ports: ViewedTimelineSyncPorts): Viewed
 
   const isAcknowledged = (agentId: string) => acknowledged.includes(agentId);
   const isDesired = (agentId: string) => desired.includes(agentId);
+  const ownsCatchUp = (agentId: string, generation: number) =>
+    !disposed &&
+    connected &&
+    isDesired(agentId) &&
+    isAcknowledged(agentId) &&
+    catchUps.get(agentId)?.generation === generation;
 
   const notifyListeners = () => {
     for (const listener of listeners) listener();
@@ -164,39 +172,35 @@ export function createViewedTimelineSync(ports: ViewedTimelineSyncPorts): Viewed
     agentId: string,
     generation: number,
     request: ProjectedTimelineForwardFetchPlan,
-    dedupe = true,
+    options: { dedupe?: boolean; fallbackToLatestTailOnOverflow?: boolean } = {},
   ): Promise<void> => {
-    if (
-      disposed ||
-      !connected ||
-      !isDesired(agentId) ||
-      !isAcknowledged(agentId) ||
-      catchUps.get(agentId)?.generation !== generation
-    ) {
-      return;
-    }
+    const { dedupe = true, fallbackToLatestTailOnOverflow = false } = options;
+    if (!ownsCatchUp(agentId, generation)) return;
 
     try {
       const page = await ports.fetchPage(agentId, request, {
         dedupe,
         intentGeneration: generation,
       });
-      if (
-        disposed ||
-        !connected ||
-        !isDesired(agentId) ||
-        !isAcknowledged(agentId) ||
-        catchUps.get(agentId)?.generation !== generation
-      ) {
-        return;
-      }
+      if (!ownsCatchUp(agentId, generation)) return;
       if (page.hasNewer && page.endCursor) {
-        await fetchUntilCurrent(
-          agentId,
-          generation,
-          planTimelineCatchUpAfter(page.endCursor),
+        if (fallbackToLatestTailOnOverflow) {
+          if (ports.fetchLatestTail) {
+            await ports.fetchLatestTail(agentId);
+          } else {
+            await ports.fetchPage(agentId, planTimelineTailFetch(), {
+              dedupe: false,
+              intentGeneration: generation,
+            });
+          }
+          catchUps.set(agentId, { generation, status: "complete" });
+          settleVisibilityCatchUp(agentId, generation, "ready");
+          return;
+        }
+        await fetchUntilCurrent(agentId, generation, planTimelineCatchUpAfter(page.endCursor), {
           dedupe,
-        );
+          fallbackToLatestTailOnOverflow: false,
+        });
         return;
       }
       if (page.hasNewer) {
@@ -246,7 +250,12 @@ export function createViewedTimelineSync(ports: ViewedTimelineSyncPorts): Viewed
       (ports.hasAuthoritativeHistory(agentId)
         ? planResumeTimelineSync({ cursor })
         : planInitialAgentTimelineSync({ cursor, hasAuthoritativeHistory: false }));
-    void fetchUntilCurrent(agentId, generation, nextRequest, dedupe);
+    const fallbackToLatestTailOnOverflow =
+      request === undefined && nextRequest.direction === "after";
+    void fetchUntilCurrent(agentId, generation, nextRequest, {
+      dedupe,
+      fallbackToLatestTailOnOverflow,
+    });
   }
 
   const startAcknowledgedCatchUps = () => {
