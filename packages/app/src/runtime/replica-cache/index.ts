@@ -1,6 +1,9 @@
 import { Buffer } from "buffer";
 import { z } from "zod";
-import { AgentStatusSchema } from "@bytetrue/byspace-protocol/messages";
+import {
+  AgentStatusSchema,
+  WorkspaceGitHubRuntimePayloadSchema,
+} from "@bytetrue/byspace-protocol/messages";
 import { AgentProviderSchema } from "@bytetrue/byspace-protocol/provider-manifest";
 import {
   normalizeEmptyProjectDescriptor,
@@ -194,6 +197,7 @@ const StoredWorkspaceSchema = z.strictObject({
   diffStat: z.strictObject({ additions: z.number(), deletions: z.number() }).nullable(),
   scripts: z.array(WorkspaceScriptSchema),
   gitRuntime: WorkspaceGitRuntimeSchema,
+  githubRuntime: WorkspaceGitHubRuntimePayloadSchema,
   forge: z.string().optional(),
 });
 
@@ -476,6 +480,7 @@ function serializeWorkspace(workspace: WorkspaceDescriptor): StoredWorkspace {
       terminalId: script.terminalId,
     })),
     gitRuntime: workspace.gitRuntime,
+    githubRuntime: workspace.githubRuntime,
     forge: workspace.forge,
   };
 }

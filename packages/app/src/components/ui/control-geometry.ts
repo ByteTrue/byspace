@@ -34,7 +34,7 @@ const CONTROL_FOCUS_RING_OFFSET = 1;
 const CONTROL_CENTER_JUSTIFY_CONTENT = "center";
 const FIELD_TEXT_LINE_HEIGHT_RATIO = 1.4;
 
-const controlHeights = {
+export const CONTROL_HEIGHTS = {
   compact: COMPACT_CONTROL_HEIGHT,
   field: FIELD_CONTROL_HEIGHT,
 };
@@ -109,15 +109,15 @@ export function createControlGeometry(theme: Theme) {
   const fieldTextSmLineHeight = fieldLineHeight(theme.fontSize.sm);
   const fieldTextMdLineHeight = fieldLineHeight(theme.fontSize.base);
   const fieldControlSm = {
-    minHeight: controlHeights.compact,
+    minHeight: CONTROL_HEIGHTS.compact,
     paddingHorizontal: theme.spacing[3],
-    paddingVertical: fieldVerticalPadding(controlHeights.compact, fieldTextSmLineHeight),
+    paddingVertical: fieldVerticalPadding(CONTROL_HEIGHTS.compact, fieldTextSmLineHeight),
     borderRadius: theme.borderRadius.md,
   };
   const fieldControlMd = {
-    minHeight: controlHeights.field,
+    minHeight: CONTROL_HEIGHTS.field,
     paddingHorizontal: theme.spacing[4],
-    paddingVertical: fieldVerticalPadding(controlHeights.field, fieldTextMdLineHeight),
+    paddingVertical: fieldVerticalPadding(CONTROL_HEIGHTS.field, fieldTextMdLineHeight),
     borderRadius: theme.borderRadius.lg,
   };
   const fieldTextSm = {
@@ -131,28 +131,28 @@ export function createControlGeometry(theme: Theme) {
   const segmentedContainerSmRadius = theme.borderRadius.md;
   const segmentedContainerMdRadius = theme.borderRadius.lg;
   const switchControl = {
-    minHeight: controlHeights.compact,
+    minHeight: CONTROL_HEIGHTS.compact,
     justifyContent: CONTROL_CENTER_JUSTIFY_CONTENT,
   } satisfies { minHeight: number; justifyContent: "center" };
 
   return {
     buttonXs: {
-      minHeight: controlHeights.compact,
+      minHeight: CONTROL_HEIGHTS.compact,
       paddingHorizontal: theme.spacing[3],
       borderRadius: theme.borderRadius.md,
     },
     buttonSm: {
-      minHeight: controlHeights.compact,
+      minHeight: CONTROL_HEIGHTS.compact,
       paddingHorizontal: theme.spacing[3],
       borderRadius: theme.borderRadius.md,
     },
     buttonMd: {
-      minHeight: controlHeights.field,
+      minHeight: CONTROL_HEIGHTS.field,
       paddingHorizontal: theme.spacing[4],
       borderRadius: theme.borderRadius.lg,
     },
     buttonLg: {
-      minHeight: controlHeights.field,
+      minHeight: CONTROL_HEIGHTS.field,
       paddingHorizontal: theme.spacing[6],
       borderRadius: theme.borderRadius.xl,
     },
@@ -202,22 +202,22 @@ export function createControlGeometry(theme: Theme) {
     },
     switchControl,
     segmentedContainerSm: {
-      minHeight: controlHeights.compact,
+      minHeight: CONTROL_HEIGHTS.compact,
       padding: SEGMENTED_COMPACT_INSET,
       borderRadius: segmentedContainerSmRadius,
     },
     segmentedContainerMd: {
-      minHeight: controlHeights.field,
+      minHeight: CONTROL_HEIGHTS.field,
       padding: SEGMENTED_FIELD_INSET,
       borderRadius: segmentedContainerMdRadius,
     },
     segmentedSegmentSm: {
-      minHeight: controlHeights.compact - SEGMENTED_COMPACT_INSET * 2,
+      minHeight: CONTROL_HEIGHTS.compact - SEGMENTED_COMPACT_INSET * 2,
       paddingHorizontal: theme.spacing[4],
       borderRadius: nestedRadius(segmentedContainerSmRadius, SEGMENTED_COMPACT_INSET),
     },
     segmentedSegmentMd: {
-      minHeight: controlHeights.field - SEGMENTED_FIELD_INSET * 2,
+      minHeight: CONTROL_HEIGHTS.field - SEGMENTED_FIELD_INSET * 2,
       paddingHorizontal: theme.spacing[6],
       borderRadius: nestedRadius(segmentedContainerMdRadius, SEGMENTED_FIELD_INSET),
     },
