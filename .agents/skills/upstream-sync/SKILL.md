@@ -41,6 +41,20 @@ Treat `docs/upstream-sync.md` as the process source of truth.
 - If upstream code appears buggy or unsafe, report the exact upstream behavior and options. Do not repair it during sync unless the user explicitly chooses that work.
 - Syncing source does not publish a release. Never tag, publish, deploy, or restart production as part of this skill.
 
+## Implementation efficiency
+
+The audit is exhaustive; implementation is intentionally coarse-grained. Once the release inventory and dispositions are approved:
+
+- Implement coherent capability batches, not one upstream commit, file, hunk, test, or styling token at a time. Each batch owns a complete user/system capability, its dependency closure, and its support tests.
+- Size a batch so one writer can finish it in one bounded run. Near the execution budget, finish and commit the coherent subset, hand off remaining owners, and stop exploring instead of leaving a broad dirty tree or forcing an overrun.
+- Build the execution map once. Do not remap an approved slice before every batch or turn the coverage ledger into a construction queue. Use deep provenance work only for a real patch conflict, failing test, or suspected intentional BySpace seam.
+- Include a deterministic prerequisite from the same approved release in its capability batch when the frozen target has one obvious end state. Ask only when more than one reasonable product or architecture outcome exists.
+- Keep one candidate writer. Parallelize read-only inventory/review work, not overlapping candidate edits.
+- Verify once per completed batch: affected upstream/adaptation tests, then typecheck, lint, and format. Build server/cross-workspace declarations only for batches that cross those boundaries. Export Web once after the aggregate Web stage, not after every UI owner.
+- Run the complete local gate matrix and `release:check` once on the finished candidate. Never run the full local test suite.
+- Review high-risk capability batches or the aggregate candidate; do not commission an independent review for every micro-change.
+- Report progress from existing Git state and command artifacts. Status reporting must not rerun tests, builds, exports, or global scans.
+
 ## Delta dispositions
 
 Account for every relevant part of the upstream release delta with one internal outcome:
@@ -53,7 +67,7 @@ Account for every relevant part of the upstream release delta with one internal 
 
 These labels are the audit ledger, not the primary user-facing report. Translate them into direct recommendations: **建议采纳**, **BySpace 已有，无需重复**, **建议不采纳**, or **需要你决定**.
 
-Do not create a per-commit ledger. Dispositions are by behavior and retained subsystem, using the release diff as evidence. Maintain a separate commit/file coverage index so the user-facing simplification cannot hide an omitted change.
+Do not create a per-commit ledger. Dispositions are by behavior and retained subsystem, using the release diff as evidence. Maintain a separate commit/file coverage index so the user-facing simplification cannot hide an omitted change, but use that index only as audit evidence—never as an implementation queue.
 
 ## First user-facing decision report
 
@@ -85,12 +99,12 @@ The detailed list must account for every behavior in the internal ledger, includ
 8. Prove the exact unmodified target with its own clean install, server build, typecheck, and Web build before copying code.
 9. Freeze the approved dispositions. Do not begin implementation while any **需要你决定** item is unresolved.
 10. Create an isolated persistent worktree from the recorded current BySpace `main` SHA.
-11. Copy each approved Port from upstream as directly as possible. Transfer its complete support slice too: tests, shared E2E helpers, fixtures, factories, benchmarks, generated assets, smoke expectations, and removal residuals. Apply only the mechanical BySpace adaptations listed above.
+11. Group approved Ports into a few dependency-safe capability batches, then copy each batch directly. Transfer the complete support slice too: tests, shared E2E helpers, fixtures, factories, benchmarks, generated assets, smoke expectations, and removal residuals. Apply only the mechanical BySpace adaptations listed above.
 12. If direct copying exposes an upstream defect, architecture conflict, unclear compatibility choice, or additional responsibility, stop that slice and ask the user before writing a solution.
 13. Import only dependency and lockfile changes required by copied behavior. Rebuild workspace declarations before diagnosing cross-package type errors. Adapt new `COMPAT(...)` markers to the actual first BySpace release and cleanup date; never copy an upstream version marker or guess an unknown BySpace release.
-14. Run the upstream tests that cover copied behavior plus focused adaptation tests. Before fixing any failure, classify its provenance with the decision tree below; then run the complete gates in `docs/upstream-sync.md`.
+14. At the end of each capability batch, run its upstream tests plus focused adaptation tests and the batch-level gates defined in `docs/upstream-sync.md`. Classify failures before editing. Run the complete gate matrix only after all batches are assembled.
 15. Audit only transfer fidelity and fixed BySpace boundaries: no omitted approved code or support files, accidental redesign, excluded client, old identity, upstream package namespace, port, home path, deployment target, release-channel regression, stale removed-feature references, or inconsistent compatibility markers.
-16. Obtain independent reviews limited to copied-versus-upstream fidelity, approved dispositions, mechanical adaptation scope, excluded-surface leakage, and fixed release boundaries. Reviewers must not propose upstream improvements or new hardening as sync blockers.
+16. Obtain independent review of high-risk aggregate batches or the finished candidate, limited to copied-versus-upstream fidelity, approved dispositions, mechanical adaptation scope, excluded-surface leakage, and fixed release boundaries. Do not review every micro-change independently; reviewers must not propose upstream improvements or new hardening as sync blockers.
 17. Fix transfer mistakes. Classify a discovered upstream defect or desirable improvement as **Needs user decision**; do not implement it automatically. Only then update the recorded upstream baseline.
 18. Push the sync branch and run the full `CI` workflow on its exact SHA (PR to `main` or `workflow_dispatch`). The baseline marker rides in the sync branch, so it can only reach `main` together with green CI evidence. For every red run, record failure → provenance → action → focused proof → replacement SHA, then rerun the complete matrix; deterministic platform failures cannot be waived by a lucky rerun.
 19. Present the candidate SHA, CI result, validation, approved change list, user decisions, and residual upstream concerns. With user approval, fast-forward `main` to the exact CI-green SHA and push. Never merge a red or unverified candidate into `main`.
@@ -115,7 +129,7 @@ A red test says the candidate and expectation disagree; it does not say which si
 
 - Treat every sync worktree and disposable upstream checkout as temporary process resources, not durable project directories.
 - Before creating one, record its absolute path, purpose, owning branch, base SHA, and whether it is a candidate or a read-only worker.
-- Use persistent sibling worktrees when a long-lived candidate needs them, but do not leave them as the default final state. Parallel worker worktrees must have one writer and an explicit owner.
+- Use a persistent sibling worktree for the long-lived candidate, but do not leave it as the default final state. The candidate has one writer; parallel worktrees are for read-only audit/review or explicitly separate experiments, each with an owner.
 - Before integration, inventory every sync worktree and checkout with its path, branch/HEAD, clean or dirty state, and uncommitted file summary.
 - After the exact-SHA CI-green candidate is integrated, remove every clean worktree whose commits are integrated or explicitly archived with `git worktree remove`. Remove clean disposable upstream checkouts as well.
 - Never delete a dirty worktree, force-remove it, commit its changes, or silently discard its untracked files. Preserve it and present the changed-file/stat summary for an explicit user decision.
@@ -134,6 +148,9 @@ A red test says the candidate and expectation disagree; it does not say which si
 - A review finding blocks the sync only when the approved upstream code was copied incorrectly, omitted, or leaked across a fixed BySpace boundary. All other findings go to the user for disposition.
 - If upstream changed an excluded surface and a retained shared module together, copy only the clearly separable retained code; if separation requires design judgment, stop and ask.
 - If the baseline marker is wrong or incomplete, stop and repair the evidence before applying code.
+- A worker/provider failure before edits is an execution failure, not a reason to rebuild the inventory. Confirm the tree is clean and retry the same capability batch.
+- Run focused tests from their owning workspace before treating a root-only parse or alias error as a source defect.
+- Reuse existing gate output in progress reports; never rerun expensive commands merely to produce status.
 
 ## Required result
 

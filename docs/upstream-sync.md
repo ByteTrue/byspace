@@ -86,7 +86,7 @@ Give each behavior one internal disposition:
 - **Superseded by a previously documented BySpace decision**;
 - **Needs user decision** — stop before implementation; unresolved decisions block baseline advancement.
 
-This is release-level accounting, not a per-commit implementation plan. Keep a separate commit/file coverage index proving that every part of the release delta maps to a behavior, including merge-only and release-metadata changes.
+This is release-level accounting, not a per-commit implementation plan. Keep a separate commit/file coverage index proving that every part of the release delta maps to a behavior, including merge-only and release-metadata changes. The coverage index is audit evidence only: never turn it into a commit-by-commit, path-by-path, or hunk-by-hunk implementation queue.
 
 Before presenting the inventory as final, obtain an independent read-only classification review. It must check omissions, cross-subsystem conflicts, whole-commit exclusions that hide retained behavior, and incorrect Already present or Superseded claims. Correct the ledger first.
 
@@ -134,10 +134,22 @@ npm run build --workspace=@getpaseo/app
 
 Use the target's documented equivalents if scripts or package names changed. Record upstream failures before touching BySpace. The proof may run alongside inventory work, but a long build should not delay the first change explanation unless it changes a recommendation. It must pass before copying code.
 
-### 5. Copy approved upstream code
+### 5. Plan capability batches
+
+The implementation unit is a coherent capability batch, not an upstream commit, file, hunk, test, or cosmetic token. A good batch owns one user/system capability or a tightly coupled group, includes its dependency closure and support tests, can compile as a whole, and has a clear path boundary from other batches.
+
+1. Group approved Ports by runtime/UI owner, dependency order, and overlapping paths. Prefer a few substantial batches over many micro-checkpoints.
+2. Size each batch so one writer can finish it in one bounded execution run. If the execution budget is nearly exhausted, finish and commit the coherent subset already implemented, hand off the remaining owners, and stop exploring; do not leave a broad dirty tree or force the whole batch through.
+3. Include a coupled prerequisite from the same approved release in the batch when the frozen target proves one deterministic end state. Stop only when the adaptation introduces a real product or architecture choice.
+4. Build the implementation plan once from the approved behavior inventory. Do not remap every upstream commit or regenerate global coverage before each batch. Use commit history as navigation; perform deep provenance analysis only when a hunk does not apply mechanically, a test fails, or a deliberate BySpace seam may exist.
+5. Keep one candidate writer. Read-only inventory, review, and failure analysis may run in parallel, but overlapping writers must not modify the candidate.
+6. Do not create a checkpoint merely because one upstream commit ended, one file changed, or one focused test can be run. Finish the capability batch before committing and running batch gates.
+7. Report progress at capability milestones. Periodic status reporting must read existing artifacts and Git state; it must not rerun builds, tests, or global scans.
+
+### 6. Copy approved upstream code
 
 1. Create a persistent isolated worktree from the recorded current BySpace `main` SHA.
-2. For each approved Port, copy the complete upstream implementation slice as directly as the retained BySpace tree permits. The slice includes production code, tests, shared E2E helpers, fixtures, test factories, benchmarks, generated assets, and smoke/package expectations changed by the same behavior.
+2. For each capability batch, copy every approved Port and its complete support slice as directly as the retained BySpace tree permits. The slice includes production code, tests, shared E2E helpers, fixtures, test factories, benchmarks, generated assets, and smoke/package expectations changed by the same behavior.
 3. Without further approval, make only deterministic mechanical adaptations:
    - BySpace product/package/import/path names;
    - omission of wiring used only by excluded surfaces;
@@ -149,9 +161,9 @@ Use the target's documented equivalents if scripts or package names changed. Rec
 7. Treat copied `COMPAT(...)` comments as release metadata, not literal source text. Before integration, make every new marker name the actual first BySpace release that carries the shim and include its cleanup date; never retain an upstream version number or guess an unknown BySpace release.
 8. Do not improve upstream code during sync. If the user wants a fix, record whether to copy upstream first, exclude it, or perform separately scoped follow-up work.
 9. Build workspace declarations before interpreting cross-package type errors.
-10. Commit copied slices as ordinary BySpace commits; never import upstream ancestry.
+10. Commit completed capability batches as ordinary BySpace commits; never import upstream ancestry or mirror upstream commit granularity.
 
-### 6. Verify the candidate
+### 7. Verify the candidate
 
 Before changing runtime behavior to satisfy a failing test or CI job, establish the failure's provenance:
 
@@ -166,7 +178,13 @@ Before changing runtime behavior to satisfy a failing test or CI job, establish 
    - **platform defect** — only one OS fails: inspect path case/separators, home resolution, watcher readiness, and teardown ordering before changing timeouts or weakening assertions.
 4. Keep a compact CI failure ledger: failing job/assertion, provenance evidence, chosen action, focused proof, and replacement exact SHA. Do not assume that every failure in a cluster shares one root cause, or that every timeout is independent.
 
-Run focused tests for each changed behavior, then:
+Use a verification ladder; do not run the final matrix after every small edit:
+
+1. **While editing a batch:** run only the smallest compiler or focused test needed to guide the transfer. A known-incomplete batch may be temporarily red; do not commit it or repeatedly run broad gates in that state.
+2. **At a completed capability batch:** run the upstream tests covering the copied behavior plus focused adaptation tests, then run root typecheck, lint, and format check once. Run tests from the owning workspace so its aliases and environment apply.
+3. **Build by blast radius:** run `build:server` when the batch changes protocol, client declarations, server/CLI code, dependencies, packaging, or another cross-workspace contract. For App-only batches, defer the real Web export until the end of the aggregate Web stage rather than exporting after every owner.
+4. **Keep generated-output commands sequential:** do not run builds, typecheck, or tests concurrently when they read or write shared `dist` declarations.
+5. **At the complete candidate:** run the final matrix once:
 
 ```bash
 npm ci
@@ -190,9 +208,11 @@ Also prove:
 - Stable/Beta endpoint selection remains correct;
 - the production daemon and deployed resources were not changed.
 
-Use upstream tests for copied behavior and focused tests for mechanical adaptations. Do not broaden a sync into an exploratory E2E campaign. If testing reveals behavior that requires a product decision, stop and ask. Broad platform coverage belongs to remote CI, not a local full-suite run.
+Use upstream tests for copied behavior and focused tests for mechanical adaptations. Never run the full local test suite, and do not broaden a sync into an exploratory E2E campaign. Broad platform coverage belongs to remote CI. If testing reveals behavior that requires a product decision, stop and ask.
 
-### 7. Review and integrate normally
+### 8. Review and integrate normally
+
+Review completed capability batches when they are high-risk or cross architectural boundaries; otherwise review the aggregate candidate. Do not launch a fresh independent review for every upstream commit, cosmetic token, or small follow-up fix. Reviewers consume the existing inventory and adaptation record rather than rebuilding the release audit.
 
 Ask independent read-only reviewers to inspect only:
 
@@ -201,13 +221,13 @@ Ask independent read-only reviewers to inspect only:
 - whether excluded surfaces or old identity leaked back in;
 - whether package and release-channel boundaries regressed.
 
-A reviewer finding is a sync blocker only when code was omitted, copied incorrectly, adapted beyond approval, or crossed a fixed BySpace boundary. A possible upstream bug, security improvement, architecture improvement, or desirable hardening is reported to the user and is not implemented automatically.
+A reviewer finding is a sync blocker only when code was omitted, copied incorrectly, adapted beyond approval, or crossed a fixed BySpace boundary. A possible upstream bug, security improvement, architecture improvement, or desirable hardening is reported to the user and is not implemented automatically. Missing shell access or duplicated gate evidence is not a code blocker; the candidate writer or supervisor may supply that evidence once.
 
 Fix transfer mistakes and resolve all **Needs user decision** items through explicit user choices. Then update the baseline marker inside the sync branch and report the candidate SHA, tests, reviews, decisions, and residual upstream concerns.
 
 Integration is branch-first: push the sync branch, run the full `CI` workflow on its exact SHA (PR to `main` or `workflow_dispatch`), and only after it is green and the user approves, fast-forward `main` to that same SHA. If CI fails, classify each failure with the provenance procedure above, fix only the transfer or explicitly approved defect, run focused proof and local gates, then submit a replacement exact SHA to the complete matrix. Do not accept rerun luck for a deterministic platform failure. The baseline marker therefore lands on `main` only together with green exact-SHA CI evidence; never merge a red or unverified candidate into `main`.
 
-### 8. Tear down temporary sync trees
+### 9. Tear down temporary sync trees
 
 A sync worktree is a temporary process resource, not a second BySpace checkout to keep indefinitely.
 
@@ -232,6 +252,9 @@ Shipping is separate. Invoke `release-beta` or `release-stable` only when explic
 - Never treat a discovered upstream defect or review suggestion as authorization to fix or harden it.
 - Never expand test-driven debugging into new sync functionality; report the decision point instead.
 - If the baseline marker cannot be proven, repair it before continuing.
+- If a worker or provider fails before making edits, confirm the candidate is clean and retry the same capability batch. Do not repeat the release inventory or remap the batch.
+- If a test fails to parse only from the repository root, rerun it from the owning workspace before changing source or test code; package aliases and setup files are part of the harness.
+- Treat status reporting as observation, not verification. Reuse recorded command output instead of rerunning expensive gates for a progress update.
 
 ## Required report
 
