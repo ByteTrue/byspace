@@ -265,6 +265,7 @@ try {
     "@bytetrue",
     "byspace-server",
     "dist",
+    "server",
     "skills",
   );
   const expectedBundledSkills = [
@@ -272,6 +273,7 @@ try {
     "byspace-advisor",
     "byspace-committee",
     "byspace-handoff",
+    "byspace-plugin",
     "byspace-project-setup",
   ];
   const installedBundledSkills = readdirSync(installedSkillsRoot, { withFileTypes: true })
