@@ -10,6 +10,7 @@ interface ClientActivityOptions {
   client: DaemonClient;
   focusedAgentId: string | null;
   focusedTerminalId: string | null;
+  onUserActivity: () => void;
   onAppResumed?: (awayMs: number) => void;
   onWindowFocused?: () => void;
 }
@@ -18,6 +19,7 @@ export function useClientActivity({
   client,
   focusedAgentId,
   focusedTerminalId,
+  onUserActivity,
   onAppResumed,
   onWindowFocused,
 }: ClientActivityOptions): void {
@@ -34,6 +36,7 @@ export function useClientActivity({
       initialFocusedTerminalId: focusedTerminalId,
       initialAppVisible: document.visibilityState === "visible",
       now: () => Date.now(),
+      onUserActivity,
       onAppResumed: (awayMs) => onAppResumedRef.current?.(awayMs),
     });
   }

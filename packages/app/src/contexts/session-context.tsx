@@ -215,6 +215,7 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
     client,
     focusedAgentId,
     focusedTerminalId,
+    onUserActivity: () => getHostRuntimeStore().recordUserActivity(),
     onAppResumed: handleAppResumed,
     onWindowFocused: refreshVisibleTimelines,
   });

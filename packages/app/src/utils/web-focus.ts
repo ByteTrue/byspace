@@ -4,6 +4,7 @@ interface FocusWithRetriesOptions {
   timeoutMs?: number;
   onSuccess?: () => void;
   onTimeout?: () => void;
+  deferInitialAttempt?: boolean;
 }
 
 export function focusWithRetries({
@@ -12,6 +13,7 @@ export function focusWithRetries({
   timeoutMs = 1500,
   onSuccess,
   onTimeout,
+  deferInitialAttempt = false,
 }: FocusWithRetriesOptions): () => void {
   let cancelled = false;
   const deadlineMs = Date.now() + timeoutMs;
@@ -40,7 +42,11 @@ export function focusWithRetries({
     });
   };
 
-  tick();
+  if (deferInitialAttempt) {
+    requestAnimationFrame(tick);
+  } else {
+    tick();
+  }
 
   return () => {
     cancelled = true;

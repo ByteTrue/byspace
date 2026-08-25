@@ -31,7 +31,15 @@ export function registerWorkspaceRouteNavigationRef(
   };
 }
 
-function findStackKeyWithMountedRouteName(state: unknown, routeName: string): string | null {
+interface MountedRouteStack {
+  key: string;
+  focusedRouteName: string | null;
+}
+
+function findStackWithMountedRouteName(
+  state: unknown,
+  routeName: string,
+): MountedRouteStack | null {
   if (!state || typeof state !== "object") {
     return null;
   }
@@ -39,6 +47,7 @@ function findStackKeyWithMountedRouteName(state: unknown, routeName: string): st
   const candidate = state as {
     key?: unknown;
     routes?: unknown;
+    index?: unknown;
   };
 
   if (!Array.isArray(candidate.routes)) {
@@ -52,19 +61,34 @@ function findStackKeyWithMountedRouteName(state: unknown, routeName: string): st
         !!route && typeof route === "object" && (route as { name?: unknown }).name === routeName,
     )
   ) {
-    return candidate.key;
+    const focusedIndex =
+      typeof candidate.index === "number" &&
+      Number.isInteger(candidate.index) &&
+      candidate.index >= 0 &&
+      candidate.index < candidate.routes.length
+        ? candidate.index
+        : candidate.routes.length - 1;
+    const focusedRoute = candidate.routes[focusedIndex];
+    const focusedRouteName =
+      focusedRoute && typeof focusedRoute === "object"
+        ? (focusedRoute as { name?: unknown }).name
+        : null;
+    return {
+      key: candidate.key,
+      focusedRouteName: typeof focusedRouteName === "string" ? focusedRouteName : null,
+    };
   }
 
   for (const route of candidate.routes) {
     if (!route || typeof route !== "object") {
       continue;
     }
-    const childKey = findStackKeyWithMountedRouteName(
+    const childStack = findStackWithMountedRouteName(
       (route as { state?: unknown }).state,
       routeName,
     );
-    if (childKey) {
-      return childKey;
+    if (childStack) {
+      return childStack;
     }
   }
 
@@ -79,15 +103,15 @@ function dispatchHostWorkspacePopTo(route: string): boolean {
   }
 
   const rootState = navigation.getRootState();
-  const target = findStackKeyWithMountedRouteName(rootState, ROOT_HOST_ROUTE_NAME);
-  if (!target) {
+  const hostStack = findStackWithMountedRouteName(rootState, ROOT_HOST_ROUTE_NAME);
+  if (!hostStack || hostStack.focusedRouteName === ROOT_HOST_ROUTE_NAME) {
     return false;
   }
   const open = getHostWorkspaceOpenParamFromPathname(route);
 
   const action: NavigationAction = {
     type: "POP_TO",
-    target,
+    target: hostStack.key,
     payload: {
       name: ROOT_HOST_ROUTE_NAME,
       params: {

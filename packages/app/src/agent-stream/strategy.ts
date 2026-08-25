@@ -84,6 +84,7 @@ export interface StreamRenderInput {
 }
 
 export interface ResolveStreamRenderStrategyInput {
+  platform?: "web" | "native";
   isMobileBreakpoint: boolean;
 }
 

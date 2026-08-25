@@ -35,6 +35,7 @@ describe("buildAgentStreamRenderModel", () => {
     const head = [assistantMessage("live-a", 121)];
 
     const model = buildAgentStreamRenderModel({
+      platform: "web",
       isTurnActive: true,
       activeTurnStartedAt: tail.at(-2)?.timestamp ?? null,
       tail,
@@ -53,6 +54,7 @@ describe("buildAgentStreamRenderModel", () => {
     const head = [assistantMessage("live-a", 3)];
 
     const model = buildAgentStreamRenderModel({
+      platform: "web",
       isTurnActive: true,
       activeTurnStartedAt: tail[0]?.timestamp ?? null,
       tail,
@@ -71,6 +73,7 @@ describe("buildAgentStreamRenderModel", () => {
     const secondHead = [assistantMessage("live-b", 4)];
 
     const first = buildAgentStreamRenderModel({
+      platform: "web",
       isTurnActive: true,
       activeTurnStartedAt: tail[0]?.timestamp ?? null,
       tail,
@@ -78,6 +81,7 @@ describe("buildAgentStreamRenderModel", () => {
       isMobileBreakpoint: false,
     });
     const second = buildAgentStreamRenderModel({
+      platform: "web",
       isTurnActive: true,
       activeTurnStartedAt: tail[0]?.timestamp ?? null,
       tail,
@@ -95,6 +99,7 @@ describe("buildAgentStreamRenderModel", () => {
     const head = [assistantMessage("live-a", 4)];
 
     const model = buildAgentStreamRenderModel({
+      platform: "web",
       isTurnActive: true,
       activeTurnStartedAt: tail[0]?.timestamp ?? null,
       tail,
@@ -111,6 +116,7 @@ describe("buildAgentStreamRenderModel", () => {
     const head = [assistantMessage("live-a", 4)];
 
     const model = buildAgentStreamRenderModel({
+      platform: "web",
       isTurnActive: false,
       activeTurnStartedAt: null,
       tail,
@@ -130,6 +136,7 @@ describe("buildAgentStreamRenderModel", () => {
     const tail = [userMessage("u1", 1), assistantMessage("a1", 4)];
 
     const model = buildAgentStreamRenderModel({
+      platform: "web",
       isTurnActive: false,
       activeTurnStartedAt: null,
       tail,
@@ -149,6 +156,7 @@ describe("buildAgentStreamRenderModel", () => {
     const tail = [userMessage("u1", 1), userMessage("u2", 4)];
 
     const model = buildAgentStreamRenderModel({
+      platform: "web",
       isTurnActive: false,
       activeTurnStartedAt: null,
       tail,

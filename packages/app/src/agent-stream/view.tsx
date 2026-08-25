@@ -55,6 +55,7 @@ import { useLoadOlderAgentHistory } from "@/hooks/use-load-older-agent-history";
 import { useSettings } from "@/hooks/use-settings";
 import type { ToastApi } from "@/components/toast-host";
 import { navigateToTimelineTail } from "./timeline-tail-navigation";
+import { useStreamHistoryWindow } from "./use-stream-history-window";
 import { ChatOutlineRail } from "@/agent-stream/chat-outline/rail";
 import { useChatOutline } from "@/agent-stream/chat-outline/use-chat-outline";
 import { getHostRuntimeStore } from "@/runtime/host-runtime";
@@ -377,7 +378,12 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
       agentId,
       toast,
     });
-    const { isLoadingOlder, hasOlder, progressKey, loadOlder } = historyPagination
+    const {
+      isLoadingOlder: remoteIsLoadingOlder,
+      hasOlder: remoteHasOlder,
+      progressKey: remoteProgressKey,
+      loadOlder: loadRemoteOlder,
+    } = historyPagination
       ? {
           isLoadingOlder: historyPagination.isLoadingOlder,
           hasOlder: historyPagination.hasOlder,
@@ -516,13 +522,29 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
       ],
     );
 
+    const {
+      start: historyWindowStart,
+      hasLocalHistory,
+      revealLoadedHistory,
+      loadOlder,
+    } = useStreamHistoryWindow({
+      agentId,
+      items: projectedToolCalls.tail,
+      loadRemoteOlder: loadRemoteOlder,
+    });
+    const isLoadingOlder = remoteIsLoadingOlder;
+    const hasOlder = hasLocalHistory || remoteHasOlder;
+    const progressKey = `${remoteProgressKey ?? "local"}:${historyWindowStart}`;
+
     const baseRenderModel = useMemo(() => {
       return buildAgentStreamRenderModel({
         isTurnActive,
         activeTurnStartedAt: effectiveTurnPresentation.startedAt,
         tail: projectedToolCalls.tail,
         head: projectedToolCalls.head,
+        platform: "web",
         isMobileBreakpoint: isMobile,
+        historyStart: historyWindowStart,
       });
     }, [
       isMobile,
@@ -530,6 +552,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
       projectedToolCalls.head,
       projectedToolCalls.tail,
       effectiveTurnPresentation.startedAt,
+      historyWindowStart,
     ]);
     const streamLayout = useMemo(
       () =>
@@ -551,6 +574,13 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
     const handleTimelineHistoryLoadError = useCallback(() => {
       toast?.error(t("agentStream.historyLoadFailed"));
     }, [t, toast]);
+    const visibleHistoryItemIds = useMemo(
+      () =>
+        new Set(
+          [...baseRenderModel.history, ...baseRenderModel.segments.liveHead].map((item) => item.id),
+        ),
+      [baseRenderModel.history, baseRenderModel.segments.liveHead],
+    );
     const chatOutline = useChatOutline({
       agentId,
       serverId: resolvedServerId,
@@ -560,6 +590,8 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
       enabled: supportsChatOutline && chatOutlineEnabled,
       viewportRef,
       onJumpError: handleTimelineHistoryLoadError,
+      visibleItemIds: visibleHistoryItemIds,
+      revealLoadedItem: revealLoadedHistory,
     });
 
     useImperativeHandle(

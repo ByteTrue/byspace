@@ -16,7 +16,7 @@ import {
   selectWorkspaceKeys,
   selectWorkspaceOrderByScope,
   selectWorkspaceStatusesForBadges,
-  selectWorkspaceStructureProjects,
+  createWorkspaceStructureProjectsSelector,
   workspaceEqualityFns,
   type WorkspaceStructure,
 } from "./selectors";
@@ -95,9 +95,13 @@ export function useWorkspaceDirectory(
 }
 
 export function useWorkspaceStructure(serverIds: string[]): WorkspaceStructure {
+  const selectProjects = useMemo(
+    () => createWorkspaceStructureProjectsSelector(serverIds),
+    [serverIds],
+  );
   const projects = useStoreWithEqualityFn(
     useSessionStore,
-    (state) => selectWorkspaceStructureProjects(state, serverIds),
+    selectProjects,
     workspaceEqualityFns.deep,
   );
   const projectOrder = useStoreWithEqualityFn(

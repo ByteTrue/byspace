@@ -189,7 +189,7 @@ describe("deriveAgentScreenViewState", () => {
     const ready = expectReadyState(result.state);
     const sync = expectCatchingUpSync(ready);
 
-    expect(sync.ui).toBe("indicator");
+    expect(sync.ui).toBe("silent");
   });
 
   it("keeps hydrated history visible with an inline indicator during catch-up", () => {
@@ -208,7 +208,7 @@ describe("deriveAgentScreenViewState", () => {
     const ready = expectReadyState(result.state);
     const sync = expectCatchingUpSync(ready);
 
-    expect(sync.ui).toBe("indicator");
+    expect(sync.ui).toBe("silent");
   });
 
   it("keeps already-hydrated history visible with an inline indicator when revisited", () => {
@@ -227,7 +227,7 @@ describe("deriveAgentScreenViewState", () => {
     const ready = expectReadyState(result.state);
     const sync = expectCatchingUpSync(ready);
 
-    expect(sync.ui).toBe("indicator");
+    expect(sync.ui).toBe("silent");
   });
 
   it("keeps hydrated history readable after a visibility catch-up error", () => {
@@ -572,7 +572,7 @@ describe("deriveAgentScreenViewState", () => {
     const ready = expectReadyState(result.state);
     const sync = expectCatchingUpSync(ready);
 
-    expect(sync.ui).toBe("indicator");
+    expect(sync.ui).toBe("silent");
     expect(result.memory.hadInitialSyncFailure).toBe(false);
   });
 });

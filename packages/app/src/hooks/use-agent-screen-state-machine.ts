@@ -4,6 +4,7 @@ import type {
   AgentFeature,
   AgentProvider,
 } from "@bytetrue/byspace-protocol/agent-types";
+import type { ViewedTimelineStatus } from "@/timeline/viewed-timeline-sync";
 
 export interface AgentScreenAgent {
   serverId: string;
@@ -48,7 +49,7 @@ export interface AgentScreenMachineInput {
   isArchivingCurrentAgent: boolean;
   isHistorySyncing: boolean;
   needsAuthoritativeSync: boolean;
-  visibilityCatchUpStatus: "ready" | "pending" | "error";
+  visibilityCatchUpStatus: ViewedTimelineStatus;
   continuity: AgentScreenContinuity;
   hasHydratedHistoryBefore: boolean;
 }
@@ -83,7 +84,7 @@ export type AgentScreenReadySyncState =
       status: "catching_up";
       ui: "overlay" | "indicator" | "silent";
     }
-  | { status: "sync_error" };
+  | { status: "sync_error"; isRetrying: boolean };
 
 export type AgentScreenViewState =
   | {
@@ -154,9 +155,9 @@ function resolveCatchingUpUi(args: {
   isVisibilityCatchUpPending: boolean;
   hasHydratedHistoryBefore: boolean;
   hadInitialSyncFailure: boolean;
-}): "overlay" | "indicator" | "silent" {
+}): "overlay" | "silent" {
   if (args.hasOptimisticCreateContinuity) return "silent";
-  if (args.hasHydratedHistoryBefore) return "indicator";
+  if (args.hasHydratedHistoryBefore) return "silent";
   if (args.isVisibilityCatchUpPending) return "overlay";
   if (args.hadInitialSyncFailure) return "silent";
   return "overlay";
@@ -174,10 +175,10 @@ function resolveAgentScreenSync(args: {
     return { status: "reconnecting" };
   }
   if (input.missingAgentState.kind === "error") {
-    return { status: "sync_error" };
+    return { status: "sync_error", isRetrying: input.visibilityCatchUpStatus === "retrying" };
   }
-  if (input.visibilityCatchUpStatus === "error") {
-    return { status: "sync_error" };
+  if (input.visibilityCatchUpStatus === "error" || input.visibilityCatchUpStatus === "retrying") {
+    return { status: "sync_error", isRetrying: input.visibilityCatchUpStatus === "retrying" };
   }
   if (
     input.visibilityCatchUpStatus === "pending" ||
