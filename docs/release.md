@@ -16,7 +16,7 @@ Electron, native iOS/Android, app-store builds, Browser automation, and a market
 
 ## Source baseline
 
-The currently integrated upstream baseline is `v0.4.0`, commit `b44bb63cf4ce089ab5750b9fc621ed52827b2820`, tree `17728f76898f841a98a7526b573b269119aebc08`. The default branch keeps BySpace-owned ancestry; README and the root commit retain public source attribution.
+The currently integrated upstream baseline is `v0.5.1`, commit `f517493591a7b4072aa30ee48db13c1a51495103`, tree `fc096ff4bc53515c14a8e53d7d7adc6118f94974`. The default branch keeps BySpace-owned ancestry; README and the root commit retain public source attribution.
 
 Future upstream updates port the aggregate delta between this baseline and an approved newer stable release onto the current BySpace `main`. They do not replace the current tree, replay upstream commits, repeat identity/client-surface work, or rewrite public history. Follow `docs/upstream-sync.md`.
 

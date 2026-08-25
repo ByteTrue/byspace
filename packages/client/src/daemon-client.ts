@@ -5611,7 +5611,7 @@ export class DaemonClient {
   }
 
   private requireDaemonConfigReloadSupport(): void {
-    // COMPAT(daemonConfigReload): added in v0.4.0, remove gate after 2027-02-14.
+    // COMPAT(daemonConfigReload): added in v0.7.0, remove gate after 2027-02-25.
     if (this.lastServerInfoMessage?.features?.daemonConfigReload !== true) {
       throw new Error("Update the host to reload daemon configuration.");
     }

@@ -1290,7 +1290,7 @@ export const FetchAgentsRequestMessageSchema = z.object({
       subscriptionId: z.string().optional(),
     })
     .optional(),
-  // COMPAT(directorySync): added in v0.5.1, remove optional after 2027-02-12.
+  // COMPAT(directorySync): added in v0.7.0, remove optional after 2027-02-25.
   sync: DirectorySyncRequestSchema.optional(),
 });
 
@@ -1332,14 +1332,14 @@ export const FetchWorkspacesRequestMessageSchema = z.object({
       subscriptionId: z.string().optional(),
     })
     .optional(),
-  // COMPAT(directorySync): added in v0.5.1, remove optional after 2027-02-12.
+  // COMPAT(directorySync): added in v0.7.0, remove optional after 2027-02-25.
   sync: DirectorySyncRequestSchema.optional(),
 });
 
 export const ProjectListRequestMessageSchema = z.object({
   type: z.literal("project.list.request"),
   requestId: z.string(),
-  // COMPAT(directorySync): added in v0.5.1, remove optional after 2027-02-12.
+  // COMPAT(directorySync): added in v0.7.0, remove optional after 2027-02-25.
   sync: DirectorySyncRequestSchema.optional(),
 });
 
@@ -3421,10 +3421,10 @@ export const ServerInfoStatusPayloadSchema = z
         agentProfiles: z.boolean().optional(),
         // COMPAT(agentConfigApply): added in v0.6.0; remove the gate after 2027-02-21.
         agentConfigApply: z.boolean().optional(),
-        // COMPAT(workspaceLabels): added in v0.5.0, remove after 2027-08-14.
+        // COMPAT(workspaceLabels): added in v0.7.0, remove after 2027-02-25.
         workspaceLabels: z.boolean().optional(),
         providersSnapshot: z.boolean().optional(),
-        // COMPAT(directorySync): added in v0.5.1, remove gate after 2027-02-12.
+        // COMPAT(directorySync): added in v0.7.0, remove gate after 2027-02-25.
         directorySync: z.boolean().optional(),
         // COMPAT(providersSnapshotCwd): added in v0.6.0, remove after 2027-02-21.
         providersSnapshotCwd: z.boolean().optional(),
@@ -3440,7 +3440,7 @@ export const ServerInfoStatusPayloadSchema = z
         forgeSearch: z.boolean().optional(),
         // COMPAT(daemonStatusRpc): added in v0.1.76, remove gate after 2026-11-18.
         daemonStatusRpc: z.boolean().optional(),
-        // COMPAT(daemonConfigReload): added in v0.4.0, remove gate after 2027-02-14.
+        // COMPAT(daemonConfigReload): added in v0.7.0, remove gate after 2027-02-25.
         daemonConfigReload: z.boolean().optional(),
         // COMPAT(relayConfig): added in v0.5.0, remove gate after 2027-02-08.
         relayConfig: z.boolean().optional(),
@@ -3848,7 +3848,7 @@ export const WorkspaceDescriptorPayloadSchema = z
     title: z.string().nullable().optional(),
     // COMPAT(workspacePinning): added in v0.1.107, remove optional after 2027-01-12.
     pinnedAt: z.string().nullable().optional(),
-    // COMPAT(workspaceLabels): added in v0.5.0, remove optional after 2027-08-14.
+    // COMPAT(workspaceLabels): added in v0.7.0, remove optional after 2027-02-25.
     labels: z.array(z.string()).optional(),
     archivingAt: z.string().nullable().optional().default(null),
     status: WorkspaceStateBucketSchema,

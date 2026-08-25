@@ -1536,7 +1536,7 @@ export class VoiceAssistantWebSocketServer {
       dataRelay: this.buildServerInfoDataRelayPayload(),
       ...(this.serverCapabilities ? { capabilities: this.serverCapabilities } : {}),
       features: {
-        // COMPAT(directorySync): added in v0.5.1, remove gate after 2027-02-12.
+        // COMPAT(directorySync): added in v0.7.0, remove gate after 2027-02-25.
         directorySync: true,
         // COMPAT(providerOptions): added in v0.5.0-beta.1 on 2026-08-12; remove the gate after 2027-02-12.
         providerOptions: true,
@@ -1546,7 +1546,7 @@ export class VoiceAssistantWebSocketServer {
         agentProfiles: true,
         // COMPAT(agentConfigApply): added in v0.6.0; remove the gate after 2027-02-21.
         agentConfigApply: true,
-        // COMPAT(workspaceLabels): added in v0.5.0, remove after 2027-08-14.
+        // COMPAT(workspaceLabels): added in v0.7.0, remove after 2027-02-25.
         ...(this.workspaceLabelService ? { workspaceLabels: true } : {}),
         // COMPAT(speechModelSelection): added in v0.5.0, remove gate after 2027-02-04.
         speechModelSelection: true,
