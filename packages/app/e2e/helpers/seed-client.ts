@@ -12,6 +12,8 @@ export interface SeedWorkspaceDescriptor {
   projectDisplayName: string;
   projectRootPath: string;
   workspaceDirectory: string;
+  diffStat: { additions: number; deletions: number } | null;
+  labels?: string[];
 }
 
 /**
@@ -48,6 +50,11 @@ export interface SeedDaemonClient {
     entries: SeedWorkspaceDescriptor[];
   }>;
   setWorkspacePinned(workspaceId: string, pinned: boolean): Promise<{ pinnedAt: string | null }>;
+  setWorkspaceLabel(input: {
+    workspaceId: string;
+    label: { name: string; color: "red" };
+    assigned: boolean;
+  }): Promise<unknown>;
   createWorkspace(input: {
     source:
       | { kind: "directory"; path: string; projectId?: string }

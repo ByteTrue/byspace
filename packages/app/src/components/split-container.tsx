@@ -909,45 +909,43 @@ function SplitNodeView({
   if (node.kind === "pane") {
     return (
       <RetainedPanel active={node.pane.hidden !== true}>
-        <View>
-          <SplitPaneView
-            pane={node.pane}
-            uiTabs={uiTabs}
-            isFocused={node.pane.id === focusedPaneId}
-            sidePanelPaneId={sidePanelPaneId}
-            maximizedPaneId={maximizedPaneId}
-            onTogglePaneMaximized={onTogglePaneMaximized}
-            normalizedServerId={normalizedServerId}
-            normalizedWorkspaceId={normalizedWorkspaceId}
-            isWorkspaceFocused={isWorkspaceFocused}
-            hoveredCloseTabKey={hoveredCloseTabKey}
-            setHoveredCloseTabKey={setHoveredCloseTabKey}
-            closingTabIds={closingTabIds}
-            onNavigateTab={onNavigateTab}
-            onCloseTab={onCloseTab}
-            onCopyResumeCommand={onCopyResumeCommand}
-            onCopyAgentId={onCopyAgentId}
-            onCopyTerminalId={onCopyTerminalId}
-            onCopyFilePath={onCopyFilePath}
-            onReloadAgent={onReloadAgent}
-            onRenameTab={onRenameTab}
-            onCloseTabsToLeft={onCloseTabsToLeft}
-            onCloseTabsToRight={onCloseTabsToRight}
-            onCloseOtherTabs={onCloseOtherTabs}
-            onCreateNewTab={onCreateNewTab}
-            buildPaneContentModel={buildPaneContentModel}
-            onFocusPane={onFocusPane}
-            onSplitPane={onSplitPane}
-            onSplitPaneEmpty={onSplitPaneEmpty}
-            onReorderTabsInPane={onReorderTabsInPane}
-            activeDragTabId={activeDragTabId}
-            showDropZones={showDropZones}
-            dropPreview={dropPreview}
-            tabDropPreview={tabDropPreview}
-            focusModeEnabled={focusModeEnabled}
-            onExitFocusMode={onExitFocusMode}
-          />
-        </View>
+        <SplitPaneView
+          pane={node.pane}
+          uiTabs={uiTabs}
+          isFocused={node.pane.id === focusedPaneId}
+          sidePanelPaneId={sidePanelPaneId}
+          maximizedPaneId={maximizedPaneId}
+          onTogglePaneMaximized={onTogglePaneMaximized}
+          normalizedServerId={normalizedServerId}
+          normalizedWorkspaceId={normalizedWorkspaceId}
+          isWorkspaceFocused={isWorkspaceFocused}
+          hoveredCloseTabKey={hoveredCloseTabKey}
+          setHoveredCloseTabKey={setHoveredCloseTabKey}
+          closingTabIds={closingTabIds}
+          onNavigateTab={onNavigateTab}
+          onCloseTab={onCloseTab}
+          onCopyResumeCommand={onCopyResumeCommand}
+          onCopyAgentId={onCopyAgentId}
+          onCopyTerminalId={onCopyTerminalId}
+          onCopyFilePath={onCopyFilePath}
+          onReloadAgent={onReloadAgent}
+          onRenameTab={onRenameTab}
+          onCloseTabsToLeft={onCloseTabsToLeft}
+          onCloseTabsToRight={onCloseTabsToRight}
+          onCloseOtherTabs={onCloseOtherTabs}
+          onCreateNewTab={onCreateNewTab}
+          buildPaneContentModel={buildPaneContentModel}
+          onFocusPane={onFocusPane}
+          onSplitPane={onSplitPane}
+          onSplitPaneEmpty={onSplitPaneEmpty}
+          onReorderTabsInPane={onReorderTabsInPane}
+          activeDragTabId={activeDragTabId}
+          showDropZones={showDropZones}
+          dropPreview={dropPreview}
+          tabDropPreview={tabDropPreview}
+          focusModeEnabled={focusModeEnabled}
+          onExitFocusMode={onExitFocusMode}
+        />
       </RetainedPanel>
     );
   }

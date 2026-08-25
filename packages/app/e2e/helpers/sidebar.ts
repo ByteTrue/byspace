@@ -89,3 +89,45 @@ export async function openSidebarPage(page: Page, pageTestID: string): Promise<v
   await expect(item).toBeVisible({ timeout: 10_000 });
   await item.click();
 }
+
+// The display-preferences menu is one row per decision, and the options sit a page below that
+// row. Every caller has to walk the same path, so it lives here: when the menu's shape moves
+// again, this is the only place that has to follow.
+export async function openSidebarDisplayPage(page: Page, branchTestID: string): Promise<void> {
+  await page.getByTestId("sidebar-display-preferences-menu").click();
+  await page.getByTestId(branchTestID).click();
+}
+
+// Project filters live a page below the display-preferences root, like the host filters.
+export async function openSidebarProjectFilter(page: Page): Promise<void> {
+  await openSidebarDisplayPage(page, "sidebar-display-project-filter");
+}
+
+// The filter rows are keyed by the project's sidebar view key. A project seeded from its own temp
+// repo has a `projectKey` unique on the host, so the view key IS that key — see
+// `buildWorkspaceStructureProjects`.
+export async function toggleProjectFilter(page: Page, projectViewKey: string): Promise<void> {
+  await page.getByTestId(`sidebar-project-filter-${projectViewKey}`).click();
+}
+
+export async function selectAllProjectsFilter(page: Page): Promise<void> {
+  await page.getByTestId("sidebar-project-filter-all").click();
+}
+
+export async function closeSidebarDisplayPreferences(page: Page): Promise<void> {
+  await page.keyboard.press("Escape");
+  await expect(page.getByTestId("sidebar-display-preferences-content")).toHaveCount(0);
+}
+
+export async function pinWorkspaceFromSidebar(page: Page, workspaceId: string): Promise<void> {
+  const serverId = getServerId();
+  const row = page.getByTestId(`sidebar-workspace-row-${serverId}:${workspaceId}`);
+  await expect(row).toBeVisible({ timeout: 30_000 });
+  const kebab = page.getByTestId(`sidebar-workspace-kebab-${serverId}:${workspaceId}`);
+  if (!(await kebab.isVisible())) {
+    await row.hover();
+  }
+  await expect(kebab).toBeVisible({ timeout: 10_000 });
+  await kebab.click();
+  await page.getByTestId(`sidebar-workspace-menu-pin-${serverId}:${workspaceId}`).click();
+}
