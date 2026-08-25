@@ -1057,7 +1057,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   selectionCopyButtonText: {
     color: theme.colors.foreground,
-    fontSize: theme.fontSize.sm,
+    fontSize: theme.fontSize.base,
     fontWeight: theme.fontWeight.medium,
   },
   attachOverlay: {
@@ -1113,7 +1113,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   keyButtonText: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.sm,
+    fontSize: theme.fontSize.base,
     fontWeight: theme.fontWeight.medium,
     textAlign: "center",
   },
@@ -1128,7 +1128,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   stateText: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.sm,
+    fontSize: theme.fontSize.base,
     textAlign: "center",
   },
 }));

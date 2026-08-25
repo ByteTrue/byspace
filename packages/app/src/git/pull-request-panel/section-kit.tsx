@@ -157,7 +157,7 @@ export const sectionKitStyles = StyleSheet.create((theme) => ({
     height: CONTROL_HEIGHTS.compact,
   },
   checkName: {
-    fontSize: theme.fontSize.sm,
+    fontSize: theme.fontSize.base,
     fontWeight: theme.fontWeight.normal,
     color: theme.colors.foreground,
     flexShrink: 1,

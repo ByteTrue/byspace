@@ -1326,7 +1326,7 @@ const styles = StyleSheet.create((theme) => ({
     gap: theme.spacing[2],
   },
   authorText: {
-    fontSize: theme.fontSize.sm,
+    fontSize: theme.fontSize.base,
     fontWeight: theme.fontWeight.normal,
     color: theme.colors.foreground,
     flexShrink: 1,

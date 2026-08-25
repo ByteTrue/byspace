@@ -86,7 +86,7 @@ const styles = StyleSheet.create((theme) => ({
   subject: {
     flex: 1,
     minWidth: 0,
-    fontSize: theme.fontSize.sm,
+    fontSize: theme.fontSize.base,
     color: theme.colors.foreground,
   },
   timestamp: {

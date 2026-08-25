@@ -253,7 +253,7 @@ const styles = StyleSheet.create((theme) => ({
     gap: theme.spacing[0.5],
   },
   headline: {
-    fontSize: theme.fontSize.sm,
+    fontSize: theme.fontSize.base,
     fontWeight: theme.fontWeight.medium,
     color: theme.colors.foreground,
   },

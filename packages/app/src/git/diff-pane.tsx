@@ -3513,7 +3513,7 @@ const styles = StyleSheet.create((theme) => ({
     paddingTop: theme.spacing[16],
   },
   emptyText: {
-    fontSize: theme.fontSize.lg,
+    fontSize: theme.fontSize.base,
     color: theme.colors.foregroundMuted,
   },
   fileSection: {
@@ -3574,7 +3574,7 @@ const styles = StyleSheet.create((theme) => ({
     justifyContent: "center",
   },
   fileName: {
-    fontSize: theme.fontSize.sm,
+    fontSize: theme.fontSize.base,
     fontWeight: theme.fontWeight.normal,
     color: theme.colors.foreground,
     flexShrink: 1,
@@ -3582,7 +3582,7 @@ const styles = StyleSheet.create((theme) => ({
     userSelect: "none",
   },
   fileDir: {
-    fontSize: theme.fontSize.sm,
+    fontSize: theme.fontSize.base,
     fontWeight: theme.fontWeight.normal,
     color: theme.colors.foregroundMuted,
     flex: 1,
@@ -3739,7 +3739,7 @@ const styles = StyleSheet.create((theme) => ({
     paddingVertical: theme.spacing[4],
   },
   statusMessageText: {
-    fontSize: theme.fontSize.sm,
+    fontSize: theme.fontSize.base,
     color: theme.colors.foregroundMuted,
     fontStyle: "italic",
   },

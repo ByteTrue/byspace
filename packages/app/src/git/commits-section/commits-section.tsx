@@ -191,7 +191,7 @@ const styles = StyleSheet.create((theme) => ({
     transform: [{ rotate: "90deg" }],
   },
   title: {
-    fontSize: theme.fontSize.sm,
+    fontSize: theme.fontSize.base,
     color: theme.colors.foreground,
   },
   count: {
