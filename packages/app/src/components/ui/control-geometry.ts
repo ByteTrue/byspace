@@ -3,7 +3,7 @@ import { ICON_SIZE, type Theme } from "@/styles/theme";
 
 export type ButtonControlSize = "xs" | "sm" | "md" | "lg";
 export type FieldControlSize = "sm" | "md";
-export type SegmentedControlSize = "sm" | "md";
+export type SegmentedControlSize = "xs" | "sm" | "md";
 export type ControlInteractionPhase = "rest" | "hover" | "active";
 
 export interface ControlInteractionState {
@@ -22,8 +22,10 @@ export interface ControlInteractionStyleMap {
   controlDisabled?: StyleProp<ViewStyle>;
 }
 
+const TIGHT_CONTROL_HEIGHT = 28;
 const COMPACT_CONTROL_HEIGHT = 32;
 const FIELD_CONTROL_HEIGHT = 44;
+const SEGMENTED_TIGHT_INSET = 2;
 const SEGMENTED_COMPACT_INSET = 2;
 const SEGMENTED_FIELD_INSET = 3;
 const SWITCH_TRACK_WIDTH = 34;
@@ -34,16 +36,22 @@ const CONTROL_FOCUS_RING_OFFSET = 1;
 const CONTROL_CENTER_JUSTIFY_CONTENT = "center";
 const FIELD_TEXT_LINE_HEIGHT_RATIO = 1.4;
 
+/**
+ * The three control heights every button, field, and segmented control is built from.
+ * Exported so a row that hosts one of those controls can size itself from the same
+ * numbers instead of guessing a height the control then outgrows.
+ */
 export const CONTROL_HEIGHTS = {
+  tight: TIGHT_CONTROL_HEIGHT,
   compact: COMPACT_CONTROL_HEIGHT,
   field: FIELD_CONTROL_HEIGHT,
 };
 
 export const buttonControlHeight: Record<ButtonControlSize, number> = {
-  xs: 28,
-  sm: COMPACT_CONTROL_HEIGHT,
-  md: FIELD_CONTROL_HEIGHT,
-  lg: FIELD_CONTROL_HEIGHT,
+  xs: CONTROL_HEIGHTS.tight,
+  sm: CONTROL_HEIGHTS.compact,
+  md: CONTROL_HEIGHTS.field,
+  lg: CONTROL_HEIGHTS.field,
 };
 
 export const buttonIconSize: Record<ButtonControlSize, number> = {
@@ -54,6 +62,7 @@ export const buttonIconSize: Record<ButtonControlSize, number> = {
 };
 
 export const segmentedIconSize: Record<SegmentedControlSize, number> = {
+  xs: ICON_SIZE.xs,
   sm: ICON_SIZE.sm,
   md: ICON_SIZE.md,
 };
@@ -64,10 +73,6 @@ export const switchGeometry = {
   thumbSize: SWITCH_THUMB_SIZE,
   thumbTravel: SWITCH_TRACK_WIDTH - SWITCH_THUMB_SIZE - (SWITCH_TRACK_HEIGHT - SWITCH_THUMB_SIZE),
 };
-
-function nestedRadius(containerRadius: number, inset: number): number {
-  return Math.max(0, containerRadius - inset);
-}
 
 function fieldLineHeight(fontSize: number): number {
   return Math.round(fontSize * FIELD_TEXT_LINE_HEIGHT_RATIO);
@@ -141,8 +146,6 @@ export function createControlGeometry(theme: Theme) {
     fontSize: theme.fontSize.base,
     lineHeight: fieldTextMdLineHeight,
   };
-  const segmentedContainerSmRadius = theme.borderRadius.md;
-  const segmentedContainerMdRadius = theme.borderRadius.lg;
   const switchControl = {
     minHeight: CONTROL_HEIGHTS.compact,
     justifyContent: CONTROL_CENTER_JUSTIFY_CONTENT,
@@ -150,22 +153,22 @@ export function createControlGeometry(theme: Theme) {
 
   return {
     buttonXs: {
-      minHeight: CONTROL_HEIGHTS.compact,
+      minHeight: buttonControlHeight.xs,
       paddingHorizontal: theme.spacing[3],
       borderRadius: theme.borderRadius.md,
     },
     buttonSm: {
-      minHeight: CONTROL_HEIGHTS.compact,
+      minHeight: buttonControlHeight.sm,
       paddingHorizontal: theme.spacing[3],
       borderRadius: theme.borderRadius.md,
     },
     buttonMd: {
-      minHeight: CONTROL_HEIGHTS.field,
+      minHeight: buttonControlHeight.md,
       paddingHorizontal: theme.spacing[4],
       borderRadius: theme.borderRadius.lg,
     },
     buttonLg: {
-      minHeight: CONTROL_HEIGHTS.field,
+      minHeight: buttonControlHeight.lg,
       paddingHorizontal: theme.spacing[6],
       borderRadius: theme.borderRadius.xl,
     },
@@ -214,25 +217,35 @@ export function createControlGeometry(theme: Theme) {
       opacity: theme.opacity[50],
     },
     switchControl,
+    segmentedContainerXs: {
+      minHeight: CONTROL_HEIGHTS.tight,
+      padding: 0,
+    },
     segmentedContainerSm: {
       minHeight: CONTROL_HEIGHTS.compact,
-      padding: SEGMENTED_COMPACT_INSET,
-      borderRadius: segmentedContainerSmRadius,
+      padding: 0,
     },
     segmentedContainerMd: {
       minHeight: CONTROL_HEIGHTS.field,
-      padding: SEGMENTED_FIELD_INSET,
-      borderRadius: segmentedContainerMdRadius,
+      padding: 0,
+    },
+    segmentedSegmentXs: {
+      minHeight: CONTROL_HEIGHTS.tight - SEGMENTED_TIGHT_INSET * 2,
+      paddingHorizontal: theme.spacing[2],
+      borderRadius: theme.borderRadius.md,
     },
     segmentedSegmentSm: {
       minHeight: CONTROL_HEIGHTS.compact - SEGMENTED_COMPACT_INSET * 2,
-      paddingHorizontal: theme.spacing[4],
-      borderRadius: nestedRadius(segmentedContainerSmRadius, SEGMENTED_COMPACT_INSET),
+      paddingHorizontal: theme.spacing[2],
+      borderRadius: theme.borderRadius.md,
     },
     segmentedSegmentMd: {
       minHeight: CONTROL_HEIGHTS.field - SEGMENTED_FIELD_INSET * 2,
-      paddingHorizontal: theme.spacing[6],
-      borderRadius: nestedRadius(segmentedContainerMdRadius, SEGMENTED_FIELD_INSET),
+      paddingHorizontal: theme.spacing[3],
+      borderRadius: theme.borderRadius.lg,
+    },
+    segmentedLabelXs: {
+      fontSize: theme.fontSize.sm,
     },
     segmentedLabelSm: {
       fontSize: theme.fontSize.base,

@@ -177,7 +177,7 @@ export function ContextMenuTrigger({
         {...props}
         disabled={disabled}
         delayLongPress={longPressDelayMs}
-        style={pressableStyle}
+        style={typeof style === "function" ? pressableStyle : style}
       >
         {children}
       </Pressable>

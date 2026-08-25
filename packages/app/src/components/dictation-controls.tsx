@@ -134,7 +134,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   timerText: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.base,
+    fontSize: theme.fontSize.lg,
     fontWeight: theme.fontWeight.medium,
     fontVariant: ["tabular-nums"],
   },

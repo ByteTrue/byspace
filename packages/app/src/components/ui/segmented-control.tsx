@@ -102,9 +102,14 @@ export function SegmentedControl<T extends string>({
   testID,
   role,
 }: SegmentedControlProps<T>) {
-  const containerSizeStyle = size === "sm" ? styles.containerSm : styles.containerMd;
-  const segmentSizeStyle = size === "sm" ? styles.segmentSm : styles.segmentMd;
-  const labelSizeStyle = size === "sm" ? styles.labelSm : styles.labelMd;
+  const sizeStyles = {
+    xs: { container: styles.containerXs, segment: styles.segmentXs, label: styles.labelXs },
+    sm: { container: styles.containerSm, segment: styles.segmentSm, label: styles.labelSm },
+    md: { container: styles.containerMd, segment: styles.segmentMd, label: styles.labelMd },
+  }[size];
+  const containerSizeStyle = sizeStyles.container;
+  const segmentSizeStyle = sizeStyles.segment;
+  const labelSizeStyle = sizeStyles.label;
   const iconSize = segmentedIconSize[size];
 
   const containerStyle = useMemo(
@@ -244,9 +249,12 @@ const styles = StyleSheet.create((theme) => {
   return {
     container: {
       flexDirection: "row",
-      alignItems: "stretch",
-      backgroundColor: theme.colors.surface2,
-      gap: 2,
+      alignItems: "center",
+      backgroundColor: "transparent",
+      gap: theme.spacing[1],
+    },
+    containerXs: {
+      ...geometry.segmentedContainerXs,
     },
     containerSm: {
       ...geometry.segmentedContainerSm,
@@ -261,6 +269,9 @@ const styles = StyleSheet.create((theme) => {
       flexShrink: 0,
       gap: theme.spacing[1],
     },
+    segmentXs: {
+      ...geometry.segmentedSegmentXs,
+    },
     segmentSm: {
       ...geometry.segmentedSegmentSm,
     },
@@ -268,18 +279,13 @@ const styles = StyleSheet.create((theme) => {
       ...geometry.segmentedSegmentMd,
     },
     segmentSelected: {
-      backgroundColor: theme.colors.surface0,
-      shadowColor: "#000",
-      shadowOffset: { width: 0, height: 1 },
-      shadowOpacity: 0.08,
-      shadowRadius: 2,
-      elevation: 1,
+      backgroundColor: theme.colors.surface3,
     },
     segmentHover: {
-      backgroundColor: theme.colors.surface1,
+      backgroundColor: theme.colors.surface2,
     },
     segmentPressed: {
-      backgroundColor: theme.colors.surface1,
+      backgroundColor: theme.colors.surface3,
     },
     segmentDisabled: {
       opacity: theme.opacity[50],
@@ -291,6 +297,9 @@ const styles = StyleSheet.create((theme) => {
     label: {
       color: theme.colors.foregroundMuted,
       fontWeight: theme.fontWeight.normal,
+    },
+    labelXs: {
+      ...geometry.segmentedLabelXs,
     },
     labelSm: {
       ...geometry.segmentedLabelSm,
