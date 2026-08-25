@@ -40,6 +40,7 @@ import { useOpenAddProject } from "@/hooks/use-open-add-project";
 import { useOpenNewWorkspace } from "@/hooks/use-global-new-workspace-action";
 import { useShortcutKeys } from "@/hooks/use-shortcut-keys";
 import type { SidebarWorkspaceEntry } from "@/hooks/use-sidebar-workspaces-list";
+import type { PinnedSidebarGroups } from "@/hooks/use-sidebar-pins";
 import type { SidebarProjectedProject } from "@/components/sidebar/sidebar-projection";
 import { useSidebarModel } from "@/components/sidebar/sidebar-model";
 import { RetainedPanelActivity } from "@/components/retained-panel";
@@ -67,6 +68,7 @@ const DEV_BUILD_LABEL = process.env.EXPO_PUBLIC_BYSPACE_DEV_BUILD_LABEL?.trim() 
 interface SidebarSharedProps {
   theme: SidebarTheme;
   projects: SidebarProjectedProject[];
+  pinnedGroups: PinnedSidebarGroups;
   workspaceEntriesByKey: ReadonlyMap<string, SidebarWorkspaceEntry>;
   isInitialLoad: boolean;
   isRevalidating: boolean;
@@ -110,6 +112,7 @@ export const LeftSidebar = memo(function LeftSidebar({ active }: { active: boole
 
   const {
     projects,
+    pinnedGroups,
     workspaceEntriesByKey,
     isInitialLoad,
     isRevalidating,
@@ -196,6 +199,7 @@ export const LeftSidebar = memo(function LeftSidebar({ active }: { active: boole
   const sharedProps = {
     theme,
     projects,
+    pinnedGroups,
     workspaceEntriesByKey,
     isInitialLoad,
     isRevalidating,
@@ -483,6 +487,7 @@ function SidebarFooter({
 function MobileSidebar({
   theme,
   projects,
+  pinnedGroups,
   workspaceEntriesByKey,
   isInitialLoad,
   isRevalidating,
@@ -554,6 +559,7 @@ function MobileSidebar({
           <SidebarWorkspaceList
             shortcutIndexByWorkspaceKey={shortcutIndexByWorkspaceKey}
             projects={projects}
+            pinnedGroups={pinnedGroups}
             workspaceEntriesByKey={workspaceEntriesByKey}
             isRefreshing={isManualRefresh && isRevalidating}
             onRefresh={handleRefresh}
@@ -581,6 +587,7 @@ function MobileSidebar({
 function DesktopSidebar({
   theme,
   projects,
+  pinnedGroups,
   workspaceEntriesByKey,
   isInitialLoad,
   isRevalidating,
@@ -711,6 +718,7 @@ function DesktopSidebar({
           <SidebarWorkspaceList
             shortcutIndexByWorkspaceKey={shortcutIndexByWorkspaceKey}
             projects={projects}
+            pinnedGroups={pinnedGroups}
             workspaceEntriesByKey={workspaceEntriesByKey}
             isRefreshing={isManualRefresh && isRevalidating}
             onRefresh={handleRefresh}

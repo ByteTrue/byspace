@@ -52,8 +52,9 @@ async function quickDragFirstRowAfterSecond(
   await expect.poll(() => rowTestIds(rows)).toEqual([before[1], before[0]]);
 }
 
-test("workspaces reorder with an immediate mouse drag", async ({ page }) => {
+test("workspaces and pinned chats reorder with an immediate mouse drag", async ({ page }) => {
   const firstProject = await seedWorkspace({ repoPrefix: "sidebar-reorder-first-" });
+  const secondProject = await seedWorkspace({ repoPrefix: "sidebar-reorder-second-" });
 
   try {
     const secondWorkspace = await firstProject.client.createWorkspace({
@@ -78,7 +79,21 @@ test("workspaces reorder with an immediate mouse drag", async ({ page }) => {
       ),
       pressWorkspaceRow,
     );
+
+    // Pinned chats are hoisted into their own section with their own persisted order, so the
+    // drag is repeated there: a pinned row that still reordered its project would leave the
+    // Pinned section itself unsortable.
+    await firstProject.client.setWorkspacePinned(firstProject.workspaceId, true);
+    await secondProject.client.setWorkspacePinned(secondProject.workspaceId, true);
+    const secondProjectWorkspaceTestId = `sidebar-workspace-row-${getServerId()}:${secondProject.workspaceId}`;
+    await quickDragFirstRowAfterSecond(
+      page.locator(
+        `[data-testid="${firstWorkspaceTestId}"], [data-testid="${secondProjectWorkspaceTestId}"]`,
+      ),
+      pressWorkspaceRow,
+    );
   } finally {
     await firstProject.cleanup();
+    await secondProject.cleanup();
   }
 });
