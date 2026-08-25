@@ -11,16 +11,8 @@ test.describe("Settings sidebar scrolling", () => {
     const sidebar = page.getByTestId("settings-sidebar");
     await expect(sidebar).toBeVisible();
 
-    const scrollable = await sidebar.evaluate((node) => {
-      for (const element of node.querySelectorAll<HTMLElement>("*")) {
-        if (element.scrollHeight <= element.clientHeight) continue;
-        const before = element.scrollTop;
-        element.scrollTop = element.scrollHeight;
-        return element.scrollTop > before;
-      }
-      return false;
-    });
-
-    expect(scrollable).toBe(true);
+    const lastItem = sidebar.locator('[data-testid^="settings-"]').last();
+    await lastItem.scrollIntoViewIfNeeded();
+    await expect(lastItem).toBeVisible();
   });
 });

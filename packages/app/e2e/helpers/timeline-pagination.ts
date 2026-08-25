@@ -219,7 +219,7 @@ export async function scrollTimelineUntilPromptIsVisible(
       }),
   );
 
-  for (let attempt = 0; attempt < 4; attempt += 1) {
+  for (let attempt = 0; attempt < 8; attempt += 1) {
     if (await target.isVisible()) {
       return;
     }

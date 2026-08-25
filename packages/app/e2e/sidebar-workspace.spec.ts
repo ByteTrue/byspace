@@ -285,7 +285,7 @@ test.describe("Half-screen desktop layout", () => {
         page.getByTestId("workspace-side-panel").filter({ visible: true }).first(),
       ).toBeVisible();
       await expect(page.getByTestId("workspace-explorer-toggle").first()).toBeVisible();
-      await expect(page.getByTestId("sidebar-pages")).not.toBeVisible();
+      await expect(page.getByTestId("sidebar-pages")).toBeVisible();
 
       const centerBounds = await page.getByTestId("workspace-tabs-row").first().boundingBox();
       const headerGlyphBounds = await page

@@ -1,12 +1,7 @@
 import { test, expect } from "./fixtures";
-import { gotoWorkspace } from "./helpers/launcher";
+import { gotoAppShell } from "./helpers/app";
 import { seedWorkspace, type SeededWorkspace } from "./helpers/seed-client";
-import { togglePinFromMenu, tabRowPin } from "./helpers/pins";
-import { expectTerminalTabOpen } from "./helpers/workspace-tabs";
-import type { PinnedTabTarget } from "../src/workspace-pins/target";
-
-const DRAFT_TARGET: PinnedTabTarget = { kind: "draft" };
-const TERMINAL_TARGET: PinnedTabTarget = { kind: "terminal" };
+import { getServerId } from "./helpers/server-id";
 
 let workspace: SeededWorkspace;
 
@@ -18,30 +13,59 @@ test.afterAll(async () => {
   await workspace?.cleanup();
 });
 
-test.describe("Pinned tab targets", () => {
-  test("pinning a target from the dropdown adds its quick-launch button to the tab row, unpinning removes it", async ({
+test.describe("Pinned workspace targets", () => {
+  test("pinning a workspace from the sidebar menu adds it to the pinned section, unpinning removes it", async ({
     page,
   }) => {
-    await gotoWorkspace(page, workspace.workspaceId);
+    const workspaceKey = `${getServerId()}:${workspace.workspaceId}`;
+    await gotoAppShell(page);
 
-    await expect(tabRowPin(page, DRAFT_TARGET)).toHaveCount(0);
+    const projectRow = page.getByTestId(`sidebar-workspace-row-${workspaceKey}`);
+    await expect(projectRow).toBeVisible({ timeout: 30_000 });
 
-    await togglePinFromMenu(page, DRAFT_TARGET);
-    await expect(tabRowPin(page, DRAFT_TARGET)).toBeVisible({ timeout: 10_000 });
+    const pinnedSection = page.getByTestId("sidebar-pinned-section");
+    await expect(pinnedSection.getByTestId(`sidebar-workspace-row-${workspaceKey}`)).toHaveCount(0);
 
-    await togglePinFromMenu(page, DRAFT_TARGET);
-    await expect(tabRowPin(page, DRAFT_TARGET)).toHaveCount(0, { timeout: 10_000 });
+    await projectRow.hover();
+    await page.getByTestId(`sidebar-workspace-kebab-${workspaceKey}`).click();
+    await page.getByTestId(`sidebar-workspace-menu-pin-${workspaceKey}`).click();
+
+    await expect(pinnedSection.getByTestId(`sidebar-workspace-row-${workspaceKey}`)).toBeVisible({
+      timeout: 10_000,
+    });
+
+    const pinnedRow = pinnedSection.getByTestId(`sidebar-workspace-row-${workspaceKey}`);
+    await pinnedRow.hover();
+    await page.getByTestId(`sidebar-workspace-kebab-${workspaceKey}`).click();
+    await page.getByTestId(`sidebar-workspace-menu-pin-${workspaceKey}`).click();
+
+    await expect(pinnedSection.getByTestId(`sidebar-workspace-row-${workspaceKey}`)).toHaveCount(
+      0,
+      {
+        timeout: 10_000,
+      },
+    );
   });
 
-  test("clicking the pinned quick-launch button in the tab row opens a terminal tab", async ({
-    page,
-  }) => {
+  test("clicking the pinned workspace row in the sidebar opens the workspace", async ({ page }) => {
     test.setTimeout(45_000);
-    await gotoWorkspace(page, workspace.workspaceId);
+    const workspaceKey = `${getServerId()}:${workspace.workspaceId}`;
+    await gotoAppShell(page);
 
-    await expect(tabRowPin(page, TERMINAL_TARGET)).toBeVisible({ timeout: 10_000 });
-    await tabRowPin(page, TERMINAL_TARGET).click();
+    const projectRow = page.getByTestId(`sidebar-workspace-row-${workspaceKey}`);
+    await expect(projectRow).toBeVisible({ timeout: 30_000 });
 
-    await expectTerminalTabOpen(page);
+    await projectRow.hover();
+    await page.getByTestId(`sidebar-workspace-kebab-${workspaceKey}`).click();
+    await page.getByTestId(`sidebar-workspace-menu-pin-${workspaceKey}`).click();
+
+    const pinnedSection = page.getByTestId("sidebar-pinned-section");
+    const pinnedRow = pinnedSection.getByTestId(`sidebar-workspace-row-${workspaceKey}`);
+    await expect(pinnedRow).toBeVisible({ timeout: 10_000 });
+    await pinnedRow.click();
+
+    await expect(page).toHaveURL(new RegExp(`/workspace/${workspace.workspaceId}`), {
+      timeout: 30_000,
+    });
   });
 });

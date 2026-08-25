@@ -1,4 +1,5 @@
 import { expect, type Locator, type Page } from "@playwright/test";
+import { runWorkspaceActionFromCommandCenter } from "./command-center-workspace-actions";
 
 export interface SplitPaneGeometry {
   containerWidth: number;
@@ -13,13 +14,11 @@ function splitSeparator(page: Page): Locator {
 }
 
 export async function splitPaneRight(page: Page): Promise<void> {
-  const modifier = process.platform === "darwin" ? "Meta" : "Control";
-  await page.keyboard.press(`${modifier}+Backslash`);
+  await runWorkspaceActionFromCommandCenter(page, "Split pane right");
 }
 
 export async function splitPaneDown(page: Page): Promise<void> {
-  const modifier = process.platform === "darwin" ? "Meta" : "Control";
-  await page.keyboard.press(`${modifier}+Shift+Backslash`);
+  await runWorkspaceActionFromCommandCenter(page, "Split pane down");
 }
 
 export async function openExplorerSplit(page: Page): Promise<void> {

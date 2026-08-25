@@ -7,13 +7,15 @@ async function expectBorderHighlight(page: Page, testID: string) {
   await expect(handle).toBeVisible();
   await expect(page.getByTestId(`${testID}-highlight`)).toHaveCount(0);
 
-  await handle.hover();
-  await expect(page.getByTestId(`${testID}-highlight`)).toHaveCount(0);
-
+  const separator = handle.getByRole("separator");
+  await separator.dispatchEvent("pointerenter");
   const highlight = page.getByTestId(`${testID}-highlight`);
-  await expect(highlight).toBeVisible();
+  await expect(highlight).toBeVisible({ timeout: 10_000 });
   await expect(highlight).toHaveCSS("width", "1px");
   await expect(highlight).not.toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+
+  await separator.dispatchEvent("pointerleave");
+  await expect(page.getByTestId(`${testID}-highlight`)).toHaveCount(0);
 }
 
 test("both sidebar borders highlight on hover", async ({ page, withWorkspace }) => {

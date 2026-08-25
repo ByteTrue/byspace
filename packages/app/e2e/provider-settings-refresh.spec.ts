@@ -193,6 +193,10 @@ test.describe("provider settings overlay stack", () => {
       await closeSheetByHeaderButton(page, "provider-settings-sheet");
 
       await expectModelSelectorVisible(page);
+      const openCodeRow = page.getByText("OpenCode", { exact: true }).first();
+      if (await openCodeRow.isVisible().catch(() => false)) {
+        await openCodeRow.click();
+      }
       await page.getByRole("button", { name: /Open .* settings/ }).click();
       await expect(page.getByTestId("provider-settings-sheet")).toBeVisible({ timeout: 10_000 });
       await exerciseProviderSettingsStack(page);

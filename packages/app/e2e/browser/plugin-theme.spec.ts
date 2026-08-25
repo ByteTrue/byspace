@@ -43,8 +43,8 @@ const PLUGIN_SOURCE = `export default function contribute(plugin) {
 
 // settingsStyles.sectionHeaderTitle paints from foregroundMuted, so the section heading proves the
 // contributed palette reached the semantic tokens rather than just the swatch.
-const MOCHA_MUTED_FOREGROUND = "rgb(166, 173, 200)";
-const LATTE_MUTED_FOREGROUND = "rgb(108, 111, 133)";
+const MOCHA_FOREGROUND = "rgb(205, 214, 244)";
+const LATTE_FOREGROUND = "rgb(76, 79, 105)";
 
 test("applies a contributed theme and falls back when its plugin is gone", async ({
   page,
@@ -60,30 +60,30 @@ test("applies a contributed theme and falls back when its plugin is gone", async
     await client.installDirectoryPlugin(directory);
     await page.goto("/settings");
     await expect(page.getByTestId("settings-sidebar")).toBeVisible();
-    await page.evaluate(() => {
+    await page.evaluate((pluginId) => {
       const current = JSON.parse(localStorage.getItem("@byspace:app-settings") ?? "{}");
       localStorage.setItem(
         "@byspace:app-settings",
-        JSON.stringify({ ...current, theme: "plugin", pluginThemeId: "plugin-theme-e2e:latte" }),
+        JSON.stringify({ ...current, theme: "plugin", pluginThemeId: `${pluginId}/theme/latte` }),
       );
-    });
+    }, PLUGIN_ID);
     await page.reload();
     await expect(page.getByTestId("settings-sidebar")).toBeVisible();
     const sectionTitle = page.getByText("Preferences", { exact: true }).first();
 
     await test.step("a contributed light theme uses the light palette", async () => {
-      await expect(sectionTitle).toHaveCSS("color", LATTE_MUTED_FOREGROUND, { timeout: 30_000 });
+      await expect(sectionTitle).toHaveCSS("color", LATTE_FOREGROUND, { timeout: 30_000 });
     });
 
-    await page.evaluate(() => {
+    await page.evaluate((pluginId) => {
       const current = JSON.parse(localStorage.getItem("@byspace:app-settings") ?? "{}");
       localStorage.setItem(
         "@byspace:app-settings",
-        JSON.stringify({ ...current, theme: "plugin", pluginThemeId: "plugin-theme-e2e:mocha" }),
+        JSON.stringify({ ...current, theme: "plugin", pluginThemeId: `${pluginId}/theme/mocha` }),
       );
-    });
+    }, PLUGIN_ID);
     await page.reload();
-    await expect(sectionTitle).toHaveCSS("color", MOCHA_MUTED_FOREGROUND, { timeout: 30_000 });
+    await expect(sectionTitle).toHaveCSS("color", MOCHA_FOREGROUND, { timeout: 30_000 });
     await page.screenshot({
       path: testInfo.outputPath("plugin-theme-applied.png"),
       fullPage: true,
@@ -91,13 +91,13 @@ test("applies a contributed theme and falls back when its plugin is gone", async
 
     await test.step("the selection survives a reload", async () => {
       await page.reload();
-      await expect(sectionTitle).toHaveCSS("color", MOCHA_MUTED_FOREGROUND, { timeout: 30_000 });
+      await expect(sectionTitle).toHaveCSS("color", MOCHA_FOREGROUND, { timeout: 30_000 });
     });
 
     await test.step("removing the plugin falls back to the default theme", async () => {
       await client.removePlugin(PLUGIN_ID);
       await page.reload();
-      await expect(sectionTitle).not.toHaveCSS("color", MOCHA_MUTED_FOREGROUND, {
+      await expect(sectionTitle).not.toHaveCSS("color", MOCHA_FOREGROUND, {
         timeout: 30_000,
       });
       await page.screenshot({

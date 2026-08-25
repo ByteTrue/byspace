@@ -134,7 +134,7 @@ test.describe("cross-host project identity", () => {
           createdProjectRootPath: secondaryCreated.workspace.projectRootPath,
         });
 
-      await page.goBack();
+      await gotoAppShell(page);
       await waitForSidebarHydration(page);
       await groupedRow.hover();
       await page.getByTestId(`sidebar-project-kebab-${projectKey}`).click();
@@ -146,7 +146,7 @@ test.describe("cross-host project identity", () => {
       await page.getByTestId(`host-picker-item-${secondary.serverId}`).click();
       await expect(page.getByText("Secondary shared app", { exact: true }).first()).toBeVisible();
 
-      await page.goBack();
+      await gotoAppShell(page);
       await waitForSidebarHydration(page);
       await openSidebarPage(page, "sidebar-schedules");
       await page.getByTestId("schedules-empty-new").click();
@@ -161,7 +161,7 @@ test.describe("cross-host project identity", () => {
       await expect(page.getByTestId(`schedule-project-option-${projectKey}`)).toBeVisible();
       await page.keyboard.press("Escape");
 
-      await page.goBack();
+      await gotoAppShell(page);
       await waitForSidebarHydration(page);
       // A workspace route names the canonical project. Switching the New Workspace host must
       // preserve that project instead of replacing it with a host-local default.

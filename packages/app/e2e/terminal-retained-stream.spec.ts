@@ -39,7 +39,7 @@ test.describe("retained terminal stream visibility", () => {
       await expect(secondTab).toBeVisible();
       await expect.poll(() => readActiveTerminalSubscriptions(page)).toEqual([second.id]);
 
-      await firstTab.click();
+      await firstTab.click({ position: { x: 12, y: 13 } });
       await waitForTerminalAttached(page);
       await expect.poll(() => readActiveTerminalSubscriptions(page)).toEqual([first.id]);
 
@@ -59,7 +59,7 @@ test.describe("retained terminal stream visibility", () => {
         })
         .toContain(sentinel);
 
-      await secondTab.click();
+      await secondTab.click({ position: { x: 12, y: 13 } });
       await waitForTerminalAttached(page);
       await expect.poll(() => readActiveTerminalSubscriptions(page)).toEqual([second.id]);
       await expect

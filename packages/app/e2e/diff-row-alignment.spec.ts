@@ -484,7 +484,6 @@ async function openWorkspaceChanges(page: Page, workspace: DirtyWorkspace): Prom
   await page.goto(buildHostWorkspaceRoute(getServerId(), workspace.id));
   await waitForWorkspaceTabsVisible(page);
   await openChangesPanel(page);
-  await page.getByTestId("diff-file-0").click();
   await expectExpandedMountedTabDiff(page);
 }
 

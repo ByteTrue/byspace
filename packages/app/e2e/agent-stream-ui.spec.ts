@@ -219,6 +219,7 @@ test.describe("Agent stream UI", () => {
     page,
   }) => {
     test.setTimeout(90_000);
+    await page.setViewportSize({ width: 390, height: 844 });
     await page.addInitScript(() => {
       Object.assign(globalThis, {
         __BYSPACE_E2E_WEB_PARTIAL_VIRTUALIZATION_THRESHOLD: 1,

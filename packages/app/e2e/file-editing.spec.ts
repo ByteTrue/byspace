@@ -305,7 +305,11 @@ test.describe("workspace file editing", () => {
       closePrompt = dialog.message();
       await dialog.dismiss();
     });
-    await page.locator('[data-testid^="workspace-file-close-"]').click({ force: true });
+    const fileTab = page.locator('[data-testid^="workspace-tab-file_"]').first();
+    await fileTab.hover();
+    const closeBtn = page.locator('[data-testid^="workspace-file-close-"]').first();
+    await expect(closeBtn).toBeVisible();
+    await closeBtn.click();
 
     await expect.poll(() => closePrompt.toLowerCase()).toContain("unsaved");
     await expect(page.getByTestId("file-source-editor")).toBeVisible();
