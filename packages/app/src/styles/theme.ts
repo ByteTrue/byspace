@@ -211,7 +211,6 @@ export interface LightThemeConfig {
   surface4: string;
   surfaceDiffEmpty: string;
   surfaceSidebar: string;
-  surfaceSidebarHover?: string;
   foreground: string;
   foregroundMuted: string;
   foregroundExtraMuted: string;
@@ -255,7 +254,8 @@ export function buildLightSemanticColors(tint: LightThemeConfig) {
     surface4: tint.surface4,
     surfaceDiffEmpty: tint.surfaceDiffEmpty,
     surfaceSidebar: tint.surfaceSidebar,
-    surfaceSidebarHover: tint.surfaceSidebarHover ?? tint.surface1,
+    surfaceSidebarHover: tint.surface1,
+    surfaceSidebarSelected: tint.surface2,
     surfaceWorkspace: tint.surface0,
 
     foreground: tint.foreground,
@@ -314,7 +314,6 @@ const lightSemanticColors = buildLightSemanticColors({
   surface4: "#d4d4d8",
   surfaceDiffEmpty: "#f6f6f6",
   surfaceSidebar: "#f4f4f5",
-  surfaceSidebarHover: "#e9e9ec",
   foreground: "#1a1a1e",
   foregroundMuted: "#71717a",
   foregroundExtraMuted: "#a1a1aa",
@@ -344,7 +343,6 @@ export interface DarkThemeConfig {
   surface4: string;
   surfaceDiffEmpty: string;
   surfaceSidebar: string;
-  surfaceSidebarHover?: string;
   foregroundMuted: string;
   foregroundExtraMuted: string;
   scrollbarHandle?: string;
@@ -388,7 +386,8 @@ export function buildDarkSemanticColors(tint: DarkThemeConfig) {
     surface4: tint.surface4,
     surfaceDiffEmpty: tint.surfaceDiffEmpty,
     surfaceSidebar: tint.surfaceSidebar,
-    surfaceSidebarHover: tint.surfaceSidebarHover ?? tint.surface1,
+    surfaceSidebarHover: tint.surface1,
+    surfaceSidebarSelected: tint.surface2,
     surfaceWorkspace: tint.surface1,
 
     foreground,
@@ -453,7 +452,6 @@ const byspaceDarkColors = buildDarkSemanticColors({
   surface4: "#595B5B",
   surfaceDiffEmpty: "#252827",
   surfaceSidebar: "#141716",
-  surfaceSidebarHover: "#1c1f1e",
   foregroundMuted: "#A1A5A4",
   foregroundExtraMuted: "#717574",
   scrollbarHandle: "#717574",
@@ -475,7 +473,6 @@ const zincDarkColors = buildDarkSemanticColors({
   surface4: "#52525b",
   surfaceDiffEmpty: "#242427",
   surfaceSidebar: "#131316",
-  surfaceSidebarHover: "#1b1b1e",
   foregroundMuted: "#a1a1aa",
   foregroundExtraMuted: "#71717a",
   scrollbarHandle: "#71717a",
@@ -498,7 +495,6 @@ const midnightDarkColors = buildDarkSemanticColors({
   surface4: "#535564",
   surfaceDiffEmpty: "#222430",
   surfaceSidebar: "#121420",
-  surfaceSidebarHover: "#1a1c28",
   foregroundMuted: "#9a9db0",
   foregroundExtraMuted: "#6b6e82",
   scrollbarHandle: "#6b6e82",
@@ -520,7 +516,6 @@ const claudeDarkColors = buildDarkSemanticColors({
   surface4: "#605d5b",
   surfaceDiffEmpty: "#2a2826",
   surfaceSidebar: "#1a1918",
-  surfaceSidebarHover: "#222120",
   foregroundMuted: "#ada9a5",
   foregroundExtraMuted: "#78746f",
   scrollbarHandle: "#78746f",
@@ -542,7 +537,6 @@ const ghosttyDarkColors = buildDarkSemanticColors({
   surface4: "#5b6175",
   surfaceDiffEmpty: "#323643",
   surfaceSidebar: "#21252d",
-  surfaceSidebarHover: "#292d36",
   foregroundMuted: "#c8ccd8",
   foregroundExtraMuted: "#a0a4b2",
   scrollbarHandle: "#a0a4b2",
@@ -717,8 +711,6 @@ const pureBlackDarkColors = buildDarkSemanticColors({
   surface4: "#2d2d2d",
   surfaceDiffEmpty: "#0c0c0c",
   surfaceSidebar: "#000000",
-  // Selected sidebar rows share this surface with hover, so it must remain visible at rest.
-  surfaceSidebarHover: "#161616",
   foregroundMuted: "#a1a1aa",
   foregroundExtraMuted: "#71717a",
   scrollbarHandle: "#71717a",
