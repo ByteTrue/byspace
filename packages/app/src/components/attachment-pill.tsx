@@ -174,7 +174,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   labelTitle: {
     color: theme.colors.foreground,
-    fontSize: theme.fontSize.sm,
+    fontSize: theme.fontSize.base,
   },
   labelSubtitle: {
     color: theme.colors.foregroundMuted,

@@ -4311,7 +4311,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   mobileTabModifiedIndicator: {
     color: theme.colors.statusWarning,
-    fontSize: theme.fontSize.sm,
+    fontSize: theme.fontSize.base,
   },
   mobileTabMenuTrigger: {
     width: 28,

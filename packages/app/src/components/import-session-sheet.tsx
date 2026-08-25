@@ -821,7 +821,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   filterTriggerText: {
     color: theme.colors.foreground,
-    fontSize: theme.fontSize.sm,
+    fontSize: theme.fontSize.base,
     fontWeight: theme.fontWeight.medium,
   },
   manualSection: {
@@ -845,7 +845,7 @@ const styles = StyleSheet.create((theme) => ({
     flex: 1,
     minWidth: 0,
     color: theme.colors.foreground,
-    fontSize: theme.fontSize.sm,
+    fontSize: theme.fontSize.base,
     paddingVertical: theme.spacing[1.5],
     paddingHorizontal: theme.spacing[3],
     borderRadius: theme.borderRadius.md,
@@ -872,7 +872,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   manualSubmitText: {
     color: theme.colors.foreground,
-    fontSize: theme.fontSize.sm,
+    fontSize: theme.fontSize.base,
     fontWeight: theme.fontWeight.medium,
   },
   list: {
@@ -922,7 +922,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   rowPreview: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.sm,
+    fontSize: theme.fontSize.base,
     lineHeight: 20,
   },
   rowCwd: {
@@ -937,7 +937,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   statusText: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.sm,
+    fontSize: theme.fontSize.base,
   },
   emptyState: {
     alignItems: "center",

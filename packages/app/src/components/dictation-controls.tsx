@@ -134,14 +134,14 @@ const styles = StyleSheet.create((theme) => ({
   },
   timerText: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.sm,
+    fontSize: theme.fontSize.base,
     fontWeight: theme.fontWeight.medium,
     fontVariant: ["tabular-nums"],
   },
   errorText: {
     flexShrink: 1,
     color: theme.colors.destructive,
-    fontSize: theme.fontSize.sm,
+    fontSize: theme.fontSize.base,
     textAlign: "center",
   },
   actions: {

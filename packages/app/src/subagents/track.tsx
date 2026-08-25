@@ -352,7 +352,7 @@ const styles = StyleSheet.create((theme) => ({
   headerLabel: {
     flexShrink: 1,
     minWidth: 0,
-    fontSize: theme.fontSize.sm,
+    fontSize: theme.fontSize.base,
     color: theme.colors.foregroundMuted,
   },
   scroll: {
@@ -379,7 +379,7 @@ const styles = StyleSheet.create((theme) => ({
   rowLabel: {
     flex: 1,
     minWidth: 0,
-    fontSize: theme.fontSize.sm,
+    fontSize: theme.fontSize.base,
     color: theme.colors.foreground,
   },
   // Keep provider context secondary and bounded so the task remains readable on compact screens.

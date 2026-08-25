@@ -1278,12 +1278,12 @@ const styles = StyleSheet.create((theme) => ({
     gap: theme.spacing[2],
   },
   browserRowLabel: {
-    fontSize: theme.fontSize.sm,
+    fontSize: theme.fontSize.base,
     color: theme.colors.foreground,
     flexShrink: 0,
   },
   browserRowLabelMuted: {
-    fontSize: theme.fontSize.sm,
+    fontSize: theme.fontSize.base,
     color: theme.colors.foregroundMuted,
     flexShrink: 0,
   },
@@ -1341,7 +1341,7 @@ const styles = StyleSheet.create((theme) => ({
     gap: theme.spacing[2],
   },
   emptyStateText: {
-    fontSize: theme.fontSize.sm,
+    fontSize: theme.fontSize.base,
     color: theme.colors.foregroundMuted,
   },
   tooltipText: {

@@ -343,9 +343,9 @@ const userMessageStylesheet = StyleSheet.create((theme) => ({
   },
   text: {
     color: theme.colors.foreground,
-    fontSize: theme.fontSize.sm,
+    fontSize: theme.fontSize.base,
     ...(isWeb
-      ? { lineHeight: Math.round(theme.fontSize.sm * 1.4), overflowWrap: "anywhere" as const }
+      ? { lineHeight: Math.round(theme.fontSize.base * 1.4), overflowWrap: "anywhere" as const }
       : {}),
   },
   imagePreviewContainer: {
@@ -775,7 +775,7 @@ export const assistantMessageStylesheet = StyleSheet.create((theme) => ({
   },
   imageErrorText: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.sm,
+    fontSize: theme.fontSize.base,
     textAlign: "center",
   },
 }));
@@ -1086,7 +1086,7 @@ const expandableBadgeStylesheet = StyleSheet.create((theme) => ({
   },
   label: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.sm,
+    fontSize: theme.fontSize.base,
     fontWeight: theme.fontWeight.normal,
     flexShrink: 0,
   },
@@ -1101,7 +1101,7 @@ const expandableBadgeStylesheet = StyleSheet.create((theme) => ({
     flexShrink: 1,
     minWidth: 0,
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.sm,
+    fontSize: theme.fontSize.base,
     fontWeight: theme.fontWeight.normal,
     marginLeft: theme.spacing[2],
   },
@@ -1110,7 +1110,7 @@ const expandableBadgeStylesheet = StyleSheet.create((theme) => ({
   },
   shimmerText: {
     color: "transparent",
-    fontSize: theme.fontSize.sm,
+    fontSize: theme.fontSize.base,
     fontWeight: theme.fontWeight.normal,
   },
   spacer: {
@@ -1800,14 +1800,14 @@ const speakMessageStylesheet = StyleSheet.create((theme) => ({
   },
   headerLabel: {
     fontFamily: theme.fontFamily.ui,
-    fontSize: theme.fontSize.sm,
+    fontSize: theme.fontSize.base,
     fontWeight: theme.fontWeight.normal,
     color: theme.colors.foregroundMuted,
   },
   text: {
     fontFamily: theme.fontFamily.ui,
-    fontSize: theme.fontSize.sm,
-    lineHeight: Math.round(theme.fontSize.sm * 1.4),
+    fontSize: theme.fontSize.base,
+    lineHeight: Math.round(theme.fontSize.base * 1.4),
     color: theme.colors.foreground,
   },
 }));
@@ -1892,7 +1892,7 @@ const activityLogStylesheet = StyleSheet.create((theme) => ({
     flex: 1,
   },
   messageText: {
-    fontSize: theme.fontSize.sm,
+    fontSize: theme.fontSize.base,
     lineHeight: 20,
   },
   detailsRow: {
@@ -2110,7 +2110,7 @@ const todoListCardStylesheet = StyleSheet.create((theme) => ({
   },
   emptyText: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.sm,
+    fontSize: theme.fontSize.base,
   },
 }));
 

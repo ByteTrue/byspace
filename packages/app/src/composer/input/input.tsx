@@ -1837,9 +1837,9 @@ const styles = StyleSheet.create((theme: Theme) => ({
   textInput: {
     width: "100%",
     color: theme.colors.foreground,
-    fontSize: theme.fontSize.sm,
+    fontSize: theme.fontSize.base,
     fontWeight: theme.fontWeight.normal,
-    lineHeight: theme.fontSize.sm * 1.4,
+    lineHeight: theme.fontSize.base * 1.4,
     ...(isWeb
       ? ({
           outlineStyle: "none",
@@ -1911,7 +1911,7 @@ const styles = StyleSheet.create((theme: Theme) => ({
     borderRadius: theme.borderRadius.full,
   },
   sendButtonLabel: {
-    fontSize: theme.fontSize.sm,
+    fontSize: theme.fontSize.base,
     fontWeight: theme.fontWeight.medium,
     color: theme.colors.accentForeground,
   },
@@ -1924,7 +1924,7 @@ const styles = StyleSheet.create((theme: Theme) => ({
     gap: theme.spacing[2],
   },
   tooltipText: {
-    fontSize: theme.fontSize.sm,
+    fontSize: theme.fontSize.base,
     color: theme.colors.popoverForeground,
   },
   buttonDisabled: {

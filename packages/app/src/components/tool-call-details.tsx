@@ -793,7 +793,7 @@ const styles = StyleSheet.create((theme) => {
     },
     groupHeaderText: {
       color: theme.colors.foregroundMuted,
-      fontSize: theme.fontSize.sm,
+      fontSize: theme.fontSize.base,
       fontWeight: theme.fontWeight.normal,
     },
     section: {
@@ -916,7 +916,7 @@ const styles = StyleSheet.create((theme) => {
     },
     emptyStateText: {
       color: theme.colors.foregroundMuted,
-      fontSize: theme.fontSize.sm,
+      fontSize: theme.fontSize.base,
       fontStyle: "italic",
     },
     loadingContainer: {
