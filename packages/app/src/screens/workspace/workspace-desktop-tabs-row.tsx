@@ -1,3 +1,4 @@
+import { PortalHost } from "@gorhom/portal";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import React, {
   useCallback,
@@ -485,6 +486,7 @@ interface WorkspaceDesktopTabsRowProps {
   externalDndContext?: boolean;
   activeDragTabId?: string | null;
   tabDropPreviewIndex?: number | null;
+  trailingActionsPortalHostName?: string | null;
   showPaneMaximizeAction?: boolean;
   paneMaximized?: boolean;
   onTogglePaneMaximized?: () => void;
@@ -970,6 +972,7 @@ function ResolvedWorkspaceDesktopTabsRow({
   externalDndContext = false,
   activeDragTabId = null,
   tabDropPreviewIndex = null,
+  trailingActionsPortalHostName,
   showPaneMaximizeAction = false,
   paneMaximized = false,
   onTogglePaneMaximized,
@@ -982,6 +985,7 @@ function ResolvedWorkspaceDesktopTabsRow({
   const [inlineAddButtonWidth, setInlineAddButtonWidth] = useState<number>(0);
   const [paneMaximizeButtonWidth, setPaneMaximizeButtonWidth] = useState<number>(0);
   const [exitFocusModeWidth, setExitFocusModeWidth] = useState<number>(0);
+  const [trailingActionsWidth, setTrailingActionsWidth] = useState<number>(0);
   const tabScrollOffset = useSharedValue(0);
   const tabScrollViewportWidth = useSharedValue(0);
   const tabScrollContentWidth = useSharedValue(0);
@@ -1000,6 +1004,10 @@ function ResolvedWorkspaceDesktopTabsRow({
 
   const handleExitFocusModeLayout = useCallback((event: LayoutChangeEvent) => {
     updateMeasuredWidth(setExitFocusModeWidth, event);
+  }, []);
+
+  const handleTrailingActionsLayout = useCallback((event: LayoutChangeEvent) => {
+    updateMeasuredWidth(setTrailingActionsWidth, event);
   }, []);
 
   const handlePaneMaximizeButtonLayout = useCallback((event: LayoutChangeEvent) => {
@@ -1043,6 +1051,7 @@ function ResolvedWorkspaceDesktopTabsRow({
         0,
         (inlineAddButtonWidth || DEFAULT_INLINE_ADD_BUTTON_RESERVED_WIDTH) +
           (focusModeEnabled ? exitFocusModeWidth : 0) +
+          trailingActionsWidth +
           resolvePaneMaximizeReservedWidth(showPaneMaximizeAction, paneMaximizeButtonWidth),
       ),
       rowPaddingHorizontal: TAB_ROW_PADDING_HORIZONTAL,
@@ -1060,6 +1069,7 @@ function ResolvedWorkspaceDesktopTabsRow({
       inlineAddButtonWidth,
       paneMaximizeButtonWidth,
       showPaneMaximizeAction,
+      trailingActionsWidth,
     ],
   );
 
@@ -1382,6 +1392,11 @@ function ResolvedWorkspaceDesktopTabsRow({
           shortcutKeys={newTabKeys}
           onLayout={handleInlineAddButtonLayout}
         />
+      ) : null}
+      {trailingActionsPortalHostName ? (
+        <View onLayout={handleTrailingActionsLayout}>
+          <PortalHost name={trailingActionsPortalHostName} />
+        </View>
       ) : null}
       <WorkspacePaneMaximizeButton
         visible={showPaneMaximizeAction}

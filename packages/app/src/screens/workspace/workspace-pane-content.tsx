@@ -73,6 +73,7 @@ export function buildWorkspacePaneContentModel({
 export interface WorkspacePaneContentProps {
   content: WorkspacePaneContentModel;
   isWorkspaceFocused: boolean;
+  isPaneVisible?: boolean;
   isPaneFocused: boolean;
   onFocusPane?: () => void;
 }
@@ -80,6 +81,7 @@ export interface WorkspacePaneContentProps {
 export function WorkspacePaneContent({
   content,
   isWorkspaceFocused,
+  isPaneVisible = true,
   isPaneFocused,
   onFocusPane,
 }: WorkspacePaneContentProps) {
@@ -126,10 +128,11 @@ export function WorkspacePaneContent({
     () =>
       createPaneFocusContextValue({
         isWorkspaceFocused,
+        isPaneVisible,
         isPaneFocused,
         onFocusPane,
       }),
-    [isPaneFocused, isWorkspaceFocused, onFocusPane],
+    [isPaneFocused, isPaneVisible, isWorkspaceFocused, onFocusPane],
   );
 
   return (

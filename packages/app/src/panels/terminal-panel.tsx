@@ -75,7 +75,7 @@ function useTerminalPanelDescriptor(
 
 function TerminalPanel() {
   const { serverId, workspaceId, target, openFileInWorkspace } = usePaneContext();
-  const { isWorkspaceFocused, isPaneFocused } = usePaneFocus();
+  const { isWorkspaceFocused, isPaneVisible, isPaneFocused } = usePaneFocus();
   const workspaceFields = useWorkspaceFields(serverId, workspaceId, (w) => ({
     workspaceDirectory: w.workspaceDirectory,
     isGitCheckout: w.projectKind === "git",
@@ -111,6 +111,7 @@ function TerminalPanel() {
       cwd={workspaceDirectory}
       terminalId={target.terminalId}
       isWorkspaceFocused={isWorkspaceFocused}
+      isPaneVisible={isPaneVisible}
       isPaneFocused={isPaneFocused}
       onOpenFileExplorer={handleOpenFileExplorer}
       onOpenWorkspaceFile={openFileInWorkspace}

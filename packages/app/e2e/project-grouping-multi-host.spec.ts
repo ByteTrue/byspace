@@ -1,6 +1,6 @@
 import { expect, test } from "./fixtures";
 import { gotoAppShell } from "./helpers/app";
-import { addConnectedHostAndReload } from "./helpers/hosts";
+import { addConnectedHostAndReload, preserveHostRegistryOnNextNavigation } from "./helpers/hosts";
 import { startIsolatedHostDaemon } from "./helpers/isolated-host-daemon";
 import { connectSeedClient } from "./helpers/seed-client";
 import {
@@ -134,18 +134,22 @@ test.describe("cross-host project identity", () => {
           createdProjectRootPath: secondaryCreated.workspace.projectRootPath,
         });
 
+      await preserveHostRegistryOnNextNavigation(page);
       await gotoAppShell(page);
       await waitForSidebarHydration(page);
       await groupedRow.hover();
       await page.getByTestId(`sidebar-project-kebab-${projectKey}`).click();
       await page.getByTestId(`sidebar-project-menu-open-settings-${projectKey}`).click();
-      await expect(page.getByText("Primary shared app", { exact: true }).first()).toBeVisible({
-        timeout: 30_000,
-      });
+      await expect(
+        page.getByText("Primary shared app", { exact: true }).filter({ visible: true }).first(),
+      ).toBeVisible({ timeout: 30_000 });
       await page.getByTestId("host-picker").click();
       await page.getByTestId(`host-picker-item-${secondary.serverId}`).click();
-      await expect(page.getByText("Secondary shared app", { exact: true }).first()).toBeVisible();
+      await expect(
+        page.getByText("Secondary shared app", { exact: true }).filter({ visible: true }).first(),
+      ).toBeVisible();
 
+      await preserveHostRegistryOnNextNavigation(page);
       await gotoAppShell(page);
       await waitForSidebarHydration(page);
       await openSidebarPage(page, "sidebar-schedules");
@@ -161,6 +165,7 @@ test.describe("cross-host project identity", () => {
       await expect(page.getByTestId(`schedule-project-option-${projectKey}`)).toBeVisible();
       await page.keyboard.press("Escape");
 
+      await preserveHostRegistryOnNextNavigation(page);
       await gotoAppShell(page);
       await waitForSidebarHydration(page);
       // A workspace route names the canonical project. Switching the New Workspace host must

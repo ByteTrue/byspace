@@ -23,6 +23,7 @@ export interface PaneContextValue {
 
 export interface PaneFocusContextValue {
   isWorkspaceFocused: boolean;
+  isPaneVisible: boolean;
   isPaneFocused: boolean;
   isInteractive: boolean;
   focusPane: () => void;
@@ -34,11 +35,13 @@ const noopFocusPane = () => {};
 
 export function createPaneFocusContextValue(input: {
   isWorkspaceFocused: boolean;
+  isPaneVisible?: boolean;
   isPaneFocused: boolean;
   onFocusPane?: () => void;
 }): PaneFocusContextValue {
   return {
     isWorkspaceFocused: input.isWorkspaceFocused,
+    isPaneVisible: input.isPaneVisible ?? true,
     isPaneFocused: input.isPaneFocused,
     isInteractive: input.isWorkspaceFocused && input.isPaneFocused,
     focusPane: input.onFocusPane ?? noopFocusPane,

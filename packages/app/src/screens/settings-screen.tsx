@@ -32,6 +32,7 @@ import { HostStatusDot } from "@/components/host-status-dot";
 import { ScreenTitle } from "@/components/headers/screen-title";
 import { HeaderIconBadge } from "@/components/headers/header-icon-badge";
 import { SettingsSection } from "@/screens/settings/settings-section";
+import { AppearanceSection } from "@/screens/settings/appearance/appearance-section";
 import {
   useAppSettings,
   parseTerminalScrollbackLines,
@@ -296,100 +297,105 @@ function GeneralSection({
   }, [settings.terminalScrollbackLines]);
 
   return (
-    <SettingsSection title={t("settings.general.title")}>
-      <View style={settingsStyles.card}>
-        <View style={settingsStyles.row}>
-          <View style={settingsStyles.rowContent}>
-            <Text style={settingsStyles.rowTitle}>{t("settings.general.defaultSend.label")}</Text>
-            <Text style={settingsStyles.rowHint}>{t(sendBehaviorDescriptionKey)}</Text>
+    <>
+      <SettingsSection title={t("settings.general.title")}>
+        <View style={settingsStyles.card}>
+          <View style={settingsStyles.row}>
+            <View style={settingsStyles.rowContent}>
+              <Text style={settingsStyles.rowTitle}>{t("settings.general.defaultSend.label")}</Text>
+              <Text style={settingsStyles.rowHint}>{t(sendBehaviorDescriptionKey)}</Text>
+            </View>
+            <DropdownMenu>
+              <DropdownTrigger
+                accessibilityRole="button"
+                accessibilityLabel={`${t("settings.general.defaultSend.label")}: ${selectedSendBehaviorLabel}`}
+                style={themeTriggerStyle}
+              >
+                <Text style={styles.themeTriggerText}>{selectedSendBehaviorLabel}</Text>
+              </DropdownTrigger>
+              <DropdownMenuContent side="bottom" align="end" width={200}>
+                {sendBehaviorOptions.map((option) => (
+                  <SendBehaviorMenuItem
+                    key={option.value}
+                    value={option.value}
+                    label={option.label}
+                    selected={settings.sendBehavior === option.value}
+                    onChange={handleSendBehaviorChange}
+                  />
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
           </View>
-          <DropdownMenu>
-            <DropdownTrigger
-              accessibilityRole="button"
-              accessibilityLabel={`${t("settings.general.defaultSend.label")}: ${selectedSendBehaviorLabel}`}
-              style={themeTriggerStyle}
-            >
-              <Text style={styles.themeTriggerText}>{selectedSendBehaviorLabel}</Text>
-            </DropdownTrigger>
-            <DropdownMenuContent side="bottom" align="end" width={200}>
-              {sendBehaviorOptions.map((option) => (
-                <SendBehaviorMenuItem
-                  key={option.value}
-                  value={option.value}
-                  label={option.label}
-                  selected={settings.sendBehavior === option.value}
-                  onChange={handleSendBehaviorChange}
-                />
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </View>
-        <View style={[settingsStyles.row, settingsStyles.rowBorder]}>
-          <View style={settingsStyles.rowContent}>
-            <Text style={settingsStyles.rowTitle}>{t("settings.general.language.label")}</Text>
-            <Text style={settingsStyles.rowHint}>{t("settings.general.language.description")}</Text>
+          <View style={[settingsStyles.row, settingsStyles.rowBorder]}>
+            <View style={settingsStyles.rowContent}>
+              <Text style={settingsStyles.rowTitle}>{t("settings.general.language.label")}</Text>
+              <Text style={settingsStyles.rowHint}>
+                {t("settings.general.language.description")}
+              </Text>
+            </View>
+            <DropdownMenu>
+              <DropdownTrigger
+                accessibilityRole="button"
+                accessibilityLabel={selectedLanguageLabel}
+                style={themeTriggerStyle}
+              >
+                <Text style={styles.themeTriggerText}>{selectedLanguageLabel}</Text>
+              </DropdownTrigger>
+              <DropdownMenuContent side="bottom" align="end" width={300}>
+                {LANGUAGE_OPTIONS.map((option) => (
+                  <LanguageMenuItem
+                    key={option.value}
+                    value={option.value}
+                    activeLocale={activeLocale}
+                    selected={settings.language === option.value}
+                    onChange={handleLanguageChange}
+                  />
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
           </View>
-          <DropdownMenu>
-            <DropdownTrigger
-              accessibilityRole="button"
-              accessibilityLabel={selectedLanguageLabel}
-              style={themeTriggerStyle}
-            >
-              <Text style={styles.themeTriggerText}>{selectedLanguageLabel}</Text>
-            </DropdownTrigger>
-            <DropdownMenuContent side="bottom" align="end" width={300}>
-              {LANGUAGE_OPTIONS.map((option) => (
-                <LanguageMenuItem
-                  key={option.value}
-                  value={option.value}
-                  activeLocale={activeLocale}
-                  selected={settings.language === option.value}
-                  onChange={handleLanguageChange}
-                />
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </View>
-        <View style={[settingsStyles.row, settingsStyles.rowBorder]}>
-          <View style={settingsStyles.rowContent}>
-            <Text style={settingsStyles.rowTitle}>
-              {t("settings.general.terminalScrollback.label")}
-            </Text>
-            <Text style={settingsStyles.rowHint}>
-              {t("settings.general.terminalScrollback.description")}
-            </Text>
-          </View>
-          <TextInput
-            initialValue={terminalScrollbackValue}
-            onChangeText={handleTerminalScrollbackChangeText}
-            onBlur={commitTerminalScrollback}
-            onSubmitEditing={commitTerminalScrollback}
-            keyboardType="number-pad"
-            inputMode="numeric"
-            selectTextOnFocus
-            style={styles.terminalScrollbackInput}
-            accessibilityLabel={t("settings.general.terminalScrollback.accessibilityLabel")}
-          />
-        </View>
-        {supportsDesktopPaneSplits() ? (
           <View style={[settingsStyles.row, settingsStyles.rowBorder]}>
             <View style={settingsStyles.rowContent}>
               <Text style={settingsStyles.rowTitle}>
-                {t("settings.general.sidePanelRouting.label")}
+                {t("settings.general.terminalScrollback.label")}
               </Text>
               <Text style={settingsStyles.rowHint}>
-                {t("settings.general.sidePanelRouting.description")}
+                {t("settings.general.terminalScrollback.description")}
               </Text>
             </View>
-            <Switch
-              value={settings.openSupportingTabsInSidePanel}
-              onValueChange={handleSidePanelRoutingChange}
-              accessibilityLabel={t("settings.general.sidePanelRouting.label")}
+            <TextInput
+              initialValue={terminalScrollbackValue}
+              onChangeText={handleTerminalScrollbackChangeText}
+              onBlur={commitTerminalScrollback}
+              onSubmitEditing={commitTerminalScrollback}
+              keyboardType="number-pad"
+              inputMode="numeric"
+              selectTextOnFocus
+              style={styles.terminalScrollbackInput}
+              accessibilityLabel={t("settings.general.terminalScrollback.accessibilityLabel")}
             />
           </View>
-        ) : null}
-      </View>
-    </SettingsSection>
+          {supportsDesktopPaneSplits() ? (
+            <View style={[settingsStyles.row, settingsStyles.rowBorder]}>
+              <View style={settingsStyles.rowContent}>
+                <Text style={settingsStyles.rowTitle}>
+                  {t("settings.general.sidePanelRouting.label")}
+                </Text>
+                <Text style={settingsStyles.rowHint}>
+                  {t("settings.general.sidePanelRouting.description")}
+                </Text>
+              </View>
+              <Switch
+                value={settings.openSupportingTabsInSidePanel}
+                onValueChange={handleSidePanelRoutingChange}
+                accessibilityLabel={t("settings.general.sidePanelRouting.label")}
+              />
+            </View>
+          ) : null}
+        </View>
+      </SettingsSection>
+      <AppearanceSection />
+    </>
   );
 }
 

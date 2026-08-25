@@ -94,6 +94,22 @@ export async function addConnectedHostAndReload(
   await page.reload();
 }
 
+export async function preserveHostRegistryOnNextNavigation(page: Page): Promise<void> {
+  await page.evaluate(
+    ({ nonceKey, disableSeedOnceKey }) => {
+      const nonce = localStorage.getItem(nonceKey);
+      if (!nonce) {
+        throw new Error("Expected the e2e seed nonce before preserving the host registry.");
+      }
+      localStorage.setItem(disableSeedOnceKey, nonce);
+    },
+    {
+      nonceKey: SEED_NONCE_KEY,
+      disableSeedOnceKey: DISABLE_DEFAULT_SEED_ONCE_KEY,
+    },
+  );
+}
+
 export async function openSidebarDisplayPreferences(page: Page): Promise<void> {
   await page.getByTestId("sidebar-display-preferences-menu").click();
   const content = page.getByTestId("sidebar-display-preferences-content");

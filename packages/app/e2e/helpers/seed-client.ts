@@ -89,6 +89,15 @@ export interface SeedDaemonClient {
     terminal: { id: string; name: string; cwd: string; activity?: TerminalActivity | null } | null;
     error: string | null;
   }>;
+  captureTerminal(
+    terminalId: string,
+    options?: { start?: number; end?: number; stripAnsi?: boolean },
+  ): Promise<{
+    terminalId: string;
+    lines: string[];
+    totalLines: number;
+    requestId: string;
+  }>;
   listTerminals(
     cwd?: string,
     requestId?: string,

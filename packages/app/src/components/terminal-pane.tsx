@@ -64,6 +64,7 @@ interface TerminalPaneProps {
   cwd: string;
   terminalId: string;
   isWorkspaceFocused: boolean;
+  isPaneVisible: boolean;
   isPaneFocused: boolean;
   onOpenFileExplorer: () => void;
   onOpenWorkspaceFile: (request: WorkspaceFileOpenRequest) => void;
@@ -178,6 +179,7 @@ export function TerminalPane({
   cwd,
   terminalId,
   isWorkspaceFocused,
+  isPaneVisible,
   isPaneFocused,
   onOpenFileExplorer,
   onOpenWorkspaceFile,
@@ -208,9 +210,8 @@ export function TerminalPane({
   const scopeKey = useMemo(() => terminalScopeKey({ serverId, cwd }), [serverId, cwd]);
   const terminalStreamKey = useMemo(() => `${scopeKey}:${terminalId}`, [scopeKey, terminalId]);
   const focusClaimIdentity = isConnected ? `${connectionEpoch}:${terminalStreamKey}` : null;
-  // Retained tabs keep their stream attached while the workspace remains focused;
-  // RetainedPanel controls presentation while focus ownership stays pane-local.
-  const isTerminalStreamActive = isWorkspaceFocused;
+  // Retained tabs stay mounted, but only the visible tab owns a daemon stream.
+  const isTerminalStreamActive = isWorkspaceFocused && isPaneVisible;
   // Keep the latest measured size for whichever client currently owns the pane,
   // but only dedupe resizes that this specific client has already pushed.
   const measuredTerminalSizeRef = useRef<{ rows: number; cols: number } | null>(null);
@@ -261,6 +262,15 @@ export function TerminalPane({
   const paneFocusResizeClaimRef = useRef(EMPTY_FOCUS_CLAIM_STATE);
   const canClaimTerminalSizeRef = useRef(canClaimTerminalSize);
   canClaimTerminalSizeRef.current = canClaimTerminalSize;
+  const hasTerminalSizeClaim = useCallback(() => {
+    if (!focusClaimIdentity) {
+      return false;
+    }
+    return (
+      paneFocusResizeClaimRef.current.claimedKey === focusClaimIdentity ||
+      workspaceTerminalSession.sizeClaims.get({ terminalId }) === focusClaimIdentity
+    );
+  }, [focusClaimIdentity, terminalId, workspaceTerminalSession.sizeClaims]);
   useEffect(() => {
     terminalIdRef.current = terminalId;
     inputModeRef.current = {
@@ -404,8 +414,7 @@ export function TerminalPane({
     }
 
     const canUseMeasuredTerminalSize = () =>
-      canClaimTerminalSizeRef.current ||
-      paneFocusResizeClaimRef.current.claimedKey === focusClaimIdentity;
+      canClaimTerminalSizeRef.current || hasTerminalSizeClaim();
     const controller = new TerminalStreamController({
       client,
       // Attach may carry final renderer geometry, but that also resizes the PTY. A new pane may
@@ -477,6 +486,7 @@ export function TerminalPane({
   }, [
     client,
     focusClaimIdentity,
+    hasTerminalSizeClaim,
     handleStreamControllerStatus,
     isConnected,
     isTerminalStreamActive,
@@ -675,7 +685,7 @@ export function TerminalPane({
         shouldClaim: input.shouldClaim,
         forceClaim: false,
         supportsTerminalSizeOwnership,
-        hasClaimedSize: paneFocusResizeClaimRef.current.claimedKey === focusClaimIdentity,
+        hasClaimedSize: hasTerminalSizeClaim(),
         readiness: {
           isWorkspaceFocused,
           isPaneFocused,
@@ -702,6 +712,12 @@ export function TerminalPane({
           key: requestedKey,
           sent,
         });
+        if (sent && supportsTerminalSizeOwnership && requestedKey === focusClaimIdentity) {
+          workspaceTerminalSession.sizeClaims.set({
+            terminalId,
+            claimIdentity: requestedKey,
+          });
+        }
       }
     },
   );

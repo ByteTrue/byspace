@@ -23,19 +23,17 @@ async function openProviderSettingsFromModelSelector(page: Page) {
   await page.getByRole("button", { name: /Select model/ }).click();
   await expect(page.getByLabel("Bottom Sheet", { exact: true })).toBeVisible({ timeout: 10_000 });
 
-  const openCodeRow = page.getByText("OpenCode", { exact: true }).first();
-  if (await openCodeRow.isVisible().catch(() => false)) {
-    await openCodeRow.click();
+  const settingsButton = page.getByTestId("selector-header-settings-mock");
+  if (!(await settingsButton.isVisible().catch(() => false))) {
+    await page.getByTestId("agent-controls-model").click();
   }
-
-  await page.getByRole("button", { name: /Open .* settings/ }).click();
+  await expect(settingsButton).toBeVisible({ timeout: 10_000 });
+  await settingsButton.click();
   await expect(page.getByTestId("provider-settings-sheet")).toBeVisible({ timeout: 10_000 });
 }
 
 async function expectModelSelectorVisible(page: Page) {
-  await expect(page.getByRole("button", { name: /Open .* settings/ })).toBeVisible({
-    timeout: 10_000,
-  });
+  await expect(page.getByTestId("selector-header-settings-mock")).toBeVisible({ timeout: 10_000 });
 }
 
 async function closeTopSheet(page: Page) {
@@ -193,11 +191,7 @@ test.describe("provider settings overlay stack", () => {
       await closeSheetByHeaderButton(page, "provider-settings-sheet");
 
       await expectModelSelectorVisible(page);
-      const openCodeRow = page.getByText("OpenCode", { exact: true }).first();
-      if (await openCodeRow.isVisible().catch(() => false)) {
-        await openCodeRow.click();
-      }
-      await page.getByRole("button", { name: /Open .* settings/ }).click();
+      await page.getByTestId("selector-header-settings-mock").click();
       await expect(page.getByTestId("provider-settings-sheet")).toBeVisible({ timeout: 10_000 });
       await exerciseProviderSettingsStack(page);
       await closeSheetByHeaderButton(page, "provider-settings-sheet");

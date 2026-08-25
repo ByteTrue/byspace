@@ -78,6 +78,7 @@ import {
 import type { WorkspaceTab } from "@/workspace-tabs/model";
 import { RenderProfile } from "@/utils/render-profiler";
 import { workspaceTabTargetsEqual } from "@/workspace-tabs/identity";
+import { buildPaneHeaderActionsPortalName } from "@/panels/pane-header-actions-portal";
 import { isNative } from "@/constants/platform";
 import { useKeyboardActionHandler } from "@/hooks/use-keyboard-action-handler";
 import type { KeyboardActionDefinition } from "@/keyboard/keyboard-action-dispatcher";
@@ -232,6 +233,7 @@ const MountedTabSlot = memo(function MountedTabSlot({
         <WorkspacePaneContent
           content={content}
           isWorkspaceFocused={isWorkspaceFocused}
+          isPaneVisible={isVisible}
           isPaneFocused={isPaneFocused}
           onFocusPane={handleFocusPane}
         />
@@ -1153,6 +1155,14 @@ function SplitPaneView({
     () => onTogglePaneMaximized(paneId),
     [onTogglePaneMaximized, paneId],
   );
+  const trailingActionsPortalHostName =
+    activeTabDescriptor?.target.kind === "agent"
+      ? buildPaneHeaderActionsPortalName(
+          normalizedServerId,
+          normalizedWorkspaceId,
+          activeTabDescriptor.tabId,
+        )
+      : null;
   return (
     <RenderProfile id={`SplitPaneView:${pane.id}`}>
       <View
@@ -1187,6 +1197,7 @@ function SplitPaneView({
             tabDropPreviewIndex={
               tabDropPreview?.paneId === pane.id ? tabDropPreview.indicatorIndex : null
             }
+            trailingActionsPortalHostName={trailingActionsPortalHostName}
             showPaneMaximizeAction={pane.id === sidePanelPaneId && !focusModeEnabled}
             paneMaximized={pane.id === maximizedPaneId}
             onTogglePaneMaximized={handleToggleMaximized}

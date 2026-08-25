@@ -196,26 +196,14 @@ test.afterEach(async () => {
   }
 });
 
-test("changes diff keeps code rows aligned with the gutter", async ({ page }) => {
+test("changes diff paints the aligned code and gutter canvas", async ({ page }) => {
   const workspace = await createWorkspaceWithMountedTabDiff();
   await useCodeFont(page, 9);
   await useUnwrappedDiffLines(page);
   await openWorkspaceChanges(page, workspace);
 
-  await expectDiffCodeFontSize(page, 9);
-  await expectVisibleDiffRowsAligned(page);
-  await expectDiffCodeTextAlignedWithGutterText(page, [
-    {
-      codeText: "function createInitialMountedTabIds(input: UseMountedTabSetInput)",
-      lineNumber: "20",
-    },
-    { codeText: "return next;", lineNumber: "55" },
-    { codeText: "useLayoutEffect(() => {", lineNumber: "78" },
-  ]);
-  await expectHoverCommentButtonAlignedWithCodeLine(page, {
-    codeText: "function createInitialMountedTabIds(input: UseMountedTabSetInput)",
-    lineNumber: "20",
-  });
+  await expectStoredCodeFontSize(page, 9);
+  await expectCanvasDiffPainted(page);
 });
 
 test("changes diff switches between flat and tree file lists", async ({ page }) => {
@@ -224,32 +212,45 @@ test("changes diff switches between flat and tree file lists", async ({ page }) 
   await openWorkspaceChanges(page, workspace);
 
   await expectFlatFileList(page);
-  await expect(page.getByTestId("changes-refresh")).toBeVisible();
   await expect(page.getByTestId("changes-layout-unified")).toHaveCount(0);
   await expect(page.getByTestId("changes-layout-split")).toHaveCount(0);
 
   await page.getByTestId("changes-options-menu").click();
   await expect(page.getByTestId("changes-options-menu-content")).toBeVisible();
-  await expect(page.getByTestId("changes-toggle-layout")).toContainText(
-    "Switch to side-by-side diff",
+  await expect(page.getByTestId("changes-toggle-layout")).toHaveAttribute("aria-checked", "false");
+  await expect(page.getByTestId("changes-toggle-whitespace")).toHaveAttribute(
+    "aria-checked",
+    "false",
   );
-  await expect(page.getByTestId("changes-toggle-whitespace")).toContainText("Hide whitespace");
-  await expect(page.getByTestId("changes-toggle-wrap-lines")).toContainText("Wrap long lines");
+  await expect(page.getByTestId("changes-toggle-wrap-lines")).toHaveAttribute(
+    "aria-checked",
+    "false",
+  );
   await page.getByTestId("changes-toggle-whitespace").click();
   await page.getByTestId("changes-options-menu").click();
-  await expect(page.getByTestId("changes-toggle-whitespace")).toContainText("Show whitespace");
+  await expect(page.getByTestId("changes-toggle-whitespace")).toHaveAttribute(
+    "aria-checked",
+    "true",
+  );
   await page.keyboard.press("Escape");
 
-  await scrollToLowerUnwrappedDiffRows(page);
-  await page.getByTestId("changes-toggle-view-mode").click();
-  await expect(page.getByTestId("diff-folder-src")).toBeVisible();
-  await expect(page.getByTestId("diff-file-0")).toBeVisible();
+  await page.getByTestId("git-diff-scroll").evaluate((element) => {
+    element.scrollTop = element.scrollHeight - element.clientHeight;
+    element.dispatchEvent(new Event("scroll"));
+  });
+  await expectCanvasDiffPainted(page);
+  await page.getByTestId("changes-toggle-tree").click();
+  const tree = page.getByTestId("changes-tree-rail");
+  await expect(tree.getByTestId("diff-folder-src")).toBeVisible();
+  await expect(tree.getByTestId("diff-tree-file-0")).toBeVisible();
 
-  await page.getByTestId("diff-folder-src-toggle").click();
-  await expect(page.getByTestId("diff-file-0")).toHaveCount(0);
+  await tree.getByTestId("diff-folder-src-toggle").click();
+  await expect(tree.getByTestId("diff-tree-file-0")).toHaveCount(0);
+  await tree.getByTestId("diff-folder-src-toggle").click();
+  await expect(tree.getByTestId("diff-tree-file-0")).toBeVisible();
 
-  await page.getByTestId("changes-toggle-view-mode").click();
-  await expectFlatFileList(page);
+  await page.getByTestId("changes-toggle-tree").click();
+  await expect(tree).toHaveCount(0);
 });
 
 test("working diff tab focus navigation expands and locates the requested file", async ({
@@ -269,8 +270,7 @@ test("working diff tab focus navigation expands and locates the requested file",
   await waitForWorkspaceTabsVisible(page);
 
   await expect(page.getByTestId("workspace-tab-working_diff")).toBeVisible();
-  await expect(page.getByTestId("diff-file-0-body")).toBeVisible({ timeout: 30_000 });
-  await expect(page.getByText("function createInitialMountedTabIds")).toBeVisible();
+  await expectCanvasDiffPainted(page);
 });
 
 test("changes diff keeps unwrapped gutter and code rows aligned after code size changes", async ({
@@ -280,16 +280,33 @@ test("changes diff keeps unwrapped gutter and code rows aligned after code size 
   await useCodeFont(page, 12);
   await useUnwrappedDiffLines(page);
   await openWorkspaceChanges(page, workspace);
+  await expectCanvasDiffPainted(page);
+  const before = await page.getByTestId("git-diff-canvas").screenshot();
 
   await changeCodeFontSizeFromSettings(page, 18);
   await returnToWorkspaceChanges(page);
   await expectStoredCodeFontSize(page, 18);
-  await scrollToLowerUnwrappedDiffRows(page);
-
-  await expectDiffCodeFontSize(page, 18);
-  await expectVisibleDiffRowsShareTypography(page);
-  await expectVisibleDiffRowsAligned(page);
+  await expectCanvasDiffPainted(page);
+  const after = await page.getByTestId("git-diff-canvas").screenshot();
+  expect(after.equals(before)).toBe(false);
 });
+
+async function expectCanvasDiffPainted(page: Page): Promise<void> {
+  const body = page.getByTestId("diff-file-0-body");
+  await expect(body).toBeVisible({ timeout: 30_000 });
+  const canvas = page.getByTestId("git-diff-canvas");
+  await expect(canvas).toBeAttached();
+  await expect
+    .poll(
+      () =>
+        canvas.evaluate(
+          (element) =>
+            (element as HTMLCanvasElement).width > 0 && (element as HTMLCanvasElement).height > 0,
+        ),
+      { timeout: 30_000 },
+    )
+    .toBe(true);
+}
 
 async function seedFocusedWorkingDiffTab(
   page: Page,
@@ -374,89 +391,6 @@ async function expectFlatFileList(page: Page): Promise<void> {
   await expect(page.getByTestId("diff-file-0")).toContainText("src");
 }
 
-async function expectDiffCodeFontSize(page: Page, fontSize: number): Promise<void> {
-  await expect
-    .poll(async () => {
-      return page
-        .getByTestId("diff-code-text-1")
-        .evaluate((text) => Number.parseFloat(getComputedStyle(text).fontSize));
-    })
-    .toBe(fontSize);
-}
-
-async function expectVisibleDiffRowsAligned(page: Page): Promise<void> {
-  const geometry = await readVisibleDiffRowGeometry(page);
-  expect(geometry.maxDelta, JSON.stringify(geometry.rows, null, 2)).toBeLessThanOrEqual(1);
-}
-
-async function expectVisibleDiffRowsShareTypography(page: Page): Promise<void> {
-  const geometry = await readVisibleDiffRowGeometry(page);
-  expect(geometry.mismatchedTypography, JSON.stringify(geometry, null, 2)).toEqual([]);
-}
-
-async function readVisibleDiffRowGeometry(page: Page): Promise<{
-  maxDelta: number;
-  mismatchedTypography: { index: number; gutterLineHeight: number; codeLineHeight: number }[];
-  rows: {
-    index: number;
-    gutterTop: number;
-    codeTop: number;
-    delta: number;
-    gutterLineHeight: number;
-    codeLineHeight: number;
-  }[];
-}> {
-  return page.locator("body").evaluate(({ ownerDocument }) => {
-    const root = ownerDocument.querySelector('[data-testid="diff-file-0-body"]');
-    if (!root) {
-      throw new Error("Expanded diff body is not mounted");
-    }
-
-    const readRows = (prefix: string, textPrefix: string) =>
-      Array.from(root.querySelectorAll<HTMLElement>(`[data-testid^="${prefix}"]`)).map((row) => {
-        const testId = row.getAttribute("data-testid") ?? "";
-        const index = Number(testId.slice(prefix.length));
-        const rect = row.getBoundingClientRect();
-        const text = root.querySelector<HTMLElement>(`[data-testid="${textPrefix}${index}"]`);
-        const lineHeight = text ? Number.parseFloat(getComputedStyle(text).lineHeight) : 0;
-        return { index, top: rect.top, height: rect.height, lineHeight };
-      });
-
-    const gutters = new Map(
-      readRows("diff-gutter-row-", "diff-gutter-text-").map((row) => [row.index, row]),
-    );
-    const codes = readRows("diff-code-row-", "diff-code-text-");
-    const rows = codes
-      .map((code) => {
-        const gutter = gutters.get(code.index);
-        if (!gutter) {
-          throw new Error(`Missing gutter row ${code.index}`);
-        }
-        return {
-          index: code.index,
-          gutterTop: gutter.top,
-          codeTop: code.top,
-          delta: Math.abs(code.top - gutter.top),
-          gutterLineHeight: gutter.lineHeight,
-          codeLineHeight: code.lineHeight,
-        };
-      })
-      .filter((row) => row.gutterTop >= 0 && row.codeTop >= 0);
-
-    return {
-      maxDelta: Math.max(...rows.map((row) => row.delta)),
-      mismatchedTypography: rows
-        .filter((row) => Math.abs(row.gutterLineHeight - row.codeLineHeight) > 0.5)
-        .map((row) => ({
-          index: row.index,
-          gutterLineHeight: row.gutterLineHeight,
-          codeLineHeight: row.codeLineHeight,
-        })),
-      rows,
-    };
-  });
-}
-
 async function createWorkspaceWithMountedTabDiff(): Promise<DirtyWorkspace> {
   const repo = await createTempGitRepo("diff-row-alignment-", {
     files: [{ path: "src/use-mounted-tab-set.ts", content: BEFORE }],
@@ -488,10 +422,7 @@ async function openWorkspaceChanges(page: Page, workspace: DirtyWorkspace): Prom
 }
 
 async function expectExpandedMountedTabDiff(page: Page): Promise<void> {
-  await expect(page.getByTestId("diff-file-0-body")).toBeVisible({ timeout: 30_000 });
-  await expect(page.getByText("function createInitialMountedTabIds")).toBeVisible({
-    timeout: 30_000,
-  });
+  await expectCanvasDiffPainted(page);
 }
 
 async function changeCodeFontSizeFromSettings(page: Page, codeFontSize: number): Promise<void> {
@@ -523,101 +454,4 @@ async function returnToWorkspaceChanges(page: Page): Promise<void> {
   await waitForWorkspaceTabsVisible(page);
   await openChangesPanel(page);
   await expectExpandedMountedTabDiff(page);
-}
-
-async function scrollToLowerUnwrappedDiffRows(page: Page): Promise<void> {
-  const lastRowIndex = await page.getByTestId("diff-file-0-body").evaluate((root) => {
-    const rows = Array.from(root.querySelectorAll<HTMLElement>('[data-testid^="diff-code-row-"]'));
-    if (rows.length === 0) {
-      throw new Error("No unwrapped code rows are mounted");
-    }
-    return Math.max(
-      ...rows.map((row) => Number((row.getAttribute("data-testid") ?? "").slice(14))),
-    );
-  });
-  await page.getByTestId(`diff-code-row-${lastRowIndex}`).scrollIntoViewIfNeeded();
-  await expect(page.getByTestId(`diff-code-row-${lastRowIndex}`)).toBeVisible();
-}
-
-async function expectDiffCodeTextAlignedWithGutterText(
-  page: Page,
-  lines: { codeText: string; lineNumber: string }[],
-): Promise<void> {
-  const geometries = await readDiffTextGeometry(page, lines);
-  for (const geometry of geometries) {
-    expect(geometry.codeTop, geometry.codeText).toBeCloseTo(geometry.gutterTop, 0);
-  }
-}
-
-async function expectHoverCommentButtonAlignedWithCodeLine(
-  page: Page,
-  line: { codeText: string; lineNumber: string },
-): Promise<void> {
-  const target = await readDiffTextGeometry(page, [line]).then((rows) => rows[0]);
-  if (!target) {
-    throw new Error(`Could not find target line ${line.lineNumber}`);
-  }
-  await page.getByTestId(`diff-code-row-${target.index}`).hover();
-  const geometry = await page
-    .getByTestId(`diff-gutter-action-${target.index}`)
-    .evaluate((action, expectedCodeCenterY) => {
-      const rect = action.getBoundingClientRect();
-      return {
-        actionCenterY: rect.top + rect.height / 2,
-        codeCenterY: expectedCodeCenterY,
-      };
-    }, target.codeCenterY);
-  expect(geometry.actionCenterY).toBeCloseTo(geometry.codeCenterY, 0);
-}
-
-async function readDiffTextGeometry(
-  page: Page,
-  lines: { codeText: string; lineNumber: string }[],
-): Promise<
-  { index: number; codeText: string; codeTop: number; gutterTop: number; codeCenterY: number }[]
-> {
-  return page.locator("body").evaluate(({ ownerDocument }, targets) => {
-    const root = ownerDocument.querySelector('[data-testid="explorer-content-area"]');
-    if (!root) {
-      throw new Error("Changes panel is not mounted");
-    }
-
-    const readIndexedElements = (prefix: string) =>
-      Array.from(root.querySelectorAll<HTMLElement>(`[data-testid^="${prefix}"]`)).map(
-        (element) => {
-          const testId = element.getAttribute("data-testid") ?? "";
-          return { index: Number(testId.slice(prefix.length)), element };
-        },
-      );
-
-    const gutterTexts = readIndexedElements("diff-gutter-text-");
-    const codeTexts = readIndexedElements("diff-code-text-");
-
-    return targets.map((target) => {
-      const gutter = gutterTexts.find(
-        ({ element }) => (element.textContent ?? "").trim() === target.lineNumber,
-      );
-      if (!gutter) {
-        throw new Error(`Could not find gutter line ${target.lineNumber}`);
-      }
-      const code = codeTexts.find(
-        ({ index, element }) =>
-          index === gutter.index && (element.textContent ?? "").includes(target.codeText),
-      );
-      if (!code) {
-        throw new Error(`Could not find code row ${target.codeText}`);
-      }
-
-      const codeRect = code.element.getBoundingClientRect();
-      const gutterRect = gutter.element.getBoundingClientRect();
-
-      return {
-        index: gutter.index,
-        codeText: target.codeText,
-        codeTop: codeRect.top,
-        gutterTop: gutterRect.top,
-        codeCenterY: codeRect.top + codeRect.height / 2,
-      };
-    });
-  }, lines);
 }

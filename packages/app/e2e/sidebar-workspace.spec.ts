@@ -10,6 +10,7 @@ import {
 import { seedWorkspace } from "./helpers/seed-client";
 import { expectWorkspaceHeader } from "./helpers/workspace-ui";
 import { getServerId } from "./helpers/server-id";
+import { openFilesPanel } from "./helpers/workspace-tabs";
 
 const GITHUB_REMOTE_URL = "https://github.com/test-owner/test-repo.git";
 
@@ -272,7 +273,7 @@ test.describe("Half-screen desktop layout", () => {
     await expect(page.getByTestId("sidebar-settings")).not.toBeVisible();
   });
 
-  test("yields app navigation to the Explorer", async ({ page }) => {
+  test("keeps app navigation beside the Explorer pane", async ({ page }) => {
     const workspace = await seedWorkspace({ repoPrefix: "sidebar-half-screen-explorer-" });
 
     try {
@@ -280,43 +281,19 @@ test.describe("Half-screen desktop layout", () => {
       await waitForSidebarProject(page, path.basename(workspace.repoPath));
       await openWorkspaceFromSidebar(page, workspace.workspaceId);
 
-      await page.getByTestId("workspace-explorer-toggle").first().click();
-      await expect(
-        page.getByTestId("workspace-side-panel").filter({ visible: true }).first(),
-      ).toBeVisible();
-      await expect(page.getByTestId("workspace-explorer-toggle").first()).toBeVisible();
-      await expect(page.getByTestId("sidebar-pages")).toBeVisible();
+      await openFilesPanel(page);
+      const explorerToggle = page.getByTestId("workspace-explorer-toggle").first();
+      await expect(page.getByTestId("workspace-tab-files").filter({ visible: true })).toBeVisible();
+      await expect(explorerToggle).toHaveAccessibleName("Close side panel");
+      await expect(page.getByTestId("sidebar-global-new-workspace")).toBeVisible();
+      await expect(page.getByTestId("workspace-tabs-row").filter({ visible: true })).toHaveCount(2);
 
-      const centerBounds = await page.getByTestId("workspace-tabs-row").first().boundingBox();
-      const headerGlyphBounds = await page
-        .getByTestId("menu-button")
-        .locator("svg")
-        .first()
-        .boundingBox();
-      const tabGlyphBounds = await page
-        .locator('[data-testid^="workspace-tab-"]')
-        .first()
-        .locator("svg")
-        .first()
-        .boundingBox();
-      expect(centerBounds).not.toBeNull();
-      expect(headerGlyphBounds).not.toBeNull();
-      expect(tabGlyphBounds).not.toBeNull();
-      expect((headerGlyphBounds?.x ?? 0) - (centerBounds?.x ?? 0)).toBeCloseTo(
-        (tabGlyphBounds?.x ?? 0) - (centerBounds?.x ?? 0),
+      await explorerToggle.click();
+      await expect(page.getByTestId("workspace-tab-files").filter({ visible: true })).toHaveCount(
         0,
       );
-
-      await expect
-        .poll(
-          async () =>
-            (await page.getByTestId("workspace-tabs-row").first().boundingBox())?.width ?? 0,
-        )
-        .toBeGreaterThanOrEqual(400);
-
-      await page.getByTestId("workspace-explorer-toggle").first().click();
-      await expect(page.getByTestId("workspace-side-panel")).not.toBeVisible();
-      await expect(page.getByTestId("workspace-explorer-toggle").first()).toBeVisible();
+      await expect(explorerToggle).toHaveAccessibleName("Open side panel");
+      await expect(page.getByTestId("sidebar-global-new-workspace")).toBeVisible();
     } finally {
       await workspace.cleanup();
     }
