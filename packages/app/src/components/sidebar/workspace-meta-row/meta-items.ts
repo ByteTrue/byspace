@@ -5,21 +5,35 @@ import { selectCheckSummary, type CheckSummary } from "./check-summary";
 import type { WorkspaceServiceSummary } from "./service-summary";
 
 export type MetaRowItem =
+  | { kind: "branch"; name: string }
+  | { kind: "project"; name: string }
   | { kind: "host" }
   | { kind: "changeRequest"; hint: PrHint }
   | { kind: "checks"; summary: CheckSummary; label: boolean }
   | { kind: "services"; summary: WorkspaceServiceSummary };
 
 export function selectMetaRowItems(input: {
+  currentBranch: string | null;
+  projectName: string | null;
   hasHostBadge: boolean;
   prHint: PrHint | null;
   serviceSummary: WorkspaceServiceSummary | null;
   visible: SidebarRowItems;
   checksDisplay: SidebarChecksDisplay;
 }): MetaRowItem[] {
-  const { hasHostBadge, prHint, serviceSummary, visible, checksDisplay } = input;
+  const {
+    currentBranch,
+    projectName,
+    hasHostBadge,
+    prHint,
+    serviceSummary,
+    visible,
+    checksDisplay,
+  } = input;
   const items: MetaRowItem[] = [];
 
+  if (currentBranch && visible.branch) items.push({ kind: "branch", name: currentBranch });
+  if (projectName && visible.project) items.push({ kind: "project", name: projectName });
   if (hasHostBadge) items.push({ kind: "host" });
   if (prHint && visible.changeRequest) items.push({ kind: "changeRequest", hint: prHint });
   if (checksDisplay !== "none") {

@@ -958,6 +958,8 @@ export const ar: TranslationResources = {
       },
       show: {
         label: "عرض",
+        branch: "الفرع",
+        project: "المشروع",
         host: "المضيف",
         changeRequest: "سحب الطلب",
         services: "الخدمات",

@@ -97,6 +97,7 @@ export const SidebarWorkspaceRowContent = memo(function SidebarWorkspaceRowConte
   workspace,
   hostBadge,
   serviceSummary = null,
+  projectName = null,
   backdrop,
   isHovered,
   isLoading,
@@ -109,6 +110,8 @@ export const SidebarWorkspaceRowContent = memo(function SidebarWorkspaceRowConte
   workspace: SidebarWorkspaceEntry;
   hostBadge?: HostBadgeModel | null;
   serviceSummary?: WorkspaceServiceSummary | null;
+  /** Only rows hoisted out of their project group name it; grouped rows would repeat their parent. */
+  projectName?: string | null;
   backdrop: SidebarSurfaceBackdrop;
   isHovered: boolean;
   isLoading: boolean;
@@ -156,6 +159,8 @@ export const SidebarWorkspaceRowContent = memo(function SidebarWorkspaceRowConte
             </View>
           </View>
           <WorkspaceMetaRow
+            currentBranch={workspace.currentBranch}
+            projectName={projectName}
             hostBadge={hostBadge ?? null}
             prHint={workspace.prHint}
             serviceSummary={serviceSummary}

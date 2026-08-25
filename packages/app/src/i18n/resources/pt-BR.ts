@@ -980,6 +980,8 @@ export const ptBR: TranslationResources = {
       },
       show: {
         label: "Mostrar",
+        branch: "Branch",
+        project: "Projeto",
         host: "Hospedar",
         changeRequest: "Solicitação pull",
         services: "Serviços",

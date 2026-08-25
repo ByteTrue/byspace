@@ -979,6 +979,8 @@ export const ru: TranslationResources = {
       },
       show: {
         label: "Показывать",
+        branch: "Ветка",
+        project: "Проект",
         host: "Хозяин",
         changeRequest: "Запрос на извлечение",
         services: "Услуги",

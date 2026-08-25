@@ -989,6 +989,8 @@ export const fr: TranslationResources = {
       },
       show: {
         label: "Afficher",
+        branch: "Branche",
+        project: "Projet",
         host: "Hôte",
         changeRequest: "Demande de tirage",
         services: "Prestations",

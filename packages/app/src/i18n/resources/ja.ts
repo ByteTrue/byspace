@@ -969,6 +969,8 @@ export const ja: TranslationResources = {
       },
       show: {
         label: "表示",
+        branch: "ブランチ",
+        project: "プロジェクト",
         host: "ホスト",
         changeRequest: "プルリクエスト",
         services: "サービス",

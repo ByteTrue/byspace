@@ -81,6 +81,8 @@ export interface AppSettings {
 export type Settings = AppSettings;
 
 const SidebarRowItemsSchema = z.strictObject({
+  branch: z.boolean().optional(),
+  project: z.boolean().optional(),
   host: z.boolean().optional(),
   changeRequest: z.boolean().optional(),
   services: z.boolean().optional(),

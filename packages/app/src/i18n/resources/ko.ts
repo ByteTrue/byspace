@@ -966,6 +966,8 @@ const koTranslations = {
       },
       show: {
         label: "표시 항목",
+        branch: "브랜치",
+        project: "프로젝트",
         host: "호스트",
         changeRequest: "풀 리퀘스트",
         checks: "검사",

@@ -35,6 +35,8 @@ const TITLE_LABEL_KEYS: Record<WorkspaceTitleSource, string> = {
   branch: "sidebar.display.titleSource.options.branch",
 };
 const ROW_ITEM_LABEL_KEYS: Record<SidebarRowItem, string> = {
+  branch: "sidebar.display.show.branch",
+  project: "sidebar.display.show.project",
   host: "sidebar.display.show.host",
   changeRequest: "sidebar.display.show.changeRequest",
   services: "sidebar.display.show.services",

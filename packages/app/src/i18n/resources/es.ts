@@ -990,6 +990,8 @@ export const es: TranslationResources = {
       },
       show: {
         label: "Mostrar",
+        branch: "Rama",
+        project: "Proyecto",
         host: "Anfitrión",
         changeRequest: "Solicitud de extracción",
         services: "Servicios",

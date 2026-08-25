@@ -1,9 +1,17 @@
-export const SIDEBAR_ROW_ITEMS = ["host", "changeRequest", "services"] as const;
+export const SIDEBAR_ROW_ITEMS = [
+  "branch",
+  "project",
+  "host",
+  "changeRequest",
+  "services",
+] as const;
 
 export type SidebarRowItem = (typeof SIDEBAR_ROW_ITEMS)[number];
 export type SidebarRowItems = Record<SidebarRowItem, boolean>;
 
 export const DEFAULT_SIDEBAR_ROW_ITEMS: SidebarRowItems = {
+  branch: false,
+  project: false,
   host: true,
   changeRequest: true,
   services: true,

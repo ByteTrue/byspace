@@ -383,7 +383,13 @@ function HostBadgePreview({
       <Text style={styles.appearancePreviewTitle} numberOfLines={1}>
         {t("settings.host.appearance.preview.workspaceName")}
       </Text>
-      <WorkspaceMetaRow hostBadge={hostBadge} prHint={null} serviceSummary={null} />
+      <WorkspaceMetaRow
+        currentBranch={null}
+        projectName={null}
+        hostBadge={hostBadge}
+        prHint={null}
+        serviceSummary={null}
+      />
     </View>
   );
 }

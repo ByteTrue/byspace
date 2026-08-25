@@ -1045,6 +1045,7 @@ function WorkspaceRowInner({
                 workspace={workspace}
                 hostBadge={subtitle}
                 serviceSummary={serviceSummary}
+                projectName={isPinned ? workspace.projectName : null}
                 backdrop={backdrop}
                 isHovered={isHovered}
                 isLoading={isArchiving || isCreating}

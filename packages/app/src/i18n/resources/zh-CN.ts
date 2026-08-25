@@ -950,6 +950,8 @@ export const zhCN: TranslationResources = {
       },
       show: {
         label: "展示",
+        branch: "分支",
+        project: "项目",
         host: "主持人",
         changeRequest: "拉取请求",
         services: "服务",
