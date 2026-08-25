@@ -2,21 +2,73 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { create } from "zustand";
 import { persist, type StateStorage } from "zustand/middleware";
 import { z } from "zod";
+import { workspaceLabelKey } from "@bytetrue/byspace-protocol/workspace-labels";
 import { createValidatedPersistStorage } from "@/storage/validated-persist-storage";
 
 export type SidebarGroupMode = "project" | "status";
 
 const SIDEBAR_VIEW_STORAGE_KEY = "sidebar-view";
 const LEGACY_SIDEBAR_GROUP_MODE_STORAGE_KEY = "sidebar-group-mode";
-const SIDEBAR_VIEW_STORE_VERSION = 3;
+const SIDEBAR_VIEW_STORE_VERSION = 4;
+
+/**
+ * The key standing for "this workspace carries no labels at all".
+ *
+ * `normalizeWorkspaceLabelName` trims, so no real label can ever normalize to the empty string
+ * and nothing in `labels` can collide with it. That is the whole reason the empty string is the
+ * choice: a sentinel like `"__unlabelled__"` would be a name a person is free to type.
+ */
+export const SIDEBAR_UNLABELLED_LABEL_KEY = "";
+
+/**
+ * What the sidebar's Labels page currently says.
+ *
+ * The labels pinned to, keyed by `workspaceLabelKey`, exactly as `hostFilters` holds server ids:
+ * empty means "every label", non-empty includes workspaces carrying any selected label.
+ */
+export interface SidebarLabelFilter {
+  labels: string[];
+}
+
+export function hasActiveSidebarLabelFilter(filter: SidebarLabelFilter): boolean {
+  return filter.labels.length > 0;
+}
+
+/**
+ * Include/exclude toggle over an allowlist, shared by the host and project filters.
+ *
+ * Both filters answer the same question — "is this one of the things I pinned the sidebar to" —
+ * so they share the operation. The label filter does not: its keys go through
+ * `workspaceLabelKey` first, which is a different identity.
+ */
+function toggleFilterEntry(list: readonly string[], key: string): string[] {
+  return list.includes(key) ? list.filter((entry) => entry !== key) : [...list, key];
+}
 
 interface SidebarViewStoreState {
   groupMode: SidebarGroupMode;
   // Empty means "all hosts". A non-empty list pins the sidebar to those hosts.
   hostFilters: string[];
+  /**
+   * Empty means "all projects". A non-empty list is an allowlist over `SidebarProjectEntry`
+   * `projectKey` — the same key the project sections are built from.
+   *
+   * There is deliberately no `reconcileProjectFilters` counterpart to `reconcileHostFilters`.
+   * The project list is narrowed by the host filter and is empty before any host connects, so
+   * reconciling against it would silently destroy the filter on every cold start and every
+   * host-filter change. Stale keys are resolved away at read time instead — see
+   * `resolveActiveProjectFilters`.
+   */
+  projectFilters: string[];
+  labelFilter: SidebarLabelFilter;
   setGroupMode: (mode: SidebarGroupMode) => void;
   toggleHostFilter: (serverId: string) => void;
   clearHostFilters: () => void;
+  toggleProjectFilter: (projectKey: string) => void;
+  clearProjectFilters: () => void;
+  toggleLabelFilter: (name: string) => void;
+  clearLabelFilter: () => void;
+  reconcileLabelFilter: (labels: readonly string[]) => void;
   reconcileHostFilters: (serverIds: readonly string[]) => void;
   // Session-only view toggle: show only workspaces that need the user's action.
   attentionOnly: boolean;
@@ -26,17 +78,28 @@ interface SidebarViewStoreState {
 interface SidebarViewPersistedState {
   groupMode: SidebarGroupMode;
   hostFilters: string[];
+  projectFilters: string[];
+  labelFilter: SidebarLabelFilter;
 }
 
 const SidebarGroupModeSchema = z.enum(["project", "status"]);
+const SidebarLabelFilterSchema = z.object({
+  labels: z.array(z.string()),
+});
 const SidebarViewPersistedStateSchema = z.strictObject({
   groupMode: SidebarGroupModeSchema.optional(),
   hostFilters: z.array(z.string()).optional(),
   hostFilter: z.string().nullable().optional(),
+  projectFilters: z.array(z.string()).optional(),
   groupModeByServerId: z.record(z.string(), SidebarGroupModeSchema).optional(),
+  labelFilter: SidebarLabelFilterSchema.optional(),
 });
 
 type SidebarViewStorageState = z.infer<typeof SidebarViewPersistedStateSchema>;
+
+function emptyLabelFilter(): SidebarLabelFilter {
+  return { labels: [] };
+}
 
 function readLegacyGroupMode(persistedState: SidebarViewStorageState): SidebarGroupMode | null {
   const groupModeByServerId = persistedState.groupModeByServerId;
@@ -62,21 +125,44 @@ function readHostFilters(persistedState: SidebarViewStorageState): string[] {
   return legacyHostFilter ? [legacyHostFilter] : [];
 }
 
+/**
+ * Re-keys a persisted filter through `workspaceLabelKey`, so the invariant on `labels` holds for
+ * state that was written by an older build of this page rather than by the current one.
+ */
+function normalizeSidebarLabelFilter(filter: SidebarLabelFilter): SidebarLabelFilter {
+  const labels = new Set(filter.labels.map(workspaceLabelKey));
+  return { labels: [...labels] };
+}
+
 export function migrateSidebarViewState(persistedState: unknown): SidebarViewPersistedState {
   const result = SidebarViewPersistedStateSchema.safeParse(persistedState);
   if (!result.success) {
-    return { groupMode: "project", hostFilters: [] };
+    return {
+      groupMode: "project",
+      hostFilters: [],
+      projectFilters: [],
+      labelFilter: emptyLabelFilter(),
+    };
   }
   const state = result.data;
 
   const legacyGroupMode = readLegacyGroupMode(state);
   if (legacyGroupMode) {
-    return { groupMode: legacyGroupMode, hostFilters: [] };
+    return {
+      groupMode: legacyGroupMode,
+      hostFilters: [],
+      projectFilters: [],
+      labelFilter: emptyLabelFilter(),
+    };
   }
 
   return {
     groupMode: state.groupMode ?? "project",
     hostFilters: readHostFilters(state),
+    projectFilters: state.projectFilters ?? [],
+    labelFilter: state.labelFilter
+      ? normalizeSidebarLabelFilter(state.labelFilter)
+      : emptyLabelFilter(),
   };
 }
 
@@ -101,16 +187,45 @@ export const useSidebarViewStore = create<SidebarViewStoreState>()(
     (set) => ({
       groupMode: "project",
       hostFilters: [],
+      projectFilters: [],
+      labelFilter: emptyLabelFilter(),
       setGroupMode: (mode) => set({ groupMode: mode }),
       attentionOnly: false,
       setAttentionOnly: (attentionOnly) => set({ attentionOnly }),
       toggleHostFilter: (serverId) =>
         set((state) => ({
-          hostFilters: state.hostFilters.includes(serverId)
-            ? state.hostFilters.filter((id) => id !== serverId)
-            : [...state.hostFilters, serverId],
+          hostFilters: toggleFilterEntry(state.hostFilters, serverId),
         })),
       clearHostFilters: () => set({ hostFilters: [] }),
+      toggleProjectFilter: (projectKey) =>
+        set((state) => ({
+          projectFilters: toggleFilterEntry(state.projectFilters, projectKey),
+        })),
+      clearProjectFilters: () => set({ projectFilters: [] }),
+      toggleLabelFilter: (name) =>
+        set((state) => {
+          const key = workspaceLabelKey(name);
+          return {
+            labelFilter: {
+              labels: toggleFilterEntry(state.labelFilter.labels, key),
+            },
+          };
+        }),
+      clearLabelFilter: () => set({ labelFilter: emptyLabelFilter() }),
+      reconcileLabelFilter: (labels) =>
+        set((state) => {
+          if (state.labelFilter.labels.length === 0) {
+            return state;
+          }
+          const available = new Set(labels.map(workspaceLabelKey));
+          const next = state.labelFilter.labels.filter(
+            (key) => key === SIDEBAR_UNLABELLED_LABEL_KEY || available.has(key),
+          );
+          if (next.length === state.labelFilter.labels.length) {
+            return state;
+          }
+          return { labelFilter: { labels: next } };
+        }),
       reconcileHostFilters: (serverIds) =>
         set((state) => {
           if (state.hostFilters.length === 0) {
@@ -134,6 +249,8 @@ export const useSidebarViewStore = create<SidebarViewStoreState>()(
       partialize: (state) => ({
         groupMode: state.groupMode,
         hostFilters: state.hostFilters,
+        projectFilters: state.projectFilters,
+        labelFilter: state.labelFilter,
       }),
       migrate: migrateSidebarViewState,
     },

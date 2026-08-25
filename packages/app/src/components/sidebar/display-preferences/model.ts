@@ -4,7 +4,7 @@ import {
   type SidebarWorkspaceTrailing,
   type WorkspaceTitleSource,
 } from "@/hooks/use-settings";
-import { useSidebarViewStore } from "@/stores/sidebar-view-store";
+import { useSidebarViewStore, type SidebarLabelFilter } from "@/stores/sidebar-view-store";
 import { DEFAULT_SIDEBAR_CHECKS_DISPLAY, type SidebarChecksDisplay } from "./checks-display";
 import { DEFAULT_SIDEBAR_ROW_ITEMS, type SidebarRowItem, type SidebarRowItems } from "./row-items";
 
@@ -22,12 +22,24 @@ export interface SidebarDisplayPreferences {
   hostFilters: readonly string[];
   toggleHostFilter: (serverId: string) => void;
   clearHostFilters: () => void;
+  projectFilters: readonly string[];
+  toggleProjectFilter: (projectKey: string) => void;
+  clearProjectFilters: () => void;
+  labelFilter: SidebarLabelFilter;
+  toggleLabelFilter: (name: string) => void;
+  clearLabelFilter: () => void;
 }
 
 export function useSidebarDisplayPreferences(): SidebarDisplayPreferences {
   const hostFilters = useSidebarViewStore((state) => state.hostFilters);
   const toggleHostFilter = useSidebarViewStore((state) => state.toggleHostFilter);
   const clearHostFilters = useSidebarViewStore((state) => state.clearHostFilters);
+  const projectFilters = useSidebarViewStore((state) => state.projectFilters);
+  const toggleProjectFilter = useSidebarViewStore((state) => state.toggleProjectFilter);
+  const clearProjectFilters = useSidebarViewStore((state) => state.clearProjectFilters);
+  const labelFilter = useSidebarViewStore((state) => state.labelFilter);
+  const toggleLabelFilter = useSidebarViewStore((state) => state.toggleLabelFilter);
+  const clearLabelFilter = useSidebarViewStore((state) => state.clearLabelFilter);
   const {
     settings: {
       workspaceTitleSource,
@@ -74,6 +86,12 @@ export function useSidebarDisplayPreferences(): SidebarDisplayPreferences {
       hostFilters,
       toggleHostFilter,
       clearHostFilters,
+      projectFilters,
+      toggleProjectFilter,
+      clearProjectFilters,
+      labelFilter,
+      toggleLabelFilter,
+      clearLabelFilter,
     }),
     [
       workspaceTitleSource,
@@ -87,6 +105,12 @@ export function useSidebarDisplayPreferences(): SidebarDisplayPreferences {
       hostFilters,
       toggleHostFilter,
       clearHostFilters,
+      projectFilters,
+      toggleProjectFilter,
+      clearProjectFilters,
+      labelFilter,
+      toggleLabelFilter,
+      clearLabelFilter,
     ],
   );
 }

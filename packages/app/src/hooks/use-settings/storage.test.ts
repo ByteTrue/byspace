@@ -16,6 +16,10 @@ import {
   type SettingsDeps,
 } from "./storage";
 import { createInMemoryKeyValueStorage } from "./fakes";
+import {
+  DEFAULT_SIDEBAR_ROW_ITEMS,
+  SIDEBAR_ROW_ITEMS,
+} from "@/components/sidebar/display-preferences/row-items";
 
 const LEGACY_SETTINGS_KEY = "@byspace:settings";
 
@@ -240,6 +244,18 @@ describe("saveAppSettings", () => {
     const loaded = await loadAppSettingsFromStorage(deps);
     expect(loaded.theme).toBe("plugin");
     expect(loaded.pluginThemeId).toBe("catppuccin/theme/mocha");
+  });
+
+  // The row items are written as one object through one strict schema, so an item the schema
+  // does not know does not just fail to persist itself — it takes every sibling toggle with it.
+  it.each(SIDEBAR_ROW_ITEMS)("persists the %s row item being switched off", async (item) => {
+    const deps = makeDeps();
+    const queryClient = new QueryClient();
+    const sidebarRowItems = { ...DEFAULT_SIDEBAR_ROW_ITEMS, [item]: false };
+
+    await saveAppSettings({ queryClient, updates: { sidebarRowItems }, deps });
+
+    expect((await loadAppSettingsFromStorage(deps)).sidebarRowItems).toEqual(sidebarRowItems);
   });
 });
 

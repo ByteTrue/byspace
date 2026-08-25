@@ -950,10 +950,58 @@ export const en = {
       },
     },
   },
+  workspaceLabels: {
+    title: "Labels",
+    unlabelled: "Unlabelled",
+    create: "Create label",
+    createConfirm: "Create",
+    creating: "Creating…",
+    name: "Label name",
+    updateHostUse: "Update this host to use labels.",
+    errors: { update: "Unable to update label", load: "Unable to load labels" },
+    colors: {
+      violet: "Violet",
+      sky: "Sky",
+      emerald: "Emerald",
+      orange: "Orange",
+      pink: "Pink",
+      indigo: "Indigo",
+      teal: "Teal",
+      red: "Red",
+      amber: "Amber",
+      blue: "Blue",
+    },
+    filter: {
+      clear: "Clear filter",
+    },
+    manage: {
+      open: "Manage labels…",
+      title: "Manage labels",
+      search: "Search labels",
+      empty: "No labels on this host.",
+      edit: "Edit label",
+      editLabel: "Edit {{name}}",
+      name: "Name",
+      color: "Color",
+      save: "Save",
+      delete: "Delete",
+      deleteTitle: "Delete {{name}}?",
+      deleteMessage_one: "This removes the label from {{count}} workspace on this host.",
+      deleteMessage_other: "This removes the label from {{count}} workspaces on this host.",
+      offline: "This host is offline.",
+      updateHost: "Update this host to manage labels.",
+    },
+  },
   sidebar: {
     pinned: {
       title: "Pinned",
     },
+    filterEmpty: {
+      title: "No workspaces match",
+      description: "Change or clear the sidebar filters to see workspaces.",
+      clear: "Clear filters",
+    },
+
     host: {
       noHost: "No host",
       switchTitle: "Switch host",
@@ -972,6 +1020,7 @@ export const en = {
         host: "Host",
         changeRequest: "Pull request",
         services: "Services",
+        labels: "Labels",
         checks: "Checks",
         diff: "Diff stat",
         timestamp: "Timestamp",
@@ -1027,6 +1076,11 @@ export const en = {
         remove: "Remove project",
         removing: "Removing...",
       },
+      projectFilter: {
+        label: "Project",
+        all: "All projects",
+      },
+
       confirmations: {
         removeTitle: "Remove project?",
         removeMessage:

@@ -68,6 +68,7 @@ const DEV_BUILD_LABEL = process.env.EXPO_PUBLIC_BYSPACE_DEV_BUILD_LABEL?.trim() 
 interface SidebarSharedProps {
   theme: SidebarTheme;
   projects: SidebarProjectedProject[];
+  hasProjectsBeforeFilter: boolean;
   pinnedGroups: PinnedSidebarGroups;
   workspaceEntriesByKey: ReadonlyMap<string, SidebarWorkspaceEntry>;
   isInitialLoad: boolean;
@@ -112,6 +113,7 @@ export const LeftSidebar = memo(function LeftSidebar({ active }: { active: boole
 
   const {
     projects,
+    hasProjectsBeforeFilter,
     pinnedGroups,
     workspaceEntriesByKey,
     isInitialLoad,
@@ -199,6 +201,7 @@ export const LeftSidebar = memo(function LeftSidebar({ active }: { active: boole
   const sharedProps = {
     theme,
     projects,
+    hasProjectsBeforeFilter,
     pinnedGroups,
     workspaceEntriesByKey,
     isInitialLoad,
@@ -487,6 +490,7 @@ function SidebarFooter({
 function MobileSidebar({
   theme,
   projects,
+  hasProjectsBeforeFilter,
   pinnedGroups,
   workspaceEntriesByKey,
   isInitialLoad,
@@ -558,6 +562,7 @@ function MobileSidebar({
         ) : (
           <SidebarWorkspaceList
             shortcutIndexByWorkspaceKey={shortcutIndexByWorkspaceKey}
+            hasProjectsBeforeFilter={hasProjectsBeforeFilter}
             projects={projects}
             pinnedGroups={pinnedGroups}
             workspaceEntriesByKey={workspaceEntriesByKey}
@@ -587,6 +592,7 @@ function MobileSidebar({
 function DesktopSidebar({
   theme,
   projects,
+  hasProjectsBeforeFilter,
   pinnedGroups,
   workspaceEntriesByKey,
   isInitialLoad,
@@ -717,6 +723,7 @@ function DesktopSidebar({
         ) : (
           <SidebarWorkspaceList
             shortcutIndexByWorkspaceKey={shortcutIndexByWorkspaceKey}
+            hasProjectsBeforeFilter={hasProjectsBeforeFilter}
             projects={projects}
             pinnedGroups={pinnedGroups}
             workspaceEntriesByKey={workspaceEntriesByKey}

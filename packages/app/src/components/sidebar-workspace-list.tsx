@@ -65,7 +65,7 @@ import {
   type SidebarWorkspacePlacement,
 } from "@/hooks/use-sidebar-workspaces-list";
 import { useSidebarOrderStore } from "@/stores/sidebar-order-store";
-import { useSidebarViewStore } from "@/stores/sidebar-view-store";
+import { hasActiveSidebarLabelFilter, useSidebarViewStore } from "@/stores/sidebar-view-store";
 import { useShowShortcutBadges } from "@/hooks/use-show-shortcut-badges";
 import { ContextMenuTrigger, useContextMenu } from "@/components/ui/context-menu";
 import {
@@ -82,6 +82,7 @@ import { getForgePresentation, normalizeForge } from "@/git/forge";
 import { toWorktreeArchiveRisk } from "@/git/worktree-archive-warning";
 import { hasVisibleOrderChanged, mergeWithRemainder } from "@/utils/sidebar-reorder";
 import { confirmDialog } from "@/utils/confirm-dialog";
+import { SidebarFilterEmptyState } from "@/components/sidebar/empty-states";
 import { projectIconPlaceholderLabelFromDisplayName } from "@/utils/project-display-name";
 import type { SidebarStateBucket } from "@/utils/sidebar-agent-state";
 import { useLimitedSidebarGroup } from "@/components/sidebar/use-limited-sidebar-group";
@@ -225,6 +226,8 @@ function selectionForSelectedWorkspace(
 }
 
 interface SidebarWorkspaceListProps {
+  /** Every project the sidebar could show before any filter narrowed it. */
+  hasProjectsBeforeFilter: boolean;
   projects: SidebarProjectedProject[];
   pinnedGroups: PinnedSidebarGroups;
   workspaceEntriesByKey: ReadonlyMap<string, SidebarWorkspaceEntry>;
@@ -637,6 +640,9 @@ function WorkspaceRowRightGroup({
             {onArchive ? (
               <SidebarWorkspaceMenu
                 workspaceKey={workspace.workspaceKey}
+                serverId={workspace.serverId}
+                workspaceId={workspace.workspaceId}
+                workspaceLabels={workspace.labels}
                 onCopyPath={onCopyPath}
                 onCopyBranchName={onCopyBranchName}
                 onRename={onRename}
@@ -1753,6 +1759,7 @@ function areProjectBlockSelectionsEqual(
 const MemoProjectBlock = memo(ProjectBlock, areProjectBlockPropsEqual);
 
 export function SidebarWorkspaceList({
+  hasProjectsBeforeFilter,
   projects,
   pinnedGroups,
   workspaceEntriesByKey,
@@ -1776,6 +1783,13 @@ export function SidebarWorkspaceList({
   const getPinnedWorkspaceOrder = useSidebarOrderStore((state) => state.getPinnedWorkspaceOrder);
   const setPinnedWorkspaceOrder = useSidebarOrderStore((state) => state.setPinnedWorkspaceOrder);
   const showHostLabels = rowItems.host;
+  const hasActiveLabelFilter = useSidebarViewStore((state) =>
+    hasActiveSidebarLabelFilter(state.labelFilter),
+  );
+  // A filter that matches nothing swaps the list's body and nothing above it. It used to replace
+  // this whole subtree, which unmounted the header — and the header is where the display menu's
+  // trigger lives, so filtering the last row away closed the menu you were filtering from.
+  const labelFilterEmpty = hasActiveLabelFilter && hasProjectsBeforeFilter && projects.length === 0;
 
   const handlePinnedWorkspaceReorder = useCallback(
     (reorderedWorkspaces: SidebarWorkspacePlacement[]) => {
@@ -1803,6 +1817,7 @@ export function SidebarWorkspaceList({
   return (
     <ProjectModeList
       projects={projects}
+      labelFilterEmpty={labelFilterEmpty}
       pinnedGroups={pinnedGroups}
       workspaceEntriesByKey={workspaceEntriesByKey}
       shortcutIndexByWorkspaceKey={shortcutIndexByWorkspaceKey}
@@ -1824,6 +1839,7 @@ export function SidebarWorkspaceList({
 
 function ProjectModeList({
   projects,
+  labelFilterEmpty,
   pinnedGroups,
   workspaceEntriesByKey,
   shortcutIndexByWorkspaceKey,
@@ -1839,7 +1855,9 @@ function ProjectModeList({
   supportsPinningByServerId,
   onToggleWorkspacePin,
   onPinnedWorkspaceReorder,
-}: Omit<SidebarWorkspaceListProps, "isRefreshing" | "onRefresh"> & {
+}: Omit<SidebarWorkspaceListProps, "isRefreshing" | "onRefresh" | "hasProjectsBeforeFilter"> & {
+  /** Swaps the list body for the label filter's empty state. Never the header above it. */
+  labelFilterEmpty: boolean;
   pathname: string;
   hostBadgeByServerId: ReadonlyMap<string, HostBadgeModel>;
   showHostLabels: boolean;
@@ -2124,7 +2142,9 @@ function ProjectModeList({
   // Attention-only filtering can hide every project while leaving a pinned attention chat visible;
   // avoid showing the "add a project" empty state over a populated Pinned section.
   let projectBody: ReactElement | null = null;
-  if (projects.length > 0) {
+  if (labelFilterEmpty) {
+    projectBody = <SidebarFilterEmptyState />;
+  } else if (projects.length > 0) {
     projectBody = <View testID="sidebar-project-list">{projects.map(renderProjectBlock)}</View>;
   } else if (pinnedChats.length === 0) {
     projectBody = emptyState;
@@ -2159,7 +2179,11 @@ function ProjectModeList({
           )}
         </View>
       ) : null}
-      {projects.length > 0 || hasActiveHostFilter || attentionOnly || pinnedChats.length > 0
+      {projects.length > 0 ||
+      hasActiveHostFilter ||
+      attentionOnly ||
+      pinnedChats.length > 0 ||
+      labelFilterEmpty
         ? listHeaderComponent
         : null}
       {projectBody}

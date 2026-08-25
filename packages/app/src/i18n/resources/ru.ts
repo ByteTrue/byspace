@@ -962,10 +962,59 @@ export const ru: TranslationResources = {
       },
     },
   },
+  workspaceLabels: {
+    title: "Метки",
+    unlabelled: "Без метки",
+    create: "Создать метку",
+    createConfirm: "Создать",
+    creating: "Создание…",
+    name: "Название метки",
+    updateHostUse: "Обновите этот хост, чтобы использовать метки.",
+    errors: { update: "Не удалось обновить метку", load: "Не удалось загрузить метки" },
+    colors: {
+      violet: "Фиолетовый",
+      sky: "Голубой",
+      emerald: "Изумрудный",
+      orange: "Оранжевый",
+      pink: "Розовый",
+      indigo: "Индиго",
+      teal: "Бирюзовый",
+      red: "Красный",
+      amber: "Янтарный",
+      blue: "Синий",
+    },
+    filter: {
+      clear: "Очистить фильтр",
+    },
+    manage: {
+      open: "Управление метками…",
+      title: "Управление метками",
+      search: "Поиск меток",
+      empty: "На этом хосте нет меток.",
+      edit: "Изменить метку",
+      editLabel: "Изменить метку «{{name}}»",
+      name: "Название",
+      color: "Цвет",
+      save: "Сохранить",
+      delete: "Удалить",
+      deleteTitle: "Удалить метку «{{name}}»?",
+      deleteMessage_one: "Метка будет снята с {{count}} рабочего пространства на этом хосте.",
+      deleteMessage_other: "Метка будет снята с {{count}} рабочих пространств на этом хосте.",
+      offline: "Этот хост не в сети.",
+      updateHost: "Обновите этот хост для управления метками.",
+    },
+  },
   sidebar: {
     pinned: {
       title: "Закреплённые",
     },
+    filterEmpty: {
+      title: "Нет подходящих рабочих пространств",
+      description:
+        "Измените или очистите фильтры боковой панели, чтобы увидеть рабочие пространства.",
+      clear: "Очистить фильтры",
+    },
+
     host: {
       noHost: "Нет хоста",
       switchTitle: "Сменить хост",
@@ -984,6 +1033,7 @@ export const ru: TranslationResources = {
         host: "Хозяин",
         changeRequest: "Запрос на извлечение",
         services: "Услуги",
+        labels: "Метки",
         checks: "Чеки",
         diff: "Разница в статистике",
         timestamp: "Метка времени",
@@ -1039,6 +1089,11 @@ export const ru: TranslationResources = {
         remove: "Удалить проект",
         removing: "Удаление...",
       },
+      projectFilter: {
+        label: "Проект",
+        all: "Все проекты",
+      },
+
       confirmations: {
         removeTitle: "Удалить проект?",
         removeMessage:

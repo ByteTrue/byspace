@@ -952,10 +952,59 @@ export const ja: TranslationResources = {
       },
     },
   },
+  workspaceLabels: {
+    title: "ラベル",
+    unlabelled: "ラベルなし",
+    create: "ラベルを作成",
+    createConfirm: "作成",
+    creating: "作成中…",
+    name: "ラベル名",
+    updateHostUse: "ラベルを使用するにはホストを更新してください。",
+    errors: { update: "ラベルを更新できません", load: "ラベルを読み込めません" },
+    colors: {
+      violet: "紫",
+      sky: "空色",
+      emerald: "エメラルド",
+      orange: "オレンジ",
+      pink: "ピンク",
+      indigo: "藍",
+      teal: "青緑",
+      red: "赤",
+      amber: "琥珀",
+      blue: "青",
+    },
+    filter: {
+      clear: "フィルターをクリア",
+    },
+    manage: {
+      open: "ラベルを管理…",
+      title: "ラベルを管理",
+      search: "ラベルを検索",
+      empty: "このホストにラベルはありません。",
+      edit: "ラベルを編集",
+      editLabel: "{{name}}を編集",
+      name: "名前",
+      color: "色",
+      save: "保存",
+      delete: "削除",
+      deleteTitle: "{{name}}を削除しますか？",
+      deleteMessage_one: "このホストの{{count}}個のワークスペースからラベルを削除します。",
+      deleteMessage_other: "このホストの{{count}}個のワークスペースからラベルを削除します。",
+      offline: "このホストはオフラインです。",
+      updateHost: "ラベルを管理するにはホストを更新してください。",
+    },
+  },
   sidebar: {
     pinned: {
       title: "固定済み",
     },
+    filterEmpty: {
+      title: "一致するワークスペースがありません",
+      description:
+        "ワークスペースを表示するにはサイドバーのフィルターを変更またはクリアしてください。",
+      clear: "フィルターをクリア",
+    },
+
     host: {
       noHost: "ホストなし",
       switchTitle: "ホストを切り替え",
@@ -974,6 +1023,7 @@ export const ja: TranslationResources = {
         host: "ホスト",
         changeRequest: "プルリクエスト",
         services: "サービス",
+        labels: "ラベル",
         checks: "小切手",
         diff: "差分統計",
         timestamp: "タイムスタンプ",
@@ -1029,6 +1079,11 @@ export const ja: TranslationResources = {
         remove: "プロジェクトを削除",
         removing: "削除中...",
       },
+      projectFilter: {
+        label: "プロジェクト",
+        all: "すべてのプロジェクト",
+      },
+
       confirmations: {
         removeTitle: "プロジェクトを削除しますか？",
         removeMessage:

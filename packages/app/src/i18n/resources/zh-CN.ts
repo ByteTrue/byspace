@@ -933,10 +933,58 @@ export const zhCN: TranslationResources = {
       },
     },
   },
+  workspaceLabels: {
+    title: "标签",
+    unlabelled: "无标签",
+    create: "新建标签",
+    createConfirm: "创建",
+    creating: "创建中…",
+    name: "标签名称",
+    updateHostUse: "请更新此主机以使用标签。",
+    errors: { update: "无法更新标签", load: "无法加载标签" },
+    colors: {
+      violet: "紫色",
+      sky: "天蓝色",
+      emerald: "翠绿色",
+      orange: "橙色",
+      pink: "粉色",
+      indigo: "靛蓝色",
+      teal: "青绿色",
+      red: "红色",
+      amber: "琥珀色",
+      blue: "蓝色",
+    },
+    filter: {
+      clear: "清除筛选",
+    },
+    manage: {
+      open: "管理标签…",
+      title: "管理标签",
+      search: "搜索标签",
+      empty: "此主机没有标签。",
+      edit: "编辑标签",
+      editLabel: "编辑{{name}}",
+      name: "名称",
+      color: "颜色",
+      save: "保存",
+      delete: "删除",
+      deleteTitle: "删除{{name}}？",
+      deleteMessage_one: "这会从此主机的{{count}}个工作区中移除该标签。",
+      deleteMessage_other: "这会从此主机的{{count}}个工作区中移除该标签。",
+      offline: "此主机离线。",
+      updateHost: "请更新此主机以管理标签。",
+    },
+  },
   sidebar: {
     pinned: {
       title: "已置顶",
     },
+    filterEmpty: {
+      title: "没有匹配的工作区",
+      description: "更改或清除侧边栏筛选以查看工作区。",
+      clear: "清除筛选",
+    },
+
     host: {
       noHost: "没有 Host",
       switchTitle: "切换 Host",
@@ -955,6 +1003,7 @@ export const zhCN: TranslationResources = {
         host: "主持人",
         changeRequest: "拉取请求",
         services: "服务",
+        labels: "标签",
         checks: "检查",
         diff: "差异统计",
         timestamp: "时间戳",
@@ -1009,6 +1058,11 @@ export const zhCN: TranslationResources = {
         remove: "移除 project",
         removing: "正在移除...",
       },
+      projectFilter: {
+        label: "项目",
+        all: "所有项目",
+      },
+
       confirmations: {
         removeTitle: "移除 project？",
         removeMessage: "从侧边栏移除「{{projectName}}」？\n\n磁盘上的文件不会被更改。",

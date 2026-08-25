@@ -51,6 +51,7 @@ function workspace(
     archivingAt: null,
     diffStat: null,
     scripts: [],
+    labels: ["backend"],
   };
 }
 
@@ -243,6 +244,9 @@ describe("ReplicaCache", () => {
     expect(session.agents.get("agent-1")?.updatedAt).toBeInstanceOf(Date);
     expect(session.agents.get("agent-1")?.projectPlacement?.checkout.cwd).toBe("/repo/byspace");
     expect(session.workspaces.get("workspace-1")?.statusEnteredAt).toBeInstanceOf(Date);
+    // A restored row draws its label chips. The reconnect cursor is current, so nothing re-sends
+    // them and a cache that dropped them would leave the sidebar unlabelled until the next edit.
+    expect(session.workspaces.get("workspace-1")?.labels).toEqual(["backend"]);
     expect(session.agentStreamTail.get("agent-1")).toEqual([message("message-1", "Cached")]);
     expect(session.agentAuthoritativeHistoryApplied).toEqual(new Map([["agent-1", true]]));
     expect(session.agentTimelineCursor).toEqual(

@@ -11,6 +11,7 @@ import {
   Pin,
   PinOff,
   Sparkles,
+  Tag,
 } from "lucide-react-native";
 import { isNative, isWeb } from "@/constants/platform";
 import type { Theme } from "@/styles/theme";
@@ -19,9 +20,15 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Shortcut } from "@/components/ui/shortcut";
+import {
+  useWorkspaceLabelMenuPages,
+  WORKSPACE_LABEL_PAGE_ID,
+  type WorkspaceLabelTarget,
+} from "@/workspace-labels/picker";
 
 const foregroundColorMapping = (theme: Theme) => ({ color: theme.colors.foreground });
 const foregroundMutedColorMapping = (theme: Theme) => ({
@@ -36,6 +43,7 @@ const ThemedCircleCheck = withUnistyles(CircleCheck);
 const ThemedSparkles = withUnistyles(Sparkles);
 const ThemedPin = withUnistyles(Pin);
 const ThemedPinOff = withUnistyles(PinOff);
+const ThemedTag = withUnistyles(Tag);
 
 const copyLeadingIcon = <ThemedCopy size={14} uniProps={foregroundMutedColorMapping} />;
 const renameLeadingIcon = <ThemedPencil size={14} uniProps={foregroundMutedColorMapping} />;
@@ -48,6 +56,7 @@ const markAsReadLeadingIcon = (
 const archiveLeadingIcon = <ThemedArchive size={14} uniProps={foregroundMutedColorMapping} />;
 const pinLeadingIcon = <ThemedPin size={14} uniProps={foregroundMutedColorMapping} />;
 const unpinLeadingIcon = <ThemedPinOff size={14} uniProps={foregroundMutedColorMapping} />;
+const labelLeadingIcon = <ThemedTag size={14} uniProps={foregroundMutedColorMapping} />;
 
 function renderTriggerIcon({ hovered }: { hovered?: boolean }) {
   return (
@@ -60,6 +69,9 @@ function renderTriggerIcon({ hovered }: { hovered?: boolean }) {
 
 interface SidebarWorkspaceMenuProps {
   workspaceKey: string;
+  serverId?: string;
+  workspaceId?: string;
+  workspaceLabels?: readonly string[];
   onCopyPath?: () => void;
   onCopyBranchName?: () => void;
   onRename?: () => void;
@@ -76,6 +88,9 @@ interface SidebarWorkspaceMenuProps {
 
 export function SidebarWorkspaceMenu({
   workspaceKey,
+  serverId,
+  workspaceId,
+  workspaceLabels,
   onCopyPath,
   onCopyBranchName,
   onRename,
@@ -90,6 +105,12 @@ export function SidebarWorkspaceMenu({
   archiveShortcutKeys,
 }: SidebarWorkspaceMenuProps) {
   const { t } = useTranslation();
+  const workspaceTarget = useMemo<WorkspaceLabelTarget | null>(
+    () =>
+      serverId && workspaceId ? { serverId, workspaceId, labels: workspaceLabels ?? [] } : null,
+    [serverId, workspaceId, workspaceLabels],
+  );
+  const pages = useWorkspaceLabelMenuPages(workspaceTarget);
   const archiveTrailing = useMemo(
     () => (archiveShortcutKeys && !isNative ? <Shortcut chord={archiveShortcutKeys} /> : null),
     [archiveShortcutKeys],
@@ -106,7 +127,7 @@ export function SidebarWorkspaceMenu({
       >
         {renderTriggerIcon}
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" width={260}>
+      <DropdownMenuContent align="end" width={260} pages={pages}>
         {onCopyPath ? (
           <DropdownMenuItem
             testID={`sidebar-workspace-menu-copy-path-${workspaceKey}`}
@@ -160,6 +181,15 @@ export function SidebarWorkspaceMenu({
           >
             {isPinned ? t("sidebar.workspace.actions.unpin") : t("sidebar.workspace.actions.pin")}
           </DropdownMenuItem>
+        ) : null}
+        {serverId && workspaceId ? (
+          <DropdownMenuSubTrigger
+            id={WORKSPACE_LABEL_PAGE_ID}
+            leading={labelLeadingIcon}
+            testID={`sidebar-workspace-menu-labels-${workspaceKey}`}
+          >
+            {t("workspaceLabels.title")}
+          </DropdownMenuSubTrigger>
         ) : null}
         <DropdownMenuItem
           testID={`sidebar-workspace-menu-archive-${workspaceKey}`}

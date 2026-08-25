@@ -14,8 +14,13 @@ import {
   GitPullRequestClosed,
   Globe,
 } from "lucide-react-native";
+import {
+  workspaceLabelKey,
+  type WorkspaceLabelDefinition,
+} from "@bytetrue/byspace-protocol/workspace-labels";
 import type { HostBadgeModel } from "@/hosts/appearance";
 import { HostBadge, HOST_BADGE_ICON_SIZE } from "@/hosts/host-badge";
+import { WorkspaceLabelChip, WORKSPACE_LABEL_CHIP_INSET } from "@/workspace-labels/chip";
 import type { PrHint } from "@/git/pr-hint";
 import { getForgePresentation, normalizeForge } from "@/git/forge";
 import { openExternalUrl } from "@/utils/open-external-url";
@@ -45,6 +50,9 @@ const ThemedCircleCheck = withUnistyles(CircleCheck);
 const ThemedCircleX = withUnistyles(CircleX);
 const ThemedCircleDashed = withUnistyles(CircleDashed);
 
+/** Stable identity so a row without labels doesn't re-select its items on every render. */
+const EMPTY_LABELS: readonly WorkspaceLabelDefinition[] = [];
+
 const foregroundMapping = (theme: Theme) => ({ color: theme.colors.foreground });
 const mutedMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
 const successMapping = (theme: Theme) => ({ color: theme.colors.statusSuccess });
@@ -58,12 +66,14 @@ export function WorkspaceMetaRow({
   hostBadge,
   prHint,
   serviceSummary,
+  labels = EMPTY_LABELS,
 }: {
   currentBranch: string | null;
   projectName: string | null;
   hostBadge: HostBadgeModel | null;
   prHint: PrHint | null;
   serviceSummary: WorkspaceServiceSummary | null;
+  labels?: readonly WorkspaceLabelDefinition[];
 }) {
   const { rowItems, checksDisplay } = useSidebarMetaPreferences();
   const items = selectMetaRowItems({
@@ -72,6 +82,7 @@ export function WorkspaceMetaRow({
     hasHostBadge: hostBadge !== null,
     prHint,
     serviceSummary,
+    labels,
     visible: rowItems,
     checksDisplay,
   });
@@ -82,7 +93,7 @@ export function WorkspaceMetaRow({
       {items.map((item, index) => (
         <Fragment key={item.kind}>
           {index > 0 ? <Text style={styles.separator}>·</Text> : null}
-          <MetaItemNode item={item} hostBadge={hostBadge} />
+          <MetaItemNode item={item} hostBadge={hostBadge} leading={index === 0} />
         </Fragment>
       ))}
     </View>
@@ -92,9 +103,12 @@ export function WorkspaceMetaRow({
 function MetaItemNode({
   item,
   hostBadge,
+  leading,
 }: {
   item: MetaRowItem;
   hostBadge: HostBadgeModel | null;
+  /** First on the line, so this item's ink sets the rail the title above it already uses. */
+  leading: boolean;
 }): ReactNode {
   if (item.kind === "branch") return <IdentityItem kind="branch" name={item.name} />;
   if (item.kind === "project") return <IdentityItem kind="project" name={item.name} />;
@@ -102,6 +116,7 @@ function MetaItemNode({
     return hostBadge ? <HostBadge badge={hostBadge} accessible={false} /> : null;
   if (item.kind === "changeRequest") return <PullRequestItem hint={item.hint} />;
   if (item.kind === "checks") return <ChecksItem summary={item.summary} label={item.label} />;
+  if (item.kind === "labels") return <LabelsItem labels={item.labels} leading={leading} />;
   return <ServiceItem summary={item.summary} />;
 }
 
@@ -115,6 +130,27 @@ function IdentityItem({ kind, name }: { kind: "branch" | "project"; name: string
       <Text style={styles.identityText} numberOfLines={1}>
         {name}
       </Text>
+    </View>
+  );
+}
+
+/**
+ * Every label on the workspace, in one run. The chips sit closer to each other than the line's
+ * items do to each other, so several labels still read as one item rather than as new peers,
+ * and they take no separator between them — each chip's ground already ends it.
+ */
+function LabelsItem({
+  labels,
+  leading,
+}: {
+  labels: readonly WorkspaceLabelDefinition[];
+  leading: boolean;
+}) {
+  return (
+    <View style={[styles.labels, leading && styles.labelsLeading]}>
+      {labels.map((label) => (
+        <WorkspaceLabelChip key={workspaceLabelKey(label.name)} label={label} />
+      ))}
     </View>
   );
 }
@@ -274,6 +310,17 @@ const styles = StyleSheet.create((theme) => ({
     fontSize: theme.fontSize.sm,
     lineHeight: 16,
     flexShrink: 0,
+  },
+  // Tighter than the line's own gap so a run of chips reads as one item — see `LabelsItem`.
+  labels: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[1],
+    minWidth: 0,
+    flexShrink: 1,
+  },
+  labelsLeading: {
+    marginLeft: -WORKSPACE_LABEL_CHIP_INSET,
   },
   serviceItem: {
     flexDirection: "row",

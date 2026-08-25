@@ -941,10 +941,58 @@ export const ar: TranslationResources = {
       },
     },
   },
+  workspaceLabels: {
+    title: "التسميات",
+    unlabelled: "بلا تسمية",
+    create: "إنشاء تسمية",
+    createConfirm: "إنشاء",
+    creating: "جارٍ الإنشاء…",
+    name: "اسم التسمية",
+    updateHostUse: "حدّث هذا المضيف لاستخدام التسميات.",
+    errors: { update: "تعذّر تحديث التسمية", load: "تعذّر تحميل التسميات" },
+    colors: {
+      violet: "بنفسجي",
+      sky: "سماوي",
+      emerald: "زمردي",
+      orange: "برتقالي",
+      pink: "وردي",
+      indigo: "نيلي",
+      teal: "أزرق مخضر",
+      red: "أحمر",
+      amber: "كهرماني",
+      blue: "أزرق",
+    },
+    filter: {
+      clear: "مسح عامل التصفية",
+    },
+    manage: {
+      open: "إدارة التسميات…",
+      title: "إدارة التسميات",
+      search: "بحث في التسميات",
+      empty: "لا توجد تسميات على هذا المضيف.",
+      edit: "تعديل التسمية",
+      editLabel: "تعديل {{name}}",
+      name: "الاسم",
+      color: "اللون",
+      save: "حفظ",
+      delete: "حذف",
+      deleteTitle: "حذف {{name}}؟",
+      deleteMessage_one: "سيؤدي هذا إلى إزالة التسمية من {{count}} مساحة عمل على هذا المضيف.",
+      deleteMessage_other: "سيؤدي هذا إلى إزالة التسمية من {{count}} مساحات عمل على هذا المضيف.",
+      offline: "هذا المضيف غير متصل.",
+      updateHost: "حدّث هذا المضيف لإدارة التسميات.",
+    },
+  },
   sidebar: {
     pinned: {
       title: "المثبتة",
     },
+    filterEmpty: {
+      title: "لا توجد مساحات عمل مطابقة",
+      description: "غيّر عوامل تصفية الشريط الجانبي أو امسحها لعرض مساحات العمل.",
+      clear: "مسح عوامل التصفية",
+    },
+
     host: {
       noHost: "لا مضيف",
       switchTitle: "تبديل المضيف",
@@ -963,6 +1011,7 @@ export const ar: TranslationResources = {
         host: "المضيف",
         changeRequest: "سحب الطلب",
         services: "الخدمات",
+        labels: "التسميات",
         checks: "الشيكات",
         diff: "الإحصائيات المختلفة",
         timestamp: "الطابع الزمني",
@@ -1018,6 +1067,11 @@ export const ar: TranslationResources = {
         remove: "إزالة المشروع",
         removing: "جارٍ الإزالة...",
       },
+      projectFilter: {
+        label: "المشروع",
+        all: "كل المشاريع",
+      },
+
       confirmations: {
         removeTitle: "هل تريد إزالة المشروع؟",
         removeMessage:

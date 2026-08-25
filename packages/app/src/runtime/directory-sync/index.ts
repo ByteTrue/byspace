@@ -24,6 +24,7 @@ import {
   shouldUseLegacyDaemonWorkspaceDirectory,
   stampLegacyWorkspaceIds,
 } from "@/workspace/legacy-daemon-workspaces";
+import { workspaceLabels } from "@/workspace-labels";
 import type { AgentDirectoryDelta } from "@/utils/agent-directory-sync";
 import { AgentDirectoryReplica } from "./agent-replica";
 import {
@@ -172,6 +173,7 @@ export class DirectorySync {
     this.flushAbortedTransactions();
     this.unsubscribe?.();
     this.unsubscribe = null;
+    workspaceLabels.disconnect(this.serverId);
     this.timeline.setConnected(false);
     this.connection = connection;
     this.abortPendingSessionWaits();
@@ -244,6 +246,7 @@ export class DirectorySync {
     this.abortPendingSessionWaits();
     this.unsubscribe?.();
     this.unsubscribe = null;
+    workspaceLabels.disconnect(this.serverId);
     this.timeline.dispose();
   }
 
@@ -448,6 +451,17 @@ export class DirectorySync {
 
   async refreshAll(): Promise<void> {
     await Promise.all([this.refreshAgents(), this.refreshWorkspaces({ subscribe: true })]);
+    await this.connectWorkspaceLabels();
+  }
+
+  async connectWorkspaceLabels(): Promise<void> {
+    const { client } = this.requireOnline();
+    const serverInfo = client.getLastServerInfoMessage();
+    await workspaceLabels.connect({
+      serverId: this.serverId,
+      client,
+      supportsWorkspaceLabels: serverInfo?.features?.workspaceLabels === true,
+    });
   }
 
   private async fetchAgents(

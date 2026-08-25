@@ -16,6 +16,7 @@ import type { SidebarStateBucket } from "@/utils/sidebar-agent-state";
 import { isEmphasizedStatusDotBucket } from "@/utils/status-dot-color";
 import { shouldRenderSyncedStatusLoader } from "@/utils/status-loader";
 import { resolveSidebarWorkspacePrimaryLabel } from "@/components/sidebar/sidebar-workspace-title";
+import { useWorkspaceLabelDefinitions } from "@/workspace-labels";
 import type { HostBadgeModel } from "@/hosts/appearance";
 import { WorkspaceMetaRow, type WorkspaceServiceSummary } from "./workspace-meta-row";
 
@@ -127,6 +128,9 @@ export const SidebarWorkspaceRowContent = memo(function SidebarWorkspaceRowConte
     settings: { workspaceTitleSource },
   } = useAppSettings();
   const workspaceLabel = resolveSidebarWorkspacePrimaryLabel({ workspace, workspaceTitleSource });
+  // The workspace carries label names; their colors live in its host's catalog, so the row is
+  // where the two meet — the meta line is handed finished definitions.
+  const labels = useWorkspaceLabelDefinitions(workspace.serverId, workspace.labels);
   const workspaceBranchTextStyle = useMemo(
     () => [
       styles.workspaceBranchText,
@@ -165,6 +169,7 @@ export const SidebarWorkspaceRowContent = memo(function SidebarWorkspaceRowConte
             hostBadge={hostBadge ?? null}
             prHint={workspace.prHint}
             serviceSummary={serviceSummary}
+            labels={labels}
           />
         </View>
       </View>

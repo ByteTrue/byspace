@@ -4,6 +4,7 @@ export const SIDEBAR_ROW_ITEMS = [
   "host",
   "changeRequest",
   "services",
+  "labels",
 ] as const;
 
 export type SidebarRowItem = (typeof SIDEBAR_ROW_ITEMS)[number];
@@ -15,6 +16,7 @@ export const DEFAULT_SIDEBAR_ROW_ITEMS: SidebarRowItems = {
   host: true,
   changeRequest: true,
   services: true,
+  labels: true,
 };
 
 export function isChecksHiddenByLegacyRowItem(value: unknown): boolean {

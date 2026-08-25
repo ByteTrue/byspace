@@ -963,10 +963,61 @@ export const ptBR: TranslationResources = {
       },
     },
   },
+  workspaceLabels: {
+    title: "Etiquetas",
+    unlabelled: "Sem etiqueta",
+    create: "Criar etiqueta",
+    createConfirm: "Criar",
+    creating: "Criando…",
+    name: "Nome da etiqueta",
+    updateHostUse: "Atualize este host para usar etiquetas.",
+    errors: {
+      update: "Não foi possível atualizar a etiqueta",
+      load: "Não foi possível carregar as etiquetas",
+    },
+    colors: {
+      violet: "Violeta",
+      sky: "Azul-céu",
+      emerald: "Esmeralda",
+      orange: "Laranja",
+      pink: "Rosa",
+      indigo: "Índigo",
+      teal: "Verde-azulado",
+      red: "Vermelho",
+      amber: "Âmbar",
+      blue: "Azul",
+    },
+    filter: {
+      clear: "Limpar filtro",
+    },
+    manage: {
+      open: "Gerenciar etiquetas…",
+      title: "Gerenciar etiquetas",
+      search: "Buscar etiquetas",
+      empty: "Não há etiquetas neste host.",
+      edit: "Editar etiqueta",
+      editLabel: "Editar {{name}}",
+      name: "Nome",
+      color: "Cor",
+      save: "Salvar",
+      delete: "Excluir",
+      deleteTitle: "Excluir {{name}}?",
+      deleteMessage_one: "Isso remove a etiqueta de {{count}} workspace neste host.",
+      deleteMessage_other: "Isso remove a etiqueta de {{count}} workspaces neste host.",
+      offline: "Este host está offline.",
+      updateHost: "Atualize este host para gerenciar etiquetas.",
+    },
+  },
   sidebar: {
     pinned: {
       title: "Fixados",
     },
+    filterEmpty: {
+      title: "Nenhum espaço de trabalho corresponde",
+      description: "Altere ou limpe os filtros da barra lateral para ver espaços de trabalho.",
+      clear: "Limpar filtros",
+    },
+
     host: {
       noHost: "Nenhum host",
       switchTitle: "Trocar host",
@@ -985,6 +1036,7 @@ export const ptBR: TranslationResources = {
         host: "Hospedar",
         changeRequest: "Solicitação pull",
         services: "Serviços",
+        labels: "Etiquetas",
         checks: "Verificações",
         diff: "Estatísticas diferentes",
         timestamp: "Carimbo de data e hora",
@@ -1040,6 +1092,11 @@ export const ptBR: TranslationResources = {
         remove: "Remover projeto",
         removing: "Removendo...",
       },
+      projectFilter: {
+        label: "Projeto",
+        all: "Todos os projetos",
+      },
+
       confirmations: {
         removeTitle: "Remover projeto?",
         removeMessage:

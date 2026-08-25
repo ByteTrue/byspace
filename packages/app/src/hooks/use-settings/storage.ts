@@ -96,6 +96,7 @@ const SidebarRowItemsSchema = z.strictObject({
   host: z.boolean().optional(),
   changeRequest: z.boolean().optional(),
   services: z.boolean().optional(),
+  labels: z.boolean().optional(),
   checks: z.boolean().optional(),
   scripts: z.boolean().optional(),
 });

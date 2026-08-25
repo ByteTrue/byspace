@@ -1,3 +1,4 @@
+import type { WorkspaceLabelDefinition } from "@bytetrue/byspace-protocol/workspace-labels";
 import type { PrHint } from "@/git/pr-hint";
 import type { SidebarChecksDisplay } from "@/components/sidebar/display-preferences/checks-display";
 import type { SidebarRowItems } from "@/components/sidebar/display-preferences/row-items";
@@ -10,7 +11,8 @@ export type MetaRowItem =
   | { kind: "host" }
   | { kind: "changeRequest"; hint: PrHint }
   | { kind: "checks"; summary: CheckSummary; label: boolean }
-  | { kind: "services"; summary: WorkspaceServiceSummary };
+  | { kind: "services"; summary: WorkspaceServiceSummary }
+  | { kind: "labels"; labels: readonly WorkspaceLabelDefinition[] };
 
 export function selectMetaRowItems(input: {
   currentBranch: string | null;
@@ -18,6 +20,7 @@ export function selectMetaRowItems(input: {
   hasHostBadge: boolean;
   prHint: PrHint | null;
   serviceSummary: WorkspaceServiceSummary | null;
+  labels: readonly WorkspaceLabelDefinition[];
   visible: SidebarRowItems;
   checksDisplay: SidebarChecksDisplay;
 }): MetaRowItem[] {
@@ -27,6 +30,7 @@ export function selectMetaRowItems(input: {
     hasHostBadge,
     prHint,
     serviceSummary,
+    labels,
     visible,
     checksDisplay,
   } = input;
@@ -41,6 +45,9 @@ export function selectMetaRowItems(input: {
     if (summary) items.push({ kind: "checks", summary, label: checksDisplay === "iconAndText" });
   }
   if (serviceSummary && visible.services) items.push({ kind: "services", summary: serviceSummary });
+  if (labels.length > 0 && visible.labels) {
+    items.push({ kind: "labels", labels });
+  }
 
   return items;
 }
