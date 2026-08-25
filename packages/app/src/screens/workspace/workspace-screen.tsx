@@ -1304,7 +1304,9 @@ function WorkspaceHeaderTitleBar({
         </View>
       ) : (
         <View style={styles.headerTitleTextGroup}>
-          <ScreenTitle testID="workspace-header-title">{title}</ScreenTitle>
+          <ScreenTitle testID="workspace-header-title" style={styles.headerTitle}>
+            {title}
+          </ScreenTitle>
           {showSubtitle ? (
             <Text
               testID="workspace-header-subtitle"
@@ -4134,7 +4136,7 @@ const styles = StyleSheet.create((theme) => ({
     minHeight: 0,
   },
   headerTitle: {
-    fontSize: theme.fontSize.base,
+    fontSize: theme.fontSize.sm,
     fontWeight: {
       xs: "400",
       md: "300",
@@ -4180,7 +4182,7 @@ const styles = StyleSheet.create((theme) => ({
     color: theme.colors.foregroundMuted,
     fontSize: {
       xs: theme.fontSize.sm,
-      md: theme.fontSize.base,
+      md: theme.fontSize.sm,
     },
     flexShrink: 1,
     minWidth: 0,
