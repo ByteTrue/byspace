@@ -2121,9 +2121,8 @@ function ProjectModeList({
       </Button>
     </View>
   );
-  // A pinned chat can be the only thing left below: hoisting every chat out of a project drops
-  // its shell, and the "add a project" empty state over a populated Pinned section would claim
-  // the sidebar is empty.
+  // Attention-only filtering can hide every project while leaving a pinned attention chat visible;
+  // avoid showing the "add a project" empty state over a populated Pinned section.
   let projectBody: ReactElement | null = null;
   if (projects.length > 0) {
     projectBody = <View testID="sidebar-project-list">{projects.map(renderProjectBlock)}</View>;

@@ -201,10 +201,11 @@ describe("buildSidebarProjection", () => {
       "newer",
       "older",
     ]);
-    // "second" had only pinned chats, so its empty shell is dropped (BySpace behavior).
-    expect(projectKeys(projection.pinnedGroups.unpinnedProjects)).toEqual(["first"]);
-    expect(projectKeys(projection.projects)).toEqual(["first"]);
+    // "second" had only pinned chats, so its empty shell stays reachable for new workspaces.
+    expect(projectKeys(projection.pinnedGroups.unpinnedProjects)).toEqual(["first", "second"]);
+    expect(projectKeys(projection.projects)).toEqual(["first", "second"]);
     expect(projection.projects[0]?.workspaces.map((row) => row.workspaceId)).toEqual(["keeper"]);
+    expect(projection.projects[1]?.workspaces).toEqual([]);
     expect(projection.shortcutModel.shortcutTargets).toEqual([
       { serverId: "srv", workspaceId: "newer" },
       { serverId: "srv", workspaceId: "older" },
