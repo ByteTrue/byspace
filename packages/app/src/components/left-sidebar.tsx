@@ -1050,14 +1050,14 @@ const styles = StyleSheet.create((theme) => ({
   footerAddProjectLabel: {
     minWidth: 0,
     flexShrink: 1,
-    fontSize: theme.fontSize.sm,
+    fontSize: theme.fontSize.base,
     fontWeight: theme.fontWeight.normal,
     color: theme.colors.foregroundMuted,
   },
   footerAddProjectLabelHovered: {
     minWidth: 0,
     flexShrink: 1,
-    fontSize: theme.fontSize.sm,
+    fontSize: theme.fontSize.base,
     fontWeight: theme.fontWeight.normal,
     color: theme.colors.foreground,
   },
@@ -1075,7 +1075,7 @@ const styles = StyleSheet.create((theme) => ({
     gap: theme.spacing[2],
   },
   tooltipText: {
-    fontSize: theme.fontSize.sm,
+    fontSize: theme.fontSize.base,
     color: theme.colors.popoverForeground,
   },
 }));

@@ -4265,7 +4265,7 @@ const styles = StyleSheet.create((theme) => ({
     gap: theme.spacing[2],
   },
   explorerTooltipText: {
-    fontSize: theme.fontSize.sm,
+    fontSize: theme.fontSize.base,
     color: theme.colors.popoverForeground,
   },
   explorerTooltipShortcut: {},

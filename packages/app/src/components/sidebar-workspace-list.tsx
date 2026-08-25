@@ -2225,13 +2225,13 @@ const styles = StyleSheet.create((theme) => ({
   },
   emptyTitle: {
     color: theme.colors.foreground,
-    fontSize: theme.fontSize.sm,
+    fontSize: theme.fontSize.base,
     fontWeight: theme.fontWeight.medium,
     textAlign: "center",
   },
   emptyText: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.sm,
+    fontSize: theme.fontSize.base,
     textAlign: "center",
   },
   projectRow: {
@@ -2318,7 +2318,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   projectTitle: {
     color: theme.colors.foreground,
-    fontSize: theme.fontSize.sm,
+    fontSize: theme.fontSize.base,
     fontWeight: "400",
     minWidth: 0,
     flexShrink: 1,
@@ -2398,7 +2398,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   projectActionTooltipText: {
     color: theme.colors.foreground,
-    fontSize: theme.fontSize.sm,
+    fontSize: theme.fontSize.base,
   },
   projectActionTooltipShortcut: {},
   projectShortcutBadgeOverlay: {
@@ -2494,7 +2494,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   workspaceBranchText: {
     color: theme.colors.foreground,
-    fontSize: theme.fontSize.sm,
+    fontSize: theme.fontSize.base,
     fontWeight: "400",
     lineHeight: 20,
     opacity: 0.76,

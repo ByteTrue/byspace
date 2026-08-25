@@ -325,7 +325,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   optionLabel: {
     flexShrink: 1,
-    fontSize: theme.fontSize.sm,
+    fontSize: theme.fontSize.base,
     color: theme.colors.foreground,
   },
   optionModifiedIndicator: {

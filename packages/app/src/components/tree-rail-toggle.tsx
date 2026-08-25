@@ -59,7 +59,7 @@ export function TreeRailToggle({
 
 const styles = StyleSheet.create((theme) => ({
   tooltipText: {
-    fontSize: theme.fontSize.sm,
+    fontSize: theme.fontSize.base,
     color: theme.colors.foreground,
   },
 }));
