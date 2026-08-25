@@ -1,5 +1,7 @@
 import type { DaemonClient } from "@bytetrue/byspace-client/internal/daemon-client";
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { SOURCE_PRESENTATION_BUDGETS } from "../source/presentation";
+import { isWeb } from "@/constants/platform";
 import { LiveFileModel, type LiveFileSession } from "./model";
 
 export function useLiveFile(input: {
@@ -18,7 +20,12 @@ export function useLiveFile(input: {
         return client.subscribeFile(target, onVersion);
       },
       read(target) {
-        return client.readFile(target.cwd, target.path);
+        return client.readFile(
+          target.cwd,
+          target.path,
+          undefined,
+          SOURCE_PRESENTATION_BUDGETS[isWeb ? "web" : "native"].plain,
+        );
       },
     };
   }, [input.client]);
