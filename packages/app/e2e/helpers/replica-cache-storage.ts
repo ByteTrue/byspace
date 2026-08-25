@@ -5,10 +5,16 @@ const STORE_NAME = "key-value";
 const STORAGE_KEY = "@byspace:replica-cache";
 
 export interface ReplicaCacheRecord {
+  version?: number;
   hosts?: Array<{
     timeline?: {
       agentId?: string;
       items?: Array<Record<string, unknown>>;
+      range?: {
+        endSeq?: number;
+        epoch?: string;
+        startSeq?: number;
+      } | null;
     } | null;
   }>;
 }
@@ -34,19 +40,29 @@ async function readStoredValue(input: {
 }): Promise<string | null> {
   const database = await new Promise<IDBDatabase>((resolve, reject) => {
     const request = indexedDB.open(input.databaseName, 1);
+    request.addEventListener("upgradeneeded", () => {
+      if (!request.result.objectStoreNames.contains(input.storeName)) {
+        request.result.createObjectStore(input.storeName);
+      }
+    });
     request.addEventListener("success", () => resolve(request.result));
     request.addEventListener("error", () => reject(request.error));
   });
-  return new Promise((resolve, reject) => {
-    const request = database
-      .transaction(input.storeName, "readonly")
-      .objectStore(input.storeName)
-      .get(input.storageKey);
+  if (!database.objectStoreNames.contains(input.storeName)) {
+    console.log("[readStoredValue] store missing:", Array.from(database.objectStoreNames));
+    database.close();
+    return null;
+  }
+  const result = await new Promise<string | null>((resolve, reject) => {
+    const transaction = database.transaction(input.storeName, "readonly");
+    const request = transaction.objectStore(input.storeName).get(input.storageKey);
     request.addEventListener("success", () =>
       resolve(typeof request.result === "string" ? request.result : null),
     );
     request.addEventListener("error", () => reject(request.error));
   });
+  database.close();
+  return result;
 }
 
 export async function readReplicaCache(page: Page): Promise<ReplicaCacheRecord | null> {

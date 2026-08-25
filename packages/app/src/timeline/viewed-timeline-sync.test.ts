@@ -189,7 +189,7 @@ class TimelineWorld {
   }
 }
 
-test("uses a tail fetch when a live cursor is not authoritative", async () => {
+test("resumes after a cached cursor before its history is authoritative", async () => {
   const world = new TimelineWorld();
   world.setLiveCursor("agent-a", 9);
   world.sync.setConnected(true);
@@ -198,7 +198,12 @@ test("uses a tail fetch when a live cursor is not authoritative", async () => {
   membership.succeed();
 
   const fetch = await world.nextFetch("agent-a");
-  expect(fetch.request).toEqual({ direction: "tail", limit: 40, projection: "projected" });
+  expect(fetch.request).toEqual({
+    direction: "after",
+    cursor: { epoch: "epoch-agent-a", seq: 9 },
+    limit: 40,
+    projection: "projected",
+  });
   fetch.respond({ hasNewer: false });
 });
 
@@ -437,15 +442,15 @@ test("explicit refresh immediately bypasses an in-flight initial catch-up", asyn
   const refreshedCatchUp = await world.nextFetch("agent-a");
   expect(refreshedCatchUp.dedupe).toBe(false);
   refreshedCatchUp.respond({ hasNewer: true, seq: 2 });
-  const refreshedContinuation = await world.nextFetch("agent-a");
-  expect(refreshedContinuation.dedupe).toBe(false);
-  expect(refreshedContinuation.request).toMatchObject({
-    direction: "after",
-    cursor: { epoch: "epoch-agent-a", seq: 2 },
+  const refreshedFallback = await world.nextFetch("agent-a");
+  expect(refreshedFallback.request).toEqual({
+    direction: "tail",
+    limit: 40,
+    projection: "projected",
   });
   staleCatchUp.respond({ hasNewer: false });
   expect(world.sync.getAgentTimelineStatus("agent-a")).toBe("pending");
-  refreshedContinuation.respond({ hasNewer: false, seq: 3 });
+  refreshedFallback.respond({ hasNewer: false, seq: 3 });
 
   world.expectNoPendingMembership();
   await vi.waitFor(() => expect(world.sync.getAgentTimelineStatus("agent-a")).toBe("ready"));

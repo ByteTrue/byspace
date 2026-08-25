@@ -20,9 +20,10 @@ import {
   type AgentStreamPayload,
 } from "./agent-timeline-replica";
 import {
-  planInitialAgentTimelineSync,
   planResumeTimelineSync,
   planTimelineCatchUpAfter,
+  planTimelineResumeFetch,
+  planTimelineTailFetch,
   type ProjectedTimelineFetchPlan,
 } from "./timeline-sync-plan";
 
@@ -75,6 +76,7 @@ export class AgentTimelineSyncOwner {
   private readonly epochVersions = new Map<string, number>();
   private readonly observedEpochs = new Map<string, string>();
   private readonly initializationAgentIds = new Set<string>();
+  private readonly forcedTimelineTailReplacements = new Set<string>();
   private requestSerial = 0;
   private forwardIntentSerial = 0;
   private connectionGeneration = 0;
@@ -94,6 +96,18 @@ export class AgentTimelineSyncOwner {
           lane: "forward",
           intentSerial: this.getViewedForwardIntent(agentId, fetchOptions.intentGeneration),
         }),
+      fetchLatestTail: async (agentId) => {
+        this.forcedTimelineTailReplacements.add(agentId);
+        try {
+          return await this.fetchTimeline(agentId, planTimelineTailFetch(), {
+            force: true,
+            lane: "forward",
+            intentSerial: this.createForwardIntent(),
+          });
+        } finally {
+          this.forcedTimelineTailReplacements.delete(agentId);
+        }
+      },
       reportError: options.reportError,
       schedule: options.schedule,
     });
@@ -126,6 +140,7 @@ export class AgentTimelineSyncOwner {
     this.viewedForwardIntents.clear();
     this.epochVersions.clear();
     this.observedEpochs.clear();
+    this.forcedTimelineTailReplacements.clear();
     this.viewed.setConnected(connected);
   }
 
@@ -156,17 +171,13 @@ export class AgentTimelineSyncOwner {
   }
 
   ensureCurrent(agentId: string): Promise<void> {
-    if (this.hasAuthoritativeHistory(agentId)) return Promise.resolve();
     const cursor = this.readCursor(agentId);
-    const request = planInitialAgentTimelineSync({
-      cursor,
-      hasAuthoritativeHistory: false,
-    });
+    const request = planTimelineResumeFetch(
+      cursor ? { epoch: cursor.epoch, endSeq: cursor.endSeq } : null,
+    );
     const initialization = this.beginInitialization(agentId, request.direction);
     const intentSerial = this.createForwardIntent();
-    void this.fetchForwardUntilCurrent(agentId, request, false, intentSerial).catch(
-      () => undefined,
-    );
+    void this.fetchInitializationPage(agentId, request, intentSerial).catch(() => undefined);
     return initialization;
   }
 
@@ -263,6 +274,7 @@ export class AgentTimelineSyncOwner {
     this.connected = false;
     this.connectionGeneration += 1;
     this.inFlight.clear();
+    this.forcedTimelineTailReplacements.clear();
     for (const agentId of this.initializationAgentIds) {
       const key = getInitKey(this.options.serverId, agentId);
       if (getInitDeferred(key)) {
@@ -275,6 +287,35 @@ export class AgentTimelineSyncOwner {
     this.initializationAgentIds.clear();
     this.viewed.dispose();
     this.replica.dispose();
+  }
+
+  private async fetchInitializationPage(
+    agentId: string,
+    initialRequest: Exclude<ProjectedTimelineFetchPlan, { direction: "before" }>,
+    intentSerial: number,
+  ): Promise<AgentTimelinePage> {
+    let request = initialRequest;
+    let force = false;
+    while (true) {
+      try {
+        return await this.fetchTimeline(agentId, request, {
+          force,
+          lane: "forward",
+          intentSerial,
+        });
+      } catch (error) {
+        if (
+          !(error instanceof TimelineResponseSupersededError) ||
+          this.disposed ||
+          !this.connected ||
+          this.latestForwardIntent.get(agentId) !== intentSerial
+        ) {
+          throw error;
+        }
+        request = planResumeTimelineSync({ cursor: this.readCursor(agentId) });
+        force = true;
+      }
+    }
   }
 
   private async fetchForwardUntilCurrent(
@@ -335,7 +376,12 @@ export class AgentTimelineSyncOwner {
     if (context.lane === "forward") {
       this.lastAppliedForwardIntent.set(agentId, context.forwardIntentSerial);
     }
-    if (this.hasAuthoritativeHistory(agentId)) this.initializationAgentIds.delete(agentId);
+    if (
+      this.hasAuthoritativeHistory(agentId) &&
+      !getInitDeferred(getInitKey(this.options.serverId, agentId))
+    ) {
+      this.initializationAgentIds.delete(agentId);
+    }
     const epochAfter = this.readCursor(agentId)?.epoch;
     if (epochAfter) this.observedEpochs.set(agentId, epochAfter);
     if (epochAfter && epochAfter !== epochBefore) {
@@ -366,6 +412,9 @@ export class AgentTimelineSyncOwner {
       !this.requestStillTargetsReplica(context, currentCursor)
     ) {
       return { ...page, reset: false };
+    }
+    if (page.direction === "tail" && this.forcedTimelineTailReplacements.delete(agentId)) {
+      return { ...page, reset: true };
     }
     return page;
   }

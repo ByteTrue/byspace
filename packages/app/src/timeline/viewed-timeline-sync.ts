@@ -1,6 +1,5 @@
 import type { AgentTimelineCursorState } from "@/stores/session-store";
 import {
-  planInitialAgentTimelineSync,
   planResumeTimelineSync,
   planTimelineCatchUpAfter,
   planTimelineTailFetch,
@@ -245,11 +244,7 @@ export function createViewedTimelineSync(ports: ViewedTimelineSyncPorts): Viewed
     catchUps.set(agentId, { generation, status: "running", request });
     pendingGaps.delete(agentId);
     const cursor = ports.readCursor(agentId);
-    const nextRequest =
-      request ??
-      (ports.hasAuthoritativeHistory(agentId)
-        ? planResumeTimelineSync({ cursor })
-        : planInitialAgentTimelineSync({ cursor, hasAuthoritativeHistory: false }));
+    const nextRequest = request ?? planResumeTimelineSync({ cursor });
     const fallbackToLatestTailOnOverflow =
       request === undefined && nextRequest.direction === "after";
     void fetchUntilCurrent(agentId, generation, nextRequest, {

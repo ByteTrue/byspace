@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { useSessionStore } from "@/stores/session-store";
 import { getInitDeferred, getInitKey } from "@/utils/agent-initialization";
+import type { AssistantMessageItem } from "@/types/stream";
 import type { ProjectedTimelineFetchPlan } from "./timeline-sync-plan";
 import {
   AgentTimelineSyncOwner,
@@ -153,6 +154,24 @@ describe("AgentTimelineSyncOwner", () => {
     world.owner.dispose();
   });
 
+  test("leaves cached resume overflow to the viewed-tail fallback", async () => {
+    const world = new TimelineOwnerWorld();
+    world.setCursor("epoch-a", 1, 1);
+
+    const initialization = world.owner.ensureCurrent(agentId).catch(() => undefined);
+    const resumed = world.take();
+    expect(resumed.request.direction).toBe("after");
+    resumed.resolve(
+      page({ request: resumed.request, startSeq: 2, endSeq: 2, hasOlder: true, hasNewer: true }),
+    );
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(world.pending).toHaveLength(0);
+
+    world.owner.dispose();
+    await initialization;
+  });
+
   test("pages an explicit refresh until the authoritative tail", async () => {
     const world = new TimelineOwnerWorld();
     world.setCursor("epoch-a", 1, 1);
@@ -189,7 +208,7 @@ describe("AgentTimelineSyncOwner", () => {
     world.owner.dispose();
   });
 
-  test("keeps one control intent across pages of a superseded catch-up", async () => {
+  test("does not continue a superseded one-page initialization", async () => {
     const world = new TimelineOwnerWorld();
     world.setLiveCursor("epoch-a", 1, 1);
     let initializationSettled = false;
@@ -197,28 +216,25 @@ describe("AgentTimelineSyncOwner", () => {
       initializationSettled = true;
       return undefined;
     });
-    const olderFirstRequest = world.take();
+    const initialRequest = world.take();
     const currentRefresh = world.owner.refreshAgent(agentId);
     const currentRequest = world.take();
 
-    olderFirstRequest.resolve(
+    initialRequest.resolve(
       page({
-        request: olderFirstRequest.request,
+        request: initialRequest.request,
         startSeq: 2,
         endSeq: 2,
         hasNewer: true,
       }),
     );
     await new Promise((resolve) => setTimeout(resolve, 0));
-    const olderContinuation = world.take();
+    expect(world.pending).toHaveLength(0);
+
     currentRequest.resolve(page({ request: currentRequest.request, startSeq: 2, endSeq: 2 }));
     await currentRefresh;
-    await Promise.resolve();
-    expect(initializationSettled).toBe(true);
     await initialization;
-
-    olderContinuation.reject(new Error("superseded continuation failed"));
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(initializationSettled).toBe(true);
     expect(
       useSessionStore.getState().sessions[serverId]?.agentAuthoritativeHistoryApplied.get(agentId),
     ).toBe(true);
@@ -755,6 +771,75 @@ describe("AgentTimelineSyncOwner", () => {
         endSeq: 1,
       },
     );
+    world.owner.dispose();
+  });
+  test("forces tail replacement when viewed timeline catch-up overflows", async () => {
+    const world = new TimelineOwnerWorld();
+    world.setCursor("epoch-a", 1, 10);
+    const initialItem: AssistantMessageItem = {
+      kind: "assistant_message",
+      id: "item-1",
+      text: "initial-tail-item",
+      timestamp: new Date(1000),
+    };
+    useSessionStore.getState().setAgentStreamState(serverId, agentId, {
+      tail: [initialItem],
+    });
+
+    world.owner.uiBridge.replaceVisibleAgentIds("source-1", [agentId]);
+
+    const resumeRequest = world.take();
+    expect(resumeRequest.request).toMatchObject({
+      direction: "after",
+      cursor: { epoch: "epoch-a", seq: 10 },
+    });
+
+    resumeRequest.resolve(
+      page({
+        request: resumeRequest.request,
+        startSeq: 11,
+        endSeq: 60,
+        hasOlder: true,
+        hasNewer: true,
+        text: "overflow-page-items",
+      }),
+    );
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const fallbackTailRequest = world.take();
+    expect(fallbackTailRequest.request).toMatchObject({
+      direction: "tail",
+    });
+
+    fallbackTailRequest.resolve(
+      page({
+        request: fallbackTailRequest.request,
+        startSeq: 100,
+        endSeq: 120,
+        hasOlder: true,
+        hasNewer: false,
+        text: "latest-tail-items",
+        reset: false,
+      }),
+    );
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const session = useSessionStore.getState().sessions[serverId];
+    expect(session?.agentTimelineCursor.get(agentId)).toEqual({
+      epoch: "epoch-a",
+      startSeq: 100,
+      endSeq: 120,
+    });
+
+    const currentTail = session?.agentStreamTail.get(agentId) ?? [];
+    expect(currentTail).toHaveLength(1);
+    const firstItem = currentTail[0];
+    expect(firstItem?.kind).toBe("assistant_message");
+    if (firstItem?.kind === "assistant_message") {
+      expect(firstItem.text).toBe("latest-tail-items");
+    }
     world.owner.dispose();
   });
 });

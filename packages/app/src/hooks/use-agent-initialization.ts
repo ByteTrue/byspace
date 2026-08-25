@@ -11,7 +11,7 @@ import {
   rejectInitDeferred,
 } from "@/utils/agent-initialization";
 import { getHostRuntimeStore, type HostRuntimeStore } from "@/runtime/host-runtime";
-import { planTimelineTailFetch } from "@/timeline/timeline-sync-plan";
+import { planTimelineResumeFetch } from "@/timeline/timeline-sync-plan";
 import { i18n } from "@/i18n/i18next";
 
 export type SetAgentInitializing = (agentId: string, initializing: boolean) => void;
@@ -51,10 +51,10 @@ export function ensureAgentIsInitialized(input: EnsureAgentIsInitializedInput): 
     return existing.promise;
   }
 
-  const session = useSessionStore.getState().sessions[serverId];
-  const timeline = selectAgentTimelineState(session, agentId);
-  if (timeline.status === "synced") return Promise.resolve();
-  const timelineRequest = planTimelineTailFetch();
+  const timeline = selectAgentTimelineState(useSessionStore.getState().sessions[serverId], agentId);
+  const timelineRequest = planTimelineResumeFetch(
+    timeline.status === "synced" ? timeline.range : null,
+  );
 
   if (!client) {
     const deferred = createInitDeferred(key, timelineRequest.direction);

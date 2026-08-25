@@ -149,6 +149,8 @@ const StoredProjectCheckoutSchema = z.union([
 ]);
 
 const StoredProjectPlacementSchema = z.strictObject({
+  projectId: z.string().optional(),
+  projectGroupingKey: z.string().optional(),
   projectKey: z.string(),
   projectName: z.string(),
   workspaceName: z.string().nullable().optional(),
@@ -471,7 +473,17 @@ function deserializeTimelineItem(item: StoredTimelineItem): StreamItem {
 }
 
 function serializeProjectPlacement(agent: Agent): StoredAgent["projectPlacement"] {
-  return agent.projectPlacement ?? null;
+  if (!agent.projectPlacement) return null;
+  return {
+    ...(agent.projectPlacement.projectId ? { projectId: agent.projectPlacement.projectId } : {}),
+    ...(agent.projectPlacement.projectGroupingKey
+      ? { projectGroupingKey: agent.projectPlacement.projectGroupingKey }
+      : {}),
+    projectKey: agent.projectPlacement.projectKey,
+    projectName: agent.projectPlacement.projectName,
+    workspaceName: agent.projectPlacement.workspaceName ?? null,
+    checkout: agent.projectPlacement.checkout,
+  };
 }
 
 function serializeAgent(agent: Agent): StoredAgent {
@@ -550,7 +562,7 @@ function serializeWorkspace(workspace: WorkspaceDescriptor): StoredWorkspace {
     projectCustomIconRevision: workspace.projectCustomIconRevision ?? null,
     projectRootPath: workspace.projectRootPath,
     workspaceDirectory: workspace.workspaceDirectory,
-    worktreeSlug: workspace.worktreeSlug,
+    ...(workspace.worktreeSlug ? { worktreeSlug: workspace.worktreeSlug } : {}),
     projectKind: workspace.projectKind,
     workspaceKind: workspace.workspaceKind,
     name: workspace.name,
@@ -559,8 +571,8 @@ function serializeWorkspace(workspace: WorkspaceDescriptor): StoredWorkspace {
     status: workspace.status,
     statusEnteredAt: workspace.statusEnteredAt?.toISOString() ?? null,
     activityAt: null,
-    archivingAt: workspace.archivingAt,
-    diffStat: workspace.diffStat,
+    archivingAt: workspace.archivingAt ?? null,
+    diffStat: workspace.diffStat ?? null,
     scripts: workspace.scripts.map((script) => ({
       scriptName: script.scriptName,
       type: script.type,
@@ -576,7 +588,7 @@ function serializeWorkspace(workspace: WorkspaceDescriptor): StoredWorkspace {
     })),
     gitRuntime: workspace.gitRuntime,
     githubRuntime: workspace.githubRuntime,
-    forge: workspace.forge,
+    ...(workspace.forge ? { forge: workspace.forge } : {}),
   };
 }
 
@@ -585,9 +597,9 @@ function serializeProject(project: ProjectDescriptor): StoredProject {
     projectId: project.projectId,
     ...(project.projectKey ? { projectKey: project.projectKey } : {}),
     projectDisplayName: project.projectDisplayName,
-    projectCustomName: project.projectCustomName,
+    projectCustomName: project.projectCustomName ?? null,
     projectCustomIconRevision: project.projectCustomIconRevision ?? null,
-    projectIconRevision: (project as { projectIconRevision?: string }).projectIconRevision,
+    ...(project.projectIconRevision ? { projectIconRevision: project.projectIconRevision } : {}),
     projectRootPath: project.projectRootPath,
     projectKind: project.projectKind,
   };

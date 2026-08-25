@@ -59,7 +59,7 @@ describe("ensureAgentIsInitialized", () => {
     expect(runtime.ensured).toEqual([{ serverId, agentId }]);
   });
 
-  it("does nothing when authoritative history is already present", async () => {
+  it("delegates authoritative history catch-up to the host timeline owner", async () => {
     const client = new FakeDaemonClient();
     const runtime = new FakeTimelineRuntime();
     useSessionStore.getState().initializeSession(serverId, client as never);
@@ -73,10 +73,10 @@ describe("ensureAgentIsInitialized", () => {
       setAgentInitializing: bindSetAgentInitializing(),
     });
 
-    expect(runtime.ensured).toEqual([]);
+    expect(runtime.ensured).toEqual([{ serverId, agentId }]);
   });
 
-  it("does nothing when the restored canonical replica range is already present", async () => {
+  it("delegates restored canonical replica catch-up to the host timeline owner", async () => {
     const client = new FakeDaemonClient();
     const runtime = new FakeTimelineRuntime();
     useSessionStore.getState().restoreSessionReplica(serverId, {
@@ -108,7 +108,7 @@ describe("ensureAgentIsInitialized", () => {
       setAgentInitializing: bindSetAgentInitializing(),
     });
 
-    expect(runtime.ensured).toEqual([]);
+    expect(runtime.ensured).toEqual([{ serverId, agentId }]);
   });
 
   it("rejects without a connected client", async () => {

@@ -1,6 +1,8 @@
 import { useLayoutEffect } from "react";
 import type { ViewedTimelineUiBridge } from "./viewed-timeline-sync";
 
+const sourceOwners = new WeakMap<ViewedTimelineUiBridge, Map<string, symbol>>();
+
 export function useViewedTimelineSource(
   sync: ViewedTimelineUiBridge | null,
   sourceId: string | null | undefined,
@@ -8,8 +10,19 @@ export function useViewedTimelineSource(
 ): void {
   useLayoutEffect(() => {
     if (!sourceId || !sync) return;
-    // Layout cleanup precedes replacement setup, so a same-key source cannot erase its remount.
+    const owners = sourceOwners.get(sync) ?? new Map<string, symbol>();
+    const owner = Symbol("viewed-timeline-source");
+    owners.set(sourceId, owner);
+    sourceOwners.set(sync, owners);
     sync.replaceVisibleAgentIds(sourceId, agentIds);
-    return () => sync.replaceVisibleAgentIds(sourceId, []);
+    return () => {
+      queueMicrotask(() => {
+        const currentOwners = sourceOwners.get(sync);
+        if (currentOwners?.get(sourceId) !== owner) return;
+        currentOwners.delete(sourceId);
+        if (currentOwners.size === 0) sourceOwners.delete(sync);
+        sync.replaceVisibleAgentIds(sourceId, []);
+      });
+    };
   }, [agentIds, sourceId, sync]);
 }
