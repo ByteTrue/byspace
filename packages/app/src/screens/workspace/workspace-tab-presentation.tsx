@@ -7,6 +7,7 @@ import invariant from "tiny-invariant";
 import { StatusRing } from "@/components/status-ring";
 import { ensurePanelsRegistered } from "@/panels/register-panels";
 import { getPanelRegistration } from "@/panels/panel-registry";
+import { usePanelInstanceAttributes } from "@/panels/panel-instance-attributes";
 import type { WorkspaceTabDescriptor } from "@/screens/workspace/workspace-tabs-types";
 import type { SidebarStateBucket } from "@/utils/sidebar-agent-state";
 import { isEmphasizedStatusDotBucket } from "@/utils/status-dot-color";
@@ -19,6 +20,7 @@ export interface WorkspaceTabPresentation {
   kind: WorkspaceTabDescriptor["kind"];
   label: string;
   subtitle: string;
+  modified: boolean;
   titleState: "ready" | "loading";
   icon: React.ComponentType<{ size: number; color: string }>;
   statusBucket: SidebarStateBucket | null;
@@ -74,6 +76,7 @@ function WorkspaceTabPresentationResolverInner({
     serverId,
     workspaceId,
   });
+  const attributes = usePanelInstanceAttributes({ serverId, workspaceId, tabId: tab.tabId });
 
   const presentation = useMemo(
     () => ({
@@ -81,6 +84,7 @@ function WorkspaceTabPresentationResolverInner({
       kind: tab.kind,
       label: descriptor.label,
       subtitle: descriptor.subtitle,
+      modified: attributes.modified,
       titleState: descriptor.titleState,
       icon: descriptor.icon,
       statusBucket: descriptor.statusBucket,
@@ -93,6 +97,7 @@ function WorkspaceTabPresentationResolverInner({
       descriptor.titleState,
       tab.key,
       tab.kind,
+      attributes.modified,
     ],
   );
 

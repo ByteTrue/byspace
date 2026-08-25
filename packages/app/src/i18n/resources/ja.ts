@@ -1563,6 +1563,7 @@ export const ja: TranslationResources = {
       label: "ファイル",
       subtitle: "ワークスペースのファイル",
       tooltip: "ワークスペースのファイルを参照",
+      chooseFile: "ファイルを選択",
     },
     pullRequest: {
       label: "プルリクエスト",

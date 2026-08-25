@@ -16,6 +16,7 @@ export interface SubagentRowPresentationData {
   kind: "agent";
   label: string;
   subtitle: string;
+  modified: boolean;
   titleState: "ready" | "loading";
   statusBucket: SidebarStateBucket | null;
 }
@@ -34,6 +35,7 @@ export function buildSubagentRowPresentationData(row: SubagentRow): SubagentRowP
     kind: "agent",
     label: label ?? "",
     subtitle: subtitle ?? "",
+    modified: false,
     titleState: label ? "ready" : "loading",
     statusBucket: deriveSidebarStateBucket({
       status,
