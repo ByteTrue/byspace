@@ -1342,7 +1342,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   noTargetText: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.sm,
+    fontSize: theme.fontSize.base,
   },
   body: {
     padding: theme.spacing[4],
@@ -1364,7 +1364,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   projectTitle: {
     color: theme.colors.foreground,
-    fontSize: theme.fontSize.lg,
+    fontSize: theme.fontSize.base,
     fontWeight: theme.fontWeight.medium,
     flexShrink: 1,
   },
@@ -1381,7 +1381,7 @@ const styles = StyleSheet.create((theme) => ({
   nameEditorInput: {
     flex: 1,
     color: theme.colors.foreground,
-    fontSize: theme.fontSize.lg,
+    fontSize: theme.fontSize.base,
     fontWeight: theme.fontWeight.medium,
     paddingVertical: theme.spacing[1],
     paddingHorizontal: theme.spacing[2],
@@ -1412,7 +1412,7 @@ const styles = StyleSheet.create((theme) => ({
     justifyContent: "center",
   },
   titleIconFallbackText: {
-    fontSize: theme.fontSize.sm,
+    fontSize: theme.fontSize.base,
     fontWeight: theme.fontWeight.medium,
   },
   iconColor: {
@@ -1430,7 +1430,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   hostName: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.sm,
+    fontSize: theme.fontSize.base,
     flexShrink: 1,
     minWidth: 0,
   },
@@ -1445,7 +1445,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   emptyScripts: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.sm,
+    fontSize: theme.fontSize.base,
   },
   scriptRow: {
     flexDirection: "row",
@@ -1488,7 +1488,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   modalInput: {
     color: theme.colors.foreground,
-    fontSize: theme.fontSize.sm,
+    fontSize: theme.fontSize.base,
     paddingVertical: theme.spacing[2],
     paddingHorizontal: theme.spacing[3],
     borderRadius: theme.borderRadius.md,
@@ -1498,7 +1498,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   modalMultilineInput: {
     color: theme.colors.foreground,
-    fontSize: theme.fontSize.sm,
+    fontSize: theme.fontSize.base,
     paddingVertical: theme.spacing[2],
     paddingHorizontal: theme.spacing[3],
     borderRadius: theme.borderRadius.md,
@@ -1530,7 +1530,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   serviceToggleLabel: {
     color: theme.colors.foreground,
-    fontSize: theme.fontSize.sm,
+    fontSize: theme.fontSize.base,
     fontWeight: theme.fontWeight.medium,
   },
   modalHint: {

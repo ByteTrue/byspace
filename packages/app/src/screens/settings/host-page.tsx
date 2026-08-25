@@ -1557,12 +1557,12 @@ const styles = StyleSheet.create((theme) => ({
     marginBottom: theme.spacing[2],
   },
   connectionLatency: {
-    fontSize: theme.fontSize.sm,
+    fontSize: theme.fontSize.base,
     marginRight: theme.spacing[2],
   },
   confirmText: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.sm,
+    fontSize: theme.fontSize.base,
   },
   confirmActions: {
     flexDirection: "row",
@@ -1585,7 +1585,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   appearanceLabel: {
     color: theme.colors.foreground,
-    fontSize: theme.fontSize.sm,
+    fontSize: theme.fontSize.base,
   },
   appearanceNameValue: {
     flexDirection: "row",
@@ -1597,7 +1597,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   appearanceNameText: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.sm,
+    fontSize: theme.fontSize.base,
     flexShrink: 1,
   },
   appearanceTrigger: {
@@ -1609,7 +1609,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   appearanceValue: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.sm,
+    fontSize: theme.fontSize.base,
   },
   appearanceSwatch: {
     width: theme.iconSize.md,
@@ -1631,7 +1631,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   appearancePreviewTitle: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.sm,
+    fontSize: theme.fontSize.base,
     flexShrink: 1,
   },
   emptyCard: {
@@ -1640,7 +1640,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   emptyText: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.sm,
+    fontSize: theme.fontSize.base,
   },
 }));
 

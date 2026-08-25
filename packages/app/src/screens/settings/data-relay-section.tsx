@@ -624,7 +624,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   helper: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.sm,
+    fontSize: theme.fontSize.base,
     marginBottom: theme.spacing[3],
   },
   modeTabs: {
@@ -648,7 +648,7 @@ const styles = StyleSheet.create((theme) => ({
     backgroundColor: theme.colors.surface3,
   },
   modeTabText: {
-    fontSize: theme.fontSize.sm,
+    fontSize: theme.fontSize.base,
     color: theme.colors.foregroundMuted,
     fontWeight: theme.fontWeight.medium,
   },
@@ -667,7 +667,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   label: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.sm,
+    fontSize: theme.fontSize.base,
     fontWeight: theme.fontWeight.medium,
   },
   labelWithAction: {
@@ -697,7 +697,7 @@ const styles = StyleSheet.create((theme) => ({
     borderWidth: 1,
     borderColor: theme.colors.border,
     color: theme.colors.foreground,
-    fontSize: theme.fontSize.sm,
+    fontSize: theme.fontSize.base,
   },
   inputFlex: {
     flex: 1,
@@ -729,7 +729,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   switchTitle: {
     color: theme.colors.foreground,
-    fontSize: theme.fontSize.sm,
+    fontSize: theme.fontSize.base,
     fontWeight: theme.fontWeight.medium,
   },
   switchHint: {
@@ -739,7 +739,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   error: {
     color: theme.colors.destructive,
-    fontSize: theme.fontSize.sm,
+    fontSize: theme.fontSize.base,
     marginBottom: theme.spacing[2],
   },
   actions: {

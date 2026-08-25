@@ -2502,12 +2502,12 @@ const styles = StyleSheet.create((theme) => ({
     paddingRight: theme.spacing[4],
   },
   composerTitle: {
-    fontSize: theme.fontSize.xl,
+    fontSize: theme.fontSize["2xl"],
     fontWeight: theme.fontWeight.normal,
     color: theme.colors.foreground,
   },
   errorText: {
-    fontSize: theme.fontSize.sm,
+    fontSize: theme.fontSize.base,
     color: theme.colors.destructive,
     lineHeight: 20,
   },
@@ -2570,12 +2570,12 @@ const styles = StyleSheet.create((theme) => ({
   },
   badgeText: {
     minWidth: 0,
-    fontSize: theme.fontSize.sm,
+    fontSize: theme.fontSize.base,
     color: theme.colors.foregroundMuted,
     flexShrink: 1,
   },
   tooltipText: {
-    fontSize: theme.fontSize.sm,
+    fontSize: theme.fontSize.base,
     color: theme.colors.popoverForeground,
   },
   chevronContainer: {

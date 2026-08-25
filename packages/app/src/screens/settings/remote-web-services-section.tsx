@@ -612,7 +612,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   helper: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.sm,
+    fontSize: theme.fontSize.base,
     marginBottom: theme.spacing[2],
   },
   presetsContainer: {
@@ -647,7 +647,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   label: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.sm,
+    fontSize: theme.fontSize.base,
     fontWeight: theme.fontWeight.medium,
   },
   input: {
@@ -658,7 +658,7 @@ const styles = StyleSheet.create((theme) => ({
     borderWidth: 1,
     borderColor: theme.colors.border,
     color: theme.colors.foreground,
-    fontSize: theme.fontSize.sm,
+    fontSize: theme.fontSize.base,
   },
   selector: {
     minHeight: 44,
@@ -672,12 +672,12 @@ const styles = StyleSheet.create((theme) => ({
   selectorValue: {
     flex: 1,
     color: theme.colors.foreground,
-    fontSize: theme.fontSize.sm,
+    fontSize: theme.fontSize.base,
   },
   selectorPlaceholder: {
     flex: 1,
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.sm,
+    fontSize: theme.fontSize.base,
   },
   previewContainer: {
     backgroundColor: theme.colors.surface2,
@@ -692,12 +692,12 @@ const styles = StyleSheet.create((theme) => ({
   },
   previewUrl: {
     color: theme.colors.foreground,
-    fontSize: theme.fontSize.sm,
+    fontSize: theme.fontSize.base,
     fontFamily: theme.fontFamily.mono,
   },
   error: {
     color: theme.colors.destructive,
-    fontSize: theme.fontSize.sm,
+    fontSize: theme.fontSize.base,
     marginBottom: theme.spacing[2],
   },
   actions: {
