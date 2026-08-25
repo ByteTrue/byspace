@@ -3,6 +3,7 @@ import { Pressable, Text, View, type PressableStateCallbackType } from "react-na
 import { useQueryClient } from "@tanstack/react-query";
 import { ChevronDown, Download, GitBranch } from "lucide-react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useTranslation } from "react-i18next";
 import type { Theme } from "@/styles/theme";
 import { Combobox, ComboboxItem, type ComboboxProps } from "@/components/ui/combobox";
@@ -110,19 +111,28 @@ export function BranchSwitcher({
 
   return (
     <View ref={anchorRef} collapsable={false} style={styles.anchor}>
-      <Pressable
-        testID={testID}
-        onPress={handleOpen}
-        style={triggerStyle}
-        accessibilityRole="button"
-        accessibilityLabel={t("branchSwitcher.currentBranch", { branchName: currentBranchName })}
-      >
-        <ThemedGitBranch size={14} uniProps={foregroundMutedIconColorMapping} />
-        <Text style={styles.branchLabel} numberOfLines={1}>
-          {currentBranchName}
-        </Text>
-        <ThemedChevronDown size={12} uniProps={foregroundMutedIconColorMapping} />
-      </Pressable>
+      <Tooltip delayDuration={300} enabledOnDesktop enabledOnMobile={false}>
+        <TooltipTrigger asChild>
+          <Pressable
+            testID={testID}
+            onPress={handleOpen}
+            style={triggerStyle}
+            accessibilityRole="button"
+            accessibilityLabel={t("branchSwitcher.currentBranch", {
+              branchName: currentBranchName,
+            })}
+          >
+            <ThemedGitBranch size={14} uniProps={foregroundMutedIconColorMapping} />
+            <Text style={styles.branchLabel} numberOfLines={1}>
+              {currentBranchName}
+            </Text>
+            <ThemedChevronDown size={12} uniProps={foregroundMutedIconColorMapping} />
+          </Pressable>
+        </TooltipTrigger>
+        <TooltipContent side="bottom">
+          <Text style={styles.tooltipText}>{t("branchSwitcher.triggerTooltip")}</Text>
+        </TooltipContent>
+      </Tooltip>
       <Combobox
         options={branchOptions}
         value={currentBranchName}
@@ -173,5 +183,9 @@ const styles = StyleSheet.create((theme) => ({
     flexDirection: "row",
     alignItems: "center",
     gap: 1,
+  },
+  tooltipText: {
+    color: theme.colors.popoverForeground,
+    fontSize: theme.fontSize.sm,
   },
 }));
