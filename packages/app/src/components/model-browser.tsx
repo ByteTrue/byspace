@@ -1234,7 +1234,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   sectionHeadingText: {
     flex: 1,
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
     fontWeight: theme.fontWeight.normal,
     color: theme.colors.foregroundMuted,
   },
@@ -1288,7 +1288,7 @@ const styles = StyleSheet.create((theme) => ({
     flexShrink: 0,
   },
   browserRowDescription: {
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
     color: theme.colors.foregroundMuted,
     flexShrink: 1,
   },
@@ -1309,7 +1309,7 @@ const styles = StyleSheet.create((theme) => ({
     gap: theme.spacing[1],
   },
   drillDownCount: {
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
     color: theme.colors.foregroundMuted,
   },
   rowStateInline: {
@@ -1345,7 +1345,7 @@ const styles = StyleSheet.create((theme) => ({
     color: theme.colors.foregroundMuted,
   },
   tooltipText: {
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
     color: theme.colors.foreground,
   },
   virtualizedModelList: {

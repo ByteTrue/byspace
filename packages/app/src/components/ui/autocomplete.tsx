@@ -306,12 +306,12 @@ const styles = StyleSheet.create((theme: Theme) => ({
   },
   detailDescription: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
     marginTop: theme.spacing[1],
   },
   detailHint: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
     marginTop: theme.spacing[1],
   },
   container: {
@@ -368,17 +368,17 @@ const styles = StyleSheet.create((theme: Theme) => ({
   },
   itemDetail: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
   },
   itemDescription: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
     marginTop: 2,
   },
   itemDescriptionInline: {
     flex: 1,
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
   },
   emptyItem: {
     paddingHorizontal: theme.spacing[3],

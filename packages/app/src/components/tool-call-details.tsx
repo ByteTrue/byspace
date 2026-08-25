@@ -812,14 +812,14 @@ const styles = StyleSheet.create((theme) => {
     },
     sectionTitle: {
       color: theme.colors.foregroundMuted,
-      fontSize: theme.fontSize.xs,
+      fontSize: theme.fontSize.sm,
       fontWeight: theme.fontWeight.semibold,
       textTransform: "uppercase",
       letterSpacing: 0.5,
     },
     rangeText: {
       color: theme.colors.foregroundMuted,
-      fontSize: theme.fontSize.xs,
+      fontSize: theme.fontSize.sm,
     },
     diffContainer: {
       borderWidth: theme.borderWidth[1],

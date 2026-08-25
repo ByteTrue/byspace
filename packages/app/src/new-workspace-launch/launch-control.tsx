@@ -255,7 +255,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   command: {
     fontFamily: theme.fontFamily.mono,
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
     color: theme.colors.foregroundMuted,
   },
 }));

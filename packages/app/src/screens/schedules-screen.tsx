@@ -410,7 +410,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   errorsBannerText: {
     color: theme.colors.palette.red[300],
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
   },
   filterEmpty: {
     flexGrow: 1,

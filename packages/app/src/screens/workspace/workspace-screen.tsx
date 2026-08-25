@@ -1304,9 +1304,7 @@ function WorkspaceHeaderTitleBar({
         </View>
       ) : (
         <View style={styles.headerTitleTextGroup}>
-          <ScreenTitle testID="workspace-header-title" style={styles.headerTitle}>
-            {title}
-          </ScreenTitle>
+          <ScreenTitle testID="workspace-header-title">{title}</ScreenTitle>
           {showSubtitle ? (
             <Text
               testID="workspace-header-subtitle"
@@ -4135,15 +4133,6 @@ const styles = StyleSheet.create((theme) => ({
     flex: 1,
     minHeight: 0,
   },
-  headerTitle: {
-    fontSize: theme.fontSize.sm,
-    fontWeight: {
-      xs: "400",
-      md: "300",
-    },
-    color: theme.colors.foreground,
-    flexShrink: 1,
-  },
   headerTitleContainer: {
     flex: 1,
     flexShrink: 1,
@@ -4182,7 +4171,7 @@ const styles = StyleSheet.create((theme) => ({
     color: theme.colors.foregroundMuted,
     fontSize: {
       xs: theme.fontSize.sm,
-      md: theme.fontSize.sm,
+      md: theme.fontSize.base,
     },
     flexShrink: 1,
     minWidth: 0,
@@ -4261,7 +4250,7 @@ const styles = StyleSheet.create((theme) => ({
     backgroundColor: theme.colors.surface2,
   },
   newTabTooltipText: {
-    fontSize: theme.fontSize.sm,
+    fontSize: theme.fontSize.base,
     color: theme.colors.popoverForeground,
   },
   newTabTooltipRow: {
@@ -4318,7 +4307,7 @@ const styles = StyleSheet.create((theme) => ({
     minWidth: 0,
     flex: 1,
     color: theme.colors.foreground,
-    fontSize: theme.fontSize.sm,
+    fontSize: theme.fontSize.base,
   },
   mobileTabModifiedIndicator: {
     color: theme.colors.statusWarning,
@@ -4336,7 +4325,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   menuItemHint: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
   },
   headerMenuProfileIconWrapper: {
     width: 16,
@@ -4400,7 +4389,7 @@ const styles = StyleSheet.create((theme) => ({
     flexShrink: 1,
     minWidth: 0,
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.sm,
+    fontSize: theme.fontSize.base,
     fontWeight: theme.fontWeight.normal,
   },
   tabLabelWithCloseButton: {

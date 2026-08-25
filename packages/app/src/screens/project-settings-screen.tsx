@@ -1397,7 +1397,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   nameEditorResetText: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
   },
   titleIcon: {
     width: 28,
@@ -1484,7 +1484,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   modalLabel: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
   },
   modalInput: {
     color: theme.colors.foreground,
@@ -1516,7 +1516,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   fieldError: {
     color: theme.colors.palette.red[300],
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
   },
   serviceToggleRow: {
     flexDirection: "row",
@@ -1535,7 +1535,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   modalHint: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
   },
   placeholderColor: {
     color: theme.colors.foregroundMuted,

@@ -264,14 +264,14 @@ const styles = StyleSheet.create((theme) => ({
   },
   identityText: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
     lineHeight: 16,
     flexShrink: 1,
   },
   itemPressed: { opacity: 0.82 },
   separator: {
     color: theme.colors.foregroundExtraMuted,
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
     lineHeight: 16,
     flexShrink: 0,
   },
@@ -284,39 +284,39 @@ const styles = StyleSheet.create((theme) => ({
   },
   serviceName: {
     color: theme.colors.statusSuccess,
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
     lineHeight: 16,
     flexShrink: 1,
   },
   serviceNameUnhealthy: {
     color: theme.colors.statusDanger,
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
     lineHeight: 16,
     flexShrink: 1,
   },
   prText: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
     lineHeight: 16,
   },
   prTextHovered: {
     color: theme.colors.foreground,
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
     lineHeight: 16,
   },
   checksTextPassed: {
     color: theme.colors.statusSuccess,
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
     lineHeight: 16,
   },
   checksTextFailed: {
     color: theme.colors.statusDanger,
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
     lineHeight: 16,
   },
   checksTextRunning: {
     color: theme.colors.statusWarning,
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
     lineHeight: 16,
   },
 }));

@@ -833,7 +833,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   manualCaption: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
     fontWeight: theme.fontWeight.medium,
   },
   manualRow: {
@@ -918,7 +918,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   rowMeta: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
   },
   rowPreview: {
     color: theme.colors.foregroundMuted,
@@ -927,7 +927,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   rowCwd: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
   },
   statusRow: {
     flexDirection: "row",

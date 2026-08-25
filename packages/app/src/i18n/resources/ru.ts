@@ -1733,8 +1733,8 @@ export const ru: TranslationResources = {
       },
       fonts: {
         title: "Шрифты",
-        interfaceSize: "Размер интерфейса",
-        interfaceSizeAccessibility: "Размер шрифта интерфейса",
+        baseSize: "Базовый размер",
+        baseSizeAccessibility: "Базовый размер шрифта",
         codeSize: "Размер кода",
         codeSizeAccessibility: "Размер шрифта кода",
       },

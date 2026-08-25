@@ -100,7 +100,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   versionLabel: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
     textAlign: "center",
     marginTop: theme.spacing[6],
   },

@@ -178,7 +178,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   labelSubtitle: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
   },
   thumbnail: {
     width: ATTACHMENT_CONTENT_HEIGHT,

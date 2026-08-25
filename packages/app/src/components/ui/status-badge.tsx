@@ -54,7 +54,7 @@ const styles = StyleSheet.create((theme) => ({
     borderColor: theme.colors.palette.red[800],
   },
   pillText: {
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
     fontWeight: theme.fontWeight.normal,
     color: theme.colors.foregroundMuted,
   },

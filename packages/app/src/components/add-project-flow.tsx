@@ -959,14 +959,14 @@ const styles = StyleSheet.create((theme) => ({
     minWidth: 0,
     flexShrink: 1,
     color: theme.colors.foreground,
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
     fontWeight: theme.fontWeight.normal,
   },
   hostContext: {
     minWidth: 0,
     flexShrink: 1,
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
     fontWeight: theme.fontWeight.normal,
   },
   input: {
@@ -995,7 +995,7 @@ const styles = StyleSheet.create((theme) => ({
   iconSlot: { width: 18, alignItems: "center" },
   rowText: { flex: 1, minWidth: 0 },
   rowTitle: { color: theme.colors.foreground, fontSize: theme.fontSize.sm },
-  rowSubtitle: { color: theme.colors.foregroundMuted, fontSize: theme.fontSize.xs, marginTop: 2 },
+  rowSubtitle: { color: theme.colors.foregroundMuted, fontSize: theme.fontSize.sm, marginTop: 2 },
   preview: {
     color: theme.colors.foregroundMuted,
     fontSize: theme.fontSize.sm,
@@ -1010,7 +1010,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   errorText: {
     color: theme.colors.destructive,
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
     paddingHorizontal: theme.spacing[4],
     paddingVertical: theme.spacing[3],
   },
@@ -1032,10 +1032,10 @@ const styles = StyleSheet.create((theme) => ({
   },
   footerKeyText: {
     color: theme.colors.foreground,
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
   },
   footerAction: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
   },
 }));

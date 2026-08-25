@@ -325,7 +325,7 @@ const styles = StyleSheet.create((theme) => ({
     paddingBottom: theme.spacing[1],
   },
   labelText: {
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
     color: theme.colors.foregroundMuted,
   },
   // `border` sits between surface1 and surface2, which put it within a hair of the hover fill and
@@ -354,7 +354,7 @@ const styles = StyleSheet.create((theme) => ({
     gap: theme.spacing[2],
   },
   hintText: {
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
     color: theme.colors.foregroundMuted,
     flexShrink: 1,
   },
@@ -419,7 +419,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   itemDescription: {
     marginTop: 2,
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
     color: theme.colors.foregroundMuted,
   },
   checkSlot: {

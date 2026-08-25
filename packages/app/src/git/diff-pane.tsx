@@ -3396,8 +3396,8 @@ const styles = StyleSheet.create((theme) => ({
     backgroundColor: theme.colors.surface2,
   },
   diffStatusText: {
-    fontSize: theme.fontSize.xs,
-    lineHeight: theme.fontSize.xs * 1.25,
+    fontSize: theme.fontSize.sm,
+    lineHeight: theme.fontSize.sm * 1.25,
     color: theme.colors.foregroundMuted,
   },
   diffStatusIconHidden: {
@@ -3450,7 +3450,7 @@ const styles = StyleSheet.create((theme) => ({
   actionErrorText: {
     paddingHorizontal: theme.spacing[3],
     paddingBottom: theme.spacing[1],
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
     color: theme.colors.destructive,
   },
   forgeSetupCallout: {
@@ -3464,7 +3464,7 @@ const styles = StyleSheet.create((theme) => ({
     backgroundColor: theme.colors.surface1,
   },
   forgeSetupCalloutText: {
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
     color: theme.colors.foregroundMuted,
   },
   diffContainer: {
@@ -3744,7 +3744,7 @@ const styles = StyleSheet.create((theme) => ({
     fontStyle: "italic",
   },
   tooltipText: {
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
     color: theme.colors.foreground,
   },
 }));

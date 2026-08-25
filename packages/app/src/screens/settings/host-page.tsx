@@ -1530,7 +1530,7 @@ const styles = StyleSheet.create((theme) => ({
     borderRadius: theme.borderRadius.full,
   },
   statusText: {
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
     fontWeight: theme.fontWeight.normal,
   },
   badgePill: {
@@ -1546,14 +1546,14 @@ const styles = StyleSheet.create((theme) => ({
     maxWidth: 200,
   },
   badgeText: {
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
     fontWeight: theme.fontWeight.normal,
     color: theme.colors.foregroundMuted,
     flexShrink: 1,
   },
   errorText: {
     color: theme.colors.palette.red[300],
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
     marginBottom: theme.spacing[2],
   },
   connectionLatency: {

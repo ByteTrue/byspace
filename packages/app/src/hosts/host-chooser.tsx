@@ -349,7 +349,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   rowSubtitle: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
   },
   emptyText: {
     color: theme.colors.foregroundMuted,

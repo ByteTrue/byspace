@@ -1689,8 +1689,8 @@ export const zhCN: TranslationResources = {
       },
       fonts: {
         title: "字体",
-        interfaceSize: "界面字号",
-        interfaceSizeAccessibility: "界面字号",
+        baseSize: "基础字号",
+        baseSizeAccessibility: "基础字号",
         codeSize: "代码字号",
         codeSizeAccessibility: "代码字号",
       },

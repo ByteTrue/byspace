@@ -99,7 +99,7 @@ const styles = StyleSheet.create((theme) => ({
     gap: theme.spacing[2],
   },
   sectionTitle: {
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
     fontWeight: theme.fontWeight.medium,
     color: theme.colors.foregroundMuted,
   },
@@ -129,7 +129,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   rowNote: {
     marginTop: 2,
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
     color: theme.colors.foregroundMuted,
   },
   rowShortcut: {

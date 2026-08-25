@@ -1597,7 +1597,7 @@ const permissionStyles = StyleSheet.create((theme) => ({
     gap: theme.spacing[2],
   },
   sectionTitle: {
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
   },
   question: {
     fontSize: theme.fontSize.sm,

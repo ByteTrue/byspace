@@ -602,7 +602,7 @@ export function RemoteWebServicesSection({ host }: { host: HostProfile }) {
 const styles = StyleSheet.create((theme) => ({
   targetHint: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
     marginTop: 2,
   },
   rowActions: {
@@ -620,7 +620,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   presetsLabel: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
     marginBottom: theme.spacing[1.5],
   },
   presetsRow: {
@@ -638,7 +638,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   presetPillText: {
     color: theme.colors.foreground,
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
     fontWeight: theme.fontWeight.medium,
   },
   field: {
@@ -688,7 +688,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   previewLabel: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
   },
   previewUrl: {
     color: theme.colors.foreground,

@@ -1769,8 +1769,8 @@ export const en = {
       },
       fonts: {
         title: "Fonts",
-        interfaceSize: "Interface size",
-        interfaceSizeAccessibility: "Interface font size",
+        baseSize: "Base size",
+        baseSizeAccessibility: "Base font size",
         codeSize: "Code size",
         codeSizeAccessibility: "Code font size",
       },

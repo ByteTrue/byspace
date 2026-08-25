@@ -47,7 +47,7 @@ const styles = StyleSheet.create((theme) => ({
     height: 20,
     lineHeight: 20,
     color: theme.colors.foregroundExtraMuted,
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
     flexShrink: 0,
   },
 }));

@@ -1075,7 +1075,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   statusError: {
     color: theme.colors.destructive,
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
   },
   keyboardContainer: {
     borderTopWidth: 1,

@@ -842,11 +842,11 @@ const sheetStyles = StyleSheet.create((theme) => ({
   },
   descriptionInline: {
     flex: 1,
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
     color: theme.colors.foregroundMuted,
   },
   errorText: {
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
     color: theme.colors.destructive,
   },
   formInput: {
@@ -928,7 +928,7 @@ const sheetStyles = StyleSheet.create((theme) => ({
   },
   footerMeta: {
     flex: 1,
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
     color: theme.colors.foregroundMuted,
   },
   compactFooterMeta: {

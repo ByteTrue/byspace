@@ -144,7 +144,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   detailsLabel: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
     fontWeight: theme.fontWeight.medium,
   },
   detailsSurface: {

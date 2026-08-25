@@ -135,7 +135,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   status: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
   },
   progressBar: {
     height: 3,

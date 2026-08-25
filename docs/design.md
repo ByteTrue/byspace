@@ -28,11 +28,13 @@ Before adding a new component, read `components/ui/`. The primitive usually exis
 
 ## 3. Hierarchy
 
-Hierarchy is conveyed through weight and color, not size. Most interface text is `fontSize.sm`; compact metadata and hints use `fontSize.xs`. The distinction between a row's primary line and its secondary line is `foreground` versus `foregroundMuted`.
+Hierarchy is conveyed through weight and color, not size. Most interface text is `fontSize.base`; compact metadata and hints use `fontSize.sm`. The distinction between a row's primary line and its secondary line is `foreground` versus `foregroundMuted`.
+
+The authored ramp uses a 14px base. New native installs default to 15px; web and desktop default to 14px. The Appearance **Base size** setting is the rendered `fontSize.base` value and scales the rest of the UI ramp proportionally. Code size remains independent.
 
 Weight has three tiers, applied by role:
 
-- **Screen titles** — the title at the top of a screen — use `<ScreenTitle>` (`packages/app/src/components/headers/screen-title.tsx`), which renders `fontSize.base` at weight `400` on compact and `300` on desktop. Top-of-screen titles are lighter on desktop, not heavier. The workspace header overrides the size to `fontSize.sm` so its title, project name, tabs, pane chrome, conversation text, and composer share the desktop working-surface scale (`packages/app/src/screens/workspace/workspace-screen.tsx`).
+- **Screen titles** — the title in app chrome — use `<ScreenTitle>` (`packages/app/src/components/headers/screen-title.tsx`), which renders `fontSize.base` at weight `400` on compact and `300` on desktop. The New workspace hero is the only larger product title; it uses `fontSize["2xl"]` (`packages/app/src/screens/new-workspace-screen.tsx`).
 - **Structural labels** use `fontWeight.medium`. This applies to section labels above a stack of rows (`packages/app/src/components/agent-list.tsx`, `packages/app/src/components/keyboard-shortcuts-dialog.tsx`), form field labels above an input inside a modal (`packages/app/src/components/add-host-modal.tsx`, `packages/app/src/components/pair-link-modal.tsx`), modal titles (`packages/app/src/components/adaptive-modal-sheet.tsx`), pane titles (`packages/app/src/git/diff-pane.tsx`), and settings section headings (`packages/app/src/screens/settings/settings-section.tsx`). Structural labels name a surface or a group of content.
 - **Content** uses `fontWeight.normal`. This applies to settings rows (`packages/app/src/styles/settings.ts`), sidebar primary list-item titles (`packages/app/src/components/sidebar-workspace-list.tsx:2680-2686`, `packages/app/src/components/agent-list.tsx:572-578`), `<Button>` text (`packages/app/src/components/ui/button.tsx:80-84`), `<StatusBadge>` text (`packages/app/src/components/ui/status-badge.tsx:56-60`), and `<SidebarCallout>` titles (`packages/app/src/components/sidebar-callout.tsx:175-180`).
 

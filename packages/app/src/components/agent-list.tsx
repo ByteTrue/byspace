@@ -276,8 +276,8 @@ function SessionRow({
   );
 
   const archivedIcon = useMemo(
-    () => <Archive size={theme.fontSize.xs} color={theme.colors.foregroundMuted} />,
-    [theme.fontSize.xs, theme.colors.foregroundMuted],
+    () => <Archive size={theme.fontSize.sm} color={theme.colors.foregroundMuted} />,
+    [theme.fontSize.sm, theme.colors.foregroundMuted],
   );
   const showDesktopAttention =
     !isMobile && showAttentionIndicator && Boolean(agent.requiresAttention);
@@ -759,7 +759,7 @@ const styles = StyleSheet.create((theme) => ({
     backgroundColor: "rgba(239, 68, 68, 0.14)",
   },
   badgeText: {
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
     fontWeight: theme.fontWeight.medium,
     color: theme.colors.foregroundMuted,
   },

@@ -837,7 +837,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   hostLabel: {
     flexShrink: 1,
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
     lineHeight: 14,
     color: theme.colors.foregroundMuted,
   },

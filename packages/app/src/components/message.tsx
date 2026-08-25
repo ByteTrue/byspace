@@ -183,7 +183,7 @@ let webToolCallShimmerRegistered = false;
 const SCROLL_EDGE_EPSILON = 0.5;
 
 // Font size for stream metadata (timestamps, durations, live elapsed timer).
-// Lives between theme.fontSize.xs (12) and theme.fontSize.sm (14); no token.
+// Lives between theme.fontSize.sm (12) and theme.fontSize.base (14); no token.
 export const STREAM_METADATA_FONT_SIZE = 13;
 type ScrollAxis = "x" | "y";
 
@@ -1902,7 +1902,7 @@ const activityLogStylesheet = StyleSheet.create((theme) => ({
   },
   detailsText: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
     marginRight: theme.spacing[1],
   },
   metadataContainer: {

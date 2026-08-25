@@ -106,7 +106,7 @@ export function resolveControlInteractionStyles(
 }
 
 export function createControlGeometry(theme: Theme) {
-  const fieldTextSmLineHeight = fieldLineHeight(theme.fontSize.sm);
+  const fieldTextSmLineHeight = fieldLineHeight(theme.fontSize.base);
   const fieldTextMdLineHeight = fieldLineHeight(theme.fontSize.base);
   const fieldControlSm = {
     minHeight: CONTROL_HEIGHTS.compact,
@@ -121,7 +121,7 @@ export function createControlGeometry(theme: Theme) {
     borderRadius: theme.borderRadius.lg,
   };
   const fieldTextSm = {
-    fontSize: theme.fontSize.sm,
+    fontSize: theme.fontSize.base,
     lineHeight: fieldTextSmLineHeight,
   };
   const fieldTextMd = {
@@ -157,10 +157,10 @@ export function createControlGeometry(theme: Theme) {
       borderRadius: theme.borderRadius.xl,
     },
     buttonText: {
-      fontSize: theme.fontSize.sm,
+      fontSize: theme.fontSize.base,
     },
     buttonTextXs: {
-      fontSize: theme.fontSize.xs,
+      fontSize: theme.fontSize.sm,
     },
     formTextInputSm: {
       ...fieldControlSm,
@@ -222,7 +222,7 @@ export function createControlGeometry(theme: Theme) {
       borderRadius: nestedRadius(segmentedContainerMdRadius, SEGMENTED_FIELD_INSET),
     },
     segmentedLabelSm: {
-      fontSize: theme.fontSize.sm,
+      fontSize: theme.fontSize.base,
     },
     segmentedLabelMd: {
       fontSize: theme.fontSize.base,

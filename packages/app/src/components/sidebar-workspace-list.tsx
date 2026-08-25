@@ -383,7 +383,7 @@ const prBadgeStyles = StyleSheet.create((theme) => ({
     opacity: 0.82,
   },
   text: {
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
     fontWeight: theme.fontWeight.normal,
     lineHeight: 14,
     color: theme.colors.foregroundMuted,
@@ -2331,7 +2331,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   projectAttentionSummaryText: {
     color: theme.colors.statusWarning,
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
     fontWeight: theme.fontWeight.medium,
   },
   projectActionButton: {
@@ -2348,7 +2348,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   projectActionButtonText: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
   },
   projectIconActionButton: {
     width: 24,
@@ -2489,7 +2489,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   workspaceArchivingText: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
     fontWeight: "600",
   },
   workspaceBranchText: {
@@ -2515,7 +2515,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   workspaceCreatingText: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
     flexShrink: 0,
   },
   statusDotNeedsInput: {

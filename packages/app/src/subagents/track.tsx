@@ -352,7 +352,7 @@ const styles = StyleSheet.create((theme) => ({
   headerLabel: {
     flexShrink: 1,
     minWidth: 0,
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
     color: theme.colors.foregroundMuted,
   },
   scroll: {
@@ -387,7 +387,7 @@ const styles = StyleSheet.create((theme) => ({
     flexShrink: 1,
     minWidth: 0,
     maxWidth: "45%",
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
     color: theme.colors.foregroundMuted,
   },
   actionClusterVisible: {
@@ -408,7 +408,7 @@ const styles = StyleSheet.create((theme) => ({
     justifyContent: "center",
   },
   tooltipText: {
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
     color: theme.colors.foreground,
   },
 }));

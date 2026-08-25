@@ -77,7 +77,7 @@ const styles = StyleSheet.create((theme) => ({
     gap: theme.spacing[1],
   },
   shortSha: {
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
     fontFamily: theme.fontFamily.mono,
     color: theme.colors.foregroundMuted,
     width: 70,
@@ -91,7 +91,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   timestamp: {
     flexShrink: 0,
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
     color: theme.colors.foregroundMuted,
   },
   caret: {

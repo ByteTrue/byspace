@@ -246,12 +246,12 @@ const styles = StyleSheet.create((theme) => ({
   },
   version: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
     flexShrink: 0,
   },
   description: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
   },
   installLink: {
     alignSelf: "flex-start",
@@ -262,7 +262,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   installLinkText: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
   },
   actionButton: {
     width: 92,

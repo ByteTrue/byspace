@@ -531,7 +531,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   errorText: {
     color: theme.colors.palette.red[300],
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
     marginTop: theme.spacing[1],
   },
   trailingControls: {

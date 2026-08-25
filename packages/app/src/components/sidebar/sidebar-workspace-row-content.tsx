@@ -363,12 +363,12 @@ export const sidebarWorkspaceRowStyles = StyleSheet.create((theme) => ({
   },
   agentSummaryAttentionText: {
     color: theme.colors.statusWarning,
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
     fontWeight: theme.fontWeight.medium,
   },
   agentSummaryWorkingText: {
     color: theme.colors.statusSuccess,
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
     fontWeight: theme.fontWeight.medium,
   },
   shortcutBadge: {
@@ -385,7 +385,7 @@ export const sidebarWorkspaceRowStyles = StyleSheet.create((theme) => ({
   },
   shortcutBadgeText: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
     fontWeight: theme.fontWeight.medium,
     lineHeight: 14,
   },

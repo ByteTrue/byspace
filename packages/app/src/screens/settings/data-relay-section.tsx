@@ -618,7 +618,7 @@ const styles = StyleSheet.create((theme) => ({
     backgroundColor: "rgba(168, 85, 247, 0.15)",
   },
   badgeLabel: {
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
     color: theme.colors.foreground,
     fontWeight: theme.fontWeight.medium,
   },
@@ -657,7 +657,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   modeHint: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
     marginBottom: theme.spacing[3],
     lineHeight: 18,
   },
@@ -681,13 +681,13 @@ const styles = StyleSheet.create((theme) => ({
     gap: 4,
   },
   textButtonLabel: {
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
     color: theme.colors.accent,
     fontWeight: theme.fontWeight.medium,
   },
   fieldHint: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
   },
   input: {
     backgroundColor: theme.colors.surface2,
@@ -734,7 +734,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   switchHint: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
     marginTop: 2,
   },
   error: {

@@ -1705,7 +1705,7 @@ const styles = StyleSheet.create((theme) => ({
     flexShrink: 0,
   },
   comboboxItemDescription: {
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
     color: theme.colors.foregroundMuted,
     flexShrink: 1,
   },

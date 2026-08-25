@@ -275,7 +275,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   hint: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
     textAlign: "center",
   },
   qrContainer: {
@@ -309,7 +309,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   linkInput: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
     paddingVertical: theme.spacing[2],
     paddingHorizontal: theme.spacing[3],
     outlineStyle: "none",

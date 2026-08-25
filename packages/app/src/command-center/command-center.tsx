@@ -771,7 +771,7 @@ const styles = StyleSheet.create((theme) => ({
   sectionLabel: {
     paddingHorizontal: theme.spacing[4],
     paddingBottom: theme.spacing[2],
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
     color: theme.colors.foregroundMuted,
   },
   sectionDivider: {
@@ -806,7 +806,7 @@ const styles = StyleSheet.create((theme) => ({
   fileLine: { flex: 1, minWidth: 0, fontSize: theme.fontSize.sm, lineHeight: 20 },
   fileName: { color: theme.colors.foreground },
   filePath: { color: theme.colors.foregroundMuted },
-  subtitle: { color: theme.colors.foregroundMuted, fontSize: theme.fontSize.xs, lineHeight: 16 },
+  subtitle: { color: theme.colors.foregroundMuted, fontSize: theme.fontSize.sm, lineHeight: 16 },
   iconSlot: { width: 16, height: 20, alignItems: "center", justifyContent: "center" },
   rowShortcut: { flexShrink: 0 },
   breadcrumb: {

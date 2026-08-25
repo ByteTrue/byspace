@@ -940,7 +940,7 @@ const styles = StyleSheet.create((theme) => ({
     minWidth: 0,
     flexShrink: 1,
     color: theme.colors.accentForeground,
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
     fontWeight: theme.fontWeight.medium,
   },
   workspacesSectionHeader: {
@@ -958,7 +958,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   workspacesSectionTitle: {
     color: theme.colors.foreground,
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
     fontWeight: theme.fontWeight.medium,
   },
   workspacesSectionActions: {
@@ -983,7 +983,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   attentionFilterCount: {
     color: theme.colors.statusWarning,
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
     fontWeight: theme.fontWeight.medium,
   },
   workspacesHeaderIconButtonDisabled: {

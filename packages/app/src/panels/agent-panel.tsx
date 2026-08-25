@@ -1827,7 +1827,7 @@ const styles = StyleSheet.create((theme) => ({
   historySyncIndicatorText: {
     flexShrink: 1,
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
     textAlign: "center",
   },
   historySyncOverlay: {
@@ -1928,7 +1928,7 @@ const styles = StyleSheet.create((theme) => ({
     textAlign: "center",
   },
   offlineDetails: {
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
     color: theme.colors.foregroundMuted,
     textAlign: "center",
   },

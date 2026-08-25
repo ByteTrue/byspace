@@ -297,7 +297,7 @@ const styles = StyleSheet.create((theme) => ({
     gap: theme.spacing[1],
   },
   approvalsText: {
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
     color: theme.colors.foregroundMuted,
   },
   hoverable: {
@@ -312,7 +312,7 @@ const styles = StyleSheet.create((theme) => ({
     paddingBottom: theme.spacing[1],
   },
   pipelineStageName: {
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
     fontWeight: theme.fontWeight.medium,
     color: theme.colors.foregroundMuted,
     textTransform: "uppercase",

@@ -527,7 +527,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   featureDescription: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
   },
   notesInput: {
     minHeight: 88,

@@ -304,12 +304,12 @@ const styles = StyleSheet.create((theme) => ({
   },
   meta: {
     marginTop: theme.spacing[1],
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
     color: theme.colors.foregroundMuted,
   },
   selectedStatus: {
     marginTop: theme.spacing[1],
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
     color: theme.colors.statusSuccess,
   },
   progressTrack: {

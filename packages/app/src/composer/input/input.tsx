@@ -1815,7 +1815,7 @@ const styles = StyleSheet.create((theme: Theme) => ({
     flex: 1,
     minWidth: 0,
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
   },
   dictationRefinementError: {
     color: theme.colors.statusDanger,
@@ -1830,7 +1830,7 @@ const styles = StyleSheet.create((theme: Theme) => ({
     position: "absolute",
     top: 0,
     right: 0,
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
     color: theme.colors.foregroundMuted,
     opacity: 0.5,
   },

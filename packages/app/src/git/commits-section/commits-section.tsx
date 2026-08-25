@@ -195,7 +195,7 @@ const styles = StyleSheet.create((theme) => ({
     color: theme.colors.foreground,
   },
   count: {
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
     color: theme.colors.foregroundMuted,
     flex: 1,
   },
@@ -214,17 +214,17 @@ const styles = StyleSheet.create((theme) => ({
     paddingBottom: theme.spacing[2],
   },
   noWorkspaceCommitsText: {
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
     color: theme.colors.foregroundMuted,
   },
   updateHostRow: {
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
     color: theme.colors.foregroundMuted,
     paddingHorizontal: theme.spacing[2],
     paddingVertical: theme.spacing[2],
   },
   errorRow: {
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
     color: theme.colors.statusDanger,
     paddingLeft: theme.spacing[2],
     paddingRight: theme.spacing[3],
