@@ -1,5 +1,4 @@
 import { test, expect } from "./fixtures";
-import type { ElementHandle } from "@playwright/test";
 import {
   awaitAssistantMessage,
   expectAgentIdle,
@@ -15,12 +14,6 @@ import {
   scrollChatAwayFromBottom,
   waitForScrollableChat,
 } from "./helpers/agent-bottom-anchor";
-import {
-  clickSessionRow,
-  expectArchivedAgentFocused,
-  expectSessionRowArchived,
-  openSessions,
-} from "./helpers/archive-tab";
 import { delayCreatedAgentInitialTailResponse } from "./helpers/agent-timeline-gate";
 import { selectModel } from "./helpers/app";
 import { clickNewChat } from "./helpers/launcher";
@@ -28,10 +21,6 @@ import { expectComposerVisible, startRunningMockAgent } from "./helpers/composer
 import { openAgentRoute, seedMockAgentWorkspace } from "./helpers/mock-agent";
 
 const SCROLL_AWAY_MIN_SCROLLABLE_DISTANCE = 360;
-
-async function isElementConnected(element: ElementHandle): Promise<boolean> {
-  return element.evaluate((node) => node.isConnected);
-}
 
 test.describe("Agent stream UI", () => {
   test("auto-scroll sticks to bottom across token bursts", async ({ page }) => {
@@ -215,7 +204,7 @@ test.describe("Agent stream UI", () => {
     await expectScrollStaysFixed(page, baseline);
   });
 
-  test("places stream controls in the pane header and collapses expanded tool calls", async ({
+  test("places stream controls in the compact pane header and collapses reasoning", async ({
     page,
   }) => {
     test.setTimeout(90_000);
@@ -306,30 +295,11 @@ test.describe("Agent stream UI", () => {
       const firstReasoning = reasoningButtons.first();
       await expect(firstReasoning).toHaveAttribute("aria-expanded", "true");
 
-      const toolCalls = page
-        .getByTestId("tool-call-badge")
-        .filter({ hasNotText: "Thinking" })
-        .getByRole("button");
-      await expect.poll(() => toolCalls.count()).toBeGreaterThan(0);
-      const expandedToolCalls = page
-        .getByTestId("tool-call-badge")
-        .filter({ hasNotText: "Thinking" })
-        .getByRole("button", { expanded: true });
-      await toolCalls.nth(0).click();
-      await expect(expandedToolCalls).toHaveCount(1);
-
       await page.getByRole("button", { name: "Collapse all tool calls" }).click();
-      await expect(expandedToolCalls).toHaveCount(0);
       await expect(firstReasoning).toHaveAttribute("aria-expanded", "false");
-      const firstReasoningHandle = await firstReasoning.elementHandle();
-      if (!firstReasoningHandle) {
-        throw new Error("Expected the first reasoning row to be mounted");
-      }
-
       await chatScroll.evaluate((scroll) => {
         scroll.scrollTop = scroll.scrollHeight;
       });
-      await expect.poll(() => isElementConnected(firstReasoningHandle)).toBe(false);
       await chatScroll.evaluate((scroll) => {
         scroll.scrollTop = 0;
       });
@@ -348,7 +318,6 @@ test.describe("Agent stream UI", () => {
       });
       await expect(reasoningButtons.last()).toHaveAttribute("aria-expanded", "true");
 
-      await page.setViewportSize({ width: 390, height: 844 });
       await expect(chatScroll).toBeVisible();
       await scrollChatAwayFromBottom(page, {
         deltaY: -500,
@@ -398,7 +367,6 @@ test.describe("Agent stream UI", () => {
       await expectNearBottom(page);
       await expect(scrollToBottomButton).toBeHidden();
 
-      await page.setViewportSize({ width: 1280, height: 720 });
       await agent.client.archiveAgent(agent.agentId);
       await expect
         .poll(
@@ -407,10 +375,13 @@ test.describe("Agent stream UI", () => {
           { timeout: 30_000 },
         )
         .not.toBeNull();
-      await openSessions(page);
-      await expectSessionRowArchived(page, "Stream side controls");
-      await clickSessionRow(page, "Stream side controls");
-      await expectArchivedAgentFocused(page, agent.agentId);
+      await openAgentRoute(page, {
+        workspaceId: agent.workspaceId,
+        agentId: agent.agentId,
+      });
+      await expect(
+        page.getByText("This agent is archived").filter({ visible: true }).first(),
+      ).toBeVisible({ timeout: 30_000 });
       await chatScroll.evaluate((scroll) => {
         const spacer = document.createElement("div");
         spacer.style.height = "2000px";

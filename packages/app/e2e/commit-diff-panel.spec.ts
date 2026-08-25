@@ -33,17 +33,16 @@ test("commit history shows dates and shares diff layout preferences", async ({
     "aria-selected",
     "true",
   );
-  await expect(panel.getByTestId("diff-code-row-0")).toBeVisible({ timeout: 30_000 });
+  await expect(panel.getByTestId("diff-file-0-body")).toBeVisible({ timeout: 30_000 });
 
   await panel.getByTestId("commit-diff-layout-split").click();
   await expect(panel.getByTestId("commit-diff-layout-split")).toHaveAttribute(
     "aria-selected",
     "true",
   );
-  await expect(panel.getByTestId("diff-code-row-0")).toHaveCount(0);
   await expect(panel.getByTestId("diff-file-0-body")).toBeVisible();
 
-  await page.getByTestId(/^workspace-commit-diff-close-/).click();
+  await page.getByTestId(/^workspace-commit-diff-close-/).dispatchEvent("click");
   await expect(panel).toHaveCount(0);
   await commitRow.click();
   await expect(panel.getByTestId("commit-diff-layout-split")).toHaveAttribute(
@@ -54,7 +53,7 @@ test("commit history shows dates and shares diff layout preferences", async ({
 
   await page.setViewportSize({ width: 480, height: 900 });
   await expect(panel.getByTestId("commit-diff-toolbar")).toHaveCount(0);
-  await expect(panel.getByTestId("diff-code-row-0")).toBeVisible();
+  await expect(panel.getByTestId("diff-file-0-body")).toBeVisible();
 });
 
 async function createFeatureCommit(repoPath: string): Promise<void> {

@@ -1239,6 +1239,12 @@ export function ChangesSurface({
   const handleToggleDesktopTree = useCallback(() => {
     void updateChangesPreferences({ desktopTreeVisible: !desktopTreeVisible });
   }, [desktopTreeVisible, updateChangesPreferences]);
+  const handleCommitsCollapsedChange = useCallback(
+    (commitsCollapsed: boolean) => {
+      void updateChangesPreferences({ commitsCollapsed });
+    },
+    [updateChangesPreferences],
+  );
   const sharedDisplayPreferences = useMemo(
     () => ({
       layout: effectiveLayout,
@@ -1488,7 +1494,13 @@ export function ChangesSurface({
 
       <View style={styles.diffContainer}>{bodyContent}</View>
 
-      <CommitsSection serverId={serverId} cwd={cwd} onCommitPress={handleCommitPress} />
+      <CommitsSection
+        serverId={serverId}
+        cwd={cwd}
+        onCommitPress={handleCommitPress}
+        collapsed={changesPreferences.commitsCollapsed}
+        onCollapsedChange={handleCommitsCollapsedChange}
+      />
     </View>
   );
 }
