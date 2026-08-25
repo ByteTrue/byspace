@@ -1,6 +1,7 @@
 import type { Page } from "@playwright/test";
 import { expect, test } from "./fixtures";
 import { gotoAppShell } from "./helpers/app";
+import { openGlobalNewWorkspaceComposer, selectNewWorkspaceProject } from "./helpers/new-workspace";
 import { daemonWsRoutePattern } from "./helpers/daemon-port";
 import { seedWorkspace } from "./helpers/seed-client";
 import { getServerId } from "./helpers/server-id";
@@ -186,6 +187,30 @@ test.describe("Pin workspace shortcut", () => {
 
       await expect(pinnedSection(page)).toBeVisible({ timeout: 10_000 });
       expect(gate.sentCount()).toBe(2);
+    } finally {
+      await workspace.cleanup();
+    }
+  });
+
+  test("keeps a fully pinned project reachable from the global composer", async ({ page }) => {
+    const workspace = await seedWorkspace({ repoPrefix: "pin-shortcut-project-reachable-" });
+
+    try {
+      await gotoAppShell(page);
+      await waitForSidebarHydration(page);
+      await openWorkspace(page, workspace.workspaceId);
+
+      await page.keyboard.press(PIN_SHORTCUT);
+      await expect(pinnedSection(page)).toBeVisible({ timeout: 10_000 });
+      await expect(page.getByTestId(`sidebar-project-row-${workspace.projectKey}`)).toHaveCount(0, {
+        timeout: 10_000,
+      });
+
+      await openGlobalNewWorkspaceComposer(page);
+      await selectNewWorkspaceProject(page, {
+        projectKey: workspace.projectKey,
+        projectDisplayName: workspace.projectDisplayName,
+      });
     } finally {
       await workspace.cleanup();
     }
