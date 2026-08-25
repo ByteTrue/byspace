@@ -26,13 +26,14 @@ const traceDaemonPath = join(repoRoot, "scripts/trace-daemon.mjs");
 const execFileAsync = promisify(execFile);
 
 const expectedSkillTracePaths = [
-  "packages/server/dist/skills/byspace-advisor/SKILL.md",
-  "packages/server/dist/skills/byspace-committee/SKILL.md",
-  "packages/server/dist/skills/byspace-handoff/SKILL.md",
-  "packages/server/dist/skills/byspace-project-setup/SKILL.md",
-  "packages/server/dist/skills/byspace-project-setup/references/byspace-json.md",
-  "packages/server/dist/skills/byspace-project-setup/references/project-readiness.md",
-  "packages/server/dist/skills/byspace/SKILL.md",
+  "packages/server/dist/server/skills/byspace-advisor/SKILL.md",
+  "packages/server/dist/server/skills/byspace-committee/SKILL.md",
+  "packages/server/dist/server/skills/byspace-handoff/SKILL.md",
+  "packages/server/dist/server/skills/byspace-plugin/SKILL.md",
+  "packages/server/dist/server/skills/byspace-project-setup/SKILL.md",
+  "packages/server/dist/server/skills/byspace-project-setup/references/byspace-json.md",
+  "packages/server/dist/server/skills/byspace-project-setup/references/project-readiness.md",
+  "packages/server/dist/server/skills/byspace/SKILL.md",
 ];
 
 async function collectFiles(root: string, directory = root): Promise<string[]> {
@@ -189,7 +190,7 @@ for (const file of tracedPaths) {
   );
 }
 const skillTracePaths = tracedPaths
-  .filter((file) => file.startsWith("packages/server/dist/skills/"))
+  .filter((file) => file.startsWith("packages/server/dist/server/skills/"))
   .sort();
 assert.deepStrictEqual(
   skillTracePaths,

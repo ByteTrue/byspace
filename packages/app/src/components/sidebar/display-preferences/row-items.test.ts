@@ -8,6 +8,7 @@ describe("parseSidebarRowItems", () => {
       project: false,
       host: true,
       changeRequest: true,
+      labels: true,
       services: true,
     });
   });

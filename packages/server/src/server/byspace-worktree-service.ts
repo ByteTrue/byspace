@@ -266,7 +266,14 @@ async function isInitialAutoBranchRenameStillSafe(options: {
   } catch {
     return false;
   }
-  if (!currentMetadata || currentMetadata.changeRequestLookupTarget) {
+  if (!currentMetadata) {
+    return false;
+  }
+  const changeRequestTarget = currentMetadata.changeRequestLookupTarget;
+  if (
+    changeRequestTarget?.changeRequestNumber !== undefined ||
+    changeRequestTarget?.headRepositoryOwner !== undefined
+  ) {
     return false;
   }
 
