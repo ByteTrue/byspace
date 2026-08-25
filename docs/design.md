@@ -30,7 +30,7 @@ Before adding a new component, read `components/ui/`. The primitive usually exis
 
 Hierarchy is conveyed through weight and color, not size. Most interface text is `fontSize.base`; compact metadata and hints use `fontSize.sm`. The distinction between a row's primary line and its secondary line is `foreground` versus `foregroundMuted`.
 
-The authored ramp uses a 14px base. New native installs default to 15px; web and desktop default to 14px. The Appearance **Base size** setting is the rendered `fontSize.base` value and scales the rest of the UI ramp proportionally. Code size remains independent.
+The authored ramp uses a 14px base, which is also the Web client's default. The Appearance **Base size** setting is the rendered `fontSize.base` value and scales the rest of the UI ramp proportionally. Code size remains independent.
 
 Weight has three tiers, applied by role:
 
@@ -169,17 +169,17 @@ Loading is inline by default. `<LoadingSpinner size={14} color={foregroundMuted}
 
 Empty states are short noun phrases. Centered, muted, one or two lines. Sessions screen pairs the empty noun with a single ghost button to navigate back (`packages/app/src/screens/sessions-screen.tsx:74-81`); that pairing is the maximum elaboration. Illustrations and CTAs disguised as empty states are wrong.
 
-Inline errors are a single sentence in `palette.red[300]` `xs`, sitting under the field or inside the card it relates to (`packages/app/src/screens/settings/providers-section.tsx:115-119`).
+Inline errors are a single sentence in `palette.red[300]` `sm`, sitting under the field or inside the card it relates to (`packages/app/src/screens/settings/providers-section.tsx:115-119`).
 
 Page-level alerts — informational notices, success confirmations, warnings, or recoverable errors that need a small visible block on the page — use `<Alert>` (`packages/app/src/components/ui/alert.tsx`). Variants: `default`, `info`, `success`, `warning`, `error`. The chrome is quiet by design: a 1px tinted border, transparent background, a small variant-tinted icon, the title in the variant accent, the description in `foregroundMuted`. Actions go in the `children` slot as `<Button variant="outline" size="sm">` — recovery actions are low-frequency and outline keeps them quiet alongside the alert's accent (`packages/app/src/screens/project-settings-screen.tsx`). One `<Alert>` at a time per region.
 
-Sidebar callouts — cross-cutting alerts that apply across the whole app, such as worktree setup — register through `useSidebarCallouts()` and render in the left sidebar via `<SidebarCallout>` (`packages/app/src/components/sidebar-callout.tsx`). The chrome (top-border-only, full-width action buttons) is tuned for that ~280px column. The current source is `packages/app/src/components/worktree-setup-callout-source.tsx`. Callouts should stay short: optional icon, one normal-weight title, one `xs` muted description, at most two actions. Use the primary action sparingly; a secondary action is outline. Dismissibility is source-owned and persists through the callout context. Do not reuse this component in page content — use `<Alert>` there.
+Sidebar callouts — cross-cutting alerts that apply across the whole app, such as worktree setup — register through `useSidebarCallouts()` and render in the left sidebar via `<SidebarCallout>` (`packages/app/src/components/sidebar-callout.tsx`). The chrome (top-border-only, full-width action buttons) is tuned for that ~280px column. The current source is `packages/app/src/components/worktree-setup-callout-source.tsx`. Callouts should stay short: optional icon, one normal-weight title, one `sm` muted description, at most two actions. Use the primary action sparingly; a secondary action is outline. Dismissibility is source-owned and persists through the callout context. Do not reuse this component in page content — use `<Alert>` there.
 
 Imperative errors are `Alert.alert("Error", "Unable to ...")` (the React Native `Alert` API, not this component) for failures that interrupt the flow and have no place on the page.
 
 Disabled state is `opacity: theme.opacity[50]` on the outer pressable. Color changes for disabled state are wrong; a disabled button is the same button, dimmer.
 
-Partial failure (a list mostly fine but one source errored) is a bordered banner above the list, listing each failure in red-300 `xs` (`packages/app/src/screens/projects-screen.tsx:151-159`). The list still renders.
+Partial failure (a list mostly fine but one source errored) is a bordered banner above the list, listing each failure in red-300 `sm` (`packages/app/src/screens/projects-screen.tsx:151-159`). The list still renders.
 
 State surfaces at the smallest scope it affects. Field error stays under the field; page error is a banner; flow-stopping error is an `Alert`.
 
