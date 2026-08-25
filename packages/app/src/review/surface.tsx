@@ -6,12 +6,15 @@ import {
   Pressable,
   type PressableStateCallbackType,
   Text,
-  TextInput,
   type TextStyle,
   View,
   type StyleProp,
   type ViewStyle,
 } from "react-native";
+import {
+  EditingTextInput as TextInput,
+  type EditingTextInputHandle,
+} from "@/components/ui/text-input";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { Button } from "@/components/ui/button";
 import { isWeb } from "@/constants/platform";
@@ -30,10 +33,6 @@ import {
 } from "./geometry";
 
 type PressableState = PressableStateCallbackType & { hovered?: boolean };
-type WebTextInputRef = TextInput & {
-  getNativeElement?: () => unknown;
-  getNativeRef?: () => unknown;
-};
 function iconButtonStyle({ hovered, pressed }: PressableState): StyleProp<ViewStyle> {
   return [styles.iconButton, (hovered || pressed) && styles.iconButtonHovered];
 }
@@ -42,12 +41,11 @@ function iconButtonDestructiveStyle({ hovered, pressed }: PressableState): Style
   return [styles.iconButton, (hovered || pressed) && styles.iconButtonDestructiveHovered];
 }
 
-function getWebTextInputElement(input: TextInput | null): HTMLElement | null {
+function getWebTextInputElement(input: EditingTextInputHandle | null): HTMLElement | null {
   if (!isWeb || typeof HTMLElement === "undefined" || !input) {
     return null;
   }
-  const webInput = input as WebTextInputRef;
-  const element = webInput.getNativeElement?.() ?? webInput.getNativeRef?.() ?? input;
+  const element = input.getNativeRef();
   return element instanceof HTMLElement ? element : null;
 }
 
@@ -442,7 +440,7 @@ export function InlineReviewEditor({
   testID?: string;
 }) {
   const { t } = useTranslation();
-  const inputRef = useRef<TextInput | null>(null);
+  const inputRef = useRef<EditingTextInputHandle | null>(null);
   const focus = useWorkspaceFocusRestoration();
   const [body, setBody] = useState(initialBody);
   const [isFocused, setIsFocused] = useState(false);
@@ -511,7 +509,7 @@ export function InlineReviewEditor({
         placeholder={t("review.comment.placeholder")}
         placeholderTextColor={styles.placeholderColor.color}
         multiline
-        defaultValue={body}
+        initialValue={body}
         onChangeText={setBody}
         onFocus={handleFocus}
         onBlur={handleBlur}

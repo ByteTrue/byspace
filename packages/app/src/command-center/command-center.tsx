@@ -3,7 +3,6 @@ import {
   Modal,
   Pressable,
   Text,
-  TextInput,
   View,
   type LayoutChangeEvent,
   type ListRenderItemInfo,
@@ -57,6 +56,10 @@ import {
   type CommandCenterWorkspaceResult,
 } from "./results";
 import { useWorkspaceFileSearch } from "./workspace-file-search";
+import {
+  EditingTextInput as TextInput,
+  type EditingTextInputHandle,
+} from "@/components/ui/text-input";
 
 const ThemedTextInput = withUnistyles(TextInput, (theme) => ({
   placeholderTextColor: theme.colors.foregroundMuted,
@@ -196,7 +199,7 @@ interface CommandCenterState {
   results: readonly CommandCenterResult[];
   rowIndexByResultId: ReadonlyMap<string, number>;
   offsets: readonly number[];
-  inputRef: React.RefObject<TextInput | null>;
+  inputRef: React.RefObject<EditingTextInputHandle | null>;
   fileSearchLoading: boolean;
   fileSearchError: string | null;
   close(): void;
@@ -212,7 +215,7 @@ function useCommandCenterState(): CommandCenterState {
   const setOpen = useKeyboardShortcutsStore((state) => state.setCommandCenterOpen);
   const setScope = useKeyboardShortcutsStore((state) => state.setCommandCenterScope);
   const snapshot = useCommandCenterContributions();
-  const inputRef = useRef<TextInput>(null);
+  const inputRef = useRef<EditingTextInputHandle>(null);
   const previousOpenRef = useRef(open);
   const [query, setQuery] = useState("");
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -652,7 +655,7 @@ export function CommandCenter() {
               <ThemedTextInput
                 testID="command-center-input"
                 ref={state.inputRef}
-                value={state.query}
+                initialValue={state.query}
                 onChangeText={state.setQuery}
                 placeholder={
                   state.scope === "files"

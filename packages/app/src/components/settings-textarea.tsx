@@ -1,6 +1,7 @@
 import type { StyleProp, TextStyle } from "react-native";
 import { useMemo } from "react";
-import { TextInput, View } from "react-native";
+import { View } from "react-native";
+import { EditingTextInput as TextInput } from "@/components/ui/text-input";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { settingsStyles } from "@/styles/settings";
 
@@ -29,7 +30,7 @@ export function SettingsTextArea({
       testID={testID}
       accessibilityLabel={accessibilityLabel}
       multiline
-      value={value}
+      initialValue={value}
       onChangeText={onChangeText}
       placeholder={placeholder}
       placeholderTextColor={theme.colors.foregroundMuted}

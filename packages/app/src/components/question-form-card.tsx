@@ -3,11 +3,11 @@ import { useState, useCallback, useMemo } from "react";
 import {
   View,
   Text,
-  TextInput,
   Pressable,
   type PressableStateCallbackType,
   type TextInputSubmitEditingEvent,
 } from "react-native";
+import { EditingTextInput as TextInput } from "@/components/ui/text-input";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { Check, X } from "lucide-react-native";
@@ -317,7 +317,7 @@ function QuestionOtherInput({
       accessibilityLabel={accessibilityLabel}
       placeholder={placeholder}
       placeholderTextColor={theme.colors.foregroundMuted}
-      value={value}
+      initialValue={value}
       onChangeText={handleChange}
       onSubmitEditing={handleSubmitEditing}
       editable={!isResponding}

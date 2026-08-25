@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Text, TextInput, View } from "react-native";
+import { Text, View } from "react-native";
+import type { EditingTextInputHandle } from "@/components/ui/text-input";
 import { useTranslation } from "react-i18next";
 import { StyleSheet } from "react-native-unistyles";
 import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
@@ -41,9 +42,9 @@ export function TerminalProfileEditModal({
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [isPending, setIsPending] = useState(false);
-  const nameInputRef = useRef<TextInput>(null);
-  const commandInputRef = useRef<TextInput>(null);
-  const argsInputRef = useRef<TextInput>(null);
+  const nameInputRef = useRef<EditingTextInputHandle>(null);
+  const commandInputRef = useRef<EditingTextInputHandle>(null);
+  const argsInputRef = useRef<EditingTextInputHandle>(null);
 
   const handleNameChange = useCallback((value: string) => {
     setName(value);

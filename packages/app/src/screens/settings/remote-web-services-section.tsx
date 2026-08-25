@@ -262,7 +262,6 @@ function AddRemoteWebServiceSheet({
         <Text style={styles.label}>{t("settings.host.remoteWebServices.nameLabel")}</Text>
         <AdaptiveTextInput
           initialValue={name}
-          value={name}
           onChangeText={setName}
           style={styles.input}
           autoCapitalize="none"
@@ -308,7 +307,6 @@ function AddRemoteWebServiceSheet({
         <Text style={styles.label}>{t("settings.host.remoteWebServices.portLabel")}</Text>
         <AdaptiveTextInput
           initialValue={port}
-          value={port}
           onChangeText={setPort}
           style={styles.input}
           autoCapitalize="none"

@@ -249,7 +249,6 @@ function DataRelayConfigSheet({
             <Text style={styles.label}>{t("settings.host.dataRelay.listenLabel")}</Text>
             <AdaptiveTextInput
               initialValue={listen}
-              value={listen}
               onChangeText={setListen}
               style={styles.input}
               autoCapitalize="none"
@@ -265,7 +264,6 @@ function DataRelayConfigSheet({
             <Text style={styles.label}>{t("settings.host.dataRelay.publicEndpointLabel")}</Text>
             <AdaptiveTextInput
               initialValue={publicEndpoint}
-              value={publicEndpoint}
               onChangeText={setPublicEndpoint}
               style={styles.input}
               autoCapitalize="none"
@@ -302,7 +300,6 @@ function DataRelayConfigSheet({
             <Text style={styles.label}>{t("settings.host.dataRelay.endpointLabel")}</Text>
             <AdaptiveTextInput
               initialValue={endpoint}
-              value={endpoint}
               onChangeText={setEndpoint}
               style={styles.input}
               autoCapitalize="none"
@@ -341,7 +338,6 @@ function DataRelayConfigSheet({
         <View style={styles.inputWithAddon}>
           <AdaptiveTextInput
             initialValue={accessToken}
-            value={accessToken}
             onChangeText={setAccessToken}
             style={[styles.input, styles.inputFlex]}
             autoCapitalize="none"

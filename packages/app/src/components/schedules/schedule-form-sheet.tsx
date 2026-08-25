@@ -488,7 +488,6 @@ function ScheduleFormFields({
             testID="schedule-name-input"
             accessibilityLabel="Schedule name"
             initialValue={state.name}
-            value={state.name}
             onChangeText={model.setName}
             placeholder="Optional"
             autoCapitalize="none"
@@ -504,7 +503,6 @@ function ScheduleFormFields({
             testID="schedule-prompt-input"
             accessibilityLabel="Prompt"
             initialValue={state.prompt}
-            value={state.prompt}
             onChangeText={model.setPrompt}
             placeholder="What should the agent do each run?"
             style={styles.multilineInput}
@@ -542,7 +540,6 @@ function ScheduleFormFields({
             testID="schedule-max-runs-input"
             accessibilityLabel="Max runs"
             initialValue={state.maxRuns}
-            value={state.maxRuns}
             onChangeText={model.setMaxRuns}
             placeholder="Unlimited"
             keyboardType="number-pad"

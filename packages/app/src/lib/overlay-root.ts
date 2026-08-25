@@ -189,7 +189,7 @@ function detachWebOverlayListeners(): void {
   webOverlayListenersAttached = false;
 }
 
-function addWebOverlay(entry: WebOverlayEntry): () => void {
+function addWebOverlay(entry: WebOverlayEntry): (options?: RemoveWebOverlayOptions) => void {
   webOverlayEntries.push(entry);
   attachWebOverlayListeners();
 
@@ -200,15 +200,23 @@ function addWebOverlay(entry: WebOverlayEntry): () => void {
     }
   });
 
-  return () => {
+  return (options) => {
     window.cancelAnimationFrame(focusFrame);
     const index = webOverlayEntries.findIndex((candidate) => candidate.id === entry.id);
     if (index !== -1) webOverlayEntries.splice(index, 1);
     detachWebOverlayListeners();
-    if (entry.restoreFocus && document.contains(entry.restoreFocus)) {
+    if (
+      options?.restoreFocus !== false &&
+      entry.restoreFocus &&
+      document.contains(entry.restoreFocus)
+    ) {
       entry.restoreFocus.focus();
     }
   };
+}
+
+interface RemoveWebOverlayOptions {
+  restoreFocus?: boolean;
 }
 
 interface WebOverlayRegistration {
@@ -234,7 +242,8 @@ export function useWebOverlayRegistration({
   const layerRef = useRef(layer);
   const keyHandlerRef = useRef(onKeyDown);
   const capturedRestoreFocusRef = useRef<HTMLElement | null>(null);
-  const removeEntryRef = useRef<(() => void) | null>(null);
+  const removeEntryRef = useRef<((options?: RemoveWebOverlayOptions) => void) | null>(null);
+  const detachedRemoveEntryRef = useRef<((options?: RemoveWebOverlayOptions) => void) | null>(null);
   const activeRef = useRef(active);
   const wasActiveRef = useRef(false);
 
@@ -259,8 +268,14 @@ export function useWebOverlayRegistration({
       typeof window !== "undefined" &&
       typeof document !== "undefined";
     if (!shouldRegister) {
-      removeEntryRef.current?.();
+      const shouldRestoreFocus = !activeRef.current;
+      if (removeEntryRef.current || shouldRestoreFocus) {
+        removeEntryRef.current?.({ restoreFocus: shouldRestoreFocus });
+      }
       removeEntryRef.current = null;
+      if (shouldRestoreFocus) {
+        detachedRemoveEntryRef.current = null;
+      }
       return;
     }
     if (removeEntryRef.current) return;
@@ -280,6 +295,12 @@ export function useWebOverlayRegistration({
     (node: unknown) => {
       scopeRef.current =
         typeof HTMLElement !== "undefined" && node instanceof HTMLElement ? node : null;
+      if (!scopeRef.current && activeRef.current) {
+        const removeEntry = removeEntryRef.current;
+        removeEntry?.({ restoreFocus: false });
+        detachedRemoveEntryRef.current = removeEntry;
+        removeEntryRef.current = null;
+      }
       // Host refs attach before descendant layout effects and autofocus. Register
       // here so the previous overlay cannot redirect that pending focus.
       syncRegistration();
@@ -290,8 +311,10 @@ export function useWebOverlayRegistration({
   useLayoutEffect(() => {
     syncRegistration();
     return () => {
-      removeEntryRef.current?.();
+      const removeEntry = removeEntryRef.current ?? detachedRemoveEntryRef.current;
+      removeEntry?.();
       removeEntryRef.current = null;
+      detachedRemoveEntryRef.current = null;
     };
   }, [active, syncRegistration]);
 

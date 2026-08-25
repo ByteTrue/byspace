@@ -664,6 +664,47 @@ interface ComposerTextSurfaceProps {
   focusInputKeys: ShortcutChord | null | undefined;
   focusHintLabel: string;
 }
+function useWebImeCompositionDeferral(
+  webTextareaRef: React.RefObject<HTMLElement | null>,
+  onChangeText: (text: string) => void,
+): (text: string) => void {
+  const composingRef = useRef(false);
+  const onChangeTextRef = useRef(onChangeText);
+  onChangeTextRef.current = onChangeText;
+
+  useEffect(() => {
+    const textarea = webTextareaRef.current as
+      | (HTMLElement & {
+          addEventListener?: (type: string, listener: EventListener) => void;
+          removeEventListener?: (type: string, listener: EventListener) => void;
+        })
+      | null;
+    if (!isWeb || !textarea || typeof textarea.addEventListener !== "function") return;
+
+    const startComposition = () => {
+      composingRef.current = true;
+    };
+    const endComposition = () => {
+      composingRef.current = false;
+      onChangeTextRef.current((textarea as HTMLTextAreaElement).value);
+    };
+
+    textarea.addEventListener("compositionstart", startComposition);
+    textarea.addEventListener("compositionend", endComposition);
+    return () => {
+      textarea.removeEventListener("compositionstart", startComposition);
+      textarea.removeEventListener("compositionend", endComposition);
+    };
+  }, [webTextareaRef]);
+
+  return useCallback(
+    (nextText: string) => {
+      if (composingRef.current) return;
+      onChangeText(nextText);
+    },
+    [onChangeText],
+  );
+}
 
 function ComposerTextSurface(props: ComposerTextSurfaceProps): React.ReactElement {
   if (props.readOnly) {
@@ -1582,6 +1623,11 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
       [clearDictationRefinementChoice, onChangeText],
     );
 
+    const handleComposerInputChange = useWebImeCompositionDeferral(
+      webTextareaRef,
+      handleInputChange,
+    );
+
     const handleInputFocus = useCallback(() => {
       isInputFocusedRef.current = true;
       setIsInputFocused(true);
@@ -1684,7 +1730,7 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
             readOnlyTextStyle={readOnlyTextStyle}
             placeholder={placeholder ?? t("composer.placeholders.fallback")}
             accessibilityLabel={t(mode.accessibilityLabelKey)}
-            onChangeText={handleInputChange}
+            onChangeText={handleComposerInputChange}
             onFocus={handleInputFocus}
             onBlur={handleInputBlur}
             editable={!showDictationToolbar && !disabled}

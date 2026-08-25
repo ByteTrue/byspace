@@ -24,10 +24,13 @@ import {
   Pressable,
   ScrollView,
   Text,
-  TextInput,
   View,
   type PressableStateCallbackType,
 } from "react-native";
+import {
+  EditingTextInput as TextInput,
+  type EditingTextInputHandle,
+} from "@/components/ui/text-input";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import {
   applyAvailableAddProjectHosts,
@@ -358,7 +361,9 @@ export function AddProjectFlow({ request, onClose }: AddProjectFlowProps) {
   const cloneGithubProject = useCloneGithubProject(hostId);
   const addEmptyProject = useSessionStore((store) => store.addEmptyProject);
   const setHasHydratedWorkspaces = useSessionStore((store) => store.setHasHydratedWorkspaces);
-  const inputRef = useRef<TextInput>(null);
+  const inputRef = useRef<EditingTextInputHandle>(null);
+  const pageInputValueRef = useRef(page.kind === "method" ? "" : pageInput(page));
+  pageInputValueRef.current = page.kind === "method" ? "" : pageInput(page);
   const submissionInFlightRef = useRef(false);
   const query = page.kind === "new-directory-name" || page.kind === "method" ? "" : page.query;
   const [debouncedQuery, setDebouncedQuery] = useState(query);
@@ -377,6 +382,10 @@ export function AddProjectFlow({ request, onClose }: AddProjectFlowProps) {
   useEffect(() => {
     const timer = setTimeout(() => inputRef.current?.focus(), 0);
     return () => clearTimeout(timer);
+  }, [page.kind]);
+
+  useEffect(() => {
+    inputRef.current?.replaceText(pageInputValueRef.current);
   }, [page.kind]);
 
   const searchesDirectories =
@@ -826,9 +835,8 @@ export function AddProjectFlow({ request, onClose }: AddProjectFlowProps) {
             </View>
             {page.kind !== "method" ? (
               <ThemedTextInput
-                key={page.kind}
                 ref={inputRef}
-                value={pageInput(page)}
+                initialValue={pageInput(page)}
                 onChangeText={handleInputChange}
                 onKeyPress={isWeb ? undefined : handleNativeKeyPress}
                 onSubmitEditing={isWeb ? undefined : submitActive}

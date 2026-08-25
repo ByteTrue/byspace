@@ -2,7 +2,8 @@ import { Buffer } from "buffer";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
-import { Pressable, Text, TextInput, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
+import { EditingTextInput as TextInput } from "@/components/ui/text-input";
 import { router } from "expo-router";
 import { StyleSheet } from "react-native-unistyles";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -910,7 +911,7 @@ function ProjectNameEditor({
       <TextInput
         testID="project-name-input"
         accessibilityLabel={t("settings.project.rename.projectNameLabel")}
-        value={value}
+        initialValue={value}
         onChangeText={setValue}
         placeholder={projectName}
         placeholderTextColor={styles.placeholderColor.color}
@@ -1274,7 +1275,7 @@ function ScriptEditModal({ script, onChange, onCancel, onSave }: ScriptEditModal
         <TextInput
           testID="script-edit-name"
           accessibilityLabel={t("settings.project.scripts.nameAccessibility")}
-          value={script.name}
+          initialValue={script.name}
           onChangeText={handleNameChange}
           onBlur={handleNameBlur}
           placeholder="dev"
@@ -1293,7 +1294,7 @@ function ScriptEditModal({ script, onChange, onCancel, onSave }: ScriptEditModal
           testID="script-edit-command"
           accessibilityLabel={t("settings.project.scripts.commandAccessibility")}
           multiline
-          value={script.commandText}
+          initialValue={script.commandText}
           onChangeText={handleCommandChange}
           onBlur={handleCommandBlur}
           placeholder="npm run dev"
