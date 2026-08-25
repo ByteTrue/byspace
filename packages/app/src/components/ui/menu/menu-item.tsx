@@ -359,7 +359,7 @@ const styles = StyleSheet.create((theme) => ({
     flexShrink: 1,
   },
   tooltipText: {
-    fontSize: theme.fontSize.sm,
+    fontSize: theme.fontSize.base,
     color: theme.colors.foreground,
   },
   // The fill is inset from the surface's edges and rounded, so a hovered row reads as a chip
@@ -403,7 +403,7 @@ const styles = StyleSheet.create((theme) => ({
     opacity: 0.72,
   },
   itemText: {
-    fontSize: theme.fontSize.sm,
+    fontSize: theme.fontSize.base,
     lineHeight: MENU_ITEM_LINE_HEIGHT,
     color: theme.colors.foreground,
     fontWeight: theme.fontWeight.normal,

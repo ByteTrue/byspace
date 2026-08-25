@@ -301,7 +301,7 @@ const styles = StyleSheet.create((theme: Theme) => ({
   },
   detailLabel: {
     color: theme.colors.foreground,
-    fontSize: theme.fontSize.sm,
+    fontSize: theme.fontSize.base,
     fontWeight: theme.fontWeight.normal,
   },
   detailDescription: {
@@ -363,7 +363,7 @@ const styles = StyleSheet.create((theme: Theme) => ({
   },
   itemLabel: {
     color: theme.colors.foreground,
-    fontSize: theme.fontSize.sm,
+    fontSize: theme.fontSize.base,
     fontWeight: theme.fontWeight.normal,
   },
   itemDetail: {
@@ -386,6 +386,6 @@ const styles = StyleSheet.create((theme: Theme) => ({
   },
   emptyText: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.sm,
+    fontSize: theme.fontSize.base,
   },
 })) as unknown as Record<string, object>;
