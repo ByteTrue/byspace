@@ -4221,8 +4221,8 @@ const styles = StyleSheet.create((theme) => ({
     gap: theme.spacing[2],
     paddingHorizontal: theme.spacing[1],
     paddingVertical: theme.spacing[1],
-    minHeight: Math.ceil(theme.fontSize.sm * 1.5) + theme.spacing[1] * 2,
-    minWidth: Math.ceil(theme.fontSize.sm * 1.5) + theme.spacing[1] * 2,
+    minHeight: Math.ceil(theme.fontSize.base * 1.5) + theme.spacing[1] * 2,
+    minWidth: Math.ceil(theme.fontSize.base * 1.5) + theme.spacing[1] * 2,
     borderRadius: theme.borderRadius.md,
   },
   sourceControlButtonWithStats: {
