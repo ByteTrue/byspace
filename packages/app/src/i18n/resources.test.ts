@@ -240,7 +240,7 @@ describe("translation resources", () => {
     expect(en.settings.diagnostics.title).toBe("Diagnostics");
     expect(en.settings.about.title).toBe("About");
     expect(en.settings.appearance.theme.title).toBe("Theme");
-    expect(en.settings.appearance.fonts.baseSize).toBe("Base size");
+    expect(en.settings.appearance.fonts.interfaceSize).toBe("Interface size");
     expect(en.settings.shortcuts.actions.rebind).toBe("Rebind");
     expect(en.settings.permissions.notifications).toBe("Notifications");
     expect(en.settings.permissions.actions.request).toBe("Request");
