@@ -417,6 +417,8 @@ describe("translation resources", () => {
     expect(en.sidebar.actions.closeSidebar).toBe("Close sidebar");
     expect(en.sidebar.sections.sessions).toBe("History");
     expect(en.sidebar.workspace.actions.newWorkspace).toBe("New workspace");
+    expect(en.sidebar.workspace.actions.pin).toBe("Pin to top");
+    expect(en.sidebar.workspace.actions.unpin).toBe("Unpin");
     expect(en.sidebar.workspace.actions.createWorkspaceFor).toBe(
       "Create a new workspace for {{projectName}}",
     );

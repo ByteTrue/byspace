@@ -1052,6 +1052,8 @@ export const ar: TranslationResources = {
         copyBranchName: "انسخ اسم الفرع",
         rename: "إعادة تسمية مساحة العمل",
         renameWithAgent: "إعادة التسمية باستخدام Agent",
+        pin: "تثبيت في الأعلى",
+        unpin: "إلغاء التثبيت",
         archive: "أرشيف",
         archiveWorkspace: "أرشفة مساحة العمل",
         hideFromSidebar: "إخفاء من الشريط الجانبي",

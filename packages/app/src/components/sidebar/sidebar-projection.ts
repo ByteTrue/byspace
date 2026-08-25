@@ -1,8 +1,15 @@
+import type { PinnedSidebarGroups, PinnedSidebarKeys } from "@/hooks/use-sidebar-pins";
+import { splitPinnedSidebarGroups } from "@/hooks/use-sidebar-pins";
 import type {
   SidebarProjectEntry,
   SidebarWorkspaceEntry,
+  SidebarWorkspacePlacement,
 } from "@/hooks/use-sidebar-workspaces-list";
-import { buildSidebarShortcutModel, type SidebarShortcutModel } from "@/utils/sidebar-shortcuts";
+import {
+  buildSidebarShortcutSections,
+  type SidebarShortcutModel,
+  type SidebarShortcutSection,
+} from "@/utils/sidebar-shortcuts";
 import { isAgentStatusNeedingAttention } from "@/utils/workspace-agent-summary";
 import { aggregateSidebarStateBuckets } from "@/utils/sidebar-agent-state";
 
@@ -13,6 +20,7 @@ export interface SidebarProjectedProject extends SidebarProjectEntry {
 
 export interface SidebarProjection {
   projects: SidebarProjectedProject[];
+  pinnedGroups: PinnedSidebarGroups;
   needsAttentionWorkspaceCount: number;
   shortcutModel: SidebarShortcutModel;
 }
@@ -26,17 +34,31 @@ export function buildSidebarProjection(input: {
   projects: readonly SidebarProjectEntry[];
   workspaceEntriesByKey: ReadonlyMap<string, SidebarWorkspaceEntry>;
   attentionOnly: boolean;
+  pinnedKeys: PinnedSidebarKeys;
+  pinnedWorkspaceOrder: string[];
+  pinnedCollapsed: boolean;
 }): SidebarProjection {
-  let needsAttentionWorkspaceCount = 0;
+  const needsAttention = (workspace: SidebarWorkspacePlacement): boolean => {
+    const entry = input.workspaceEntriesByKey.get(workspace.workspaceKey);
+    return entry ? isAgentStatusNeedingAttention(entry.statusBucket) : false;
+  };
+
+  // Pinned chats are hoisted out of their project into their own section, so the projected
+  // project list below is always the post-split remainder.
+  const { pinnedChats, unpinnedProjects } = splitPinnedSidebarGroups({
+    projects: [...input.projects],
+    keys: input.pinnedKeys,
+    pinnedWorkspaceOrder: input.pinnedWorkspaceOrder,
+  });
+  const visiblePinnedChats = input.attentionOnly ? pinnedChats.filter(needsAttention) : pinnedChats;
+
+  let needsAttentionWorkspaceCount = visiblePinnedChats.filter(needsAttention).length;
   const projectedProjects: SidebarProjectedProject[] = [];
 
-  for (const project of input.projects) {
+  for (const project of unpinnedProjects) {
     let attentionCount = 0;
     const workspaces = project.workspaces.filter((workspace) => {
-      const entry = input.workspaceEntriesByKey.get(workspace.workspaceKey);
-      const needsAttentionWorkspace = entry
-        ? isAgentStatusNeedingAttention(entry.statusBucket)
-        : false;
+      const needsAttentionWorkspace = needsAttention(workspace);
       if (needsAttentionWorkspace) {
         attentionCount += 1;
         return true;
@@ -60,9 +82,20 @@ export function buildSidebarProjection(input: {
     });
   }
 
+  // Shortcut numbers follow the visual order: the Pinned section first, then the projects.
+  // A collapsed Pinned section hands its numbers back to the rows below it.
+  const sections: SidebarShortcutSection[] = [];
+  if (!input.pinnedCollapsed) {
+    sections.push({ workspaces: visiblePinnedChats });
+  }
+  for (const project of projectedProjects) {
+    sections.push({ workspaces: project.workspaces });
+  }
+
   return {
     projects: projectedProjects,
+    pinnedGroups: { pinnedChats: visiblePinnedChats, unpinnedProjects },
     needsAttentionWorkspaceCount,
-    shortcutModel: buildSidebarShortcutModel({ projects: projectedProjects }),
+    shortcutModel: buildSidebarShortcutSections({ sections }),
   };
 }

@@ -1073,6 +1073,8 @@ export const ru: TranslationResources = {
         copyBranchName: "Скопировать название ветки",
         rename: "Переименовать рабочую область",
         renameWithAgent: "Переименовать с помощью агента",
+        pin: "Закрепить вверху",
+        unpin: "Открепить",
         archive: "Архив",
         archiveWorkspace: "Архивировать рабочее пространство",
         hideFromSidebar: "Скрыть с боковой панели",

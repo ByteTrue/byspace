@@ -1083,6 +1083,8 @@ export const fr: TranslationResources = {
         copyBranchName: "Copier le nom de la branche",
         rename: "Renommer l'espace de travail",
         renameWithAgent: "Renommer avec un agent",
+        pin: "Épingler en haut",
+        unpin: "Désépingler",
         archive: "Archive",
         archiveWorkspace: "Archiver l’espace de travail",
         hideFromSidebar: "Masquer de la barre latérale",

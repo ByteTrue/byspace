@@ -3,7 +3,11 @@ import type {
   SidebarProjectEntry,
   SidebarWorkspaceEntry,
 } from "@/hooks/use-sidebar-workspaces-list";
-import { buildSidebarShortcutModel, getRelativeSidebarShortcutTarget } from "./sidebar-shortcuts";
+import {
+  buildSidebarShortcutModel,
+  buildSidebarShortcutSections,
+  getRelativeSidebarShortcutTarget,
+} from "./sidebar-shortcuts";
 
 function workspace(input: {
   serverId: string;
@@ -123,6 +127,69 @@ describe("buildSidebarShortcutModel", () => {
     expect(model.shortcutTargets).toHaveLength(9);
     expect(model.shortcutTargets[0]).toEqual({ serverId: "s", workspaceId: "ws-1" });
     expect(model.shortcutTargets[8]).toEqual({ serverId: "s", workspaceId: "ws-9" });
+  });
+});
+
+describe("buildSidebarShortcutSections", () => {
+  const pinned = workspace({
+    serverId: "s1",
+    workspaceId: "ws-pinned",
+    workspaceDirectory: "/repo/pinned",
+    name: "pinned",
+  });
+  const first = workspace({
+    serverId: "s1",
+    workspaceId: "ws-first",
+    workspaceDirectory: "/repo/first",
+    name: "first",
+  });
+  const second = workspace({
+    serverId: "s1",
+    workspaceId: "ws-second",
+    workspaceDirectory: "/repo/second",
+    name: "second",
+  });
+
+  it("numbers the Pinned section before the project sections", () => {
+    const model = buildSidebarShortcutSections({
+      sections: [{ workspaces: [pinned] }, { workspaces: [first, second] }],
+    });
+
+    expect(model.shortcutTargets).toEqual([
+      { serverId: "s1", workspaceId: "ws-pinned" },
+      { serverId: "s1", workspaceId: "ws-first" },
+      { serverId: "s1", workspaceId: "ws-second" },
+    ]);
+    expect(model.shortcutIndexByWorkspaceKey.get("s1:ws-pinned")).toBe(1);
+    expect(model.shortcutIndexByWorkspaceKey.get("s1:ws-first")).toBe(2);
+    expect(model.shortcutIndexByWorkspaceKey.get("s1:ws-second")).toBe(3);
+  });
+
+  it("gives a collapsed section's numbers back to the rows below it", () => {
+    const model = buildSidebarShortcutSections({
+      sections: [{ workspaces: [pinned], collapsed: true }, { workspaces: [first, second] }],
+    });
+
+    expect(model.shortcutTargets).toEqual([
+      { serverId: "s1", workspaceId: "ws-first" },
+      { serverId: "s1", workspaceId: "ws-second" },
+    ]);
+    expect(model.shortcutIndexByWorkspaceKey.get("s1:ws-pinned")).toBeUndefined();
+    expect(model.shortcutIndexByWorkspaceKey.get("s1:ws-first")).toBe(1);
+    expect(model.shortcutIndexByWorkspaceKey.get("s1:ws-second")).toBe(2);
+  });
+
+  it("respects the shortcut limit across sections", () => {
+    const model = buildSidebarShortcutSections({
+      sections: [{ workspaces: [pinned] }, { workspaces: [first, second] }],
+      shortcutLimit: 2,
+    });
+
+    expect(model.shortcutTargets).toEqual([
+      { serverId: "s1", workspaceId: "ws-pinned" },
+      { serverId: "s1", workspaceId: "ws-first" },
+    ]);
+    expect(model.shortcutIndexByWorkspaceKey.get("s1:ws-second")).toBeUndefined();
   });
 });
 

@@ -45,6 +45,38 @@ export function buildSidebarShortcutModel(input: {
   return { shortcutTargets, shortcutIndexByWorkspaceKey };
 }
 
+export interface SidebarShortcutSection {
+  workspaces: readonly SidebarWorkspacePlacement[];
+  collapsed?: boolean;
+}
+
+// Walks sections in visual order, skipping collapsed ones so a folded Pinned section or a
+// collapsed project gives its shortcut numbers back to the rows below it.
+export function buildSidebarShortcutSections(input: {
+  sections: readonly SidebarShortcutSection[];
+  shortcutLimit?: number;
+}): SidebarShortcutModel {
+  const maxShortcuts = Math.max(0, Math.floor(input.shortcutLimit ?? 9));
+  const shortcutTargets: SidebarShortcutWorkspaceTarget[] = [];
+  const shortcutIndexByWorkspaceKey = new Map<string, number>();
+
+  for (const section of input.sections) {
+    if (section.collapsed) {
+      continue;
+    }
+    for (const workspace of section.workspaces) {
+      if (shortcutTargets.length >= maxShortcuts) {
+        break;
+      }
+      const shortcutNumber = shortcutTargets.length + 1;
+      shortcutTargets.push(createShortcutTarget(workspace));
+      shortcutIndexByWorkspaceKey.set(workspace.workspaceKey, shortcutNumber);
+    }
+  }
+
+  return { shortcutTargets, shortcutIndexByWorkspaceKey };
+}
+
 export function getRelativeSidebarShortcutTarget(input: {
   targets: readonly SidebarShortcutWorkspaceTarget[];
   currentTarget: SidebarShortcutWorkspaceTarget | null;

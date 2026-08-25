@@ -1084,6 +1084,8 @@ export const es: TranslationResources = {
         copyBranchName: "Copiar nombre de sucursal",
         rename: "Cambiar nombre del espacio de trabajo",
         renameWithAgent: "Renombrar con un agente",
+        pin: "Anclar arriba",
+        unpin: "Desanclar",
         archive: "Archivo",
         archiveWorkspace: "Archivar espacio de trabajo",
         hideFromSidebar: "Ocultar de la barra lateral",

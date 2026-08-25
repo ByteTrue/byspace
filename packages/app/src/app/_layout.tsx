@@ -36,6 +36,7 @@ import { ProviderSettingsHost } from "@/components/provider-settings-host";
 import { RootErrorBoundary } from "@/components/root-error-boundary";
 import { WorkspaceSetupDialog } from "@/components/workspace-setup-dialog";
 import { WorkspaceShortcutTargetsSubscriber } from "@/components/workspace-shortcut-targets-subscriber";
+import { WorkspacePinShortcutHandler } from "@/components/workspace-pin-shortcut-handler";
 import { FloatingPanelPortalHost } from "@/components/ui/floating-panel-portal";
 import { HostChooserModal } from "@/hosts/host-chooser";
 import { useIsCompactFormFactor } from "@/constants/layout";
@@ -548,6 +549,7 @@ function AppShell() {
       <HorizontalScrollProvider>
         <AppWithSidebar>
           <WorkspaceRouteNavigationBridge />
+          <WorkspacePinShortcutHandler />
           <RootStack />
         </AppWithSidebar>
       </HorizontalScrollProvider>

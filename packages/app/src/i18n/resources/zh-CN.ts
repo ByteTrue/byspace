@@ -1042,6 +1042,8 @@ export const zhCN: TranslationResources = {
         copyBranchName: "复制分支名称",
         rename: "重命名 workspace",
         renameWithAgent: "使用 Agent 重命名",
+        pin: "置顶",
+        unpin: "取消置顶",
         archive: "归档",
         archiveWorkspace: "归档工作区",
         hideFromSidebar: "从侧边栏隐藏",

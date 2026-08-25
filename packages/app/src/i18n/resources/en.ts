@@ -1061,6 +1061,8 @@ export const en = {
         copyBranchName: "Copy branch name",
         rename: "Rename workspace",
         renameWithAgent: "Rename with agent",
+        pin: "Pin to top",
+        unpin: "Unpin",
         archive: "Archive",
         archiveWorkspace: "Archive workspace",
         hideFromSidebar: "Hide from sidebar",

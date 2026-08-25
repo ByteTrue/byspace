@@ -111,6 +111,9 @@ describe("buildSidebarProjection", () => {
         [idle.entry.workspaceKey, idle.entry],
       ]),
       attentionOnly: false,
+      pinnedKeys: { pinnedWorkspaceKeys: [], pinnedAtByKey: {} },
+      pinnedWorkspaceOrder: [],
+      pinnedCollapsed: false,
     });
 
     expect(projectKeys(projection.projects)).toEqual(["first", "second", "empty"]);
@@ -156,11 +159,160 @@ describe("buildSidebarProjection", () => {
         [quiet.entry.workspaceKey, quiet.entry],
       ]),
       attentionOnly: true,
+      pinnedKeys: { pinnedWorkspaceKeys: [], pinnedAtByKey: {} },
+      pinnedWorkspaceOrder: [],
+      pinnedCollapsed: false,
     });
 
     expect(projectKeys(projection.projects)).toEqual(["mixed"]);
     expect(projection.projects[0]?.workspaces.map((row) => row.workspaceId)).toEqual(["waiting"]);
     expect(projection.needsAttentionWorkspaceCount).toBe(1);
     expect(shouldShowProjectHostLabels(projection.projects[0]!)).toBe(false);
+  });
+
+  it("hoists pinned chats into their own group, most recently pinned first", () => {
+    const older = makeWorkspace({ id: "older", projectKey: "first" });
+    const keeper = makeWorkspace({ id: "keeper", projectKey: "first" });
+    const newer = makeWorkspace({ id: "newer", projectKey: "second" });
+
+    const projection = buildSidebarProjection({
+      projects: [
+        makeProject("first", [older.placement, keeper.placement]),
+        makeProject("second", [newer.placement]),
+      ],
+      workspaceEntriesByKey: new Map([
+        [older.entry.workspaceKey, older.entry],
+        [keeper.entry.workspaceKey, keeper.entry],
+        [newer.entry.workspaceKey, newer.entry],
+      ]),
+      attentionOnly: false,
+      pinnedKeys: {
+        pinnedWorkspaceKeys: ["srv:older", "srv:newer"],
+        pinnedAtByKey: {
+          "srv:older": "2026-07-01T09:00:00.000Z",
+          "srv:newer": "2026-07-01T10:00:00.000Z",
+        },
+      },
+      pinnedWorkspaceOrder: [],
+      pinnedCollapsed: false,
+    });
+
+    expect(projection.pinnedGroups.pinnedChats.map((row) => row.workspaceId)).toEqual([
+      "newer",
+      "older",
+    ]);
+    // "second" had only pinned chats, so its empty shell is dropped (BySpace behavior).
+    expect(projectKeys(projection.pinnedGroups.unpinnedProjects)).toEqual(["first"]);
+    expect(projectKeys(projection.projects)).toEqual(["first"]);
+    expect(projection.projects[0]?.workspaces.map((row) => row.workspaceId)).toEqual(["keeper"]);
+    expect(projection.shortcutModel.shortcutTargets).toEqual([
+      { serverId: "srv", workspaceId: "newer" },
+      { serverId: "srv", workspaceId: "older" },
+      { serverId: "srv", workspaceId: "keeper" },
+    ]);
+  });
+
+  it("applies the stored pinned order over pin recency", () => {
+    const older = makeWorkspace({ id: "older", projectKey: "first" });
+    const keeper = makeWorkspace({ id: "keeper", projectKey: "first" });
+    const newer = makeWorkspace({ id: "newer", projectKey: "first" });
+
+    const projection = buildSidebarProjection({
+      projects: [makeProject("first", [older.placement, keeper.placement, newer.placement])],
+      workspaceEntriesByKey: new Map([
+        [older.entry.workspaceKey, older.entry],
+        [keeper.entry.workspaceKey, keeper.entry],
+        [newer.entry.workspaceKey, newer.entry],
+      ]),
+      attentionOnly: false,
+      pinnedKeys: {
+        pinnedWorkspaceKeys: ["srv:older", "srv:newer"],
+        pinnedAtByKey: {
+          "srv:older": "2026-07-01T09:00:00.000Z",
+          "srv:newer": "2026-07-01T10:00:00.000Z",
+        },
+      },
+      pinnedWorkspaceOrder: ["srv:older", "srv:newer"],
+      pinnedCollapsed: false,
+    });
+
+    expect(projection.pinnedGroups.pinnedChats.map((row) => row.workspaceId)).toEqual([
+      "older",
+      "newer",
+    ]);
+  });
+
+  it("attentionOnly filters the pinned group as well as the projects", () => {
+    const pinnedQuiet = makeWorkspace({ id: "pinned-quiet", projectKey: "p" });
+    const pinnedWaiting = makeWorkspace({
+      id: "pinned-waiting",
+      projectKey: "p",
+      status: "attention",
+      needsAttentionCount: 1,
+    });
+    const quiet = makeWorkspace({ id: "quiet", projectKey: "p" });
+    const waiting = makeWorkspace({
+      id: "waiting",
+      projectKey: "p",
+      status: "needs_input",
+      needsAttentionCount: 1,
+    });
+
+    const projection = buildSidebarProjection({
+      projects: [
+        makeProject("p", [
+          pinnedQuiet.placement,
+          pinnedWaiting.placement,
+          quiet.placement,
+          waiting.placement,
+        ]),
+      ],
+      workspaceEntriesByKey: new Map([
+        [pinnedQuiet.entry.workspaceKey, pinnedQuiet.entry],
+        [pinnedWaiting.entry.workspaceKey, pinnedWaiting.entry],
+        [quiet.entry.workspaceKey, quiet.entry],
+        [waiting.entry.workspaceKey, waiting.entry],
+      ]),
+      attentionOnly: true,
+      pinnedKeys: {
+        pinnedWorkspaceKeys: ["srv:pinned-quiet", "srv:pinned-waiting"],
+        pinnedAtByKey: {
+          "srv:pinned-quiet": "2026-07-01T09:00:00.000Z",
+          "srv:pinned-waiting": "2026-07-01T10:00:00.000Z",
+        },
+      },
+      pinnedWorkspaceOrder: [],
+      pinnedCollapsed: false,
+    });
+
+    expect(projection.pinnedGroups.pinnedChats.map((row) => row.workspaceId)).toEqual([
+      "pinned-waiting",
+    ]);
+    expect(projection.projects[0]?.workspaces.map((row) => row.workspaceId)).toEqual(["waiting"]);
+    expect(projection.needsAttentionWorkspaceCount).toBe(2);
+  });
+
+  it("gives pinned shortcut numbers back to the projects when the Pinned section is collapsed", () => {
+    const pinned = makeWorkspace({ id: "pinned", projectKey: "first" });
+    const keeper = makeWorkspace({ id: "keeper", projectKey: "first" });
+
+    const projection = buildSidebarProjection({
+      projects: [makeProject("first", [pinned.placement, keeper.placement])],
+      workspaceEntriesByKey: new Map([
+        [pinned.entry.workspaceKey, pinned.entry],
+        [keeper.entry.workspaceKey, keeper.entry],
+      ]),
+      attentionOnly: false,
+      pinnedKeys: {
+        pinnedWorkspaceKeys: ["srv:pinned"],
+        pinnedAtByKey: { "srv:pinned": "2026-07-01T09:00:00.000Z" },
+      },
+      pinnedWorkspaceOrder: [],
+      pinnedCollapsed: true,
+    });
+
+    expect(projection.pinnedGroups.pinnedChats.map((row) => row.workspaceId)).toEqual(["pinned"]);
+    expect(projection.shortcutModel.shortcutIndexByWorkspaceKey.get("srv:pinned")).toBeUndefined();
+    expect(projection.shortcutModel.shortcutIndexByWorkspaceKey.get("srv:keeper")).toBe(1);
   });
 });

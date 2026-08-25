@@ -1074,6 +1074,8 @@ export const ptBR: TranslationResources = {
         copyBranchName: "Copiar nome da branch",
         rename: "Renomear workspace",
         renameWithAgent: "Renomear com um agente",
+        pin: "Fixar no topo",
+        unpin: "Desafixar",
         archive: "Arquivar",
         archiveWorkspace: "Arquivar workspace",
         hideFromSidebar: "Ocultar da barra lateral",

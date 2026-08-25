@@ -360,6 +360,22 @@ const SHORTCUT_BINDINGS: readonly ShortcutBinding[] = [
     },
   },
 
+  // --- Pin workspace ---
+  {
+    id: "workspace-pin-cmd-shift-p-mac",
+    action: "workspace.pin",
+    combo: "Cmd+Shift+P",
+    when: { mac: true, commandCenter: false },
+    help: { id: "pin-workspace", section: "workspaces", label: "Pin chat" },
+  },
+  {
+    id: "workspace-pin-ctrl-shift-p-non-mac",
+    action: "workspace.pin",
+    combo: "Ctrl+Shift+P",
+    when: { mac: false, commandCenter: false, terminal: false },
+    help: { id: "pin-workspace", section: "workspaces", label: "Pin chat" },
+  },
+
   // --- Tab management ---
   {
     id: "workspace-tab-new-cmd-t-mac",

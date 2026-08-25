@@ -1063,6 +1063,8 @@ export const ja: TranslationResources = {
         copyBranchName: "ブランチ名をコピー",
         rename: "ワークスペースの名前を変更",
         renameWithAgent: "エージェントで名前を変更",
+        pin: "上部に固定",
+        unpin: "固定解除",
         archive: "アーカイブ",
         archiveWorkspace: "ワークスペースをアーカイブ",
         hideFromSidebar: "サイドバーから非表示",
