@@ -23,5 +23,5 @@ test("both sidebar borders highlight on hover", async ({ page, withWorkspace }) 
   await expectBorderHighlight(page, "left-sidebar-resize-handle");
 
   await page.getByTestId("workspace-explorer-toggle").first().click();
-  await expectBorderHighlight(page, "explorer-sidebar-resize-handle");
+  await expectBorderHighlight(page, "workspace-split-resize-handle");
 });

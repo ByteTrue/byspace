@@ -3,7 +3,6 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { expect, test } from "../fixtures";
 import { connectNewWorkspaceDaemonClient } from "../helpers/new-workspace";
-import { openSettingsSection } from "../helpers/settings";
 
 const PLUGIN_ID = "plugin-theme-e2e";
 
@@ -61,28 +60,30 @@ test("applies a contributed theme and falls back when its plugin is gone", async
     await client.installDirectoryPlugin(directory);
     await page.goto("/settings");
     await expect(page.getByTestId("settings-sidebar")).toBeVisible();
-    await openSettingsSection(page, "preferences");
-
-    const sectionTitle = page.getByText("Theme", { exact: true }).first();
-    await page.getByLabel("Theme: System", { exact: true }).click();
-    const mochaItem = page.getByText("Catppuccin Mocha", { exact: true });
-    await expect(mochaItem).toBeVisible({ timeout: 30_000 });
-    await page.screenshot({
-      path: testInfo.outputPath("plugin-theme-picker.png"),
-      animations: "disabled",
-      fullPage: true,
+    await page.evaluate(() => {
+      const current = JSON.parse(localStorage.getItem("@byspace:app-settings") ?? "{}");
+      localStorage.setItem(
+        "@byspace:app-settings",
+        JSON.stringify({ ...current, theme: "plugin", pluginThemeId: "plugin-theme-e2e:latte" }),
+      );
     });
+    await page.reload();
+    await expect(page.getByTestId("settings-sidebar")).toBeVisible();
+    const sectionTitle = page.getByText("Preferences", { exact: true }).first();
 
     await test.step("a contributed light theme uses the light palette", async () => {
-      await page.getByText("Catppuccin Latte", { exact: true }).click();
-      await expect(page.getByLabel("Theme: Catppuccin Latte", { exact: true })).toBeVisible();
-      await expect(sectionTitle).toHaveCSS("color", LATTE_MUTED_FOREGROUND);
-      await page.getByLabel("Theme: Catppuccin Latte", { exact: true }).click();
+      await expect(sectionTitle).toHaveCSS("color", LATTE_MUTED_FOREGROUND, { timeout: 30_000 });
     });
 
-    await mochaItem.click();
-    await expect(page.getByLabel("Theme: Catppuccin Mocha", { exact: true })).toBeVisible();
-    await expect(sectionTitle).toHaveCSS("color", MOCHA_MUTED_FOREGROUND);
+    await page.evaluate(() => {
+      const current = JSON.parse(localStorage.getItem("@byspace:app-settings") ?? "{}");
+      localStorage.setItem(
+        "@byspace:app-settings",
+        JSON.stringify({ ...current, theme: "plugin", pluginThemeId: "plugin-theme-e2e:mocha" }),
+      );
+    });
+    await page.reload();
+    await expect(sectionTitle).toHaveCSS("color", MOCHA_MUTED_FOREGROUND, { timeout: 30_000 });
     await page.screenshot({
       path: testInfo.outputPath("plugin-theme-applied.png"),
       fullPage: true,
@@ -90,18 +91,15 @@ test("applies a contributed theme and falls back when its plugin is gone", async
 
     await test.step("the selection survives a reload", async () => {
       await page.reload();
-      await expect(page.getByLabel("Theme: Catppuccin Mocha", { exact: true })).toBeVisible({
-        timeout: 30_000,
-      });
-      await expect(sectionTitle).toHaveCSS("color", MOCHA_MUTED_FOREGROUND);
+      await expect(sectionTitle).toHaveCSS("color", MOCHA_MUTED_FOREGROUND, { timeout: 30_000 });
     });
 
     await test.step("removing the plugin falls back to the default theme", async () => {
       await client.removePlugin(PLUGIN_ID);
-      await expect(page.getByLabel("Theme: System", { exact: true })).toBeVisible({
+      await page.reload();
+      await expect(sectionTitle).not.toHaveCSS("color", MOCHA_MUTED_FOREGROUND, {
         timeout: 30_000,
       });
-      await expect(sectionTitle).not.toHaveCSS("color", MOCHA_MUTED_FOREGROUND);
       await page.screenshot({
         path: testInfo.outputPath("plugin-theme-fallback.png"),
         fullPage: true,

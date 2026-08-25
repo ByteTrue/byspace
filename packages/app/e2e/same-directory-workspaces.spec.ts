@@ -4,7 +4,12 @@ import { test, expect, type Page } from "./fixtures";
 import { gotoWorkspace, clickNewTerminal } from "./helpers/launcher";
 import { seedWorkspace, type SeededWorkspace } from "./helpers/seed-client";
 import { expectExplorerEntryVisible } from "./helpers/file-explorer";
-import { expectNoTerminalTabs, clickFirstTerminalTab } from "./helpers/workspace-tabs";
+import {
+  expectNoTerminalTabs,
+  clickFirstTerminalTab,
+  openChangesPanel,
+  openFilesPanel,
+} from "./helpers/workspace-tabs";
 
 // Model B: two workspaces can back the SAME directory. What follows from that
 // split is the contract these specs pin:
@@ -16,11 +21,11 @@ import { expectNoTerminalTabs, clickFirstTerminalTab } from "./helpers/workspace
 // On desktop the explorer is pinned open; on narrow layouts it must be toggled.
 // Open it either way, then select the requested tab.
 async function openExplorerTab(page: Page, tab: "files" | "changes"): Promise<void> {
-  const openButton = page.getByRole("button", { name: "Open explorer" }).first();
-  if (await openButton.isVisible().catch(() => false)) {
-    await openButton.click();
+  if (tab === "files") {
+    await openFilesPanel(page);
+  } else {
+    await openChangesPanel(page);
   }
-  await page.getByTestId(`explorer-tab-${tab}`).click();
 }
 
 async function createSecondWorkspaceOnSameDir(

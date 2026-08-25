@@ -269,8 +269,8 @@ export async function expectDirectHostUriHidden(page: Page): Promise<void> {
 
 export async function expectPreferencesContent(page: Page): Promise<void> {
   await expect(page.getByText("Default send", { exact: true }).first()).toBeVisible();
-  await expect(page.getByText("Theme", { exact: true }).first()).toBeVisible();
-  await expect(page.getByRole("button", { name: "Play test" })).toBeVisible();
+  await expect(page.getByText("Language", { exact: true }).first()).toBeVisible();
+  await expect(page.getByText("Terminal scrollback", { exact: true }).first()).toBeVisible();
 }
 
 export async function expectAboutContent(page: Page): Promise<void> {

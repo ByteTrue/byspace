@@ -23,10 +23,7 @@ export function tabRowPin(page: Page, target: PinnedTabTarget) {
 }
 
 export async function openNewTabMenu(page: Page): Promise<void> {
-  const trigger = page
-    .getByTestId("workspace-new-tab-menu-trigger")
-    .filter({ visible: true })
-    .first();
+  const trigger = page.getByTestId("workspace-new-tab-button").filter({ visible: true }).first();
   await expect(trigger).toBeVisible({ timeout: 10_000 });
   await trigger.click();
 }

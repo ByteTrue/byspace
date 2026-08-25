@@ -1,5 +1,6 @@
 import { test, expect, type Page } from "./fixtures";
 import { TerminalE2EHarness } from "./helpers/terminal-dsl";
+import { splitPaneRight } from "./helpers/split-pane";
 import { waitForTerminalAttached } from "./helpers/terminal-perf";
 
 type TrackedTerminal = NonNullable<Window["__byspaceTerminal"]>;
@@ -65,8 +66,8 @@ test.describe("retained terminal stream visibility", () => {
         .poll(() => readTrackedTerminalText(page), { timeout: 10_000 })
         .toContain(sentinel);
 
-      await page.getByRole("button", { name: "Split pane right" }).first().click();
-      await expect(page.getByRole("button", { name: "Split pane right" })).toHaveCount(2);
+      await splitPaneRight(page);
+      await expect(page.getByTestId("workspace-tabs-row").filter({ visible: true })).toHaveCount(2);
       await waitForAnimationFrame(page);
       await waitForAnimationFrame(page);
       await expect.poll(() => readActiveTerminalSubscriptions(page)).toEqual([second.id]);

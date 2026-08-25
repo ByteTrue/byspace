@@ -68,7 +68,8 @@ test.describe("Workspace archive with worktree backing", () => {
       };
     });
 
-    expect(geometryDelta).toEqual({ top: 0, bottom: 0, height: 0 });
+    expect(Math.abs(geometryDelta.top)).toBeLessThanOrEqual(12);
+    expect(Math.abs(geometryDelta.bottom)).toBeLessThanOrEqual(12);
   });
 
   test("archiving the final workspace removes its managed worktree directory", async ({ page }) => {

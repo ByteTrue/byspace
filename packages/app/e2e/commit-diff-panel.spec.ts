@@ -2,6 +2,7 @@ import { execFileSync } from "node:child_process";
 import { writeFile } from "node:fs/promises";
 import path from "node:path";
 import { test, expect } from "./fixtures";
+import { openChangesPanel } from "./helpers/workspace-tabs";
 
 const COMMIT_SUBJECT = "Show commit timestamps";
 
@@ -14,7 +15,7 @@ test("commit history shows dates and shares diff layout preferences", async ({
   await page.setViewportSize({ width: 1400, height: 900 });
   await workspace.navigateTo();
 
-  await page.getByRole("button", { name: "Open explorer" }).click();
+  await openChangesPanel(page);
   const commitsSection = page.getByRole("button", { name: /Commits/i });
   await expect(commitsSection).toBeVisible({ timeout: 30_000 });
   await commitsSection.click();

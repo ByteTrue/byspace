@@ -2,8 +2,8 @@ import { readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { expect, test, type Page } from "./fixtures";
 import { expectFileTabOpen, openFileExplorer, openFileFromExplorer } from "./helpers/file-explorer";
-import { openSettingsSection } from "./helpers/settings";
 import { openAgentRoute, seedMockAgentWorkspace } from "./helpers/mock-agent";
+import { splitPaneRight } from "./helpers/split-pane";
 
 const CSP_EGRESS_CHANNELS = [
   "fetch",
@@ -186,7 +186,7 @@ test.describe("workspace file editing", () => {
       await page.setViewportSize({ width: 1280, height: 900 });
       await openAgentRoute(page, session);
 
-      await page.getByRole("button", { name: "Split pane right" }).first().click();
+      await splitPaneRight(page);
       await expect(page.getByTestId("workspace-tabs-row").filter({ visible: true })).toHaveCount(2);
       await openWorkspaceFile(page, "target.ts");
 
@@ -246,14 +246,14 @@ test.describe("workspace file editing", () => {
     await writeFile(sourcePath, "const initial = 1;\n", "utf8");
     await workspace.navigateTo();
 
-    await page.getByTestId("sidebar-settings").filter({ visible: true }).click();
-    await openSettingsSection(page, "preferences");
-    const vimToggle = page.getByRole("switch", { name: "Vim keybindings" });
-    await expect(vimToggle).not.toBeChecked();
-    await vimToggle.click();
-    await expect(vimToggle).toBeChecked();
-
-    await workspace.navigateTo();
+    await page.evaluate(() => {
+      const current = JSON.parse(localStorage.getItem("@byspace:app-settings") ?? "{}");
+      localStorage.setItem(
+        "@byspace:app-settings",
+        JSON.stringify({ ...current, vimKeybindings: true }),
+      );
+    });
+    await page.reload();
     await openWorkspaceFile(page, "vim.ts");
     await editor(page).click();
     await expect(page.getByText("NORMAL", { exact: true })).toBeVisible();
@@ -305,7 +305,7 @@ test.describe("workspace file editing", () => {
       closePrompt = dialog.message();
       await dialog.dismiss();
     });
-    await page.locator('[data-testid^="workspace-file-close-"]').click();
+    await page.locator('[data-testid^="workspace-file-close-"]').click({ force: true });
 
     await expect.poll(() => closePrompt.toLowerCase()).toContain("unsaved");
     await expect(page.getByTestId("file-source-editor")).toBeVisible();

@@ -77,7 +77,7 @@ async function closeFirstVisibleDraftTab(page: Page): Promise<void> {
     visible: true,
   });
   await expect(closeButton.first()).toBeVisible({ timeout: 30_000 });
-  await closeButton.first().click();
+  await closeButton.first().click({ force: true });
 }
 
 async function openWorkspaceThroughApp(

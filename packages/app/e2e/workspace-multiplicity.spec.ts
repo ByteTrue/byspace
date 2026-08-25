@@ -10,6 +10,7 @@ import {
   submitNewWorkspaceEmpty,
 } from "./helpers/new-workspace";
 import { seedWorkspace, type SeededWorkspace } from "./helpers/seed-client";
+import { openFilesPanel } from "./helpers/workspace-tabs";
 import { expectExplorerEntryVisible } from "./helpers/file-explorer";
 import { getServerId } from "./helpers/server-id";
 import { waitForSidebarHydration } from "./helpers/workspace-ui";
@@ -26,11 +27,7 @@ function workspaceRowTestId(workspaceId: string): string {
 // On desktop the file explorer is pinned open; on narrower layouts it must be
 // toggled first. Open it either way, then select the Files tab.
 async function openFilesTab(page: Page): Promise<void> {
-  const openButton = page.getByRole("button", { name: "Open explorer" }).first();
-  if (await openButton.isVisible().catch(() => false)) {
-    await openButton.click();
-  }
-  await page.getByTestId("explorer-tab-files").click();
+  await openFilesPanel(page);
   await expect(page.getByTestId("file-explorer-tree-scroll")).toBeVisible({ timeout: 30_000 });
 }
 

@@ -139,12 +139,12 @@ test.describe("cross-host project identity", () => {
       await groupedRow.hover();
       await page.getByTestId(`sidebar-project-kebab-${projectKey}`).click();
       await page.getByTestId(`sidebar-project-menu-open-settings-${projectKey}`).click();
-      await expect(page.getByText("Primary shared app", { exact: true })).toBeVisible({
+      await expect(page.getByText("Primary shared app", { exact: true }).first()).toBeVisible({
         timeout: 30_000,
       });
       await page.getByTestId("host-picker").click();
       await page.getByTestId(`host-picker-item-${secondary.serverId}`).click();
-      await expect(page.getByText("Secondary shared app", { exact: true })).toBeVisible();
+      await expect(page.getByText("Secondary shared app", { exact: true }).first()).toBeVisible();
 
       await page.goBack();
       await waitForSidebarHydration(page);

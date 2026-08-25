@@ -12,6 +12,16 @@ function splitSeparator(page: Page): Locator {
   return page.getByRole("separator", { name: "" });
 }
 
+export async function splitPaneRight(page: Page): Promise<void> {
+  const modifier = process.platform === "darwin" ? "Meta" : "Control";
+  await page.keyboard.press(`${modifier}+Backslash`);
+}
+
+export async function splitPaneDown(page: Page): Promise<void> {
+  const modifier = process.platform === "darwin" ? "Meta" : "Control";
+  await page.keyboard.press(`${modifier}+Shift+Backslash`);
+}
+
 export async function openExplorerSplit(page: Page): Promise<void> {
   await page.getByRole("button", { name: "Open side panel" }).click();
   await expect(splitSeparator(page)).toHaveCount(1, { timeout: 30_000 });

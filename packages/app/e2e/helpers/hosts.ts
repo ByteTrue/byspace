@@ -98,7 +98,7 @@ export async function openSidebarDisplayPreferences(page: Page): Promise<void> {
   await page.getByTestId("sidebar-display-preferences-menu").click();
   const content = page.getByTestId("sidebar-display-preferences-content");
   await expect(content).toBeVisible({ timeout: 10_000 });
-  await content.getByRole("button", { name: "Hosts", exact: true }).click();
+  await content.getByRole("menuitem", { name: "Hosts", exact: true }).click();
 }
 
 // A host's filter row carries a status dot on the left next to its label.

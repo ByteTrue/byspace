@@ -1,6 +1,7 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { test, expect, type Page } from "./fixtures";
+import { openChangesPanel } from "./helpers/workspace-tabs";
 import { seedMockAgentWorkspace, openAgentRoute } from "./helpers/mock-agent";
 
 function visibleComposer(page: Page) {
@@ -31,8 +32,7 @@ test("adds a changed file to the focused chat without replacing its composer dra
     await expect(agentComposer).toBeEditable({ timeout: 30_000 });
     await agentComposer.fill("Preserve this thought");
 
-    await page.getByRole("button", { name: "Open explorer" }).click();
-    await page.getByTestId("explorer-tab-changes").click();
+    await openChangesPanel(page);
     const changedFile = page.getByText("changed file.ts", { exact: true }).first();
     await expect(changedFile).toBeVisible({ timeout: 30_000 });
     await page.getByTestId("diff-file-0-toggle").click({ button: "right" });

@@ -77,7 +77,7 @@ test.describe("Settings sidebar navigation", () => {
       await openSettings(page);
       await openSettingsHostSection(page, getServerId(), "agents");
 
-      await expect(page.getByTestId("host-orchestration-skills-card")).toBeVisible();
+      await expect(page.getByTestId("host-agent-skills-card")).toBeVisible();
       const card = page.getByTestId("host-page-ai-operations-model-card");
       const selector = card.getByTestId("combined-model-selector");
       await expect(selector).toContainText("Select model");

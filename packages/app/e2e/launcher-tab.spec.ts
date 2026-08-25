@@ -35,12 +35,14 @@ test.afterAll(async () => {
 // ═══════════════════════════════════════════════════════════════════════════
 
 test.describe("Tab creation", () => {
-  test("Cmd+T opens a new agent tab with composer", async ({ page }) => {
+  test("Cmd+T opens a new tab panel", async ({ page }) => {
     await gotoWorkspace(page, workspace.workspaceId);
 
     await pressNewTabShortcut(page);
 
-    await expectComposerVisible(page);
+    await expect(
+      page.getByTestId("workspace-new-tab-panel").filter({ visible: true }),
+    ).toBeVisible();
   });
 
   test("opening two new tabs creates two draft tabs", async ({ page }) => {
@@ -48,15 +50,13 @@ test.describe("Tab creation", () => {
 
     const countBefore = await countTabsOfKind(page, "draft");
 
-    await pressNewTabShortcut(page);
+    await clickNewChat(page);
     await expect
       .poll(() => countTabsOfKind(page, "draft"), { timeout: 15_000 })
       .toBe(countBefore + 1);
     const countAfterFirst = await countTabsOfKind(page, "draft");
 
-    // Blur the composer so the second shortcut isn't swallowed by the focused input
-    await page.evaluate(() => (document.activeElement as HTMLElement)?.blur?.());
-    await pressNewTabShortcut(page);
+    await clickNewChat(page);
     await expect
       .poll(() => countTabsOfKind(page, "draft"), { timeout: 15_000 })
       .toBe(countAfterFirst + 1);

@@ -5,6 +5,7 @@ import { seedWorkspace, type SeedDaemonClient } from "./helpers/seed-client";
 import { getServerId } from "./helpers/server-id";
 import { observeTimelineSubscriptions } from "./helpers/timeline-delivery";
 import { waitForWorkspaceTabsVisible } from "./helpers/workspace-tabs";
+import { splitPaneRight } from "./helpers/split-pane";
 import { installDaemonWebSocketGate } from "./helpers/daemon-websocket-gate";
 import {
   expectReconnectingToastGone,
@@ -104,7 +105,7 @@ test.describe("Viewed agent timelines", () => {
     try {
       await enableMoveTabShortcut(page);
       await openAgent(page, scenario, scenario.firstAgentId);
-      await page.getByRole("button", { name: "Split pane right" }).click();
+      await splitPaneRight(page);
       await selectAgent(page, "Second viewed chat");
       await moveActiveTabRight(page);
       await expect(

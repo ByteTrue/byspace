@@ -6,7 +6,7 @@ import { test, expect } from "./fixtures";
 import { getServerId } from "./helpers/server-id";
 import { connectSeedClient } from "./helpers/seed-client";
 import { createTempGitRepo } from "./helpers/workspace";
-import { waitForWorkspaceTabsVisible } from "./helpers/workspace-tabs";
+import { openChangesPanel, waitForWorkspaceTabsVisible } from "./helpers/workspace-tabs";
 
 interface DirtyWorkspace {
   id: string;
@@ -483,15 +483,9 @@ async function openWorkspaceChanges(page: Page, workspace: DirtyWorkspace): Prom
   await page.setViewportSize({ width: 1400, height: 900 });
   await page.goto(buildHostWorkspaceRoute(getServerId(), workspace.id));
   await waitForWorkspaceTabsVisible(page);
-  await page.getByRole("button", { name: "Open explorer" }).click();
-  await openChangesInVisibleExplorer(page);
+  await openChangesPanel(page);
   await page.getByTestId("diff-file-0").click();
   await expectExpandedMountedTabDiff(page);
-}
-
-async function openChangesInVisibleExplorer(page: Page): Promise<void> {
-  await expect(page.getByTestId("explorer-tab-changes")).toBeVisible({ timeout: 30_000 });
-  await expect(page.getByText("use-mounted-tab-set.ts")).toBeVisible({ timeout: 30_000 });
 }
 
 async function expectExpandedMountedTabDiff(page: Page): Promise<void> {
@@ -528,7 +522,7 @@ async function expectStoredCodeFontSize(page: Page, codeFontSize: number): Promi
 async function returnToWorkspaceChanges(page: Page): Promise<void> {
   await page.getByTestId("settings-back-to-workspace").click();
   await waitForWorkspaceTabsVisible(page);
-  await openChangesInVisibleExplorer(page);
+  await openChangesPanel(page);
   await expectExpandedMountedTabDiff(page);
 }
 

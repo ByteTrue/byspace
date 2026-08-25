@@ -282,7 +282,7 @@ test.describe("Half-screen desktop layout", () => {
 
       await page.getByTestId("workspace-explorer-toggle").first().click();
       await expect(
-        page.getByTestId("explorer-tab-files").filter({ visible: true }).first(),
+        page.getByTestId("workspace-side-panel").filter({ visible: true }).first(),
       ).toBeVisible();
       await expect(page.getByTestId("workspace-explorer-toggle").first()).toBeVisible();
       await expect(page.getByTestId("sidebar-pages")).not.toBeVisible();
@@ -315,7 +315,7 @@ test.describe("Half-screen desktop layout", () => {
         .toBeGreaterThanOrEqual(400);
 
       await page.getByTestId("workspace-explorer-toggle").first().click();
-      await expect(page.getByTestId("explorer-tab-files")).not.toBeVisible();
+      await expect(page.getByTestId("workspace-side-panel")).not.toBeVisible();
       await expect(page.getByTestId("workspace-explorer-toggle").first()).toBeVisible();
     } finally {
       await workspace.cleanup();

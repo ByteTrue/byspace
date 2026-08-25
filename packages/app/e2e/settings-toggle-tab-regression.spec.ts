@@ -70,9 +70,11 @@ test.describe("Settings toggle tab regression", () => {
       await pressSettingsToggleShortcut(page);
       await expect(page).toHaveURL(/\/settings\/preferences$/);
 
-      await page.getByRole("button", { name: "Queue", exact: true }).click();
+      await page.getByRole("button", { name: /^Default send:/ }).click();
+      await page.getByRole("menuitem", { name: "Queue", exact: true }).click();
       await expectSendBehavior(page, "queue");
-      await page.getByRole("button", { name: "Interrupt", exact: true }).click();
+      await page.getByRole("button", { name: /^Default send:/ }).click();
+      await page.getByRole("menuitem", { name: "Interrupt", exact: true }).click();
       await expectSendBehavior(page, "interrupt");
 
       await pressSettingsToggleShortcut(page);

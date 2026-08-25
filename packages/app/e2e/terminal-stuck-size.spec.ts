@@ -1,5 +1,6 @@
 import { test, expect, type Page } from "./fixtures";
 import { TerminalE2EHarness } from "./helpers/terminal-dsl";
+import { clickNewTerminal, waitForTabBar } from "./helpers/launcher";
 import { getTerminalBufferText } from "./helpers/terminal-perf";
 import { buildHostWorkspaceRoute } from "../src/utils/host-routes";
 import { getServerId } from "./helpers/server-id";
@@ -56,8 +57,7 @@ async function readRenderedTerminalSize(page: Page): Promise<RenderedTerminalSiz
 }
 
 async function createTerminalViaMenu(page: Page): Promise<void> {
-  await page.getByTestId("workspace-new-tab-menu-trigger").click();
-  await page.getByTestId("workspace-new-tab-menu-terminal").click();
+  await clickNewTerminal(page);
 }
 
 async function listTerminalIds(harness: TerminalE2EHarness): Promise<string[]> {
@@ -107,9 +107,7 @@ test.describe("terminal PTY size claim under lost window focus", () => {
     await page.setViewportSize({ width: 1280, height: 900 });
 
     await page.goto(buildHostWorkspaceRoute(getServerId(), harness.workspaceId));
-    await expect(page.getByTestId("workspace-new-tab-menu-trigger")).toBeVisible({
-      timeout: 30_000,
-    });
+    await waitForTabBar(page);
 
     // Wait for the daemon to know about the first terminal rather than sleeping: if it were
     // missing from this snapshot it would be misread as "new" below.
