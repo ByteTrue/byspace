@@ -140,7 +140,7 @@ const styles = StyleSheet.create((theme) => ({
   name: {
     flexShrink: 1,
     color: theme.colors.foreground,
-    fontSize: theme.fontSize.sm,
+    fontSize: theme.fontSize.base,
   },
   headerSpacer: {
     flex: 1,

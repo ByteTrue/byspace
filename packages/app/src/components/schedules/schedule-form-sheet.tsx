@@ -1056,7 +1056,7 @@ const styles = StyleSheet.create((theme) => {
       color: theme.colors.foreground,
     },
     readonlyTextSm: {
-      fontSize: theme.fontSize.sm,
+      fontSize: theme.fontSize.base,
     },
     readonlyTextMd: {
       fontSize: theme.fontSize.base,

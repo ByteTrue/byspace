@@ -202,7 +202,7 @@ const styles = StyleSheet.create((theme) => ({
     minWidth: 0,
     paddingVertical: theme.spacing[3],
     color: theme.colors.foreground,
-    fontSize: theme.fontSize.sm,
+    fontSize: theme.fontSize.base,
   },
   list: {
     borderRadius: theme.borderRadius.lg,
@@ -240,7 +240,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   name: {
     color: theme.colors.foreground,
-    fontSize: theme.fontSize.sm,
+    fontSize: theme.fontSize.base,
     fontWeight: theme.fontWeight.medium,
     flexShrink: 1,
   },
@@ -281,6 +281,6 @@ const styles = StyleSheet.create((theme) => ({
   },
   stateText: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.sm,
+    fontSize: theme.fontSize.base,
   },
 }));

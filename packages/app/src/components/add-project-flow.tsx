@@ -994,11 +994,11 @@ const styles = StyleSheet.create((theme) => ({
   disabled: { opacity: theme.opacity[50] },
   iconSlot: { width: 18, alignItems: "center" },
   rowText: { flex: 1, minWidth: 0 },
-  rowTitle: { color: theme.colors.foreground, fontSize: theme.fontSize.sm },
+  rowTitle: { color: theme.colors.foreground, fontSize: theme.fontSize.base },
   rowSubtitle: { color: theme.colors.foregroundMuted, fontSize: theme.fontSize.sm, marginTop: 2 },
   preview: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.sm,
+    fontSize: theme.fontSize.base,
     paddingHorizontal: theme.spacing[4],
     paddingVertical: theme.spacing[2],
   },

@@ -19,14 +19,14 @@ const PAIR_LINK_PLACEHOLDER = `${resolveAppHostedRelease().appBaseUrl}/#offer=..
 const styles = StyleSheet.create((theme) => ({
   helper: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.sm,
+    fontSize: theme.fontSize.base,
   },
   field: {
     gap: theme.spacing[2],
   },
   label: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.sm,
+    fontSize: theme.fontSize.base,
     fontWeight: theme.fontWeight.medium,
   },
   input: {
@@ -40,7 +40,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   error: {
     color: theme.colors.destructive,
-    fontSize: theme.fontSize.sm,
+    fontSize: theme.fontSize.base,
   },
   actions: {
     flexDirection: "row",
