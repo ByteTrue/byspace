@@ -222,6 +222,7 @@ export function TerminalPane({
     () => getWorkspaceTerminalSession({ scopeKey }),
     [scopeKey],
   );
+  const completedAttachIdentityRef = useRef<string | null>(null);
   const [isAttaching, setIsAttaching] = useState(false);
   const [streamError, setStreamError] = useState<string | null>(null);
   const [rendererReadyStreamKey, setRendererReadyStreamKey] = useState<string | null>(null);
@@ -398,10 +399,16 @@ export function TerminalPane({
     clearPassiveResizeTimer();
   }, [scopeKey, clearPassiveResizeTimer]);
 
-  const handleStreamControllerStatus = useCallback((status: TerminalStreamControllerStatus) => {
-    setIsAttaching(status.isAttaching);
-    setStreamError(status.error);
-  }, []);
+  const handleStreamControllerStatus = useCallback(
+    (status: TerminalStreamControllerStatus) => {
+      if (!status.isAttaching && !status.error && status.terminalId && focusClaimIdentity) {
+        completedAttachIdentityRef.current = focusClaimIdentity;
+      }
+      setIsAttaching(status.isAttaching);
+      setStreamError(status.error);
+    },
+    [focusClaimIdentity],
+  );
 
   useEffect(() => {
     streamControllerRef.current?.dispose();
@@ -902,7 +909,7 @@ export function TerminalPane({
   const showLoadingOverlay = shouldShowTerminalLoadingOverlay({
     isWorkspaceFocused,
     hasStreamError: Boolean(streamError),
-    isAttaching,
+    isAttaching: isAttaching && completedAttachIdentityRef.current !== focusClaimIdentity,
     rendererReadyStreamKey,
     terminalStreamKey,
   });

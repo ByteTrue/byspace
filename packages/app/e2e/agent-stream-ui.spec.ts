@@ -19,6 +19,7 @@ import { selectModel } from "./helpers/app";
 import { clickNewChat } from "./helpers/launcher";
 import { expectComposerVisible, startRunningMockAgent } from "./helpers/composer";
 import { openAgentRoute, seedMockAgentWorkspace } from "./helpers/mock-agent";
+import { splitPaneRight } from "./helpers/split-pane";
 
 const SCROLL_AWAY_MIN_SCROLLABLE_DISTANCE = 360;
 
@@ -412,8 +413,8 @@ test.describe("Agent stream UI", () => {
         1,
       );
 
-      await page.getByRole("button", { name: "Split pane right" }).first().click();
-      await expect(page.getByRole("button", { name: "Split pane right" })).toHaveCount(2);
+      await splitPaneRight(page);
+      await expect(page.getByTestId("workspace-tabs-row").filter({ visible: true })).toHaveCount(2);
       await expect(page.getByTestId("agent-stream-controls").filter({ visible: true })).toHaveCount(
         1,
       );
