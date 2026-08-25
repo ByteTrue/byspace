@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ActivityIndicator, Image, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Image, Text, View } from "react-native";
+import { EditingTextInput } from "@/components/ui/text-input";
 import * as Clipboard from "expo-clipboard";
 import * as QRCode from "qrcode";
 import { StyleSheet } from "react-native-unistyles";
@@ -237,7 +238,12 @@ function PairDeviceBody(props: PairDeviceBodyProps) {
       </View>
       <View style={styles.linkRow}>
         <View style={styles.inputWrapper}>
-          <TextInput style={styles.linkInput} value={viewState.url} readOnly selectTextOnFocus />
+          <EditingTextInput
+            style={styles.linkInput}
+            initialValue={viewState.url}
+            readOnly
+            selectTextOnFocus
+          />
         </View>
         <Button variant="outline" size="sm" leftIcon={copyIcon} onPress={handleCopyPress}>
           {copied ? labels.copied : labels.copy}

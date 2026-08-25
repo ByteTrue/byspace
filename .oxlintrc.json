@@ -260,6 +260,15 @@
       }
     },
     {
+      "files": [
+        "packages/app/src/components/ui/text-input/**/*.{ts,tsx}",
+        "packages/app/src/composer/input/input.tsx"
+      ],
+      "rules": {
+        "no-restricted-imports": "off"
+      }
+    },
+    {
       "files": ["**/e2e/fixtures.ts"],
       "rules": {
         "no-empty-pattern": "off"

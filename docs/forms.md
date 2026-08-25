@@ -64,8 +64,9 @@ complete`), keyed off the opened snapshot's serverId. Waiting for data is a
 - Every text field consumes `EditingTextInput`, directly or through a UI
   wrapper. The editing surface owns in-progress text; React observes committed
   edits through `onChangeText`, and programmatic mutations use the input's
-  `replaceText` command. Its props omit `value` and `defaultValue`; web IME
-  candidates stay unpublished until composition commits.
+  `replaceText` command. Its props omit `value` and `defaultValue`, web IME
+  candidates stay unpublished until composition commits, and lint rejects raw
+  React Native `TextInput` imports outside the primitive.
 - The form declares one size for all fields: `sm` on desktop, `md` compact
   (`useIsCompactFormFactor`).
 - Availability hierarchy: a field whose capability doesn't apply is **hidden**

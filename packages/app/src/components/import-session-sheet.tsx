@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Pressable, type PressableStateCallbackType, Text, TextInput, View } from "react-native";
+import { Pressable, type PressableStateCallbackType, Text, View } from "react-native";
+import { EditingTextInput } from "@/components/ui/text-input";
 import { useMutation, useQueries, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import type {
@@ -433,8 +434,8 @@ function ManualImportSection({
           desktopPlacement="bottom-start"
           desktopPreventInitialFlash
         />
-        <TextInput
-          value={sessionId}
+        <EditingTextInput
+          initialValue={sessionId}
           onChangeText={onSessionIdChange}
           onSubmitEditing={onSubmit}
           returnKeyType="go"
