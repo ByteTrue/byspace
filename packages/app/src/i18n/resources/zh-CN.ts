@@ -839,6 +839,8 @@ export const zhCN: TranslationResources = {
         expandAll: "展开所有文件",
         collapseAllFolders: "折叠所有文件夹",
         expandAllFolders: "展开所有文件夹",
+        expandAllFiles: "展开所有文件",
+        collapseAllFiles: "折叠所有文件",
         refreshing: "正在刷新",
         refresh: "刷新",
         refreshState: "刷新 git 和 {{brand}} 状态",
@@ -855,6 +857,7 @@ export const zhCN: TranslationResources = {
         base: "base",
         newFile: "新增",
         deletedFile: "已删除",
+        modifiedFile: "已修改",
         commits: {
           title: "提交",
           updateHost: "更新 Host 以查看提交历史。",

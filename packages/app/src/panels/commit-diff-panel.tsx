@@ -10,7 +10,7 @@ import { isWeb } from "@/constants/platform";
 import { useChangesPreferences } from "@/hooks/use-changes-preferences";
 import { useRetainedPanelActive } from "@/components/retained-panel";
 import { useAppSettings } from "@/hooks/use-settings";
-import { SharedDiffView } from "@/git/diff-pane";
+import { DiffDocument } from "@/git/diff-document";
 import { useCommitDiffFiles } from "@/git/use-diff-files";
 import { usePaneContext } from "@/panels/pane-context";
 import type { PanelDescriptor, PanelRegistration } from "@/panels/panel-registry";
@@ -106,7 +106,7 @@ function CommitDiffPanel() {
     );
   } else {
     bodyContent = (
-      <SharedDiffView files={files} displayPreferences={displayPreferences} mode={commitMode} />
+      <DiffDocument files={files} displayPreferences={displayPreferences} mode={commitMode} />
     );
   }
 

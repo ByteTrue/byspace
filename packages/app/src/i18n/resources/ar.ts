@@ -847,6 +847,8 @@ export const ar: TranslationResources = {
         expandAll: "قم بتوسيع كافة الملفات",
         collapseAllFolders: "طي كافة المجلدات",
         expandAllFolders: "توسيع كافة المجلدات",
+        expandAllFiles: "توسيع كافة الملفات",
+        collapseAllFiles: "طي كافة الملفات",
         refreshing: "منعش",
         refresh: "ينعش",
         refreshState: "تحديث حالة git و{{brand}}",
@@ -863,6 +865,7 @@ export const ar: TranslationResources = {
         base: "قاعدة",
         newFile: "جديد",
         deletedFile: "تم الحذف",
+        modifiedFile: "معدّل",
         commits: {
           title: "الإيداعات",
           updateHost: "حدّث المضيف لعرض سجل الالتزامات.",

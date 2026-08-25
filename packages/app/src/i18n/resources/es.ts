@@ -879,6 +879,8 @@ export const es: TranslationResources = {
         expandAll: "Expandir todos los archivos",
         collapseAllFolders: "Contraer todas las carpetas",
         expandAllFolders: "Expandir todas las carpetas",
+        expandAllFiles: "Expandir todos los archivos",
+        collapseAllFiles: "Contraer todos los archivos",
         refreshing: "Refrescante",
         refresh: "Refrescar",
         refreshState: "Actualizar el estado de git y {{brand}}",
@@ -895,6 +897,7 @@ export const es: TranslationResources = {
         base: "base",
         newFile: "Nuevo",
         deletedFile: "Eliminado",
+        modifiedFile: "Modificado",
         commits: {
           title: "Commits",
           updateHost: "Actualiza el host para ver el historial de commits.",

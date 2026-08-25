@@ -868,6 +868,8 @@ export const ru: TranslationResources = {
         expandAll: "Развернуть все файлы",
         collapseAllFolders: "Свернуть все папки",
         expandAllFolders: "Развернуть все папки",
+        expandAllFiles: "Развернуть все файлы",
+        collapseAllFiles: "Свернуть все файлы",
         refreshing: "Освежающий",
         refresh: "Обновить",
         refreshState: "Обновить состояние git и {{brand}}",
@@ -884,6 +886,7 @@ export const ru: TranslationResources = {
         base: "база",
         newFile: "Новый",
         deletedFile: "Удалено",
+        modifiedFile: "Изменено",
         commits: {
           title: "Коммиты",
           updateHost: "Обновите хост, чтобы просмотреть историю коммитов.",

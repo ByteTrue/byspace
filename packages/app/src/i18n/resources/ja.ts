@@ -858,6 +858,8 @@ export const ja: TranslationResources = {
         expandAll: "すべて展開",
         collapseAllFolders: "すべてのフォルダを折りたたむ",
         expandAllFolders: "すべてのフォルダを展開",
+        expandAllFiles: "すべてのファイルを展開",
+        collapseAllFiles: "すべてのファイルを折りたたむ",
         refreshing: "更新中",
         refresh: "更新",
         refreshState: "gitと{{brand}}の状態を更新",
@@ -874,6 +876,7 @@ export const ja: TranslationResources = {
         base: "ベース",
         newFile: "新規",
         deletedFile: "削除済み",
+        modifiedFile: "変更済み",
         commits: {
           title: "コミット",
           updateHost: "コミット履歴を表示するにはホストを更新してください。",

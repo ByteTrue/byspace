@@ -857,6 +857,8 @@ const koTranslations = {
         expandAll: "모든 파일 펼치기",
         collapseAllFolders: "모든 폴더 축소",
         expandAllFolders: "모든 폴더 확장",
+        expandAllFiles: "모든 파일 확장",
+        collapseAllFiles: "모든 파일 축소",
         refreshing: "새로고침 중",
         refresh: "새로고침",
         refreshState: "Git 및 {{brand}} 상태 새로고침",
@@ -873,6 +875,7 @@ const koTranslations = {
         base: "기준",
         newFile: "신규",
         deletedFile: "삭제됨",
+        modifiedFile: "수정됨",
         commits: {
           title: "커밋",
           countLabel: "워크스페이스 커밋 {{count}}개",

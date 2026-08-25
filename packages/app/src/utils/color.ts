@@ -1,4 +1,15 @@
-/** Colour adjustments in OKLab, where chroma can change without shifting perceived lightness. */
+/**
+ * Colour maths in OKLab, for the cases where a colour has to be adjusted rather than chosen.
+ *
+ * OKLab because chroma and lightness are separable there in a way they are not in HSL: scaling
+ * HSL saturation drags perceived brightness with it, so a set of icons desaturated that way ends
+ * up with the yellows washed out and the blues barely touched. In OKLab, holding L fixed and
+ * scaling the a/b vector moves a colour straight toward grey at the same apparent lightness.
+ *
+ * Reducing chroma always stays inside sRGB — the gamut is convex around the neutral axis — so
+ * these conversions never need gamut mapping.
+ */
+
 interface Oklab {
   L: number;
   a: number;
@@ -35,9 +46,11 @@ function oklabToLinearRgb({ L, a, b }: Oklab): [number, number, number] {
   ];
 }
 
+/** Parses `#rgb` and `#rrggbb` into 0–1 sRGB channels. Anything else is not a colour we own. */
 export function parseHexColor(hex: string): [number, number, number] | null {
   const body = hex.startsWith("#") ? hex.slice(1) : hex;
   if (!/^[0-9a-fA-F]+$/.test(body)) return null;
+
   let expanded: string;
   if (body.length === 3) {
     expanded = `${body[0]}${body[0]}${body[1]}${body[1]}${body[2]}${body[2]}`;
@@ -46,6 +59,7 @@ export function parseHexColor(hex: string): [number, number, number] | null {
   } else {
     return null;
   }
+
   return [
     Number.parseInt(expanded.slice(0, 2), 16) / 255,
     Number.parseInt(expanded.slice(2, 4), 16) / 255,
@@ -53,15 +67,33 @@ export function parseHexColor(hex: string): [number, number, number] | null {
   ];
 }
 
-function toHexChannel(channel: number): string {
-  return Math.min(255, Math.max(0, Math.round(channel * 255)))
-    .toString(16)
-    .padStart(2, "0");
+/** Adds alpha to a theme-owned hex color in a format accepted by Canvas and Skia. */
+export function hexColorWithAlpha(hex: string, alpha: number): string {
+  const rgb = parseHexColor(hex);
+  if (!rgb) throw new TypeError(`Expected a hex color, received ${hex}`);
+  if (!Number.isFinite(alpha) || alpha < 0 || alpha > 1) {
+    throw new RangeError(`Color alpha must be between 0 and 1, received ${alpha}`);
+  }
+  const [r, g, b] = rgb.map((channel) => Math.round(channel * 255));
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
+function toHexChannel(channel: number): string {
+  const clamped = Math.min(255, Math.max(0, Math.round(channel * 255)));
+  return clamped.toString(16).padStart(2, "0");
+}
+
+/**
+ * Scales a colour's chroma toward neutral while holding its perceived lightness.
+ *
+ * `amount` is the fraction of the original chroma to keep: `1` is unchanged, `0` is grey. Input
+ * that is not a hex colour comes back untouched, so this is safe to run over strings that mix
+ * colours with things like `none` or `currentColor`.
+ */
 export function desaturateHexColor(hex: string, amount: number): string {
   const rgb = parseHexColor(hex);
   if (!rgb) return hex;
+
   const [r, g, b] = rgb;
   const lab = linearRgbToOklab(srgbToLinear(r), srgbToLinear(g), srgbToLinear(b));
   const [linearR, linearG, linearB] = oklabToLinearRgb({
@@ -69,5 +101,6 @@ export function desaturateHexColor(hex: string, amount: number): string {
     a: lab.a * amount,
     b: lab.b * amount,
   });
+
   return `#${toHexChannel(linearToSrgb(linearR))}${toHexChannel(linearToSrgb(linearG))}${toHexChannel(linearToSrgb(linearB))}`;
 }

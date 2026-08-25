@@ -18,7 +18,7 @@ import {
   HEADER_INNER_HEIGHT_MOBILE,
   HEADER_TOP_PADDING_MOBILE,
 } from "@/constants/layout";
-import { GitDiffPane } from "@/git/diff-pane";
+import { ChangesSurface } from "@/git/diff-pane";
 import { FileExplorerPane } from "./file-explorer-pane";
 import { RetainedPanel, RetainedPanelActivity } from "@/components/retained-panel";
 import { useMountedTabSet } from "@/screens/workspace/use-mounted-tab-set";
@@ -310,11 +310,12 @@ function ChangedFilesPane({
 >) {
   const { addFile, canAddToChat } = useAddFileToChat({ serverId, workspaceId });
   return (
-    <GitDiffPane
+    <ChangesSurface
       serverId={serverId}
       workspaceId={workspaceId}
       cwd={workspaceRoot}
       enabled={isOpen}
+      host="explorer"
       onOpenFile={onOpenFile}
       onAddToChat={canAddToChat ? addFile : undefined}
     />

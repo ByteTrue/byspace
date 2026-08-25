@@ -869,6 +869,8 @@ export const ptBR: TranslationResources = {
         expandAll: "Expandir todos os arquivos",
         collapseAllFolders: "Recolher todas as pastas",
         expandAllFolders: "Expandir todas as pastas",
+        expandAllFiles: "Expandir todos os arquivos",
+        collapseAllFiles: "Recolher todos os arquivos",
         refreshing: "Atualizando",
         refresh: "Atualizar",
         refreshState: "Atualizar estado do git e do {{brand}}",
@@ -885,6 +887,7 @@ export const ptBR: TranslationResources = {
         base: "base",
         newFile: "Novo",
         deletedFile: "Excluído",
+        modifiedFile: "Modificado",
         commits: {
           title: "Commits",
           updateHost: "Atualize o host para ver o histórico de commits.",

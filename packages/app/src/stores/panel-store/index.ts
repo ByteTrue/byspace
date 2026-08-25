@@ -72,6 +72,7 @@ export interface PanelState {
   // by full uncompressed dir path, so folders default to expanded and new
   // folders stay expanded as the diff changes.
   diffCollapsedFoldersByWorkspace: Record<string, string[]>;
+  collapsedFilePathsByWorkspace: Record<string, string[]>;
   sidebarWidth: number;
   explorerSortOption: SortOption;
   explorerShowHiddenFiles: boolean;
@@ -100,6 +101,7 @@ export interface PanelState {
   setExpandedPathsForWorkspace: (workspaceKey: string, paths: ExpandedPathsUpdate) => void;
   setDiffExpandedPathsForWorkspace: (workspaceKey: string, paths: string[]) => void;
   setDiffCollapsedFoldersForWorkspace: (workspaceKey: string, dirPaths: string[]) => void;
+  setCollapsedFilePathsForWorkspace: (workspaceKey: string, paths: string[]) => void;
   activateExplorerTabForCheckout: (checkout: ExplorerCheckoutContext) => void;
   setSidebarWidth: (width: number) => void;
   setExplorerSortOption: (option: SortOption) => void;
@@ -136,6 +138,7 @@ export const usePanelStore = create<PanelState>()(
       expandedPathsByWorkspace: {},
       diffExpandedPathsByWorkspace: {},
       diffCollapsedFoldersByWorkspace: {},
+      collapsedFilePathsByWorkspace: {},
       sidebarWidth: DEFAULT_SIDEBAR_WIDTH,
       explorerSortOption: "name",
       explorerShowHiddenFiles: true,
@@ -259,6 +262,13 @@ export const usePanelStore = create<PanelState>()(
           diffCollapsedFoldersByWorkspace: {
             ...state.diffCollapsedFoldersByWorkspace,
             [workspaceKey]: dirPaths,
+          },
+        })),
+      setCollapsedFilePathsForWorkspace: (workspaceKey, paths) =>
+        set((state) => ({
+          collapsedFilePathsByWorkspace: {
+            ...state.collapsedFilePathsByWorkspace,
+            [workspaceKey]: paths,
           },
         })),
       activateExplorerTabForCheckout: (checkout) =>

@@ -519,7 +519,7 @@ export function AppearanceSection() {
     selected: selectedPluginTheme,
     select: selectPluginTheme,
   } = useContributedThemes();
-  const showFontFamilyRows = !isNative;
+  const showInterfaceFontFamilyRow = !isNative;
   const uiFontPlaceholder = resolveDefaultStackPlaceholder(t, DEFAULT_UI_FONT_STACK);
   const monoFontPlaceholder = resolveDefaultStackPlaceholder(t, DEFAULT_MONO_FONT_STACK);
 
@@ -684,7 +684,7 @@ export function AppearanceSection() {
       </SettingsSection>
       <SettingsSection title={t("settings.appearance.fonts.title")}>
         <View style={settingsStyles.card}>
-          {showFontFamilyRows ? (
+          {showInterfaceFontFamilyRow ? (
             <FontFamilyRow
               title={t("settings.appearance.fonts.interfaceFont")}
               hint={t("settings.appearance.fonts.interfaceFontHint")}
@@ -701,11 +701,11 @@ export function AppearanceSection() {
             title={t("settings.appearance.fonts.baseSize")}
             accessibilityLabel={t("settings.appearance.fonts.baseSizeAccessibility")}
             draft={uiBaseSizeDraft}
-            withBorder={showFontFamilyRows}
+            withBorder={showInterfaceFontFamilyRow}
             onChangeDraft={handleUiBaseSizeChange}
             onCommit={commitUiBaseSize}
           />
-          {showFontFamilyRows ? (
+          {showInterfaceFontFamilyRow ? (
             <FontFamilyRow
               title={t("settings.appearance.fonts.codeFont")}
               hint={t("settings.appearance.fonts.codeFontHint")}

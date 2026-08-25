@@ -856,6 +856,8 @@ export const en = {
         expandAll: "Expand all files",
         collapseAllFolders: "Collapse all folders",
         expandAllFolders: "Expand all folders",
+        expandAllFiles: "Expand all files",
+        collapseAllFiles: "Collapse all files",
         refreshing: "Refreshing",
         refresh: "Refresh",
         refreshState: "Refresh git and {{brand}} state",
@@ -872,6 +874,7 @@ export const en = {
         base: "base",
         newFile: "New",
         deletedFile: "Deleted",
+        modifiedFile: "Modified",
         commits: {
           title: "Commits",
           updateHost: "Update the host to view commit history.",
