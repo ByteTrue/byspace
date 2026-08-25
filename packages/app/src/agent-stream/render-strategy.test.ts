@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { StreamItem } from "@/types/stream";
 import {
-  collectAssistantTurnContentForStreamRenderStrategy,
+  collectAssistantResponseContentForStreamRenderStrategy,
   getBottomOffsetForStreamRenderStrategy,
   getFrameChildOrderForStreamRenderStrategy,
   getHistoryLiveBoundaryIndexForStreamRenderStrategy,
@@ -117,12 +117,46 @@ describe("neighbor and traversal semantics", () => {
     });
     const forwardStartIndex = chronological.findIndex((item) => item.id === "a2");
     expect(
-      collectAssistantTurnContentForStreamRenderStrategy({
+      collectAssistantResponseContentForStreamRenderStrategy({
         strategy: forward,
         items: chronological,
         startIndex: forwardStartIndex,
       }),
     ).toBe("assistant-1\n\nassistant-2");
+  });
+
+  it("collects copy content across adjacent turns without a visible prompt", () => {
+    const chronological: StreamItem[] = [
+      { ...assistantMessage("a1", "first turn", 1), turnId: "turn-1" },
+      {
+        kind: "tool_call",
+        id: "tool",
+        timestamp: createTimestamp(2),
+        turnId: "turn-2",
+        payload: {
+          source: "orchestrator",
+          data: {
+            toolCallId: "tool",
+            toolName: "Shell",
+            arguments: "echo hi",
+            result: null,
+            status: "completed",
+          },
+        },
+      },
+      { ...assistantMessage("a2", "second turn", 3), turnId: "turn-2" },
+    ];
+    const strategy = resolveStreamRenderStrategy({
+      isMobileBreakpoint: false,
+    });
+
+    expect(
+      collectAssistantResponseContentForStreamRenderStrategy({
+        strategy,
+        items: chronological,
+        startIndex: 2,
+      }),
+    ).toBe("first turn\n\nsecond turn");
   });
 
   it("returns undefined neighbor when index would be out of bounds", () => {

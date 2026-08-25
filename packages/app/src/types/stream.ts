@@ -88,6 +88,7 @@ export interface UserMessageItem {
   id: string;
   clientMessageId?: string;
   messageId?: string;
+  turnId?: string;
   timelineCursor?: TimelinePosition;
   text: string;
   timestamp: Date;
@@ -99,6 +100,7 @@ export interface UserMessageInput {
   id?: string;
   clientMessageId?: string;
   messageId?: string;
+  turnId?: string;
   timelineCursor?: TimelinePosition;
   text: string;
   timestamp: Date;
@@ -116,6 +118,7 @@ export function createUserMessage(input: UserMessageInput): UserMessageItem {
     id,
     ...(input.clientMessageId ? { clientMessageId: input.clientMessageId } : {}),
     ...(input.messageId ? { messageId: input.messageId } : {}),
+    ...(input.turnId ? { turnId: input.turnId } : {}),
     ...(input.timelineCursor ? { timelineCursor: input.timelineCursor } : {}),
     text: input.text,
     timestamp: input.timestamp,
@@ -676,6 +679,7 @@ export interface AssistantMessageItem {
   kind: "assistant_message";
   id: string;
   messageId?: string;
+  turnId?: string;
   timelineCursor?: TimelinePosition;
   text: string;
   timestamp: Date;
@@ -694,6 +698,7 @@ export interface ThoughtItem {
   kind: "thought";
   id: string;
   timelineCursor?: TimelinePosition;
+  turnId?: string;
   text: string;
   timestamp: Date;
   status: ThoughtStatus;
@@ -729,6 +734,7 @@ export interface ToolCallItem {
   kind: "tool_call";
   id: string;
   timelineCursor?: TimelinePosition;
+  turnId?: string;
   timestamp: Date;
   payload: ToolCallPayload;
 }
@@ -747,6 +753,7 @@ export interface ActivityLogItem {
   kind: "activity_log";
   id: string;
   timelineCursor?: TimelinePosition;
+  turnId?: string;
   timestamp: Date;
   activityType: ActivityLogType;
   message: string;
@@ -757,6 +764,7 @@ export interface CompactionItem {
   kind: "compaction";
   id: string;
   timelineCursor?: TimelinePosition;
+  turnId?: string;
   timestamp: Date;
   status: "loading" | "completed";
   trigger?: "auto" | "manual";
@@ -779,6 +787,7 @@ export interface TodoListItem {
   kind: "todo_list";
   id: string;
   timelineCursor?: TimelinePosition;
+  turnId?: string;
   timestamp: Date;
   provider: AgentProvider;
   items: TodoEntry[];

@@ -23,6 +23,19 @@ const STATUS_BUCKET_PRIORITY: readonly SidebarStateBucket[] = [
   "done",
 ];
 
+/**
+ * The order states are listed in when all of them are shown side by side rather than collapsed
+ * into one — the sidebar's status groups, and the subagent pill's segments. Anything the user has
+ * to act on comes before anything that is still moving on its own.
+ */
+export const STATUS_BUCKET_ORDER: readonly SidebarStateBucket[] = [
+  "needs_input",
+  "failed",
+  "attention",
+  "running",
+  "done",
+] as const;
+
 export function aggregateSidebarStateBuckets(
   buckets: Iterable<SidebarStateBucket>,
 ): SidebarStateBucket {

@@ -139,6 +139,43 @@ function findLayoutItem(layout: StreamLayout, id: string): StreamLayoutItem {
 }
 
 describe("layoutStream", () => {
+  it("places one response footer after an adjacent tagged tool-only turn", () => {
+    const priorAssistant = { ...assistantMessage("prior", 1), turnId: "turn-1" };
+    const nextTool = { ...toolCall("next-tool", 2), turnId: "turn-2" };
+    const layout = layoutFor({
+      tail: [priorAssistant, nextTool],
+      timingIds: [priorAssistant.id],
+    });
+
+    expect(layout.auxiliaryTurnFooter?.itemId).toBe(priorAssistant.id);
+    expect(footerOwners(layout)).toEqual([priorAssistant.id]);
+  });
+
+  it("recomputes cached history layout when only the live boundary turn changes", () => {
+    const priorAssistant = { ...assistantMessage("prior", 1), turnId: "turn-1" };
+    const history = [priorAssistant];
+    const liveHead: StreamItem[] = [{ ...userMessage("live-user", 2), turnId: "turn-1" }];
+    const strategy = strategyFor();
+    const first = layoutStream({
+      strategy,
+      isTurnActive: true,
+      history,
+      liveHead,
+      timingByAssistantId: timingFor(priorAssistant.id),
+    });
+
+    liveHead[0] = { ...liveHead[0]!, turnId: "turn-2" };
+    const second = layoutStream({
+      strategy,
+      isTurnActive: true,
+      history,
+      liveHead,
+      timingByAssistantId: timingFor(priorAssistant.id),
+    });
+
+    expect(footerOwners(first)).toEqual([]);
+    expect(footerOwners(second)).toEqual([priorAssistant.id]);
+  });
   it("marks only the active live-head assistant block as streaming", () => {
     const completed = assistantMessage("turn:block:0", 2, { groupId: "turn", index: 0 });
     const live = assistantMessage("turn:block:1", 3, { groupId: "turn", index: 1 });
@@ -226,7 +263,7 @@ describe("layoutStream", () => {
     });
 
     expect(findLayoutItem(layout, historyBlock.id).assistantSpacing).toBe("compactBottom");
-    expect(findLayoutItem(layout, headBlock.id).assistantSpacing).toBe("compactTop");
+    expect(findLayoutItem(layout, headBlock.id).assistantSpacing).toBe("compactBoth");
   });
 
   it("keeps split tool sequencing and gapBelow identical to unsplit history", () => {
