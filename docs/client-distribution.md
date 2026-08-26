@@ -21,7 +21,7 @@ A Stable tag is `vX.Y.Z`; a Beta tag is `vX.Y.Z-beta.N`. Desktop and Android ass
 2. Create the immutable annotated release tag at that SHA.
 3. `Publish npm`, `Deploy App`, `Deploy Relay`, and `Publish clients` all validate the tag and the successful exact-SHA CI run.
 4. `Publish clients` checks out only `refs/tags/<tag>`, builds each public client, and fails if the checked-out commit, package version, and tag disagree.
-5. The final publish job downloads all matrix artifacts, merges the two macOS updater manifests, stamps immediate rollout metadata, generates `client-release-manifest.json` and `SHA256SUMS.txt`, and verifies every file before upload.
+5. The final publish job downloads all matrix artifacts, merges the per-architecture macOS and Windows updater manifests, stamps immediate rollout metadata, generates `client-release-manifest.json` and `SHA256SUMS.txt`, and verifies every file before upload.
 6. Existing GitHub Release assets may only be reused when their SHA-256 matches. A different file with the same asset name is a hard failure; the workflow never uses `--clobber`.
 7. The workflow downloads the published assets again and verifies the public copy against the manifest and checksums.
 
@@ -34,6 +34,8 @@ Desktop builds publish:
 - macOS arm64 and x64: DMG + ZIP + updater metadata;
 - Linux x64: AppImage, deb, rpm, tar.gz + updater metadata;
 - Windows x64 and arm64: NSIS installer, ZIP + updater metadata.
+
+Each architecture is built and smoked on a native-architecture GitHub runner (`macos-14` arm64, `macos-15-intel` x64, `windows-11-arm` arm64, `windows-2022` x64). This prevents host-architecture optional/native dependencies from leaking into a cross-compiled package.
 
 Every public file is covered by `SHA256SUMS.txt` and the client manifest. OS code signing is applied when the corresponding GitHub release credentials are configured:
 

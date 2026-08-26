@@ -46,7 +46,12 @@ test("client publisher builds every public client from one immutable exact-CI ta
   assert.match(workflow, /apksigner.*verify --verbose --print-certs/);
   assert.match(workflow, /android-signing\.json/);
   assert.match(workflow, /merge-updater-manifest\.mjs/);
+  assert.match(workflow, /runner: macos-14/);
+  assert.match(workflow, /runner: macos-15-intel/);
+  assert.match(workflow, /runner: windows-2022/);
+  assert.match(workflow, /runner: windows-11-arm/);
   assert.match(workflow, /win-arm64-unpacked/);
+  assert.doesNotMatch(workflow, /electron-builder --win[^\n]*--x64 --arm64/);
   assert.match(workflow, /\.blockmap/);
   assert.match(workflow, /updater_channel=latest/);
   assert.match(workflow, /updater_channel=beta/);

@@ -254,9 +254,17 @@ jobs:
           retention-days: 14
 
   windows:
-    name: Windows x64 + arm64
+    name: Windows ${{ matrix.arch }}
     needs: release-context
-    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x64
+            runner: windows-2022
+          - arch: arm64
+            runner: windows-11-arm
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 60
     env:
       CSC_LINK: ${{ secrets.WINDOWS_CERTIFICATE_BASE64 }}
@@ -298,24 +306,27 @@ jobs:
       - run: npm run build:desktop:main
       - name: Package Windows
         working-directory: packages/desktop
-        run: npx electron-builder --win nsis zip --x64 --arm64 --publish never
+        run: npx electron-builder --win nsis zip --${{ matrix.arch }} --publish never
       - name: Verify package contents and signatures
         shell: pwsh
         run: |
-          foreach ($app in @("packages/desktop/release/win-unpacked", "packages/desktop/release/win-arm64-unpacked")) {
-            if (-not (Test-Path "$app/resources/app/package.json")) { throw "missing $app package.json" }
-            $pkg = Get-Content "$app/resources/app/package.json" -Raw | ConvertFrom-Json
-            if ($pkg.name -ne "@bytetrue/byspace-desktop") { throw "unexpected package name in $app" }
-            @(
-              "$app/resources/server/daemon-worker.js",
-              "$app/resources/server/supervisor-entrypoint.js",
-              "$app/resources/bin/byspace.js",
-              "$app/resources/app-update.yml",
-              "$app/resources/app/node_modules/node-pty",
-              "$app/resources/app/node_modules/@bytetrue/byspace-native-keymap",
-              "$app/resources/app/node_modules/esbuild"
-            ) | ForEach-Object { if (-not (Test-Path $_)) { throw "missing $_" } }
+          $app = if ('${{ matrix.arch }}' -eq 'arm64') {
+            'packages/desktop/release/win-arm64-unpacked'
+          } else {
+            'packages/desktop/release/win-unpacked'
           }
+          if (-not (Test-Path "$app/resources/app/package.json")) { throw "missing $app package.json" }
+          $pkg = Get-Content "$app/resources/app/package.json" -Raw | ConvertFrom-Json
+          if ($pkg.name -ne "@bytetrue/byspace-desktop") { throw "unexpected package name in $app" }
+          @(
+            "$app/resources/server/daemon-worker.js",
+            "$app/resources/server/supervisor-entrypoint.js",
+            "$app/resources/bin/byspace.js",
+            "$app/resources/app-update.yml",
+            "$app/resources/app/node_modules/node-pty",
+            "$app/resources/app/node_modules/@bytetrue/byspace-native-keymap",
+            "$app/resources/app/node_modules/esbuild"
+          ) | ForEach-Object { if (-not (Test-Path $_)) { throw "missing $_" } }
           if ("${{ steps.signing.outputs.mode }}" -eq "authenticode") {
             Get-ChildItem packages/desktop/release -Recurse -Filter '*.exe' | ForEach-Object {
               $signature = Get-AuthenticodeSignature $_.FullName
@@ -326,7 +337,7 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: client-smoke-windows
+          name: client-smoke-windows-${{ matrix.arch }}
           path: ${{ runner.temp }}/desktop-smoke
           if-no-files-found: ignore
           retention-days: 7
@@ -342,7 +353,7 @@ jobs:
           Set-Content client-artifact/windows-signing.txt '${{ steps.signing.outputs.mode }}'
       - uses: actions/upload-artifact@v4
         with:
-          name: client-windows
+          name: client-windows-${{ matrix.arch }}
           path: client-artifact/*
           if-no-files-found: error
           retention-days: 14
@@ -505,18 +516,21 @@ jobs:
           arm_manifest="$(find downloaded/client-mac-arm64 -type f -name "${UPDATER_CHANNEL}-mac.yml" -print -quit)"
           x64_manifest="$(find downloaded/client-mac-x64 -type f -name "${UPDATER_CHANNEL}-mac.yml" -print -quit)"
           linux_manifest="$(find downloaded/client-linux-x64 -type f -name "${UPDATER_CHANNEL}-linux.yml" -print -quit)"
-          windows_manifest="$(find downloaded/client-windows -type f -name "${UPDATER_CHANNEL}.yml" -print -quit)"
-          test -n "$arm_manifest" && test -n "$x64_manifest" && test -n "$linux_manifest" && test -n "$windows_manifest"
+          windows_x64_manifest="$(find downloaded/client-windows-x64 -type f -name "${UPDATER_CHANNEL}.yml" -print -quit)"
+          windows_arm_manifest="$(find downloaded/client-windows-arm64 -type f -name "${UPDATER_CHANNEL}.yml" -print -quit)"
+          test -n "$arm_manifest" && test -n "$x64_manifest" && test -n "$linux_manifest"
+          test -n "$windows_x64_manifest" && test -n "$windows_arm_manifest"
           node scripts/merge-updater-manifest.mjs "$arm_manifest" "$x64_manifest" "staging/${UPDATER_CHANNEL}-mac.yml"
+          node scripts/merge-updater-manifest.mjs "$windows_x64_manifest" "$windows_arm_manifest" "staging/${UPDATER_CHANNEL}.yml"
           cp "$linux_manifest" "staging/${UPDATER_CHANNEL}-linux.yml"
-          cp "$windows_manifest" "staging/${UPDATER_CHANNEL}.yml"
           release_date="$(git for-each-ref "refs/tags/$RELEASE_TAG" --format='%(taggerdate:iso-strict)')"
           test -n "$release_date"
           node scripts/stamp-rollout.mjs --release-date "$release_date" --rollout-hours 0 staging/*.yml
 
           macos_signing="$(tr -d '\r\n' < downloaded/client-mac-arm64/macos-signing.txt)"
           test "$macos_signing" = "$(tr -d '\r\n' < downloaded/client-mac-x64/macos-signing.txt)"
-          windows_signing="$(tr -d '\r\n' < downloaded/client-windows/windows-signing.txt)"
+          windows_signing="$(tr -d '\r\n' < downloaded/client-windows-x64/windows-signing.txt)"
+          test "$windows_signing" = "$(tr -d '\r\n' < downloaded/client-windows-arm64/windows-signing.txt)"
           android_fingerprint="$(tr -d '\r\n' < downloaded/client-android/android-certificate-sha256.txt)"
           node scripts/client-release-manifest.mjs create \
             --directory staging \
