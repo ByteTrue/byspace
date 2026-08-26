@@ -1,6 +1,6 @@
 {
   "name": "@bytetrue/byspace-plugin",
-  "version": "0.7.3",
+  "version": "0.7.4",
   "private": true,
   "description": "BySpace plugin SDK package",
   "files": [
