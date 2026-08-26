@@ -115,7 +115,7 @@ Before the tag, source can be fixed normally. After the tag, npm and client asse
 
 ## Incident-derived client build controls
 
-The first `v0.7.1`, `v0.7.2`, and `v0.7.3` client matrices failed before asset publication and established these additional controls:
+The first `v0.7.1` through `v0.7.4` client matrices failed before asset publication and established these additional controls:
 
 - Electron Web export is owned by the root `build:desktop:web` script. macOS, Linux, Windows, and local Desktop builds call that one script; a workflow must never route `build:web` to the Desktop workspace.
 - Electron server runtime and main-process compilation are owned by the tested root `build:desktop:runtime` and `build:desktop:main` scripts. Workflows must not invent package-script names that local builds do not execute.
@@ -126,6 +126,8 @@ The first `v0.7.1`, `v0.7.2`, and `v0.7.3` client matrices failed before asset p
 - Packaged smoke commands use only CLI options registered by the packaged version. The release workflow test rejects retired flags such as `--no-inject-mcp`; a real local package smoke must reach renderer startup, Desktop-managed daemon status, CLI status, terminal creation, and clean shutdown.
 - The Windows arm64 hosted runner uses x64 Node under Windows emulation for build tooling because `workerd` does not support a Windows arm64 development host. electron-builder still produces an arm64 application and the smoke runs that application on the native arm64 runner.
 - Desktop ownership is persisted in `byspace.pid`. CLI `daemon status --json` must preserve the additive `desktopManaged` field so the Electron manager can distinguish and safely stop/restart the daemon it owns.
+- electron-builder resolves signing and entitlement paths from its process working directory. Every platform package step runs from `packages/desktop`; ad-hoc macOS builds explicitly set `CSC_NAME=-` instead of relying on runner-specific auto-discovery behavior.
+- Desktop packages use `asar: true`. Post-package validation must inspect `app.asar`, `app.asar.unpacked` native dependencies, the platform CLI wrapper, and updater metadata through `scripts/verify-desktop-package.mjs`; checks for a nonexistent unpacked `resources/app` or standalone `resources/server` tree are invalid.
 
 ## Evidence in this repository
 

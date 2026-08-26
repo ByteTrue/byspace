@@ -37,6 +37,8 @@ Desktop builds publish:
 
 Each architecture is built and smoked on a native-architecture GitHub runner (`macos-14` arm64, `macos-15-intel` x64, `windows-11-arm` arm64, `windows-2022` x64). This prevents host-architecture optional/native dependencies from leaking into a cross-compiled package.
 
+All platform packagers run from `packages/desktop`. `scripts/verify-desktop-package.mjs` validates the real `app.asar` package entries, unpacked native dependencies, updater metadata, and platform CLI wrapper after the packaged runtime smoke; release checks must not assume an unpacked `resources/app` tree.
+
 Every public file is covered by `SHA256SUMS.txt` and the client manifest. OS code signing is applied when the corresponding GitHub release credentials are configured:
 
 - macOS GitHub secrets: `APPLE_CERTIFICATE`, `APPLE_CERTIFICATE_PASSWORD`, `APPLE_ID`, `APPLE_PASSWORD`, `APPLE_TEAM_ID`;

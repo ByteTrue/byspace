@@ -58,7 +58,7 @@ npm run lint
 npm run format:check
 npm run build:web --workspace=@bytetrue/byspace-app
 npm run release:check
-node --test scripts/client-release-manifest.test.mjs scripts/release-workflows.test.mjs
+node --test scripts/client-release-manifest.test.mjs scripts/release-workflows.test.mjs scripts/verify-desktop-package.test.mjs
 ```
 
 `release:check` builds and validates a local candidate before version-control changes. Exact-SHA CI independently creates and verifies the canonical Web/npm artifacts. The immutable tag separately causes `Publish clients` to build and smoke packaged Desktop targets plus the signed Android APK, then generate and publicly re-verify `client-release-manifest.json` and `SHA256SUMS.txt`.

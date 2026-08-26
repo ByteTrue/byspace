@@ -1,11 +1,17 @@
 # Changelog
 
-## 0.7.4 - 2026-08-27
+## 0.7.5 - 2026-08-27
 
 - Completes the public multi-client release tuple: every Stable/Beta tag publishes checksummed Electron Desktop packages for macOS, Linux, and Windows plus a BySpace release-key-signed Android APK alongside npm, Web/PWA, and Relay.
-- Hardens real packaged-client validation by scoping optional Apple credentials, removing a retired daemon option, preserving Desktop-managed daemon ownership through CLI status, and using x64 Node build tooling on the native Windows arm64 runner while still packaging and smoking the arm64 application.
+- Makes all Desktop packagers run from the Desktop project directory, forces explicit ad-hoc macOS signing when Developer ID credentials are absent, and validates the real ASAR package layout through one cross-platform verifier backed by focused tests and a real local package smoke.
 - Publishes immutable exact-tag client manifests, SHA-256 checksums, updater metadata, actual macOS/Windows signing state, public re-download verification, and Android certificate identity; iOS source and validation remain maintained while active CD builds and uploads no iOS artifact.
-- Leaves the immutable 0.7.1–0.7.3 tags untouched after their client matrices stopped before asset upload, and fixes forward without reconstructing old-tag artifacts from newer workflow code.
+- Leaves the immutable 0.7.1–0.7.4 tags untouched after their client matrices stopped before asset upload, and fixes forward without reconstructing old-tag artifacts from newer workflow code.
+
+## 0.7.4 - 2026-08-27
+
+- Publishes npm, Stable Web, and Stable Relay successfully and hardens packaged-client validation by scoping optional Apple credentials, removing a retired daemon option, preserving Desktop-managed daemon ownership through CLI status, and using x64 Node build tooling on the native Windows arm64 runner.
+- The client matrix stopped before aggregate upload because macOS packaging resolved entitlements from the wrong working directory and post-package checks assumed an unpacked `resources/app` tree instead of the real `app.asar` layout; no client asset reached the GitHub Release.
+- Client publication is fixed forward in 0.7.5 without moving the 0.7.4 tag or rebuilding it from later workflow code.
 
 ## 0.7.3 - 2026-08-27
 

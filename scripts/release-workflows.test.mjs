@@ -82,6 +82,14 @@ test("client publisher builds every public client from one immutable exact-CI ta
   assert.match(workflow, /runner: windows-2022/);
   assert.match(workflow, /runner: windows-11-arm/);
   assert.match(workflow, /architecture: x64/);
+  assert.equal(workflow.match(/working-directory: packages\/desktop/g)?.length, 3);
+  assert.match(workflow, /export CSC_NAME=-/);
+  assert.match(workflow, /release\/mac-arm64\/BySpace\.app/);
+  assert.match(workflow, /release\/mac\/BySpace\.app/);
+  assert.equal(workflow.match(/verify-desktop-package\.mjs/g)?.length, 3);
+  assert.doesNotMatch(workflow, /resources\/server\/daemon-worker\.js/);
+  assert.doesNotMatch(workflow, /byspace-native-keymap/);
+  assert.doesNotMatch(workflow, /resources\/app\/package\.json/);
   assert.match(workflow, /win-arm64-unpacked/);
   assert.doesNotMatch(workflow, /electron-builder --win[^\n]*--x64 --arm64/);
   assert.match(workflow, /\.blockmap/);

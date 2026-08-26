@@ -1,6 +1,6 @@
 {
   "name": "@bytetrue/byspace-desktop",
-  "version": "0.7.4",
+  "version": "0.7.5",
   "private": true,
   "description": "BySpace desktop app (Electron wrapper)",
   "homepage": "https://byspace.cc.cd",

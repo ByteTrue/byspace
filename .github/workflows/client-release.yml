@@ -136,26 +136,23 @@ jobs:
           for name in CSC_LINK CSC_KEY_PASSWORD APPLE_ID APPLE_APP_SPECIFIC_PASSWORD APPLE_TEAM_ID; do
             if [[ -z "${!name}" ]]; then unset "$name"; fi
           done
+          if [[ "${{ steps.signing.outputs.mode }}" == ad-hoc ]]; then export CSC_NAME=-; fi
           npx electron-builder --mac zip dmg --${{ matrix.arch }} --publish never
       - name: Verify package and signing
         shell: bash
         run: |
           set -euo pipefail
-          app="packages/desktop/release/mac-${{ matrix.arch }}/BySpace.app"
+          if [[ "${{ matrix.arch }}" == arm64 ]]; then
+            app="packages/desktop/release/mac-arm64/BySpace.app"
+          else
+            app="packages/desktop/release/mac/BySpace.app"
+          fi
+          resources="$app/Contents/Resources"
           codesign --verify --deep --strict "$app"
           if [[ "${{ steps.signing.outputs.mode }}" == developer-id-notarized ]]; then
             spctl --assess --type execute --verbose=2 "$app"
           fi
-          package_json="$app/Contents/Resources/app/package.json"
-          [[ -f "$package_json" ]]
-          node -e 'const p=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")); if(p.name!=="@bytetrue/byspace-desktop") process.exit(1)' "$package_json"
-          [[ -f "$app/Contents/Resources/server/daemon-worker.js" ]]
-          [[ -f "$app/Contents/Resources/server/supervisor-entrypoint.js" ]]
-          [[ -f "$app/Contents/Resources/bin/byspace.js" ]]
-          [[ -f "$app/Contents/Resources/app-update.yml" ]]
-          [[ -d "$app/Contents/Resources/app/node_modules/node-pty" ]]
-          [[ -d "$app/Contents/Resources/app/node_modules/@bytetrue/byspace-native-keymap" ]]
-          [[ -d "$app/Contents/Resources/app/node_modules/esbuild" ]]
+          node scripts/verify-desktop-package.mjs "$resources" byspace
       - name: Upload packaged smoke diagnostics
         if: failure()
         uses: actions/upload-artifact@v4
@@ -220,19 +217,7 @@ jobs:
         working-directory: packages/desktop
         run: npx electron-builder --linux AppImage deb rpm tar.gz --x64 --publish never
       - name: Verify package contents
-        shell: bash
-        run: |
-          set -euo pipefail
-          app="packages/desktop/release/linux-unpacked"
-          [[ -f "$app/resources/app/package.json" ]]
-          node -e 'const p=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")); if(p.name!=="@bytetrue/byspace-desktop") process.exit(1)' "$app/resources/app/package.json"
-          [[ -f "$app/resources/server/daemon-worker.js" ]]
-          [[ -f "$app/resources/server/supervisor-entrypoint.js" ]]
-          [[ -f "$app/resources/bin/byspace.js" ]]
-          [[ -f "$app/resources/app-update.yml" ]]
-          [[ -d "$app/resources/app/node_modules/node-pty" ]]
-          [[ -d "$app/resources/app/node_modules/@bytetrue/byspace-native-keymap" ]]
-          [[ -d "$app/resources/app/node_modules/esbuild" ]]
+        run: node scripts/verify-desktop-package.mjs packages/desktop/release/linux-unpacked/resources byspace
       - name: Upload packaged smoke diagnostics
         if: failure()
         uses: actions/upload-artifact@v4
@@ -320,18 +305,9 @@ jobs:
           } else {
             'packages/desktop/release/win-unpacked'
           }
-          if (-not (Test-Path "$app/resources/app/package.json")) { throw "missing $app package.json" }
-          $pkg = Get-Content "$app/resources/app/package.json" -Raw | ConvertFrom-Json
-          if ($pkg.name -ne "@bytetrue/byspace-desktop") { throw "unexpected package name in $app" }
-          @(
-            "$app/resources/server/daemon-worker.js",
-            "$app/resources/server/supervisor-entrypoint.js",
-            "$app/resources/bin/byspace.js",
-            "$app/resources/app-update.yml",
-            "$app/resources/app/node_modules/node-pty",
-            "$app/resources/app/node_modules/@bytetrue/byspace-native-keymap",
-            "$app/resources/app/node_modules/esbuild"
-          ) | ForEach-Object { if (-not (Test-Path $_)) { throw "missing $_" } }
+          $resources = "$app/resources"
+          node scripts/verify-desktop-package.mjs $resources byspace.cmd
+          if ($LASTEXITCODE -ne 0) { throw "packaged Desktop verification failed for $resources" }
           if ("${{ steps.signing.outputs.mode }}" -eq "authenticode") {
             Get-ChildItem packages/desktop/release -Recurse -Filter '*.exe' | ForEach-Object {
               $signature = Get-AuthenticodeSignature $_.FullName

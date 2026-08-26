@@ -1,6 +1,6 @@
 {
   "name": "byspace",
-  "version": "0.7.4",
+  "version": "0.7.5",
   "private": true,
   "description": "BySpace: local-first personal compute control plane for AI agents and connected devices",
   "keywords": [
@@ -111,7 +111,7 @@
     "release:publish:beta": "node scripts/publish-byspace.mjs --skip-pack --tag beta",
     "branding:check": "node scripts/check-branding.mjs",
     "pack:byspace": "node scripts/pack-byspace.mjs",
-    "test:pack": "node --test scripts/client-release-manifest.test.mjs scripts/merge-updater-manifest.test.mjs scripts/pack-byspace-output.test.mjs scripts/release-artifact-manifest.test.mjs scripts/release-verify.test.mjs scripts/release-workflows.test.mjs scripts/stamp-rollout.test.mjs",
+    "test:pack": "node --test scripts/client-release-manifest.test.mjs scripts/merge-updater-manifest.test.mjs scripts/pack-byspace-output.test.mjs scripts/release-artifact-manifest.test.mjs scripts/release-verify.test.mjs scripts/release-workflows.test.mjs scripts/stamp-rollout.test.mjs scripts/verify-desktop-package.test.mjs",
     "smoke:package": "node scripts/smoke-byspace-package.mjs",
     "release:verify": "node scripts/release-verify.mjs"
   },
