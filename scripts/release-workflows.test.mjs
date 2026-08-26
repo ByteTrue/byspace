@@ -40,6 +40,9 @@ test("client publisher builds every public client from one immutable exact-CI ta
   assert.match(workflow, /push:\n    tags:\n      - "v\*"/);
   assert.doesNotMatch(workflow, /workflow_dispatch|inputs\.tag/);
   assert.doesNotMatch(workflow, /checkout_ref|--clobber|eas-cli|--platform ios|\.ipa/);
+  assert.equal(workflow.match(/run: npm run build:desktop:web/g)?.length, 3);
+  assert.doesNotMatch(workflow, /npm run build:web --workspace=@bytetrue\/byspace-desktop/);
+  assert.doesNotMatch(workflow, /npm config set script-shell/);
   assert.match(
     workflow,
     /gh run list .*--workflow CI --commit "\$sha" --event push --status success/,
@@ -139,4 +142,9 @@ test("Desktop clean app dependency builds leave every workspace dependency consu
     /npm run clean --workspace=@bytetrue\/byspace-expo-two-way-audio/,
   );
   assert.match(packageJson.scripts["build:desktop"], /^npm run build:app-deps:clean/);
+  assert.equal(
+    packageJson.scripts["build:desktop:web"],
+    "cd packages/app && cross-env BYSPACE_WEB_PLATFORM=electron npx expo export --platform web",
+  );
+  assert.match(packageJson.scripts["build:desktop"], /npm run build:desktop:web/);
 });

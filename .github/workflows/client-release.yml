@@ -120,7 +120,7 @@ jobs:
           EXPO_NO_DOTENV: "1"
           EXPO_PUBLIC_POSTHOG_KEY: ${{ secrets.EXPO_PUBLIC_POSTHOG_KEY }}
           EXPO_PUBLIC_POSTHOG_HOST: ${{ secrets.EXPO_PUBLIC_POSTHOG_HOST }}
-        run: npm run build:web --workspace=@bytetrue/byspace-desktop
+        run: npm run build:desktop:web
       - run: npm run build:server:runtime
       - run: npm run build:desktop:main
       - name: Package macOS
@@ -202,7 +202,7 @@ jobs:
           EXPO_NO_DOTENV: "1"
           EXPO_PUBLIC_POSTHOG_KEY: ${{ secrets.EXPO_PUBLIC_POSTHOG_KEY }}
           EXPO_PUBLIC_POSTHOG_HOST: ${{ secrets.EXPO_PUBLIC_POSTHOG_HOST }}
-        run: npm run build:web --workspace=@bytetrue/byspace-desktop
+        run: npm run build:desktop:web
       - run: npm run build:server:runtime
       - run: npm run build:desktop:main
       - name: Package Linux
@@ -287,7 +287,6 @@ jobs:
           if ($hasCertificate -ne $hasPassword) { throw "Windows signing credentials must be both present or both absent" }
           $mode = if ($hasCertificate) { "authenticode" } else { "unsigned" }
           "mode=$mode" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
-      - run: npm config set script-shell powershell.exe
       - run: npm ci
       - run: npm run build:app-deps
       - name: Export Electron Web bundle
@@ -295,7 +294,7 @@ jobs:
           EXPO_NO_DOTENV: "1"
           EXPO_PUBLIC_POSTHOG_KEY: ${{ secrets.EXPO_PUBLIC_POSTHOG_KEY }}
           EXPO_PUBLIC_POSTHOG_HOST: ${{ secrets.EXPO_PUBLIC_POSTHOG_HOST }}
-        run: npm run build:web --workspace=@bytetrue/byspace-desktop
+        run: npm run build:desktop:web
       - run: npm run build:server:runtime
       - run: npm run build:desktop:main
       - name: Package Windows
