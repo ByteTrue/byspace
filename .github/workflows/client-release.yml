@@ -76,11 +76,6 @@ jobs:
           - arch: x64
             runner: macos-15-intel
     env:
-      CSC_LINK: ${{ secrets.APPLE_CERTIFICATE }}
-      CSC_KEY_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-      APPLE_ID: ${{ secrets.APPLE_ID }}
-      APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
       DESKTOP_APP_UPDATE_BASE_URL: https://github.com/ByteTrue/byspace/releases/download
       DESKTOP_APP_UPDATE_CHANNEL: ${{ needs.release-context.outputs.channel }}
       RELEASE_CHANNEL: ${{ needs.release-context.outputs.channel }}
@@ -101,6 +96,12 @@ jobs:
       - name: Validate optional Apple signing credentials
         id: signing
         shell: bash
+        env:
+          CSC_LINK: ${{ secrets.APPLE_CERTIFICATE }}
+          CSC_KEY_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
           set -euo pipefail
           values=("$CSC_LINK" "$CSC_KEY_PASSWORD" "$APPLE_ID" "$APPLE_APP_SPECIFIC_PASSWORD" "$APPLE_TEAM_ID")
@@ -125,7 +126,17 @@ jobs:
       - run: npm run build:desktop:main
       - name: Package macOS
         working-directory: packages/desktop
-        run: npx electron-builder --mac zip dmg --${{ matrix.arch }} --publish never
+        env:
+          CSC_LINK: ${{ secrets.APPLE_CERTIFICATE }}
+          CSC_KEY_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          for name in CSC_LINK CSC_KEY_PASSWORD APPLE_ID APPLE_APP_SPECIFIC_PASSWORD APPLE_TEAM_ID; do
+            if [[ -z "${!name}" ]]; then unset "$name"; fi
+          done
+          npx electron-builder --mac zip dmg --${{ matrix.arch }} --publish never
       - name: Verify package and signing
         shell: bash
         run: |
@@ -277,6 +288,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
+          architecture: x64
           cache: npm
       - name: Validate optional Windows signing credentials
         id: signing

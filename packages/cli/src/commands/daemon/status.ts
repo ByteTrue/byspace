@@ -25,6 +25,7 @@ interface DaemonStatus {
   hostname: string | null;
   pid: number | null;
   startedAt: string | null;
+  desktopManaged: boolean;
   owner: string | null;
   logPath: string;
   daemonNode: string;
@@ -401,6 +402,7 @@ export async function runStatusCommand(
     hostname: state.pidInfo?.hostname ?? null,
     pid: state.pidInfo?.pid ?? null,
     startedAt: state.pidInfo?.startedAt ?? null,
+    desktopManaged: state.pidInfo?.desktopManaged === true,
     owner,
     logPath: state.logPath,
     daemonNode,

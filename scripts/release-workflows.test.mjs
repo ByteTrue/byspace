@@ -39,6 +39,10 @@ test("client publisher builds every public client from one immutable exact-CI ta
   const workflow = readWorkflow("client-release.yml");
   const npmWorkflow = readWorkflow("npm-release.yml");
   const rootPackage = JSON.parse(readFileSync(resolve(root, "package.json"), "utf8"));
+  const packagedDesktopSmoke = readFileSync(
+    resolve(root, "packages", "desktop", "e2e", "packaged-app-smoke.js"),
+    "utf8",
+  );
   assert.match(workflow, /push:\n    tags:\n      - "v\*"/);
   assert.doesNotMatch(workflow, /workflow_dispatch|inputs\.tag/);
   assert.doesNotMatch(workflow, /checkout_ref|--clobber|eas-cli|--platform ios|\.ipa/);
@@ -56,6 +60,13 @@ test("client publisher builds every public client from one immutable exact-CI ta
     npmWorkflow,
     /curl -fsSL --retry 72 --retry-all-errors --retry-delay 5 --retry-max-time 360/,
   );
+  assert.doesNotMatch(workflow, /^ {6}CSC_LINK: \$\{\{ secrets\.APPLE_CERTIFICATE \}\}$/m);
+  assert.match(
+    workflow,
+    /for name in CSC_LINK CSC_KEY_PASSWORD APPLE_ID APPLE_APP_SPECIFIC_PASSWORD APPLE_TEAM_ID/,
+  );
+  assert.match(packagedDesktopSmoke, /"--no-mcp"/);
+  assert.doesNotMatch(packagedDesktopSmoke, /--no-inject-mcp/);
   assert.match(
     workflow,
     /gh run list .*--workflow CI --commit "\$sha" --event push --status success/,
@@ -70,6 +81,7 @@ test("client publisher builds every public client from one immutable exact-CI ta
   assert.match(workflow, /runner: macos-15-intel/);
   assert.match(workflow, /runner: windows-2022/);
   assert.match(workflow, /runner: windows-11-arm/);
+  assert.match(workflow, /architecture: x64/);
   assert.match(workflow, /win-arm64-unpacked/);
   assert.doesNotMatch(workflow, /electron-builder --win[^\n]*--x64 --arm64/);
   assert.match(workflow, /\.blockmap/);

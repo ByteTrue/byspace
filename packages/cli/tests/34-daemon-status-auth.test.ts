@@ -24,6 +24,7 @@ try {
         hostname: "status-auth-test",
         uid: process.getuid?.(),
         listen: `0.0.0.0:${daemon.port}`,
+        desktopManaged: true,
       },
       null,
       2,
@@ -43,6 +44,7 @@ try {
 
     assert.strictEqual(status.localDaemon, "running");
     assert.strictEqual(status.connectedDaemon, "auth_required");
+    assert.strictEqual(status.desktopManaged, true);
     assert(!("runningAgents" in status), "status should not fetch agent counts");
     assert(!("idleAgents" in status), "status should not fetch agent counts");
     assert.match(status.note, /requires a password/i);
