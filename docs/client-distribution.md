@@ -25,7 +25,7 @@ A Stable tag is `vX.Y.Z`; a Beta tag is `vX.Y.Z-beta.N`. Desktop and Android ass
 6. Existing GitHub Release assets may only be reused when their SHA-256 matches. A different file with the same asset name is a hard failure; the workflow never uses `--clobber`.
 7. The workflow downloads the published assets again and verifies the public copy against the manifest and checksums.
 
-`Publish npm` creates the GitHub Release. `Publish clients` waits for that exact-tag release, then attaches the verified assets idempotently.
+`Publish npm` creates the GitHub Release. `Publish clients` waits for that exact-tag release, then attaches the verified assets idempotently. It has no manual dispatch path: recovery reruns only failed jobs in the original tag-triggered run so successful build artifacts are reused byte-for-byte. If those retained artifacts are unavailable, fix forward with a new version instead of rebuilding an already-partially-published tag.
 
 ## Desktop assets and signing
 

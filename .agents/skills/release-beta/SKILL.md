@@ -49,7 +49,7 @@ Do not create the tag before these gates pass.
 2. Push it once. Protected release tags cannot be moved or deleted.
 3. Wait for `Publish npm` and tag-triggered `Publish clients` to succeed.
 4. Wait for `Deploy App` and `Deploy Relay` triggered by the publisher to succeed.
-5. If a post-publication step fails, fix forward or rerun only the failed immutable event; a client retry may upload a missing asset only when every existing asset is byte-identical. Never retag different source or overwrite a published asset.
+5. If a post-publication step fails, fix forward or rerun only failed jobs in the original immutable event. `Publish clients` has no manual dispatch/rebuild path; reuse its retained artifacts, and upload a missing asset only when every existing asset is byte-identical. If retained artifacts are unavailable, cut a new version. Never retag different source or overwrite a published asset.
 
 ## Verify
 

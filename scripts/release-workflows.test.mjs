@@ -8,6 +8,10 @@ const readWorkflow = (name) => readFileSync(resolve(root, ".github", "workflows"
 
 test("CI builds Web once, embeds it in one package, and smokes that package on every OS", () => {
   const workflow = readWorkflow("ci.yml");
+  assert.match(
+    workflow,
+    /go run github\.com\/rhysd\/actionlint\/cmd\/actionlint@v1\.7\.12 -no-color/,
+  );
   assert.doesNotMatch(workflow, /npm run build:web/);
   assert.equal(workflow.match(/npm run pack:byspace/g)?.length, 1);
   assert.doesNotMatch(workflow, /npm run pack:byspace -- --skip-web-export/);
@@ -34,7 +38,7 @@ test("npm package bundles and smoke-loads the private plugin runtime", () => {
 test("client publisher builds every public client from one immutable exact-CI tag", () => {
   const workflow = readWorkflow("client-release.yml");
   assert.match(workflow, /push:\n    tags:\n      - "v\*"/);
-  assert.match(workflow, /workflow_dispatch:[\s\S]*?tag:/);
+  assert.doesNotMatch(workflow, /workflow_dispatch|inputs\.tag/);
   assert.doesNotMatch(workflow, /checkout_ref|--clobber|eas-cli|--platform ios|\.ipa/);
   assert.match(
     workflow,

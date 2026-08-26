@@ -103,7 +103,7 @@ Pages rollback uses a prior successful production deployment. Worker rollback us
 npm versions and client assets are immutable: fix forward with a new version.
 
 - If npm publication succeeded but its workflow failed later, rerun `Publish npm`; it skips republishing the immutable version and resumes downstream steps after dist-tag verification catches up.
-- If client publication failed, rerun `Publish clients` for the existing tag. Identical assets are accepted; different bytes under an existing name are rejected.
+- If client publication failed, rerun only the failed jobs in the original tag-triggered `Publish clients` run so retained build artifacts are reused. There is no manual dispatch/rebuild path for an existing tag. Identical assets are accepted; different bytes under an existing name are rejected. If retained artifacts are unavailable, fix forward with a new version.
 - Never delete/reupload a client asset or mutate updater manifests to repair a release.
 - If App or Relay failed, rerun that immutable workflow. Emergency hosted-surface rollback must be reconciled with a new package version.
 - Published client binaries remain attached to their original tag.
