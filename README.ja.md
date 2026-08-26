@@ -24,17 +24,17 @@
 
 ---
 
-自分のマシンでエージェントを並列実行。スマートフォンからでもデスクからでも、開発を進めてリリースできます。
+自分のマシンでエージェントを並列実行し、Web、Android、Desktop、CLI から操作できます。
 
 - **セルフホスト:** エージェントはあなたのマシン上で動作し、完全な開発環境を使用します。自分のツール・設定・スキルをそのまま活用できます。
 - **マルチプロバイダー:** Claude Code、Codex、Copilot、OpenCode、Pi を同一のインターフェースで利用。タスクに合ったモデルを選べます。
 - **ローカル音声入力:** Host で明示的にインストール・選択した音声モデルを使い、口述した内容を文字に変換します。
-- **クロスデバイス:** ブラウザ Web/PWA と CLI に対応。机で作業を始め、スマートフォンのブラウザで確認し、ターミナルから自動化できます。
+- **フルクライアント:** Web/PWA、署名済み Android APK、macOS/Linux/Windows Desktop、CLI が同じローカルデーモンに接続します。
 - **プライバシー優先:** BySpace にはテレメトリー・トラッキング・強制ログインは一切ありません。
 
 ## はじめかた
 
-BySpace はコーディングエージェントを管理するローカルサーバー（デーモン）を起動します。ホストされた Web アプリと CLI がこのデーモンに接続します。
+BySpace はコーディングエージェントを管理するローカルデーモンを起動します。Web、Android、Desktop、CLI は直接または E2EE Relay 経由で接続します。
 
 ### 前提条件
 
@@ -45,6 +45,12 @@ BySpace はコーディングエージェントを管理するローカルサー
 - [GitHub Copilot](https://github.com/features/copilot/cli/)
 - [OpenCode](https://github.com/anomalyco/opencode)
 - [Pi](https://pi.dev)
+
+### Android と Desktop
+
+[最新の GitHub Release](https://github.com/ByteTrue/byspace/releases/latest) から署名済み Android APK と macOS/Linux/Windows Electron クライアントをダウンロードし、`client-release-manifest.json` と `SHA256SUMS.txt` で検証できます。
+
+iOS のソース、prebuild、テストは維持しますが、iOS ビルドは公開しません。
 
 ### CLI / ヘッドレス
 
@@ -113,16 +119,17 @@ npx skills add ByteTrue/byspace
 モノレポのパッケージ構成：
 
 - `packages/server`: BySpace デーモン（エージェントプロセスのオーケストレーション、WebSocket API、MCP サーバー）
-- `packages/app`: ブラウザ Web/PWA クライアント（Expo + React Native Web）
+- `packages/app`: Web/PWA、Android、維持される iOS ソース用の共有 Expo クライアント
+- `packages/desktop`: macOS、Linux、Windows の Electron ホスト
 - `packages/cli`: デーモンおよびエージェントワークフロー向け `byspace` CLI
 - `packages/relay`: リモート接続用リレーパッケージ
 
 メンテナー向けワークフローはリポジトリローカルのスキルとして定義されています。
 
 - `upstream-sync` — 固定した Paseo リリーススナップショットからクリーンに再構築します。
-- `release-beta` — npm、Web、Relay を一つの Beta チャンネルとしてリリースします。
-- `release-stable` — Stable チャンネルをリリースまたは昇格します。
-- `harden-byspace-release` — パッケージング、CI/CD、チャンネル分離、復旧を監査します。
+- `release-beta` — npm、Web、Relay、Android、Desktop を一つの Beta チャンネルとしてリリースします。
+- `release-stable` — 完全な Stable チャンネルをリリースまたは昇格します。
+- `harden-byspace-release` — npm/クライアントのパッケージング、署名、CI/CD、チャンネル分離、復旧を監査します。
 
 よく使うコマンド：
 

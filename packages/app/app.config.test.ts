@@ -45,12 +45,18 @@ describe("app config build profiles", () => {
     expect(config.android.buildProfile).toBe("profile");
   });
 
-  it("keeps camera, notifications, and audio in the default build", async () => {
+  it("keeps camera, notifications, audio, and release signing in the default build", async () => {
     const config = await loadExpoConfig();
+    const plugins = pluginNames(config.plugins);
 
-    expect(pluginNames(config.plugins)).toEqual(
+    expect(plugins).toEqual(
       expect.arrayContaining(["expo-camera", "expo-notifications", "expo-audio"]),
     );
+    expect(
+      plugins.some(
+        (plugin) => typeof plugin === "function" && plugin.name === "withAndroidReleaseSigning",
+      ),
+    ).toBe(true);
     expect(config.extra.fdroidBuild).toBe(false);
   });
 

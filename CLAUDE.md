@@ -50,6 +50,7 @@ At the start of non-trivial work, list `docs/` and skim anything relevant to the
 | [docs/ad-hoc-daemon-testing.md](docs/ad-hoc-daemon-testing.md) | Isolated in-process daemon test harness                                                                                        |
 | [docs/docker.md](docs/docker.md)                               | Running the daemon and bundled web UI in Docker, volumes, agent images, security                                               |
 | [docs/release.md](docs/release.md)                             | Release playbook, draft releases, completion checklist                                                                         |
+| [docs/client-distribution.md](docs/client-distribution.md)     | Public Desktop/Android release artifacts, signing, checksums, and explicit iOS no-publish boundary                             |
 | [docs/upstream-sync.md](docs/upstream-sync.md)                 | Release-level delta workflow for synchronizing upstream changes onto current BySpace `main`                                    |
 | [docs/release-engineering.md](docs/release-engineering.md)     | Packaging, CI/CD, channel isolation, cutover, and incident-derived release controls                                            |
 | [docs/terminal-activity.md](docs/terminal-activity.md)         | Terminal activity indicators — source-agnostic tracker, agent hook reporting, adding a new hook provider                       |
@@ -115,13 +116,14 @@ See [docs/development.md](docs/development.md) for full setup, build sync requir
 
 ## Multi-client boundary
 
-BySpace maintains one shared product across Browser Web/PWA, Android, iOS, and Electron Desktop, plus the CLI. Distribution maturity differs by platform: Web is public; Android has an internally verified sideload artifact; iOS guarantees source/prebuild closure without signed distribution; Electron has a verified internal macOS package while signed/public Desktop distribution remains gated.
+BySpace maintains one shared product across Browser Web/PWA, Android, iOS, Electron Desktop, and the CLI. Stable/Beta releases publish Web/PWA, npm CLI/daemon, Relay, signed Android APK, and checksummed Electron artifacts for macOS/Linux/Windows from one immutable tag. iOS is maintained source/prebuild/test surface only and is never built, submitted, or uploaded by active CD.
 
 - Keep shared product journeys in platform-neutral Expo/React code; put actual OS access in `.web`, `.native`, Expo module/config-plugin, or Electron main/preload adapters.
 - Use browser APIs directly in Web-owned modules and keep SSR-safe guards when modules can load before `window` exists.
 - Distinguish compact browser layouts from native mobile behavior; “mobile” viewport terminology alone does not imply Android/iOS.
-- Do not delete, stub, or skip Android/iOS/Electron/Browser-automation code merely because a public artifact is not enabled yet. Every maintained platform slice participates in upstream audits.
+- Do not delete, stub, or skip Android/iOS/Electron/Browser-automation code. Every maintained platform slice participates in upstream audits even though iOS is not distributed.
 - iOS must not evaluate daemon-delivered dynamic plugin client bundles; first-party compiled client behavior remains allowed.
+- Active release CD must publish Desktop and Android assets and must not contain an iOS build/submit/upload path. Follow [docs/client-distribution.md](docs/client-distribution.md).
 - Validate every client change with App typecheck and a real Web export. Also run the documented build/prebuild/smoke for each native or Electron surface the change touches.
 
 ## Debugging

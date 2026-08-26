@@ -11,6 +11,8 @@ closed: 2026-08-26
 
 # 多客户端聚合验证与独立审查
 
+> **当前发行状态（2026-08-27）：** 本 Issue 的“不发布、不签名”仅是 Epic 005 聚合验收时的历史边界，已由 [Issue 050](../../../../issues/050-o-full-client-release-gate/index.md) 取代。当前 Stable/Beta 发布签名 Android APK 与 macOS/Linux/Windows Electron 资产；iOS 继续 source/prebuild/test-only，active CD 不发布。
+
 ## 初始需求
 
 这是 Epic 005 的聚合收口检查点。它不重复前六个 Issue 的实现，而是要求：
@@ -101,7 +103,7 @@ build:highlight:clean
 - 合计：**12 files，306 tests passed**。
 - Root release/build-script regression：`node --test scripts/release-workflows.test.mjs`，5/5 passed。
 
-前六个 Issue 的闭环证据继续成立：Android internal APK/emulator Direct+Relay smoke、Native source tests、Web-only policy correction、Desktop package/CLI/browser automation tests、真实 macOS packaged smoke、EAS/Fastlane/Maestro/Nix/dormant workflows source closure；本 Issue 没有伪造新的签名或公开发布证据。
+Epic 005 当时的前六个检查点均有闭环证据：Android internal APK/emulator Direct+Relay smoke、Native source tests、Web-only policy correction、Desktop package/CLI/browser automation tests、真实 macOS packaged smoke，以及 EAS/Fastlane/Maestro/Nix/发布源码闭包。本 Issue 不把后续才由 Issue 050 建立的签名与公开发布证据倒填到该次聚合验收。
 
 ### 构建、导出与静态门禁
 
@@ -140,18 +142,20 @@ build:highlight:clean
 - Native/Desktop 271-path manifest 与关键调用链：无缺失。
 - 对审查后发现的跨构建顺序修复又做一次窄复核：`package.json`、静态回归与 `docs/development.md` 均与 frozen v0.5.1 一致；无 Blocker / High / Medium / Low。
 
-Reviewer 仅记录两个预期的发布边界：没有有效 EAS Project ID/平台凭据时 Push subscription 会安全跳过；Expo Push sender 需要访问 `exp.host`。两者均属于休眠发布配置，不是源码闭包缺陷。
+Reviewer 当时记录两个配置边界：没有有效 EAS Project ID/平台凭据时 Push subscription 会安全跳过；Expo Push sender 需要访问 `exp.host`。这两项仍是运行环境配置，不是源码闭包缺陷，也不改变 Issue 050 建立的 Android/Desktop 当前发行契约。
 
-## 明确保留的边界
+## 本检查点当时的边界
 
-- 未配置或使用 Apple Team、App Store Connect、Google Play、EAS Push、notarization、Windows signing 或 GitHub Electron release credentials。
-- 未执行 signed iOS device archive/TestFlight/App Store、Play/EAS public artifact、signed/notarized Desktop 或 Windows/Linux runner smoke。
-- 本 Issue 的技术验证阶段未发布 npm、Web、Relay、Native 或 Desktop 版本；后续 Stable 发布仍按独立 release gate 执行。
+> 以下只描述 2026-08-26 Epic 005 聚合验证本身，不是当前发行政策。当前政策见 Issue 050 与 `docs/client-distribution.md`。
+
+- 该次验证未配置或使用 Apple Team、App Store Connect、Google Play、EAS Push、notarization、Windows signing 或 GitHub Electron release credentials。
+- 该次验证未执行 signed iOS device archive/TestFlight/App Store、Play/EAS public artifact、signed/notarized Desktop 或 Windows/Linux runner smoke。
+- 该次技术验证未发布 npm、Web、Relay、Native 或 Desktop 版本；Android/Desktop 公开发布随后由独立 release gate 建立。
 - 未重启或接管 6777 生产 daemon；最终 managed-daemon smoke 只启动并停止隔离 6769 daemon，既有生产 daemon PID 保持不变。
-- Public Web remains canonical；用户于 2026-08-26 完成验收并单独授权 Project Spec 更新与 Epic 005 关闭。
+- 用户于 2026-08-26 完成验收并单独授权 Project Spec 更新与 Epic 005 关闭。
 
 ## 关闭结论
 
-Epic 005 的七个实现/验证检查点现已全部完成：Native App、Android artifact、产品边界与 sync policy、Electron core/package、Desktop Browser Automation、dormant release source，以及最终聚合审计均有可复核证据；聚合阶段发现的 Push 与跨构建顺序遗漏已补齐并独立复核。
+Epic 005 的七个实现/验证检查点全部完成：Native App、Android artifact、产品边界与 sync policy、Electron core/package、Desktop Browser Automation、平台发布源码，以及最终聚合审计均有可复核证据；聚合阶段发现的 Push 与跨构建顺序遗漏已补齐并独立复核。
 
 **本 Issue 与 Epic 005 均已关闭；稳定结论已毕业到 Project Spec、Vision 与 `docs/`。**

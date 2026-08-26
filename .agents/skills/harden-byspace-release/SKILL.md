@@ -1,6 +1,6 @@
 ---
 name: harden-byspace-release
-description: Audit or repair BySpace release engineering across packaging, global npm installation, Trusted Publishing, exact-SHA CI, immutable tags, Cloudflare Pages/Relay deployment, Stable/Beta isolation, cutover, rollback, and post-release verification. Use for release-readiness reviews, failed releases, packaging/install bugs, CI/CD or Cloudflare changes, channel mismatches, or requests to distill release lessons without necessarily shipping a version.
+description: Audit or repair BySpace release engineering across npm packaging, Trusted Publishing, exact-SHA CI, immutable tags, Web/Relay deployment, signed Android APK, Electron Desktop assets, checksums/manifests, Stable/Beta isolation, iOS no-publish enforcement, rollback, and post-release verification. Use for release-readiness reviews, failed releases, packaging/install bugs, client artifacts, signing, CI/CD or Cloudflare changes, or channel mismatches.
 ---
 
 # Harden BySpace release
@@ -11,12 +11,15 @@ Audit the full evidence chain, not just whether a build command passed.
 
 1. `docs/release-engineering.md`
 2. `docs/release.md`
-3. `scripts/pack-byspace.mjs`
-4. `scripts/smoke-byspace-package.mjs`
-5. `scripts/publish-byspace.mjs`
-6. `.github/workflows/npm-release.yml`
-7. `.github/workflows/deploy-app.yml`
-8. `.github/workflows/deploy-relay.yml`
+3. `docs/client-distribution.md`
+4. `scripts/pack-byspace.mjs`
+5. `scripts/smoke-byspace-package.mjs`
+6. `scripts/client-release-manifest.mjs`
+7. `scripts/publish-byspace.mjs`
+8. `.github/workflows/npm-release.yml`
+9. `.github/workflows/client-release.yml`
+10. `.github/workflows/deploy-app.yml`
+11. `.github/workflows/deploy-relay.yml`
 
 Read only additional files implicated by the failure or proposed change.
 
@@ -37,6 +40,9 @@ Read only additional files implicated by the failure or proposed change.
 - Final tarball has repository metadata, executable shim, expected internal packages, and no empty dependency stubs.
 - Smoke installs globally into a clean prefix, loads native modules, and starts/stops an isolated daemon.
 - Publish reuses the exact smoke-tested tarball.
+- Client jobs build from the same immutable tag/SHA, never from a caller-selected ref.
+- Public Desktop/Android assets have an exact inventory, SHA-256 checksums, signing metadata, and public re-download proof.
+- iOS workflow definitions are absent from active GitHub/EAS CD directories; maintained reference source is non-executable.
 
 ### Release trust
 
@@ -48,18 +54,18 @@ Read only additional files implicated by the failure or proposed change.
 
 ### Channel isolation
 
-- Stable maps to npm `latest`, `app.byspace.cc.cd`, and `byspace-relay`.
-- Beta maps to npm `beta`, `app-beta.byspace.cc.cd`, and `byspace-relay-beta`.
-- Runtime version selects app URL, relay, CORS, pairing/help links, and self-update dist-tag.
+- Stable maps to npm `latest`, `app.byspace.cc.cd`, `byspace-relay`, and Stable GitHub Desktop/Android assets.
+- Beta maps to npm `beta`, `app-beta.byspace.cc.cd`, `byspace-relay-beta`, and prerelease GitHub Desktop/Android assets.
+- Runtime version selects app URL, relay, CORS, pairing/help links, self-update dist-tag, and Desktop update channel.
 - Custom and environment endpoints remain authoritative.
-- Deploying one channel leaves the other channel's Pages deployment and Worker version unchanged.
+- Deploying one channel leaves the other channel's npm/Web/Relay/client assets and manifests unchanged.
 
 ### Runtime and recovery
 
 - CLI and daemon use the intended global Node environment.
 - Production daemon restarts only with explicit permission.
 - State backup and Git bundle exist before destructive cutover.
-- Post-release proof includes registry, GitHub release, Pages SHA/version, Worker version, real pairing URL, relay connection, and daemon version.
+- Post-release proof includes registry, GitHub release client inventory/checksums/signing state, Android install/launch, Desktop smoke, explicit iOS absence, Pages SHA/version, Worker version, real pairing URL, relay connection, and daemon version.
 
 ## Method
 

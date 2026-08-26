@@ -1,3 +1,6 @@
+# INACTIVE SOURCE REFERENCE: this file is outside .eas/workflows and cannot run automatically.
+# BySpace retains iOS source/prebuild/test support but active CD never builds, submits, or uploads iOS.
+
 name: Release iOS Beta
 on:
   workflow_dispatch: {}

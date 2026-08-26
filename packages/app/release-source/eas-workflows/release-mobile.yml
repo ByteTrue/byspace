@@ -1,3 +1,6 @@
+# INACTIVE SOURCE REFERENCE: this file is outside .eas/workflows and cannot run automatically.
+# Active CD publishes signed Android APKs via .github/workflows/client-release.yml and never builds iOS.
+
 name: Release Mobile
 on:
   workflow_dispatch: {}

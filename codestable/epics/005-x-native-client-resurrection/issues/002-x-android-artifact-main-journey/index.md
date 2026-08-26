@@ -9,6 +9,8 @@ closed: 2026-08-26
 
 # 生成 Android 可侧载产物并验证主旅程
 
+> **当前发行状态（2026-08-27）：** 本 Issue 的 debug/internal 侧载范围是历史实现检查点，已由 [Issue 050](../../../../issues/050-o-full-client-release-gate/index.md) 取代。Android Stable/Beta 现在从 exact tag 构建并发布使用固定 BySpace v1 更新密钥签名的 APK；iOS 仍不进入 active CD。
+
 ## 做成以后是什么样
 
 BySpace 能从干净源码生成使用永久 Application ID 的 Android APK，并安装到 emulator 或真实设备。App 不依赖 Metro 即可启动，能通过 Direct 与 Relay 连接隔离的 BySpace daemon，进入现有 Workspace、Agent、Terminal、文件与设置主旅程。

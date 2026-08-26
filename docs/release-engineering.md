@@ -7,19 +7,17 @@ This document turns failures encountered while rebuilding and shipping BySpace i
 Treat a release as one immutable source and one complete channel tuple:
 
 ```text
-commit → CI → package artifact → npm dist-tag → Web → Relay → real daemon
+commit → exact-SHA CI → npm/Web/Relay artifacts + Desktop/Android artifacts → public verification
 ```
 
 Stable and Beta are separate tuples:
 
 ```text
-Stable = npm latest + app.byspace.cc.cd + byspace-relay
-Beta   = npm beta   + app-beta.byspace.cc.cd + byspace-relay-beta
+Stable = npm latest + Stable Web/Relay + Stable Desktop/Android GitHub assets
+Beta   = npm beta   + Beta Web/Relay   + Beta Desktop/Android GitHub assets
 ```
 
-A release is incomplete until every element in its tuple is verified and the other tuple is proven unchanged.
-
-Android/iOS/Electron artifacts are separate channel tuples whose public gates are not active yet. Their source, tests, package definitions, and dormant workflows are nevertheless maintained product surfaces. Never infer “omit from source or upstream sync” from “not published by the current npm/Web/Relay playbook.”
+A release is incomplete until every element in its tuple is verified and the other tuple is proven unchanged. iOS is a maintained source/prebuild/test surface but is explicitly outside both publication tuples and must be absent from active CD.
 
 ## Lessons converted into controls
 
@@ -28,7 +26,7 @@ Android/iOS/Electron artifacts are separate channel tuples whose public gates ar
 | Per-commit upstream sync produced a deep fork and endless conflicts.                                                                       | Freeze two upstream releases and port their aggregate release delta onto the current BySpace `main`; use individual commits only to understand intent.                                                   |
 | Importing upstream commits would expose upstream ancestry and authors in BySpace history.                                                  | Do not merge, rebase, or cherry-pick upstream; record ported behavior in normal BySpace-authored sync commits.                                                                                           |
 | The Web-only cut deleted client packages while leaving cross-layer Browser/Electron/native seams and made later restoration expensive.     | Add, retire, or restore a client capability as a vertical slice across UI/protocol/client/daemon/tests/docs; keep every maintained platform in the upstream coverage ledger.                             |
-| False platform stubs made temporarily unsupported clients look permanently dead.                                                           | Keep real `.web`/`.native`/Electron boundaries for maintained clients; delete a branch only when Project Spec explicitly retires that product path, not merely because public distribution is dormant.   |
+| False platform stubs made maintained clients look permanently dead or disappear from the release tuple.                                    | Keep real `.web`/`.native`/Electron boundaries and require Android/Desktop assets for every release tag; delete a branch only when Project Spec explicitly retires that product path.                    |
 | Mechanical rename commits carried unrelated feature dependencies.                                                                          | Treat BySpace identity as an existing invariant; rename only newly ported upstream identifiers and verify zero residuals instead of replaying an old transform.                                          |
 | Deleting `package-lock.json` re-resolved floating ranges and caused ecosystem-wide type drift.                                             | Preserve the source lockfile's resolved versions and change only intentional workspace/package identities.                                                                                               |
 | Workspace declarations were stale after cross-package changes.                                                                             | Rebuild the owning stack before patching consumers; never add duplicate local types to mask stale declarations.                                                                                          |
@@ -37,6 +35,9 @@ Android/iOS/Electron artifacts are separate channel tuples whose public gates ar
 | A local install smoke passed while global install was broken.                                                                              | Install the tarball into a clean global prefix and exercise the generated global shim.                                                                                                                   |
 | JavaScript-only smoke missed native binding failures.                                                                                      | Load `node-pty`, speech bindings, and MCP compatibility modules from the installed package.                                                                                                              |
 | Repacking between smoke and publish changed the artifact.                                                                                  | Publish the exact tarball that passed smoke; never rebuild between verification and publication.                                                                                                         |
+| Client release workflows rebuilt arbitrary refs or overwrote existing assets with `--clobber`.                                             | Build only the immutable tag at the exact-SHA CI commit; generate a complete manifest/checksum set; accept existing assets only when bytes match; never mutate updater manifests after publication.      |
+| Android preview/debug signing made a downloadable APK unable to form a durable update chain.                                               | Require the permanent BySpace release key in CD, pin its public certificate fingerprint in source, verify with `apksigner`, and install/launch the signed APK before upload.                             |
+| Maintained iOS source was mistaken for permission to publish iOS.                                                                          | Keep iOS source, prebuild, tests, EAS/Fastlane reference implementation, and platform restrictions; keep executable iOS CD absent until an explicit future product decision.                             |
 | Independent CI, package, and Pages builds could differ while sharing a source SHA.                                                         | Build the canonical Web distribution once in exact-SHA push CI, embed it into one npm tarball, attest both with commit/version/SHA-256 manifests, and promote those CI-run artifacts without rebuilding. |
 | npm rejected a valid package late because `repository.url` was absent.                                                                     | Assert registry-required metadata from the installed tarball before publication.                                                                                                                         |
 | Trusted Publishing failed with an old npm.                                                                                                 | Pin a Trusted-Publishing-capable npm in the workflow and keep OIDC permissions minimal.                                                                                                                  |
@@ -75,13 +76,14 @@ Stop only after each applicable rung passes; a higher rung does not replace a lo
 1. **Source proof** — frozen baseline and target tag/commit/tree, green target baseline, explicit release-delta dispositions.
 2. **Static proof** — generated declarations, typecheck, lint, format, branding, residual search.
 3. **Behavior proof** — focused tests for changed branches and trust boundaries.
-4. **Artifact proof** — verify commit/version/SHA-256 manifests, inspect the one tarball, clean global install, native loads, CLI shim, and post-publish registry tarball digest.
-5. **Runtime proof** — isolated daemon start/status/pair/stop on a reserved port and home.
+4. **Artifact proof** — verify commit/version/SHA-256 manifests, inspect the npm tarball, clean global install, native loads, CLI shim, Desktop package contents, Android signer/identity, and absence of iOS assets.
+5. **Runtime proof** — isolated daemon start/status/pair/stop, packaged Desktop smoke on each supported OS, and Android APK install/launch.
 6. **CI proof** — exact pushed SHA green on all platform jobs.
 7. **Registry proof** — expected immutable version and dist-tag visible from npm.
-8. **Deployment proof** — Pages and Worker identify the tagged SHA/version.
-9. **Channel proof** — real pairing URL and relay connection use the intended channel; the other channel's deployment IDs remain unchanged.
-10. **Recovery proof** — state/archive path exists and rollback target is known.
+8. **Deployment proof** — Pages/Worker identify the tagged SHA/version and the GitHub Release has the exact client inventory.
+9. **Channel proof** — real pairing/relay use the intended channel; Desktop updater metadata uses that channel; the other channel's hosted IDs and client manifest remain unchanged.
+10. **Public integrity proof** — download published clients, verify `SHA256SUMS.txt` and `client-release-manifest.json`, and re-check the Android certificate fingerprint.
+11. **Recovery proof** — state/archive path exists, hosted rollback target is known, Android signing-key recovery is protected, and immutable clients have a fix-forward plan.
 
 ## Review boundaries
 
@@ -103,13 +105,13 @@ Order irreversible operations so every stop point is recoverable:
 3. push source, but do not tag;
 4. wait for exact-SHA CI;
 5. create one immutable tag;
-6. wait for npm publication;
-7. deploy only the matching channel;
-8. verify online package, Web, Relay, pairing, and daemon;
+6. let npm and client publication run from that tag;
+7. deploy only the matching hosted channel;
+8. verify npm, Web, Relay, pairing, daemon, Desktop/Android inventory, public checksums, signing state, and absence of iOS assets;
 9. confirm the other channel did not move;
 10. announce completion.
 
-Before the tag, source can be fixed normally. After the tag, npm is immutable: fix forward with a new version.
+Before the tag, source can be fixed normally. After the tag, npm and client asset names/bytes are immutable: fix forward with a new version.
 
 ## Evidence in this repository
 
@@ -119,5 +121,8 @@ Before the tag, source can be fixed normally. After the tag, npm is immutable: f
 - Version policy: `scripts/set-release-version.mjs`
 - npm trust chain: `.github/workflows/npm-release.yml`
 - Channel deploy gates: `.github/workflows/deploy-app.yml`, `.github/workflows/deploy-relay.yml`
+- Client artifact gate: `.github/workflows/client-release.yml`
+- Client manifest/integrity implementation: `scripts/client-release-manifest.mjs`
+- Client distribution contract: `docs/client-distribution.md`
 - Operational release flow: `docs/release.md`
 - Source update flow: `docs/upstream-sync.md`

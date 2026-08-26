@@ -13,6 +13,8 @@ related_issue: ""
 > **读者：** 要决定 BySpace 是否、以及怎样重新支持 iOS、Android 与 Electron，并把它们发展成跨设备能力宿主的人。
 >
 > **关闭后追加决策（2026-08-26）：** 用户撤销了本审计原 D4 的“首轮排除 Browser Automation”边界，并要求旧 Web-only 裁剪一起移除的受维护 Native/Desktop/Browser/测试/构建/发布源码大体完整恢复。当前约束以 Epic 005 和 Project Spec 为准；本文保留旧判断的历史因果，并在相关位置标明已被取代。
+>
+> **发行边界更新（2026-08-27）：** [Issue 050](../050-o-full-client-release-gate/index.md) 又取代了本审计的 dormant/internal 发行结论：Stable/Beta 必须发布签名 Android APK 与 Electron Desktop 三平台资产；iOS 只保留源码、prebuild、测试和非执行发布参考，active CD 不构建、不提交、不上传。
 
 ## 要弄清什么、怎样算够
 
@@ -91,4 +93,4 @@ BySpace 当前只发布同一 Expo 代码库的 Web 形态，而上游仍由 iOS
 
 ## 关闭结果
 
-用户已批准完整客户端复活、iOS source-only + dormant release source、Android + Electron 首轮交付、File Handoff 优先等审计决策。关闭后又明确撤销 D4，并将 Desktop Browser/CDP、桌面系统集成、原生/桌面测试、打包和休眠发布源码纳入同一客户端基础闭包；只有用 Paseo marketing-site 替换现有 BySpace website、旧 Chat/Loops 等显式产品排除和未开闸的真实签名发布仍不恢复。目标世界已毕业到 Vision，有界实施由已关闭的 Epic 005 完成，稳定事实已进入 Project Spec 与 `docs/`。
+用户已批准完整客户端复活、File Handoff 优先等审计决策，并在关闭后撤销 D4，将 Desktop Browser/CDP、桌面系统集成、原生/桌面测试、打包与发布源码纳入同一客户端基础闭包。Epic 005 完成源码与内部构建恢复；Issue 050 进一步启用 Android 与 Electron Desktop 的 Stable/Beta exact-tag 公开发行，并固定 iOS no-publish CD 边界。当前仍排除 Paseo marketing-site 替换、旧 Chat/Loops 与 iOS 商店/IPA 发布；稳定事实已进入 Vision、Project Spec 与 `docs/`。

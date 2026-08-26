@@ -1,8 +1,8 @@
 # Architecture
 
-BySpace is a multi-client, local-first system for monitoring and controlling AI coding agents and user-owned device capabilities. The daemon runs on your machine, manages agent processes, and streams their output to Browser Web/PWA, Android/iOS, Electron Desktop, and CLI clients.
+BySpace is a multi-client, local-first system for monitoring and controlling AI coding agents and user-owned device capabilities. The daemon runs on your machine, manages agent processes, and streams their output to Browser Web/PWA, published Android and Electron Desktop clients, maintained source-only iOS, and CLI clients.
 
-Your code never leaves your machine. Public distribution maturity differs by client, but all maintained clients share the same daemon protocol and product model.
+Your code never leaves your machine. Public Web, Android, and Desktop clients share the same daemon protocol and product model; iOS stays implementation-complete but outside active publication.
 
 ## System overview
 
@@ -28,8 +28,8 @@ Your code never leaves your machine. Public distribution maturity differs by cli
 ## Components at a glance
 
 - **Daemon:** Local server that spawns and manages agent processes and exposes the WebSocket API.
-- **Shared App:** Expo/React client used by Browser Web/PWA and maintained Android/iOS hosts.
-- **Electron Desktop:** Trusted local host for the shared renderer, managed daemon/local transport, OS bridges, and Desktop Browser automation.
+- **Shared App:** Expo/React client used by Browser Web/PWA, published Android, and maintained source-only iOS hosts.
+- **Electron Desktop:** Published trusted local host for macOS/Linux/Windows with the shared renderer, managed daemon/local transport, OS bridges, Desktop Browser automation, and immutable updater metadata.
 - **CLI:** Terminal interface for agent workflows that can also start and manage the daemon.
 - **Relay:** Optional encrypted bridge for remote control without opening daemon ports directly.
 - **Data Relay:** Optional daemon-hosted WSS listener that carries E2EE Remote Web Service traffic separately from the control Relay.
@@ -93,7 +93,8 @@ code imports from `@bytetrue/byspace-client`.
 Expo Router and React Native app that connects to one or more daemons.
 
 - Web/PWA uses React Native Web and remains the zero-install public client.
-- Android/iOS use the same routes and product state with native platform adapters for pairing, files, Terminal, audio, push, and OS permissions.
+- Android/iOS use the same routes and product state with native adapters for pairing, files, Terminal, audio, push, and OS permissions.
+- Android is built as a permanently signed public APK; iOS is prebuild/test-verified but excluded from active CD.
 - Expo Router navigation (`/h/[serverId]/workspace/[workspaceId]`, `/h/[serverId]/agent/[agentId]`, etc.). The `workspaceId` URL segment is an opaque workspace id (path-shaped today and opaque-encoded for routing), not a directly meaningful filesystem path.
 - `HostRuntimeController` manages saved host connections, reconnection, and per-host runtime state.
 - `SessionContext` wraps the daemon client for the active session.
@@ -103,7 +104,7 @@ Expo Router and React Native app that connects to one or more daemons.
 
 ### `packages/desktop` — Electron Desktop host
 
-The maintained Electron package loads the shared Web renderer while owning managed-daemon lifecycle, local socket transport, typed preload IPC, native dialogs/notifications/file paths/editor integration, Desktop Browser/CDP automation, updater behavior, and cross-platform packaging. Internal macOS package/runtime smoke is verified; signed/notarized public Desktop distribution remains behind a separate release gate.
+The published Electron package loads the shared Web renderer while owning managed-daemon lifecycle, local socket transport, typed preload IPC, native dialogs/notifications/file paths/editor integration, Desktop Browser/CDP automation, immutable channel-specific updater metadata, and cross-platform packaging. Stable/Beta tags publish checksummed macOS arm64/x64, Linux x64, and Windows x64/arm64 assets; OS signing state is recorded in the client manifest.
 
 ### `packages/cli` — Command-line client
 

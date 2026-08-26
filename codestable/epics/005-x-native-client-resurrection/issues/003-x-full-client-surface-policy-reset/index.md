@@ -9,6 +9,8 @@ closed: 2026-08-26
 
 # 重置完整客户端表面与上游同步边界
 
+> **当前发行状态（2026-08-27）：** 本 Issue 的发布凭据后置决定只描述 Epic 005 当时的恢复阶段，已由 [Issue 050](../../../../issues/050-o-full-client-release-gate/index.md) 取代。当前 Stable/Beta 必须发布 Android 与 Electron Desktop；Android v1 更新密钥已配置，Desktop 在平台凭据存在时执行原生签名，iOS 保持 no-publish CD。
+
 ## 为什么必须重置
 
 用户确认旧 Web-only 裁剪一起去掉的受维护原生/桌面内容大体都应恢复，并明确指出未来上游同步规则也不能继续把这些内容默认排除。此前审计 D4 把 Desktop Browser Automation 后置，仓库规则甚至禁止 `.native`、Electron、EAS 与原生依赖；这些规则会让 Epic 005 只恢复空壳，并在下一次上游同步再次漏掉完整客户端纵向切片。

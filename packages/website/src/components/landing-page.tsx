@@ -1,13 +1,20 @@
 import * as React from "react";
 import { motion, useInView, useScroll, useTransform, type Transition } from "framer-motion";
-import { Mic, ArrowRight } from "lucide-react";
+import { Mic, ArrowRight, Download } from "lucide-react";
 import { CursorFieldProvider } from "~/components/butterfly";
 import { CommandDialog } from "~/components/command-dialog";
 import { HeroMockup } from "~/components/hero-mockup";
 import { FAQItem } from "~/components/faq-item";
 import { SiteFooter } from "~/components/site-footer";
 import { SiteHeader } from "~/components/site-header";
-import { webAppUrl, docsUrl, githubRepoUrl, GlobeIcon, TerminalIcon } from "~/downloads";
+import {
+  webAppUrl,
+  docsUrl,
+  githubRepoUrl,
+  clientDownloadsUrl,
+  GlobeIcon,
+  TerminalIcon,
+} from "~/downloads";
 import "~/styles.css";
 
 // Shared motion presets
@@ -753,6 +760,16 @@ function GetStarted() {
         </a>
 
         <ServerInstallButton />
+
+        <a
+          href={clientDownloadsUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center justify-center gap-2 rounded-lg border border-white/20 px-4 py-2.5 text-sm font-medium text-white hover:bg-white/10 transition-colors"
+        >
+          <Download className="h-4 w-4" />
+          Download Clients
+        </a>
 
         <a
           href={githubRepoUrl}

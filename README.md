@@ -24,17 +24,17 @@
 
 ---
 
-Run agents in parallel on your own machines from a hosted Web interface or the CLI.
+Run agents in parallel on your own machines from Web, Android, Desktop, or the CLI.
 
 - **Self-hosted:** Agents run on your machine with your full dev environment. Use your tools, your configs, and your skills.
 - **Multi-provider:** Claude Code, Codex, Copilot, OpenCode, and Pi through the same interface. Pick the right model for each job.
 - **Local dictation:** Transcribe tasks on your Host with a speech model you explicitly install and select.
-- **Web + CLI:** Use the hosted browser interface from any device, or script the same local daemon from the terminal.
+- **Every client:** Use the hosted Web/PWA, signed Android APK, macOS/Linux/Windows Desktop app, or CLI against the same local daemon.
 - **Privacy-first:** BySpace doesn't have any telemetry, tracking, or forced log-ins.
 
 ## Getting Started
 
-BySpace runs a local daemon that manages your coding agents. The hosted Web app and CLI connect directly or through the E2EE relay.
+BySpace runs a local daemon that manages your coding agents. Web, Android, Desktop, and CLI clients connect directly or through the E2EE relay.
 
 ### Prerequisites
 
@@ -45,6 +45,12 @@ You need at least one agent CLI installed and configured with your credentials:
 - [GitHub Copilot](https://github.com/features/copilot/cli/)
 - [OpenCode](https://github.com/anomalyco/opencode)
 - [Pi](https://pi.dev)
+
+### Android and Desktop
+
+Download signed Android APKs and macOS/Linux/Windows Electron clients from the [latest GitHub Release](https://github.com/ByteTrue/byspace/releases/latest). Verify downloads with the included `client-release-manifest.json` and `SHA256SUMS.txt`.
+
+iOS source, prebuild, and tests are maintained, but BySpace does not publish iOS builds.
 
 ### CLI / headless
 
@@ -114,16 +120,17 @@ Then use them in any agent conversation:
 Quick monorepo package map:
 
 - `packages/server`: BySpace daemon (agent process orchestration, WebSocket API, MCP server)
-- `packages/app`: Expo/React Native Web client
+- `packages/app`: shared Expo client for Web/PWA, Android, and maintained iOS source
+- `packages/desktop`: Electron host for macOS, Linux, and Windows
 - `packages/cli`: `byspace` CLI for daemon and agent workflows
 - `packages/relay`: Relay package for remote connectivity
 
 Maintainer workflows are encoded as repo-local skills:
 
 - `upstream-sync` — rebuild from a frozen Paseo release snapshot.
-- `release-beta` — ship npm/Web/Relay Beta as one channel.
-- `release-stable` — ship or promote the Stable channel.
-- `harden-byspace-release` — audit packaging, CI/CD, channel isolation, or recovery.
+- `release-beta` — ship npm/Web/Relay plus Android/Desktop Beta as one channel.
+- `release-stable` — ship or promote the complete Stable channel.
+- `harden-byspace-release` — audit npm/client packaging, signing, CI/CD, channel isolation, or recovery.
 
 Common commands:
 

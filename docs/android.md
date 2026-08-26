@@ -1,4 +1,4 @@
-# Android development and sideload builds
+# Android development and public APK releases
 
 BySpace's Android client is generated from the shared Expo app in
 `packages/app`. The generated `packages/app/android/` directory is ignored and
@@ -6,9 +6,7 @@ must not become a second source of truth.
 
 ## Current delivery boundary
 
-Epic 005 restored Android for local development and internally verified sideloaded
-artifacts. Google Play publishing and a production signing key remain outside the
-current release gate.
+Stable and Beta tags publish a signed universal Android APK to the matching GitHub Release. Google Play is not an active channel. The public APK is built by `.github/workflows/client-release.yml` from the exact immutable tag and permanent BySpace update key; local builds remain development/sideload artifacts unless the release-signing environment is explicitly provided.
 
 Permanent identifiers are:
 
@@ -74,9 +72,15 @@ The APK is generated at:
 packages/app/android/app/build/outputs/apk/release/app-release.apk
 ```
 
-This `release` variant is intentionally signed with the generated Android debug
-keystore. It is suitable for internal sideload testing only; it is not a Play
-Store artifact. Production signing is a later delivery gate.
+Without release-signing environment variables, a local `release` variant uses the generated development signing behavior and is suitable only for local sideload testing. The public workflow requires the permanent BySpace release key and fails closed if any credential is missing.
+
+The public signer certificate SHA-256 is pinned in `.github/release/android-signing.json`. Verify a downloaded APK with:
+
+```bash
+apksigner verify --verbose --print-certs BySpace-<version>-android.apk
+```
+
+The private key is not in Git. GitHub Actions receives it through `ANDROID_RELEASE_KEYSTORE_BASE64`, `ANDROID_RELEASE_KEYSTORE_PASSWORD`, `ANDROID_RELEASE_KEY_ALIAS`, and `ANDROID_RELEASE_KEY_PASSWORD`. The owner recovery bundle is `~/.config/byspace/release-secrets/android-release-v1.jks` plus `android-release-v1.env`; both files are mode 600 and must be backed up together. Treat loss or replacement as an update-chain incident, not routine key rotation.
 
 For an attached emulator or device, the app package also exposes the upstream
 run commands:
@@ -130,3 +134,17 @@ mise exec -- adb reverse tcp:6777 tcp:6769
 Relay pairing can be tested without emulator camera input by opening the
 `byspace` deep link containing the daemon offer. Always use an isolated daemon
 home for this test; never restart the main daemon on port 6777.
+
+## Public release verification
+
+The client release workflow performs all of the following before upload:
+
+1. production prebuild with the release-signing config plugin;
+2. Gradle `assembleRelease`;
+3. package id and version-name inspection;
+4. `apksigner` verification against the pinned certificate fingerprint;
+5. clean emulator install and app launch;
+6. inclusion in `client-release-manifest.json` and `SHA256SUMS.txt`;
+7. public GitHub Release re-download and checksum verification.
+
+See `docs/client-distribution.md` for the shared Desktop/Android release contract and the explicit iOS no-publish boundary.

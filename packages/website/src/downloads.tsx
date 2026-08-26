@@ -3,6 +3,7 @@ import * as React from "react";
 export const webAppUrl = "https://app.byspace.cc.cd";
 export const githubRepoUrl = "https://github.com/ByteTrue/byspace";
 export const docsUrl = "https://app.byspace.cc.cd/docs";
+export const clientDownloadsUrl = `${githubRepoUrl}/releases/latest`;
 
 export function GlobeIcon(props: React.SVGProps<SVGSVGElement>) {
   return (

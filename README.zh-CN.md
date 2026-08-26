@@ -24,17 +24,17 @@
 
 ---
 
-在你自己的机器上并行运行 agents。无论在手机上还是桌前，都能推进交付。
+在你自己的机器上并行运行 agents，通过 Web、Android、Desktop 或 CLI 随时推进交付。
 
 - **自托管：** Agents 在你的机器上运行，使用完整的本地开发环境、工具、配置和技能。
 - **多提供商：** 通过同一个界面使用 Claude Code、Codex、Copilot、OpenCode 和 Pi。为每个任务选择合适的模型。
 - **本地听写：** 使用你在 Host 上明确安装并选择的语音模型，将口述内容转成文字。
-- **跨设备：** 支持浏览器 Web/PWA 和 CLI。在桌前开始工作，用手机浏览器查看进度，也可以从终端脚本化操作。
+- **完整客户端：** 托管 Web/PWA、签名 Android APK、macOS/Linux/Windows Desktop 和 CLI 连接同一个本地 daemon。
 - **隐私优先：** BySpace 没有遥测、追踪，也不会强制登录。
 
 ## 快速开始
 
-BySpace 会运行一个名为 daemon 的本地服务，用来管理你的 coding agents。托管 Web app 和 CLI 会连接到它。
+BySpace 会运行一个名为 daemon 的本地服务来管理 coding agents；Web、Android、Desktop 和 CLI 客户端可以直连或通过 E2EE Relay 连接。
 
 ### 前置条件
 
@@ -45,6 +45,12 @@ BySpace 会运行一个名为 daemon 的本地服务，用来管理你的 coding
 - [GitHub Copilot](https://github.com/features/copilot/cli/)
 - [OpenCode](https://github.com/anomalyco/opencode)
 - [Pi](https://pi.dev)
+
+### Android 与 Desktop
+
+从 [最新 GitHub Release](https://github.com/ByteTrue/byspace/releases/latest) 下载签名 Android APK 和 macOS/Linux/Windows Electron 客户端，并使用随附的 `client-release-manifest.json` 与 `SHA256SUMS.txt` 校验。
+
+BySpace 维护 iOS 源码、prebuild 和测试，但不发布 iOS 构建。
 
 ### CLI / 无头模式
 
@@ -113,16 +119,17 @@ npx skills add ByteTrue/byspace
 Monorepo 包结构速览：
 
 - `packages/server`：BySpace daemon（agent 进程编排、WebSocket API、MCP server）
-- `packages/app`：浏览器 Web/PWA 客户端（Expo + React Native Web）
+- `packages/app`：Web/PWA、Android 与持续维护的 iOS 源码共享 Expo 客户端
+- `packages/desktop`：macOS、Linux、Windows Electron 宿主
 - `packages/cli`：用于 daemon 和 agent 工作流的 `byspace` CLI
 - `packages/relay`：用于远程连接的 relay 包
 
 维护流程已经沉淀为仓库内 skills：
 
 - `upstream-sync` — 从冻结的 Paseo release snapshot 干净重建。
-- `release-beta` — 将 npm、Web、Relay 作为完整 Beta channel 发布。
-- `release-stable` — 发布或晋升 Stable channel。
-- `harden-byspace-release` — 审计打包、CI/CD、channel 隔离和故障恢复。
+- `release-beta` — 将 npm、Web、Relay、Android 和 Desktop 作为完整 Beta channel 发布。
+- `release-stable` — 发布或晋升完整 Stable channel。
+- `harden-byspace-release` — 审计 npm/客户端打包、签名、CI/CD、channel 隔离和故障恢复。
 
 常用命令：
 

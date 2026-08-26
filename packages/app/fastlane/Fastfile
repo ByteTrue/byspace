@@ -1,3 +1,5 @@
+# Maintained iOS source reference only. Active BySpace CD never invokes Fastlane, builds iOS,
+# submits to TestFlight/App Store, or uploads an iOS artifact.
 default_platform(:ios)
 
 APP_IDENTIFIER = "com.bytetrue.byspace"

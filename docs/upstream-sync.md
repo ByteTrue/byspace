@@ -11,7 +11,7 @@ BySpace synchronizes with Paseo by porting the aggregate delta between two froze
 
 Update this marker and the matching marker in `docs/release.md` only after a sync is fully implemented and verified.
 
-Coverage note: the `v0.5.1` baseline is complete across every maintained Web/PWA, Android/iOS, Electron/Desktop Browser, server, CLI, Relay, test, build, packaging, and dormant-release surface. Epic 005 closed the Native/Desktop slices omitted by the former Web-only policy, so the next release comparison can use this frozen baseline without a separate native gap ledger.
+Coverage note: the `v0.5.1` baseline is complete across every maintained Web/PWA, Android/iOS, Electron/Desktop Browser, server, CLI, Relay, test, build, packaging, and platform-release surface. Epic 005 closed the Native/Desktop slices omitted by the former Web-only policy, and the current BySpace release contract publishes Android/Desktop while explicitly retaining iOS without active CD.
 
 ## Sync model
 
@@ -32,10 +32,10 @@ A sync is a controlled source transfer, not a design or hardening project. Once 
 A sync must preserve these established BySpace contracts:
 
 1. Browser Web/PWA, shared Expo Android/iOS, Electron Desktop, Desktop Browser automation, CLI, SDK client, daemon, Relay, and their tests/build/package/release source are maintained surfaces.
-2. Distribution maturity is not a source-exclusion rule. Web is public; Android is internally validated; iOS signed distribution and Electron public distribution remain gated, but their maintained source still participates in every applicable sync.
+2. Distribution status is not a source-exclusion rule. Web/PWA, Android, and Electron Desktop are public; iOS is maintained but intentionally never published by active CD. Every maintained platform participates in each applicable sync.
 3. Only explicitly documented product exclusions stay absent. The current standing exclusions are replacing BySpace's existing `packages/website` with Paseo's independent marketing-site implementation and product paths already superseded in Project Spec; “native”, “Electron”, or “Browser automation” is never enough reason by itself.
 4. BySpace identity remains complete: `BySpace`, `byspace`, `BYSPACE_*`, `@bytetrue/byspace*`, `~/.byspace`, `byspace.json`, permanent app IDs, URL scheme `byspace`, and port `6777`.
-5. The single-package npm distribution and isolated Stable/Beta Web and Relay channels remain intact. Native/Desktop artifact channels require their own approved release gates and must not piggyback on npm/Web tags.
+5. The single-package npm distribution, isolated Stable/Beta Web/Relay channels, and same-tag Desktop/Android GitHub Release assets remain one coherent channel tuple. iOS release workflow activation is a blocked product change, not a mechanical upstream port.
 6. Current BySpace behavior and documented product decisions remain fixed. If approved upstream behavior conflicts with them, stop and ask rather than combining or improving either design.
 
 Do not repeat identity migration, replace the BySpace tree, or flatten maintained platform boundaries during a routine sync. Audit each supported client and its support files as retained product surface.
@@ -81,7 +81,7 @@ For internal accounting, summarize impact across:
 - shared Expo Android/iOS runtime, native modules, permissions, and platform tests;
 - Electron main/preload/renderer integration, Desktop Browser automation, OS bridges, and updater behavior;
 - Relay and connection security;
-- dependencies, generated declarations, packaging, E2E, platform workflows, and dormant/public release source.
+- dependencies, generated declarations, packaging, E2E, active Android/Desktop publishing, and inactive iOS reference release source.
 
 Give each behavior one internal disposition:
 
@@ -211,14 +211,14 @@ npm run build:desktop -- --dir
 npm run release:check
 ```
 
-Use the documented equivalent if Expo or Desktop scripts change. Android/iOS prebuilds prove source closure only; the current-host Desktop `--dir` package is unsigned. Foreign-platform artifacts and signed/public packages remain exact-SHA CI or separately approved release-gate responsibilities.
+Use the documented equivalent if Expo or Desktop scripts change. Android/iOS prebuilds and current-host Desktop `--dir` packaging are sync-time source proofs, not publication. The finished candidate must preserve the active same-tag Desktop/Android release gate and the explicit absence of executable iOS CD; actual signed/public artifacts remain release-skill responsibilities.
 
 Also prove:
 
 - every relevant upstream behavior has a disposition;
 - every approved Port matches upstream except recorded mechanical adaptations;
 - no unapproved redesign, bug fix, hardening, or generalized compatibility layer was added;
-- no maintained Web/Android/iOS/Electron/Desktop-Browser production or support slice was omitted, stubbed, or disabled because its public distribution gate is closed;
+- no maintained Web/Android/iOS/Electron/Desktop-Browser production or support slice was omitted or stubbed; published Android/Desktop gates remain active, while iOS executable CD remains absent;
 - no explicitly excluded Paseo-website replacement or superseded product surface leaked back in;
 - no old product namespace, home path, config name, port, app identifier, or deployment target was introduced;
 - the global tarball and native modules still work;

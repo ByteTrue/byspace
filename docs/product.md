@@ -4,7 +4,7 @@ What BySpace is, who it's for, and where it's going.
 
 ## What is BySpace
 
-BySpace is a self-hosted personal compute control plane built around agents. The currently public hosted Web interface and local CLI control agents in your own development environment; the same product is maintained across Android/iOS and an Electron Desktop host so each device can also contribute its native capabilities.
+BySpace is a self-hosted personal compute control plane built around agents. Stable/Beta releases publish the Web/PWA, local CLI/daemon, Relay, Electron Desktop clients for macOS/Linux/Windows, and a signed Android APK from one immutable tag. The iOS host remains maintained source/prebuild/test surface but active CD intentionally never publishes it.
 
 The development workflow is shifting from manually editing files to orchestrating agents and user-owned devices that do the work. BySpace is built for that workflow.
 
@@ -13,7 +13,7 @@ The development workflow is shifting from manually editing files to orchestratin
 Freedom and flexibility. Every design decision follows from this:
 
 - **Multi-provider** — Use any coding agent harness. Pick the right model for each job, switch freely as the landscape shifts. No vendor-lock in.
-- **Full clients + CLI** — Use the same local daemon from Web/PWA, Android/iOS, Electron Desktop, or terminal automation. Public distribution can mature independently without splitting the product model.
+- **Full clients + CLI** — Use the same local daemon from Web/PWA, published Android and Electron Desktop clients, or terminal automation. iOS implementation remains maintained without entering the distribution train.
 - **Self-hosted** — The daemon runs on your machine. Your code, your keys, your environment. No inference markup, no cloud dependency.
 - **Respectful** - No telemetry, no forced cloud, no forced accounts
 - **Open source** — AGPL-3.0. Users can inspect, fork, and contribute.
@@ -71,9 +71,10 @@ Anyone who builds software:
 
 ## Current state (August 2026)
 
-- Public Hosted Web/PWA and CLI backed by a local daemon and optional E2EE relay
-- Shared Android/iOS source and native build closure; an Android internal sideload artifact has completed Direct/Relay main-journey smoke
-- Electron Desktop and Desktop Browser automation have completed internal macOS package/runtime smoke; native/Desktop test and dormant release source remain maintained while signed/public distribution stays gated
+- Public Hosted Web/PWA and CLI backed by a local daemon and optional E2EE Relay
+- Public signed Android APK distributed from GitHub Releases with permanent update identity
+- Public checksummed Electron Desktop artifacts for macOS, Linux, and Windows, with packaged Browser automation and updater metadata
+- Maintained iOS source, prebuild, native modules, and tests; active CD never builds or submits iOS
 - Built-in providers: Claude Code (Agent SDK), Codex (app-server), GitHub Copilot (ACP), OpenCode, Pi, OMP
 - One-click ACP provider catalog: CodeWhale, Cursor, Hermes, Qwen Coder, Kimi Code, and others — plus custom ACP providers
 - Local dictation with Host-managed multilingual speech models and optional text-only refinement through the current Agent provider

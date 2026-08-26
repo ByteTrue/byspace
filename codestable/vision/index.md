@@ -35,8 +35,8 @@ AI Coding Agent 仍是核心能力，但不再是产品边界本身；BySpace �
       插件发现、请求与组合
 ```
 
-- **完整客户端**：Web 保持零安装的一等入口；Electron 与 iOS/Android 使用同一套完整 BySpace 产品，同时承载各平台独有能力。
-- **Desktop Browser Workbench**：Electron 内嵌 webview/CDP、可信输入、快照、截图和日志是受维护的一等桌面能力，不是因公开分发尚未开启就可以删除的可选残留。
+- **完整客户端**：Web 保持零安装的一等入口；公开的 Electron/Android 与 maintained source-only iOS 使用同一套完整 BySpace 产品，同时承载各平台独有能力。
+- **Desktop Browser Workbench**：Electron 内嵌 webview/CDP、可信输入、快照、截图和日志是公开桌面客户端的一等能力。
 - **Daemon 控制平面**：拥有设备身份、能力目录、授权、生命周期和路由；插件不能绕过它接触长期凭据。
 - **Native Capability**：由受信任 binary 内置、固定且版本化的能力 allowlist。安装插件不会凭空增加新的 OS 权限类型。
 - **Plugin**：贡献 UI 和组合逻辑。普通插件升级不要求重新发布移动 App。
@@ -47,10 +47,10 @@ AI Coding Agent 仍是核心能力，但不再是产品边界本身；BySpace �
 - BySpace 保持 local-first、self-hosted、BYOK、无强制账号与无遥测；代码、凭据和长期设备身份仍由用户拥有。
 - Web 功能不能因原生客户端恢复而退化；平台差异应收敛在真实平台边界，不重新扩散成全仓库条件分支。
 - 客户端提供能力，daemon 协调能力，插件组合能力。
-- 上游同步覆盖所有受维护客户端及其测试、构建、打包和休眠发布源码；公开分发成熟度不构成省略 Android/iOS/Electron/Browser 的理由。
+- 上游同步覆盖所有受维护客户端及其测试、构建、打包和平台发布支持；分发状态不构成省略 Android/iOS/Electron/Browser 的理由。
 - 首轮设备协作只承诺同一 daemon 下的设备；P2P、TURN 与多 daemon Device Mesh 尚未成为目标实现。
-- iOS 的公开分发与动态插件政策必须由真实签名构建和 App Review 验证；当前只保留共享源码、平台边界与休眠发布流水线。
-- 当前公开发行仍是 Web/PWA + CLI + daemon；Android internal artifact、macOS Electron package 与 Desktop Browser 已完成真实主旅程，iOS source/prebuild 和其余 Native/Desktop 维护面已由 [`Epic 005`](../epics/005-x-native-client-resurrection/spec.md) 闭合。现行事实见 [`codestable/spec/index.md`](../spec/index.md)。
+- iOS 当前只保留共享源码、平台边界、prebuild、测试和参考发行配置；active CD 明确不构建或提交 iOS。
+- 当前公开发行 tuple 是 Web/PWA + CLI/daemon + Relay + signed Android APK + macOS/Linux/Windows Electron Desktop。所有资产来自同一不可变 Stable/Beta tag；现行事实见 [`codestable/spec/index.md`](../spec/index.md) 和 [`docs/client-distribution.md`](../../docs/client-distribution.md)。
 - 原生恢复的范围与证据来源见已关闭的 [`原生客户端复活审计`](../issues/048-x-native-client-resurrection-audit/index.md)。
 - Device Registry、File Handoff、实时音频和 OS 虚拟麦克风将在完整客户端基础闭合后分别摘取，不提前塞进当前 Epic。
 

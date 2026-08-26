@@ -1,6 +1,6 @@
 # Vision 与 Epic 决策稿
 
-> 用户已批准本文的 D1–D8 与 iOS 休眠发布流水线边界；随后在 2026-08-26 明确撤销 D4 的 Browser Automation 后置决定，并要求旧 Web-only 裁剪一起移除的受维护 Native/Desktop/Browser/测试/构建/发布源码纳入完整恢复。正式目标世界见 [`codestable/vision/index.md`](../../vision/index.md)，已关闭的实施规格见 [`Epic 005`](../../epics/005-x-native-client-resurrection/spec.md)；本文保留审计阶段的原始因果，表格标注当前决定。
+> 本文记录 2026-08-26 的审计阶段决策；Browser Automation 后置决定已被撤销，完整客户端源码已由 [`Epic 005`](../../epics/005-x-native-client-resurrection/spec.md) 恢复。2026-08-27 的 [Issue 050](../050-o-full-client-release-gate/index.md) 又取代了 dormant/internal 发行边界：Stable/Beta 必须发布签名 Android APK 与 Electron Desktop 三平台资产；iOS 保持 source/prebuild/test-only，active CD 不构建、不提交、不上传。当前事实以 Project Spec、Vision 和 `docs/client-distribution.md` 为准。
 
 ## Vision 草案
 

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import test from "node:test";
 
@@ -31,11 +31,40 @@ test("npm package bundles and smoke-loads the private plugin runtime", () => {
   assert.match(smokeScript, /require\.resolve\("@bytetrue\/byspace-plugin\/server"\)/);
 });
 
-test("Android artifact workflow uses existing release helpers and self-contained metadata", () => {
-  const workflow = readWorkflow("android-apk-release.yml");
-  assert.match(workflow, /emit-release-env\.mjs --source-tag/);
-  assert.match(workflow, /sha256sum/);
-  assert.doesNotMatch(workflow, /validate-release-tag\.mjs|android-release-metadata\.mjs/);
+test("client publisher builds every public client from one immutable exact-CI tag", () => {
+  const workflow = readWorkflow("client-release.yml");
+  assert.match(workflow, /push:\n    tags:\n      - "v\*"/);
+  assert.match(workflow, /workflow_dispatch:[\s\S]*?tag:/);
+  assert.doesNotMatch(workflow, /checkout_ref|--clobber|eas-cli|--platform ios|\.ipa/);
+  assert.match(
+    workflow,
+    /gh run list .*--workflow CI --commit "\$sha" --event push --status success/,
+  );
+  assert.match(workflow, /needs: \[release-context, mac, linux, windows, android\]/);
+  assert.match(workflow, /BYSPACE_REQUIRE_RELEASE_SIGNING=1/);
+  assert.match(workflow, /ANDROID_RELEASE_KEYSTORE_BASE64/);
+  assert.match(workflow, /apksigner.*verify --verbose --print-certs/);
+  assert.match(workflow, /android-signing\.json/);
+  assert.match(workflow, /merge-updater-manifest\.mjs/);
+  assert.match(workflow, /win-arm64-unpacked/);
+  assert.match(workflow, /\.blockmap/);
+  assert.match(workflow, /updater_channel=latest/);
+  assert.match(workflow, /updater_channel=beta/);
+  assert.match(workflow, /UPDATER_CHANNEL/);
+  assert.match(workflow, /stamp-rollout\.mjs .*--rollout-hours 0/);
+  assert.equal(workflow.match(/client-release-manifest\.mjs verify/g)?.length, 2);
+  assert.match(workflow, /SHA256SUMS\.txt/);
+  assert.match(workflow, /Refusing to replace existing release asset with different bytes/);
+  assert.match(workflow, /Download and verify published client assets/);
+  assert.equal(existsSync(resolve(root, ".github", "workflows", "desktop-release.yml")), false);
+  assert.equal(existsSync(resolve(root, ".github", "workflows", "desktop-rollout.yml")), false);
+  assert.equal(existsSync(resolve(root, ".github", "workflows", "android-apk-release.yml")), false);
+  assert.equal(existsSync(resolve(root, "packages", "app", ".eas", "workflows")), false);
+  const inactiveIosPolicy = readFileSync(
+    resolve(root, "packages", "app", "release-source", "eas-workflows", "README.md"),
+    "utf8",
+  );
+  assert.match(inactiveIosPolicy, /iOS is not built, submitted, or uploaded by active CD/);
 });
 
 test("Playwright CI keeps twelve matching isolated shards", () => {

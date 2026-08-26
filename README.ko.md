@@ -2,9 +2,7 @@
 
 [![BySpace](https://img.shields.io/badge/BySpace-AI_Agent_Orchestration-1a1a2e?style=for-the-badge&logo=github&logoColor=white)](https://github.com/ByteTrue/byspace)
 
-웹과 CLI에서 로컬 AI 코딩 에이전트를 모니터링하고 제어하세요.
-
-> **개발 중:** API와 동작은 아직 변경될 수 있습니다.
+Web, Android, Desktop 또는 CLI에서 로컬 AI 코딩 에이전트를 모니터링하고 제어하세요.
 
 <p align="center">
   <img src="docs/assets/byspace-screenshot.png" alt="BySpace 스크린샷" width="900" />
@@ -22,14 +20,21 @@ BySpace는 다음 에이전트를 직접 지원합니다.
 
 ## 아키텍처
 
-BySpace는 로컬 우선 방식입니다. 호스팅된 웹 앱은 직접 연결하거나 종단 간 암호화된 릴레이를 통해 데몬에 연결합니다. 코드와 에이전트 실행은 데몬이 실행되는 컴퓨터에 남아 있습니다.
+BySpace는 로컬 우선 방식입니다. Web, Android, macOS/Linux/Windows Desktop 및 CLI 클라이언트는 직접 또는 종단 간 암호화된 Relay를 통해 데몬에 연결합니다. 코드와 에이전트 실행은 데몬 컴퓨터에 남아 있습니다.
 
 npm 워크스페이스 모노레포 구성:
 
 - `packages/server` — 에이전트 수명 주기, WebSocket API, MCP 서버를 담당하는 데몬
-- `packages/app` — Expo + React Native Web 기반 브라우저 클라이언트
+- `packages/app` — Web/PWA, Android 및 유지 관리되는 iOS 소스를 공유하는 Expo 클라이언트
+- `packages/desktop` — macOS/Linux/Windows Electron Desktop 호스트
 - `packages/cli` — Docker 스타일 CLI (`byspace run/ls/logs/wait`)
 - `packages/relay` — 원격 접속용 종단 간 암호화 릴레이
+
+## 클라이언트 다운로드
+
+[최신 GitHub Release](https://github.com/ByteTrue/byspace/releases/latest)에서 서명된 Android APK와 macOS/Linux/Windows Desktop 클라이언트를 다운로드하고 `client-release-manifest.json` 및 `SHA256SUMS.txt`로 검증하세요.
+
+iOS 소스, prebuild 및 테스트는 유지하지만 iOS 빌드는 게시하지 않습니다.
 
 ## 빠른 시작
 

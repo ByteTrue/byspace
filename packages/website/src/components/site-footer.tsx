@@ -1,4 +1,4 @@
-import { webAppUrl, docsUrl, githubRepoUrl } from "~/downloads";
+import { clientDownloadsUrl, webAppUrl, docsUrl, githubRepoUrl } from "~/downloads";
 
 interface SiteFooterProps {
   width?: "default" | "prose";
@@ -29,6 +29,14 @@ export function SiteFooter({ width = "default" }: SiteFooterProps) {
               className="block text-muted-foreground hover:text-foreground transition-colors"
             >
               Beta Channel
+            </a>
+            <a
+              href={clientDownloadsUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="block text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Download Clients
             </a>
             <a
               href={`${docsUrl}/cli`}

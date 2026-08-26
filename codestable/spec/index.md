@@ -6,10 +6,10 @@ BySpace 是一个自托管的个人计算控制平面：同一套 Agent、Worksp
 
 ## 客户端与发行边界
 
-- **当前公开发行：** 浏览器 Web/PWA、`byspace` CLI、本地 daemon、Cloudflare encrypted control relay，以及可选的 daemon-hosted 私有 Remote Web Service 数据面。
-- **已验证内部宿主：** Android `com.bytetrue.byspace` sideload APK 已通过 Direct/Relay 与核心主旅程；macOS Electron package 已通过 managed-daemon、local transport、Desktop Browser/CDP、typed OS bridge 和真实页面交互 smoke。二者仍没有正式签名、Play/EAS、notarization 或公开下载渠道。
-- **已闭合维护面：** iOS 共享源码/prebuild、Android/iOS Native modules 与测试、Electron Windows/Linux packaging 边界，以及 Native/Desktop 休眠发布源码。它们是正式源码和上游同步表面，不因尚未公开发行而被排除。
-- **明确不包含：** 用 Paseo 的独立 marketing-site 实现替换现有 BySpace `packages/website`、旧 Chat/Loops、Voice conversation/TTS，以及未通过单独发布闸门的 App Store/Play/签名 Desktop 公开发行。
+- **当前公开发行：** 浏览器 Web/PWA、`byspace` CLI/daemon、Cloudflare encrypted control relay、signed Android APK，以及 macOS/Linux/Windows Electron Desktop；Stable/Beta 的所有公开面来自同一不可变 tag/SHA。
+- **客户端产物契约：** GitHub Release 必须包含 Android/Desktop 完整资产、`client-release-manifest.json` 与 `SHA256SUMS.txt`；Android 使用固定更新密钥签名，Desktop 的实际签名状态写入 manifest。
+- **iOS 边界：** iOS 共享源码、prebuild、Native modules、测试、EAS profiles/Fastlane 与参考 workflow source 保持维护，但 active GitHub/EAS CD 不构建、不提交、不上传 iOS。
+- **明确不包含：** 用 Paseo 的独立 marketing-site 实现替换现有 BySpace `packages/website`、旧 Chat/Loops、Voice conversation/TTS、App Store/TestFlight、Google Play 商店提交，以及没有对应凭据时伪称已签名/notarized 的 Desktop 包。
 - **既有核心：** 直接 Provider、ACP、自定义 Provider、Terminal、Git/worktree、Schedule、Dictation、Plugin、MCP 与当前 daemon/CLI/Relay 能力保持不变。
 
 ### Desktop Window Chrome
@@ -124,6 +124,13 @@ Agent 使用 bundled `byspace-project-setup` Skill 检查干净 worktree 的可�
 - Web：`https://app.byspace.cc.cd`
 - Relay：`wss://relay.byspace.cc.cd:443`
 
+## 客户端发行边界
+
+- Stable/Beta 的一个不可变 Tag 同时发布 npm、Web/PWA、Relay、Electron Desktop（macOS/Linux/Windows）与 Android APK；客户端资产附在同一个 GitHub Release，并由公开 manifest 与 SHA-256 清单闭环。
+- Android 使用 BySpace 永久 release key 签名，应用 ID 固定为 `com.bytetrue.byspace`；直接 GitHub APK 是当前公开渠道，Google Play 不是当前渠道。
+- Electron Desktop 是公开客户端；OS 签名/公证状态必须在每个 release manifest 中真实记录，不能把未签名资产描述为已签名。
+- iOS 保留共享源码、prebuild、原生模块、测试与参考发行配置，但 active GitHub/EAS CD 不构建、不提交、不上传 iOS。启用 iOS 发布属于新的显式产品决定。
+
 ## Agent 聊天完整性
 
 - daemon 已提交的 Timeline 是聊天完整性的权威来源；live stream 负责低延迟展示，保留 subscription 不能证明浏览器没有漏收消息。
@@ -132,4 +139,4 @@ Agent 使用 bundled `byspace-project-setup` Skill 检查干净 worktree 的可�
 
 ## 来源与维护
 
-当前源码以首次干净引入的 Paseo `v0.2.0-beta.1` 为产品基础，并已按 release-delta 流程完整集成 Paseo `v0.5.1`（commit `f517493591a7b4072aa30ee48db13c1a51495103`，tree `fc096ff4bc53515c14a8e53d7d7adc6118f94974`）的全部受维护 Web/PWA、Android/iOS、Electron/Desktop Browser、server、CLI、Relay、测试、构建与休眠发布表面；旧 Web-only 政策遗漏的 Native/Desktop 纵向切片已由 Epic 005 闭合。Git 默认分支始终保持 BySpace-only ancestry；LICENSE 和 README 保留上游版权、AGPL 与来源归属。后续只按 Paseo 正式 release 审查并移植所有受维护客户端的聚合差异，不导入上游提交历史。
+当前源码以首次干净引入的 Paseo `v0.2.0-beta.1` 为产品基础，并已按 release-delta 流程完整集成 Paseo `v0.5.1`（commit `f517493591a7b4072aa30ee48db13c1a51495103`，tree `fc096ff4bc53515c14a8e53d7d7adc6118f94974`）的全部受维护 Web/PWA、Android/iOS、Electron/Desktop Browser、server、CLI、Relay、测试、构建与平台发布表面；旧 Web-only 政策遗漏的 Native/Desktop 纵向切片已由 Epic 005 闭合。后续同步必须保持 Android/Desktop 公开发行 gate 与 iOS no-publish CD 边界，不得把分发状态当作省略客户端源码的理由。Git 默认分支始终保持 BySpace-only ancestry；LICENSE 和 README 保留上游版权、AGPL 与来源归属，不导入上游提交历史。

@@ -9,6 +9,8 @@ closed: 2026-08-26
 
 # 恢复 Native App 源码闭包
 
+> **当前发行状态（2026-08-27）：** 本 Issue 记录 Epic 005 的源码恢复检查点；其中“不承诺安装包/发布”的范围限制已由 [Issue 050](../../../../issues/050-o-full-client-release-gate/index.md) 取代。Android 现随 Stable/Beta 发布签名 APK，Electron Desktop 发布三平台资产；iOS 仍只维护源码、prebuild 与测试，active CD 不构建、不提交、不上传。
+
 ## 做成以后是什么样
 
 当前 BySpace Expo App 重新拥有 Android/iOS 所需的共享平台判定、原生入口、platform override、Expo module/config plugin 与双向音频源码。Web 仍从同一包导出并保持现有行为；Android/iOS 可以从源码生成原生工程，但本 Issue 不承诺真实安装包或设备运行。
