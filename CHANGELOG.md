@@ -1,12 +1,15 @@
 # Changelog
 
+## 0.7.2 - 2026-08-27
+
+- Completes the multi-client release tuple in public artifacts: every Stable/Beta tag publishes checksummed Electron Desktop packages for macOS, Linux, and Windows plus a BySpace release-key-signed Android APK alongside npm, Web/PWA, and Relay.
+- Repairs the first client matrix by centralizing Electron Web export in `build:desktop:web` across local, macOS, Linux, and Windows builds and by preserving npm's default Windows lifecycle shell for transitive package scripts.
+- Publishes immutable exact-tag client manifests, SHA-256 checksums, updater metadata, actual macOS/Windows signing state, public re-download verification, and Android certificate identity; iOS source and validation remain maintained while active CD builds and uploads no iOS artifact.
+
 ## 0.7.1 - 2026-08-27
 
-- Completes the multi-client release tuple: every Stable/Beta tag now publishes checksummed Electron Desktop artifacts for macOS, Linux, and Windows plus a signed Android APK alongside npm, Web/PWA, and Relay.
-- Adds immutable exact-tag client publishing with full asset manifests, SHA-256 checksums, updater metadata validation, byte-identical retry enforcement, cross-platform packaged smoke checks, and public re-download verification.
-- Establishes the permanent BySpace Android update identity and fails closed on missing release-signing credentials; `v0.7.1` Android APKs use the pinned signer certificate recorded in the repository.
-- Makes the iOS boundary explicit: iOS source, prebuild, native modules, tests, EAS profiles, Fastlane, and inactive workflow references remain maintained, while active CD never builds, submits, or uploads iOS.
-- Updates release skills, product and architecture documentation, CodeStable records, website downloads, and localized READMEs to make Desktop and Android public release assets the current product contract. macOS uses ad-hoc signing and Windows remains unsigned until their platform signing credentials are provisioned; the release manifest records the actual signing state.
+- Adds the unified Desktop/Android release infrastructure, long-term Android signing identity, release manifest/checksum tooling, iOS no-CD boundary, and matching release skills, documentation, website downloads, and CodeStable contract.
+- Publishes npm, Stable Web, and Stable Relay successfully. The first Desktop/Android client matrix stopped before uploading any GitHub Release asset because Electron Web export targeted the wrong workspace and Windows npm lifecycle scripts were forced through Windows PowerShell; client publication is fixed forward in 0.7.2 without moving or rebuilding the 0.7.1 tag.
 
 ## 0.7.0 - 2026-08-27
 
