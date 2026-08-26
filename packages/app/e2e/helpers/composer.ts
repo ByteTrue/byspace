@@ -41,7 +41,14 @@ export async function submitMessage(page: Page, text: string): Promise<void> {
   const input = composerInput(page);
   await expect(input).toBeEditable({ timeout: 30_000 });
   await input.fill(text);
-  await input.press("Enter");
+  await expect(input).toHaveValue(text);
+
+  const sendButton = page
+    .getByRole("button", { name: "Send message", exact: true })
+    .filter({ visible: true })
+    .first();
+  await expect(sendButton).toBeEnabled({ timeout: 30_000 });
+  await sendButton.click();
 }
 
 export async function fillComposerDraft(page: Page, text: string): Promise<void> {
