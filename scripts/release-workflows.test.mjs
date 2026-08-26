@@ -10,7 +10,7 @@ test("CI builds Web once, embeds it in one package, and smokes that package on e
   const workflow = readWorkflow("ci.yml");
   assert.match(
     workflow,
-    /go run github\.com\/rhysd\/actionlint\/cmd\/actionlint@v1\.7\.12 -no-color/,
+    /go run github\.com\/rhysd\/actionlint\/cmd\/actionlint@v1\.7\.12 -no-color -shellcheck= -pyflakes=/,
   );
   assert.doesNotMatch(workflow, /npm run build:web/);
   assert.equal(workflow.match(/npm run pack:byspace/g)?.length, 1);
