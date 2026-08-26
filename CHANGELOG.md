@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.7.3 - 2026-08-27
+
+- Completes the public multi-client release tuple: every Stable/Beta tag publishes checksummed Electron Desktop packages for macOS, Linux, and Windows plus a BySpace release-key-signed Android APK alongside npm, Web/PWA, and Relay.
+- Makes macOS, Linux, Windows, and local Desktop builds share tested root entrypoints for Electron Web export, server runtime, and main-process compilation, and waits up to six minutes for a newly published npm tarball to become downloadable.
+- Publishes immutable exact-tag client manifests, SHA-256 checksums, updater metadata, actual macOS/Windows signing state, public re-download verification, and Android certificate identity; iOS source and validation remain maintained while active CD builds and uploads no iOS artifact.
+
 ## 0.7.2 - 2026-08-27
 
 - Publishes npm, Stable Web, and Stable Relay successfully and repairs the first client matrix's Electron Web export and Windows npm lifecycle shell failures.
