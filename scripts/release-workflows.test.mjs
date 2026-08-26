@@ -37,12 +37,25 @@ test("npm package bundles and smoke-loads the private plugin runtime", () => {
 
 test("client publisher builds every public client from one immutable exact-CI tag", () => {
   const workflow = readWorkflow("client-release.yml");
+  const npmWorkflow = readWorkflow("npm-release.yml");
+  const rootPackage = JSON.parse(readFileSync(resolve(root, "package.json"), "utf8"));
   assert.match(workflow, /push:\n    tags:\n      - "v\*"/);
   assert.doesNotMatch(workflow, /workflow_dispatch|inputs\.tag/);
   assert.doesNotMatch(workflow, /checkout_ref|--clobber|eas-cli|--platform ios|\.ipa/);
   assert.equal(workflow.match(/run: npm run build:desktop:web/g)?.length, 3);
+  assert.equal(workflow.match(/run: npm run build:desktop:runtime/g)?.length, 3);
+  assert.equal(workflow.match(/run: npm run build:desktop:main/g)?.length, 3);
+  assert.equal(rootPackage.scripts["build:desktop:runtime"], "npm run build:server:clean");
+  assert.equal(
+    rootPackage.scripts["build:desktop:main"],
+    "npm run build:main --workspace=@bytetrue/byspace-desktop",
+  );
   assert.doesNotMatch(workflow, /npm run build:web --workspace=@bytetrue\/byspace-desktop/);
   assert.doesNotMatch(workflow, /npm config set script-shell/);
+  assert.match(
+    npmWorkflow,
+    /curl -fsSL --retry 72 --retry-all-errors --retry-delay 5 --retry-max-time 360/,
+  );
   assert.match(
     workflow,
     /gh run list .*--workflow CI --commit "\$sha" --event push --status success/,

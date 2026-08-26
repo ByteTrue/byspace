@@ -115,10 +115,12 @@ Before the tag, source can be fixed normally. After the tag, npm and client asse
 
 ## Incident-derived client build controls
 
-The first `v0.7.1` client matrix failed before publication and established two additional controls:
+The first `v0.7.1` and `v0.7.2` client matrices failed before asset publication and established these additional controls:
 
 - Electron Web export is owned by the root `build:desktop:web` script. macOS, Linux, Windows, and local Desktop builds call that one script; a workflow must never route `build:web` to the Desktop workspace.
+- Electron server runtime and main-process compilation are owned by the tested root `build:desktop:runtime` and `build:desktop:main` scripts. Workflows must not invent package-script names that local builds do not execute.
 - Windows jobs must leave npm's default lifecycle shell intact. Do not set npm `script-shell` to Windows PowerShell: transitive package scripts may use `cmd.exe` operators such as `||`. Workflow `shell: pwsh` remains appropriate for explicit PowerShell steps.
+- npm registry version metadata may become visible before the tarball CDN serves the new object. Post-publish verification waits up to six minutes for the exact tarball; retrying a failed job for an already-published version must verify without republishing.
 - A green source/build gate does not substitute for the first real cross-platform tag matrix. If that immutable tag exposes a workflow defect after npm publication, leave the tag untouched and fix forward to a new version.
 
 ## Evidence in this repository

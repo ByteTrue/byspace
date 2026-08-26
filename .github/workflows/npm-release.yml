@@ -124,7 +124,7 @@ jobs:
           cp artifacts/npm-artifact.json "$registry_artifact_dir/npm-artifact.json"
           artifact_name="$(node -p 'require("./artifacts/npm-artifact.json").artifact')"
           tarball_url="$(npm view "@bytetrue/byspace@$version" dist.tarball)"
-          curl -fsSL --retry 12 --retry-all-errors --retry-delay 5 "$tarball_url" -o "$registry_artifact_dir/$artifact_name"
+          curl -fsSL --retry 72 --retry-all-errors --retry-delay 5 --retry-max-time 360 "$tarball_url" -o "$registry_artifact_dir/$artifact_name"
           node scripts/release-artifact-manifest.mjs verify --kind npm --manifest "$registry_artifact_dir/npm-artifact.json" --commit "${{ github.sha }}"
 
       - name: Create GitHub release

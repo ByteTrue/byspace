@@ -121,7 +121,7 @@ jobs:
           EXPO_PUBLIC_POSTHOG_KEY: ${{ secrets.EXPO_PUBLIC_POSTHOG_KEY }}
           EXPO_PUBLIC_POSTHOG_HOST: ${{ secrets.EXPO_PUBLIC_POSTHOG_HOST }}
         run: npm run build:desktop:web
-      - run: npm run build:server:runtime
+      - run: npm run build:desktop:runtime
       - run: npm run build:desktop:main
       - name: Package macOS
         working-directory: packages/desktop
@@ -203,7 +203,7 @@ jobs:
           EXPO_PUBLIC_POSTHOG_KEY: ${{ secrets.EXPO_PUBLIC_POSTHOG_KEY }}
           EXPO_PUBLIC_POSTHOG_HOST: ${{ secrets.EXPO_PUBLIC_POSTHOG_HOST }}
         run: npm run build:desktop:web
-      - run: npm run build:server:runtime
+      - run: npm run build:desktop:runtime
       - run: npm run build:desktop:main
       - name: Package Linux
         working-directory: packages/desktop
@@ -295,7 +295,7 @@ jobs:
           EXPO_PUBLIC_POSTHOG_KEY: ${{ secrets.EXPO_PUBLIC_POSTHOG_KEY }}
           EXPO_PUBLIC_POSTHOG_HOST: ${{ secrets.EXPO_PUBLIC_POSTHOG_HOST }}
         run: npm run build:desktop:web
-      - run: npm run build:server:runtime
+      - run: npm run build:desktop:runtime
       - run: npm run build:desktop:main
       - name: Package Windows
         working-directory: packages/desktop
