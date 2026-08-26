@@ -36,6 +36,8 @@ import { Shortcut } from "@/components/ui/shortcut";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { isWeb } from "@/constants/platform";
+import { TitlebarDragRegion } from "@/components/desktop/titlebar-drag-region";
+import { WindowChromeSafeArea } from "@/utils/desktop-window";
 import { useOpenAddProject } from "@/hooks/use-open-add-project";
 import { useOpenNewWorkspace } from "@/hooks/use-global-new-workspace-action";
 import { useShortcutKeys } from "@/hooks/use-shortcut-keys";
@@ -699,6 +701,8 @@ function DesktopSidebar({
     >
       <View style={desktopSidebarBorderStyle}>
         <View style={styles.sidebarDragArea}>
+          <TitlebarDragRegion />
+          <WindowChromeSafeArea placement="below" />
           <View style={styles.sidebarHeaderGroup} testID="sidebar-pages-header">
             <SidebarPagesMenu />
             <PluginSidebarItems />

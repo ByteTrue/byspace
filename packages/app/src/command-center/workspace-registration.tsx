@@ -10,6 +10,7 @@ import {
   Focus,
   GitCompareArrows,
   GitPullRequest,
+  Globe,
   Maximize2,
   Move,
   PanelRight,
@@ -20,6 +21,7 @@ import {
   SquareTerminal,
   X,
 } from "lucide-react-native";
+import { getIsElectron } from "@/constants/platform";
 import { supportsDesktopPaneSplits, useIsCompactFormFactor } from "@/constants/layout";
 import { GIT_ACTION_ICONS } from "@/git/action-icons";
 import { useGitActionRunner, useGitActions } from "@/git/use-actions";
@@ -48,6 +50,7 @@ import { resolveWorkspaceCommandCenterShortcuts } from "./workspace-shortcuts";
 const WORKSPACE_COMMAND_CENTER_ICONS = {
   newAgent: getCommandCenterIcon(SquarePen),
   newTerminal: getCommandCenterIcon(SquareTerminal),
+  newBrowser: getCommandCenterIcon(Globe),
   splitRight: getCommandCenterIcon(Columns2),
   splitDown: getCommandCenterIcon(Rows2),
   changes: getCommandCenterIcon(GitCompareArrows),
@@ -81,7 +84,7 @@ function staticIcon(element: ReactElement | undefined): CommandCenterIcon | unde
 }
 
 function resolveWorkspaceShortcuts(overrides: ShortcutOverrides): WorkspaceCommandCenterShortcuts {
-  const platform = { isMac: getShortcutOs() === "mac", isDesktop: true };
+  const platform = { isMac: getShortcutOs() === "mac", isDesktop: getIsElectron() };
   return resolveWorkspaceCommandCenterShortcuts({ overrides, platform });
 }
 
@@ -121,6 +124,7 @@ export function useWorkspaceCommandCenterActions(): void {
           section: t("workspace.header.actions.workspaceActions"),
           newAgent: t("workspace.tabs.actions.newAgent"),
           newTerminal: t("workspace.tabs.actions.newTerminal"),
+          newBrowser: t("workspace.tabs.actions.newBrowser"),
           splitRight: t("workspace.tabs.actions.splitRight"),
           splitDown: t("workspace.tabs.actions.splitDown"),
           changes: t("workspace.tabs.actions.changes"),
@@ -159,7 +163,7 @@ export function useWorkspaceCommandCenterActions(): void {
         shortcuts: resolveWorkspaceShortcuts(overrides),
         capabilities: {
           canSplitPanes: supportsDesktopPaneSplits() && !isCompact,
-          canOpenBrowserTabs: false,
+          canOpenBrowserTabs: getIsElectron(),
           isGit,
         },
         activeTabKind,

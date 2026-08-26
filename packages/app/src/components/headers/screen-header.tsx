@@ -9,6 +9,8 @@ import {
   HEADER_TOP_PADDING_MOBILE,
   useIsCompactFormFactor,
 } from "@/constants/layout";
+import { TitlebarDragRegion } from "@/components/desktop/titlebar-drag-region";
+import { WindowChromeSafeArea } from "@/utils/desktop-window";
 
 interface ScreenHeaderProps {
   left?: ReactNode;
@@ -42,24 +44,23 @@ export function ScreenHeader({
     () => [styles.inner, { paddingTop: insets.top + topPadding }],
     [insets.top, topPadding],
   );
-  const rowStyle = useMemo(
-    () => [
-      styles.row,
-      { paddingHorizontal: baseHorizontalPadding },
-      borderless && styles.borderless,
-    ],
-    [baseHorizontalPadding, borderless],
-  );
+  const rowStyle = useMemo(() => [styles.row, borderless && styles.borderless], [borderless]);
   const leftCombinedStyle = useMemo(() => [styles.left, leftStyle], [leftStyle]);
   const rightCombinedStyle = useMemo(() => [styles.right, rightStyle], [rightStyle]);
 
   return (
     <View style={styles.header}>
       <View style={innerStyle}>
-        <View onLayout={onRowLayout} style={rowStyle}>
+        <WindowChromeSafeArea
+          placement="inline"
+          horizontalPadding={baseHorizontalPadding}
+          onLayout={onRowLayout}
+          style={rowStyle}
+        >
+          <TitlebarDragRegion />
           <View style={leftCombinedStyle}>{left}</View>
           <View style={rightCombinedStyle}>{right}</View>
-        </View>
+        </WindowChromeSafeArea>
       </View>
     </View>
   );

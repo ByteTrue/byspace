@@ -22,6 +22,22 @@ test("CI builds Web once, embeds it in one package, and smokes that package on e
   assert.match(workflow, /npm run smoke:package -- --skip-pack/);
 });
 
+test("npm package bundles and smoke-loads the private plugin runtime", () => {
+  const packScript = readFileSync(resolve(root, "scripts", "pack-byspace.mjs"), "utf8");
+  const smokeScript = readFileSync(resolve(root, "scripts", "smoke-byspace-package.mjs"), "utf8");
+
+  assert.match(packScript, /internalWorkspaces = \[[^\]]*"plugin"/);
+  assert.match(smokeScript, /require\.resolve\("@bytetrue\/byspace-plugin"\)/);
+  assert.match(smokeScript, /require\.resolve\("@bytetrue\/byspace-plugin\/server"\)/);
+});
+
+test("Android artifact workflow uses existing release helpers and self-contained metadata", () => {
+  const workflow = readWorkflow("android-apk-release.yml");
+  assert.match(workflow, /emit-release-env\.mjs --source-tag/);
+  assert.match(workflow, /sha256sum/);
+  assert.doesNotMatch(workflow, /validate-release-tag\.mjs|android-release-metadata\.mjs/);
+});
+
 test("Playwright CI keeps twelve matching isolated shards", () => {
   const workflow = readWorkflow("ci.yml");
   const jobStart = workflow.indexOf("\n  playwright:");
@@ -72,4 +88,17 @@ test("App deploy selects the same CI Web artifact and preserves channel inputs",
   assert.match(workflow, /--commit-hash "\$EXPECTED_SHA"/);
   assert.doesNotMatch(workflow, /expo export/);
   assert.doesNotMatch(workflow, /build:app-deps/);
+});
+
+test("Desktop clean app dependency builds leave every workspace dependency consumable", () => {
+  const packageJson = JSON.parse(readFileSync(resolve(root, "package.json"), "utf8"));
+  const cleanBuild = packageJson.scripts["build:app-deps:clean"];
+
+  assert.match(cleanBuild, /npm run build:client:clean/);
+  assert.match(cleanBuild, /npm run build --workspace=@bytetrue\/byspace-expo-two-way-audio/);
+  assert.doesNotMatch(
+    cleanBuild,
+    /npm run clean --workspace=@bytetrue\/byspace-expo-two-way-audio/,
+  );
+  assert.match(packageJson.scripts["build:desktop"], /^npm run build:app-deps:clean/);
 });

@@ -1204,6 +1204,7 @@ export const ar: TranslationResources = {
       title: "ابدأ من",
     },
   },
+  desktop: en.desktop,
   rootError: {
     kicker: "حدث خطأ",
     title: "واجه BySpace مشكلة.",

@@ -1,0 +1,49 @@
+{
+  "cli": {
+    "version": ">= 15.0.0",
+    "appVersionSource": "local"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "env": {
+        "APP_VARIANT": "development"
+      }
+    },
+    "preview": {
+      "distribution": "internal",
+      "env": {
+        "APP_VARIANT": "production"
+      }
+    },
+    "profile": {
+      "distribution": "internal",
+      "env": {
+        "APP_VARIANT": "production",
+        "BYSPACE_BUILD_PROFILE": "profile"
+      }
+    },
+    "production": {
+      "env": {
+        "APP_VARIANT": "production"
+      }
+    },
+    "production-apk": {
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "APP_VARIANT": "production"
+      }
+    }
+  },
+  "submit": {
+    "production": {
+      "android": {
+        "track": "production"
+      }
+    }
+  }
+}

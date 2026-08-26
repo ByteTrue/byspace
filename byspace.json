@@ -11,6 +11,10 @@
       "type": "service",
       "command": "BYSPACE_DEV_MANAGED_HOME=1 BYSPACE_DEV_ROOT=\"${BYSPACE_WORKTREE_PATH:-$PWD}\" BYSPACE_HOME=\"${BYSPACE_WORKTREE_PATH:-$PWD}/.dev/byspace-home\" BYSPACE_LISTEN=0.0.0.0:${BYSPACE_SERVICE_DAEMON_PORT:-6768} BYSPACE_DEV_DAEMON_ENDPOINT=localhost:${BYSPACE_SERVICE_DAEMON_PORT:-6768} EXPO_PORT=${BYSPACE_PORT:-} ./scripts/dev-app.sh"
     },
+    "desktop": {
+      "type": "service",
+      "command": "BYSPACE_DEV_MANAGED_HOME=1 BYSPACE_DEV_ROOT=\"${BYSPACE_WORKTREE_PATH:-$PWD}\" BYSPACE_HOME=\"${BYSPACE_WORKTREE_PATH:-$PWD}/.dev/byspace-home\" BYSPACE_LISTEN=0.0.0.0:${BYSPACE_SERVICE_DAEMON_PORT:-6768} BYSPACE_DEV_DAEMON_ENDPOINT=localhost:${BYSPACE_SERVICE_DAEMON_PORT:-6768} EXPO_PORT=${BYSPACE_PORT:-} exec ./packages/desktop/scripts/dev.sh"
+    },
     "typecheck": {
       "command": "npm run typecheck"
     }

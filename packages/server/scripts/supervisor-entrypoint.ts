@@ -1,5 +1,6 @@
 import { fileURLToPath } from "url";
 import { existsSync } from "node:fs";
+import path from "node:path";
 import {
   acquirePidLock,
   PidLockError,
@@ -17,11 +18,13 @@ process.title = "BySpace Supervisor";
 
 interface DaemonRunnerConfig {
   devMode: boolean;
+  reclaimStalePidLock: boolean;
   workerArgs: string[];
 }
 
 function parseConfig(argv: string[]): DaemonRunnerConfig {
   let devMode = false;
+  let reclaimStalePidLock = false;
   const workerArgs: string[] = [];
 
   for (const arg of argv) {
@@ -29,10 +32,14 @@ function parseConfig(argv: string[]): DaemonRunnerConfig {
       devMode = true;
       continue;
     }
+    if (arg === "--reclaim-stale-pid-lock") {
+      reclaimStalePidLock = true;
+      continue;
+    }
     workerArgs.push(arg);
   }
 
-  return { devMode, workerArgs };
+  return { devMode, reclaimStalePidLock, workerArgs };
 }
 
 function resolveWorkerEntry(): string {
@@ -78,11 +85,27 @@ function resolveWorkerExecArgv(workerEntry: string, devMode: boolean): string[] 
   return [...devArgs, ...execArgv];
 }
 
+function resolvePackagedNodeEntrypointRunnerPath(currentScriptPath: string): string | null {
+  const packageMarker = `${path.sep}node_modules${path.sep}@bytetrue${path.sep}byspace-server${path.sep}`;
+  const markerIndex = currentScriptPath.lastIndexOf(packageMarker);
+  if (markerIndex === -1) {
+    return null;
+  }
+
+  const appRoot = currentScriptPath.slice(0, markerIndex);
+  const runnerPath = path.join(appRoot, "dist", "daemon", "node-entrypoint-runner.js");
+  return existsSync(runnerPath) ? runnerPath : null;
+}
+
 async function main(): Promise<void> {
   const config = parseConfig(process.argv.slice(2));
   const workerEntry = config.devMode ? resolveDevWorkerEntry() : resolveWorkerEntry();
   const workerExecArgv = resolveWorkerExecArgv(workerEntry, config.devMode);
   const workerEnv: NodeJS.ProcessEnv = { ...process.env };
+  const packagedNodeEntrypointRunner =
+    process.env.ELECTRON_RUN_AS_NODE === "1"
+      ? resolvePackagedNodeEntrypointRunnerPath(fileURLToPath(import.meta.url))
+      : null;
 
   applySherpaLoaderEnv(workerEnv);
 
@@ -91,7 +114,10 @@ async function main(): Promise<void> {
   const supervisorLogFile = resolveSupervisorLogFile(byspaceHome, persistedConfig, workerEnv);
 
   try {
-    await acquirePidLock(byspaceHome, null, { ownerPid: process.pid });
+    await acquirePidLock(byspaceHome, null, {
+      ownerPid: process.pid,
+      reclaimStaleDesktopLock: config.reclaimStalePidLock,
+    });
   } catch (error) {
     if (error instanceof PidLockError) {
       process.stderr.write(`${error.message}\n`);
@@ -131,6 +157,21 @@ async function main(): Promise<void> {
     workerArgs: config.workerArgs,
     workerEnv,
     workerExecArgv,
+    resolveWorkerSpawnSpec: packagedNodeEntrypointRunner
+      ? (resolvedWorkerEntry) => ({
+          command: process.execPath,
+          args: [
+            packagedNodeEntrypointRunner,
+            "node-script",
+            resolvedWorkerEntry,
+            ...config.workerArgs,
+          ],
+          env: {
+            ...workerEnv,
+            ELECTRON_RUN_AS_NODE: "1",
+          },
+        })
+      : undefined,
     restartOnCrash: true,
     logFile: supervisorLogFile,
     onWorkerReady: async ({ listen }) => {

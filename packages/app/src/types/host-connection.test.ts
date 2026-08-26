@@ -9,6 +9,22 @@ describe("connectionFromListen", () => {
       endpoint: "localhost:6777",
     });
   });
+
+  it("accepts Unix domain sockets", () => {
+    expect(connectionFromListen("/tmp/byspace.sock")).toEqual({
+      id: "socket:/tmp/byspace.sock",
+      type: "directSocket",
+      path: "/tmp/byspace.sock",
+    });
+  });
+
+  it("accepts Windows named pipes", () => {
+    expect(connectionFromListen("\\\\.\\pipe\\byspace-daemon")).toEqual({
+      id: "pipe:\\\\.\\pipe\\byspace-daemon",
+      type: "directPipe",
+      path: "\\\\.\\pipe\\byspace-daemon",
+    });
+  });
 });
 
 describe("normalizeStoredHostProfile", () => {

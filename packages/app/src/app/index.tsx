@@ -12,6 +12,9 @@ import {
   useIsLastWorkspaceSelectionHydrated,
   useLastWorkspaceSelection,
 } from "@/stores/navigation-active-workspace-store";
+import { shouldUseDesktopDaemon } from "@/desktop/daemon/desktop-daemon";
+
+const isDesktop = shouldUseDesktopDaemon();
 export default function Index() {
   const pathname = usePathname();
   const bootstrapState = useHostRuntimeBootstrapState();
@@ -30,6 +33,7 @@ export default function Index() {
 
   const startupRoute = resolveStartupRoute({
     route: { kind: "index", pathname },
+    startupBlocker: bootstrapState.startupBlocker,
     hostRegistryStatus,
     hosts,
     anyOnlineHostServerId,
@@ -46,5 +50,5 @@ export default function Index() {
     return <Redirect href={startupRoute.href} />;
   }
 
-  return <StartupSplashScreen />;
+  return <StartupSplashScreen bootstrapState={isDesktop ? bootstrapState : undefined} />;
 }

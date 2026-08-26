@@ -5,7 +5,7 @@ import type {
 } from "@bytetrue/byspace-protocol/messages";
 import type { PluginResourceComposerAttachment } from "@/plugins/attachments";
 
-export type AttachmentStorageType = "web-indexeddb";
+export type AttachmentStorageType = "web-indexeddb" | "desktop-file" | "native-file";
 
 export interface AttachmentMetadata {
   id: string;
@@ -16,6 +16,32 @@ export interface AttachmentMetadata {
   fileName?: string | null;
   byteSize?: number | null;
   createdAt: number;
+}
+
+export interface BrowserElementAttachment {
+  url: string;
+  selector: string;
+  tag: string;
+  text: string;
+  outerHTML: string;
+  computedStyles: Record<string, string>;
+  boundingRect: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  };
+  reactSource: {
+    fileName: string | null;
+    lineNumber: number | null;
+    columnNumber: number | null;
+    componentName: string | null;
+  } | null;
+  parentChain: string[];
+  children: string[];
+  comment?: string;
+  screenshot?: AttachmentMetadata;
+  formatted: string;
 }
 
 export type PullRequestContextAttachmentKind =
@@ -84,6 +110,10 @@ export type UserComposerAttachment =
     };
 
 export type WorkspaceComposerAttachment =
+  | {
+      kind: "browser_element";
+      attachment: BrowserElementAttachment;
+    }
   | PullRequestContextAttachment
   | ChatHistoryContextAttachment
   | {
@@ -98,7 +128,8 @@ export type ComposerAttachment = UserComposerAttachment | WorkspaceComposerAttac
 export type AttachmentDataSource =
   | { kind: "bytes"; bytes: Uint8Array }
   | { kind: "blob"; blob: Blob }
-  | { kind: "data_url"; dataUrl: string };
+  | { kind: "data_url"; dataUrl: string }
+  | { kind: "file_uri"; uri: string };
 
 export interface SaveAttachmentInput {
   id?: string;

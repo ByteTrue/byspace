@@ -31,6 +31,7 @@ import {
   findPaneContainingTab,
   focusPaneInLayout,
   focusTabInLayout,
+  getFocusedBrowserId,
   getTreeDepth,
   insertSplit,
   moveTabToPaneInLayout,
@@ -71,6 +72,7 @@ export {
   FOCUSED_PANE_PLACEMENT,
   findPaneById,
   findPaneContainingTab,
+  getFocusedBrowserId,
   getTreeDepth,
   insertSplit,
   normalizeLayout,
@@ -189,6 +191,7 @@ const WorkspaceTabTargetStorageSchema = z.discriminatedUnion("kind", [
     subagentId: z.string(),
   }),
   z.strictObject({ kind: z.literal("terminal"), terminalId: z.string() }),
+  z.strictObject({ kind: z.literal("browser"), browserId: z.string() }),
   z.strictObject({ kind: z.literal("files") }),
   z.strictObject({ kind: z.literal("pull_request") }),
   z.strictObject({

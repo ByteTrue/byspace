@@ -26,10 +26,22 @@
         let
           pkgs = pkgsFor system;
           byspace = pkgs.callPackage ./nix/package.nix { };
+          versionParts = pkgs.lib.splitString "." byspace.version;
+          sourceRevision = if self ? revCount && self.revCount != null then self.revCount else 0;
+          buildRevision = sourceRevision - (sourceRevision / 10000) * 10000;
+          desktopBuildVersion = pkgs.lib.concatStringsSep "." [
+            (builtins.elemAt versionParts 0)
+            (builtins.elemAt versionParts 1)
+            (toString buildRevision)
+          ];
         in
         {
           default = byspace;
           byspace = byspace;
+          desktop = pkgs.callPackage ./nix/desktop-package.nix {
+            inherit byspace;
+            buildVersion = desktopBuildVersion;
+          };
         }
       );
 

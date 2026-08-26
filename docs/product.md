@@ -4,16 +4,16 @@ What BySpace is, who it's for, and where it's going.
 
 ## What is BySpace
 
-BySpace is a personal, Web-based development environment built around agents. A hosted browser interface and local CLI control agents running in your own development environment.
+BySpace is a self-hosted personal compute control plane built around agents. The currently public hosted Web interface and local CLI control agents in your own development environment; the same product is maintained across Android/iOS and an Electron Desktop host so each device can also contribute its native capabilities.
 
-The development workflow is shifting from manually editing files to orchestrating agents that do the editing. BySpace is built for that workflow.
+The development workflow is shifting from manually editing files to orchestrating agents and user-owned devices that do the work. BySpace is built for that workflow.
 
 ## Core philosophy
 
 Freedom and flexibility. Every design decision follows from this:
 
 - **Multi-provider** — Use any coding agent harness. Pick the right model for each job, switch freely as the landscape shifts. No vendor-lock in.
-- **Web + CLI** — Use the same local daemon from a hosted browser interface or terminal automation.
+- **Full clients + CLI** — Use the same local daemon from Web/PWA, Android/iOS, Electron Desktop, or terminal automation. Public distribution can mature independently without splitting the product model.
 - **Self-hosted** — The daemon runs on your machine. Your code, your keys, your environment. No inference markup, no cloud dependency.
 - **Respectful** - No telemetry, no forced cloud, no forced accounts
 - **Open source** — AGPL-3.0. Users can inspect, fork, and contribute.
@@ -39,13 +39,13 @@ A workspace is a flexible canvas:
 
 ### The daemon
 
-BySpace is a client-server system. The daemon (Node.js) runs on your machine, manages agent processes, and streams output in real time over WebSocket to the Web app or CLI.
+BySpace is a client-server system. The daemon (Node.js) runs on your machine, manages agent processes, and streams output in real time over WebSocket or local Desktop transport to Web, mobile, Desktop, and CLI clients.
 
 This architecture means:
 
 - The daemon can run on any machine: laptop, VM, remote server
-- Multiple clients can connect simultaneously
-- Agents keep running when you close the browser
+- Multiple Web, mobile, Desktop, and CLI clients can connect simultaneously
+- Agents keep running when you close any client
 
 ## Target user
 
@@ -54,7 +54,7 @@ Anyone who builds software:
 - Care about owning their tools and their data
 - Use multiple AI providers and want to switch freely
 - Run agents on real tasks across real projects
-- Want browser access to agents running on their own machines
+- Want access from browsers, desktops, and mobile devices to agents running on their own machines
 
 ## What compounds over time
 
@@ -69,9 +69,11 @@ Anyone who builds software:
 3. **The daemon as infrastructure.** Server/client architecture enables deployment anywhere.
 4. **Open source outlasts funding.** Open source communities are resilient. Contributors become advocates.
 
-## Current state (May 2026)
+## Current state (August 2026)
 
-- Hosted Web/PWA and CLI backed by a local daemon and optional E2EE relay
+- Public Hosted Web/PWA and CLI backed by a local daemon and optional E2EE relay
+- Shared Android/iOS source and native build closure; an Android internal sideload artifact has completed Direct/Relay main-journey smoke
+- Electron Desktop and Desktop Browser automation have completed internal macOS package/runtime smoke; native/Desktop test and dormant release source remain maintained while signed/public distribution stays gated
 - Built-in providers: Claude Code (Agent SDK), Codex (app-server), GitHub Copilot (ACP), OpenCode, Pi, OMP
 - One-click ACP provider catalog: CodeWhale, Cursor, Hermes, Qwen Coder, Kimi Code, and others — plus custom ACP providers
 - Local dictation with Host-managed multilingual speech models and optional text-only refinement through the current Agent provider

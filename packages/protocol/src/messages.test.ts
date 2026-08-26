@@ -316,6 +316,16 @@ describe("agent detach RPC", () => {
     expect(parsed.features?.agentDetach).toBe(true);
   });
 
+  test("parses optional desktop-managed daemon metadata", () => {
+    const parsed = parseServerInfoStatusPayload({
+      status: "server_info",
+      serverId: "srv-test",
+      desktopManaged: true,
+    });
+
+    expect(parsed?.desktopManaged).toBe(true);
+  });
+
   test("parses the workspace-targeted session import feature gate", () => {
     const parsed = parseServerInfoStatusPayload({
       status: "server_info",

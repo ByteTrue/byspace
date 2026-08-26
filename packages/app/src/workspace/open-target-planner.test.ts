@@ -68,4 +68,34 @@ describe("planWorkspaceOpenTargets", () => {
       }),
     ).toEqual([]);
   });
+
+  it("plans desktop targets for local Electron workspaces", () => {
+    expect(
+      planWorkspaceOpenTargets({
+        workspaceDirectory: "/repo",
+        activeFile: { path: "src/app.ts", lineStart: 3 },
+        desktopTargets: [
+          {
+            id: "vscode",
+            label: "VS Code",
+            kind: "editor",
+            icon: { kind: "symbol", name: "terminal" },
+          },
+        ],
+        canUseDesktopBridge: true,
+        isLocalExecution: true,
+      }),
+    ).toMatchObject([
+      {
+        source: "desktop",
+        id: "vscode",
+        openInput: {
+          editorId: "vscode",
+          workspacePath: "/repo",
+          filePath: "/repo/src/app.ts",
+          line: 3,
+        },
+      },
+    ]);
+  });
 });

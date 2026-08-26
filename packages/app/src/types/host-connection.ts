@@ -15,6 +15,18 @@ import { z } from "zod";
 
 export { DirectTcpHostConnectionSchema, type DirectTcpHostConnection };
 
+export interface DirectSocketHostConnection {
+  id: string;
+  type: "directSocket";
+  path: string;
+}
+
+export interface DirectPipeHostConnection {
+  id: string;
+  type: "directPipe";
+  path: string;
+}
+
 export interface RelayHostConnection {
   id: string;
   type: "relay";
@@ -23,7 +35,11 @@ export interface RelayHostConnection {
   daemonPublicKeyB64: string;
 }
 
-export type HostConnection = DirectTcpHostConnection | RelayHostConnection;
+export type HostConnection =
+  | DirectTcpHostConnection
+  | DirectSocketHostConnection
+  | DirectPipeHostConnection
+  | RelayHostConnection;
 
 export type HostLifecycle = Record<string, never>;
 
@@ -58,6 +74,12 @@ function hostConnectionEquals(left: HostConnection, right: HostConnection): bool
       (left.useTls ?? false) === (right.useTls ?? false) &&
       left.password === right.password
     );
+  }
+  if (left.type === "directSocket" && right.type === "directSocket") {
+    return left.path === right.path;
+  }
+  if (left.type === "directPipe" && right.type === "directPipe") {
+    return left.path === right.path;
   }
   if (left.type === "relay" && right.type === "relay") {
     return (
@@ -183,6 +205,32 @@ export function connectionFromListen(listen: string): HostConnection | null {
     return null;
   }
 
+  if (normalizedListen.startsWith("pipe://")) {
+    const path = normalizedListen.slice("pipe://".length).trim();
+    return path ? { id: `pipe:${path}`, type: "directPipe", path } : null;
+  }
+
+  if (normalizedListen.startsWith("unix://")) {
+    const path = normalizedListen.slice("unix://".length).trim();
+    return path ? { id: `socket:${path}`, type: "directSocket", path } : null;
+  }
+
+  if (normalizedListen.startsWith("\\\\.\\pipe\\")) {
+    return {
+      id: `pipe:${normalizedListen}`,
+      type: "directPipe",
+      path: normalizedListen,
+    };
+  }
+
+  if (normalizedListen.startsWith("/")) {
+    return {
+      id: `socket:${normalizedListen}`,
+      type: "directSocket",
+      path: normalizedListen,
+    };
+  }
+
   try {
     const endpoint = normalizeLoopbackToLocalhost(normalizeHostPort(normalizedListen));
     return {
@@ -202,6 +250,16 @@ const StoredHostConnectionSchema = z.discriminatedUnion("type", [
     endpoint: z.string(),
     useTls: z.boolean().optional(),
     password: z.string().optional(),
+  }),
+  z.strictObject({
+    id: z.string().optional(),
+    type: z.literal("directSocket"),
+    path: z.string(),
+  }),
+  z.strictObject({
+    id: z.string().optional(),
+    type: z.literal("directPipe"),
+    path: z.string(),
   }),
   z.strictObject({
     id: z.string().optional(),
@@ -238,6 +296,14 @@ function normalizeStoredConnection(connection: StoredHostConnection): HostConnec
     } catch {
       return null;
     }
+  }
+  if (connection.type === "directSocket") {
+    const path = connection.path.trim();
+    return path ? { id: `socket:${path}`, type: "directSocket", path } : null;
+  }
+  if (connection.type === "directPipe") {
+    const path = connection.path.trim();
+    return path ? { id: `pipe:${path}`, type: "directPipe", path } : null;
   }
   if (connection.type === "relay") {
     try {

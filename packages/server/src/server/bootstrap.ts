@@ -127,6 +127,8 @@ import {
 import { CheckoutDiffManager } from "./checkout-diff-manager.js";
 import { ScheduleService } from "./schedule/service.js";
 import { DaemonConfigStore, type MutableDaemonConfig } from "./daemon-config-store.js";
+import { BrowserToolsBroker } from "./browser-tools/broker.js";
+import { DaemonConfigBrowserToolsPolicy } from "./browser-tools/policy.js";
 import { WorkspaceGitServiceImpl } from "./workspace-git-service.js";
 import { resolveWorkspaceIdForPath } from "./resolve-workspace-id-for-path.js";
 import {
@@ -144,7 +146,7 @@ import { loadOrCreateDaemonKeyPair } from "./daemon-keypair.js";
 import { RelayRuntime } from "./relay-runtime.js";
 import { RemoteWebServiceTargetAcceptor } from "./remote-web-service/data-relay.js";
 import { RemoteWebServiceManager } from "./remote-web-service/remote-web-service-manager.js";
-import type { PushNotificationSender } from "./push/notifications.js";
+import type { PushNotificationSender } from "./push/index.js";
 import { getOrCreateServerId } from "./server-id.js";
 import { resolveDaemonVersion } from "./daemon-version.js";
 import {
@@ -342,6 +344,7 @@ export interface BySpaceDaemonConfig {
   listen: string;
   byspaceHome: string;
   daemonVersion?: string;
+  desktopManaged?: boolean;
   worktreesRoot?: string;
   workspaceServicePorts?: BySpaceServicePortAllocation;
   corsAllowedOrigins: string[];
@@ -424,6 +427,7 @@ export interface BySpaceDaemon {
   serviceProxy: ServiceProxySubsystem;
   remoteWebServiceManager: RemoteWebServiceManager;
   scriptRuntimeStore: WorkspaceScriptRuntimeStore;
+  browserToolsBroker: BrowserToolsBroker;
   start(): Promise<void>;
   stop(): Promise<void>;
   getListenTarget(): ListenTarget | null;
@@ -662,6 +666,8 @@ export async function createBySpaceDaemon(
     logger.error({ err: error }, "Failed to maintain orchestration skills at startup");
   });
   const pluginRuntime = new PluginService(logger, daemonConfigStore);
+  const browserToolsPolicy = new DaemonConfigBrowserToolsPolicy(daemonConfigStore);
+  const browserToolsBroker = new BrowserToolsBroker({});
 
   const serverId = getOrCreateServerId(config.byspaceHome, { logger });
   const agentCliToken = randomBytes(32).toString("base64url");
@@ -1405,6 +1411,8 @@ export async function createBySpaceDaemon(
       await gitMutation.notifyGitMutation(input.cwd, "rename-branch");
       return renamed;
     },
+    browserToolsEnabled: browserToolsPolicy.isEnabled(),
+    browserToolsBroker,
     byspaceHome: config.byspaceHome,
     worktreesRoot: config.worktreesRoot,
     callerAgentId: runtime.callerAgentId,
@@ -1594,6 +1602,7 @@ export async function createBySpaceDaemon(
 
             const daemonRuntimeConfig = {
               listen: formatListenTarget(boundListenTarget ?? listenTarget),
+              desktopManaged: config.desktopManaged ?? false,
               worktreesRoot: config.worktreesRoot,
               workspaceServicePorts: config.workspaceServicePorts,
               get appBaseUrl() {
@@ -1674,6 +1683,7 @@ export async function createBySpaceDaemon(
               providerSnapshotManager,
               daemonRuntimeConfig,
               serviceProxyPublicBaseUrl,
+              browserToolsBroker,
               workspaceSetupRuntime,
               remoteWebServiceManager,
               daemonKeyPair.publicKeyB64,
@@ -1848,6 +1858,7 @@ export async function createBySpaceDaemon(
     serviceProxy,
     remoteWebServiceManager,
     scriptRuntimeStore,
+    browserToolsBroker,
     start,
     stop,
     getListenTarget: () => boundListenTarget,

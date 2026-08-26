@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-BySpace is a Web-and-CLI environment for monitoring and controlling local AI coding agents from anywhere. The hosted Web app connects directly or through the encrypted relay; code and execution stay on the daemon machine.
+BySpace is a local-first personal compute control plane for monitoring and controlling AI coding agents and user-owned device capabilities. The public Web app connects directly or through the encrypted relay; the shared Expo app has maintained Android/iOS hosts and a maintained Electron Desktop host. Code and execution stay on the daemon machine.
 
 **Supported agents:** direct Claude Code, Codex, OpenCode, and Pi integrations plus ACP-compatible agents.
 
@@ -9,7 +9,9 @@ BySpace is a Web-and-CLI environment for monitoring and controlling local AI cod
 This is an npm workspace monorepo:
 
 - `packages/server` — Daemon: agent lifecycle, WebSocket API, MCP server
-- `packages/app` — Browser Web client (Expo + React Native Web)
+- `packages/app` — Shared Expo client for Browser Web/PWA, Android, and iOS
+- `packages/desktop` — Maintained Electron Desktop host
+- `packages/expo-two-way-audio` — Native Expo audio module used by maintained mobile hosts
 - `packages/cli` — Docker-style CLI (`byspace run/ls/logs/wait`)
 - `packages/relay` — E2E encrypted relay for remote access
 
@@ -39,6 +41,7 @@ At the start of non-trivial work, list `docs/` and skim anything relevant to the
 | [docs/service-proxy.md](docs/service-proxy.md)                 | Service proxy: exposing workspace scripts at public URLs, DNS setup, reverse proxy config                                      |
 | [docs/remote-web-services.md](docs/remote-web-services.md)     | Private daemon-to-daemon HTTP/SSE/WebSocket services, Data Relay topology, deployment, and VPS migration                       |
 | [docs/development.md](docs/development.md)                     | Dev server, build sync gotchas, CLI reference, agent state, Playwright MCP                                                     |
+| [docs/android.md](docs/android.md)                             | Android toolchain, generated native project, sideload builds, emulator, and direct/Relay smoke testing                         |
 | [docs/rpc-namespacing.md](docs/rpc-namespacing.md)             | WebSocket RPC naming convention — dotted namespaces and `.request`/`.response` pairs                                           |
 | [docs/protocol-validation.md](docs/protocol-validation.md)     | zod-aot generated inbound WebSocket validation, patched compiler regressions, schema-purity rules                              |
 | [docs/terminal-performance.md](docs/terminal-performance.md)   | Terminal latency pipeline, coalescing/backpressure invariants, benchmark + perf spec usage                                     |
@@ -110,15 +113,16 @@ See [docs/development.md](docs/development.md) for full setup, build sync requir
 
 - **All back-compat shims are tagged and dated for cleanup.** Every shim that exists for old-client/old-daemon support carries a `COMPAT(name)` comment with the version it was added in and a target removal date (typically 6 months out). One grep — `rg "COMPAT\("` — should produce the full list of cleanup work. Don't bury back-compat in untagged `??`-fallbacks or optional-chain tunnels — that's how it stops being deletable.
 
-## Web-only client boundary
+## Multi-client boundary
 
-The only supported graphical client is the browser Web app. `packages/app` still uses Expo and React Native Web, so React Native package names do not imply native iOS/Android support.
+BySpace maintains one shared product across Browser Web/PWA, Android, iOS, and Electron Desktop, plus the CLI. Distribution maturity differs by platform: Web is public; Android has an internally verified sideload artifact; iOS guarantees source/prebuild closure without signed distribution; Electron has a verified internal macOS package while signed/public Desktop distribution remains gated.
 
-- Use browser APIs directly where appropriate; keep SSR-safe guards when modules can load before `window` exists.
-- Keep responsive compact layouts: “mobile” layout terminology refers to narrow browser viewports, not a native app.
-- Do not add Electron bridges, `.electron.*`, `.native.*`, iOS/Android build paths, EAS, or native-only dependencies.
-- `isWeb`/`isNative` may remain in shared upstream code during migration, but new behavior targets Web only.
-- Validate client changes with App typecheck and a real Web export.
+- Keep shared product journeys in platform-neutral Expo/React code; put actual OS access in `.web`, `.native`, Expo module/config-plugin, or Electron main/preload adapters.
+- Use browser APIs directly in Web-owned modules and keep SSR-safe guards when modules can load before `window` exists.
+- Distinguish compact browser layouts from native mobile behavior; “mobile” viewport terminology alone does not imply Android/iOS.
+- Do not delete, stub, or skip Android/iOS/Electron/Browser-automation code merely because a public artifact is not enabled yet. Every maintained platform slice participates in upstream audits.
+- iOS must not evaluate daemon-delivered dynamic plugin client bundles; first-party compiled client behavior remains allowed.
+- Validate every client change with App typecheck and a real Web export. Also run the documented build/prebuild/smoke for each native or Electron surface the change touches.
 
 ## Debugging
 

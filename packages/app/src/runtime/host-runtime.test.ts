@@ -457,6 +457,21 @@ function createMemoryHostRuntimeStorage(entries: Record<string, string> = {}): H
   };
 }
 
+function createAppearanceStore(storage: HostRuntimeStorage): HostRuntimeStore {
+  return new HostRuntimeStore({
+    storage,
+    deps: {
+      createClient: () => {
+        throw new Error("createClient should not be called");
+      },
+      connectToDaemon: async () => {
+        throw new Error("connectToDaemon should not be called");
+      },
+      getClientId: async () => "cid_test_appearance",
+    },
+  });
+}
+
 function onceHostListMatches(store: HostRuntimeStore, predicate: () => boolean): Promise<void> {
   if (predicate()) {
     return Promise.resolve();
@@ -1389,6 +1404,236 @@ describe("HostRuntimeController", () => {
 });
 
 describe("HostRuntimeStore", () => {
+  it("revokes push notifications before removing a host", async () => {
+    const host = makeHost({ connections: [makeHost().connections[0]!] });
+    const revocation = createDeferred<void>();
+    const storage = createMemoryHostRuntimeStorage({
+      "@byspace:daemon-registry": JSON.stringify([host]),
+      "@byspace:e2e": "1",
+    });
+    const store = new HostRuntimeStore({
+      storage,
+      deps: makeDeps({}, []),
+      revokePushNotifications: async ({ serverId }) => {
+        expect(serverId).toBe(host.serverId);
+        expect(store.getHosts().map((candidate) => candidate.serverId)).toEqual([host.serverId]);
+        await revocation.promise;
+      },
+    });
+    await store.boot();
+
+    const removal = store.removeHost(host.serverId);
+    expect(store.getHosts().map((candidate) => candidate.serverId)).toEqual([host.serverId]);
+    revocation.resolve();
+    await removal;
+
+    expect(store.getHosts()).toEqual([]);
+  });
+
+  it("revokes push notifications when removing a host's final connection", async () => {
+    const host = makeHost({ connections: [makeHost().connections[0]!] });
+    const revokedServerIds: string[] = [];
+    const storage = createMemoryHostRuntimeStorage({
+      "@byspace:daemon-registry": JSON.stringify([host]),
+      "@byspace:e2e": "1",
+    });
+    const store = new HostRuntimeStore({
+      storage,
+      deps: makeDeps({}, []),
+      revokePushNotifications: async ({ serverId }) => {
+        revokedServerIds.push(serverId);
+      },
+    });
+    await store.boot();
+
+    await store.removeConnection(host.serverId, host.connections[0]!.id);
+
+    expect(revokedServerIds).toEqual([host.serverId]);
+    expect(store.getHosts()).toEqual([]);
+  });
+
+  it("exposes the default appearance for a host stored before the field existed", async () => {
+    const storage = createMemoryHostRuntimeStorage();
+    await storage.setItem(
+      "@byspace:daemon-registry",
+      JSON.stringify([
+        {
+          serverId: "srv_legacy",
+          label: "Legacy",
+          connections: [
+            { id: "socket:/tmp/legacy.sock", type: "directSocket", path: "/tmp/legacy.sock" },
+          ],
+          preferredConnectionId: "socket:/tmp/legacy.sock",
+        },
+      ]),
+    );
+    await storage.setItem("@byspace:e2e", "1");
+    const store = createAppearanceStore(storage);
+
+    const registryLoaded = onceHostListMatches(store, () => store.isHostRegistryLoaded());
+    store.boot();
+    await registryLoaded;
+
+    expect(store.getHosts()[0]?.appearance).toEqual({ color: "none", badgeDisplay: "auto" });
+
+    store.syncHosts([]);
+  });
+
+  it("records a chosen host color and writes it through to storage", async () => {
+    const host = makeHost({ serverId: "srv_appearance", updatedAt: new Date(0).toISOString() });
+    const storage = createMemoryHostRuntimeStorage();
+    await storage.setItem("@byspace:daemon-registry", JSON.stringify([host]));
+    await storage.setItem("@byspace:e2e", "1");
+    const store = createAppearanceStore(storage);
+
+    const registryLoaded = onceHostListMatches(store, () => store.isHostRegistryLoaded());
+    store.boot();
+    await registryLoaded;
+
+    const hostListChanged = onceHostListMatches(
+      store,
+      () => store.getHosts()[0]?.appearance.color === "teal",
+    );
+    await store.setHostColor("srv_appearance", "teal");
+    await hostListChanged;
+
+    const updated = store.getHosts()[0];
+    expect(updated?.appearance).toEqual({ color: "teal", badgeDisplay: null });
+    expect(updated?.updatedAt).not.toBe(host.updatedAt);
+
+    const persisted = await storage.getItem("@byspace:daemon-registry");
+    expect(JSON.parse(persisted ?? "[]")[0].appearance).toEqual({
+      color: "teal",
+      badgeDisplay: null,
+    });
+
+    store.syncHosts([]);
+  });
+
+  it("records a chosen badge display without disturbing the color", async () => {
+    const host = makeHost({
+      serverId: "srv_appearance",
+      appearance: { color: "amber", badgeDisplay: null },
+    });
+    const storage = createMemoryHostRuntimeStorage();
+    await storage.setItem("@byspace:daemon-registry", JSON.stringify([host]));
+    await storage.setItem("@byspace:e2e", "1");
+    const store = createAppearanceStore(storage);
+
+    const registryLoaded = onceHostListMatches(store, () => store.isHostRegistryLoaded());
+    store.boot();
+    await registryLoaded;
+
+    const hostListChanged = onceHostListMatches(
+      store,
+      () => store.getHosts()[0]?.appearance.badgeDisplay === "icon",
+    );
+    await store.setHostBadgeDisplay("srv_appearance", "icon");
+    await hostListChanged;
+
+    expect(store.getHosts()[0]?.appearance).toEqual({ color: "amber", badgeDisplay: "icon" });
+
+    const persisted = await storage.getItem("@byspace:daemon-registry");
+    expect(JSON.parse(persisted ?? "[]")[0].appearance).toEqual({
+      color: "amber",
+      badgeDisplay: "icon",
+    });
+
+    store.syncHosts([]);
+  });
+
+  it("keeps host appearance unchanged when persistence fails", async () => {
+    const host = makeHost({ serverId: "srv_appearance" });
+    const storage = createMemoryHostRuntimeStorage();
+    await storage.setItem("@byspace:daemon-registry", JSON.stringify([host]));
+    await storage.setItem("@byspace:e2e", "1");
+    const store = createAppearanceStore(storage);
+
+    const registryLoaded = onceHostListMatches(store, () => store.isHostRegistryLoaded());
+    store.boot();
+    await registryLoaded;
+
+    storage.setItem = async () => {
+      throw new Error("disk full");
+    };
+
+    await expect(store.setHostColor("srv_appearance", "teal")).rejects.toThrow("disk full");
+    expect(store.getHosts()[0]?.appearance).toEqual(host.appearance);
+
+    store.syncHosts([]);
+  });
+
+  it("serializes overlapping host appearance writes", async () => {
+    const host = makeHost({ serverId: "srv_appearance" });
+    const storage = createMemoryHostRuntimeStorage();
+    await storage.setItem("@byspace:daemon-registry", JSON.stringify([host]));
+    await storage.setItem("@byspace:e2e", "1");
+    const store = createAppearanceStore(storage);
+
+    const registryLoaded = onceHostListMatches(store, () => store.isHostRegistryLoaded());
+    store.boot();
+    await registryLoaded;
+
+    const firstWrite = createDeferred<void>();
+    let writeCount = 0;
+    const setItem = storage.setItem.bind(storage);
+    storage.setItem = async (key, value) => {
+      writeCount += 1;
+      if (writeCount === 1) await firstWrite.promise;
+      await setItem(key, value);
+    };
+
+    const color = store.setHostColor("srv_appearance", "teal");
+    const display = store.setHostBadgeDisplay("srv_appearance", "icon");
+    await Promise.resolve();
+    expect(writeCount).toBe(1);
+
+    firstWrite.resolve();
+    await Promise.all([color, display]);
+
+    expect(store.getHosts()[0]?.appearance).toEqual({ color: "teal", badgeDisplay: "icon" });
+    const persistedHosts = JSON.parse((await storage.getItem("@byspace:daemon-registry")) ?? "[]");
+    expect(persistedHosts[0]?.appearance).toEqual({ color: "teal", badgeDisplay: "icon" });
+    store.syncHosts([]);
+  });
+
+  it("preserves a manual host rename when desktop status re-advertises the daemon hostname", async () => {
+    const advertisedHostname = "macbook-pro.local";
+    const store = new HostRuntimeStore({
+      deps: {
+        createClient: () => new FakeDaemonClient() as unknown as DaemonClient,
+        connectToDaemon: async ({ host }) => ({
+          client: makeConnectedProbeClient(5) as unknown as DaemonClient,
+          serverId: host.serverId,
+          hostname: advertisedHostname,
+        }),
+        getClientId: async () => "cid_test_runtime",
+      },
+      storage: createMemoryHostRuntimeStorage(),
+    });
+
+    try {
+      await store.upsertConnectionFromListen({
+        listenAddress: "127.0.0.1:6777",
+        serverId: "srv_desktop",
+        hostname: advertisedHostname,
+      });
+      await store.renameHost("srv_desktop", "mac-dev");
+
+      await store.upsertConnectionFromListen({
+        listenAddress: "127.0.0.1:6777",
+        serverId: "srv_desktop",
+        hostname: advertisedHostname,
+      });
+
+      expect(store.getHosts().find((host) => host.serverId === "srv_desktop")?.label).toBe(
+        "mac-dev",
+      );
+    } finally {
+      store.syncHosts([]);
+    }
+  });
+
   it("restores the display replica before declaring the host registry loaded", async () => {
     const host = makeHost();
     const storage = createMemoryHostRuntimeStorage();

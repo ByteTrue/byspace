@@ -1,4 +1,4 @@
-import { mkdtemp, open, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, open, rm, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, test } from "vitest";
@@ -84,6 +84,40 @@ describe("pid-lock ownership", () => {
 
       const lock = await getPidLockInfo(byspaceHome);
       expect(lock?.pid).toBe(process.pid);
+    } finally {
+      await rm(byspaceHome, { recursive: true, force: true });
+    }
+  });
+
+  test("reclaims a stale desktop-managed lock after reachability has failed", async () => {
+    const byspaceHome = await mkdtemp(join(tmpdir(), "byspace-pid-lock-stale-desktop-heartbeat-"));
+    const replacementOwnerPid = process.pid + 10_000;
+
+    try {
+      const pidPath = join(byspaceHome, "byspace.pid");
+      await writeFile(
+        pidPath,
+        JSON.stringify({
+          pid: process.pid,
+          startedAt: "2026-01-01T00:00:00.000Z",
+          hostname: "old-host",
+          uid: process.getuid?.() ?? 0,
+          listen: "/tmp/byspace.sock",
+          desktopManaged: true,
+          heartbeat: true,
+        }),
+      );
+      const staleTime = new Date(Date.now() - 10 * 60_000);
+      await utimes(pidPath, staleTime, staleTime);
+
+      await acquirePidLock(byspaceHome, null, {
+        ownerPid: replacementOwnerPid,
+        reclaimStaleDesktopLock: true,
+      });
+
+      const lock = await getPidLockInfo(byspaceHome);
+      expect(lock?.pid).toBe(replacementOwnerPid);
+      expect(lock?.listen).toBeNull();
     } finally {
       await rm(byspaceHome, { recursive: true, force: true });
     }

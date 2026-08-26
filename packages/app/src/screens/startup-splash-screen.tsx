@@ -2,10 +2,29 @@ import { ActivityIndicator, Text, View } from "react-native";
 import { useTranslation } from "react-i18next";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { BySpaceLogo } from "@/components/icons/byspace-logo";
+import { Button } from "@/components/ui/button";
 
-export function StartupSplashScreen() {
+interface StartupSplashScreenProps {
+  bootstrapState?: {
+    splashError: string | null;
+    retry: () => void;
+  };
+}
+
+export function StartupSplashScreen({ bootstrapState }: StartupSplashScreenProps) {
   const { t } = useTranslation();
   const { theme } = useUnistyles();
+  if (bootstrapState?.splashError) {
+    return (
+      <View style={styles.container}>
+        <BySpaceLogo size={64} />
+        <Text style={styles.message}>{bootstrapState.splashError}</Text>
+        <Button size="sm" onPress={bootstrapState.retry}>
+          {t("common.actions.retry")}
+        </Button>
+      </View>
+    );
+  }
   return (
     <View style={styles.container}>
       <BySpaceLogo size={64} />

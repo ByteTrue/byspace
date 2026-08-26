@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import type { DaemonClient } from "@bytetrue/byspace-client/internal/daemon-client";
 import { useHostFeature } from "@/runtime/host-features";
 import { useHostRuntimeIsConnected } from "@/runtime/host-runtime";
+import { allowsDynamicPluginClientBundles } from "@/constants/platform";
 import { pluginRegistry } from "./registry";
 
 export function PluginCatalogSync({
@@ -13,10 +14,15 @@ export function PluginCatalogSync({
 }) {
   const connected = useHostRuntimeIsConnected(serverId);
   const supported = useHostFeature(serverId, "plugins");
+  const dynamicBundlesAllowed = allowsDynamicPluginClientBundles();
 
   useEffect(() => {
     let cancelled = false;
     let refreshQueue = Promise.resolve();
+    if (!dynamicBundlesAllowed) {
+      pluginRegistry.removeHost(serverId);
+      return;
+    }
     if (!supported) {
       pluginRegistry.removeHost(serverId);
       return;
@@ -55,7 +61,7 @@ export function PluginCatalogSync({
       cancelled = true;
       unsubscribe();
     };
-  }, [client, connected, serverId, supported]);
+  }, [client, connected, dynamicBundlesAllowed, serverId, supported]);
 
   useEffect(() => () => pluginRegistry.removeHost(serverId), [serverId]);
   return null;

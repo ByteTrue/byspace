@@ -1,1 +1,1 @@
-export * from "./markdown-text.web";
+export * from "./markdown-text.ios";

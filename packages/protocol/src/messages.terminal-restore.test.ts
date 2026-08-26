@@ -79,15 +79,17 @@ describe("terminal restore schemas", () => {
     ).toThrow();
   });
 
-  test("accepts terminal restore mode feature metadata", () => {
-    expect(
-      ServerInfoStatusPayloadSchema.parse({
-        status: "server_info",
-        serverId: "server-1",
-        features: {
-          "terminal-restore-modes": true,
-        },
-      }).features?.["terminal-restore-modes"],
-    ).toBe(true);
+  test("accepts terminal feature metadata", () => {
+    const features = ServerInfoStatusPayloadSchema.parse({
+      status: "server_info",
+      serverId: "server-1",
+      features: {
+        "terminal-restore-modes": true,
+        "terminal-input-mode-replay": true,
+      },
+    }).features;
+
+    expect(features?.["terminal-restore-modes"]).toBe(true);
+    expect(features?.["terminal-input-mode-replay"]).toBe(true);
   });
 });

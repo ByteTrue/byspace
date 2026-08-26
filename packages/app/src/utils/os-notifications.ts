@@ -1,4 +1,6 @@
 import { Asset } from "expo-asset";
+import { getDesktopHost } from "@/desktop/host";
+import { isNative } from "@/constants/platform";
 import { buildNotificationRoute, resolveNotificationTarget } from "./notification-routing";
 
 interface OsNotificationPayload {
@@ -19,6 +21,13 @@ export const WEB_NOTIFICATION_CLICK_EVENT = "byspace:web-notification-click";
 
 let permissionRequest: Promise<boolean> | null = null;
 let notificationIconUrl: string | null | undefined;
+
+function getDesktopNotificationSender():
+  | ((payload: OsNotificationPayload) => Promise<boolean>)
+  | null {
+  const sendNotification = getDesktopHost()?.notification?.sendNotification;
+  return typeof sendNotification === "function" ? sendNotification : null;
+}
 
 function getWebNotificationConstructor(): {
   permission: string;
@@ -72,7 +81,8 @@ async function ensureNotificationPermission(): Promise<boolean> {
 }
 
 export async function ensureOsNotificationPermission(): Promise<boolean> {
-  return await ensureNotificationPermission();
+  if (isNative) return false;
+  return ensureNotificationPermission();
 }
 
 function hasNotificationClickTarget(data: Record<string, unknown> | undefined): boolean {
@@ -142,6 +152,13 @@ function attachWebClickHandler(
 }
 
 export async function sendOsNotification(payload: OsNotificationPayload): Promise<boolean> {
+  if (isNative) return false;
+
+  const desktopNotificationSender = getDesktopNotificationSender();
+  if (desktopNotificationSender) {
+    return desktopNotificationSender(payload);
+  }
+
   const NotificationConstructor = getWebNotificationConstructor();
   if (NotificationConstructor) {
     const granted = await ensureNotificationPermission();

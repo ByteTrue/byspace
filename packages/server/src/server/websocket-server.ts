@@ -29,6 +29,12 @@ import type { ProjectUpdate } from "./workspace-reconciliation-service.js";
 import { DirectorySyncService } from "./directory-sync/index.js";
 import { asUint8Array, decodeBinaryFrame } from "@bytetrue/byspace-protocol/binary-frames/index";
 import { CLIENT_CAPS } from "@bytetrue/byspace-protocol/client-capabilities";
+import type { BrowserAutomationExecuteResponse } from "@bytetrue/byspace-protocol/browser-automation/rpc-schemas";
+import {
+  BrowserAutomationHostCapabilitySchema,
+  type BrowserAutomationHostCapability,
+} from "@bytetrue/byspace-protocol/browser-automation/capabilities";
+import type { BrowserToolsBroker } from "./browser-tools/broker.js";
 import type { TerminalActivity } from "@bytetrue/byspace-protocol/terminal-activity";
 import type { HostnamesConfig } from "./hostnames.js";
 import { isHostnameAllowed } from "./hostnames.js";
@@ -51,8 +57,11 @@ import type { GitCommandRuntimeMetricsSnapshot } from "../utils/git-command-runt
 import { snapshotGitCommandRuntimeMetrics } from "../utils/run-git-command.js";
 import type { WorkspaceAutoName } from "./workspace-auto-name.js";
 import { buildWorkspaceGitMetadataFromSnapshot } from "./workspace-git-metadata.js";
-import { PushTokenStore } from "./push/token-store.js";
-import { createPushNotificationSender, type PushNotificationSender } from "./push/notifications.js";
+import {
+  createPushNotifications,
+  type PushNotifications,
+  type PushNotificationSender,
+} from "./push/index.js";
 import type { ScriptHealthState } from "./script-health-monitor.js";
 import type { ServiceProxySubsystem } from "./service-proxy.js";
 import type { RemoteWebServiceManager } from "./remote-web-service/remote-web-service-manager.js";
@@ -430,6 +439,15 @@ interface WebSocketLike {
   once: (event: "close" | "error", listener: (...args: unknown[]) => void) => void;
 }
 
+function getBrowserHostCapability(
+  capabilities: Record<string, unknown> | null,
+): BrowserAutomationHostCapability | null {
+  const parsed = BrowserAutomationHostCapabilitySchema.safeParse(
+    capabilities?.[CLIENT_CAPS.browserHost],
+  );
+  return parsed.success ? parsed.data : null;
+}
+
 type SessionConnectionLifecycle =
   | { kind: "reconnectable" }
   | { kind: "ephemeral-plugin"; pluginId: string };
@@ -443,6 +461,11 @@ interface SessionConnection {
   sockets: Set<WebSocketLike>;
   externalDisconnectCleanupTimeout: ReturnType<typeof setTimeout> | null;
   lifecycle: SessionConnectionLifecycle;
+}
+
+interface BrowserToolsRegistration {
+  capabilitySignature: string;
+  unregister: () => void;
 }
 
 interface ClosePhysicalSocketParams {
@@ -536,7 +559,7 @@ export class VoiceAssistantWebSocketServer {
   private readonly byspaceHome: string;
   private readonly worktreesRoot: string | undefined;
   private readonly daemonConfigStore: DaemonConfigStore;
-  private readonly pushTokenStore: PushTokenStore;
+  private readonly pushNotifications: PushNotifications;
   private readonly pushNotificationSender: PushNotificationSender;
   private readonly mcpBaseUrl: string | null;
   private speech!: SpeechService | null;
@@ -573,6 +596,8 @@ export class VoiceAssistantWebSocketServer {
   private readonly orchestrationSkills: SessionOptions["orchestrationSkills"];
   private readonly workspaceLabelService: WorkspaceLabelService | null;
   private unsubscribeTerminalActivity: (() => void) | null = null;
+  private readonly browserToolsBroker: BrowserToolsBroker | null;
+  private readonly browserToolsRegistrations = new Map<string, BrowserToolsRegistration>();
   private acceptingConnections = true;
   private readonly directorySync = new DirectorySyncService();
 
@@ -616,6 +641,7 @@ export class VoiceAssistantWebSocketServer {
     providerSnapshotManager?: ProviderSnapshotManager,
     daemonRuntimeConfig?: DaemonRuntimeConfig,
     serviceProxyPublicBaseUrl?: string | null,
+    browserToolsBroker?: BrowserToolsBroker | null,
     workspaceSetupRuntime: WorkspaceSetupRuntime = new WorkspaceSetupRuntime(),
     remoteWebServiceManager?: RemoteWebServiceManager | null,
     daemonPublicKeyB64?: string,
@@ -632,6 +658,7 @@ export class VoiceAssistantWebSocketServer {
     this.daemonVersion = daemonVersion.trim();
     this.daemonPublicKeyB64 = daemonPublicKeyB64;
     this.daemonRuntimeConfig = daemonRuntimeConfig;
+    this.browserToolsBroker = browserToolsBroker ?? null;
     this.pluginRuntime = pluginRuntime;
     this.orchestrationSkills = orchestrationSkills;
     this.agentManager = agentManager;
@@ -702,9 +729,11 @@ export class VoiceAssistantWebSocketServer {
     };
 
     const pushLogger = this.logger.child({ module: "push" });
-    this.pushTokenStore = new PushTokenStore(pushLogger, join(byspaceHome, "push-tokens.json"));
-    this.pushNotificationSender =
-      pushNotificationSender ?? createPushNotificationSender(pushLogger, this.pushTokenStore);
+    this.pushNotifications = createPushNotifications({
+      logger: pushLogger,
+      filePath: join(byspaceHome, "push-tokens.json"),
+    });
+    this.pushNotificationSender = pushNotificationSender ?? this.pushNotifications;
 
     this.agentManager.setAgentAttentionCallback((params) => {
       void this.broadcastAgentAttention(params).catch((err) => {
@@ -1065,6 +1094,9 @@ export class VoiceAssistantWebSocketServer {
     this.sessions.clear();
     this.socketIdentities.clear();
     this.externalSessionsByKey.clear();
+    for (const clientId of this.browserToolsRegistrations.keys()) {
+      this.unregisterBrowserToolsClient(clientId);
+    }
     this.wss.close();
   }
 
@@ -1318,7 +1350,7 @@ export class VoiceAssistantWebSocketServer {
       },
       logger: connectionLogger.child({ module: "session" }),
       downloadTokenStore: this.downloadTokenStore,
-      pushTokenStore: this.pushTokenStore,
+      pushNotifications: this.pushNotifications,
       byspaceHome: this.byspaceHome,
       worktreesRoot: this.worktreesRoot,
       agentManager: this.agentManager,
@@ -1467,10 +1499,12 @@ export class VoiceAssistantWebSocketServer {
         JSON.stringify(newClientCapabilities ?? null)
       ) {
         existing.clientCapabilities = newClientCapabilities;
+        this.syncBrowserToolsClientRegistration(existing);
       }
       existing.sockets.add(ws);
       this.sessions.set(ws, existing);
       pending.identity.sessionId = existing.session.getSessionId();
+      this.syncBrowserToolsClientRegistration(existing);
       this.sendToClient(ws, this.createServerInfoMessage());
       pending.connectionLogger.info(
         {
@@ -1498,6 +1532,7 @@ export class VoiceAssistantWebSocketServer {
       this.externalSessionsByKey.set(clientId, connection);
     }
     pending.identity.sessionId = connection.session.getSessionId();
+    this.syncBrowserToolsClientRegistration(connection);
     this.sendToClient(ws, this.createServerInfoMessage());
     connection.connectionLogger.info(
       {
@@ -1532,6 +1567,7 @@ export class VoiceAssistantWebSocketServer {
       serverId: this.serverId,
       hostname: getHostname(),
       version: this.daemonVersion,
+      desktopManaged: this.daemonRuntimeConfig?.desktopManaged ?? false,
       ...(this.daemonPublicKeyB64 ? { daemonPublicKeyB64: this.daemonPublicKeyB64 } : {}),
       dataRelay: this.buildServerInfoDataRelayPayload(),
       ...(this.serverCapabilities ? { capabilities: this.serverCapabilities } : {}),
@@ -1544,6 +1580,8 @@ export class VoiceAssistantWebSocketServer {
         remoteWebServices: true,
         // COMPAT(agentProfiles): added in v0.6.0; remove the gate after 2027-02-21.
         agentProfiles: true,
+        // COMPAT(pushTokenRevocation): added in v0.6.0 on 2026-08-26; remove after 2027-02-26.
+        pushTokenRevocation: true,
         // COMPAT(agentConfigApply): added in v0.6.0; remove the gate after 2027-02-21.
         agentConfigApply: true,
         // COMPAT(workspaceLabels): added in v0.7.0, remove after 2027-02-25.
@@ -1580,6 +1618,8 @@ export class VoiceAssistantWebSocketServer {
         pluginThemes: true,
         // COMPAT(terminalRestoreModes): added in v0.1.81, remove gate after 2026-11-23.
         "terminal-restore-modes": true,
+        // COMPAT(terminalInputModeReplay): added in v0.6.1, remove gate after 2027-02-26.
+        "terminal-input-mode-replay": true,
         // COMPAT(terminalSizeOwnership): added in v0.5.0, remove gate after 2027-02-08.
         "terminal-size-ownership": true,
         // COMPAT(agentTimelinePromptIndex): added in v0.5.0, remove gate after 2027-02-08.
@@ -1786,6 +1826,7 @@ export class VoiceAssistantWebSocketServer {
     }
 
     if (connection.sockets.size === 0) {
+      this.unregisterBrowserToolsClient(connection.clientId);
       this.incrementRuntimeCounter("sessionDisconnectedWaitingReconnect");
       if (connection.externalDisconnectCleanupTimeout) {
         clearTimeout(connection.externalDisconnectCleanupTimeout);
@@ -1848,11 +1889,55 @@ export class VoiceAssistantWebSocketServer {
       this.externalSessionsByKey.delete(connection.clientId);
     }
 
+    this.unregisterBrowserToolsClient(connection.clientId);
+
     connection.connectionLogger.trace(
       { clientId: connection.clientId, totalSessions: this.sessions.size },
       logMessage,
     );
     await connection.session.cleanup();
+  }
+
+  private syncBrowserToolsClientRegistration(connection: SessionConnection): void {
+    if (!this.browserToolsBroker) {
+      return;
+    }
+    const browserHostCapability = getBrowserHostCapability(connection.clientCapabilities);
+    if (!browserHostCapability) {
+      this.unregisterBrowserToolsClient(connection.clientId);
+      return;
+    }
+    const capabilitySignature = JSON.stringify(browserHostCapability);
+    const existing = this.browserToolsRegistrations.get(connection.clientId);
+    if (existing?.capabilitySignature === capabilitySignature) {
+      return;
+    }
+    if (existing) {
+      this.browserToolsRegistrations.delete(connection.clientId);
+      existing.unregister();
+    }
+
+    const unregister = this.browserToolsBroker.registerClient({
+      id: connection.clientId,
+      hostKind: browserHostCapability.hostKind,
+      supportedCommands: browserHostCapability.supportedCommands,
+      sendBrowserAutomationRequest: (request) => {
+        this.sendToConnection(connection, wrapSessionMessage(request));
+      },
+    });
+    this.browserToolsRegistrations.set(connection.clientId, {
+      capabilitySignature,
+      unregister,
+    });
+  }
+
+  private unregisterBrowserToolsClient(clientId: string): void {
+    const registration = this.browserToolsRegistrations.get(clientId);
+    if (!registration) {
+      return;
+    }
+    this.browserToolsRegistrations.delete(clientId);
+    registration.unregister();
   }
 
   private finishPluginSocketCleanup(ws: WebSocketLike): void {
@@ -2119,6 +2204,11 @@ export class VoiceAssistantWebSocketServer {
         },
         "ws_control_rpc_received",
       );
+    }
+
+    if (message.message.type === "browser.automation.execute.response") {
+      this.browserToolsBroker?.receiveResponse(message.message as BrowserAutomationExecuteResponse);
+      return;
     }
 
     const startMs = performance.now();

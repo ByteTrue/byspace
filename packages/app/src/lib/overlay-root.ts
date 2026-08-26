@@ -31,6 +31,7 @@ export function getOverlayRoot(): HTMLElement {
     el.style.position = "fixed";
     el.style.inset = "0";
     el.style.pointerEvents = "none";
+    el.style.zIndex = String(WEB_SURFACE_PLANE.overlay);
     document.body.appendChild(el);
   }
   return el;
@@ -41,6 +42,11 @@ export const OVERLAY_Z = {
   modal: 20,
   toast: 10_000,
   tooltip: 20_000,
+} as const;
+
+export const WEB_SURFACE_PLANE = {
+  browser: 0,
+  overlay: 1,
 } as const;
 
 type OverlayKind = "floating" | "modal";

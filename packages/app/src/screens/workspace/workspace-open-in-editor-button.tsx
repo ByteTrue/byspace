@@ -5,6 +5,7 @@ import { Pressable, Text, View, type PressableStateCallbackType } from "react-na
 import { useMutation } from "@tanstack/react-query";
 import { Check, ChevronDown } from "lucide-react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
+import { EditorTargetIcon } from "@/components/icons/editor-target-icon";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -14,11 +15,13 @@ import {
 import { useToast } from "@/contexts/toast-context";
 import { useCheckoutStatusQuery } from "@/git/use-status-query";
 import { useCheckoutPrStatusQuery } from "@/git/use-pr-status-query";
+import { useIsLocalDaemon } from "@/hooks/use-is-local-daemon";
 import { useHostRuntimeIsConnected } from "@/runtime/host-runtime";
 import { resolvePreferredEditorId, usePreferredEditor } from "@/hooks/use-preferred-editor";
 import { openExternalUrl } from "@/utils/open-external-url";
 import { isAbsolutePath } from "@/utils/path";
 import { isWeb } from "@/constants/platform";
+import { openDesktopTarget, useDesktopOpenTargets } from "@/workspace/desktop-open-targets";
 import { resolveWorkspaceFilePaths, type WorkspaceFileLocation } from "@/workspace/file-open";
 import { planWorkspaceOpenTargets } from "@/workspace/open-target-planner";
 import type { Theme } from "@/styles/theme";
@@ -41,6 +44,7 @@ interface OpenTarget {
 }
 
 const ThemedLoadingSpinner = withUnistyles(LoadingSpinner);
+const ThemedEditorTargetIcon = withUnistyles(EditorTargetIcon);
 const ThemedChevronDown = withUnistyles(ChevronDown);
 const ThemedCheckIcon = withUnistyles(Check);
 
@@ -84,7 +88,10 @@ export function WorkspaceOpenInEditorButton({
   const { t } = useTranslation();
   const toast = useToast();
   const isConnected = useHostRuntimeIsConnected(serverId);
+  const isLocalDaemon = useIsLocalDaemon(serverId);
   const { preferredEditorId, updatePreferredEditor } = usePreferredEditor();
+  const { targets: desktopOpenTargets, isAvailable: isDesktopOpenAvailable } =
+    useDesktopOpenTargets({ isLocalExecution: isLocalDaemon });
 
   const resolvedFile = useMemo(
     () =>
@@ -114,18 +121,40 @@ export function WorkspaceOpenInEditorButton({
         workspaceDirectory: cwd,
         activeFile,
         resolvedActiveFile: resolvedFile,
+        desktopTargets: desktopOpenTargets,
+        canUseDesktopBridge: isDesktopOpenAvailable,
+        isLocalExecution: isLocalDaemon,
         checkoutStatus,
         forge: resolvedForge,
       }).map((target) => {
-        const presentation = getForgePresentation(target.forge);
+        if (target.source === "forge") {
+          const presentation = getForgePresentation(target.forge);
+          return {
+            id: target.id,
+            label: target.label,
+            icon: renderForgeOpenTargetIcon(presentation.icon),
+            onOpen: () => openExternalUrl(target.url),
+          };
+        }
         return {
           id: target.id,
           label: target.label,
-          icon: renderForgeOpenTargetIcon(presentation.icon),
-          onOpen: () => openExternalUrl(target.url),
+          icon: (
+            <ThemedEditorTargetIcon icon={target.icon} size={16} uniProps={mutedColorMapping} />
+          ),
+          onOpen: () => openDesktopTarget(target.openInput),
         };
       }),
-    [activeFile, checkoutStatus, cwd, resolvedFile, resolvedForge],
+    [
+      activeFile,
+      checkoutStatus,
+      cwd,
+      desktopOpenTargets,
+      isDesktopOpenAvailable,
+      isLocalDaemon,
+      resolvedFile,
+      resolvedForge,
+    ],
   );
 
   const targetIds = useMemo(() => targets.map((target) => target.id), [targets]);

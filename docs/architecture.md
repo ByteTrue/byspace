@@ -1,34 +1,35 @@
 # Architecture
 
-BySpace is a Web-and-CLI client-server system for monitoring and controlling local AI coding agents. The daemon runs on your machine, manages agent processes, and streams their output in real time over WebSocket.
+BySpace is a multi-client, local-first system for monitoring and controlling AI coding agents and user-owned device capabilities. The daemon runs on your machine, manages agent processes, and streams their output to Browser Web/PWA, Android/iOS, Electron Desktop, and CLI clients.
 
-Your code never leaves your machine. BySpace is local-first.
+Your code never leaves your machine. Public distribution maturity differs by client, but all maintained clients share the same daemon protocol and product model.
 
 ## System overview
 
 ```
-┌────────────────────┐       ┌───────────────┐
-│ Hosted Web / PWA   │       │      CLI      │
-│ (Cloudflare Pages) │       │  (Commander)  │
-└─────────┬──────────┘       └───────┬───────┘
-          │ direct or E2EE relay     │ direct
-          └──────────────┬───────────┘
-                         │
-                  ┌──────▼──────┐
-                  │ Local daemon │
-                  │   (Node.js)  │
-                  └──────┬──────┘
-                         │
-               ┌─────────▼─────────┐
-               │ Direct + ACP Agent │
-               │     providers      │
-               └────────────────────┘
+┌────────────────┐  ┌─────────────┐  ┌────────────────┐  ┌───────────┐
+│ Hosted Web/PWA │  │ Android/iOS │  │ Electron       │  │    CLI    │
+│ Cloudflare/Web │  │ Shared Expo │  │ Desktop host   │  │ Commander │
+└───────┬────────┘  └──────┬──────┘  └────────┬───────┘  └─────┬─────┘
+        │ direct/E2EE relay │ direct/local/E2EE relay           │ direct
+        └───────────────────┴────────────┬───────────────────────┘
+                                         │
+                                  ┌──────▼──────┐
+                                  │ Local daemon │
+                                  │   Node.js    │
+                                  └──────┬──────┘
+                                         │
+                              ┌──────────▼──────────┐
+                              │ Direct + ACP Agent  │
+                              │      providers      │
+                              └─────────────────────┘
 ```
 
 ## Components at a glance
 
 - **Daemon:** Local server that spawns and manages agent processes and exposes the WebSocket API.
-- **Web app:** Expo/React Native Web client hosted independently or served by the daemon.
+- **Shared App:** Expo/React client used by Browser Web/PWA and maintained Android/iOS hosts.
+- **Electron Desktop:** Trusted local host for the shared renderer, managed daemon/local transport, OS bridges, and Desktop Browser automation.
 - **CLI:** Terminal interface for agent workflows that can also start and manage the daemon.
 - **Relay:** Optional encrypted bridge for remote control without opening daemon ports directly.
 - **Data Relay:** Optional daemon-hosted WSS listener that carries E2EE Remote Web Service traffic separately from the control Relay.
@@ -87,17 +88,22 @@ facade. App and CLI may import the low-level driver from
 `@bytetrue/byspace-client/internal/daemon-client` during migration, while new SDK-shaped
 code imports from `@bytetrue/byspace-client`.
 
-### `packages/app` — Browser Web client (Expo)
+### `packages/app` — Shared Web/Android/iOS client (Expo)
 
-Expo Router and React Native Web app that connects to one or more daemons.
+Expo Router and React Native app that connects to one or more daemons.
 
+- Web/PWA uses React Native Web and remains the zero-install public client.
+- Android/iOS use the same routes and product state with native platform adapters for pairing, files, Terminal, audio, push, and OS permissions.
 - Expo Router navigation (`/h/[serverId]/workspace/[workspaceId]`, `/h/[serverId]/agent/[agentId]`, etc.). The `workspaceId` URL segment is an opaque workspace id (path-shaped today and opaque-encoded for routing), not a directly meaningful filesystem path.
-- `HostRuntimeController` manages saved host connections, reconnection, and per-host runtime state
-- `SessionContext` wraps the daemon client for the active session
-- Composer UI and submit/draft behavior live in `packages/app/src/composer/`; screens and panels should integrate it from there instead of dropping composer internals into `components/`, `hooks/`, or `screens/workspace/`
-- Timeline reducers in `timeline/session-stream-reducers.ts` handle compaction, gap detection, sequence-based deduplication
+- `HostRuntimeController` manages saved host connections, reconnection, and per-host runtime state.
+- `SessionContext` wraps the daemon client for the active session.
+- Composer UI and submit/draft behavior live in `packages/app/src/composer/`; screens and panels should integrate it from there instead of dropping composer internals into `components/`, `hooks/`, or `screens/workspace/`.
+- Timeline reducers in `timeline/session-stream-reducers.ts` handle compaction, gap detection, sequence-based deduplication.
 - Timeline sync correctness is documented in [docs/timeline-sync.md](timeline-sync.md): live streams are for immediacy, `fetch_agent_timeline_request` is authoritative, and catch-up is paged but complete.
-- Voice features: dictation (STT) and voice agent (realtime)
+
+### `packages/desktop` — Electron Desktop host
+
+The maintained Electron package loads the shared Web renderer while owning managed-daemon lifecycle, local socket transport, typed preload IPC, native dialogs/notifications/file paths/editor integration, Desktop Browser/CDP automation, updater behavior, and cross-platform packaging. Internal macOS package/runtime smoke is verified; signed/notarized public Desktop distribution remains behind a separate release gate.
 
 ### `packages/cli` — Command-line client
 

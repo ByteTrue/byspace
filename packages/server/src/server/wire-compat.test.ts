@@ -247,7 +247,7 @@ function createSessionForWireCompatTest(options?: {
     onMessage: (message) => messages.push(message),
     logger: pino({ level: "silent" }),
     downloadTokenStore: {} as SessionOptions["downloadTokenStore"],
-    pushTokenStore: {} as SessionOptions["pushTokenStore"],
+    pushNotifications: {} as SessionOptions["pushNotifications"],
     byspaceHome: "/tmp/byspace-home",
     agentManager: new InMemoryAgentManager(
       options?.rows ?? rows,

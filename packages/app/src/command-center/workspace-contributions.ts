@@ -12,6 +12,7 @@ export interface WorkspaceCommandCenterLabels {
   section: string;
   newAgent: string;
   newTerminal: string;
+  newBrowser: string;
   splitRight: string;
   splitDown: string;
   changes: string;
@@ -47,6 +48,7 @@ export interface WorkspaceCommandCenterLabels {
 export interface WorkspaceCommandCenterIcons {
   newAgent?: CommandCenterIcon;
   newTerminal?: CommandCenterIcon;
+  newBrowser?: CommandCenterIcon;
   splitRight?: CommandCenterIcon;
   splitDown?: CommandCenterIcon;
   changes?: CommandCenterIcon;
@@ -496,6 +498,18 @@ function buildCreationContributions(
       action: { id: "workspace.terminal.new", scope: "workspace" },
     }),
   );
+  if (source.capabilities.canOpenBrowserTabs) {
+    contributions.push(
+      buildQueryAction(source, {
+        id: "tab:new-browser",
+        rank: 3,
+        title: source.labels.newBrowser,
+        keywords: ["browser", "web", "preview"],
+        icon: source.icons.newBrowser,
+        action: { id: "workspace.browser.new", scope: "workspace" },
+      }),
+    );
+  }
   return contributions;
 }
 

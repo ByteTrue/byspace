@@ -1,3 +1,7 @@
+import * as Linking from "expo-linking";
+import { getDesktopHost } from "@/desktop/host";
+import { isWeb } from "@/constants/platform";
+
 const ALLOWED_EXTERNAL_URL_PROTOCOLS = new Set(["http:", "https:"]);
 
 function isAllowedExternalUrl(url: string): boolean {
@@ -9,6 +13,17 @@ function isAllowedExternalUrl(url: string): boolean {
 }
 
 export async function openExternalUrl(url: string): Promise<void> {
+  if (isWeb) {
+    const opener = getDesktopHost()?.opener?.openUrl;
+    if (typeof opener === "function") {
+      await opener(url);
+      return;
+    }
+    if (!isAllowedExternalUrl(url)) return;
+    window.open(url, "_blank", "noopener,noreferrer");
+    return;
+  }
+
   if (!isAllowedExternalUrl(url)) return;
-  window.open(url, "_blank", "noopener,noreferrer");
+  await Linking.openURL(url);
 }

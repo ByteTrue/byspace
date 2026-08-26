@@ -1,1 +1,1 @@
-export * from "./height-mirror.web";
+export * from "./height-mirror.native";

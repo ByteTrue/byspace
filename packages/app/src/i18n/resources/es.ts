@@ -1242,6 +1242,7 @@ export const es: TranslationResources = {
       title: "Empezar desde",
     },
   },
+  desktop: en.desktop,
   rootError: {
     kicker: "Algo salió mal",
     title: "BySpace tuvo un problema.",

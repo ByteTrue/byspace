@@ -15,6 +15,7 @@ import type { DaemonConfigReloadResult } from "../../daemon-config-store.js";
 
 export interface DaemonRuntimeConfig {
   listen: string | null;
+  desktopManaged: boolean;
   worktreesRoot?: string;
   workspaceServicePorts?: BySpaceServicePortAllocation;
   appBaseUrl?: string;

@@ -1,7 +1,9 @@
 import { useCallback, useRef } from "react";
 import { useTranslation } from "react-i18next";
+import { getDesktopHost, isElectronRuntime } from "@/desktop/host";
 import {
   normalizePickedImageFiles,
+  pickImagesWithDesktopDialog,
   type PickedImageAttachmentInput,
 } from "@/hooks/image-attachment-picker";
 
@@ -47,6 +49,10 @@ export function useImageAttachmentPicker(): UseImageAttachmentPickerResult {
     if (isPickingRef.current) return null;
     isPickingRef.current = true;
     try {
+      if (isElectronRuntime()) {
+        const selectedImages = await pickImagesWithDesktopDialog(getDesktopHost()?.dialog);
+        return selectedImages.length > 0 ? selectedImages : null;
+      }
       return await pickImagesWithWebInput();
     } catch (error) {
       console.error("[ImageAttachmentPicker] Failed to pick image:", error);

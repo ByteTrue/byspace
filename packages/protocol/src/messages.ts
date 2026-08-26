@@ -55,6 +55,11 @@ import {
   LoopStopResponseSchema,
 } from "./loop/rpc-schemas.js";
 import {
+  BrowserAutomationExecuteRequestSchema,
+  BrowserAutomationExecuteResponseSchema,
+} from "./browser-automation/rpc-schemas.js";
+import { BrowserAutomationHostCapabilitySchema } from "./browser-automation/capabilities.js";
+import {
   BySpaceConfigRawSchema,
   BySpaceLifecycleCommandRawSchema,
   BySpaceMetadataGenerationEntrySchema,
@@ -2806,6 +2811,19 @@ export const RegisterPushTokenMessageSchema = z.object({
   token: z.string(),
 });
 
+export const PushUnregisterRequestSchema = z.object({
+  type: z.literal("push.unregister.request"),
+  token: z.string(),
+  requestId: z.string(),
+});
+
+export const PushUnregisterResponseSchema = z.object({
+  type: z.literal("push.unregister.response"),
+  payload: z.object({
+    requestId: z.string(),
+  }),
+});
+
 // ============================================================================
 // Terminal Messages
 // ============================================================================
@@ -3000,6 +3018,7 @@ export const CaptureTerminalRequestSchema = z.object({
 });
 
 export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
+  BrowserAutomationExecuteResponseSchema,
   VoiceAudioChunkMessageSchema,
   AbortRequestMessageSchema,
   AudioPlayedMessageSchema,
@@ -3155,6 +3174,7 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   PingMessageSchema,
   ListCommandsRequestSchema,
   RegisterPushTokenMessageSchema,
+  PushUnregisterRequestSchema,
   ListTerminalsRequestSchema,
   SubscribeTerminalsRequestSchema,
   UnsubscribeTerminalsRequestSchema,
@@ -3397,6 +3417,8 @@ export const ServerInfoStatusPayloadSchema = z
     serverId: z.string().trim().min(1),
     hostname: ServerInfoHostnameSchema.optional(),
     version: ServerInfoVersionSchema.optional(),
+    // COMPAT(desktopManaged): added in v0.6.0 on 2026-08-26; remove the gate after 2027-02-26.
+    desktopManaged: z.boolean().optional(),
     // COMPAT(remoteWebServices): added in v0.6.0; old daemons omit their data-plane key.
     daemonPublicKeyB64: z.string().trim().min(1).optional(),
     // COMPAT(remoteWebServices): added in v0.6.0; remove the gate after 2027-02-20.
@@ -3420,6 +3442,8 @@ export const ServerInfoStatusPayloadSchema = z
         remoteWebServices: z.boolean().optional(),
         // COMPAT(agentProfiles): added in v0.6.0; remove the gate after 2027-02-21.
         agentProfiles: z.boolean().optional(),
+        // COMPAT(pushTokenRevocation): added in v0.6.0 on 2026-08-26; remove after 2027-02-26.
+        pushTokenRevocation: z.boolean().optional(),
         // COMPAT(agentConfigApply): added in v0.6.0; remove the gate after 2027-02-21.
         agentConfigApply: z.boolean().optional(),
         // COMPAT(workspaceLabels): added in v0.7.0, remove after 2027-02-25.
@@ -3457,6 +3481,8 @@ export const ServerInfoStatusPayloadSchema = z
         skillManagement: z.boolean().optional(),
         // COMPAT(terminalRestoreModes): added in v0.1.81, remove gate after 2026-11-23.
         "terminal-restore-modes": z.boolean().optional(),
+        // COMPAT(terminalInputModeReplay): added in v0.6.1, remove gate after 2027-02-26.
+        "terminal-input-mode-replay": z.boolean().optional(),
         // COMPAT(terminalSizeOwnership): added in v0.5.0, remove after 2027-02-08.
         "terminal-size-ownership": z.boolean().optional(),
         // COMPAT(agentTimelinePromptIndex): added in v0.5.0, remove gate after 2027-02-08.
@@ -6254,6 +6280,7 @@ export const AgentSkillsImportLegacySelectionResponseSchema = z.object({
 });
 
 export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
+  BrowserAutomationExecuteRequestSchema,
   PluginCatalogGetResponseSchema,
   PluginListResponseSchema,
   PluginLogsGetResponseSchema,
@@ -6281,6 +6308,7 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   DictationStreamErrorMessageSchema,
   StatusMessageSchema,
   PongMessageSchema,
+  PushUnregisterResponseSchema,
   RpcErrorMessageSchema,
   ArtifactMessageSchema,
   AgentUpdateMessageSchema,
@@ -6898,6 +6926,8 @@ export type ClientHeartbeatMessage = z.infer<typeof ClientHeartbeatMessageSchema
 export type ListCommandsRequest = z.infer<typeof ListCommandsRequestSchema>;
 export type ListCommandsResponse = z.infer<typeof ListCommandsResponseSchema>;
 export type RegisterPushTokenMessage = z.infer<typeof RegisterPushTokenMessageSchema>;
+export type PushUnregisterRequest = z.infer<typeof PushUnregisterRequestSchema>;
+export type PushUnregisterResponse = z.infer<typeof PushUnregisterResponseSchema>;
 
 // Terminal message types
 export type ListTerminalsRequest = z.infer<typeof ListTerminalsRequestSchema>;
@@ -6959,6 +6989,7 @@ export const WSHelloMessageSchema = z.object({
       [CLIENT_CAPS.providerSubagents]: z.boolean().optional(),
       [CLIENT_CAPS.projectUpdates]: z.boolean().optional(),
       [CLIENT_CAPS.compactProviderSnapshots]: z.boolean().optional(),
+      [CLIENT_CAPS.browserHost]: BrowserAutomationHostCapabilitySchema.optional(),
     })
     .passthrough()
     .optional(),

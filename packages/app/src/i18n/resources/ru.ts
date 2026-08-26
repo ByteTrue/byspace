@@ -1,4 +1,4 @@
-import type { TranslationResources } from "./en";
+import { en, type TranslationResources } from "./en";
 
 export const ru: TranslationResources = {
   common: {
@@ -1230,6 +1230,7 @@ export const ru: TranslationResources = {
       title: "Начать с",
     },
   },
+  desktop: en.desktop,
   rootError: {
     kicker: "Что-то пошло не так",
     title: "В BySpace возникла проблема.",

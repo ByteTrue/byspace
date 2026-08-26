@@ -84,6 +84,8 @@ import {
   createBySpaceWorktreeCommand,
   type CreateBySpaceWorktreeCommandInput,
 } from "../../worktree/commands.js";
+import { registerBrowserTools } from "../../browser-tools/tools.js";
+import type { BrowserToolsBroker } from "../../browser-tools/broker.js";
 import type {
   BySpaceToolCatalog,
   BySpaceToolConfig,
@@ -131,6 +133,8 @@ export interface BySpaceToolHostDependencies {
     cwd: string,
     firstAgentContext?: FirstAgentContext,
   ) => Promise<string>;
+  browserToolsEnabled?: boolean;
+  browserToolsBroker?: BrowserToolsBroker | null;
   byspaceHome?: string;
   worktreesRoot?: string;
   callerAgentId?: string;
@@ -1166,6 +1170,15 @@ export function createBySpaceToolCatalog(options: BySpaceToolHostDependencies): 
   type AgentToAgentCreateAgentArgs = z.infer<typeof agentToAgentCreateAgentArgsSchema>;
   type TopLevelCreateAgentArgs = z.infer<typeof canonicalTopLevelCreateAgentArgsSchema>;
   type TopLevelCreateAgentToolArgs = z.infer<typeof topLevelCreateAgentArgsSchema>;
+
+  if (options.browserToolsEnabled && options.browserToolsBroker) {
+    registerBrowserTools({
+      registerTool,
+      broker: options.browserToolsBroker,
+      callerAgentId,
+      resolveCallerAgent,
+    });
+  }
 
   registerTool(
     "create_workspace",

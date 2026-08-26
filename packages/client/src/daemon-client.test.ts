@@ -1,6 +1,11 @@
 import { afterEach, expect, expectTypeOf, test, vi } from "vitest";
 import { z } from "zod";
-import { DaemonClient, type DaemonTransport, type Logger } from "./daemon-client";
+import {
+  DaemonClient,
+  type DaemonClientTrace,
+  type DaemonTransport,
+  type Logger,
+} from "./daemon-client";
 import {
   decodeFileTransferFrame,
   encodeFileTransferFrame,
@@ -29,6 +34,24 @@ function createMockLogger() {
     info: vi.fn(),
     warn: vi.fn(),
     error: vi.fn(),
+  };
+}
+
+interface TraceRecord {
+  phase: "begin" | "end";
+  name?: string;
+  args?: Record<string, string>;
+}
+
+function createTraceRecorder(): { trace: DaemonClientTrace; records: TraceRecord[] } {
+  const records: TraceRecord[] = [];
+  return {
+    trace: {
+      isEnabled: () => true,
+      beginSection: (name, args) => records.push({ phase: "begin", name, args }),
+      endSection: () => records.push({ phase: "end" }),
+    },
+    records,
   };
 }
 
@@ -157,6 +180,56 @@ afterEach(async () => {
   clients.length = 0;
   vi.useRealTimers();
   vi.unstubAllGlobals();
+});
+
+test("traces transport frames, message types, and JSON parse duration", async () => {
+  const mock = createMockTransport();
+  const recorder = createTraceRecorder();
+  const client = new DaemonClient({
+    url: "ws://test",
+    clientId: "trace_unit_test",
+    transportFactory: () => mock.transport,
+    reconnect: { enabled: false },
+    trace: recorder.trace,
+  });
+  clients.push(client);
+
+  const connectPromise = client.connect();
+  mock.triggerOpen({ preserveSent: true });
+  await connectPromise;
+
+  expect(recorder.records).toEqual([
+    {
+      phase: "begin",
+      name: "byspace.ws.message.outbound",
+      args: { envelopeType: "hello", messageType: "hello" },
+    },
+    { phase: "end" },
+    {
+      phase: "begin",
+      name: "byspace.ws.frame.outbound",
+      args: { kind: "text", size: expect.any(String) },
+    },
+    { phase: "end" },
+    {
+      phase: "begin",
+      name: "byspace.ws.frame.inbound",
+      args: { kind: "text", size: expect.any(String) },
+    },
+    {
+      phase: "begin",
+      name: "byspace.ws.json.parse",
+      args: { size: expect.any(String) },
+    },
+    { phase: "end" },
+    {
+      phase: "begin",
+      name: "byspace.ws.message.inbound",
+      args: { envelopeType: "session", messageType: "status" },
+    },
+    { phase: "end" },
+    { phase: "end" },
+  ]);
 });
 
 const noopLogger: Logger = {
@@ -647,6 +720,42 @@ test("sends new-agent run options when updating schedules", async () => {
   });
 });
 
+test("sends typed browser automation execute responses", async () => {
+  const logger = createMockLogger();
+  const mock = createMockTransport();
+
+  const client = new DaemonClient({
+    url: "ws://test",
+    clientId: "clsk_unit_test",
+    logger,
+    reconnect: { enabled: false },
+    transportFactory: () => mock.transport,
+  });
+  clients.push(client);
+
+  const connectPromise = client.connect();
+  mock.triggerOpen();
+  await connectPromise;
+
+  client.sendBrowserAutomationExecuteResponse({
+    type: "browser.automation.execute.response",
+    payload: {
+      requestId: "req-1",
+      ok: true,
+      result: { command: "list_tabs", tabs: [] },
+    },
+  });
+
+  expect(parseSentFrame(mock.sent[0])).toEqual({
+    type: "browser.automation.execute.response",
+    payload: {
+      requestId: "req-1",
+      ok: true,
+      result: { command: "list_tabs", tabs: [] },
+    },
+  });
+});
+
 test("does not reconnect after close when ensureConnected is called", async () => {
   const logger = createMockLogger();
   const mock = createMockTransport();
@@ -692,6 +801,59 @@ test("keeps the transport connected when a session RPC ping times out", async ()
 
   await expect(client.ping({ timeoutMs: 1 })).rejects.toThrow("Timeout waiting for message");
 
+  expect(client.getConnectionState().status).toBe("connected");
+});
+
+test("waits for the daemon to acknowledge push token revocation", async () => {
+  const mock = createMockTransport();
+  const client = new DaemonClient({
+    url: "ws://test",
+    clientId: "clsk_push_revocation",
+    reconnect: { enabled: false },
+    transportFactory: () => mock.transport,
+  });
+  clients.push(client);
+  const connectPromise = client.connect();
+  mock.triggerOpen({ features: { pushTokenRevocation: true } });
+  await connectPromise;
+
+  const revocation = client.unregisterPushToken("ExponentPushToken[test-device]");
+  const request = parseSentFrame(mock.sent.at(-1));
+  expect(request).toMatchObject({
+    type: "push.unregister.request",
+    token: "ExponentPushToken[test-device]",
+  });
+  mock.triggerMessage(
+    wrapSessionMessage({
+      type: "push.unregister.response",
+      payload: { requestId: request.requestId },
+    }),
+  );
+
+  await revocation;
+});
+
+test("bounds the wait for push token revocation", async () => {
+  useHeartbeatClock();
+  const mock = createMockTransport();
+  const client = new DaemonClient({
+    url: "ws://test",
+    clientId: "clsk_push_revocation_timeout",
+    reconnect: { enabled: false },
+    transportFactory: () => mock.transport,
+  });
+  clients.push(client);
+  const connectPromise = client.connect();
+  mock.triggerOpen({ features: { pushTokenRevocation: true } });
+  await connectPromise;
+
+  const revocation = client.unregisterPushToken("ExponentPushToken[test-device]");
+  const rejection = expect(revocation).rejects.toThrow("Timeout waiting for message (2000ms)");
+  await vi.advanceTimersByTimeAsync(1_999);
+  expect(client.getConnectionState().status).toBe("connected");
+
+  await vi.advanceTimersByTimeAsync(1);
+  await rejection;
   expect(client.getConnectionState().status).toBe("connected");
 });
 

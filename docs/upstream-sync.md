@@ -11,6 +11,8 @@ BySpace synchronizes with Paseo by porting the aggregate delta between two froze
 
 Update this marker and the matching marker in `docs/release.md` only after a sync is fully implemented and verified.
 
+Coverage note: the `v0.5.1` baseline is complete across every maintained Web/PWA, Android/iOS, Electron/Desktop Browser, server, CLI, Relay, test, build, packaging, and dormant-release surface. Epic 005 closed the Native/Desktop slices omitted by the former Web-only policy, so the next release comparison can use this frozen baseline without a separate native gap ledger.
+
 ## Sync model
 
 For baseline `OLD` and approved target `NEW`:
@@ -29,13 +31,14 @@ A sync is a controlled source transfer, not a design or hardening project. Once 
 
 A sync must preserve these established BySpace contracts:
 
-1. Browser Web/PWA + CLI + SDK client + daemon + Relay are the supported surfaces.
-2. Electron, native iOS/Android, `expo-two-way-audio`, marketing website, and Electron Browser automation stay absent.
-3. BySpace identity remains complete: `BySpace`, `byspace`, `BYSPACE_*`, `@bytetrue/byspace*`, `~/.byspace`, `byspace.json`, and port `6777`.
-4. The single-package npm distribution and isolated Stable/Beta Web and Relay channels remain intact.
-5. Current BySpace behavior and documented product decisions remain fixed. If approved upstream behavior conflicts with them, stop and ask rather than combining or improving either design.
+1. Browser Web/PWA, shared Expo Android/iOS, Electron Desktop, Desktop Browser automation, CLI, SDK client, daemon, Relay, and their tests/build/package/release source are maintained surfaces.
+2. Distribution maturity is not a source-exclusion rule. Web is public; Android is internally validated; iOS signed distribution and Electron public distribution remain gated, but their maintained source still participates in every applicable sync.
+3. Only explicitly documented product exclusions stay absent. The current standing exclusions are replacing BySpace's existing `packages/website` with Paseo's independent marketing-site implementation and product paths already superseded in Project Spec; “native”, “Electron”, or “Browser automation” is never enough reason by itself.
+4. BySpace identity remains complete: `BySpace`, `byspace`, `BYSPACE_*`, `@bytetrue/byspace*`, `~/.byspace`, `byspace.json`, permanent app IDs, URL scheme `byspace`, and port `6777`.
+5. The single-package npm distribution and isolated Stable/Beta Web and Relay channels remain intact. Native/Desktop artifact channels require their own approved release gates and must not piggyback on npm/Web tags.
+6. Current BySpace behavior and documented product decisions remain fixed. If approved upstream behavior conflicts with them, stop and ask rather than combining or improving either design.
 
-Do not repeat existing client deletion, identity migration, packaging, or release setup during a routine sync. Audit them as invariants instead.
+Do not repeat identity migration, replace the BySpace tree, or flatten maintained platform boundaries during a routine sync. Audit each supported client and its support files as retained product surface.
 
 ## Hard gates
 
@@ -74,9 +77,11 @@ For internal accounting, summarize impact across:
 - Providers, Pi, and ACP;
 - terminal and PTY lifecycle;
 - Git, worktrees, Forge, and file operations;
-- Web/PWA UI and responsive behavior;
+- Browser Web/PWA UI and responsive behavior;
+- shared Expo Android/iOS runtime, native modules, permissions, and platform tests;
+- Electron main/preload/renderer integration, Desktop Browser automation, OS bridges, and updater behavior;
 - Relay and connection security;
-- dependencies, generated declarations, packaging, and CI.
+- dependencies, generated declarations, packaging, E2E, platform workflows, and dormant/public release source.
 
 Give each behavior one internal disposition:
 
@@ -123,16 +128,21 @@ Wait for explicit target and disposition approval before implementation.
 
 ### 4. Prove the upstream target
 
-In a disposable checkout of the exact target:
+In a disposable checkout of the exact target, prove the complete maintained client baseline, not only Web:
 
 ```bash
 npm ci
+npm run build:app-deps
 npm run build:server
 npm run typecheck
 npm run build --workspace=@getpaseo/app
+CI=1 npx expo prebuild --platform android --clean
+CI=1 npx expo prebuild --platform ios --clean
+npm run build:main --workspace=@getpaseo/desktop
+npm run build:desktop -- --dir
 ```
 
-Use the target's documented equivalents if scripts or package names changed. Record upstream failures before touching BySpace. The proof may run alongside inventory work, but a long build should not delay the first change explanation unless it changes a recommendation. It must pass before copying code.
+Use the target's documented equivalents if scripts or package names changed. The Desktop package may require server declarations first; that build order is part of the proof, not a reason to patch duplicate types. Record upstream failures before touching BySpace. A host that cannot build a foreign signed/public artifact must still prove source/prebuild closure locally and assign the missing platform artifact to exact-SHA CI; signed publishing is never part of sync. The proof may run alongside inventory work, but a long build should not delay the first change explanation unless it changes a recommendation. It must pass before copying code.
 
 ### 5. Plan capability batches
 
@@ -182,7 +192,7 @@ Use a verification ladder; do not run the final matrix after every small edit:
 
 1. **While editing a batch:** run only the smallest compiler or focused test needed to guide the transfer. A known-incomplete batch may be temporarily red; do not commit it or repeatedly run broad gates in that state.
 2. **At a completed capability batch:** run the upstream tests covering the copied behavior plus focused adaptation tests, then run root typecheck, lint, and format check once. Run tests from the owning workspace so its aliases and environment apply.
-3. **Build by blast radius:** run `build:server` when the batch changes protocol, client declarations, server/CLI code, dependencies, packaging, or another cross-workspace contract. For App-only batches, defer the real Web export until the end of the aggregate Web stage rather than exporting after every owner.
+3. **Build by blast radius:** run `build:server` when the batch changes protocol, client declarations, server/CLI code, dependencies, packaging, or another cross-workspace contract. For shared-App batches, defer the real Web export and relevant Android/iOS prebuilds until the aggregate App stage rather than rebuilding after every owner. For Electron batches, build server declarations before Desktop main/preload.
 4. **Keep generated-output commands sequential:** do not run builds, typecheck, or tests concurrently when they read or write shared `dist` declarations.
 5. **At the complete candidate:** run the final matrix once:
 
@@ -194,16 +204,23 @@ npm run typecheck
 npm run lint
 npm run format:check
 npm run build --workspace=@bytetrue/byspace-app
+(cd packages/app && CI=1 npx expo prebuild --platform android --clean)
+(cd packages/app && CI=1 npx expo prebuild --platform ios --clean)
+npm run build:main --workspace=@bytetrue/byspace-desktop
+npm run build:desktop -- --dir
 npm run release:check
 ```
+
+Use the documented equivalent if Expo or Desktop scripts change. Android/iOS prebuilds prove source closure only; the current-host Desktop `--dir` package is unsigned. Foreign-platform artifacts and signed/public packages remain exact-SHA CI or separately approved release-gate responsibilities.
 
 Also prove:
 
 - every relevant upstream behavior has a disposition;
 - every approved Port matches upstream except recorded mechanical adaptations;
 - no unapproved redesign, bug fix, hardening, or generalized compatibility layer was added;
-- no Electron/native/website/Browser-automation or unsupported authority was resurrected;
-- no old product namespace, home path, config name, port, or deployment target was introduced;
+- no maintained Web/Android/iOS/Electron/Desktop-Browser production or support slice was omitted, stubbed, or disabled because its public distribution gate is closed;
+- no explicitly excluded Paseo-website replacement or superseded product surface leaked back in;
+- no old product namespace, home path, config name, port, app identifier, or deployment target was introduced;
 - the global tarball and native modules still work;
 - Stable/Beta endpoint selection remains correct;
 - the production daemon and deployed resources were not changed.
@@ -216,10 +233,11 @@ Review completed capability batches when they are high-risk or cross architectur
 
 Ask independent read-only reviewers to inspect only:
 
-- whether every approved upstream behavior was copied completely and faithfully;
+- whether every approved upstream behavior was copied completely and faithfully across every maintained client;
 - whether adaptations are mechanical and explicitly recorded;
-- whether excluded surfaces or old identity leaked back in;
-- whether package and release-channel boundaries regressed.
+- whether an explicitly excluded product surface or old identity leaked back in;
+- whether a maintained Android/iOS/Electron/Browser/test/build slice was incorrectly treated as excluded;
+- whether package, artifact, and release-channel boundaries regressed.
 
 A reviewer finding is a sync blocker only when code was omitted, copied incorrectly, adapted beyond approval, or crossed a fixed BySpace boundary. A possible upstream bug, security improvement, architecture improvement, or desirable hardening is reported to the user and is not implemented automatically. Missing shell access or duplicated gate evidence is not a code blocker; the candidate writer or supervisor may supply that evidence once.
 

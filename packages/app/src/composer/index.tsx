@@ -48,6 +48,7 @@ import {
   sendQueuedComposerMessageNow,
   toggleGithubAttachmentFromPicker,
   uploadFileAttachments,
+  type AttachmentPersister,
   type QueueWriter,
   type QueuedComposerMessage,
 } from "@/composer/actions";
@@ -62,7 +63,12 @@ import {
   useHostRuntimeClient,
   useHostRuntimeIsConnected,
 } from "@/runtime/host-runtime";
-import { deleteAttachments, persistAttachmentFromBlob } from "@/attachments/service";
+import {
+  deleteAttachments,
+  persistAttachmentFromBlob,
+  persistAttachmentFromDataUrl,
+  persistAttachmentFromFileUri,
+} from "@/attachments/service";
 import { resolveAgentControlsMode } from "@/composer/agent-controls/mode";
 import { resolveComposerInputMode, type ComposerInputMode } from "@/composer/input-mode";
 import { useKeyboardActionHandler } from "@/hooks/use-keyboard-action-handler";
@@ -109,6 +115,15 @@ import {
   resolveWorkspaceFileDrop,
   type WorkspaceFileDragPayload,
 } from "@/attachments/workspace-file-drag";
+
+const composerImageAttachmentPersister: Pick<
+  AttachmentPersister,
+  "persistFromBlob" | "persistFromDataUrl" | "persistFromFileUri"
+> = {
+  persistFromBlob: persistAttachmentFromBlob,
+  persistFromDataUrl: persistAttachmentFromDataUrl,
+  persistFromFileUri: persistAttachmentFromFileUri,
+};
 
 type QueuedMessage = QueuedComposerMessage;
 
@@ -1278,10 +1293,7 @@ export function Composer({
   const handlePickImage = useCallback(async () => {
     const newImages = await pickAndPersistImages({
       pickImages,
-      persister: {
-        persistFromBlob: ({ blob, mimeType, fileName }) =>
-          persistAttachmentFromBlob({ blob, mimeType, fileName }),
-      },
+      persister: composerImageAttachmentPersister,
     });
     if (newImages.length === 0) return;
     addImages(newImages);

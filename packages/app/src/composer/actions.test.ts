@@ -121,16 +121,30 @@ function reviewWorkspaceAttachment(
 
 function createFakePersister(): AttachmentPersister & {
   blobCalls: Array<{ blob: Blob; mimeType: string; fileName: string | null }>;
+  dataUrlCalls: Array<{ dataUrl: string; mimeType: string; fileName: string | null }>;
+  fileUriCalls: Array<{ uri: string; mimeType: string; fileName: string | null }>;
   deletedBatches: AttachmentMetadata[][];
 } {
   const blobCalls: Array<{ blob: Blob; mimeType: string; fileName: string | null }> = [];
+  const dataUrlCalls: Array<{ dataUrl: string; mimeType: string; fileName: string | null }> = [];
+  const fileUriCalls: Array<{ uri: string; mimeType: string; fileName: string | null }> = [];
   const deletedBatches: AttachmentMetadata[][] = [];
   return {
     blobCalls,
+    dataUrlCalls,
+    fileUriCalls,
     deletedBatches,
     persistFromBlob: async ({ blob, mimeType, fileName }) => {
       blobCalls.push({ blob, mimeType, fileName });
       return { ...imageMetadata, id: `blob-${blobCalls.length}` };
+    },
+    persistFromDataUrl: async ({ dataUrl, mimeType, fileName }) => {
+      dataUrlCalls.push({ dataUrl, mimeType, fileName });
+      return { ...imageMetadata, id: `data-url-${dataUrlCalls.length}` };
+    },
+    persistFromFileUri: async ({ uri, mimeType, fileName }) => {
+      fileUriCalls.push({ uri, mimeType, fileName });
+      return { ...imageMetadata, id: `uri-${fileUriCalls.length}` };
     },
     deleteAttachments: (metadata) => {
       deletedBatches.push(metadata);
@@ -339,6 +353,43 @@ describe("pickAndPersistImages", () => {
     });
     expect(persister.blobCalls).toEqual([{ blob, mimeType: "image/png", fileName: "img-1.png" }]);
     expect(result.map((m) => m.id)).toEqual(["blob-1"]);
+  });
+
+  it("persists file_uri sources via persistFromFileUri", async () => {
+    const persister = createFakePersister();
+    const result = await pickAndPersistImages({
+      pickImages: async () => [
+        {
+          source: { kind: "file_uri", uri: "/tmp/x.jpg" },
+          mimeType: "image/jpeg",
+          fileName: null,
+        },
+      ],
+      persister,
+    });
+    expect(persister.fileUriCalls).toEqual([
+      { uri: "/tmp/x.jpg", mimeType: "image/jpeg", fileName: null },
+    ]);
+    expect(result.map((metadata) => metadata.id)).toEqual(["uri-1"]);
+  });
+
+  it("persists data_url sources via persistFromDataUrl", async () => {
+    const persister = createFakePersister();
+    const dataUrl = "data:image/png;base64,AAEC";
+    const result = await pickAndPersistImages({
+      pickImages: async () => [
+        {
+          source: { kind: "data_url", dataUrl },
+          mimeType: "image/png",
+          fileName: "pasted.png",
+        },
+      ],
+      persister,
+    });
+    expect(persister.dataUrlCalls).toEqual([
+      { dataUrl, mimeType: "image/png", fileName: "pasted.png" },
+    ]);
+    expect(result.map((metadata) => metadata.id)).toEqual(["data-url-1"]);
   });
 });
 

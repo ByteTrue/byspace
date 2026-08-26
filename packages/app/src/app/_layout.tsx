@@ -3,6 +3,7 @@ import { BottomSheetModalProvider } from "@gorhom/bottom-sheet";
 import { PortalProvider } from "@gorhom/portal";
 import { QueryClientProvider } from "@tanstack/react-query";
 import * as Linking from "expo-linking";
+import * as Notifications from "expo-notifications";
 import { Stack, useNavigationContainerRef, usePathname, useRouter } from "expo-router";
 import {
   createContext,
@@ -12,12 +13,14 @@ import {
   useEffect,
   useMemo,
   useState,
+  useRef,
   useSyncExternalStore,
 } from "react";
 import { AppState, useWindowDimensions, View } from "react-native";
 import { GestureDetector, GestureHandlerRootView } from "react-native-gesture-handler";
+import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
-import { StyleSheet } from "react-native-unistyles";
+import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { AppearanceProvider } from "@/appearance/provider";
 import { CommandCenter } from "@/command-center/command-center";
 import { CommandCenterRootActions } from "@/command-center/root-registration";
@@ -28,7 +31,9 @@ import { AddProjectFlowHost } from "@/components/add-project-flow-host";
 import { AppearanceStyleBoundary } from "@/components/appearance-style-boundary";
 import { WorktreeSetupCalloutSource } from "@/components/worktree-setup-callout-source";
 import { DownloadToast } from "@/components/download-toast";
+import { QuittingOverlay } from "@/components/quitting-overlay";
 import { KeyboardShortcutsDialog } from "@/components/keyboard-shortcuts-dialog";
+import { AppDiagnosticHost } from "@/components/app-diagnostic-host";
 import { LeftSidebar } from "@/components/left-sidebar";
 import { SidebarModelProvider } from "@/components/sidebar/sidebar-model";
 import { CompactExplorerSidebarHost } from "@/components/compact-explorer-sidebar-host";
@@ -38,20 +43,35 @@ import { WorkspaceSetupDialog } from "@/components/workspace-setup-dialog";
 import { WorkspaceShortcutTargetsSubscriber } from "@/components/workspace-shortcut-targets-subscriber";
 import { WorkspacePinShortcutHandler } from "@/components/workspace-pin-shortcut-handler";
 import { FloatingPanelPortalHost } from "@/components/ui/floating-panel-portal";
-import { HostChooserModal } from "@/hosts/host-chooser";
-import { useIsCompactFormFactor } from "@/constants/layout";
+import { HostChooserModal, useHostChooser } from "@/hosts/host-chooser";
+import { getIsElectronRuntime, useIsCompactFormFactor } from "@/constants/layout";
 import {
   canDesktopAppSidebarShare,
+  resolveDesktopAppChromeLayout,
   resolveDesktopAppContentMinimum,
   resolveDesktopSidebarVisibility,
 } from "@/components/desktop-sidebar-layout";
-import { isWeb } from "@/constants/platform";
+import { isNative, isWeb } from "@/constants/platform";
 import { HorizontalScrollProvider } from "@/contexts/horizontal-scroll-context";
 import { SessionProvider } from "@/contexts/session-context";
 import { SidebarCalloutProvider } from "@/contexts/sidebar-callout-context";
 import { ToastProvider } from "@/contexts/toast-context";
 import { AudioProvider } from "@/contexts/audio-context";
-import { shouldRunStartupGiveUpTimer } from "@/navigation/host-runtime-bootstrap";
+import {
+  resolveStartupBlocker,
+  resolveStartupNavigationReady,
+  shouldRunStartupGiveUpTimer,
+  startHostRuntimeBootstrap,
+  type StartupBlocker,
+} from "@/navigation/host-runtime-bootstrap";
+import { shouldUseDesktopDaemon } from "@/desktop/daemon/desktop-daemon";
+import { AgentNavigationListener } from "@/desktop/agent-navigation";
+import { listenToDesktopEvent } from "@/desktop/electron/events";
+import { updateDesktopWindowControls } from "@/desktop/electron/window";
+import { getDesktopHost } from "@/desktop/host";
+import { loadDesktopSettings } from "@/desktop/settings/desktop-settings";
+import { RosettaCalloutSource } from "@/desktop/updates/rosetta-callout-source";
+import { UpdateCalloutSource } from "@/desktop/updates/update-callout-source";
 import { registerWorkspaceRouteNavigationRef } from "@/navigation/workspace-route-navigation";
 import { ThemedStack } from "@/navigation/themed-stack";
 import { legacyFavoriteProfileMigration } from "@/agent-profiles/migration";
@@ -60,7 +80,9 @@ import { useGlobalNewWorkspaceAction } from "@/hooks/use-global-new-workspace-ac
 import { useLatchedBoolean } from "@/hooks/use-latched-boolean";
 import { useFaviconStatus } from "@/hooks/use-favicon-status";
 import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts";
+import { KeyboardShiftProvider } from "@/hooks/use-keyboard-shift-style";
 import { useCompactWebViewportZoomLock } from "@/hooks/use-compact-web-viewport-zoom-lock";
+import { useOpenProject } from "@/hooks/use-open-project";
 import { useAppSettings } from "@/hooks/use-settings";
 import { useStableEvent } from "@/hooks/use-stable-event";
 import { useOpenAgentListGesture } from "@/mobile-panels/gestures";
@@ -71,20 +93,29 @@ import {
   useKeyboardActionDispatcher,
 } from "@/keyboard/keyboard-action-dispatcher-context";
 import { polyfillCrypto } from "@/polyfills/crypto";
+import { polyfillNavigator } from "@/polyfills/navigator";
 import { queryClient } from "@/data/query-client";
 import {
   getHostRuntimeStore,
+  hasConfiguredLocalDaemonOverride,
   useHostMutations,
   useHostRuntimeClient,
   useHostRuntimeIsConnected,
+  useHostRegistryLoaded,
   useHosts,
 } from "@/runtime/host-runtime";
+import { getDaemonStartService } from "@/runtime/daemon-start-service";
 import { selectIsAgentListOpen, usePanelStore } from "@/stores/panel-store";
 import { flushDraftPersistStorage } from "@/stores/draft-store";
 import { getNextThemePreference } from "@/styles/theme";
 import { useSessionStore } from "@/stores/session-store";
 import { installWebScrollbarStyles } from "@/styles/install-web-scrollbar-styles";
 import type { HostProfile } from "@/types/host-connection";
+import {
+  useHasWindowChromeObstruction,
+  WindowChromeProvider,
+  WindowChromeRegion,
+} from "@/utils/desktop-window";
 import {
   buildOpenProjectRoute,
   parseHostWorkspaceRouteFromPathname,
@@ -94,20 +125,28 @@ import { buildNotificationRoute, resolveNotificationTarget } from "@/utils/notif
 import { navigateToAgent } from "@/utils/navigate-to-agent";
 import { PluginCatalogSync } from "@/plugins";
 import {
+  ensureOsNotificationPermission,
   WEB_NOTIFICATION_CLICK_EVENT,
   type WebNotificationClickDetail,
 } from "@/utils/os-notifications";
 
 polyfillCrypto();
+polyfillNavigator();
 
 export interface HostRuntimeBootstrapState {
+  splashError: string | null;
+  retry: () => void;
   hasGivenUpWaitingForHost: boolean;
   storeReady: boolean;
+  startupBlocker: StartupBlocker;
 }
 
 const HostRuntimeBootstrapContext = createContext<HostRuntimeBootstrapState>({
+  splashError: null,
+  retry: () => {},
   hasGivenUpWaitingForHost: false,
   storeReady: false,
+  startupBlocker: { kind: "none" },
 });
 
 function PushNotificationRouter() {
@@ -126,16 +165,81 @@ function PushNotificationRouter() {
     router.navigate(buildNotificationRoute(data));
   });
 
+  const lastHandledIdRef = useRef<string | null>(null);
+
   useEffect(() => {
-    const openFromWebClick = (event: Event) => {
-      const customEvent = event as CustomEvent<WebNotificationClickDetail>;
-      event.preventDefault();
-      openNotification(customEvent.detail?.data);
+    if (isWeb) {
+      let removeDesktopNotificationListener: (() => void) | null = null;
+      let cancelled = false;
+
+      if (getIsElectronRuntime()) {
+        void ensureOsNotificationPermission();
+
+        const unlistenResult = getDesktopHost()?.events?.on?.(
+          "notification-click",
+          (payload: unknown) => {
+            const data =
+              typeof payload === "object" &&
+              payload !== null &&
+              "data" in payload &&
+              typeof (payload as { data?: unknown }).data === "object" &&
+              (payload as { data?: unknown }).data !== null
+                ? (payload as { data: Record<string, unknown> }).data
+                : undefined;
+            openNotification(data);
+          },
+        );
+
+        void Promise.resolve(unlistenResult).then((unlisten) => {
+          if (typeof unlisten !== "function") return undefined;
+          if (cancelled) {
+            unlisten();
+            return undefined;
+          }
+          removeDesktopNotificationListener = unlisten;
+          return undefined;
+        });
+      }
+
+      const openFromWebClick = (event: Event) => {
+        const customEvent = event as CustomEvent<WebNotificationClickDetail>;
+        event.preventDefault();
+        openNotification(customEvent.detail?.data);
+      };
+      window.addEventListener(WEB_NOTIFICATION_CLICK_EVENT, openFromWebClick as EventListener);
+      return () => {
+        cancelled = true;
+        removeDesktopNotificationListener?.();
+        window.removeEventListener(WEB_NOTIFICATION_CLICK_EVENT, openFromWebClick as EventListener);
+      };
+    }
+
+    Notifications.setNotificationHandler({
+      handleNotification: async () => ({
+        shouldShowAlert: false,
+        shouldShowBanner: false,
+        shouldShowList: false,
+        shouldPlaySound: false,
+        shouldSetBadge: false,
+      }),
+    });
+
+    const openFromResponse = (response: Notifications.NotificationResponse) => {
+      const identifier = response.notification.request.identifier;
+      if (lastHandledIdRef.current === identifier) return;
+      lastHandledIdRef.current = identifier;
+      openNotification(
+        response.notification.request.content.data as Record<string, unknown> | undefined,
+      );
     };
-    window.addEventListener(WEB_NOTIFICATION_CLICK_EVENT, openFromWebClick as EventListener);
-    return () => {
-      window.removeEventListener(WEB_NOTIFICATION_CLICK_EVENT, openFromWebClick as EventListener);
-    };
+
+    const subscription = Notifications.addNotificationResponseReceivedListener(openFromResponse);
+    void Notifications.getLastNotificationResponseAsync().then((response) => {
+      if (response) openFromResponse(response);
+      return undefined;
+    });
+
+    return () => subscription.remove();
   }, [openNotification]);
 
   return null;
@@ -214,16 +318,61 @@ export function useEarliestOnlineHostServerId(): string | null {
   );
 }
 
+function useDaemonStartLastError(): string | null {
+  const service = getDaemonStartService({ store: getHostRuntimeStore() });
+  return useSyncExternalStore(
+    (listener) => service.subscribe(listener),
+    () => service.getLastError(),
+    () => service.getLastError(),
+  );
+}
+
+function useDaemonStartIsRunning(): boolean {
+  const service = getDaemonStartService({ store: getHostRuntimeStore() });
+  return useSyncExternalStore(
+    (listener) => service.subscribe(listener),
+    () => service.isRunning(),
+    () => service.isRunning(),
+  );
+}
+
 const STARTUP_GIVE_UP_TIMEOUT_MS = 5_000;
+
+async function shouldStartBuiltInDaemon(): Promise<boolean> {
+  if (!shouldUseDesktopDaemon() || hasConfiguredLocalDaemonOverride()) {
+    return false;
+  }
+  const settings = await loadDesktopSettings();
+  return settings.daemon.manageBuiltInDaemon;
+}
 
 function HostRuntimeBootstrapProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
-    getHostRuntimeStore().boot();
+    const store = getHostRuntimeStore();
+    startHostRuntimeBootstrap({
+      store,
+      daemonStartService: getDaemonStartService({ store }),
+      shouldStartDaemon: shouldStartBuiltInDaemon,
+    });
   }, []);
 
   const anyOnlineHostServerId = useEarliestOnlineHostServerId();
+  const daemonStartError = useDaemonStartLastError();
+  const daemonStartIsRunning = useDaemonStartIsRunning();
+  const isDesktopRuntime = shouldUseDesktopDaemon();
   const [hasGivenUpWaitingForHost, setHasGivenUpWaitingForHost] = useState(false);
+  const startupBlocker = useMemo(
+    () =>
+      resolveStartupBlocker({
+        isDesktopRuntime,
+        anyOnlineHostServerId,
+        daemonStartIsRunning,
+        daemonStartError,
+      }),
+    [anyOnlineHostServerId, daemonStartError, daemonStartIsRunning, isDesktopRuntime],
+  );
   const shouldRunGiveUpTimer = shouldRunStartupGiveUpTimer({
+    startupBlocker,
     anyOnlineHostServerId,
     hasGivenUpWaitingForHost,
   });
@@ -234,12 +383,18 @@ function HostRuntimeBootstrapProvider({ children }: { children: ReactNode }) {
     return () => clearTimeout(handle);
   }, [shouldRunGiveUpTimer]);
 
+  const retry = useCallback(() => {
+    void getDaemonStartService({ store: getHostRuntimeStore() }).startIfEnabled({
+      shouldStart: shouldStartBuiltInDaemon,
+    });
+  }, []);
+  const splashError =
+    startupBlocker.kind === "managed-daemon-error" ? startupBlocker.message : null;
+  const storeReady = resolveStartupNavigationReady({ startupBlocker });
+
   const state = useMemo<HostRuntimeBootstrapState>(
-    () => ({
-      hasGivenUpWaitingForHost,
-      storeReady: true,
-    }),
-    [hasGivenUpWaitingForHost],
+    () => ({ splashError, retry, hasGivenUpWaitingForHost, storeReady, startupBlocker }),
+    [splashError, retry, hasGivenUpWaitingForHost, storeReady, startupBlocker],
   );
 
   return (
@@ -336,6 +491,11 @@ function AppContainer({ children, chromeEnabled: chromeEnabledOverride }: AppCon
       viewportWidth,
     }),
   });
+  const hasTopLeftWindowControls = useHasWindowChromeObstruction("top-left");
+  const appChromeLayout = resolveDesktopAppChromeLayout({
+    desktopSidebarRendered: desktopSidebarVisible,
+    hasTopLeftWindowControls,
+  });
   const sidebarChrome = (
     <SidebarChrome
       mounted={isCompactLayout ? chromeEnabled : desktopSidebarMounted}
@@ -345,13 +505,21 @@ function AppContainer({ children, chromeEnabled: chromeEnabledOverride }: AppCon
   );
   const workspaceChrome = (
     <View style={rowStyle}>
-      {!isCompactLayout ? sidebarChrome : null}
+      {!isCompactLayout ? (
+        <WindowChromeRegion corners={appChromeLayout.sidebarCorners}>
+          {sidebarChrome}
+        </WindowChromeRegion>
+      ) : null}
       {isCompactLayout ? (
         <CompactExplorerSidebarHost enabled={chromeEnabled}>
-          <View style={flexStyle}>{children}</View>
+          <WindowChromeRegion corners={chromeEnabled ? "both" : appChromeLayout.contentCorners}>
+            <View style={flexStyle}>{children}</View>
+          </WindowChromeRegion>
         </CompactExplorerSidebarHost>
       ) : (
-        <View style={flexStyle}>{children}</View>
+        <WindowChromeRegion corners={appChromeLayout.contentCorners}>
+          <View style={flexStyle}>{children}</View>
+        </WindowChromeRegion>
       )}
     </View>
   );
@@ -362,6 +530,8 @@ function AppContainer({ children, chromeEnabled: chromeEnabledOverride }: AppCon
       <FloatingPanelPortalHost />
       {isCompactLayout ? sidebarChrome : null}
       <DownloadToast />
+      <RosettaCalloutSource />
+      <UpdateCalloutSource />
       <WorktreeSetupCalloutSource />
       <CommandCenterRootActions />
       <CommandCenterWorkspaceActions />
@@ -372,6 +542,8 @@ function AppContainer({ children, chromeEnabled: chromeEnabledOverride }: AppCon
       <ProviderSettingsHost />
       <WorkspaceSetupDialog />
       <KeyboardShortcutsDialog />
+      <AppDiagnosticHost />
+      <QuittingOverlay />
     </View>
   );
 
@@ -430,6 +602,7 @@ function ProvidersWrapper({ children }: { children: ReactNode }) {
   return (
     <AppearanceProvider>
       <AudioProvider>
+        <DesktopWindowControlsSync />
         <OfferLinkListener upsertDaemonFromOfferUrl={upsertConnectionFromOfferUrl} />
         <HostSessionManager />
         <FaviconStatusSync />
@@ -437,6 +610,26 @@ function ProvidersWrapper({ children }: { children: ReactNode }) {
       </AudioProvider>
     </AppearanceProvider>
   );
+}
+
+function DesktopWindowControlsSync() {
+  const { isLoading } = useAppSettings();
+  const { theme } = useUnistyles();
+  const surface0 = theme.colors.surface0;
+  const foreground = theme.colors.foreground;
+
+  useEffect(() => {
+    if (isLoading || isNative) return;
+    void updateDesktopWindowControls({
+      backgroundColor: surface0,
+      foregroundColor: foreground,
+      trafficLightOffsetY: -5,
+    }).catch((error) => {
+      console.warn("[DesktopWindow] Failed to update window controls overlay", error);
+    });
+  }, [isLoading, surface0, foreground]);
+
+  return null;
 }
 
 function OfferLinkListener({
@@ -482,6 +675,98 @@ function OfferLinkListener({
   return null;
 }
 
+interface OpenProjectEventPayload {
+  path?: unknown;
+}
+
+interface PendingOpenProjectRequest {
+  id: number;
+  serverId: string;
+  path: string;
+}
+
+let nextOpenProjectRequestId = 1;
+
+function OpenProjectListener() {
+  const chooseHost = useHostChooser();
+  const [request, setRequest] = useState<PendingOpenProjectRequest | null>(null);
+  const [pendingPath, setPendingPath] = useState<string | null>(null);
+  const hostRegistryLoaded = useHostRegistryLoaded();
+  const openProject = useOpenProject(request?.serverId ?? null);
+
+  const openPathOnChosenHost = useCallback(
+    (path: string) => {
+      const nextPath = path.trim();
+      if (!nextPath) return;
+      if (!hostRegistryLoaded) {
+        setPendingPath(nextPath);
+        return;
+      }
+      chooseHost({
+        title: "Choose host",
+        onChooseHost: (serverId) => {
+          setRequest({ id: nextOpenProjectRequestId++, serverId, path: nextPath });
+        },
+      });
+    },
+    [chooseHost, hostRegistryLoaded],
+  );
+
+  useEffect(() => {
+    if (!hostRegistryLoaded || !pendingPath) return;
+    const nextPath = pendingPath;
+    setPendingPath(null);
+    openPathOnChosenHost(nextPath);
+  }, [hostRegistryLoaded, openPathOnChosenHost, pendingPath]);
+
+  useEffect(() => {
+    if (!request) return;
+    let cancelled = false;
+    void openProject(request.path).then((result) => {
+      if (cancelled) return null;
+      setRequest((current) => (current?.id === request.id ? null : current));
+      return result.ok ? null : null;
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [openProject, request]);
+
+  useEffect(() => {
+    let disposed = false;
+    let unlisten: (() => void) | null = null;
+    void getDesktopHost()
+      ?.getPendingOpenProject?.()
+      ?.then((pending) => {
+        if (!disposed && pending) openPathOnChosenHost(pending);
+        return undefined;
+      })
+      .catch(() => undefined);
+
+    void listenToDesktopEvent<OpenProjectEventPayload>("open-project", (payload) => {
+      if (disposed) return;
+      const nextPath = typeof payload?.path === "string" ? payload.path.trim() : "";
+      openPathOnChosenHost(nextPath);
+    })
+      .then((dispose) => {
+        if (disposed) {
+          dispose();
+          return undefined;
+        }
+        unlisten = dispose;
+        return undefined;
+      })
+      .catch(() => undefined);
+
+    return () => {
+      disposed = true;
+      unlisten?.();
+    };
+  }, [openPathOnChosenHost]);
+
+  return null;
+}
+
 function AppWithSidebar({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const hosts = useHosts();
@@ -500,9 +785,13 @@ function AppWithSidebar({ children }: { children: ReactNode }) {
   return <AppContainer chromeEnabled={shouldShowAppChrome}>{children}</AppContainer>;
 }
 
-function FaviconStatusSync() {
+function WebFaviconStatusSync() {
   useFaviconStatus();
   return null;
+}
+
+function FaviconStatusSync() {
+  return isWeb ? <WebFaviconStatusSync /> : null;
 }
 
 const ROOT_STACK_SCREEN_OPTIONS = {
@@ -525,6 +814,7 @@ function RootStack() {
         <Stack.Screen name="open-project" />
         <Stack.Screen name="sessions" />
         <Stack.Screen name="schedules" />
+        <Stack.Screen name="pair-scan" />
       </Stack.Protected>
       <Stack.Screen name="h/[serverId]" />
       <Stack.Screen name="settings/hosts/[serverId]/index" />
@@ -547,6 +837,8 @@ function AppShell() {
   return (
     <MobilePanelsProvider>
       <HorizontalScrollProvider>
+        <OpenProjectListener />
+        <AgentNavigationListener />
         <AppWithSidebar>
           <WorkspaceRouteNavigationBridge />
           <WorkspacePinShortcutHandler />
@@ -577,12 +869,22 @@ function RuntimeProviders({ children }: { children: ReactNode }) {
 // BottomSheetModalProvider is the exception: Gorhom modals consume portal
 // context and need one shared provider for sibling sheets to stack.
 function RootProviders({ children }: { children: ReactNode }) {
-  return (
+  const content = (
     <KeyboardActionDispatcherProvider>
-      <PortalProvider>
-        <BottomSheetModalProvider>{children}</BottomSheetModalProvider>
-      </PortalProvider>
+      <WindowChromeProvider>
+        <PortalProvider>
+          <BottomSheetModalProvider>{children}</BottomSheetModalProvider>
+        </PortalProvider>
+      </WindowChromeProvider>
     </KeyboardActionDispatcherProvider>
+  );
+
+  if (isWeb) return content;
+
+  return (
+    <KeyboardProvider>
+      <KeyboardShiftProvider>{content}</KeyboardShiftProvider>
+    </KeyboardProvider>
   );
 }
 

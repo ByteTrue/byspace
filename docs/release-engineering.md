@@ -19,14 +19,16 @@ Beta   = npm beta   + app-beta.byspace.cc.cd + byspace-relay-beta
 
 A release is incomplete until every element in its tuple is verified and the other tuple is proven unchanged.
 
+Android/iOS/Electron artifacts are separate channel tuples whose public gates are not active yet. Their source, tests, package definitions, and dormant workflows are nevertheless maintained product surfaces. Never infer “omit from source or upstream sync” from “not published by the current npm/Web/Relay playbook.”
+
 ## Lessons converted into controls
 
 | Failure or risk                                                                                                                            | Durable control                                                                                                                                                                                          |
 | ------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Per-commit upstream sync produced a deep fork and endless conflicts.                                                                       | Freeze two upstream releases and port their aggregate release delta onto the current BySpace `main`; use individual commits only to understand intent.                                                   |
 | Importing upstream commits would expose upstream ancestry and authors in BySpace history.                                                  | Do not merge, rebase, or cherry-pick upstream; record ported behavior in normal BySpace-authored sync commits.                                                                                           |
-| Deleting packages left cross-layer Browser/Electron/native wiring.                                                                         | Delete capabilities as vertical slices from UI through protocol/client/daemon/tests/docs; run zero-residual searches.                                                                                    |
-| False platform stubs hid dead client code.                                                                                                 | Delete unreachable branches instead of returning false/null to preserve obsolete structure.                                                                                                              |
+| The Web-only cut deleted client packages while leaving cross-layer Browser/Electron/native seams and made later restoration expensive.     | Add, retire, or restore a client capability as a vertical slice across UI/protocol/client/daemon/tests/docs; keep every maintained platform in the upstream coverage ledger.                             |
+| False platform stubs made temporarily unsupported clients look permanently dead.                                                           | Keep real `.web`/`.native`/Electron boundaries for maintained clients; delete a branch only when Project Spec explicitly retires that product path, not merely because public distribution is dormant.   |
 | Mechanical rename commits carried unrelated feature dependencies.                                                                          | Treat BySpace identity as an existing invariant; rename only newly ported upstream identifiers and verify zero residuals instead of replaying an old transform.                                          |
 | Deleting `package-lock.json` re-resolved floating ranges and caused ecosystem-wide type drift.                                             | Preserve the source lockfile's resolved versions and change only intentional workspace/package identities.                                                                                               |
 | Workspace declarations were stale after cross-package changes.                                                                             | Rebuild the owning stack before patching consumers; never add duplicate local types to mask stale declarations.                                                                                          |
@@ -90,7 +92,7 @@ Always review these separately:
 - **Protocol:** old/new parse compatibility, connection generation/epoch, request/ack correlation.
 - **Packaging:** root versus embedded dependency ownership, platform-specific native modules, generated shim.
 - **Release:** tag timing, tag immutability, workflow event trust, exact artifact continuity, channel isolation.
-- **Product boundary:** no Electron/native/Browser/website resurrection and no accidental loss of Web/PWA behavior.
+- **Product boundary:** no regression or silent omission across maintained Web/PWA, Android/iOS, Electron Desktop, Desktop Browser automation, and CLI journeys; no replacement of the existing BySpace landing package with the upstream marketing-site implementation, and no superseded product path without an explicit decision.
 
 ## Cutover discipline
 

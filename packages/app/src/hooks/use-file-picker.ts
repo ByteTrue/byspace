@@ -1,6 +1,25 @@
 import { useCallback, useRef } from "react";
+import { getDesktopHost, isElectronRuntime } from "@/desktop/host";
 import { getMimeTypeFromPath } from "@/attachments/file-types";
-import type { PickedFile } from "@/attachments/picked-file";
+import { readDesktopFileBytes, type PickedFile } from "@/attachments/picked-file";
+
+async function pickFilesWithDesktopDialog(): Promise<PickedFile[] | null> {
+  const dialogOpen = getDesktopHost()?.dialog?.open;
+  if (typeof dialogOpen !== "function") {
+    throw new Error("Desktop dialog API is not available.");
+  }
+
+  const selection = await dialogOpen({ directory: false, multiple: true });
+  if (!selection) return null;
+  const paths = Array.isArray(selection) ? selection : [selection];
+  return Promise.all(
+    paths.map(async (filePath) => ({
+      fileName: filePath.split(/[/\\]/).findLast(Boolean) ?? filePath,
+      mimeType: getMimeTypeFromPath(filePath),
+      bytes: await readDesktopFileBytes(filePath),
+    })),
+  );
+}
 
 function pickFilesWithWebInput(): Promise<PickedFile[] | null> {
   return new Promise((resolve) => {
@@ -41,7 +60,8 @@ export function useFilePicker() {
     if (isPickingRef.current) return null;
     isPickingRef.current = true;
     try {
-      return await pickFilesWithWebInput();
+      if (isElectronRuntime()) return pickFilesWithDesktopDialog();
+      return pickFilesWithWebInput();
     } finally {
       isPickingRef.current = false;
     }

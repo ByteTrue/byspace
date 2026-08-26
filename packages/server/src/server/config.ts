@@ -642,6 +642,7 @@ export function resolveConfigFromPersisted(
     listen,
     byspaceHome,
     daemonVersion,
+    desktopManaged: env.BYSPACE_DESKTOP_MANAGED === "1",
     worktreesRoot: resolveWorktreesRoot(byspaceHome, persisted),
     workspaceServicePorts: persisted.worktrees?.servicePorts,
     corsAllowedOrigins: resolveCorsAllowedOrigins(env, persisted, hostedRelease),

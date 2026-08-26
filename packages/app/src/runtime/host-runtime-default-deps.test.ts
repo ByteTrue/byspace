@@ -13,6 +13,8 @@ vi.mock("@bytetrue/byspace-client/internal/daemon-client", () => ({
   },
 }));
 
+vi.mock("@/utils/app-version", () => ({ resolveAppVersion: () => null }));
+
 vi.mock("@/utils/test-daemon-connection", () => ({
   connectToDaemon: vi.fn(async (_connection: unknown, options: Record<string, unknown>) => {
     captures.probeOptions.push(options);
@@ -42,6 +44,7 @@ describe("host runtime default connection capabilities", () => {
     deps.createClient({ host, connection, clientId: "client-1", runtimeGeneration: 1 });
     await deps.connectToDaemon({ host, connection });
 
+    expect(captures.activeConfigs[0]?.clientType).toBe("browser");
     expect(captures.activeConfigs[0]?.capabilities).toEqual({
       [CLIENT_CAPS.selectiveAgentTimeline]: true,
     });

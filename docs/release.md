@@ -12,13 +12,13 @@ Related process docs:
 | Stable  | `latest`     | `https://app.byspace.cc.cd`      | `wss://relay.byspace.cc.cd:443`      |
 | Beta    | `beta`       | `https://app-beta.byspace.cc.cd` | `wss://relay-beta.byspace.cc.cd:443` |
 
-Electron, native iOS/Android, app-store builds, Browser automation, and a marketing website are not release surfaces.
+This playbook currently publishes only the npm + Web/PWA + Relay tuple. Android/iOS/Electron, Desktop Browser automation, their native tests, and dormant artifact workflows are maintained source surfaces but are not published by these steps yet; activating a native/Desktop channel requires a separately approved exact-artifact gate. The existing BySpace `packages/website` keeps its separate lifecycle; this playbook does not replace it with the upstream marketing-site implementation.
 
 ## Source baseline
 
 The currently integrated upstream baseline is `v0.5.1`, commit `f517493591a7b4072aa30ee48db13c1a51495103`, tree `fc096ff4bc53515c14a8e53d7d7adc6118f94974`. The default branch keeps BySpace-owned ancestry; README and the root commit retain public source attribution.
 
-Future upstream updates port the aggregate delta between this baseline and an approved newer stable release onto the current BySpace `main`. They do not replace the current tree, replay upstream commits, repeat identity/client-surface work, or rewrite public history. Follow `docs/upstream-sync.md`.
+Future upstream updates port the aggregate delta between this complete multi-client baseline and an approved newer stable release onto the current BySpace `main`. They do not replace the current tree, replay upstream commits, repeat identity migration, omit maintained client surfaces, or rewrite public history. Follow `docs/upstream-sync.md`.
 
 ## Release invariants
 

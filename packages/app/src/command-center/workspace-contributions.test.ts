@@ -33,6 +33,7 @@ function source(gitActions: GitActions): {
         section: "Workspace actions",
         newAgent: "New agent",
         newTerminal: "New terminal",
+        newBrowser: "New browser",
         splitRight: "Split pane right",
         splitDown: "Split pane down",
         changes: "Changes",

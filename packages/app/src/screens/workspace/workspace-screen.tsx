@@ -89,6 +89,7 @@ import {
   findPaneById,
   FOCUSED_PANE_PLACEMENT,
   selectSidePanelPaneId,
+  getFocusedBrowserId,
   type WorkspaceTabPlacement,
   useWorkspaceLayoutStore,
   useWorkspaceLayoutStoreHydrated,
@@ -123,6 +124,9 @@ import type { CheckoutStatusPayload } from "@/git/use-status-query";
 import { confirmDialog } from "@/utils/confirm-dialog";
 import { useArchiveAgent } from "@/hooks/use-archive-agent";
 import { useStableEvent } from "@/hooks/use-stable-event";
+import { removeResidentBrowserWebview } from "@/desktop/browser/resident-webviews";
+import { createWorkspaceBrowser, useBrowserStore } from "@/desktop/browser/store";
+import { getDesktopHost } from "@/desktop/host";
 import { buildProviderCommand } from "@/utils/provider-command-templates";
 import { generateDraftId } from "@/stores/draft-keys";
 import { resolveWorkspaceRouteId } from "@/utils/workspace-identity";
@@ -145,6 +149,7 @@ import {
   type WorkspaceTabMenuEntry,
   type WorkspaceTabMenuLabels,
 } from "@/screens/workspace/workspace-tab-menu";
+import { useDesktopBrowserNewTabRequests } from "@/desktop/browser/new-tab-requests";
 import type { WorkspaceTabDescriptor } from "@/screens/workspace/workspace-tabs-types";
 import {
   resolveWorkspaceHeaderRenderState,
@@ -190,7 +195,7 @@ import {
 } from "@/panels/panel-instance-attributes";
 import { findAdjacentPane } from "@/utils/split-navigation";
 import { useIsCompactFormFactor, supportsDesktopPaneSplits } from "@/constants/layout";
-import { isNative, isWeb } from "@/constants/platform";
+import { getIsElectron, isNative, isWeb } from "@/constants/platform";
 import type { SurfaceBackdrop } from "@/styles/surface-backdrop";
 import { useContainerWidthBelow } from "@/hooks/use-container-width";
 import {
@@ -216,6 +221,7 @@ import {
   type WorkspaceFileOpenRequest,
 } from "@/workspace/file-open";
 import { RenderProfile } from "@/utils/render-profiler";
+import { traceInstant } from "@/performance/native-trace";
 import { useWorkspaceCheckoutStatus } from "@/screens/workspace/use-workspace-checkout-status";
 import { useHasPullRequest } from "@/panels/pull-request";
 import { fileStateForFilesView } from "@/panels/file/state";
@@ -341,6 +347,7 @@ function getFallbackTabOptionLabel(
     newAgent: string;
     setup: string;
     terminal: string;
+    browser: string;
     agent: string;
     changes: string;
     files: string;
@@ -358,6 +365,9 @@ function getFallbackTabOptionLabel(
   }
   if (tab.target.kind === "terminal") {
     return labels.terminal;
+  }
+  if (tab.target.kind === "browser") {
+    return labels.browser;
   }
   if (tab.target.kind === "file") {
     return tab.target.path.split("/").findLast(Boolean) ?? tab.target.path;
@@ -385,6 +395,7 @@ function getFallbackTabOptionDescription(
     workspaceSetup: string;
     agent: string;
     terminal: string;
+    browser: string;
     changes: string;
     files: string;
     pullRequest: string;
@@ -404,6 +415,9 @@ function getFallbackTabOptionDescription(
   }
   if (tab.target.kind === "terminal") {
     return labels.terminal;
+  }
+  if (tab.target.kind === "browser") {
+    return labels.browser;
   }
   if (tab.target.kind === "provider_subagent") {
     return labels.agent;
@@ -722,6 +736,7 @@ function MobileWorkspaceTabOption({
       newAgent: t("workspace.tabs.fallback.newAgent"),
       setup: t("workspace.tabs.fallback.setup"),
       terminal: t("workspace.tabs.fallback.terminal"),
+      browser: t("workspace.tabs.fallback.browser"),
       agent: t("workspace.tabs.fallback.agent"),
       changes: t("panels.diff.changesLabel"),
       files: t("panels.files.label"),
@@ -2017,6 +2032,14 @@ function WorkspaceScreenContent({
   const workspaceLayout = useWorkspaceLayoutStore((state) =>
     persistenceKey ? (state.layoutByWorkspace[persistenceKey] ?? null) : null,
   );
+  const focusedBrowserId = useMemo(() => getFocusedBrowserId(workspaceLayout), [workspaceLayout]);
+  useEffect(() => {
+    if (!getIsElectron()) return;
+    void getDesktopHost()?.browser?.setWorkspaceActiveBrowser?.({
+      workspaceId: normalizedWorkspaceId,
+      browserId: focusedBrowserId,
+    });
+  }, [focusedBrowserId, normalizedWorkspaceId]);
   const sidePanelPaneId = useWorkspaceLayoutStore((state) =>
     persistenceKey ? selectSidePanelPaneId(state, persistenceKey) : null,
   );
@@ -2090,6 +2113,12 @@ function WorkspaceScreenContent({
       if (input.target?.kind === "agent") {
         unpinWorkspaceAgent(persistenceKey, input.target.agentId);
         hideWorkspaceAgent(persistenceKey, input.target.agentId);
+      }
+      if (input.target?.kind === "browser") {
+        const { browserId } = input.target;
+        useBrowserStore.getState().removeBrowser(browserId);
+        removeResidentBrowserWebview(browserId);
+        void getDesktopHost()?.browser?.unregisterWorkspaceBrowser?.(browserId);
       }
       closeWorkspaceTab(persistenceKey, normalizedTabId);
     },
@@ -2516,6 +2545,7 @@ function WorkspaceScreenContent({
       setup: t("workspace.tabs.fallback.setup"),
       workspaceSetup: t("workspace.tabs.fallback.workspaceSetup"),
       terminal: t("workspace.tabs.fallback.terminal"),
+      browser: t("workspace.tabs.fallback.browser"),
       agent: t("workspace.tabs.fallback.agent"),
       changes: t("panels.diff.changesLabel"),
       files: t("panels.files.label"),
@@ -2552,6 +2582,19 @@ function WorkspaceScreenContent({
       createTerminal({ profile, destination: { kind: "open" } });
     },
     [createTerminal],
+  );
+
+  const handleCreateBrowserTab = useCallback(
+    (input?: { paneId?: string }) => {
+      if (!persistenceKey || !getIsElectron()) return;
+      const { browserId } = createWorkspaceBrowser();
+      openWorkspaceTabFocused(
+        persistenceKey,
+        { kind: "browser", browserId },
+        paneLocalPlacement(input?.paneId),
+      );
+    },
+    [openWorkspaceTabFocused, persistenceKey],
   );
 
   const handleCreateNewTab = useCallback(
@@ -2596,9 +2639,30 @@ function WorkspaceScreenContent({
         });
         return;
       }
+      const { browserId } = createWorkspaceBrowser();
+      openTarget({ kind: "browser", browserId });
     },
     [createTerminal, createWorkspaceTab, persistenceKey, replaceWorkspaceTabTarget],
   );
+
+  const handleOpenUrlInBrowserTab = useCallback(
+    (url: string) => {
+      if (!persistenceKey || !getIsElectron()) return;
+      const { browserId } = createWorkspaceBrowser({ initialUrl: url });
+      openWorkspaceTabFocused(
+        persistenceKey,
+        { kind: "browser", browserId },
+        FOCUSED_PANE_PLACEMENT,
+      );
+    },
+    [openWorkspaceTabFocused, persistenceKey],
+  );
+
+  useDesktopBrowserNewTabRequests({
+    enabled: Boolean(persistenceKey),
+    workspaceLayout,
+    openUrl: handleOpenUrlInBrowserTab,
+  });
 
   const handleSelectSwitcherTab = useCallback(
     (key: string) => {
@@ -3185,6 +3249,9 @@ function WorkspaceScreenContent({
         case "workspace.terminal.new":
           handleCreateTerminal();
           return true;
+        case "workspace.browser.new":
+          handleCreateBrowserTab();
+          return true;
         case "workspace.tab.menu.open":
           handleCreateNewTab({ paneId: focusedPaneTabState.pane?.id });
           return true;
@@ -3222,6 +3289,7 @@ function WorkspaceScreenContent({
       handleCreateDraftTab,
       handleCreateNewTab,
       handleCreateTerminal,
+      handleCreateBrowserTab,
       focusedPaneTabState.pane?.id,
       navigateToTabId,
       tabs,
@@ -3234,6 +3302,9 @@ function WorkspaceScreenContent({
       switch (action.id) {
         case "workspace.tab.target.agent":
           handleCreateDraftTab({ paneId });
+          return true;
+        case "workspace.tab.target.browser":
+          handleCreateBrowserTab({ paneId });
           return true;
         case "workspace.tab.target.changes":
           if (persistenceKey && isGitCheckout) {
@@ -3257,6 +3328,7 @@ function WorkspaceScreenContent({
     [
       focusedPaneTabState.pane?.id,
       handleCreateDraftTab,
+      handleCreateBrowserTab,
       isGitCheckout,
       isMobile,
       openInSidePanelByDefault,
@@ -3398,6 +3470,7 @@ function WorkspaceScreenContent({
       "workspace.tab.navigate-index",
       "workspace.tab.navigate-relative",
       "workspace.terminal.new",
+      "workspace.browser.new",
       "workspace.tab.menu.open",
     ] as const,
     enabled: workspaceKeyboardActionsEnabled,
@@ -3414,6 +3487,7 @@ function WorkspaceScreenContent({
     }),
     actions: [
       "workspace.tab.target.agent",
+      "workspace.tab.target.browser",
       "workspace.tab.target.changes",
       "workspace.tab.target.files",
     ] as const,
@@ -3879,7 +3953,7 @@ function WorkspaceScreenContent({
     () => ({
       showChanges: isGitCheckout,
       showPullRequest: hasPullRequest,
-      showBrowser: false,
+      showBrowser: getIsElectron(),
       terminalDisabled: createTerminalDisabled,
       launch: launchWorkspaceTab,
     }),
@@ -4104,6 +4178,11 @@ function WorkspaceScreenContent({
       </View>
     </RenderProfile>
   );
+
+  traceInstant("byspace.workspace_screen.render_return", {
+    workspaceId: normalizedWorkspaceId,
+    activeTabKey,
+  });
 
   if (gatedWorkspaceScreen) {
     return gatedWorkspaceScreen;

@@ -489,7 +489,14 @@ export function resolveKnownHostRoute(input: {
   return { kind: "redirect", href: "/welcome" };
 }
 
-export const SETTINGS_SECTION_SLUGS = ["preferences", "shortcuts", "permissions", "about"] as const;
+export const SETTINGS_SECTION_SLUGS = [
+  "preferences",
+  "shortcuts",
+  "integrations",
+  "notifications",
+  "permissions",
+  "about",
+] as const;
 
 export type SettingsSectionSlug = (typeof SETTINGS_SECTION_SLUGS)[number];
 

@@ -17,7 +17,7 @@ import { parsePackedFilename } from "./pack-byspace-output.mjs";
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const cliDir = join(root, "packages", "cli");
 const artifactsDir = join(root, "artifacts");
-const internalWorkspaces = ["highlight", "protocol", "client", "relay", "server"];
+const internalWorkspaces = ["highlight", "protocol", "client", "plugin", "relay", "server"];
 const npmCli = process.env.npm_execpath;
 const skipWebExport = process.argv.includes("--skip-web-export");
 

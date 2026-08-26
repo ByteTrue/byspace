@@ -2,8 +2,9 @@
 
 ## Prerequisites
 
-- Node.js (see `.tool-versions` for exact version)
+- Node.js 22 or newer from the user's global installation. Do not pin Node in this repository; global `byspace` CLI and daemon commands must resolve through the same Node installation.
 - npm workspaces (comes with Node)
+- Android client development additionally follows [android.md](android.md).
 
 ## Running the dev server
 
@@ -245,12 +246,19 @@ Use the named root build targets instead of remembering workspace dependency cha
 ```bash
 npm run build:client       # protocol -> client
 npm run build:server-deps  # (highlight || relay) -> protocol -> client
-npm run build:app-deps     # highlight -> protocol -> client
+npm run build:app-deps     # highlight -> protocol -> client -> plugin -> native audio
+npm run build:desktop      # clean app deps -> Electron web export -> Desktop package
 ```
 
 Use `npm run build:server` whenever you have changed any daemon/server-facing package and need clean cross-package types or runtime behavior.
 
+`build:app-deps:clean` is a clean **build**, not a cleanup-only target: it must leave Client, Plugin, Highlight, and `@bytetrue/byspace-expo-two-way-audio` compiled. In particular, do not replace the Audio build with `npm run clean`; a successful Desktop build is followed by Native exports in release validation, and those exports resolve the Audio package through `build/index.js`.
+
+When smoke-testing the packaged Desktop managed daemon while another daemon is reachable on `6777`, seed the isolated `$BYSPACE_HOME/config.json` with `daemon.listen` set to the test port. `BYSPACE_LISTEN` alone does not change the initial `byspace daemon status`: status intentionally scrubs inherited daemon environment overrides and reports persisted config plus the PID file. On a fresh isolated home, the first launch can therefore report and reuse `6777` while materializing the environment override into `config.json`; a subsequent launch sees the persisted test port as stopped and starts the isolated daemon. Pre-seeding the config avoids that ambiguous two-launch sequence. Set `BYSPACE_ELECTRON_USER_DATA_DIR` when the smoke also needs isolated Electron user data; Desktop applies it with `app.setPath("userData", ...)` before startup. Do not pass `--user-data-dir`, which is currently treated as a BySpace CLI passthrough argument rather than a GUI runtime flag.
+
 The app Metro config disables Watchman and uses Metro's node crawler for exports. Keep that invariant unless you have verified production app exports on machines with and without Watchman installed; distro Watchman builds can differ in capabilities and change Metro's crawl behavior.
+
+When creating an isolated source copy for Native prebuild verification, root-anchor rsync exclusions as `--exclude '/android' --exclude '/ios'`. Unanchored `--exclude android --exclude ios` also strips `modules/*/android` and `modules/*/ios`; `expo prebuild` can still exit successfully while the app-local native modules are absent. A successful prebuild therefore does not by itself prove local-module linkage. Keep the nested module sources in the copy and inspect `expo-modules-autolinking resolve --platform android --json` and `--platform apple --json` for the expected platform-specific modules. Profile builds intentionally generate `<profileable android:shell="true"/>`; assert that element rather than a nonexistent `android:profileable` attribute.
 
 For tighter loops, you can rebuild a single workspace:
 

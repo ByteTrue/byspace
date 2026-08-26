@@ -2,13 +2,27 @@
 
 ## 当前产品
 
-BySpace 是一个 Web + CLI 环境，用于从浏览器或命令行监控和控制本机 AI coding agents。代码、凭据、Agent 进程、工作区和持久状态都留在本地 Node.js daemon；远程浏览器通过自托管的端到端加密 Relay 与 daemon 通信。
+BySpace 是一个自托管的个人计算控制平面：同一套 Agent、Workspace、Terminal、文件、设置与插件产品模型通过 Web/PWA、Android/iOS、Electron Desktop 和 CLI 连接本地 Node.js daemon。代码、凭据、Agent 进程、工作区和持久状态留在 daemon；远程客户端通过 Direct 或端到端加密 Relay 连接。
 
-## 发行边界
+## 客户端与发行边界
 
-- 支持：浏览器 Web/PWA、`byspace` CLI、本地 daemon、Cloudflare encrypted control relay，以及可选的 daemon-hosted 私有 Remote Web Service 数据面。
-- 保留：Paseo `v0.2.0` 中的直接 Provider、ACP、自定义 Provider、Terminal、Git/worktree、Schedule、Loop 与 MCP 能力；Voice conversation/TTS 已由本地 Dictation 取代。
-- 不支持：Electron、原生 iOS/Android、app-store/APK、marketing website、Electron Browser automation。
+- **当前公开发行：** 浏览器 Web/PWA、`byspace` CLI、本地 daemon、Cloudflare encrypted control relay，以及可选的 daemon-hosted 私有 Remote Web Service 数据面。
+- **已验证内部宿主：** Android `com.bytetrue.byspace` sideload APK 已通过 Direct/Relay 与核心主旅程；macOS Electron package 已通过 managed-daemon、local transport、Desktop Browser/CDP、typed OS bridge 和真实页面交互 smoke。二者仍没有正式签名、Play/EAS、notarization 或公开下载渠道。
+- **已闭合维护面：** iOS 共享源码/prebuild、Android/iOS Native modules 与测试、Electron Windows/Linux packaging 边界，以及 Native/Desktop 休眠发布源码。它们是正式源码和上游同步表面，不因尚未公开发行而被排除。
+- **明确不包含：** 用 Paseo 的独立 marketing-site 实现替换现有 BySpace `packages/website`、旧 Chat/Loops、Voice conversation/TTS，以及未通过单独发布闸门的 App Store/Play/签名 Desktop 公开发行。
+- **既有核心：** 直接 Provider、ACP、自定义 Provider、Terminal、Git/worktree、Schedule、Dictation、Plugin、MCP 与当前 daemon/CLI/Relay 能力保持不变。
+
+### Desktop Window Chrome
+
+- macOS 红绿灯拥有独立的顶部安全区；左侧栏首个产品入口必须从安全区下方开始，不能与红绿灯重叠。
+- 左侧栏折叠只保留页面内容区 Header 的单一按钮；窗口级不再重复提供第二个折叠按钮。这是 BySpace 产品决策，不随上游的双入口实现。
+
+### Native 与 Desktop 宿主边界
+
+- Browser Web/PWA、Android、iOS 与 Electron 使用同一 Expo Router 产品模型；共享业务旅程保持平台中立，实际 OS 能力放在 `.web` / `.native`、Expo module/config plugin 或 Electron main/preload adapter。
+- Electron renderer 与插件只能通过 typed preload 和 daemon broker 使用受限 OS/Browser 能力，不获得任意 IPC 或 CDP；Desktop 既可管理内置 daemon，也可连接其他 Host。
+- Native Push 仅在原生客户端注册，daemon 以 48 小时 lease 持久化 token 并支持有确认的撤销；Web 保持 no-op。没有有效 EAS Project ID 或平台凭据时安全跳过注册。
+- iOS 不执行 daemon 下发的动态插件 client bundle；first-party compiled client behavior 保持允许。公开 Native/Desktop artifact 必须另建 exact-artifact、签名和渠道验证闸门。
 
 ## 私有远程 Web 服务
 
@@ -118,4 +132,4 @@ Agent 使用 bundled `byspace-project-setup` Skill 检查干净 worktree 的可�
 
 ## 来源与维护
 
-当前源码以首次干净引入的 Paseo `v0.2.0-beta.1` 为产品基础，并已按 release-delta 流程同步至 Paseo `v0.2.0`；Git 默认分支始终保持 BySpace-only ancestry。LICENSE 和 README 保留上游版权、AGPL 与来源归属。后续只按 Paseo 正式 release 审查并移植聚合差异，不导入上游提交历史。
+当前源码以首次干净引入的 Paseo `v0.2.0-beta.1` 为产品基础，并已按 release-delta 流程完整集成 Paseo `v0.5.1`（commit `f517493591a7b4072aa30ee48db13c1a51495103`，tree `fc096ff4bc53515c14a8e53d7d7adc6118f94974`）的全部受维护 Web/PWA、Android/iOS、Electron/Desktop Browser、server、CLI、Relay、测试、构建与休眠发布表面；旧 Web-only 政策遗漏的 Native/Desktop 纵向切片已由 Epic 005 闭合。Git 默认分支始终保持 BySpace-only ancestry；LICENSE 和 README 保留上游版权、AGPL 与来源归属。后续只按 Paseo 正式 release 审查并移植所有受维护客户端的聚合差异，不导入上游提交历史。

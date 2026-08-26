@@ -9,6 +9,10 @@ import {
   parseHostPort,
   shouldUseTlsForDefaultHostedRelay,
 } from "./daemon-endpoints";
+import {
+  buildLocalDaemonTransportUrl,
+  createDesktopLocalDaemonTransportFactory,
+} from "@/desktop/daemon/desktop-daemon-transport";
 export interface DaemonProbeClient {
   readonly lastError: string | null;
   connect(): Promise<void>;
@@ -16,15 +20,24 @@ export interface DaemonProbeClient {
   getLastServerInfoMessage(): { serverId: string; hostname: string | null } | null;
 }
 
+interface LocalTransportUrlInput {
+  transportType: "socket" | "pipe";
+  transportPath: string;
+}
+
 export interface DaemonConnectionDependencies<TClient extends DaemonProbeClient> {
   getClientId(): Promise<string>;
   resolveAppVersion(): string | null;
+  createLocalTransportFactory(): DaemonClientConfig["transportFactory"] | null;
+  buildLocalTransportUrl(input: LocalTransportUrlInput): string;
   createClient(config: DaemonClientConfig): TClient;
 }
 
 const defaultDaemonConnectionDependencies: DaemonConnectionDependencies<DaemonClient> = {
   getClientId: getOrCreateClientId,
   resolveAppVersion,
+  createLocalTransportFactory: createDesktopLocalDaemonTransportFactory,
+  buildLocalTransportUrl: buildLocalDaemonTransportUrl,
   createClient: (config) => new DaemonClient(config),
 };
 
@@ -102,7 +115,7 @@ function isLoopbackHost(host: string): boolean {
 
 export function isPlaintextDirectConnectionBlocked(
   connection: HostConnection,
-  pageProtocol = typeof window === "undefined" ? null : window.location.protocol,
+  pageProtocol = typeof window === "undefined" ? null : (window.location?.protocol ?? null),
 ): boolean {
   return (
     pageProtocol === "https:" &&
@@ -121,13 +134,17 @@ function assertDirectConnectionAllowed(connection: HostConnection): void {
 export async function buildClientConfig(
   connection: HostConnection,
   serverId?: string,
-  options?: { capabilities?: DaemonClientConfig["capabilities"] },
+  options?: {
+    capabilities?: DaemonClientConfig["capabilities"];
+    trace?: DaemonClientConfig["trace"];
+  },
   deps: Pick<
     DaemonConnectionDependencies<DaemonProbeClient>,
-    "getClientId" | "resolveAppVersion"
+    "getClientId" | "resolveAppVersion" | "createLocalTransportFactory" | "buildLocalTransportUrl"
   > = defaultDaemonConnectionDependencies,
 ): Promise<DaemonClientConfig> {
   const clientId = await deps.getClientId();
+  const localTransportFactory = deps.createLocalTransportFactory();
   const base = {
     clientId,
     clientType: "mobile" as const,
@@ -135,7 +152,22 @@ export async function buildClientConfig(
     suppressSendErrors: true,
     reconnect: { enabled: false },
     ...(options?.capabilities ? { capabilities: options.capabilities } : {}),
+    ...(options?.trace ? { trace: options.trace } : {}),
+    ...((connection.type === "directSocket" || connection.type === "directPipe") &&
+    localTransportFactory
+      ? { transportFactory: localTransportFactory }
+      : {}),
   };
+
+  if (connection.type === "directSocket" || connection.type === "directPipe") {
+    return {
+      ...base,
+      url: deps.buildLocalTransportUrl({
+        transportType: connection.type === "directSocket" ? "socket" : "pipe",
+        transportPath: connection.path,
+      }),
+    };
+  }
 
   if (connection.type === "directTcp") {
     return {
@@ -233,6 +265,7 @@ interface ProbeOptions {
   serverId?: string;
   timeoutMs?: number;
   capabilities?: DaemonClientConfig["capabilities"];
+  trace?: DaemonClientConfig["trace"];
 }
 
 function resolveTimeout(connection: HostConnection, options?: ProbeOptions): number {

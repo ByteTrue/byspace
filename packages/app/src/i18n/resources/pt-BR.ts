@@ -1232,6 +1232,7 @@ export const ptBR: TranslationResources = {
       title: "Começar de",
     },
   },
+  desktop: en.desktop,
   rootError: {
     kicker: "Algo deu errado",
     title: "O BySpace encontrou um problema.",

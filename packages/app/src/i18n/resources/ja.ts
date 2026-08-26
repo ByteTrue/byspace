@@ -1219,6 +1219,7 @@ export const ja: TranslationResources = {
       title: "開始点",
     },
   },
+  desktop: en.desktop,
   rootError: {
     kicker: "問題が発生しました",
     title: "BySpace で問題が発生しました。",

@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { DaemonClient } from "@bytetrue/byspace-client/internal/daemon-client";
 
 const connection = vi.hoisted(() => ({ connected: true, supported: true }));
+const pluginPolicy = vi.hoisted(() => ({ dynamicBundlesAllowed: true }));
 
 vi.mock("@/runtime/host-runtime", () => ({
   useHostRuntimeIsConnected: () => connection.connected,
@@ -14,6 +15,13 @@ vi.mock("@/runtime/host-runtime", () => ({
 
 vi.mock("@/runtime/host-features", () => ({
   useHostFeature: () => connection.supported,
+}));
+
+vi.mock("@/constants/platform", () => ({
+  allowsDynamicPluginClientBundles: () => pluginPolicy.dynamicBundlesAllowed,
+  isDev: false,
+  isNative: false,
+  isWeb: true,
 }));
 
 import { PluginCatalogSync } from "./catalog-sync";
@@ -41,6 +49,7 @@ describe("PluginCatalogSync", () => {
     vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
     connection.connected = true;
     connection.supported = true;
+    pluginPolicy.dynamicBundlesAllowed = true;
     unsubscribe.mockReset();
     vi.mocked(catalogClient.getPluginCatalog).mockClear();
     vi.mocked(catalogClient.on).mockClear();
@@ -87,5 +96,15 @@ describe("PluginCatalogSync", () => {
     expect(Reflect.get(globalThis, "__catalogSyncCleanups")).toBe(2);
     expect(pluginRegistry.getSnapshot()).toEqual([]);
     expect(unsubscribe).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not load daemon-delivered bundles when platform policy denies them", async () => {
+    pluginPolicy.dynamicBundlesAllowed = false;
+
+    await renderSync();
+
+    expect(catalogClient.getPluginCatalog).not.toHaveBeenCalled();
+    expect(catalogClient.on).not.toHaveBeenCalled();
+    expect(pluginRegistry.getSnapshot()).toEqual([]);
   });
 });

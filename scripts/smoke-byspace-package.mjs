@@ -51,13 +51,22 @@ const nativeLoadCheck = `
   )});
   const pty = require("node-pty");
   const sherpa = require("sherpa-onnx-node");
+  const pluginRootPath = require.resolve("@bytetrue/byspace-plugin");
+  const pluginServer = await import(
+    pathToFileURL(require.resolve("@bytetrue/byspace-plugin/server")),
+  );
   const mcpCompatModules = [
     "@modelcontextprotocol/sdk/server/zod-compat.js",
     "@modelcontextprotocol/sdk/server/zod-json-schema-compat.js",
   ];
   await Promise.all(mcpCompatModules.map((specifier) => import(pathToFileURL(require.resolve(specifier)))));
-  if (typeof pty.spawn !== "function" || typeof sherpa.OfflineRecognizer !== "function") {
-    throw new Error("Installed native modules did not expose their runtime APIs");
+  if (
+    typeof pty.spawn !== "function" ||
+    typeof sherpa.OfflineRecognizer !== "function" ||
+    typeof pluginRootPath !== "string" ||
+    typeof pluginServer.defineAttachmentSource !== "function"
+  ) {
+    throw new Error("Installed bundled modules did not expose their runtime APIs");
   }
 `;
 

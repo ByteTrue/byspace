@@ -28,6 +28,7 @@ const LEGACY_SETTINGS_KEY = "@byspace:settings";
 
 export type SendBehavior = "interrupt" | "queue";
 export type ServiceUrlBehavior = "ask" | "in-app" | "external";
+export type ReleaseChannel = "stable" | "beta";
 export type WorkspaceTitleSource = "title" | "branch";
 export type SidebarWorkspaceTrailing = "diff" | "timestamp" | "none";
 export type ToolCallDetailLevel = "overview" | "detailed";

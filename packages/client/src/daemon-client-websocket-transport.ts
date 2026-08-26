@@ -5,7 +5,11 @@ import type {
 } from "./daemon-client-transport-types.js";
 import { extractRelayMessage } from "./daemon-client-transport-utils.js";
 
-type GlobalWebSocketConstructor = new (url: string, protocols?: string | string[]) => WebSocketLike;
+type GlobalWebSocketConstructor = new (
+  url: string,
+  protocols?: string | string[],
+  options?: { headers?: Record<string, string> },
+) => WebSocketLike;
 
 function getGlobalWebSocket(): GlobalWebSocketConstructor {
   const globalWs = (globalThis as { WebSocket?: GlobalWebSocketConstructor }).WebSocket;
@@ -24,6 +28,15 @@ export function defaultWebSocketFactory(
     return new globalWs(url);
   }
   return new globalWs(url, options.protocols);
+}
+
+// React Native and Node-compatible WebSocket implementations accept this extra options object.
+// Keep it out of the standard browser factory above.
+export function nativeWebSocketFactory(
+  url: string,
+  options?: { headers?: Record<string, string>; protocols?: string[] },
+): WebSocketLike {
+  return new (getGlobalWebSocket())(url, options?.protocols, { headers: options?.headers });
 }
 
 export function createWebSocketTransportFactory(factory: WebSocketFactory): DaemonTransportFactory {

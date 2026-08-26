@@ -43,6 +43,7 @@ export type KeyboardActionId =
   | "workspace.explorer.maximize.toggle"
   | "workspace.focus.toggle"
   | "workspace.terminal.new"
+  | "workspace.browser.new"
   | "sidebar.toggle.right"
   | "sidebar.toggle.both"
   | "workspace.new"
@@ -96,6 +97,7 @@ export type KeyboardActionDefinition =
   | { id: "workspace.explorer.maximize.toggle"; scope: KeyboardActionScope }
   | { id: "workspace.focus.toggle"; scope: KeyboardActionScope }
   | { id: "workspace.terminal.new"; scope: KeyboardActionScope }
+  | { id: "workspace.browser.new"; scope: KeyboardActionScope }
   | { id: "sidebar.toggle.right"; scope: KeyboardActionScope }
   | { id: "sidebar.toggle.both"; scope: KeyboardActionScope }
   | { id: "workspace.new"; scope: KeyboardActionScope }

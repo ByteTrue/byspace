@@ -1,6 +1,8 @@
 import { type ReactNode, useMemo } from "react";
 import { I18nextProvider } from "react-i18next";
+import { getLocales } from "expo-localization";
 import { useAppSettings } from "@/hooks/use-settings";
+import { isNative } from "@/constants/platform";
 import { i18n } from "./i18next";
 import { resolveSupportedLocale } from "./locales";
 import { ensureI18nLanguageForRender } from "./sync-language";
@@ -10,6 +12,9 @@ interface I18nProviderProps {
 }
 
 function getSystemLocales(): string[] {
+  if (isNative) {
+    return getLocales().map((locale) => locale.languageTag);
+  }
   if (typeof navigator === "undefined") {
     return [];
   }

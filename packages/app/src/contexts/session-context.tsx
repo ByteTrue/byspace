@@ -3,6 +3,7 @@ import { AppState } from "react-native";
 import { useQueryClient } from "@tanstack/react-query";
 import { useClientActivity } from "@/hooks/use-client-activity";
 import { useAppVisible } from "@/hooks/use-app-visible";
+import { startPushNotifications } from "@/push-notifications";
 import type { StreamItem } from "@/types/stream";
 import type { AgentAttachment, SessionOutboundMessage } from "@bytetrue/byspace-protocol/messages";
 import { parseServerInfoStatusPayload } from "@bytetrue/byspace-protocol/messages";
@@ -219,6 +220,7 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
     onAppResumed: handleAppResumed,
     onWindowFocused: refreshVisibleTimelines,
   });
+  useEffect(() => startPushNotifications({ client, serverId }), [client, serverId]);
 
   const notifyAgentAttention = useCallback(
     (params: {

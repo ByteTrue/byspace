@@ -166,6 +166,7 @@ import {
   normalizeProvidersSnapshotPayload,
 } from "./compat/normalize-provider-models.js";
 import { TerminalStreamRouter, type TerminalStreamEvent } from "./terminal-stream-router.js";
+import type { BrowserAutomationExecuteResponse } from "@bytetrue/byspace-protocol/browser-automation/rpc-schemas";
 
 export interface Logger {
   debug(obj: object, msg?: string): void;
@@ -298,6 +299,7 @@ export type {
 } from "./daemon-client-transport-types.js";
 
 export type { TerminalStreamEvent };
+export type BrowserAutomationExecuteResponseMessage = BrowserAutomationExecuteResponse;
 
 export type ConnectionState =
   | { status: "idle" }
@@ -376,7 +378,14 @@ export interface DaemonClientConfig {
   };
   runtimeMetricsIntervalMs?: number;
   runtimeMetricsWindowMs?: number;
+  trace?: DaemonClientTrace;
   capabilities?: Partial<Record<ClientCapability, unknown>>;
+}
+
+export interface DaemonClientTrace {
+  isEnabled(): boolean;
+  beginSection(name: string, args?: Record<string, string>): void;
+  endSection(): void;
 }
 
 export interface SendMessageOptions {
@@ -958,6 +967,7 @@ function toTimeoutError(error: unknown, label: string, timeoutMs: number): Error
 const DEFAULT_RECONNECT_BASE_DELAY_MS = 1500;
 const DEFAULT_RECONNECT_MAX_DELAY_MS = 30000;
 const DEFAULT_SESSION_RPC_TIMEOUT_MS = 60_000;
+const PUSH_TOKEN_REVOCATION_TIMEOUT_MS = 2_000;
 const DEFAULT_CONNECT_TIMEOUT_MS = 15_000;
 const DEFAULT_LIVENESS_TIMEOUT_MS = 5000;
 const LIVENESS_HEARTBEAT_INTERVAL_MS = 10_000;
@@ -1030,6 +1040,26 @@ function concatByteChunks(chunks: Uint8Array[], size: number): Uint8Array {
     offset += chunk.byteLength;
   }
   return bytes;
+}
+
+function getTransportFrameSize(frame: string | Uint8Array | ArrayBuffer): number {
+  if (typeof frame === "string") {
+    return frame.length;
+  }
+  return frame.byteLength;
+}
+
+function describeInboundTransportFrame(
+  frame: unknown,
+  rawBytes: Uint8Array | null,
+): Record<string, string> {
+  if (typeof frame === "string") {
+    return { kind: "text", size: String(frame.length) };
+  }
+  if (rawBytes) {
+    return { kind: "binary", size: String(rawBytes.byteLength) };
+  }
+  return { kind: "unknown", size: "0" };
 }
 
 function hashForLog(value: string): string {
@@ -1534,6 +1564,49 @@ export class DaemonClient {
   // Core Send Helpers
   // ============================================================================
 
+  private beginTraceSection(name: string, args?: Record<string, string>): boolean {
+    const trace = this.config.trace;
+    if (!trace?.isEnabled()) {
+      return false;
+    }
+    trace.beginSection(name, args);
+    return true;
+  }
+
+  private endTraceSection(isOpen: boolean): void {
+    if (isOpen) {
+      this.config.trace?.endSection();
+    }
+  }
+
+  private traceInstant(name: string, args?: Record<string, string>): void {
+    const isOpen = this.beginTraceSection(name, args);
+    this.endTraceSection(isOpen);
+  }
+
+  private sendJsonMessage(envelopeType: string, messageType: string, message: unknown): void {
+    this.traceInstant("byspace.ws.message.outbound", {
+      envelopeType,
+      messageType,
+    });
+    this.sendTransportFrame(JSON.stringify(message));
+  }
+
+  private sendTransportFrame(frame: string | Uint8Array | ArrayBuffer): void {
+    if (!this.transport) {
+      throw new Error("Transport not connected");
+    }
+    const isOpen = this.beginTraceSection("byspace.ws.frame.outbound", {
+      kind: typeof frame === "string" ? "text" : "binary",
+      size: String(getTransportFrameSize(frame)),
+    });
+    try {
+      this.transport.send(frame);
+    } finally {
+      this.endTraceSection(isOpen);
+    }
+  }
+
   /**
    * Send a session message. For fire-and-forget messages (heartbeats, etc.),
    * failures are suppressed if `suppressSendErrors` is configured.
@@ -1548,7 +1621,7 @@ export class DaemonClient {
     }
     const payload = SessionInboundMessageSchema.parse(message);
     try {
-      this.transport.send(JSON.stringify({ type: "session", message: payload }));
+      this.sendJsonMessage("session", payload.type, { type: "session", message: payload });
     } catch (error) {
       if (this.config.suppressSendErrors) {
         return;
@@ -1589,7 +1662,11 @@ export class DaemonClient {
       throw new Error(`Transport not connected (status: ${this.connectionState.status})`);
     }
     try {
-      this.transport.send(frame);
+      this.traceInstant("byspace.ws.message.outbound", {
+        envelopeType: "binary",
+        messageType: "binary",
+      });
+      this.sendTransportFrame(frame);
     } catch (error) {
       if (this.config.suppressSendErrors) {
         return;
@@ -1611,7 +1688,7 @@ export class DaemonClient {
     if (this.transport && status === "connected") {
       this.assertProviderOptionsSupported(message);
       const payload = SessionInboundMessageSchema.parse(message);
-      this.transport.send(JSON.stringify({ type: "session", message: payload }));
+      this.sendJsonMessage("session", payload.type, { type: "session", message: payload });
       return Promise.resolve();
     }
 
@@ -1791,7 +1868,7 @@ export class DaemonClient {
     }
     const payload = SessionInboundMessageSchema.parse(message);
     try {
-      this.transport.send(JSON.stringify({ type: "session", message: payload }));
+      this.sendJsonMessage("session", payload.type, { type: "session", message: payload });
     } catch (error) {
       throw error instanceof Error ? error : new Error(String(error));
     }
@@ -1869,6 +1946,16 @@ export class DaemonClient {
     this.sendSessionMessage({
       type: "register_push_token",
       token,
+    });
+  }
+
+  async unregisterPushToken(token: string): Promise<void> {
+    const requestId = this.createRequestId();
+    await this.sendCorrelatedSessionRequest({
+      requestId,
+      message: { type: "push.unregister.request", token, requestId },
+      responseType: "push.unregister.response",
+      timeout: PUSH_TOKEN_REVOCATION_TIMEOUT_MS,
     });
   }
 
@@ -1966,7 +2053,7 @@ export class DaemonClient {
     this.pingProbe = probe;
 
     try {
-      this.transport.send(JSON.stringify({ type: "ping" }));
+      this.sendJsonMessage("ping", "ping", { type: "ping" });
     } catch (error) {
       this.clearPingProbe();
       const sendError = error instanceof Error ? error : new Error(String(error));
@@ -4848,6 +4935,10 @@ export class DaemonClient {
     });
   }
 
+  sendBrowserAutomationExecuteResponse(response: BrowserAutomationExecuteResponse): void {
+    this.sendSessionMessageStrict(response);
+  }
+
   async getPluginCatalog(): Promise<Array<{ id: string; clientBundle: string }>> {
     const requestId = this.createRequestId();
     const payload = await this.sendCorrelatedSessionRequest({
@@ -5647,23 +5738,21 @@ export class DaemonClient {
     }
 
     try {
-      this.transport.send(
-        JSON.stringify({
-          type: "hello",
-          clientId: this.config.clientId,
-          clientType: this.config.clientType ?? "cli",
-          protocolVersion: 1,
-          capabilities: {
-            [CLIENT_CAPS.customModeIcons]: true,
-            [CLIENT_CAPS.reasoningMergeEnum]: true,
-            [CLIENT_CAPS.terminalReflowableSnapshot]: true,
-            [CLIENT_CAPS.providerSubagents]: true,
-            [CLIENT_CAPS.compactProviderSnapshots]: true,
-            ...this.config.capabilities,
-          },
-          ...(this.config.appVersion ? { appVersion: this.config.appVersion } : {}),
-        }),
-      );
+      this.sendJsonMessage("hello", "hello", {
+        type: "hello",
+        clientId: this.config.clientId,
+        clientType: this.config.clientType ?? "cli",
+        protocolVersion: 1,
+        capabilities: {
+          [CLIENT_CAPS.customModeIcons]: true,
+          [CLIENT_CAPS.reasoningMergeEnum]: true,
+          [CLIENT_CAPS.terminalReflowableSnapshot]: true,
+          [CLIENT_CAPS.providerSubagents]: true,
+          [CLIENT_CAPS.compactProviderSnapshots]: true,
+          ...this.config.capabilities,
+        },
+        ...(this.config.appVersion ? { appVersion: this.config.appVersion } : {}),
+      });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to send hello message";
       this.lastErrorValue = message;
@@ -5734,24 +5823,37 @@ export class DaemonClient {
     }
 
     const rawBytes = asUint8Array(rawData);
-    if (rawBytes && this.tryHandleBinaryFrame(rawBytes)) {
-      return;
+    const isOpen = this.beginTraceSection(
+      "byspace.ws.frame.inbound",
+      describeInboundTransportFrame(rawData, rawBytes),
+    );
+    try {
+      if (rawBytes && this.tryHandleBinaryFrame(rawBytes)) {
+        return;
+      }
+      const payload = decodeMessageData(rawData);
+      if (!payload) {
+        return;
+      }
+      this.handleJsonPayload(payload, rawBytes?.byteLength);
+    } finally {
+      this.endTraceSection(isOpen);
     }
-    const payload = decodeMessageData(rawData);
-    if (!payload) {
-      return;
-    }
-    this.handleJsonPayload(payload, rawBytes?.byteLength);
   }
 
   private handleJsonPayload(payload: string, rawBytesLength: number | undefined): void {
     const bytes = rawBytesLength ?? payload.length;
     const startMs = perfNow();
     let parsedJson: unknown;
+    const parseTraceOpen = this.beginTraceSection("byspace.ws.json.parse", {
+      size: String(bytes),
+    });
     try {
       parsedJson = JSON.parse(payload);
     } catch {
       return;
+    } finally {
+      this.endTraceSection(parseTraceOpen);
     }
 
     const parsed = validateWSOutboundMessage(parsedJson);
@@ -5778,11 +5880,19 @@ export class DaemonClient {
     this.consecutiveLivenessFailures = 0;
 
     if (parsed.data.type === "pong") {
+      this.traceInstant("byspace.ws.message.inbound", {
+        envelopeType: "pong",
+        messageType: "pong",
+      });
       this.resolvePingProbe();
       this.runtimeMetrics?.recordMessage("pong", bytes, perfNow() - startMs);
       return;
     }
 
+    this.traceInstant("byspace.ws.message.inbound", {
+      envelopeType: "session",
+      messageType: parsed.data.message.type,
+    });
     this.handleSessionMessage(parsed.data.message);
     const msgType = parsed.data.message.type;
     this.runtimeMetrics?.recordMessage(msgType, bytes, perfNow() - startMs);
@@ -5794,6 +5904,11 @@ export class DaemonClient {
   private tryHandleBinaryFrame(rawBytes: Uint8Array): boolean {
     const fileFrame = decodeFileTransferFrame(rawBytes);
     if (fileFrame) {
+      this.traceInstant("byspace.ws.message.inbound", {
+        envelopeType: "binary",
+        messageType: "file",
+        opcode: String(fileFrame.opcode),
+      });
       this.consecutiveLivenessFailures = 0;
       this.handleFileTransferFrame(fileFrame);
       this.runtimeMetrics?.recordBinaryFrame("other", rawBytes.byteLength, 0);
@@ -5804,6 +5919,11 @@ export class DaemonClient {
     if (!frame) {
       return false;
     }
+    this.traceInstant("byspace.ws.message.inbound", {
+      envelopeType: "binary",
+      messageType: "terminal",
+      opcode: String(frame.opcode),
+    });
     this.consecutiveLivenessFailures = 0;
     const binaryStartMs = perfNow();
     this.terminalStreams.handleFrame(frame);

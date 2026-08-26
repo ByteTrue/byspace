@@ -20,17 +20,25 @@ describe("desktop sidebar layout", () => {
     ).toBe(false);
   });
 
-  it("assigns chrome ownership independently of workspace Explorer state", () => {
+  it("moves top-left window chrome ownership between the sidebar and content", () => {
     expect(
       resolveDesktopAppChromeLayout({
         desktopSidebarRendered: true,
         hasTopLeftWindowControls: true,
-        sidebarControlsEnabled: true,
       }),
     ).toEqual({
       sidebarCorners: "top-left",
       contentCorners: "top-right",
-      sidebarToggleOwner: "window",
+    });
+
+    expect(
+      resolveDesktopAppChromeLayout({
+        desktopSidebarRendered: false,
+        hasTopLeftWindowControls: true,
+      }),
+    ).toEqual({
+      sidebarCorners: "none",
+      contentCorners: "both",
     });
   });
 

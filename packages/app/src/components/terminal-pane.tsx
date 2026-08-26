@@ -201,6 +201,11 @@ export function TerminalPane({
   const supportsTerminalRestoreModes = useSessionStore(
     (state) => state.sessions[serverId]?.serverInfo?.features?.["terminal-restore-modes"] === true,
   );
+  // COMPAT(terminalInputModeReplay): added in v0.6.1, drop the gate after 2027-02-26.
+  const supportsTerminalInputModeReplay = useSessionStore(
+    (state) =>
+      state.sessions[serverId]?.serverInfo?.features?.["terminal-input-mode-replay"] === true,
+  );
   // COMPAT(terminalSizeOwnership): added in v0.5.0, drop the gate when the daemon floor is v0.5.0 after 2027-02-08.
   const supportsTerminalSizeOwnership = useSessionStore(
     (state) => state.sessions[serverId]?.serverInfo?.features?.["terminal-size-ownership"] === true,
@@ -938,6 +943,7 @@ export function TerminalPane({
             ref={emulatorRef}
             dom={TERMINAL_EMULATOR_DOM_PROPS}
             streamKey={terminalStreamKey}
+            supportsTerminalInputModeReplay={supportsTerminalInputModeReplay}
             testId="terminal-surface"
             xtermTheme={xtermTheme}
             scrollbackLines={settings.terminalScrollbackLines}

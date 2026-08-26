@@ -10,6 +10,7 @@ export interface PanelIconProps {
 export interface PanelDescriptor {
   label: string;
   subtitle: string;
+  tooltip?: string;
   titleState: "ready" | "loading";
   icon: ComponentType<PanelIconProps>;
   statusBucket: SidebarStateBucket | null;

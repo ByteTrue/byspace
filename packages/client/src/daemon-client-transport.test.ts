@@ -11,6 +11,7 @@ import {
 import {
   createWebSocketTransportFactory,
   defaultWebSocketFactory,
+  nativeWebSocketFactory,
 } from "./daemon-client-websocket-transport.js";
 
 const createClientChannelMock = vi.hoisted(() => vi.fn());
@@ -44,6 +45,35 @@ describe("daemon-client transport helpers", () => {
     expect(constructorSpy).toHaveBeenNthCalledWith(2, "ws://direct.example", [
       "byspace.bearer.secret",
     ]);
+    vi.unstubAllGlobals();
+  });
+
+  test("nativeWebSocketFactory forwards headers through the React Native constructor options", () => {
+    const constructorSpy = vi.fn();
+    class NativeWebSocket {
+      readonly readyState = 1;
+
+      constructor(
+        _url: string,
+        _protocols?: string | string[],
+        _options?: { headers?: Record<string, string> },
+      ) {
+        constructorSpy(...arguments);
+      }
+
+      send(): void {}
+      close(): void {}
+    }
+    vi.stubGlobal("WebSocket", NativeWebSocket);
+
+    nativeWebSocketFactory("ws://native.example", {
+      headers: { Authorization: "Bearer native" },
+      protocols: ["byspace.bearer.native"],
+    });
+
+    expect(constructorSpy).toHaveBeenCalledWith("ws://native.example", ["byspace.bearer.native"], {
+      headers: { Authorization: "Bearer native" },
+    });
     vi.unstubAllGlobals();
   });
 

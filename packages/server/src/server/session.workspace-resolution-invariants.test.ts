@@ -92,7 +92,7 @@ function createHarness(input: {
     onMessage: (m) => emitted.push(m),
     logger: createStub<SessionOptions["logger"]>(logger),
     downloadTokenStore: createStub<SessionOptions["downloadTokenStore"]>({}),
-    pushTokenStore: createStub<SessionOptions["pushTokenStore"]>({}),
+    pushNotifications: createStub<SessionOptions["pushNotifications"]>({}),
     byspaceHome: mkdtempSync(path.join(tmpdir(), "byspace-invariant-test-")),
     agentManager: createStub<SessionOptions["agentManager"]>({
       subscribe: () => () => {},

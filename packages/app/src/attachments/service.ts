@@ -78,6 +78,20 @@ export async function persistAttachmentFromBytes(input: {
   });
 }
 
+export async function persistAttachmentFromFileUri(input: {
+  uri: string;
+  mimeType?: string;
+  fileName?: string | null;
+  id?: string;
+}): Promise<AttachmentMetadata> {
+  return await persistAttachment({
+    id: input.id,
+    mimeType: input.mimeType,
+    fileName: input.fileName,
+    source: { kind: "file_uri", uri: input.uri },
+  });
+}
+
 export async function encodeAttachmentsForSend(
   attachments: readonly AttachmentMetadata[] | undefined,
 ): Promise<Array<{ data: string; mimeType: string }> | undefined> {

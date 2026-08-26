@@ -1,6 +1,8 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ComponentType, ReactNode } from "react";
 import { Pressable, ScrollView, Text, View, type PressableStateCallbackType } from "react-native";
+import { Button } from "@/components/ui/button";
+import { SegmentedControl } from "@/components/ui/segmented-control";
 import { EditingTextInput as TextInput } from "@/components/ui/text-input";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -9,6 +11,7 @@ import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import {
   ArrowLeft,
+  Bell,
   Settings,
   Server,
   Network,
@@ -17,6 +20,7 @@ import {
   Gauge,
   Keyboard,
   Info,
+  Puzzle,
   Shield,
   Plus,
   FolderGit2,
@@ -33,10 +37,20 @@ import { ScreenTitle } from "@/components/headers/screen-title";
 import { HeaderIconBadge } from "@/components/headers/header-icon-badge";
 import { SettingsSection } from "@/screens/settings/settings-section";
 import { AppearanceSection } from "@/screens/settings/appearance/appearance-section";
+import { BrowserDataSection } from "@/desktop/browser/settings/browser-data-section";
+import { DesktopPermissionsSection } from "@/desktop/components/desktop-permissions-section";
+import { DesktopNotificationsSection } from "@/desktop/components/desktop-notifications-section";
+import { IntegrationsSection } from "@/desktop/components/integrations-section";
+import { isElectronRuntime } from "@/desktop/host";
+import { useDesktopSettings } from "@/desktop/settings/desktop-settings";
+import { useDesktopAppUpdater } from "@/desktop/updates/use-desktop-app-updater";
+import { formatVersionWithPrefix } from "@/desktop/updates/desktop-updates";
+import { confirmDialog } from "@/utils/confirm-dialog";
 import {
   useAppSettings,
   parseTerminalScrollbackLines,
   type AppSettings,
+  type ReleaseChannel,
   type SendBehavior,
 } from "@/hooks/use-settings";
 import { useHostRuntimeIsConnected, useHosts } from "@/runtime/host-runtime";
@@ -44,6 +58,8 @@ import { useSessionStore } from "@/stores/session-store";
 import type { HostProfile } from "@/types/host-connection";
 import { BackHeader } from "@/components/headers/back-header";
 import { ScreenHeader } from "@/components/headers/screen-header";
+import { TitlebarDragRegion } from "@/components/desktop/titlebar-drag-region";
+import { WindowChromeRegion, WindowChromeSafeArea } from "@/utils/desktop-window";
 import { AddHostMethodModal } from "@/components/add-host-method-modal";
 import { AddHostModal } from "@/components/add-host-modal";
 import { PairLinkModal } from "@/components/pair-link-modal";
@@ -109,6 +125,18 @@ const SIDEBAR_SECTION_ITEMS: SidebarSectionItem[] = [
   { id: "preferences", labelKey: "settings.sections.preferences", icon: Settings },
   { id: "shortcuts", labelKey: "settings.sections.shortcuts", icon: Keyboard },
   {
+    id: "integrations",
+    labelKey: "settings.sections.integrations",
+    icon: Puzzle,
+    desktopOnly: true,
+  },
+  {
+    id: "notifications",
+    labelKey: "settings.sections.notifications",
+    icon: Bell,
+    desktopOnly: true,
+  },
+  {
     id: "permissions",
     labelKey: "settings.sections.permissions",
     icon: Shield,
@@ -116,6 +144,8 @@ const SIDEBAR_SECTION_ITEMS: SidebarSectionItem[] = [
   },
   { id: "about", labelKey: "settings.sections.about", icon: Info },
 ];
+
+const isDesktopApp = isElectronRuntime();
 
 interface HostSectionItem {
   id: HostSectionSlug;
@@ -395,6 +425,7 @@ function GeneralSection({
         </View>
       </SettingsSection>
       <AppearanceSection />
+      {isDesktopApp ? <BrowserDataSection /> : null}
     </>
   );
 }
@@ -417,11 +448,131 @@ function AboutSection({ appVersion, appVersionText }: AboutSectionProps) {
             </View>
             <Text style={styles.aboutValue}>{appVersionText}</Text>
           </View>
+          {isDesktopApp ? <DesktopAppUpdateRow /> : null}
         </View>
       </SettingsSection>
       <ConnectedHostsSection clientVersion={appVersion} />
       <View style={styles.aboutCommunity}>
         <CommunityLinks />
+      </View>
+    </>
+  );
+}
+
+function getUpdateButtonLabel(
+  t: TFunction,
+  isInstalling: boolean,
+  latestVersion: string | null | undefined,
+): string {
+  if (isInstalling) return t("settings.about.updates.installing");
+  if (latestVersion) {
+    return t("settings.about.updates.updateTo", {
+      version: formatVersionWithPrefix(latestVersion),
+    });
+  }
+  return t("settings.about.updates.update");
+}
+
+function DesktopAppUpdateRow() {
+  const { t } = useTranslation();
+  const { settings, updateSettings } = useDesktopSettings();
+  const {
+    isDesktopApp: updaterAvailable,
+    statusText,
+    availableUpdate,
+    errorMessage,
+    isChecking,
+    isInstalling,
+    checkForUpdates,
+    installUpdate,
+  } = useDesktopAppUpdater();
+
+  const handleCheckForUpdates = useCallback(() => {
+    void checkForUpdates();
+  }, [checkForUpdates]);
+
+  const handleReleaseChannelChange = useCallback(
+    (releaseChannel: ReleaseChannel) => {
+      void updateSettings({ releaseChannel });
+    },
+    [updateSettings],
+  );
+
+  const releaseChannelOptions = useMemo(
+    () => [
+      { value: "stable" as const, label: t("settings.about.releaseChannel.stable") },
+      { value: "beta" as const, label: t("settings.about.releaseChannel.beta") },
+    ],
+    [t],
+  );
+
+  const handleInstallUpdate = useCallback(() => {
+    void confirmDialog({
+      title: t("settings.about.updates.installTitle"),
+      message: t("settings.about.updates.installMessage"),
+      confirmLabel: t("settings.about.updates.installConfirm"),
+      cancelLabel: t("common.actions.cancel"),
+    }).then((confirmed) => {
+      if (confirmed) {
+        void installUpdate();
+      }
+      return undefined;
+    });
+  }, [installUpdate, t]);
+
+  const isUpdateReady = availableUpdate?.readyToInstall === true;
+  const readyUpdateVersion = isUpdateReady ? availableUpdate?.latestVersion : null;
+
+  if (!updaterAvailable) {
+    return null;
+  }
+
+  return (
+    <>
+      <View style={[settingsStyles.row, settingsStyles.rowBorder]}>
+        <View style={settingsStyles.rowContent}>
+          <Text style={settingsStyles.rowTitle}>{t("settings.about.releaseChannel.label")}</Text>
+          <Text style={settingsStyles.rowHint}>
+            {t("settings.about.releaseChannel.description")}
+          </Text>
+        </View>
+        <SegmentedControl
+          size="sm"
+          value={settings.releaseChannel}
+          onValueChange={handleReleaseChannelChange}
+          options={releaseChannelOptions}
+        />
+      </View>
+      <View style={[settingsStyles.row, settingsStyles.rowBorder]}>
+        <View style={settingsStyles.rowContent}>
+          <Text style={settingsStyles.rowTitle}>{t("settings.about.updates.label")}</Text>
+          <Text style={settingsStyles.rowHint}>{statusText}</Text>
+          {readyUpdateVersion ? (
+            <Text style={settingsStyles.rowHint}>
+              {t("settings.about.updates.readyToInstall", {
+                version: formatVersionWithPrefix(readyUpdateVersion),
+              })}
+            </Text>
+          ) : null}
+          {errorMessage ? <Text style={styles.aboutErrorText}>{errorMessage}</Text> : null}
+        </View>
+        <View style={styles.aboutUpdateActions}>
+          <Button
+            variant="outline"
+            size="sm"
+            onPress={handleCheckForUpdates}
+            disabled={isChecking || isInstalling}
+          >
+            {isChecking ? t("settings.about.updates.checking") : t("settings.about.updates.check")}
+          </Button>
+          <Button
+            size="sm"
+            onPress={handleInstallUpdate}
+            disabled={isChecking || isInstalling || !isUpdateReady}
+          >
+            {getUpdateButtonLabel(t, isInstalling, readyUpdateVersion)}
+          </Button>
+        </View>
       </View>
     </>
   );
@@ -722,7 +873,7 @@ function SettingsSidebar({
   const { t } = useTranslation();
   const hosts = useHosts();
   const hasHosts = hosts.length > 0;
-  const items = SIDEBAR_SECTION_ITEMS.filter((item) => !item.desktopOnly);
+  const items = SIDEBAR_SECTION_ITEMS.filter((item) => !item.desktopOnly || isDesktopApp);
   const insets = useSafeAreaInsets();
   const isDesktop = layout === "desktop";
   const outerContainerStyle = useMemo(
@@ -806,6 +957,11 @@ function SettingsSidebar({
       {isDesktop ? (
         <View style={innerContainerStyle}>
           <View style={sidebarStyles.sidebarDragArea}>
+            <TitlebarDragRegion />
+            <WindowChromeSafeArea
+              placement="below"
+              style={isDesktopApp ? sidebarStyles.desktopChromeClearance : undefined}
+            />
             <SidebarHeaderRow
               icon={ArrowLeft}
               label={t("settings.backToWorkspace")}
@@ -1078,6 +1234,12 @@ export default function SettingsScreen({ view, openAddHostIntent = null }: Setti
           );
         case "shortcuts":
           return <KeyboardShortcutsSection />;
+        case "integrations":
+          return <IntegrationsSection />;
+        case "notifications":
+          return <DesktopNotificationsSection />;
+        case "permissions":
+          return <DesktopPermissionsSection />;
         case "about":
           return <AboutSection appVersion={appVersion} appVersionText={appVersionText} />;
       }
@@ -1092,6 +1254,16 @@ export default function SettingsScreen({ view, openAddHostIntent = null }: Setti
       </View>
     );
   }
+
+  const desktopDetailHeaderLeft = detailHeader ? (
+    <>
+      <HeaderIconBadge>
+        <detailHeader.Icon size={theme.iconSize.md} color={theme.colors.foregroundMuted} />
+      </HeaderIconBadge>
+      <ScreenTitle testID="settings-detail-header-title">{detailHeader.title}</ScreenTitle>
+      {detailHeader.titleAccessory}
+    </>
+  ) : null;
 
   const addHostModals = (
     <>
@@ -1164,42 +1336,31 @@ export default function SettingsScreen({ view, openAddHostIntent = null }: Setti
   return (
     <View style={styles.container}>
       <View style={desktopStyles.row}>
-        <SettingsSidebar
-          view={view}
-          onSelectSection={handleSelectSection}
-          onSelectHostSection={handleSelectHostSection}
-          onSelectHost={handleSelectHost}
-          onSelectProjects={handleSelectProjects}
-          onAddHost={handleAddHost}
-          onBackToWorkspace={handleBackToWorkspace}
-          activeHostServerId={activeHostServerId}
-          layout="desktop"
-        />
-        <View style={desktopStyles.contentPane} testID="settings-detail-pane">
-          <ScreenHeader
-            borderless={!detailHeader}
-            left={
-              detailHeader ? (
-                <>
-                  <HeaderIconBadge>
-                    <detailHeader.Icon
-                      size={theme.iconSize.md}
-                      color={theme.colors.foregroundMuted}
-                    />
-                  </HeaderIconBadge>
-                  <ScreenTitle testID="settings-detail-header-title">
-                    {detailHeader.title}
-                  </ScreenTitle>
-                  {detailHeader.titleAccessory}
-                </>
-              ) : null
-            }
-            leftStyle={desktopStyles.detailLeft}
+        <WindowChromeRegion corners="top-left">
+          <SettingsSidebar
+            view={view}
+            onSelectSection={handleSelectSection}
+            onSelectHostSection={handleSelectHostSection}
+            onSelectHost={handleSelectHost}
+            onSelectProjects={handleSelectProjects}
+            onAddHost={handleAddHost}
+            onBackToWorkspace={handleBackToWorkspace}
+            activeHostServerId={activeHostServerId}
+            layout="desktop"
           />
-          <ScrollView style={styles.scrollView} contentContainerStyle={insetBottomStyle}>
-            <View style={styles.content}>{content}</View>
-          </ScrollView>
-        </View>
+        </WindowChromeRegion>
+        <WindowChromeRegion corners="top-right">
+          <View style={desktopStyles.contentPane} testID="settings-detail-pane">
+            <ScreenHeader
+              borderless={!detailHeader}
+              left={desktopDetailHeaderLeft}
+              leftStyle={desktopStyles.detailLeft}
+            />
+            <ScrollView style={styles.scrollView} contentContainerStyle={insetBottomStyle}>
+              <View style={styles.content}>{content}</View>
+            </ScrollView>
+          </View>
+        </WindowChromeRegion>
       </View>
       {addHostModals}
     </View>
@@ -1319,6 +1480,9 @@ const sidebarStyles = StyleSheet.create((theme) => ({
   },
   sidebarDragArea: {
     position: "relative",
+  },
+  desktopChromeClearance: {
+    marginBottom: 1,
   },
   mobileContainer: {
     paddingVertical: theme.spacing[2],
