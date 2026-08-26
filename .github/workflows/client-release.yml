@@ -92,7 +92,7 @@ jobs:
       RELEASE_CHANNEL: ${{ needs.release-context.outputs.channel }}
       RELEASE_ROLLOUT_HOURS: "0"
       BYSPACE_DESKTOP_SMOKE: "1"
-      BYSPACE_DESKTOP_SMOKE_ARTIFACT_DIR: ${{ runner.temp }}/desktop-smoke
+      BYSPACE_DESKTOP_SMOKE_ARTIFACT_DIR: ${{ github.workspace }}/.desktop-smoke
 
     steps:
       - uses: actions/checkout@v4
@@ -188,7 +188,7 @@ jobs:
       RELEASE_CHANNEL: ${{ needs.release-context.outputs.channel }}
       RELEASE_ROLLOUT_HOURS: "0"
       BYSPACE_DESKTOP_SMOKE: "1"
-      BYSPACE_DESKTOP_SMOKE_ARTIFACT_DIR: ${{ runner.temp }}/desktop-smoke
+      BYSPACE_DESKTOP_SMOKE_ARTIFACT_DIR: ${{ github.workspace }}/.desktop-smoke
 
     steps:
       - uses: actions/checkout@v4
@@ -274,7 +274,7 @@ jobs:
       RELEASE_CHANNEL: ${{ needs.release-context.outputs.channel }}
       RELEASE_ROLLOUT_HOURS: "0"
       BYSPACE_DESKTOP_SMOKE: "1"
-      BYSPACE_DESKTOP_SMOKE_ARTIFACT_DIR: ${{ runner.temp }}/desktop-smoke
+      BYSPACE_DESKTOP_SMOKE_ARTIFACT_DIR: ${{ github.workspace }}/.desktop-smoke
 
     steps:
       - uses: actions/checkout@v4
