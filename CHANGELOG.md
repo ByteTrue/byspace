@@ -17,18 +17,18 @@
 
 - Publishes npm, Stable Web, and Stable Relay successfully, makes macOS/Linux/Windows/local Desktop builds share tested root Web/runtime/main entrypoints, and waits up to six minutes for a newly published npm tarball to become downloadable.
 - The client matrix stopped before aggregate upload because empty optional Apple credential variables confused electron-builder, packaged smoke used a retired CLI flag, Windows arm64 build tooling encountered an unsupported `workerd` host, and the Android hosted runner shut down during emulator boot; no client asset reached the GitHub Release.
-- Client publication is fixed forward in 0.7.4 without moving the 0.7.3 tag or rebuilding it from later workflow code.
+- Client publication is fixed forward in 0.7.5 without moving the 0.7.3 tag or rebuilding it from later workflow code.
 
 ## 0.7.2 - 2026-08-27
 
 - Publishes npm, Stable Web, and Stable Relay successfully and repairs the first client matrix's Electron Web export and Windows npm lifecycle shell failures.
 - Extends the client publisher with exact-tag manifests, SHA-256 checksums, updater metadata, actual signing state, Android certificate identity, and an explicit iOS no-CD boundary, but the `v0.7.2` Desktop matrix stopped before asset upload because its workflow referenced undefined root runtime/main build scripts.
-- Recovers an npm post-publish verification race by retrying the same immutable tag after the exact registry tarball became available; no package was republished and no incomplete client asset reached the GitHub Release. Client publication is ultimately fixed forward in 0.7.4.
+- Recovers an npm post-publish verification race by retrying the same immutable tag after the exact registry tarball became available; no package was republished and no incomplete client asset reached the GitHub Release. Client publication is ultimately fixed forward in 0.7.5.
 
 ## 0.7.1 - 2026-08-27
 
 - Adds the unified Desktop/Android release infrastructure, long-term Android signing identity, release manifest/checksum tooling, iOS no-CD boundary, and matching release skills, documentation, website downloads, and CodeStable contract.
-- Publishes npm, Stable Web, and Stable Relay successfully. The first Desktop/Android client matrix stopped before uploading any GitHub Release asset because Electron Web export targeted the wrong workspace and Windows npm lifecycle scripts were forced through Windows PowerShell; client publication is ultimately fixed forward in 0.7.4 without moving or rebuilding the 0.7.1 tag.
+- Publishes npm, Stable Web, and Stable Relay successfully. The first Desktop/Android client matrix stopped before uploading any GitHub Release asset because Electron Web export targeted the wrong workspace and Windows npm lifecycle scripts were forced through Windows PowerShell; client publication is ultimately fixed forward in 0.7.5 without moving or rebuilding the 0.7.1 tag.
 
 ## 0.7.0 - 2026-08-27
 
