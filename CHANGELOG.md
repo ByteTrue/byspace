@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.7.0 - 2026-08-27
+
+- Restores the maintained Android, iOS, and Electron Desktop source and build surfaces around the shared product, with native terminal, attachments, audio, push-notification lifecycle, Desktop daemon management, updates, CLI integration, and verified local packaging paths.
+- Adds Desktop Browser panes and Browser Automation for tab management, accessibility snapshots, trusted input, navigation, screenshots, uploads, logs, evaluation, responsive sizing, and daemon-exposed Browser tools.
+- Adds the experimental trusted-local Plugin platform across daemon, CLI, Web, Command Center, workspace and agent panels, composer attachments, themes, settings, and bounded logs.
+- Reworks workspaces around split panes, side panels, labels, sortable pinned workspaces, browser and editor targets, richer Command Center actions, and more consistent compact and Desktop navigation.
+- Adds active-turn steering, agent tracks, sequenced directory synchronization, IndexedDB-backed timeline and provider caches, faster resume and catch-up behavior, and clearer running-turn and diff status.
+- Expands provider and orchestration support with MiniMax Code ACP, host-managed orchestration skills, live Pi usage, safer task resume identity, config reload without daemon restart, and stronger provider recovery and catalog behavior.
+- Improves Git and review workflows with durable PR identity and status, check summaries, broader valid branch names, complete-path search, canvas diff rendering, richer syntax highlighting, and retained file and project state.
+- Refreshes the interface with a unified typography scale, keyboard-first menus, IME-safe editing, model and profile creation, Russian localization, and more polished composer, sidebar, settings, and workspace controls.
+- Hardens Relay and pairing key validation, Desktop and Native build ordering, daemon supervision and packaging, push token revocation, browser isolation, and multi-client compatibility and smoke coverage.
+
 ## 0.6.0 - 2026-08-21
 
 - Adds Private Remote Web Services for securely exposing loopback HTTP, SSE, and WebSocket services between trusted daemons through an optional standalone E2EE Data Relay and `*.remote.localhost` routes.
