@@ -342,7 +342,7 @@ jobs:
   android:
     name: Android APK
     needs: release-context
-    runs-on: ubuntu-latest
+    runs-on: macos-14
     timeout-minutes: 90
     env:
       BYSPACE_ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_RELEASE_KEY_ALIAS }}
@@ -371,7 +371,7 @@ jobs:
             [[ -n "${!name:-}" ]] || { echo "Missing required secret: $name" >&2; exit 1; }
           done
           keystore="$RUNNER_TEMP/byspace-android-release.jks"
-          printf '%s' "$ANDROID_RELEASE_KEYSTORE_BASE64" | base64 --decode > "$keystore"
+          node -e 'require("node:fs").writeFileSync(process.argv[1], Buffer.from(process.env.ANDROID_RELEASE_KEYSTORE_BASE64, "base64"))' "$keystore"
           chmod 600 "$keystore"
           echo "BYSPACE_ANDROID_KEYSTORE_PATH=$keystore" >> "$GITHUB_ENV"
           echo "BYSPACE_REQUIRE_RELEASE_SIGNING=1" >> "$GITHUB_ENV"
@@ -397,9 +397,9 @@ jobs:
           set -euo pipefail
           apk="$(find packages/app/android/app/build/outputs/apk/release -maxdepth 1 -type f -name '*.apk' -print -quit)"
           [[ -n "$apk" ]]
-          build_tools="$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)"
-          apksigner="$build_tools/apksigner"
-          apkanalyzer="$ANDROID_HOME/cmdline-tools/latest/bin/apkanalyzer"
+          apksigner="$(find "$ANDROID_HOME/build-tools" -mindepth 2 -maxdepth 2 -type f -name apksigner -print -quit)"
+          apkanalyzer="$(command -v apkanalyzer)"
+          [[ -x "$apksigner" && -x "$apkanalyzer" ]]
           "$apksigner" verify --verbose --print-certs "$apk" | tee "$RUNNER_TEMP/apksigner.txt"
           fingerprint="$(node scripts/apksigner-certificate-sha256.mjs "$RUNNER_TEMP/apksigner.txt")"
           expected="$(node -p 'require("./.github/release/android-signing.json").certificateSha256.toLowerCase()')"
@@ -417,9 +417,9 @@ jobs:
         run: |
           set -euo pipefail
           apk="client-artifact/BySpace-${{ needs.release-context.outputs.version }}-android.apk"
-          yes | sdkmanager 'system-images;android-35;google_apis;x86_64' >/dev/null
+          sdkmanager 'emulator' 'system-images;android-35;google_apis;arm64-v8a' >/dev/null
           printf 'no\n' | avdmanager create avd --force --name byspace-release \
-            --package 'system-images;android-35;google_apis;x86_64' --device pixel_7 >/dev/null
+            --package 'system-images;android-35;google_apis;arm64-v8a' --device pixel_7 >/dev/null
           if [[ -e /dev/kvm ]]; then sudo chmod 666 /dev/kvm; fi
           "$ANDROID_HOME/emulator/emulator" -avd byspace-release -no-window -no-audio \
             -no-boot-anim -no-snapshot -gpu swiftshader_indirect >/tmp/byspace-android-emulator.log 2>&1 &
@@ -431,11 +431,15 @@ jobs:
             sleep 2
           done
           [[ "$(adb shell getprop sys.boot_completed | tr -d '\r')" == "1" ]]
-          adb install -r "$apk"
-          adb shell pm path com.bytetrue.byspace | grep -q '^package:'
-          adb shell monkey -p com.bytetrue.byspace -c android.intent.category.LAUNCHER 1
+          adb install "$apk"
+          package_path="$(adb shell pm path com.bytetrue.byspace | tr -d '\r')"
+          [[ "$package_path" == package:* ]]
+          launch_output="$(adb shell am start -W -n com.bytetrue.byspace/.MainActivity)"
+          printf '%s\n' "$launch_output"
+          grep -q '^Status: ok$' <<< "$launch_output"
           sleep 10
-          adb shell pidof com.bytetrue.byspace | grep -Eq '[0-9]'
+          pid="$(adb shell pidof com.bytetrue.byspace | tr -d '\r')"
+          [[ "$pid" =~ ^[0-9]+$ ]]
           adb emu kill
           wait "$emulator_pid" || true
           trap - EXIT

@@ -57,7 +57,7 @@ The Android APK is a production release build of `com.bytetrue.byspace`, signed 
 - `ANDROID_RELEASE_KEY_ALIAS`
 - `ANDROID_RELEASE_KEY_PASSWORD`
 
-The public certificate identity is pinned in `.github/release/android-signing.json`. CD verifies the APK with `apksigner`, compares its certificate SHA-256 with that file, then installs and launches the APK on a clean emulator before publication.
+The public certificate identity is pinned in `.github/release/android-signing.json`. The `macos-14` arm64 Android job builds the universal APK on the same host architecture as the proven local release path, verifies it with `apksigner`, compares its certificate SHA-256 with the pin, then installs and explicitly launches `MainActivity` on a clean API 35 arm64 emulator before publication.
 
 Never rotate or replace the Android signing key as an ordinary release fix: devices only accept upgrades signed by the same key. The private owner recovery bundle is outside the repository at `~/.config/byspace/release-secrets/android-release-v1.jks` plus `android-release-v1.env`; both files must remain mode 600 and be backed up together through the owner's secure secret-storage process.
 

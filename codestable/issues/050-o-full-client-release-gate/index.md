@@ -48,9 +48,9 @@ created: 2026-08-27
 3. Android prebuild 后用专用 release key 运行 Gradle `assembleRelease`，通过 `apksigner` 校验证书指纹；key 仅保存为本机受限备份和 GitHub Actions Secrets。
 4. 将 iOS EAS workflow definitions 移出 active workflow directory并标为 inactive reference source；active GitHub/EAS CD 不得包含 iOS build/submit。Fastlane、EAS profiles、prebuild 和测试保留。
 5. 更新所有当前事实入口与 release Skills；历史关闭文档追加新发行 Issue 链接，所有 current-source-of-truth 文档只陈述新边界。
-6. 本地完成三平台/Android 可执行验证与完整 release gate；`v0.7.1` 至 `v0.7.6` 的真实 tag 矩阵暴露 CI/打包机械缺陷后，均不修改旧 tag，通过 `v0.7.7` fix-forward，等待 npm/Web/Relay/Clients 全部完成并做真实安装验证。
+6. 本地完成三平台/Android 可执行验证与完整 release gate；`v0.7.1` 至 `v0.7.7` 的真实 tag 矩阵暴露 CI/打包/hosted-runner 缺陷后，均不修改旧 tag，通过 `v0.7.8` fix-forward，等待 npm/Web/Relay/Clients 全部完成并做真实安装验证。
 
-## v0.7.1 至 v0.7.6 客户端发布事故与恢复
+## v0.7.1 至 v0.7.7 客户端发布事故与恢复
 
 `v0.7.1` 的 npm、Stable Web 与 Stable Relay 已成功，但 `Publish clients` 首次真实矩阵在任何 Release asset 上传前失败：
 
@@ -95,12 +95,16 @@ created: 2026-08-27
 
 `v0.7.7` fix-forward 对 ASAR entry separator 做显式归一化并新增 Windows-style fixture，将 Android job timeout 扩至 90 分钟，并用支持当前 `V2 Signer` 与旧标签、且要求唯一 signer 的 tested parser 提取证书 SHA-256；release key、指纹比对、包名/版本、emulator 安装与启动全套门禁保持不变。`v0.7.6` tag 与 Release 资产保持不动。
 
+`v0.7.7` 的 npm、Stable Web、Stable Relay 与五个 Desktop job（macOS arm64/x64、Linux x64、Windows x64/arm64）全部成功；Android 则连续三次在 Ubuntu hosted runner 上运行 Gradle 25–31 分钟后收到外部 shutdown，均无 Gradle/源码错误，aggregate upload 从未启动，GitHub Release 客户端资产仍为 0。相同 tag 源码在本机 macOS arm64 上完成 production clean prebuild、永久 release key 的 clean `assembleRelease`（4 分 31 秒）、唯一证书/固定指纹、包名/版本、API 35 arm64 emulator 安装与 `MainActivity` 启动，无 fatal crash。
+
+`v0.7.8` fix-forward 将 signed universal APK 构建和 API 35 launch smoke 移到与本地闭环一致、且此前稳定完成 Desktop job 的 `macos-14` arm64 runner；emulator 启动从会在无物理按键 headless 环境返回 `-5` 的 `monkey` 改为显式 `am start -W`。证书 pin、唯一 signer、包名/版本、clean install、live PID、aggregate manifest/checksum 与 iOS exclusion 门禁不减。`v0.7.7` tag 和空资产 Release 保持不动。
+
 ## 验证
 
 - 静态/单元：release workflow、channel isolation、release metadata、Android signing config plugin、active-iOS-absence tests。
 - 本机构建：Desktop macOS package；Android release APK + `apksigner verify --print-certs`；Web export；typecheck/lint/format/diff。
-- CI 穿刺：workflow 静态契约、本机 macOS package（含真实 renderer、Desktop-managed daemon、CLI status、terminal、ASAR 内容验证）和 Android 产物验证与 exact-SHA 主 CI 先通过；`v0.7.7` tag 端到端执行 macOS/Linux/Windows/Android publisher。客户端工作流不提供绕过上传的假发布模式。
-- 发布目标：`v0.7.7` exact-SHA CI；npm latest、Stable Web、Stable Relay、Publish Clients 全绿。
+- CI 穿刺：workflow 静态契约、本机 macOS package（含真实 renderer、Desktop-managed daemon、CLI status、terminal、ASAR 内容验证）和 Android clean release APK/签名/身份/API 35 emulator 闭环与 exact-SHA 主 CI 先通过；`v0.7.8` tag 端到端执行 macOS/Linux/Windows/Android publisher。客户端工作流不提供绕过上传的假发布模式。
+- 发布目标：`v0.7.8` exact-SHA CI；npm latest、Stable Web、Stable Relay、Publish Clients 全绿。
 - Release 资产：按 manifest 逐个下载、SHA-256 校验；macOS/Windows/Linux 启动 smoke；Android 安装/启动/Direct+Relay smoke；iOS asset/job/submit 为 0。
 - 渠道：Beta npm/Web/Relay/Desktop 基线不变。
 - 独立 Reviewer 只读审查 exact-tag/exact-SHA、anti-clobber、Android 固定证书签名、Desktop 五目标/updater、iOS active-CD 排除与 docs/skills/网站一致性：无 Blocker / High。

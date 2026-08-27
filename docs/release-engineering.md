@@ -115,7 +115,7 @@ Before the tag, source can be fixed normally. After the tag, npm and client asse
 
 ## Incident-derived client build controls
 
-The first `v0.7.1` through `v0.7.6` client matrices failed before asset publication and established these additional controls:
+The first `v0.7.1` through `v0.7.7` client matrices failed before asset publication and established these additional controls:
 
 - Electron Web export is owned by the root `build:desktop:web` script. macOS, Linux, Windows, and local Desktop builds call that one script; a workflow must never route `build:web` to the Desktop workspace.
 - Electron server runtime and main-process compilation are owned by the tested root `build:desktop:runtime` and `build:desktop:main` scripts. Workflows must not invent package-script names that local builds do not execute.
@@ -129,7 +129,8 @@ The first `v0.7.1` through `v0.7.6` client matrices failed before asset publicat
 - Both macOS entitlement files are release inputs and must be tracked by Git; local existence is not proof that a tag contains them. The release workflow test checks them with `git ls-files --error-unmatch`. When Developer ID credentials are absent, the `afterSign` hook explicitly applies and verifies a deep ad-hoc signature so Intel and arm64 runners cannot diverge on auto-discovery behavior.
 - Desktop packages use `asar: true`. Post-package validation checks JavaScript entrypoints including `esbuild` inside `app.asar`, native `node-pty` plus platform `@esbuild` binaries under `app.asar.unpacked`, the platform CLI wrapper, and updater metadata through `scripts/verify-desktop-package.mjs`; checks for a nonexistent unpacked `resources/app`, standalone `resources/server`, or a platform-independent unpack layout are invalid.
 - `@electron/asar` returns platform-native entry separators, so package verification normalizes backslashes before checking archive paths. Focused fixtures must include Windows-style ASAR entries instead of proving only the current development host.
-- Signed Android native compilation may outlast a transient hosted-runner window. The Android client job allows 90 minutes, but a longer timeout never weakens the fixed-certificate, application ID/version, emulator install, launch, or aggregate-upload gates.
+- A longer workflow timeout cannot repair external hosted-runner reclamation: three independent Ubuntu runners shut down 25–31 minutes into the Android Gradle release build, while the equivalent clean macOS arm64 build completed locally in 4 minutes 31 seconds. Android release build and API 35 launch smoke therefore run on the `macos-14` arm64 runner that matches the proven path; the output remains one universal APK and every signing, identity, version, runtime, and aggregate-upload gate remains intact.
+- Android emulator smoke launches the declared `MainActivity` with `am start -W` and requires a successful launch plus a live application PID. Do not use `monkey` as a launcher: it can return a nondeterministic `-5` result on a healthy headless emulator with no physical keys.
 - `apksigner --print-certs` labels differ across Android build-tools versions. Certificate extraction uses `scripts/apksigner-certificate-sha256.mjs`, accepts current `V2 Signer` and legacy `Signer #1` labels, requires exactly one signer and one unique digest, then compares that digest to the repository pin.
 
 ## Evidence in this repository

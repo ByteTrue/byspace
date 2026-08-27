@@ -98,6 +98,12 @@ test("client publisher builds every public client from one immutable exact-CI ta
   assert.doesNotMatch(workflow, /\^Signer #1 certificate SHA-256 digest/);
   assert.match(workflow, /android-signing\.json/);
   assert.match(workflow, /android:\n    name: Android APK[\s\S]*?timeout-minutes: 90/);
+  assert.match(workflow, /android:\n    name: Android APK[\s\S]*?runs-on: macos-14/);
+  assert.match(workflow, /system-images;android-35;google_apis;arm64-v8a/);
+  assert.match(workflow, /adb shell am start -W -n com\.bytetrue\.byspace\/\.MainActivity/);
+  assert.doesNotMatch(workflow, /adb shell monkey/);
+  assert.doesNotMatch(workflow, /yes \| sdkmanager/);
+  assert.doesNotMatch(workflow, /-x lintVitalRelease/);
   assert.match(workflow, /merge-updater-manifest\.mjs/);
   assert.match(workflow, /runner: macos-14/);
   assert.match(workflow, /runner: macos-15-intel/);
