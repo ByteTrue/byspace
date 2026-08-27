@@ -10,12 +10,12 @@ category: Hub
 
 Run Hub on your machine, connect it to Slack without a public server, and answer a mention with an agent in your repository. Hub's browser setup hands off to your terminal, and guided setup writes and deploys the workflow for you.
 
-You need [Paseo installed and running](/docs), Node.js, and a Slack workspace where you can create an app.
+You need [BySpace installed and running](/docs), Node.js, and a Slack workspace where you can create an app.
 
 ## 1. Start Hub
 
 ```sh
-npx @getpaseo/hub
+npx @bytetrue/hub
 ```
 
 Open the address it prints, normally <http://localhost:3000>, and create the operator account Hub asks for.
@@ -29,7 +29,7 @@ The first run needs no database, Docker, environment variables, or API keys. Hub
 Paste the App-level token and Bot token back into Hub, then choose **Connect Slack**. Invite the bot to the channel where you will use it:
 
 ```text
-/invite @Paseo
+/invite @BySpace
 ```
 
 GitHub and Discord can wait. Their setup stays available under **Apps**.
@@ -39,7 +39,7 @@ GitHub and Discord can wait. Their setup stays available under **Apps**.
 **Connect a daemon** shows one command with this Hub's address already in it:
 
 ```sh
-paseo hub login http://localhost:3000
+byspace hub login http://localhost:3000
 ```
 
 Run it on the machine where your code lives, in the repository the agent should work in. Guided setup records that directory as the workflow's working directory.
@@ -66,20 +66,20 @@ The agent provider list contains only runtimes the daemon can use; it does not s
 Setup then validates the bundle, writes it, and deploys:
 
 ```text
-.paseo/
+.byspace/
 ├── hub.yml
 └── workflows/
     └── slack-help.yml
 ```
 
-If `.paseo/` already exists, setup asks before replacing it. Declining the daemon connection prints `paseo hub connect <hub>; then paseo hub init` — both commands, because connecting alone does not create the workflow. Declining only the starter workflow prints `paseo hub init`.
+If `.byspace/` already exists, setup asks before replacing it. Declining the daemon connection prints `byspace hub connect <hub>; then byspace hub init` — both commands, because connecting alone does not create the workflow. Declining only the starter workflow prints `byspace hub init`.
 
 ## 5. Mention the bot
 
 In the channel you invited the bot to:
 
 ```text
-@Paseo have a look
+@BySpace have a look
 ```
 
 Hub starts the agent on your daemon and posts its reply in the Slack thread. The terminal prints the project's Activity URL, where the run appears. If nothing runs, [Activity](/docs/hub/activity) tells a filtered mention from one that never matched a workflow.
@@ -91,4 +91,4 @@ Hub starts the agent on your daemon and posts its reply in the Slack thread. The
 - [Workflows](/docs/hub/workflows) — routing, prompts, and provider replies.
 - [Hub security](/docs/hub/security) — read this before widening `from_users` or giving an agent GitHub authority.
 
-Hub keeps its local state in your user data directory, normally `~/.local/share/paseo-hub`. [Self-hosting](/docs/hub/self-hosting) covers deployment and advanced configuration when you outgrow the local run.
+Hub keeps its local state in your user data directory, normally `~/.local/share/byspace-hub`. [Self-hosting](/docs/hub/self-hosting) covers deployment and advanced configuration when you outgrow the local run.

@@ -290,11 +290,11 @@ describe("evaluatePluginClientBundle", () => {
     ).toThrow("must return a cleanup function");
   });
 
-  it("resolves @getpaseo/plugin/server for shared RPC contracts", () => {
+  it("resolves @bytetrue/byspace-plugin/server for shared RPC contracts", () => {
     const plugin = evaluatePluginClientBundle(
       "example",
       `(function(require) {
-        const { defineRpc, defineAttachmentSource } = require("@getpaseo/plugin/server");
+        const { defineRpc, defineAttachmentSource } = require("@bytetrue/byspace-plugin/server");
         const search = defineRpc({ name: "issues.search", input: {}, output: {} });
         const module = { exports: {} };
         module.exports.default = function(plugin) {

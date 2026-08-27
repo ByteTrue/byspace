@@ -1,12 +1,12 @@
 import { webContents as allWebContents, type WebContents } from "electron";
-import { PASEO_BROWSER_PROFILE_PARTITION } from "../browser-profile.js";
+import { BYSPACE_BROWSER_PROFILE_PARTITION } from "../browser-profile.js";
 import {
   BROWSER_NEW_TAB_REQUEST_EVENT,
   decideBrowserWindowOpenRequest,
   isAllowedBrowserWebviewUrl,
   PendingBrowserWindowOpenRequests,
 } from "./window-open.js";
-import { PaseoBrowserWebviewRegistry } from "./registry.js";
+import { BySpaceBrowserWebviewRegistry } from "./registry.js";
 
 export {
   BROWSER_NEW_TAB_REQUEST_EVENT,
@@ -14,7 +14,7 @@ export {
   PendingBrowserWindowOpenRequests,
 };
 
-const browserRegistry = new PaseoBrowserWebviewRegistry();
+const browserRegistry = new BySpaceBrowserWebviewRegistry();
 
 interface BrowserWebContentsIdentity {
   readonly id: number;
@@ -40,21 +40,24 @@ interface RegisterAttachedBrowserInput extends AttachedBrowserRegistration {
   findWebContents(webContentsId: number): RegisteredBrowserWebContents | null;
 }
 
-export function isPaseoBrowserWebviewAttach(input: { src?: string; partition?: string }): boolean {
+export function isBySpaceBrowserWebviewAttach(input: {
+  src?: string;
+  partition?: string;
+}): boolean {
   return (
-    isAllowedBrowserWebviewUrl(input.src) && input.partition === PASEO_BROWSER_PROFILE_PARTITION
+    isAllowedBrowserWebviewUrl(input.src) && input.partition === BYSPACE_BROWSER_PROFILE_PARTITION
   );
 }
 
-export function listRegisteredPaseoBrowserIds(): string[] {
+export function listRegisteredBySpaceBrowserIds(): string[] {
   return browserRegistry.listBrowserIds();
 }
 
-export function getPaseoBrowserWebviewRegistry(): PaseoBrowserWebviewRegistry {
+export function getBySpaceBrowserWebviewRegistry(): BySpaceBrowserWebviewRegistry {
   return browserRegistry;
 }
 
-export function preparePaseoBrowserWebContents(contents: RegisteredBrowserWebContents): void {
+export function prepareBySpaceBrowserWebContents(contents: RegisteredBrowserWebContents): void {
   const webContentsId = contents.id;
   contents.setBackgroundThrottling(false);
   contents.once("destroyed", () => {
@@ -62,7 +65,7 @@ export function preparePaseoBrowserWebContents(contents: RegisteredBrowserWebCon
   });
 }
 
-export function registerAttachedPaseoBrowser(input: RegisterAttachedBrowserInput): boolean {
+export function registerAttachedBySpaceBrowser(input: RegisterAttachedBrowserInput): boolean {
   const guest = input.findWebContents(input.webContentsId);
   if (
     !guest ||
@@ -85,7 +88,7 @@ export function registerAttachedPaseoBrowser(input: RegisterAttachedBrowserInput
   return true;
 }
 
-export function getPaseoBrowserIdForWebContents(
+export function getBySpaceBrowserIdForWebContents(
   contents: BrowserWebContentsIdentity | null,
 ): string | null {
   if (!contents || contents.isDestroyed()) {
@@ -94,27 +97,30 @@ export function getPaseoBrowserIdForWebContents(
   return browserRegistry.getBrowserIdForWebContents(contents.id);
 }
 
-export function unregisterPaseoBrowser(browserId: string): void {
+export function unregisterBySpaceBrowser(browserId: string): void {
   browserRegistry.unregisterBrowser(browserId);
 }
 
-export function unregisterPaseoBrowserFromHost(hostWebContentsId: number, browserId: string): void {
+export function unregisterBySpaceBrowserFromHost(
+  hostWebContentsId: number,
+  browserId: string,
+): void {
   browserRegistry.unregisterBrowserFromHost(hostWebContentsId, browserId);
 }
 
-export function unregisterPaseoBrowserHost(hostWebContentsId: number): void {
+export function unregisterBySpaceBrowserHost(hostWebContentsId: number): void {
   browserRegistry.unregisterHostWebContents(hostWebContentsId);
 }
 
-export function getPaseoBrowserWorkspaceId(browserId: string): string | null {
+export function getBySpaceBrowserWorkspaceId(browserId: string): string | null {
   return browserRegistry.getWorkspaceId(browserId);
 }
 
-export function listRegisteredPaseoBrowserIdsForWorkspace(workspaceId: string): string[] {
+export function listRegisteredBySpaceBrowserIdsForWorkspace(workspaceId: string): string[] {
   return browserRegistry.listBrowserIdsForWorkspace(workspaceId);
 }
 
-export function setWorkspaceActivePaseoBrowserId(input: {
+export function setWorkspaceActiveBySpaceBrowserId(input: {
   hostWebContentsId: number;
   workspaceId: string;
   browserId: string | null;
@@ -122,18 +128,18 @@ export function setWorkspaceActivePaseoBrowserId(input: {
   browserRegistry.setWorkspaceActiveBrowser(input);
 }
 
-export function getWorkspaceActivePaseoBrowserId(workspaceId: string): string | null {
+export function getWorkspaceActiveBySpaceBrowserId(workspaceId: string): string | null {
   return browserRegistry.getMostRecentActiveBrowserIdForWorkspace(workspaceId);
 }
 
-export function getWorkspaceActivePaseoBrowserIdForHostWindow(
+export function getWorkspaceActiveBySpaceBrowserIdForHostWindow(
   workspaceId: string,
   hostWebContentsId: number,
 ): string | null {
   return browserRegistry.getActiveBrowserIdForWorkspaceInHostWindow(hostWebContentsId, workspaceId);
 }
 
-export function getPaseoBrowserWebContentsForHostWindow(
+export function getBySpaceBrowserWebContentsForHostWindow(
   browserId: string,
   hostWebContentsId: number,
 ): WebContents | null {
@@ -152,7 +158,7 @@ export function getPaseoBrowserWebContentsForHostWindow(
   return null;
 }
 
-export function getActivePaseoBrowserWebContentsForHostWindow(
+export function getActiveBySpaceBrowserWebContentsForHostWindow(
   hostWebContentsId: number,
 ): WebContents | null {
   const browserId = browserRegistry.getActiveBrowserIdForHostWindow(hostWebContentsId);

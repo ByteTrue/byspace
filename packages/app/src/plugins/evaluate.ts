@@ -2,7 +2,7 @@ import * as React from "react";
 import * as ReactJsxRuntime from "react/jsx-runtime";
 // eslint-disable-next-line no-restricted-imports -- plugin client runtime injects host ReactNative.
 import * as ReactNative from "react-native";
-// eslint-disable-next-line no-restricted-imports -- plugin bundles receive TanStack's real runtime, not Paseo's query wrappers.
+// eslint-disable-next-line no-restricted-imports -- plugin bundles receive TanStack's real runtime, not BySpace's query wrappers.
 import * as ReactQuery from "@tanstack/react-query";
 import * as Zod from "zod";
 import {
@@ -14,12 +14,15 @@ import {
   type PluginSurfaceProps,
   type PluginThemeContribution,
   type PluginWorkspacePanelContribution,
-  usePaseo,
+  useBySpace,
   useAgent,
   useWorkspace,
   useRpc,
-} from "@getpaseo/plugin";
-import { createPluginContext, type PluginRegistrationCollector } from "@getpaseo/plugin/host";
+} from "@bytetrue/byspace-plugin";
+import {
+  createPluginContext,
+  type PluginRegistrationCollector,
+} from "@bytetrue/byspace-plugin/host";
 import type { EvaluatedPlugin } from "./types";
 import type { ComponentType } from "react";
 import { resolvePluginIcon } from "./icons";
@@ -188,17 +191,17 @@ export function evaluatePluginClientBundle(id: string, bundle: string): Evaluate
     if (name === "react") return React;
     if (name === "react/jsx-runtime") return ReactJsxRuntime;
     if (name === "react-native") return ReactNative;
-    if (name === "@getpaseo/plugin") {
+    if (name === "@bytetrue/byspace-plugin") {
       return {
         defineAttachmentSource,
         defineRpc,
-        usePaseo,
+        useBySpace,
         useAgent,
         useWorkspace,
         useRpc,
       };
     }
-    if (name === "@getpaseo/plugin/server") {
+    if (name === "@bytetrue/byspace-plugin/server") {
       return { defineAttachmentSource, defineRpc };
     }
     if (name === "@tanstack/react-query") return ReactQuery;

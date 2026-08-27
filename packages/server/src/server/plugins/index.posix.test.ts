@@ -9,9 +9,9 @@ import { PluginService } from "./index.js";
 const roots: string[] = [];
 
 async function createPlugin(id: string, source: string): Promise<string> {
-  const directory = await mkdtemp(path.join(tmpdir(), "paseo-plugin-service-"));
+  const directory = await mkdtemp(path.join(tmpdir(), "byspace-plugin-service-"));
   roots.push(directory);
-  await writeFile(path.join(directory, "paseo-plugin.json"), JSON.stringify({ id }));
+  await writeFile(path.join(directory, "byspace-plugin.json"), JSON.stringify({ id }));
   await writeFile(path.join(directory, "index.tsx"), source);
   return directory;
 }
@@ -44,7 +44,7 @@ function createService(
 }
 
 function bindTestSessionHost(service: PluginService): PluginService {
-  service.bindPaseoSessionHost({
+  service.bindBySpaceSessionHost({
     async attachPluginSocket(_pluginId, socket) {
       const closed = new Promise<void>((resolve) => socket.once("close", resolve));
       socket.on("message", (data) => {
@@ -110,7 +110,7 @@ function createPausedRuntime() {
       running.clear();
     },
     subscribe: () => () => undefined,
-    bindPaseoSessionHost: () => undefined,
+    bindBySpaceSessionHost: () => undefined,
   };
   return { runtime, started, releaseStart };
 }
@@ -145,14 +145,14 @@ function createPluginSelectivePausedRuntime(pausedPluginId: string) {
       running.clear();
     },
     subscribe: () => () => undefined,
-    bindPaseoSessionHost: () => undefined,
+    bindBySpaceSessionHost: () => undefined,
   };
   return { runtime, started, releaseStart, starts };
 }
 
 describe("PluginService", () => {
   it("retains logs when disabled and clears them only when removed", async () => {
-    const home = await mkdtemp(path.join(tmpdir(), "paseo-plugin-home-"));
+    const home = await mkdtemp(path.join(tmpdir(), "byspace-plugin-home-"));
     roots.push(home);
     const entries = [
       {
@@ -175,7 +175,7 @@ describe("PluginService", () => {
       stopPluginById: async () => false,
       stopAll: async () => undefined,
       subscribe: () => () => undefined,
-      bindPaseoSessionHost: () => undefined,
+      bindBySpaceSessionHost: () => undefined,
     };
     const service = createService(
       home,
@@ -194,7 +194,7 @@ describe("PluginService", () => {
   });
 
   it("publishes each configured plugin after its startup state settles", async () => {
-    const home = await mkdtemp(path.join(tmpdir(), "paseo-plugin-home-"));
+    const home = await mkdtemp(path.join(tmpdir(), "byspace-plugin-home-"));
     roots.push(home);
     const first = await createPlugin(
       "startup-first",
@@ -218,7 +218,7 @@ describe("PluginService", () => {
   }, 20_000);
 
   it("uses an explicit config key, exposes reload failure, and retries from disk", async () => {
-    const home = await mkdtemp(path.join(tmpdir(), "paseo-plugin-home-"));
+    const home = await mkdtemp(path.join(tmpdir(), "byspace-plugin-home-"));
     roots.push(home);
     const directory = await createPlugin(
       "manifest-default",
@@ -254,7 +254,7 @@ describe("PluginService", () => {
   }, 20_000);
 
   it("disables and removes a plugin without touching its source directory", async () => {
-    const home = await mkdtemp(path.join(tmpdir(), "paseo-plugin-home-"));
+    const home = await mkdtemp(path.join(tmpdir(), "byspace-plugin-home-"));
     roots.push(home);
     const cleanupFile = path.join(home, "cleanup.txt");
     const directory = await createPlugin(
@@ -282,7 +282,7 @@ export default function contribute(plugin: unknown) {
   }, 20_000);
 
   it("detaches every plugin synchronously when the global switch turns off and recovers", async () => {
-    const home = await mkdtemp(path.join(tmpdir(), "paseo-plugin-home-"));
+    const home = await mkdtemp(path.join(tmpdir(), "byspace-plugin-home-"));
     roots.push(home);
     const first = await createPlugin(
       "first",
@@ -314,7 +314,7 @@ export default function contribute(plugin: unknown) {
   }, 20_000);
 
   it("does not publish an in-flight start after a later global disable", async () => {
-    const home = await mkdtemp(path.join(tmpdir(), "paseo-plugin-home-"));
+    const home = await mkdtemp(path.join(tmpdir(), "byspace-plugin-home-"));
     roots.push(home);
     const store = createStore(home, {
       slow: { source: "directory", path: "/plugins/slow", enabled: true },
@@ -337,7 +337,7 @@ export default function contribute(plugin: unknown) {
   });
 
   it("does not publish an in-flight enable after a later plugin disable", async () => {
-    const home = await mkdtemp(path.join(tmpdir(), "paseo-plugin-home-"));
+    const home = await mkdtemp(path.join(tmpdir(), "byspace-plugin-home-"));
     roots.push(home);
     const store = createStore(home, {
       slow: { source: "directory", path: "/plugins/slow", enabled: false },
@@ -359,7 +359,7 @@ export default function contribute(plugin: unknown) {
   });
 
   it("keeps a later disable authoritative over an enable waiting behind another plugin", async () => {
-    const home = await mkdtemp(path.join(tmpdir(), "paseo-plugin-home-"));
+    const home = await mkdtemp(path.join(tmpdir(), "byspace-plugin-home-"));
     roots.push(home);
     const store = createStore(home, {
       occupier: { source: "directory", path: "/plugins/occupier", enabled: false },
@@ -391,7 +391,7 @@ export default function contribute(plugin: unknown) {
   });
 
   it("notifies exactly once after successful and failed configured installs", async () => {
-    const home = await mkdtemp(path.join(tmpdir(), "paseo-plugin-home-"));
+    const home = await mkdtemp(path.join(tmpdir(), "byspace-plugin-home-"));
     roots.push(home);
     const successful = await createPlugin(
       "successful-install",
@@ -416,10 +416,10 @@ export default function contribute(plugin: unknown) {
   });
 
   it("reports invalid manifests, missing entries, and startup failures", async () => {
-    const home = await mkdtemp(path.join(tmpdir(), "paseo-plugin-home-"));
+    const home = await mkdtemp(path.join(tmpdir(), "byspace-plugin-home-"));
     roots.push(home);
     const invalid = await createPlugin("valid-before-corruption", "export default () => () => {};");
-    await writeFile(path.join(invalid, "paseo-plugin.json"), JSON.stringify({}));
+    await writeFile(path.join(invalid, "byspace-plugin.json"), JSON.stringify({}));
     const missingEntry = await createPlugin("missing-entry", "export default () => () => {};");
     await rm(path.join(missingEntry, "index.tsx"));
     const startupFailure = await createPlugin(
@@ -452,7 +452,7 @@ export default function contribute(plugin: unknown) {
   });
 
   it("contains cleanup errors and invokes server cleanup once per stopped installation", async () => {
-    const home = await mkdtemp(path.join(tmpdir(), "paseo-plugin-home-"));
+    const home = await mkdtemp(path.join(tmpdir(), "byspace-plugin-home-"));
     roots.push(home);
     const cleanupFile = path.join(home, "cleanups.txt");
     const directory = await createPlugin(

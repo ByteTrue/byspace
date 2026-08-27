@@ -136,7 +136,7 @@ export interface HubRelationshipRetryPolicy {
 }
 
 export interface HubRelationshipControllerOptions {
-  paseoHome: string;
+  byspaceHome: string;
   hostname: string;
   serverId: string;
   daemonPublicKey: string;
@@ -193,7 +193,7 @@ export class HubRelationshipController implements HubRelationshipManagement {
   private executionAgents: { daemonId: string; value: HubExecutionAgents } | null = null;
 
   constructor(private readonly options: HubRelationshipControllerOptions) {
-    this.filePath = path.join(options.paseoHome, FILE_NAME);
+    this.filePath = path.join(options.byspaceHome, FILE_NAME);
     this.clock = options.clock ?? systemClock;
     this.retryPolicy = options.retryPolicy ?? new BoundedExponentialHubRetryPolicy();
     this.record = this.load();

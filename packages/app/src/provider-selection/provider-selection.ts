@@ -3,11 +3,11 @@ import type {
   AgentModelDefinition,
   AgentProvider,
   ProviderSnapshotEntry,
-} from "@getpaseo/protocol/agent-types";
-import type { AgentProviderDefinition } from "@getpaseo/protocol/provider-manifest";
+} from "@bytetrue/byspace-protocol/agent-types";
+import type { AgentProviderDefinition } from "@bytetrue/byspace-protocol/provider-manifest";
 import type { DraftCommandConfig } from "@/hooks/use-agent-commands-query";
 import { i18n } from "@/i18n/i18next";
-import { compareMatchScores, scoreTextFields } from "@getpaseo/protocol/search/text-match";
+import { compareMatchScores, scoreTextFields } from "@bytetrue/byspace-protocol/search/text-match";
 import { filterSelectableModels } from "./model-catalog";
 
 export interface ProviderSelectionModelRow {

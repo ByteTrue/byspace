@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import type { AgentFeature, AgentMode, AgentSelectOption } from "@getpaseo/protocol/agent-types";
+import type {
+  AgentFeature,
+  AgentMode,
+  AgentSelectOption,
+} from "@bytetrue/byspace-protocol/agent-types";
 import type { ProviderSelectorProvider } from "@/provider-selection/provider-selection";
 import type { CommandCenterContribution } from "./contributions";
 import {

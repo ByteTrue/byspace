@@ -1,9 +1,9 @@
-import type { ProjectIcon } from "@getpaseo/protocol/messages";
-import type { DaemonClient } from "@getpaseo/client/internal/daemon-client";
+import type { ProjectIcon } from "@bytetrue/byspace-protocol/messages";
+import type { DaemonClient } from "@bytetrue/byspace-client/internal/daemon-client";
 import { replicaCacheStorage } from "@/runtime/replica-cache/storage";
 import type { ProjectIconTarget } from "./icon-target";
 
-const STORAGE_KEY = "@paseo:project-icon-cache";
+const STORAGE_KEY = "@byspace:project-icon-cache";
 const CACHE_VERSION = 1;
 const PERSIST_DELAY_MS = 250;
 const MAX_ENTRIES = 512;

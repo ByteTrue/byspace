@@ -1,6 +1,6 @@
-import { callPluginRpc } from "@getpaseo/plugin/host";
-import type { PluginCommandCapabilities, PluginPanelLocation } from "@getpaseo/plugin";
-import type { PluginClientStateSource } from "@getpaseo/plugin/host";
+import { callPluginRpc } from "@bytetrue/byspace-plugin/host";
+import type { PluginCommandCapabilities, PluginPanelLocation } from "@bytetrue/byspace-plugin";
+import type { PluginClientStateSource } from "@bytetrue/byspace-plugin/host";
 import type { CommandCenterContribution } from "@/command-center/contributions";
 import { getCommandCenterIcon } from "@/command-center/icon";
 import { resolvePluginIcon } from "../icons";
@@ -35,7 +35,7 @@ function capabilities(
   navigation: PluginCommandCenterNavigation,
 ): PluginCommandCapabilities {
   return {
-    paseo: runtime.paseo,
+    byspace: runtime.byspace,
     rpc: (contract, input) => callPluginRpc(contract, runtime.invoke, input),
     openSurface(surfaceId) {
       if (!plugin.surfaces.some((surface) => surface.id === surfaceId)) {

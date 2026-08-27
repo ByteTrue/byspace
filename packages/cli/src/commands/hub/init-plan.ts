@@ -39,15 +39,15 @@ export interface HubInitScaffold {
 }
 
 export function hubLoginResumeCommand(step: "connect" | "init", origin: string): string {
-  return step === "connect" ? `paseo hub connect ${origin}` : "paseo hub init";
+  return step === "connect" ? `byspace hub connect ${origin}` : "byspace hub init";
 }
 
 export function planHubInitOpening(input: {
   loggedIn: boolean;
-  paseoDirectoryExists: boolean;
+  byspaceDirectoryExists: boolean;
 }): HubInitOpeningPlan {
   return {
-    replaceExisting: input.paseoDirectoryExists,
+    replaceExisting: input.byspaceDirectoryExists,
     steps: [...(input.loggedIn ? [] : (["login"] as const)), "connect", "project", "scaffold"],
   };
 }
@@ -60,7 +60,7 @@ export function createHubInitBundle(
     projectSlug,
     workflowCount: 1,
     files: [
-      { path: ".paseo/hub.yml", content: scaffold.hub },
+      { path: ".byspace/hub.yml", content: scaffold.hub },
       { path: scaffold.workflowPath, content: scaffold.workflow },
     ],
   };
@@ -115,7 +115,7 @@ export function createHubInitScaffold(input: HubInitScaffoldInput): HubInitScaff
   const provider = providerScaffold(input.provider, input.providerFilters, environmentName);
   return {
     hub,
-    workflowPath: `.paseo/workflows/${input.provider}-help.yml`,
+    workflowPath: `.byspace/workflows/${input.provider}-help.yml`,
     workflow: YAML.stringify(provider.workflow, { lineWidth: 0 }),
     testAction: provider.testAction,
   };
@@ -133,10 +133,10 @@ function providerScaffold(
       workflow: workflow({
         name: "github-help",
         on: "github.issue_comment",
-        filters: { repo, contains: "@paseo", from_users: [user] },
+        filters: { repo, contains: "@byspace", from_users: [user] },
         environment,
       }),
-      testAction: `Comment \`@paseo have a look\` on ${repo}.`,
+      testAction: `Comment \`@byspace have a look\` on ${repo}.`,
     };
   }
 
@@ -151,7 +151,7 @@ function providerScaffold(
         environment,
         reply: "slack.reply",
       }),
-      testAction: "Mention `@Paseo have a look` in Slack.",
+      testAction: "Mention `@BySpace have a look` in Slack.",
     };
   }
 
@@ -164,7 +164,7 @@ function providerScaffold(
       environment,
       reply: "discord.reply",
     }),
-    testAction: "Mention `@Paseo have a look` in Discord.",
+    testAction: "Mention `@BySpace have a look` in Discord.",
   };
 }
 
@@ -190,7 +190,7 @@ function workflow(input: {
         agent: "starter",
         prompt: [
           {
-            text: `${replyInstruction}complete this request and call hub.finish_execution when done.\n\n<user-prompt>\n\${{ paseo.prompt }}\n</user-prompt>\n`,
+            text: `${replyInstruction}complete this request and call hub.finish_execution when done.\n\n<user-prompt>\n\${{ byspace.prompt }}\n</user-prompt>\n`,
           },
         ],
         ...(input.reply === undefined

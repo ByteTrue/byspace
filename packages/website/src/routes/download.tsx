@@ -31,8 +31,8 @@ export const Route = createFileRoute("/download")({
     search.channel === "beta" ? { channel: "beta" } : {},
   head: () =>
     pageMeta(
-      "Download Paseo for macOS, Windows, Linux, iOS, and Android",
-      "Install Paseo on every platform. Native desktop apps for macOS, Windows, and Linux. Mobile apps for iOS and Android. Self-hosted, open source, free to download.",
+      "Download BySpace for macOS, Windows, Linux, iOS, and Android",
+      "Install BySpace on every platform. Native desktop apps for macOS, Windows, and Linux. Mobile apps for iOS and Android. Self-hosted, open source, free to download.",
       "/download",
     ),
   component: Download,
@@ -94,7 +94,7 @@ function Download() {
 
           {!onBeta && (
             <PlatformRow icon={TerminalIcon} label="Homebrew">
-              <CodeBlock size="sm">brew install --cask paseo</CodeBlock>
+              <CodeBlock size="sm">brew install --cask byspace</CodeBlock>
             </PlatformRow>
           )}
 
@@ -172,7 +172,7 @@ function Download() {
           <div>
             <h2 className="text-2xl font-semibold">Server</h2>
             <p className="text-sm text-muted-foreground mt-1">
-              Run the Paseo server anywhere, connect from any client
+              Run the BySpace server anywhere, connect from any client
             </p>
           </div>
           <TerminalIcon className="h-5 w-5 text-muted-foreground mt-1.5" />
@@ -182,16 +182,16 @@ function Download() {
           <PlatformRow icon={TerminalIcon} label="npm">
             <CodeBlock size="sm">
               {onBeta
-                ? "npm install -g @getpaseo/cli@beta && paseo"
-                : "npm install -g @getpaseo/cli && paseo"}
+                ? "npm install -g @bytetrue/byspace@beta && byspace"
+                : "npm install -g @bytetrue/byspace && byspace"}
             </CodeBlock>
           </PlatformRow>
 
           <PlatformRow icon={TerminalIcon} label="Nix">
             <CodeBlock size="sm">
               {onBeta
-                ? `nix run github:getpaseo/paseo/v${version}`
-                : "nix run github:getpaseo/paseo"}
+                ? `nix run github:ByteTrue/byspace/v${version}`
+                : "nix run github:ByteTrue/byspace"}
             </CodeBlock>
           </PlatformRow>
         </div>
@@ -200,7 +200,7 @@ function Download() {
       <p className="text-center text-xs text-muted-foreground mt-8">
         All releases are available on{" "}
         <a
-          href="https://github.com/getpaseo/paseo/releases"
+          href="https://github.com/ByteTrue/byspace/releases"
           target="_blank"
           rel="noopener noreferrer"
           className="underline hover:text-foreground transition-colors"

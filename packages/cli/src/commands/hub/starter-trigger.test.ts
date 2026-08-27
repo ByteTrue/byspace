@@ -8,33 +8,33 @@ describe("starter trigger connections", () => {
         {
           github: [
             {
-              slug: "github-getpaseo",
-              accountLogin: "getpaseo",
+              slug: "github-ByteTrue",
+              accountLogin: "ByteTrue",
               accountType: "Organization",
-              repositories: ["getpaseo/paseo"],
+              repositories: ["ByteTrue/byspace"],
             },
           ],
-          slack: [{ teamId: "T123", teamName: "Paseo" }],
-          discord: [{ guildId: "456", guildName: "Paseo Discord" }],
+          slack: [{ teamId: "T123", teamName: "BySpace" }],
+          discord: [{ guildId: "456", guildName: "BySpace Discord" }],
         },
-        "getpaseo/paseo",
+        "ByteTrue/byspace",
       ),
     ).toEqual([
       {
-        id: "github:getpaseo/paseo",
-        label: "GitHub — getpaseo/paseo",
+        id: "github:ByteTrue/byspace",
+        label: "GitHub — ByteTrue/byspace",
         provider: "github",
-        filters: { repo: "getpaseo/paseo" },
+        filters: { repo: "ByteTrue/byspace" },
       },
       {
         id: "slack:T123",
-        label: "Slack — Paseo",
+        label: "Slack — BySpace",
         provider: "slack",
         filters: { workspace: "T123" },
       },
       {
         id: "discord:456",
-        label: "Discord — Paseo Discord",
+        label: "Discord — BySpace Discord",
         provider: "discord",
         filters: { guild: "456" },
       },
@@ -47,16 +47,16 @@ describe("starter trigger connections", () => {
         {
           github: [
             {
-              slug: "github-getpaseo",
-              accountLogin: "getpaseo",
+              slug: "github-ByteTrue",
+              accountLogin: "ByteTrue",
               accountType: "Organization",
-              repositories: ["getpaseo/hub"],
+              repositories: ["ByteTrue/hub"],
             },
           ],
           slack: [],
           discord: [],
         },
-        "getpaseo/paseo",
+        "ByteTrue/byspace",
       ),
     ).toEqual([]);
   });

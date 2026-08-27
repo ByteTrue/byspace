@@ -4,8 +4,8 @@ import {
   encodeTerminalStreamFrame,
   TerminalStreamOpcode,
   type TerminalStreamFrame,
-} from "@getpaseo/protocol/binary-frames/index";
-import type { TerminalInput, TerminalState } from "@getpaseo/protocol/messages";
+} from "@bytetrue/byspace-protocol/binary-frames/index";
+import type { TerminalInput, TerminalState } from "@bytetrue/byspace-protocol/messages";
 
 export type TerminalStreamEvent =
   | { terminalId: string; type: "output"; data: Uint8Array }

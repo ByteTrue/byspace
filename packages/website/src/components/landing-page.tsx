@@ -199,7 +199,7 @@ const SOCIAL_PROOF_TWEETS = [
     date: "May 28, 2026",
     avatar: "/social-proof/arnoldgamboa.jpg",
     url: "https://x.com/arnoldgamboa/status/2059832028099436921",
-    text: "Paseo is a really good interface for Pi. It’s not the only thing it does, but that’s my current use case for now.",
+    text: "BySpace is a really good interface for Pi. It’s not the only thing it does, but that’s my current use case for now.",
   },
   {
     name: "Dong",
@@ -207,7 +207,7 @@ const SOCIAL_PROOF_TWEETS = [
     date: "Apr 12, 2026",
     avatar: "/social-proof/dongnaebi.jpg",
     url: "https://x.com/dongnaebi/status/2043162391941398735",
-    text: "Paseo is the best software I've used this year. Absolutely amazing!",
+    text: "BySpace is the best software I've used this year. Absolutely amazing!",
   },
 ] as const;
 
@@ -305,7 +305,7 @@ function SocialProofWall() {
     >
       <SectionTitle
         title="Loved by developers"
-        description="See what developers are saying about Paseo."
+        description="See what developers are saying about BySpace."
       />
 
       <div className="social-proof-marquee space-y-4 overflow-hidden">
@@ -385,7 +385,7 @@ function MultiProviderSection() {
   return (
     <FeatureSection
       title="Works with your tools"
-      description="Run your agents from one interface. Paseo uses each provider's native harness, so your subscriptions, skills, config, and MCP servers keep working."
+      description="Run your agents from one interface. BySpace uses each provider's native harness, so your subscriptions, skills, config, and MCP servers keep working."
     >
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         {providers.map((p) => (
@@ -704,7 +704,7 @@ function WorkflowSection() {
   return (
     <FeatureSection
       title="Review, preview, ship"
-      description="Create branches, preview the app in the browser, review the diff inline, then commit, open a PR, and merge without leaving Paseo."
+      description="Create branches, preview the app in the browser, review the diff inline, then commit, open a PR, and merge without leaving BySpace."
     >
       <div className="overflow-hidden rounded-2xl border border-white/10 bg-white/[0.02]">
         <WorkflowHeader />
@@ -947,7 +947,7 @@ const SERVER_INSTALL_TRIGGER = (
 
 const SERVER_INSTALL_FOOTNOTE = (
   <>
-    Requires Node.js 18+. Run <span className="font-mono text-white/40">paseo</span> to start the
+    Requires Node.js 18+. Run <span className="font-mono text-white/40">byspace</span> to start the
     daemon.
   </>
 );
@@ -957,8 +957,8 @@ function ServerInstallButton() {
     <CommandDialog
       trigger={SERVER_INSTALL_TRIGGER}
       title="Run agents on a remote machine"
-      description="For headless machines you want to connect to from the Paseo apps. The desktop app already includes a built-in daemon."
-      command="npm install -g @getpaseo/cli && paseo"
+      description="For headless machines you want to connect to from the BySpace apps. The desktop app already includes a built-in daemon."
+      command="npm install -g @bytetrue/byspace && byspace"
       footnote={SERVER_INSTALL_FOOTNOTE}
     />
   );
@@ -976,7 +976,7 @@ const bashKeywords = new Set([
   "true",
   "false",
 ]);
-const bashCommands = new Set(["paseo", "echo", "jq"]);
+const bashCommands = new Set(["byspace", "echo", "jq"]);
 
 function tokenizeBashComment(code: string, i: number): { node: React.ReactNode; len: number } {
   const end = code.indexOf("\n", i);
@@ -1150,25 +1150,25 @@ const cliExamples: CLIExample[] = [
     title: "Run agents",
     description:
       "Launch agents locally or on any remote host. The --worktree flag spins up an isolated git branch so you can run multiple agents on the same repo without conflicts.",
-    code: `paseo run "implement user authentication"
-paseo run --provider codex --worktree feature-x "implement feature X"
-paseo run --host devbox:6767 "run the full test suite"
+    code: `byspace run "implement user authentication"
+byspace run --provider codex --worktree feature-x "implement feature X"
+byspace run --host devbox:6777 "run the full test suite"
 
-paseo ls                           # list running agents
-paseo attach abc123                # stream live output
-paseo send abc123 "also add tests" # follow-up task`,
+byspace ls                           # list running agents
+byspace attach abc123                # stream live output
+byspace send abc123 "also add tests" # follow-up task`,
   },
   {
     title: "Schedules",
     description:
       "Run agents on a cron schedule. Automate recurring tasks like dependency updates, security audits, or report generation.",
     code: `# Run a security audit every Monday at 9am
-paseo schedule create --cron "0 9 * * 1" \\
+byspace schedule create --cron "0 9 * * 1" \\
   "audit the codebase for security issues and open PRs for fixes"
 
-paseo schedule ls                    # list all schedules
-paseo schedule pause abc123          # pause a schedule
-paseo schedule delete abc123         # remove a schedule`,
+byspace schedule ls                    # list all schedules
+byspace schedule pause abc123          # pause a schedule
+byspace schedule delete abc123         # remove a schedule`,
   },
 ];
 
@@ -1251,7 +1251,7 @@ function PhoneShowcase() {
             src="/phone-1-480.webp"
             srcSet="/phone-1-320.webp 320w, /phone-1-480.webp 480w"
             sizes="(min-width: 768px) 240px, 160px"
-            alt="Paseo sessions list"
+            alt="BySpace sessions list"
             width={480}
             height={1044}
             loading="lazy"
@@ -1271,7 +1271,7 @@ function PhoneShowcase() {
             src="/phone-2-480.webp"
             srcSet="/phone-2-320.webp 320w, /phone-2-480.webp 480w"
             sizes="(min-width: 768px) 240px, 220px"
-            alt="Paseo agent chat"
+            alt="BySpace agent chat"
             width={480}
             height={1044}
             loading="lazy"
@@ -1286,7 +1286,7 @@ function PhoneShowcase() {
             src="/phone-3-480.webp"
             srcSet="/phone-3-320.webp 320w, /phone-3-480.webp 480w"
             sizes="(min-width: 768px) 240px, 160px"
-            alt="Paseo diff view"
+            alt="BySpace diff view"
             width={480}
             height={1044}
             loading="lazy"
@@ -1386,13 +1386,13 @@ function FAQ() {
       <h2 className="text-3xl font-medium">FAQ</h2>
       <div className="space-y-6">
         <FAQItem question="Is this free?">
-          Yes. Paseo is free and open source. You need Claude Code, Codex, Cursor, OpenCode, or Pi
+          Yes. BySpace is free and open source. You need Claude Code, Codex, Cursor, OpenCode, or Pi
           installed with your own credentials. Voice is local-first by default and can optionally
           use OpenAI speech providers if you configure them.
         </FAQItem>
         <FAQItem question="Does my code leave my machine?">
-          Paseo doesn&apos;t send your code anywhere. Agents run locally and talk to their own APIs
-          as they normally would. For remote access, you can use the optional{" "}
+          BySpace doesn&apos;t send your code anywhere. Agents run locally and talk to their own
+          APIs as they normally would. For remote access, you can use the optional{" "}
           <a href="/docs/security" className="underline hover:text-white/80">
             end-to-end encrypted relay
           </a>
@@ -1400,12 +1400,12 @@ function FAQ() {
         </FAQItem>
         <FAQItem question="What agents does it support?">
           Claude Code, Codex, Cursor, OpenCode, and Pi. Each agent runs as its own process using its
-          own CLI or local integration. Paseo doesn&apos;t modify or wrap their behavior.
+          own CLI or local integration. BySpace doesn&apos;t modify or wrap their behavior.
         </FAQItem>
         <FAQItem question="Do I need the desktop app?">
           No. You can run the daemon headless with{" "}
           <code className="font-mono text-muted-foreground">
-            npm install -g @getpaseo/cli && paseo
+            npm install -g @bytetrue/byspace && byspace
           </code>{" "}
           and use the CLI, web app, or mobile app to connect. The desktop app just bundles the
           daemon with a UI.
@@ -1420,7 +1420,7 @@ function FAQ() {
           .
         </FAQItem>
         <FAQItem question="Can I connect from outside my network?">
-          Yes. You can use the hosted relay (end-to-end encrypted, Paseo can&apos;t read your
+          Yes. You can use the hosted relay (end-to-end encrypted, BySpace can&apos;t read your
           traffic), set up your own tunnel (Tailscale, Cloudflare Tunnel, etc.), or expose the
           daemon port directly. See{" "}
           <a href="/docs/configuration" className="underline hover:text-white/80">
@@ -1429,21 +1429,21 @@ function FAQ() {
           .
         </FAQItem>
         <FAQItem question="Do I need git or GitHub?">
-          No. Paseo works in any directory. Worktrees are optional and only relevant if you use git.
-          You can run agents anywhere you&apos;d normally work.
+          No. BySpace works in any directory. Worktrees are optional and only relevant if you use
+          git. You can run agents anywhere you&apos;d normally work.
         </FAQItem>
-        <FAQItem question="Can I get banned for using Paseo?">
+        <FAQItem question="Can I get banned for using BySpace?">
           <p>We can&apos;t make promises on behalf of providers.</p>
           <p>
-            That said, Paseo launches each provider&apos;s local CLI or integration (Claude Code,
+            That said, BySpace launches each provider&apos;s local CLI or integration (Claude Code,
             Codex, Cursor, OpenCode, Pi) as a subprocess. It doesn&apos;t extract tokens or call
-            inference APIs directly. From the provider&apos;s perspective, usage through Paseo is
+            inference APIs directly. From the provider&apos;s perspective, usage through BySpace is
             indistinguishable from running the provider yourself.
           </p>
-          <p>I&apos;ve been using Paseo with all providers for months without issue.</p>
+          <p>I&apos;ve been using BySpace with all providers for months without issue.</p>
         </FAQItem>
         <FAQItem question="How do worktrees work?">
-          When you launch an agent with the worktree option (from the app, desktop, or CLI), Paseo
+          When you launch an agent with the worktree option (from the app, desktop, or CLI), BySpace
           creates a git worktree and runs the agent inside it. The agent works on an isolated branch
           without touching your main working directory. See the{" "}
           <a href="/docs/worktrees" className="underline hover:text-white/80">
@@ -1465,7 +1465,7 @@ const HUB_SURFACES = [
 function HubSection() {
   return (
     <FeatureSection
-      title="Paseo Hub"
+      title="BySpace Hub"
       badge="New"
       description="An optional service you run on top of your daemons. It gives them triggers from GitHub, Slack, and Discord, and access for your team."
     >
@@ -1501,14 +1501,14 @@ function SponsorCTA() {
     >
       <div className="text-sm text-muted-foreground leading-relaxed space-y-3">
         <p>
-          Paseo is an independent open source project for running coding agents across your own
+          BySpace is an independent open source project for running coding agents across your own
           machines, phone, desktop, and CLI.
         </p>
         <p>
           It&apos;s built around freedom of choice: use the provider you want, run it on your own
           infrastructure, and keep your workflow portable.
         </p>
-        <p>If you like Paseo, sponsorship is the best way to support continued development.</p>
+        <p>If you like BySpace, sponsorship is the best way to support continued development.</p>
         <p>- Mo</p>
       </div>
       <div className="pt-2">

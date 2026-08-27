@@ -1,23 +1,23 @@
 ---
 title: Open Source Codex App Alternative With Linux, Mobile, and Multi-Provider Support
-description: Paseo is an open source alternative to Codex App for developers who want Linux, native mobile apps, a self-hosted daemon, and Codex alongside Claude Code, OpenCode, Copilot, and more.
+description: BySpace is an open source alternative to Codex App for developers who want Linux, native mobile apps, a self-hosted daemon, and Codex alongside Claude Code, OpenCode, Copilot, and more.
 nav: Codex App
 order: 54
 ---
 
-# Paseo vs Codex App
+# BySpace vs Codex App
 
 Codex App is OpenAI's desktop app for working with Codex threads in parallel. It runs on macOS and Windows, with local, worktree, and cloud modes.
 
-Paseo is an app for orchestrating coding agents, with native clients on desktop, mobile, web, and the CLI. Open source (AGPL-3.0).
+BySpace is an app for orchestrating coding agents, with native clients on desktop, mobile, web, and the CLI. Open source (AGPL-3.0).
 
-![Paseo desktop and mobile app](/hero-mockup.png)
+![BySpace desktop and mobile app](/hero-mockup.png)
 
 ## When to pick what
 
 Pick Codex App if you want OpenAI's first-party app for Codex, with Codex-specific features like cloud threads, appshots, image generation, and computer use on macOS.
 
-Pick Paseo if you want:
+Pick BySpace if you want:
 
 - Linux alongside macOS and Windows
 - A native iOS and Android app
@@ -28,7 +28,7 @@ Pick Paseo if you want:
 
 ## Architecture
 
-Paseo runs a daemon on your machine. Desktop, web, mobile, and CLI clients connect to it over a websocket. The daemon launches Codex and other providers as local processes, using your installed CLIs and credentials.
+BySpace runs a daemon on your machine. Desktop, web, mobile, and CLI clients connect to it over a websocket. The daemon launches Codex and other providers as local processes, using your installed CLIs and credentials.
 
 Codex App is a desktop app for Codex. It can run local and worktree threads on your computer, and cloud threads on OpenAI-managed infrastructure.
 
@@ -36,17 +36,17 @@ Codex App is a desktop app for Codex. It can run local and worktree threads on y
 
 Codex App runs Codex.
 
-Paseo runs Codex too, plus Claude Code, OpenCode, and Pi natively, plus 30+ more agents through the in-app catalog including GitHub Copilot, Cursor, Gemini CLI, and Amp. Paseo speaks the [Agent Client Protocol](https://agentclientprotocol.com), so any ACP agent works. Custom providers run any CLI agent. See [Supported providers](/docs/supported-providers).
+BySpace runs Codex too, plus Claude Code, OpenCode, and Pi natively, plus 30+ more agents through the in-app catalog including GitHub Copilot, Cursor, Gemini CLI, and Amp. BySpace speaks the [Agent Client Protocol](https://agentclientprotocol.com), so any ACP agent works. Custom providers run any CLI agent. See [Supported providers](/docs/supported-providers).
 
 ## Desktop platforms
 
 Codex App is available on macOS and Windows. OpenAI lists Linux as not available yet.
 
-Paseo ships on macOS, Linux, and Windows.
+BySpace ships on macOS, Linux, and Windows.
 
 ## Mobile
 
-Paseo ships native iOS and Android apps with the same agent workflow as the desktop app.
+BySpace ships native iOS and Android apps with the same agent workflow as the desktop app.
 
 Codex can be controlled remotely through OpenAI's mobile surfaces, including ChatGPT mobile remote connections. Codex App itself is a desktop app.
 
@@ -56,40 +56,40 @@ Both tools support Git worktrees for parallel work.
 
 Codex App creates Codex-managed worktrees under `$CODEX_HOME/worktrees` and supports local environment setup scripts and project actions through `.codex` configuration.
 
-Paseo creates worktrees under `$PASEO_HOME/worktrees`, runs setup and teardown hooks from `paseo.json`, and gives each worktree its own dev server URLs like `web.fix-auth.my-app.localhost` so parallel services don't fight for ports.
+BySpace creates worktrees under `$BYSPACE_HOME/worktrees`, runs setup and teardown hooks from `byspace.json`, and gives each worktree its own dev server URLs like `web.fix-auth.my-app.localhost` so parallel services don't fight for ports.
 
 ## GitHub and review
 
 Both tools support reviewing diffs, committing, pushing, and opening pull requests from the app.
 
-Paseo also surfaces PR checks and reviews in the app, and exposes the same workflow through the CLI and MCP server.
+BySpace also surfaces PR checks and reviews in the app, and exposes the same workflow through the CLI and MCP server.
 
 ## CLI and automation
 
 Codex has its own CLI, IDE extension, web app, automations, and SDK.
 
-Paseo's CLI controls the same daemon as the app:
+BySpace's CLI controls the same daemon as the app:
 
 ```bash
-paseo run --provider codex "implement OAuth"
-paseo run --provider claude --worktree refactor-auth "refactor auth"
-paseo run --host devbox:6767 "run the test suite"
-paseo ls
-paseo send <agent-id> "add tests"
-paseo schedule create --cron "0 9 * * 1" "audit the codebase"
+byspace run --provider codex "implement OAuth"
+byspace run --provider claude --worktree refactor-auth "refactor auth"
+byspace run --host devbox:6777 "run the test suite"
+byspace ls
+byspace send <agent-id> "add tests"
+byspace schedule create --cron "0 9 * * 1" "audit the codebase"
 ```
 
-`paseo run --host` connects to a remote daemon. `paseo schedule` runs an agent on a cron. The MCP server lets other agents create worktrees, launch agents, open terminals, and send prompts.
+`byspace run --host` connects to a remote daemon. `byspace schedule` runs an agent on a cron. The MCP server lets other agents create worktrees, launch agents, open terminals, and send prompts.
 
 ## Voice
 
 Codex App supports voice dictation.
 
-Paseo supports dictation and realtime voice mode. Speech-to-text and text-to-speech can run locally on your device.
+BySpace supports dictation and realtime voice mode. Speech-to-text and text-to-speech can run locally on your device.
 
 ## Comparison
 
-|                              | Paseo                                                           | Codex App                    |
+|                              | BySpace                                                         | Codex App                    |
 | ---------------------------- | --------------------------------------------------------------- | ---------------------------- |
 | License                      | Open source (AGPL-3.0)                                          | Not published as open source |
 | Desktop platforms            | macOS, Linux, Windows                                           | macOS, Windows               |
@@ -107,4 +107,4 @@ Paseo supports dictation and realtime voice mode. Speech-to-text and text-to-spe
 | Voice                        | Dictation and realtime voice                                    | Dictation                    |
 | Self-hosted daemon           | Yes                                                             | No                           |
 
-See also: [Paseo vs Claude Desktop](/alternatives/claude-desktop), [Paseo vs OpenCode Desktop](/alternatives/opencode-desktop), [Supported providers](/docs/supported-providers).
+See also: [BySpace vs Claude Desktop](/alternatives/claude-desktop), [BySpace vs OpenCode Desktop](/alternatives/opencode-desktop), [Supported providers](/docs/supported-providers).

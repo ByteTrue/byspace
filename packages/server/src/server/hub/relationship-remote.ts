@@ -138,7 +138,7 @@ export class DirectHubRelationshipRemote implements HubRelationshipRemote {
       handshakeTimeout: this.requestTimeoutMs,
       headers: {
         authorization: `Bearer ${input.credential}`,
-        "x-paseo-daemon-id": input.daemonId,
+        "x-byspace-daemon-id": input.daemonId,
       },
     });
     let settled = false;

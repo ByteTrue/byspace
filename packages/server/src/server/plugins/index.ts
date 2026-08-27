@@ -5,7 +5,7 @@ import {
   type PluginLogEntry,
   type PluginListItem,
   type PluginSource,
-} from "@getpaseo/protocol/messages";
+} from "@bytetrue/byspace-protocol/messages";
 import type { DaemonConfigStore } from "../daemon-config-store.js";
 import { readPluginManifest } from "./manifest.js";
 import { PluginRuntime } from "./runtime.js";
@@ -19,7 +19,7 @@ interface PluginRuntimePort {
   stopPluginById(pluginId: string): Promise<boolean>;
   stopAll(): Promise<void>;
   subscribe(listener: (pluginId: string, error?: string) => void): () => void;
-  bindPaseoSessionHost(sessionHost: Parameters<PluginRuntime["bindPaseoSessionHost"]>[0]): void;
+  bindBySpaceSessionHost(sessionHost: Parameters<PluginRuntime["bindBySpaceSessionHost"]>[0]): void;
 }
 
 export class PluginService {
@@ -49,8 +49,10 @@ export class PluginService {
     return () => this.listeners.delete(listener);
   }
 
-  bindPaseoSessionHost(sessionHost: Parameters<PluginRuntime["bindPaseoSessionHost"]>[0]): void {
-    this.runtime.bindPaseoSessionHost(sessionHost);
+  bindBySpaceSessionHost(
+    sessionHost: Parameters<PluginRuntime["bindBySpaceSessionHost"]>[0],
+  ): void {
+    this.runtime.bindBySpaceSessionHost(sessionHost);
   }
 
   async start(): Promise<void> {

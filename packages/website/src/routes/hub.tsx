@@ -16,8 +16,8 @@ import { pageMeta } from "~/meta";
 export const Route = createFileRoute("/hub")({
   head: () =>
     pageMeta(
-      "Paseo Hub - GitHub, Slack, and Discord triggers",
-      "Run Paseo Hub yourself and start agents on your own machines from GitHub, Slack, and Discord.",
+      "BySpace Hub - GitHub, Slack, and Discord triggers",
+      "Run BySpace Hub yourself and start agents on your own machines from GitHub, Slack, and Discord.",
       "/hub",
     ),
   component: Hub,
@@ -30,7 +30,7 @@ const LINK_CLASS = "underline hover:text-white/80";
 function Hub() {
   return (
     <SiteShell width="default">
-      <h1 className="text-3xl font-medium tracking-tight mb-4">Paseo Hub</h1>
+      <h1 className="text-3xl font-medium tracking-tight mb-4">BySpace Hub</h1>
       <p className="text-lg text-white/70 leading-relaxed max-w-2xl">
         An optional service that sits above your daemons and gives them extra capabilities.
       </p>
@@ -56,7 +56,7 @@ function QuickStart() {
         Run one command, then finish setup in the browser.
       </p>
       <pre className="w-fit max-w-full overflow-x-auto rounded-xl border border-white/10 bg-white/[0.03] px-5 py-4 font-mono text-sm text-white/90">
-        <code>npx @getpaseo/hub</code>
+        <code>npx @bytetrue/hub</code>
       </pre>
       <div className="flex flex-wrap items-center gap-4 pt-2">
         <a
@@ -66,7 +66,7 @@ function QuickStart() {
           Read the quickstart
         </a>
         <a
-          href="https://github.com/getpaseo/hub"
+          href="https://github.com/ByteTrue/hub"
           target="_blank"
           rel="noopener noreferrer"
           className="inline-flex items-center gap-2 rounded-md border border-white/15 px-4 py-2 text-sm font-medium text-white/80 hover:border-white/25 hover:text-white transition-colors"
@@ -132,7 +132,7 @@ function DiscordDemo() {
             </p>
           </DemoMessage>
 
-          <DemoMessage author="paseo-bot" time="09:41" bot>
+          <DemoMessage author="byspace-bot" time="09:41" bot>
             <p>Three P0 issues are open:</p>
             <ul className="space-y-1">
               {DEMO_ISSUES.map((issue) => (
@@ -150,11 +150,11 @@ function DiscordDemo() {
             </p>
           </DemoMessage>
 
-          <DemoMessage author="paseo-bot" time="09:48" bot>
+          <DemoMessage author="byspace-bot" time="09:48" bot>
             <p>
               Ran on <span className="font-mono text-white/50">macbook-pro</span>. Opened{" "}
               <span className="text-white/80 underline decoration-white/20">
-                getpaseo/paseo#1234
+                ByteTrue/byspace#1234
               </span>{" "}
               with a fix for the terminal writes.
             </p>
@@ -177,7 +177,7 @@ function DiscordDemo() {
 }
 
 function Mention() {
-  return <span className="rounded bg-indigo-400/15 px-1 py-0.5 text-indigo-200">@paseo-bot</span>;
+  return <span className="rounded bg-indigo-400/15 px-1 py-0.5 text-indigo-200">@byspace-bot</span>;
 }
 
 function DemoMessage({
@@ -326,7 +326,7 @@ function Shape() {
 
           <Connector label="direct connection or relay" />
 
-          <DiagramRow label="Paseo apps">
+          <DiagramRow label="BySpace apps">
             {DIAGRAM_CLIENTS.map((client) => (
               <DiagramCard key={client} name={client} />
             ))}
@@ -391,8 +391,8 @@ function Access() {
     <section className="space-y-6">
       <h2 className="text-xl font-medium">Hosted Hub</h2>
       <p className="text-white/70 leading-relaxed max-w-2xl">
-        The hosted version is not generally available yet. Join the Paseo Discord and watch the
-        <span className="font-mono text-white/80"> #paseo-hub</span> channel for the release
+        The hosted version is not generally available yet. Join the BySpace Discord and watch the
+        <span className="font-mono text-white/80"> #byspace-hub</span> channel for the release
         announcement.
       </p>
       <div className="flex items-center gap-4 pt-2">
@@ -415,14 +415,14 @@ function FaqSection() {
       <h2 className="text-3xl font-medium">FAQ</h2>
       <div className="space-y-6">
         <FAQItem question="What is the Hub?">
-          A separate service that sits above your Paseo daemons. You connect one or more daemons to
-          it and it gives them GitHub, Slack, and Discord triggers, with collaboration features
-          planned. Paseo works fully without it.
+          A separate service that sits above your BySpace daemons. You connect one or more daemons
+          to it and it gives them GitHub, Slack, and Discord triggers, with collaboration features
+          planned. BySpace works fully without it.
         </FAQItem>
         <FAQItem question="Why is it a separate service instead of part of the daemon?">
           <p>
             The daemon stays one lean executable on one machine. The Hub talks to daemons over the
-            same RPCs the app and the CLI use, so anyone can build their own hub on top of Paseo.
+            same RPCs the app and the CLI use, so anyone can build their own hub on top of BySpace.
           </p>
           <p>
             It also has a different job. The Hub is meant to be exposed to the internet, shared with
@@ -430,9 +430,9 @@ function FaqSection() {
           </p>
         </FAQItem>
         <FAQItem question="Can I run it myself?">
-          Yes. Run <code>npx @getpaseo/hub</code> and complete setup in the browser. The source is
+          Yes. Run <code>npx @bytetrue/hub</code> and complete setup in the browser. The source is
           available on{" "}
-          <a href="https://github.com/getpaseo/hub" className={LINK_CLASS}>
+          <a href="https://github.com/ByteTrue/hub" className={LINK_CLASS}>
             GitHub
           </a>
           , and the{" "}
@@ -442,11 +442,11 @@ function FaqSection() {
           covers more involved deployments.
         </FAQItem>
         <FAQItem question="What do I need to run it?">
-          Node.js and a running Paseo daemon. Hub guides you through connecting the provider apps
+          Node.js and a running BySpace daemon. Hub guides you through connecting the provider apps
           you want.
         </FAQItem>
         <FAQItem question="Will there be a hosted version?">
-          Yes. Join the Paseo Discord and watch the <code>#paseo-hub</code> channel. The hosted
+          Yes. Join the BySpace Discord and watch the <code>#byspace-hub</code> channel. The hosted
           release will be announced there.
         </FAQItem>
         <FAQItem question="What else is planned?">
@@ -459,7 +459,8 @@ function FaqSection() {
         </FAQItem>
         <FAQItem question="Do I have to move my team to a new tool?">
           No. The Hub works in the Slack or Discord your team already uses, and on the daemons you
-          already run. When the work gets serious you switch to the Paseo app on those same daemons.
+          already run. When the work gets serious you switch to the BySpace app on those same
+          daemons.
         </FAQItem>
         <FAQItem question="Which agents does it run?">
           Whichever ones your daemons have configured, with your own subscriptions and skills. The
@@ -477,9 +478,9 @@ function FaqSection() {
             rel="noopener noreferrer"
             className={LINK_CLASS}
           >
-            Paseo Discord
+            BySpace Discord
           </a>{" "}
-          and wait for the release announcement in <code>#paseo-hub</code>. You do not need to
+          and wait for the release announcement in <code>#byspace-hub</code>. You do not need to
           message anyone directly.
         </FAQItem>
       </div>

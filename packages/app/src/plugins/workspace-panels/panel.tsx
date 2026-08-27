@@ -3,8 +3,8 @@ import type {
   PluginHostProps,
   PluginTheme,
   PluginWorkspacePanelProps,
-} from "@getpaseo/plugin";
-import { PluginClientStateProvider } from "@getpaseo/plugin/host";
+} from "@bytetrue/byspace-plugin";
+import { PluginClientStateProvider } from "@bytetrue/byspace-plugin/host";
 import { CircleAlert } from "lucide-react-native";
 import { useMemo } from "react";
 import { Platform, Text, View } from "react-native";

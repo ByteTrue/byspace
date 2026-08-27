@@ -1,9 +1,9 @@
 import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { z } from "zod";
-import { PluginIdSchema } from "@getpaseo/protocol/messages";
+import { PluginIdSchema } from "@bytetrue/byspace-protocol/messages";
 
-const MANIFEST_FILENAME = "paseo-plugin.json";
+const MANIFEST_FILENAME = "byspace-plugin.json";
 const PluginManifestSchema = z.object({ id: PluginIdSchema }).strict();
 
 export type PluginManifest = z.infer<typeof PluginManifestSchema>;

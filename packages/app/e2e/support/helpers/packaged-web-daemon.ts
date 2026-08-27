@@ -55,24 +55,24 @@ export async function startPackagedWebDaemon(input: {
   relayEndpoint: string;
 }): Promise<PackagedWebDaemon> {
   const port = await availablePort();
-  const home = await mkdtemp(path.join(tmpdir(), "paseo-relay-deployment-e2e-"));
+  const home = await mkdtemp(path.join(tmpdir(), "byspace-relay-deployment-e2e-"));
   const serverId = `relay-deployment-${Date.now().toString(36)}`;
-  const paseo = path.resolve(__dirname, "../../../../../node_modules/.bin/paseo");
+  const byspace = path.resolve(__dirname, "../../../../../node_modules/.bin/byspace");
   const env: NodeJS.ProcessEnv = {
     ...process.env,
     CI: "true",
     NODE_ENV: "development",
-    PASEO_NODE_ENV: "development",
-    PASEO_SERVER_ID: serverId,
-    PASEO_RELAY_ENDPOINT: input.relayEndpoint,
-    PASEO_RELAY_PUBLIC_ENDPOINT: input.relayEndpoint,
-    PASEO_RELAY_USE_TLS: "false",
-    PASEO_RELAY_PUBLIC_USE_TLS: "false",
+    BYSPACE_NODE_ENV: "development",
+    BYSPACE_SERVER_ID: serverId,
+    BYSPACE_RELAY_ENDPOINT: input.relayEndpoint,
+    BYSPACE_RELAY_PUBLIC_ENDPOINT: input.relayEndpoint,
+    BYSPACE_RELAY_USE_TLS: "false",
+    BYSPACE_RELAY_PUBLIC_USE_TLS: "false",
   };
 
   try {
     await execFileAsync(
-      paseo,
+      byspace,
       ["daemon", "start", "--home", home, "--port", String(port), "--relay", "--web-ui"],
       { env },
     );
@@ -86,7 +86,7 @@ export async function startPackagedWebDaemon(input: {
       serverId,
       pairingOfferUrl: async () => {
         const { stdout } = await execFileAsync(
-          paseo,
+          byspace,
           ["daemon", "pair", "--home", home, "--relay", "--json"],
           { env },
         );
@@ -97,14 +97,16 @@ export async function startPackagedWebDaemon(input: {
         return result.url;
       },
       close: async () => {
-        await execFileAsync(paseo, ["daemon", "stop", "--home", home], { env }).catch(
+        await execFileAsync(byspace, ["daemon", "stop", "--home", home], { env }).catch(
           () => undefined,
         );
         await rm(home, { recursive: true, force: true });
       },
     };
   } catch (error) {
-    await execFileAsync(paseo, ["daemon", "stop", "--home", home], { env }).catch(() => undefined);
+    await execFileAsync(byspace, ["daemon", "stop", "--home", home], { env }).catch(
+      () => undefined,
+    );
     await rm(home, { recursive: true, force: true });
     throw error;
   }

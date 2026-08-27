@@ -1,9 +1,9 @@
 {
-  "name": "@getpaseo/cli",
+  "name": "@bytetrue/byspace",
   "version": "0.6.1",
-  "description": "Paseo CLI - control your AI coding agents from the command line",
+  "description": "BySpace CLI - control your AI coding agents from the command line",
   "bin": {
-    "paseo": "bin/paseo"
+    "byspace": "bin/byspace"
   },
   "files": [
     "bin",
@@ -27,10 +27,10 @@
     "test:e2e:lifecycle": "npx tsx tests/e2e/agent-lifecycle.test.ts"
   },
   "dependencies": {
+    "@bytetrue/byspace-client": "0.6.1",
+    "@bytetrue/byspace-protocol": "0.6.1",
+    "@bytetrue/byspace-server": "0.6.1",
     "@clack/prompts": "^1.0.0",
-    "@getpaseo/client": "0.6.1",
-    "@getpaseo/protocol": "0.6.1",
-    "@getpaseo/server": "0.6.1",
     "chalk": "^5.3.0",
     "commander": "^12.0.0",
     "mime-types": "^2.1.35",

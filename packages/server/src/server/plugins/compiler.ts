@@ -242,7 +242,7 @@ function filterEntrypoint(source: string, target: PluginBuildTarget): string {
 
 function createRuntimeBoundaryPlugin(target: PluginBuildTarget): Plugin {
   return {
-    name: `paseo-plugin-${target}-runtime-boundary`,
+    name: `byspace-plugin-${target}-runtime-boundary`,
     setup(buildContext) {
       buildContext.onResolve({ filter: /\.(?:client|server)(?:\.[cm]?[jt]sx?)?$/ }, (args) => {
         const importedTarget = moduleTarget(args.path);
@@ -276,14 +276,14 @@ function createUnusedPlatformModulePlugin(target: PluginBuildTarget): Plugin {
       ? /^(@tanstack\/react-query|react|react\/jsx-runtime|react-native)$/
       : /^node:/;
   return {
-    name: `paseo-plugin-${target}-unused-platform-modules`,
+    name: `byspace-plugin-${target}-unused-platform-modules`,
     setup(buildContext) {
       buildContext.onResolve({ filter }, (args) => ({
         path: args.path,
-        namespace: "paseo-unused-platform-module",
+        namespace: "byspace-unused-platform-module",
         sideEffects: false,
       }));
-      buildContext.onLoad({ filter: /.*/, namespace: "paseo-unused-platform-module" }, () => ({
+      buildContext.onLoad({ filter: /.*/, namespace: "byspace-unused-platform-module" }, () => ({
         contents: "module.exports = {};",
         loader: "js",
       }));

@@ -1,15 +1,15 @@
-# @getpaseo/client
+# @bytetrue/byspace-client
 
-TypeScript SDK for building integrations on top of a Paseo daemon.
+TypeScript SDK for building integrations on top of a BySpace daemon.
 
 ```bash
-npm install @getpaseo/client
+npm install @bytetrue/byspace-client
 ```
 
 ```ts
-import { createPaseoClient } from "@getpaseo/client";
+import { createBySpaceClient } from "@bytetrue/byspace-client";
 
-const client = createPaseoClient({ url: "ws://127.0.0.1:6767/ws" });
+const client = createBySpaceClient({ url: "ws://127.0.0.1:6777/ws" });
 await client.connect();
 
 const agent = await client.agents.create({
@@ -24,16 +24,16 @@ console.log(result.lastMessage);
 await client.close();
 ```
 
-The public API is the package root. Imports under `@getpaseo/client/internal/*` are unsupported implementation details used by Paseo's own packages.
+The public API is the package root. Imports under `@bytetrue/byspace-client/internal/*` are unsupported implementation details used by BySpace's own packages.
 
-Read the [SDK documentation](https://paseo.sh/docs/sdk) for agents, workspaces, provider discovery, events, recipes, and the API reference. Runnable TypeScript patterns also live in [`examples/`](./examples/README.md).
+Read the [SDK documentation](https://byspace.cc.cd/docs/sdk) for agents, workspaces, provider discovery, events, recipes, and the API reference. Runnable TypeScript patterns also live in [`examples/`](./examples/README.md).
 
 ## Runtime
 
 The client needs a WebSocket implementation. Modern browsers and Node.js 22 provide one globally.
 
-Use a WebSocket URL ending in `/ws`, such as `ws://127.0.0.1:6767/ws`. Pass `password` when the daemon requires authentication.
+Use a WebSocket URL ending in `/ws`, such as `ws://127.0.0.1:6777/ws`. Pass `password` when the daemon requires authentication.
 
 ## Stability
 
-The high-level API exported from `@getpaseo/client` is the supported SDK surface. The SDK and daemon remain protocol-compatible across versions, but newly added capabilities can require a newer daemon.
+The high-level API exported from `@bytetrue/byspace-client` is the supported SDK surface. The SDK and daemon remain protocol-compatible across versions, but newly added capabilities can require a newer daemon.

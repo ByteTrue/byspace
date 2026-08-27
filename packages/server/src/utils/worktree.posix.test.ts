@@ -4,24 +4,27 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import {
   createWorktree as createWorktreePrimitive,
   deriveWorktreeProjectHash,
-  deletePaseoWorktree,
+  deleteBySpaceWorktree,
   InvalidGitBranchNameError,
   getScriptConfigs,
   getWorktreeSetupCommands,
   getWorktreeTerminalSpecs,
   getWorktreeTeardownCommands,
   isServiceScript,
-  isPaseoOwnedWorktreeCwd,
-  listPaseoWorktrees,
-  readPaseoConfig,
+  isBySpaceOwnedWorktreeCwd,
+  listBySpaceWorktrees,
+  readBySpaceConfig,
   resolveWorktreeRuntimeEnv,
   type WorktreeSetupCommandProgressEvent,
   runWorktreeSetupCommands,
   type CreateWorktreeOptions,
   type WorktreeConfig,
 } from "./worktree";
-import type { PaseoConfig } from "@getpaseo/protocol/paseo-config-schema";
-import { getPaseoWorktreeMetadataPath, readPaseoWorktreeMetadata } from "./worktree-metadata.js";
+import type { BySpaceConfig } from "@bytetrue/byspace-protocol/byspace-config-schema";
+import {
+  getBySpaceWorktreeMetadataPath,
+  readBySpaceWorktreeMetadata,
+} from "./worktree-metadata.js";
 import {
   getCheckoutDiff,
   getCheckoutStatus,
@@ -48,8 +51,8 @@ import { delimiter, dirname, join } from "path";
 import { tmpdir } from "os";
 import net from "node:net";
 
-function loadConfigForTest(repoRoot: string): PaseoConfig | null {
-  const result = readPaseoConfig(repoRoot);
+function loadConfigForTest(repoRoot: string): BySpaceConfig | null {
+  const result = readBySpaceConfig(repoRoot);
   return result.ok ? result.config : null;
 }
 
@@ -59,7 +62,7 @@ interface LegacyCreateWorktreeTestOptions {
   baseBranch: string;
   worktreeSlug: string;
   runSetup?: boolean;
-  paseoHome?: string;
+  byspaceHome?: string;
   worktreesRoot?: string;
 }
 
@@ -79,7 +82,7 @@ function createLegacyWorktreeForTest(
       branchName: options.branchName,
     },
     runSetup: options.runSetup ?? true,
-    paseoHome: options.paseoHome,
+    byspaceHome: options.byspaceHome,
     worktreesRoot: options.worktreesRoot,
   });
 }
@@ -88,13 +91,13 @@ describe.skipIf(isPlatform("win32"))("worktree POSIX-only", () => {
   describe("createWorktree", () => {
     let tempDir: string;
     let repoDir: string;
-    let paseoHome: string;
+    let byspaceHome: string;
 
     beforeEach(() => {
       // Use realpathSync to resolve symlinks (e.g., /var -> /private/var on macOS)
       tempDir = realpathSync(mkdtempSync(join(tmpdir(), "worktree-test-")));
       repoDir = join(tempDir, "test-repo");
-      paseoHome = join(tempDir, "paseo-home");
+      byspaceHome = join(tempDir, "byspace-home");
 
       // Create a git repo with an initial commit
       mkdirSync(repoDir, { recursive: true });
@@ -119,13 +122,13 @@ describe.skipIf(isPlatform("win32"))("worktree POSIX-only", () => {
         cwd: repoDir,
         baseBranch: "main",
         worktreeSlug: "hello-world",
-        paseoHome,
+        byspaceHome,
       });
 
-      expect(result.worktreePath).toBe(join(paseoHome, "worktrees", projectHash, "hello-world"));
+      expect(result.worktreePath).toBe(join(byspaceHome, "worktrees", projectHash, "hello-world"));
       expect(existsSync(result.worktreePath)).toBe(true);
       expect(existsSync(join(result.worktreePath, "file.txt"))).toBe(true);
-      const metadataPath = getPaseoWorktreeMetadataPath(result.worktreePath);
+      const metadataPath = getBySpaceWorktreeMetadataPath(result.worktreePath);
       expect(existsSync(metadataPath)).toBe(true);
       const metadata = JSON.parse(readFileSync(metadataPath, "utf8"));
       expect(metadata).toMatchObject({
@@ -143,36 +146,36 @@ describe.skipIf(isPlatform("win32"))("worktree POSIX-only", () => {
         cwd: repoDir,
         baseBranch: "main",
         worktreeSlug: "custom-root",
-        paseoHome,
+        byspaceHome,
         worktreesRoot,
       });
 
       expect(result.worktreePath).toBe(join(worktreesRoot, projectHash, "custom-root"));
       await expect(
-        isPaseoOwnedWorktreeCwd(result.worktreePath, { paseoHome, worktreesRoot }),
+        isBySpaceOwnedWorktreeCwd(result.worktreePath, { byspaceHome, worktreesRoot }),
       ).resolves.toMatchObject({ allowed: true, worktreeRoot: join(worktreesRoot, projectHash) });
       await expect(
-        isPaseoOwnedWorktreeCwd(result.worktreePath, { paseoHome }),
+        isBySpaceOwnedWorktreeCwd(result.worktreePath, { byspaceHome }),
       ).resolves.toMatchObject({ allowed: false });
 
-      const worktrees = await listPaseoWorktrees({ cwd: repoDir, paseoHome, worktreesRoot });
+      const worktrees = await listBySpaceWorktrees({ cwd: repoDir, byspaceHome, worktreesRoot });
       expect(worktrees.map((entry) => entry.path)).toContain(result.worktreePath);
 
-      await deletePaseoWorktree({
+      await deleteBySpaceWorktree({
         cwd: repoDir,
         worktreePath: result.worktreePath,
-        paseoHome,
+        byspaceHome,
         worktreesBaseRoot: worktreesRoot,
       });
       expect(existsSync(result.worktreePath)).toBe(false);
     });
 
-    it.skip("detects paseo-owned worktrees across realpath differences (macOS /var vs /private/var)", async () => {
+    it.skip("detects byspace-owned worktrees across realpath differences (macOS /var vs /private/var)", async () => {
       // Intentionally create repo using the non-realpath tmpdir() variant (often /var/... on macOS).
       const varTempDir = mkdtempSync(join(tmpdir(), "worktree-realpath-test-"));
       const privateTempDir = realpathSync(varTempDir);
       const varRepoDir = join(varTempDir, "test-repo");
-      const varPaseoHome = join(varTempDir, "paseo-home");
+      const varBySpaceHome = join(varTempDir, "byspace-home");
       mkdirSync(varRepoDir, { recursive: true });
       execFileSync("git", ["init", "-b", "main"], { cwd: varRepoDir });
       execFileSync("git", ["config", "user.email", "test@test.com"], { cwd: varRepoDir });
@@ -188,37 +191,37 @@ describe.skipIf(isPlatform("win32"))("worktree POSIX-only", () => {
         cwd: varRepoDir,
         baseBranch: "main",
         worktreeSlug: "realpath-test",
-        paseoHome: varPaseoHome,
+        byspaceHome: varBySpaceHome,
       });
 
       const projectHash = await deriveWorktreeProjectHash(varRepoDir);
       const privateWorktreePath = join(
         privateTempDir,
-        "paseo-home",
+        "byspace-home",
         "worktrees",
         projectHash,
         "realpath-test",
       );
       expect(existsSync(privateWorktreePath)).toBe(true);
 
-      const ownership = await isPaseoOwnedWorktreeCwd(privateWorktreePath, {
-        paseoHome: varPaseoHome,
+      const ownership = await isBySpaceOwnedWorktreeCwd(privateWorktreePath, {
+        byspaceHome: varBySpaceHome,
       });
       expect(ownership.allowed).toBe(true);
 
       rmSync(varTempDir, { recursive: true, force: true });
     });
 
-    it("reports repoRoot as the repository root for paseo-owned worktrees", async () => {
+    it("reports repoRoot as the repository root for byspace-owned worktrees", async () => {
       const result = await createLegacyWorktreeForTest({
         branchName: "main",
         cwd: repoDir,
         baseBranch: "main",
         worktreeSlug: "repo-root-check",
-        paseoHome,
+        byspaceHome,
       });
 
-      const ownership = await isPaseoOwnedWorktreeCwd(result.worktreePath, { paseoHome });
+      const ownership = await isBySpaceOwnedWorktreeCwd(result.worktreePath, { byspaceHome });
       expect(ownership.allowed).toBe(true);
       expect(ownership.repoRoot).toBe(repoDir);
     });
@@ -227,7 +230,7 @@ describe.skipIf(isPlatform("win32"))("worktree POSIX-only", () => {
       const nonGitDir = join(tempDir, "not-a-repo");
       mkdirSync(nonGitDir, { recursive: true });
 
-      const ownership = await isPaseoOwnedWorktreeCwd(nonGitDir, { paseoHome });
+      const ownership = await isBySpaceOwnedWorktreeCwd(nonGitDir, { byspaceHome });
 
       expect(ownership.allowed).toBe(false);
       expect(ownership.worktreePath).toBe(realpathSync(nonGitDir));
@@ -240,10 +243,10 @@ describe.skipIf(isPlatform("win32"))("worktree POSIX-only", () => {
         worktreeSlug: "my-feature",
         source: { kind: "branch-off", baseBranch: "main", branchName: "feature/x" },
         runSetup: true,
-        paseoHome,
+        byspaceHome,
       });
 
-      expect(result.worktreePath).toBe(join(paseoHome, "worktrees", projectHash, "my-feature"));
+      expect(result.worktreePath).toBe(join(byspaceHome, "worktrees", projectHash, "my-feature"));
       expect(existsSync(result.worktreePath)).toBe(true);
 
       const currentBranch = execFileSync("git", ["branch", "--show-current"], {
@@ -256,7 +259,7 @@ describe.skipIf(isPlatform("win32"))("worktree POSIX-only", () => {
         cwd: result.worktreePath,
       });
 
-      const metadataPath = getPaseoWorktreeMetadataPath(result.worktreePath);
+      const metadataPath = getBySpaceWorktreeMetadataPath(result.worktreePath);
       const metadata = JSON.parse(readFileSync(metadataPath, "utf8"));
       expect(metadata).toMatchObject({
         version: 1,
@@ -273,7 +276,7 @@ describe.skipIf(isPlatform("win32"))("worktree POSIX-only", () => {
         worktreeSlug: "dev-worktree",
         source: { kind: "checkout-branch", branchName: "dev" },
         runSetup: true,
-        paseoHome,
+        byspaceHome,
       });
 
       expect(existsSync(result.worktreePath)).toBe(true);
@@ -284,7 +287,7 @@ describe.skipIf(isPlatform("win32"))("worktree POSIX-only", () => {
         .trim();
       expect(currentBranch).toBe("dev");
 
-      const metadataPath = getPaseoWorktreeMetadataPath(result.worktreePath);
+      const metadataPath = getBySpaceWorktreeMetadataPath(result.worktreePath);
       const metadata = JSON.parse(readFileSync(metadataPath, "utf8"));
       expect(metadata).toMatchObject({
         version: 1,
@@ -301,7 +304,7 @@ describe.skipIf(isPlatform("win32"))("worktree POSIX-only", () => {
         worktreeSlug: "release-worktree",
         source: { kind: "checkout-branch", branchName: "release/1.1.15" },
         runSetup: true,
-        paseoHome,
+        byspaceHome,
       });
 
       expect(existsSync(result.worktreePath)).toBe(true);
@@ -319,12 +322,12 @@ describe.skipIf(isPlatform("win32"))("worktree POSIX-only", () => {
         worktreeSlug: "dev-worktree",
         source: { kind: "checkout-branch", branchName: "main" },
         runSetup: true,
-        paseoHome,
+        byspaceHome,
       });
 
       expect(result.branchName).toBe("main-1");
       expect(existsSync(result.worktreePath)).toBe(true);
-      expect(readPaseoWorktreeMetadata(result.worktreePath)?.changeRequestLookupTarget).toEqual({
+      expect(readBySpaceWorktreeMetadata(result.worktreePath)?.changeRequestLookupTarget).toEqual({
         headRef: "main-1",
         localBranchName: "main-1",
       });
@@ -342,7 +345,7 @@ describe.skipIf(isPlatform("win32"))("worktree POSIX-only", () => {
       execFileSync("git", ["checkout", "-b", "contributor/feature"], { cwd: remoteCloneDir });
       writeFileSync(join(remoteCloneDir, "file.txt"), "from-pr\n");
       writeFileSync(
-        join(remoteCloneDir, "paseo.json"),
+        join(remoteCloneDir, "byspace.json"),
         JSON.stringify({ worktree: { setup: ['echo "setup ran" > setup.log'] } }),
       );
       execFileSync("git", ["add", "."], { cwd: remoteCloneDir });
@@ -365,7 +368,7 @@ describe.skipIf(isPlatform("win32"))("worktree POSIX-only", () => {
           baseRefName: "main",
         },
         runSetup: true,
-        paseoHome,
+        byspaceHome,
       });
 
       expect(readFileSync(join(result.worktreePath, "file.txt"), "utf8")).toBe("from-pr\n");
@@ -377,7 +380,7 @@ describe.skipIf(isPlatform("win32"))("worktree POSIX-only", () => {
         .trim();
       expect(currentBranch).toBe("user/feature");
 
-      const metadataPath = getPaseoWorktreeMetadataPath(result.worktreePath);
+      const metadataPath = getBySpaceWorktreeMetadataPath(result.worktreePath);
       const metadata = JSON.parse(readFileSync(metadataPath, "utf8"));
       expect(metadata).toMatchObject({ baseRefName: "main" });
     });
@@ -413,7 +416,7 @@ describe.skipIf(isPlatform("win32"))("worktree POSIX-only", () => {
           baseRefName: "main",
         },
         runSetup: true,
-        paseoHome,
+        byspaceHome,
       });
 
       expect(readFileSync(join(result.worktreePath, "file.txt"), "utf8")).toBe(
@@ -459,7 +462,7 @@ describe.skipIf(isPlatform("win32"))("worktree POSIX-only", () => {
         baseBranch: "refs/heads/main",
         worktreeSlug: "prefer-local-feature",
         runSetup: false,
-        paseoHome,
+        byspaceHome,
       });
       const originResult = await createLegacyWorktreeForTest({
         branchName: "prefer-origin-feature",
@@ -467,24 +470,28 @@ describe.skipIf(isPlatform("win32"))("worktree POSIX-only", () => {
         baseBranch: "refs/remotes/origin/main",
         worktreeSlug: "prefer-origin-feature",
         runSetup: false,
-        paseoHome,
+        byspaceHome,
       });
 
       expect(readFileSync(join(localResult.worktreePath, "file.txt"), "utf8")).toBe("from-local\n");
-      const localStatus = await getCheckoutStatus(localResult.worktreePath, { paseoHome });
+      const localStatus = await getCheckoutStatus(localResult.worktreePath, { byspaceHome });
       expect(localStatus.isGit).toBe(true);
       if (!localStatus.isGit) {
         return;
       }
       expect(localStatus.aheadBehind).toEqual({ ahead: 0, behind: 0 });
       await expect(
-        getCheckoutDiff(localResult.worktreePath, { mode: "base", baseRef: "main" }, { paseoHome }),
+        getCheckoutDiff(
+          localResult.worktreePath,
+          { mode: "base", baseRef: "main" },
+          { byspaceHome },
+        ),
       ).resolves.toMatchObject({ diff: "" });
       expect(readFileSync(join(originResult.worktreePath, "file.txt"), "utf8")).toBe(
         "from-origin\n",
       );
       expect(
-        JSON.parse(readFileSync(getPaseoWorktreeMetadataPath(originResult.worktreePath), "utf8")),
+        JSON.parse(readFileSync(getBySpaceWorktreeMetadataPath(originResult.worktreePath), "utf8")),
       ).toMatchObject({ baseRefName: "main" });
     });
 
@@ -517,7 +524,7 @@ describe.skipIf(isPlatform("win32"))("worktree POSIX-only", () => {
         baseBranch: "refs/remotes/upstream/main",
         worktreeSlug: "fork-base-feature",
         runSetup: false,
-        paseoHome,
+        byspaceHome,
       });
 
       expect(readFileSync(join(result.worktreePath, "file.txt"), "utf8")).toBe("from-upstream\n");
@@ -525,12 +532,12 @@ describe.skipIf(isPlatform("win32"))("worktree POSIX-only", () => {
       // to the commit the worktree was cut from: "main" resolves local-first, which here is
       // a different commit than the fork's upstream.
       expect(
-        JSON.parse(readFileSync(getPaseoWorktreeMetadataPath(result.worktreePath), "utf8")),
+        JSON.parse(readFileSync(getBySpaceWorktreeMetadataPath(result.worktreePath), "utf8")),
       ).toMatchObject({ baseRefName: "main", baseRef: "refs/remotes/upstream/main" });
 
       // An untouched child must report no work of its own. Comparing against the wrong base
       // shows the upstream-only commit as if the workspace had written it.
-      const status = await getCheckoutStatus(result.worktreePath, { paseoHome });
+      const status = await getCheckoutStatus(result.worktreePath, { byspaceHome });
       expect(status.isGit).toBe(true);
       if (!status.isGit) {
         return;
@@ -543,7 +550,7 @@ describe.skipIf(isPlatform("win32"))("worktree POSIX-only", () => {
         getCheckoutDiff(
           result.worktreePath,
           { mode: "base", baseRef: "refs/remotes/origin/main" },
-          { paseoHome },
+          { byspaceHome },
         ),
       ).rejects.toThrow(
         "Base ref mismatch: stored refs/remotes/upstream/main, requested refs/remotes/origin/main",
@@ -552,16 +559,16 @@ describe.skipIf(isPlatform("win32"))("worktree POSIX-only", () => {
         await getCheckoutDiff(
           result.worktreePath,
           { mode: "base", baseRef: "main" },
-          { paseoHome },
+          { byspaceHome },
         ),
       ).toMatchObject({ diff: "" });
       const history = await listCheckoutCommits({
         cwd: result.worktreePath,
-        context: { paseoHome },
+        context: { byspaceHome },
       });
       expect(history.commits.every((commit) => commit.isOnBase)).toBe(true);
       await expect(
-        mergeToBase(result.worktreePath, { baseRef: "main" }, { paseoHome }),
+        mergeToBase(result.worktreePath, { baseRef: "main" }, { byspaceHome }),
       ).rejects.toThrow(
         "No local merge target is recorded for base ref refs/remotes/upstream/main",
       );
@@ -576,20 +583,20 @@ describe.skipIf(isPlatform("win32"))("worktree POSIX-only", () => {
       });
       execFileSync("git", ["push", "origin", "main"], { cwd: forkCloneDir });
       execFileSync("git", ["fetch", "upstream"], { cwd: result.worktreePath });
-      await mergeFromBase(result.worktreePath, { baseRef: "main" }, { paseoHome });
+      await mergeFromBase(result.worktreePath, { baseRef: "main" }, { byspaceHome });
       expect(readFileSync(join(result.worktreePath, "later.txt"), "utf8")).toBe("later\n");
 
       execFileSync("git", ["update-ref", "-d", "refs/remotes/upstream/main"], {
         cwd: result.worktreePath,
       });
       await expect(
-        getCheckoutDiff(result.worktreePath, { mode: "base", baseRef: "main" }, { paseoHome }),
+        getCheckoutDiff(result.worktreePath, { mode: "base", baseRef: "main" }, { byspaceHome }),
       ).rejects.toThrow("Base ref not found: refs/remotes/upstream/main");
       await expect(
-        mergeFromBase(result.worktreePath, { baseRef: "main" }, { paseoHome }),
+        mergeFromBase(result.worktreePath, { baseRef: "main" }, { byspaceHome }),
       ).rejects.toThrow("Base ref not found: refs/remotes/upstream/main");
       await expect(
-        listCheckoutCommits({ cwd: result.worktreePath, context: { paseoHome } }),
+        listCheckoutCommits({ cwd: result.worktreePath, context: { byspaceHome } }),
       ).rejects.toThrow("Base ref not found: refs/remotes/upstream/main");
     });
 
@@ -608,11 +615,11 @@ describe.skipIf(isPlatform("win32"))("worktree POSIX-only", () => {
         baseBranch: "refs/remotes/upstream/release+hotfix",
         worktreeSlug: "release-hotfix-feature",
         runSetup: false,
-        paseoHome,
+        byspaceHome,
       });
 
       expect(
-        JSON.parse(readFileSync(getPaseoWorktreeMetadataPath(result.worktreePath), "utf8")),
+        JSON.parse(readFileSync(getBySpaceWorktreeMetadataPath(result.worktreePath), "utf8")),
       ).toMatchObject({
         baseRefName: "release+hotfix",
         baseRef: "refs/remotes/upstream/release+hotfix",
@@ -636,7 +643,7 @@ describe.skipIf(isPlatform("win32"))("worktree POSIX-only", () => {
         baseBranch: "main",
         worktreeSlug: "prefer-local-fallback-feature",
         runSetup: false,
-        paseoHome,
+        byspaceHome,
       });
 
       expect(readFileSync(join(result.worktreePath, "file.txt"), "utf8")).toBe("from-local-only\n");
@@ -650,7 +657,7 @@ describe.skipIf(isPlatform("win32"))("worktree POSIX-only", () => {
           baseBranch: "does-not-exist",
           worktreeSlug: "missing-base-feature",
           runSetup: false,
-          paseoHome,
+          byspaceHome,
         }),
       ).rejects.toThrow("Base branch not found: does-not-exist");
     });
@@ -674,7 +681,7 @@ describe.skipIf(isPlatform("win32"))("worktree POSIX-only", () => {
           worktreeSlug: "invalid-existing-branch",
           source: { kind: "checkout-branch", branchName: "bad..name" },
           runSetup: true,
-          paseoHome,
+          byspaceHome,
         });
       } catch (error) {
         caughtError = error;
@@ -692,7 +699,7 @@ describe.skipIf(isPlatform("win32"))("worktree POSIX-only", () => {
           worktreeSlug: "invalid-option-like-branch",
           source: { kind: "checkout-branch", branchName: "-bad" },
           runSetup: true,
-          paseoHome,
+          byspaceHome,
         });
       } catch (error) {
         caughtError = error;
@@ -712,11 +719,11 @@ describe.skipIf(isPlatform("win32"))("worktree POSIX-only", () => {
         cwd: repoDir,
         baseBranch: "main",
         worktreeSlug: "hello",
-        paseoHome,
+        byspaceHome,
       });
 
       // Should create branch "hello-1" since "hello" exists
-      expect(result.worktreePath).toBe(join(paseoHome, "worktrees", projectHash, "hello"));
+      expect(result.worktreePath).toBe(join(byspaceHome, "worktrees", projectHash, "hello"));
       expect(existsSync(result.worktreePath)).toBe(true);
 
       const branches = execFileSync("git", ["branch"], { cwd: repoDir }).toString();
@@ -733,7 +740,7 @@ describe.skipIf(isPlatform("win32"))("worktree POSIX-only", () => {
         cwd: repoDir,
         baseBranch: "main",
         worktreeSlug: "hello",
-        paseoHome,
+        byspaceHome,
       });
 
       expect(existsSync(result.worktreePath)).toBe(true);
@@ -742,22 +749,22 @@ describe.skipIf(isPlatform("win32"))("worktree POSIX-only", () => {
       expect(branches).toContain("hello-2");
     });
 
-    it("runs setup commands from paseo.json", async () => {
-      // Create paseo.json with setup commands
-      const paseoConfig = {
+    it("runs setup commands from byspace.json", async () => {
+      // Create byspace.json with setup commands
+      const byspaceConfig = {
         worktree: {
           setup: [
-            'echo "source=$PASEO_SOURCE_CHECKOUT_PATH" > setup.log',
-            'echo "root_alias=$PASEO_ROOT_PATH" >> setup.log',
-            'echo "worktree=$PASEO_WORKTREE_PATH" >> setup.log',
-            'echo "branch=$PASEO_BRANCH_NAME" >> setup.log',
-            'echo "port=$PASEO_WORKTREE_PORT" >> setup.log',
+            'echo "source=$BYSPACE_SOURCE_CHECKOUT_PATH" > setup.log',
+            'echo "root_alias=$BYSPACE_ROOT_PATH" >> setup.log',
+            'echo "worktree=$BYSPACE_WORKTREE_PATH" >> setup.log',
+            'echo "branch=$BYSPACE_BRANCH_NAME" >> setup.log',
+            'echo "port=$BYSPACE_WORKTREE_PORT" >> setup.log',
           ],
         },
       };
-      writeFileSync(join(repoDir, "paseo.json"), JSON.stringify(paseoConfig));
-      execFileSync("git", ["add", "paseo.json"], { cwd: repoDir });
-      execFileSync("git", ["-c", "commit.gpgsign=false", "commit", "-m", "add paseo.json"], {
+      writeFileSync(join(repoDir, "byspace.json"), JSON.stringify(byspaceConfig));
+      execFileSync("git", ["add", "byspace.json"], { cwd: repoDir });
+      execFileSync("git", ["-c", "commit.gpgsign=false", "commit", "-m", "add byspace.json"], {
         cwd: repoDir,
       });
 
@@ -766,7 +773,7 @@ describe.skipIf(isPlatform("win32"))("worktree POSIX-only", () => {
         cwd: repoDir,
         baseBranch: "main",
         worktreeSlug: "setup-test",
-        paseoHome,
+        byspaceHome,
       });
 
       expect(existsSync(result.worktreePath)).toBe(true);
@@ -784,14 +791,14 @@ describe.skipIf(isPlatform("win32"))("worktree POSIX-only", () => {
       expect(portValue).toBeGreaterThan(0);
     });
 
-    it("runs string setup scripts from paseo.json as a single shell command", async () => {
-      const paseoConfig = {
+    it("runs string setup scripts from byspace.json as a single shell command", async () => {
+      const byspaceConfig = {
         worktree: {
           setup: 'greeting="hello from string setup"\necho "$greeting" > setup.log',
         },
       };
-      writeFileSync(join(repoDir, "paseo.json"), JSON.stringify(paseoConfig));
-      execFileSync("git", ["add", "paseo.json"], { cwd: repoDir });
+      writeFileSync(join(repoDir, "byspace.json"), JSON.stringify(byspaceConfig));
+      execFileSync("git", ["add", "byspace.json"], { cwd: repoDir });
       execFileSync("git", ["-c", "commit.gpgsign=false", "commit", "-m", "add string setup"], {
         cwd: repoDir,
       });
@@ -801,7 +808,7 @@ describe.skipIf(isPlatform("win32"))("worktree POSIX-only", () => {
         cwd: repoDir,
         baseBranch: "main",
         worktreeSlug: "string-setup-test",
-        paseoHome,
+        byspaceHome,
       });
 
       expect(getWorktreeSetupCommands(result.worktreePath)).toEqual([
@@ -818,17 +825,17 @@ describe.skipIf(isPlatform("win32"))("worktree POSIX-only", () => {
       mkdirSync(home);
       mkdirSync(binDir);
 
-      const shimPath = join(binDir, "paseo-shim");
+      const shimPath = join(binDir, "byspace-shim");
       writeFileSync(shimPath, "#!/bin/sh\nprintf 'shim:%s\\n' \"$1\"\n");
       chmodSync(shimPath, 0o755);
       writeFileSync(join(home, ".bash_profile"), "export PATH=/usr/bin:/bin\n");
       const bashEnvPath = join(home, "bash-env");
       writeFileSync(bashEnvPath, "export PATH=/usr/bin:/bin\n");
       writeFileSync(
-        join(repoDir, "paseo.json"),
+        join(repoDir, "byspace.json"),
         JSON.stringify({
           worktree: {
-            setup: "command -v paseo-shim >/dev/null && paseo-shim ok > setup-path.log",
+            setup: "command -v byspace-shim >/dev/null && byspace-shim ok > setup-path.log",
           },
         }),
       );
@@ -846,11 +853,11 @@ describe.skipIf(isPlatform("win32"))("worktree POSIX-only", () => {
           branchName: "main",
           cleanupOnFailure: false,
           runtimeEnv: {
-            PASEO_SOURCE_CHECKOUT_PATH: repoDir,
-            PASEO_ROOT_PATH: repoDir,
-            PASEO_WORKTREE_PATH: repoDir,
-            PASEO_BRANCH_NAME: "main",
-            PASEO_WORKTREE_PORT: "12345",
+            BYSPACE_SOURCE_CHECKOUT_PATH: repoDir,
+            BYSPACE_ROOT_PATH: repoDir,
+            BYSPACE_WORKTREE_PATH: repoDir,
+            BYSPACE_BRANCH_NAME: "main",
+            BYSPACE_WORKTREE_PORT: "12345",
           },
         });
       } finally {
@@ -876,7 +883,7 @@ describe.skipIf(isPlatform("win32"))("worktree POSIX-only", () => {
 
     it("treats blank lifecycle strings as empty", () => {
       writeFileSync(
-        join(repoDir, "paseo.json"),
+        join(repoDir, "byspace.json"),
         JSON.stringify({
           worktree: {
             setup: " \n\t ",
@@ -891,7 +898,7 @@ describe.skipIf(isPlatform("win32"))("worktree POSIX-only", () => {
 
     it("filters non-string and blank entries from lifecycle arrays", () => {
       writeFileSync(
-        join(repoDir, "paseo.json"),
+        join(repoDir, "byspace.json"),
         JSON.stringify({
           worktree: {
             setup: [
@@ -901,10 +908,10 @@ describe.skipIf(isPlatform("win32"))("worktree POSIX-only", () => {
               'echo "second" >> setup-array.log',
             ],
             teardown: [
-              'echo "first" > "$PASEO_SOURCE_CHECKOUT_PATH/teardown-array.log"',
+              'echo "first" > "$BYSPACE_SOURCE_CHECKOUT_PATH/teardown-array.log"',
               null,
               "",
-              'echo "second" >> "$PASEO_SOURCE_CHECKOUT_PATH/teardown-array.log"',
+              'echo "second" >> "$BYSPACE_SOURCE_CHECKOUT_PATH/teardown-array.log"',
             ],
           },
         }),
@@ -915,20 +922,20 @@ describe.skipIf(isPlatform("win32"))("worktree POSIX-only", () => {
         'echo "second" >> setup-array.log',
       ]);
       expect(getWorktreeTeardownCommands(repoDir)).toEqual([
-        'echo "first" > "$PASEO_SOURCE_CHECKOUT_PATH/teardown-array.log"',
-        'echo "second" >> "$PASEO_SOURCE_CHECKOUT_PATH/teardown-array.log"',
+        'echo "first" > "$BYSPACE_SOURCE_CHECKOUT_PATH/teardown-array.log"',
+        'echo "second" >> "$BYSPACE_SOURCE_CHECKOUT_PATH/teardown-array.log"',
       ]);
     });
 
     it("does not run setup commands when runSetup=false", async () => {
-      const paseoConfig = {
+      const byspaceConfig = {
         worktree: {
           setup: ['echo "setup ran" > setup.log'],
         },
       };
-      writeFileSync(join(repoDir, "paseo.json"), JSON.stringify(paseoConfig));
-      execFileSync("git", ["add", "paseo.json"], { cwd: repoDir });
-      execFileSync("git", ["-c", "commit.gpgsign=false", "commit", "-m", "add paseo.json"], {
+      writeFileSync(join(repoDir, "byspace.json"), JSON.stringify(byspaceConfig));
+      execFileSync("git", ["add", "byspace.json"], { cwd: repoDir });
+      execFileSync("git", ["-c", "commit.gpgsign=false", "commit", "-m", "add byspace.json"], {
         cwd: repoDir,
       });
 
@@ -938,7 +945,7 @@ describe.skipIf(isPlatform("win32"))("worktree POSIX-only", () => {
         baseBranch: "main",
         worktreeSlug: "no-setup-test",
         runSetup: false,
-        paseoHome,
+        byspaceHome,
       });
 
       expect(existsSync(result.worktreePath)).toBe(true);
@@ -946,13 +953,13 @@ describe.skipIf(isPlatform("win32"))("worktree POSIX-only", () => {
     });
 
     it("streams setup command progress events while commands are executing", async () => {
-      const paseoConfig = {
+      const byspaceConfig = {
         worktree: {
           setup: ['echo "first line"; echo "second line" 1>&2'],
         },
       };
-      writeFileSync(join(repoDir, "paseo.json"), JSON.stringify(paseoConfig));
-      execFileSync("git", ["add", "paseo.json"], { cwd: repoDir });
+      writeFileSync(join(repoDir, "byspace.json"), JSON.stringify(byspaceConfig));
+      execFileSync("git", ["add", "byspace.json"], { cwd: repoDir });
       execFileSync("git", ["-c", "commit.gpgsign=false", "commit", "-m", "add streaming setup"], {
         cwd: repoDir,
       });
@@ -980,7 +987,7 @@ describe.skipIf(isPlatform("win32"))("worktree POSIX-only", () => {
         baseBranch: "main",
         worktreeSlug: "runtime-env-port-reuse",
         runSetup: false,
-        paseoHome,
+        byspaceHome,
       });
 
       const first = await resolveWorktreeRuntimeEnv({
@@ -992,7 +999,7 @@ describe.skipIf(isPlatform("win32"))("worktree POSIX-only", () => {
         branchName: result.branchName,
       });
 
-      expect(second.PASEO_WORKTREE_PORT).toBe(first.PASEO_WORKTREE_PORT);
+      expect(second.BYSPACE_WORKTREE_PORT).toBe(first.BYSPACE_WORKTREE_PORT);
     });
 
     it("fails runtime env resolution when persisted port is in use", async () => {
@@ -1002,14 +1009,14 @@ describe.skipIf(isPlatform("win32"))("worktree POSIX-only", () => {
         baseBranch: "main",
         worktreeSlug: "runtime-env-port-conflict",
         runSetup: false,
-        paseoHome,
+        byspaceHome,
       });
 
       const env = await resolveWorktreeRuntimeEnv({
         worktreePath: result.worktreePath,
         branchName: result.branchName,
       });
-      const port = Number(env.PASEO_WORKTREE_PORT);
+      const port = Number(env.BYSPACE_WORKTREE_PORT);
 
       const server = net.createServer();
       await new Promise<void>((resolve, reject) => {
@@ -1036,19 +1043,19 @@ describe.skipIf(isPlatform("win32"))("worktree POSIX-only", () => {
     });
 
     it("cleans up worktree if setup command fails", async () => {
-      // Create paseo.json with failing setup command
-      const paseoConfig = {
+      // Create byspace.json with failing setup command
+      const byspaceConfig = {
         worktree: {
           setup: ["exit 1"],
         },
       };
-      writeFileSync(join(repoDir, "paseo.json"), JSON.stringify(paseoConfig));
-      execFileSync("git", ["add", "paseo.json"], { cwd: repoDir });
-      execFileSync("git", ["-c", "commit.gpgsign=false", "commit", "-m", "add paseo.json"], {
+      writeFileSync(join(repoDir, "byspace.json"), JSON.stringify(byspaceConfig));
+      execFileSync("git", ["add", "byspace.json"], { cwd: repoDir });
+      execFileSync("git", ["-c", "commit.gpgsign=false", "commit", "-m", "add byspace.json"], {
         cwd: repoDir,
       });
 
-      const expectedWorktreePath = join(paseoHome, "worktrees", "test-repo", "fail-test");
+      const expectedWorktreePath = join(byspaceHome, "worktrees", "test-repo", "fail-test");
 
       await expect(
         createLegacyWorktreeForTest({
@@ -1056,7 +1063,7 @@ describe.skipIf(isPlatform("win32"))("worktree POSIX-only", () => {
           cwd: repoDir,
           baseBranch: "main",
           worktreeSlug: "fail-test",
-          paseoHome,
+          byspaceHome,
         }),
       ).rejects.toThrow("Worktree setup command failed");
 
@@ -1064,8 +1071,8 @@ describe.skipIf(isPlatform("win32"))("worktree POSIX-only", () => {
       expect(existsSync(expectedWorktreePath)).toBe(false);
     });
 
-    it("reads worktree terminal specs from paseo.json with optional name", async () => {
-      const paseoConfig = {
+    it("reads worktree terminal specs from byspace.json with optional name", async () => {
+      const byspaceConfig = {
         worktree: {
           terminals: [
             { name: "Dev Server", command: "npm run dev" },
@@ -1073,7 +1080,7 @@ describe.skipIf(isPlatform("win32"))("worktree POSIX-only", () => {
           ],
         },
       };
-      writeFileSync(join(repoDir, "paseo.json"), JSON.stringify(paseoConfig));
+      writeFileSync(join(repoDir, "byspace.json"), JSON.stringify(byspaceConfig));
 
       expect(getWorktreeTerminalSpecs(repoDir)).toEqual([
         { name: "Dev Server", command: "npm run dev" },
@@ -1082,7 +1089,7 @@ describe.skipIf(isPlatform("win32"))("worktree POSIX-only", () => {
     });
 
     it("filters invalid worktree terminal specs", async () => {
-      const paseoConfig = {
+      const byspaceConfig = {
         worktree: {
           terminals: [
             null,
@@ -1093,7 +1100,7 @@ describe.skipIf(isPlatform("win32"))("worktree POSIX-only", () => {
           ],
         },
       };
-      writeFileSync(join(repoDir, "paseo.json"), JSON.stringify(paseoConfig));
+      writeFileSync(join(repoDir, "byspace.json"), JSON.stringify(byspaceConfig));
 
       expect(getWorktreeTerminalSpecs(repoDir)).toEqual([
         { name: "Watch", command: "npm run watch" },
@@ -1103,7 +1110,7 @@ describe.skipIf(isPlatform("win32"))("worktree POSIX-only", () => {
 
     it("parses omitted script type as a plain script", async () => {
       writeFileSync(
-        join(repoDir, "paseo.json"),
+        join(repoDir, "byspace.json"),
         JSON.stringify({
           scripts: {
             typecheck: {
@@ -1125,7 +1132,7 @@ describe.skipIf(isPlatform("win32"))("worktree POSIX-only", () => {
 
     it("parses service scripts and preserves optional port", async () => {
       writeFileSync(
-        join(repoDir, "paseo.json"),
+        join(repoDir, "byspace.json"),
         JSON.stringify({
           scripts: {
             server: {
@@ -1151,7 +1158,7 @@ describe.skipIf(isPlatform("win32"))("worktree POSIX-only", () => {
 
     it("ignores invalid script entries gracefully", async () => {
       writeFileSync(
-        join(repoDir, "paseo.json"),
+        join(repoDir, "byspace.json"),
         JSON.stringify({
           scripts: {
             valid: {
@@ -1186,9 +1193,9 @@ describe.skipIf(isPlatform("win32"))("worktree POSIX-only", () => {
       );
     });
 
-    it("seeds an uncommitted paseo.json from the main repo into a new worktree", async () => {
+    it("seeds an uncommitted byspace.json from the main repo into a new worktree", async () => {
       writeFileSync(
-        join(repoDir, "paseo.json"),
+        join(repoDir, "byspace.json"),
         JSON.stringify({ scripts: { dev: { command: "echo hi" } } }),
       );
 
@@ -1197,25 +1204,25 @@ describe.skipIf(isPlatform("win32"))("worktree POSIX-only", () => {
         worktreeSlug: "seed-uncommitted",
         source: { kind: "branch-off", baseBranch: "main", branchName: "feature/seed" },
         runSetup: false,
-        paseoHome,
+        byspaceHome,
       });
 
-      const worktreeConfigPath = join(result.worktreePath, "paseo.json");
+      const worktreeConfigPath = join(result.worktreePath, "byspace.json");
       expect(existsSync(worktreeConfigPath)).toBe(true);
       expect(JSON.parse(readFileSync(worktreeConfigPath, "utf8"))).toEqual({
         scripts: { dev: { command: "echo hi" } },
       });
     });
 
-    it("keeps a new worktree clean when its upstream ref has a newer paseo.json", async () => {
+    it("keeps a new worktree clean when its upstream ref has a newer byspace.json", async () => {
       const remoteDir = join(tempDir, "remote.git");
       const updaterDir = join(tempDir, "updater");
       writeFileSync(
-        join(repoDir, "paseo.json"),
+        join(repoDir, "byspace.json"),
         JSON.stringify({ worktree: { setup: "echo old" } }),
       );
-      execFileSync("git", ["add", "paseo.json"], { cwd: repoDir });
-      execFileSync("git", ["-c", "commit.gpgsign=false", "commit", "-m", "add paseo.json"], {
+      execFileSync("git", ["add", "byspace.json"], { cwd: repoDir });
+      execFileSync("git", ["-c", "commit.gpgsign=false", "commit", "-m", "add byspace.json"], {
         cwd: repoDir,
       });
       execFileSync("git", ["clone", "--bare", repoDir, remoteDir]);
@@ -1224,11 +1231,11 @@ describe.skipIf(isPlatform("win32"))("worktree POSIX-only", () => {
       execFileSync("git", ["config", "user.email", "test@test.com"], { cwd: updaterDir });
       execFileSync("git", ["config", "user.name", "Test"], { cwd: updaterDir });
       writeFileSync(
-        join(updaterDir, "paseo.json"),
+        join(updaterDir, "byspace.json"),
         JSON.stringify({ worktree: { setup: "echo new" } }),
       );
-      execFileSync("git", ["add", "paseo.json"], { cwd: updaterDir });
-      execFileSync("git", ["-c", "commit.gpgsign=false", "commit", "-m", "update paseo.json"], {
+      execFileSync("git", ["add", "byspace.json"], { cwd: updaterDir });
+      execFileSync("git", ["-c", "commit.gpgsign=false", "commit", "-m", "update byspace.json"], {
         cwd: updaterDir,
       });
       execFileSync("git", ["push", "origin", "main"], { cwd: updaterDir });
@@ -1243,10 +1250,10 @@ describe.skipIf(isPlatform("win32"))("worktree POSIX-only", () => {
           branchName: "feature/upstream-config",
         },
         runSetup: false,
-        paseoHome,
+        byspaceHome,
       });
 
-      const worktreeConfigPath = join(result.worktreePath, "paseo.json");
+      const worktreeConfigPath = join(result.worktreePath, "byspace.json");
       expect(JSON.parse(readFileSync(worktreeConfigPath, "utf8"))).toEqual({
         worktree: { setup: "echo new" },
       });
@@ -1258,19 +1265,19 @@ describe.skipIf(isPlatform("win32"))("worktree POSIX-only", () => {
       ).toBe("");
     });
 
-    it("preserves a dangling paseo.json symlink from the selected ref", async () => {
-      const externalConfigPath = join(tempDir, "outside-paseo.json");
+    it("preserves a dangling byspace.json symlink from the selected ref", async () => {
+      const externalConfigPath = join(tempDir, "outside-byspace.json");
       execFileSync("git", ["checkout", "-b", "symlink-config"], { cwd: repoDir });
-      symlinkSync(externalConfigPath, join(repoDir, "paseo.json"));
-      execFileSync("git", ["add", "paseo.json"], { cwd: repoDir });
+      symlinkSync(externalConfigPath, join(repoDir, "byspace.json"));
+      execFileSync("git", ["add", "byspace.json"], { cwd: repoDir });
       execFileSync(
         "git",
-        ["-c", "commit.gpgsign=false", "commit", "-m", "add paseo.json symlink"],
+        ["-c", "commit.gpgsign=false", "commit", "-m", "add byspace.json symlink"],
         { cwd: repoDir },
       );
       execFileSync("git", ["checkout", "main"], { cwd: repoDir });
       writeFileSync(
-        join(repoDir, "paseo.json"),
+        join(repoDir, "byspace.json"),
         JSON.stringify({ worktree: { setup: "echo source" } }),
       );
 
@@ -1283,10 +1290,10 @@ describe.skipIf(isPlatform("win32"))("worktree POSIX-only", () => {
           branchName: "feature/symlink-config",
         },
         runSetup: false,
-        paseoHome,
+        byspaceHome,
       });
 
-      const worktreeConfigPath = join(result.worktreePath, "paseo.json");
+      const worktreeConfigPath = join(result.worktreePath, "byspace.json");
       expect(lstatSync(worktreeConfigPath).isSymbolicLink()).toBe(true);
       expect(readlinkSync(worktreeConfigPath)).toBe(externalConfigPath);
       expect(existsSync(externalConfigPath)).toBe(false);
@@ -1298,28 +1305,28 @@ describe.skipIf(isPlatform("win32"))("worktree POSIX-only", () => {
       ).toBe("");
     });
 
-    it("creates a worktree without error when no paseo.json exists in the main repo", async () => {
+    it("creates a worktree without error when no byspace.json exists in the main repo", async () => {
       const result = await createLegacyWorktreeForTest({
         cwd: repoDir,
         worktreeSlug: "no-config",
         source: { kind: "branch-off", baseBranch: "main", branchName: "feature/no-config" },
         runSetup: false,
-        paseoHome,
+        byspaceHome,
       });
 
-      expect(existsSync(join(result.worktreePath, "paseo.json"))).toBe(false);
+      expect(existsSync(join(result.worktreePath, "byspace.json"))).toBe(false);
     });
   });
 
-  describe("paseo worktree manager", () => {
+  describe("byspace worktree manager", () => {
     let tempDir: string;
     let repoDir: string;
-    let paseoHome: string;
+    let byspaceHome: string;
 
     beforeEach(() => {
       tempDir = realpathSync(mkdtempSync(join(tmpdir(), "worktree-manager-test-")));
       repoDir = join(tempDir, "test-repo");
-      paseoHome = join(tempDir, "paseo-home");
+      byspaceHome = join(tempDir, "byspace-home");
 
       mkdirSync(repoDir, { recursive: true });
       execFileSync("git", ["init", "-b", "main"], { cwd: repoDir });
@@ -1357,87 +1364,87 @@ describe.skipIf(isPlatform("win32"))("worktree POSIX-only", () => {
         cwd: repoA,
         baseBranch: "main",
         worktreeSlug: "alpha",
-        paseoHome,
+        byspaceHome,
       });
       const fromRepoB = await createLegacyWorktreeForTest({
         branchName: "main",
         cwd: repoB,
         baseBranch: "main",
         worktreeSlug: "alpha",
-        paseoHome,
+        byspaceHome,
       });
 
       expect(dirname(fromRepoA.worktreePath)).not.toBe(dirname(fromRepoB.worktreePath));
       expect(fromRepoA.worktreePath.endsWith("alpha-1")).toBe(false);
       expect(fromRepoB.worktreePath.endsWith("alpha-1")).toBe(false);
 
-      const repoAWorktrees = await listPaseoWorktrees({ cwd: repoA, paseoHome });
-      const repoBWorktrees = await listPaseoWorktrees({ cwd: repoB, paseoHome });
+      const repoAWorktrees = await listBySpaceWorktrees({ cwd: repoA, byspaceHome });
+      const repoBWorktrees = await listBySpaceWorktrees({ cwd: repoB, byspaceHome });
 
       expect(repoAWorktrees.map((entry) => entry.path)).toEqual([fromRepoA.worktreePath]);
       expect(repoBWorktrees.map((entry) => entry.path)).toEqual([fromRepoB.worktreePath]);
     });
 
-    it("lists and deletes paseo worktrees under ~/.paseo/worktrees/{hash}", async () => {
+    it("lists and deletes byspace worktrees under ~/.byspace/worktrees/{hash}", async () => {
       const first = await createLegacyWorktreeForTest({
         branchName: "main",
         cwd: repoDir,
         baseBranch: "main",
         worktreeSlug: "alpha",
-        paseoHome,
+        byspaceHome,
       });
       const second = await createLegacyWorktreeForTest({
         branchName: "main",
         cwd: repoDir,
         baseBranch: "main",
         worktreeSlug: "beta",
-        paseoHome,
+        byspaceHome,
       });
 
-      const worktrees = await listPaseoWorktrees({ cwd: repoDir, paseoHome });
+      const worktrees = await listBySpaceWorktrees({ cwd: repoDir, byspaceHome });
       const paths = worktrees.map((worktree) => worktree.path).sort();
       expect(paths).toEqual([first.worktreePath, second.worktreePath].sort());
 
-      await deletePaseoWorktree({ cwd: repoDir, worktreePath: first.worktreePath, paseoHome });
+      await deleteBySpaceWorktree({ cwd: repoDir, worktreePath: first.worktreePath, byspaceHome });
       expect(existsSync(first.worktreePath)).toBe(false);
 
-      const remaining = await listPaseoWorktrees({ cwd: repoDir, paseoHome });
+      const remaining = await listBySpaceWorktrees({ cwd: repoDir, byspaceHome });
       expect(remaining.map((worktree) => worktree.path)).toEqual([second.worktreePath]);
     });
 
-    it("deletes a paseo worktree even when given a subdirectory path", async () => {
+    it("deletes a byspace worktree even when given a subdirectory path", async () => {
       const created = await createLegacyWorktreeForTest({
         branchName: "main",
         cwd: repoDir,
         baseBranch: "main",
         worktreeSlug: "alpha",
-        paseoHome,
+        byspaceHome,
       });
 
       const nestedDir = join(created.worktreePath, "nested", "dir");
       mkdirSync(nestedDir, { recursive: true });
 
-      await deletePaseoWorktree({ cwd: repoDir, worktreePath: nestedDir, paseoHome });
+      await deleteBySpaceWorktree({ cwd: repoDir, worktreePath: nestedDir, byspaceHome });
       expect(existsSync(created.worktreePath)).toBe(false);
 
-      const remaining = await listPaseoWorktrees({ cwd: repoDir, paseoHome });
+      const remaining = await listBySpaceWorktrees({ cwd: repoDir, byspaceHome });
       expect(remaining.some((worktree) => worktree.path === created.worktreePath)).toBe(false);
     });
 
-    it("runs teardown commands from paseo.json before deleting a worktree", async () => {
-      const paseoConfig = {
+    it("runs teardown commands from byspace.json before deleting a worktree", async () => {
+      const byspaceConfig = {
         worktree: {
           teardown: [
-            'echo "source=$PASEO_SOURCE_CHECKOUT_PATH" > "$PASEO_SOURCE_CHECKOUT_PATH/teardown.log"',
-            'echo "root_alias=$PASEO_ROOT_PATH" >> "$PASEO_SOURCE_CHECKOUT_PATH/teardown.log"',
-            'echo "worktree=$PASEO_WORKTREE_PATH" >> "$PASEO_SOURCE_CHECKOUT_PATH/teardown.log"',
-            'echo "branch=$PASEO_BRANCH_NAME" >> "$PASEO_SOURCE_CHECKOUT_PATH/teardown.log"',
-            'echo "port=$PASEO_WORKTREE_PORT" >> "$PASEO_SOURCE_CHECKOUT_PATH/teardown.log"',
+            'echo "source=$BYSPACE_SOURCE_CHECKOUT_PATH" > "$BYSPACE_SOURCE_CHECKOUT_PATH/teardown.log"',
+            'echo "root_alias=$BYSPACE_ROOT_PATH" >> "$BYSPACE_SOURCE_CHECKOUT_PATH/teardown.log"',
+            'echo "worktree=$BYSPACE_WORKTREE_PATH" >> "$BYSPACE_SOURCE_CHECKOUT_PATH/teardown.log"',
+            'echo "branch=$BYSPACE_BRANCH_NAME" >> "$BYSPACE_SOURCE_CHECKOUT_PATH/teardown.log"',
+            'echo "port=$BYSPACE_WORKTREE_PORT" >> "$BYSPACE_SOURCE_CHECKOUT_PATH/teardown.log"',
           ],
         },
       };
-      writeFileSync(join(repoDir, "paseo.json"), JSON.stringify(paseoConfig));
-      execFileSync("git", ["add", "paseo.json"], { cwd: repoDir });
+      writeFileSync(join(repoDir, "byspace.json"), JSON.stringify(byspaceConfig));
+      execFileSync("git", ["add", "byspace.json"], { cwd: repoDir });
       execFileSync("git", ["-c", "commit.gpgsign=false", "commit", "-m", "add teardown commands"], {
         cwd: repoDir,
       });
@@ -1447,14 +1454,18 @@ describe.skipIf(isPlatform("win32"))("worktree POSIX-only", () => {
         cwd: repoDir,
         baseBranch: "main",
         worktreeSlug: "teardown-test",
-        paseoHome,
+        byspaceHome,
       });
       const runtimeEnv = await resolveWorktreeRuntimeEnv({
         worktreePath: created.worktreePath,
         branchName: created.branchName,
       });
 
-      await deletePaseoWorktree({ cwd: repoDir, worktreePath: created.worktreePath, paseoHome });
+      await deleteBySpaceWorktree({
+        cwd: repoDir,
+        worktreePath: created.worktreePath,
+        byspaceHome,
+      });
       expect(existsSync(created.worktreePath)).toBe(false);
 
       const teardownLog = readFileSync(join(repoDir, "teardown.log"), "utf8");
@@ -1462,18 +1473,18 @@ describe.skipIf(isPlatform("win32"))("worktree POSIX-only", () => {
       expect(teardownLog).toContain(`root_alias=${repoDir}`);
       expect(teardownLog).toContain(`worktree=${created.worktreePath}`);
       expect(teardownLog).toContain("branch=teardown-branch");
-      expect(teardownLog).toContain(`port=${runtimeEnv.PASEO_WORKTREE_PORT}`);
+      expect(teardownLog).toContain(`port=${runtimeEnv.BYSPACE_WORKTREE_PORT}`);
     });
 
-    it("runs string teardown scripts from paseo.json as a single shell command", async () => {
-      const paseoConfig = {
+    it("runs string teardown scripts from byspace.json as a single shell command", async () => {
+      const byspaceConfig = {
         worktree: {
           teardown:
-            'cleanup_message="teardown string"\necho "$cleanup_message" > "$PASEO_SOURCE_CHECKOUT_PATH/teardown.log"',
+            'cleanup_message="teardown string"\necho "$cleanup_message" > "$BYSPACE_SOURCE_CHECKOUT_PATH/teardown.log"',
         },
       };
-      writeFileSync(join(repoDir, "paseo.json"), JSON.stringify(paseoConfig));
-      execFileSync("git", ["add", "paseo.json"], { cwd: repoDir });
+      writeFileSync(join(repoDir, "byspace.json"), JSON.stringify(byspaceConfig));
+      execFileSync("git", ["add", "byspace.json"], { cwd: repoDir });
       execFileSync("git", ["-c", "commit.gpgsign=false", "commit", "-m", "add string teardown"], {
         cwd: repoDir,
       });
@@ -1483,27 +1494,31 @@ describe.skipIf(isPlatform("win32"))("worktree POSIX-only", () => {
         cwd: repoDir,
         baseBranch: "main",
         worktreeSlug: "teardown-string-test",
-        paseoHome,
+        byspaceHome,
       });
 
-      await deletePaseoWorktree({ cwd: repoDir, worktreePath: created.worktreePath, paseoHome });
+      await deleteBySpaceWorktree({
+        cwd: repoDir,
+        worktreePath: created.worktreePath,
+        byspaceHome,
+      });
 
       expect(getWorktreeTeardownCommands(repoDir)).toEqual([
-        'cleanup_message="teardown string"\necho "$cleanup_message" > "$PASEO_SOURCE_CHECKOUT_PATH/teardown.log"',
+        'cleanup_message="teardown string"\necho "$cleanup_message" > "$BYSPACE_SOURCE_CHECKOUT_PATH/teardown.log"',
       ]);
       expect(readFileSync(join(repoDir, "teardown.log"), "utf8").trim()).toBe("teardown string");
     });
 
-    it("omits PASEO_WORKTREE_PORT from teardown env when runtime metadata is missing", async () => {
-      const paseoConfig = {
+    it("omits BYSPACE_WORKTREE_PORT from teardown env when runtime metadata is missing", async () => {
+      const byspaceConfig = {
         worktree: {
           teardown: [
-            'echo "port=${PASEO_WORKTREE_PORT-unset}" > "$PASEO_SOURCE_CHECKOUT_PATH/teardown-port.log"',
+            'echo "port=${BYSPACE_WORKTREE_PORT-unset}" > "$BYSPACE_SOURCE_CHECKOUT_PATH/teardown-port.log"',
           ],
         },
       };
-      writeFileSync(join(repoDir, "paseo.json"), JSON.stringify(paseoConfig));
-      execFileSync("git", ["add", "paseo.json"], { cwd: repoDir });
+      writeFileSync(join(repoDir, "byspace.json"), JSON.stringify(byspaceConfig));
+      execFileSync("git", ["add", "byspace.json"], { cwd: repoDir });
       execFileSync(
         "git",
         ["-c", "commit.gpgsign=false", "commit", "-m", "add teardown port logging"],
@@ -1515,26 +1530,30 @@ describe.skipIf(isPlatform("win32"))("worktree POSIX-only", () => {
         cwd: repoDir,
         baseBranch: "main",
         worktreeSlug: "teardown-port-missing-test",
-        paseoHome,
+        byspaceHome,
       });
 
-      await deletePaseoWorktree({ cwd: repoDir, worktreePath: created.worktreePath, paseoHome });
+      await deleteBySpaceWorktree({
+        cwd: repoDir,
+        worktreePath: created.worktreePath,
+        byspaceHome,
+      });
 
       expect(readFileSync(join(repoDir, "teardown-port.log"), "utf8").trim()).toBe("port=unset");
       expect(existsSync(created.worktreePath)).toBe(false);
     });
 
     it("does not remove worktree when a teardown command fails", async () => {
-      const paseoConfig = {
+      const byspaceConfig = {
         worktree: {
           teardown: [
-            'echo "started" > "$PASEO_SOURCE_CHECKOUT_PATH/teardown-start.log"',
+            'echo "started" > "$BYSPACE_SOURCE_CHECKOUT_PATH/teardown-start.log"',
             "echo boom 1>&2; exit 9",
           ],
         },
       };
-      writeFileSync(join(repoDir, "paseo.json"), JSON.stringify(paseoConfig));
-      execFileSync("git", ["add", "paseo.json"], { cwd: repoDir });
+      writeFileSync(join(repoDir, "byspace.json"), JSON.stringify(byspaceConfig));
+      execFileSync("git", ["add", "byspace.json"], { cwd: repoDir });
       execFileSync(
         "git",
         ["-c", "commit.gpgsign=false", "commit", "-m", "add failing teardown commands"],
@@ -1546,11 +1565,11 @@ describe.skipIf(isPlatform("win32"))("worktree POSIX-only", () => {
         cwd: repoDir,
         baseBranch: "main",
         worktreeSlug: "teardown-failure-test",
-        paseoHome,
+        byspaceHome,
       });
 
       await expect(
-        deletePaseoWorktree({ cwd: repoDir, worktreePath: created.worktreePath, paseoHome }),
+        deleteBySpaceWorktree({ cwd: repoDir, worktreePath: created.worktreePath, byspaceHome }),
       ).rejects.toThrow("Worktree teardown command failed");
 
       expect(existsSync(created.worktreePath)).toBe(true);

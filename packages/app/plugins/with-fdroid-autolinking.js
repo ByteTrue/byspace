@@ -11,26 +11,26 @@ const EXCLUDED_ANDROID_MODULES = [
   "expo-dev-menu-interface",
 ];
 
-const FDROID_ABI_VERSION_CODE_BLOCK = `// Paseo F-Droid single-ABI version codes
-def paseoAbiVersionCodes = [
+const FDROID_ABI_VERSION_CODE_BLOCK = `// BySpace F-Droid single-ABI version codes
+def byspaceAbiVersionCodes = [
     "armeabi-v7a": 1,
     "arm64-v8a": 2,
     "x86": 3,
     "x86_64": 4,
 ]
-def paseoArchitectures = (findProperty("reactNativeArchitectures") ?: "")
+def byspaceArchitectures = (findProperty("reactNativeArchitectures") ?: "")
     .toString()
     .split(",")
     .collect { it.trim() }
     .findAll { !it.isEmpty() }
 
-if (paseoArchitectures.size() == 1) {
-    def paseoAbi = paseoArchitectures[0]
-    def paseoAbiVersionCode = paseoAbiVersionCodes[paseoAbi]
-    if (paseoAbiVersionCode == null) {
-        throw new GradleException("Unsupported Paseo Android ABI: " + paseoAbi)
+if (byspaceArchitectures.size() == 1) {
+    def byspaceAbi = byspaceArchitectures[0]
+    def byspaceAbiVersionCode = byspaceAbiVersionCodes[byspaceAbi]
+    if (byspaceAbiVersionCode == null) {
+        throw new GradleException("Unsupported BySpace Android ABI: " + byspaceAbi)
     }
-    android.defaultConfig.versionCode = android.defaultConfig.versionCode * 10 + paseoAbiVersionCode
+    android.defaultConfig.versionCode = android.defaultConfig.versionCode * 10 + byspaceAbiVersionCode
 }
 `;
 
@@ -49,7 +49,7 @@ function configureFdroidAppBuildGradle(contents) {
     );
   }
 
-  if (!configuredContents.includes("// Paseo F-Droid single-ABI version codes")) {
+  if (!configuredContents.includes("// BySpace F-Droid single-ABI version codes")) {
     configuredContents = `${configuredContents.trimEnd()}\n\n${FDROID_ABI_VERSION_CODE_BLOCK}`;
   }
 

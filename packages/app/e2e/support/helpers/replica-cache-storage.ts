@@ -1,8 +1,8 @@
 import type { Page } from "@playwright/test";
 
-const DATABASE_NAME = "paseo-replica-cache";
+const DATABASE_NAME = "byspace-replica-cache";
 const STORE_NAME = "key-value";
-const STORAGE_KEY = "@paseo:replica-cache";
+const STORAGE_KEY = "@byspace:replica-cache";
 
 export interface ReplicaCacheRecord {
   version?: number;

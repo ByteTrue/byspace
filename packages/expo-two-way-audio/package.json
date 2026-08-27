@@ -1,5 +1,5 @@
 {
-  "name": "@getpaseo/expo-two-way-audio",
+  "name": "@bytetrue/byspace-expo-two-way-audio",
   "version": "0.6.1",
   "description": "Native module for two way audio streaming",
   "keywords": [

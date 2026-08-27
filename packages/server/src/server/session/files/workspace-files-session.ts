@@ -1,10 +1,10 @@
 import type pino from "pino";
-import { getErrorMessage } from "@getpaseo/protocol/error-utils";
+import { getErrorMessage } from "@bytetrue/byspace-protocol/error-utils";
 import {
   encodeFileTransferFrame,
   FileTransferOpcode,
   type FileTransferFrame,
-} from "@getpaseo/protocol/binary-frames/index";
+} from "@bytetrue/byspace-protocol/binary-frames/index";
 import type {
   FileDownloadTokenRequest,
   FileEntryCreateRequest,
@@ -50,7 +50,7 @@ export interface WorkspaceFilesSessionHost {
 export interface WorkspaceFilesSessionOptions {
   host: WorkspaceFilesSessionHost;
   downloadTokenStore: DownloadTokenStore;
-  paseoHome: string;
+  byspaceHome: string;
   logger: pino.Logger;
   fileObserver?: FileObserver;
 }
@@ -74,7 +74,7 @@ export class WorkspaceFilesSession {
     this.host = options.host;
     this.downloadTokenStore = options.downloadTokenStore;
     this.logger = options.logger;
-    this.fileUploads = new FileUploadStore({ paseoHome: options.paseoHome });
+    this.fileUploads = new FileUploadStore({ byspaceHome: options.byspaceHome });
     this.fileObserver = options.fileObserver ?? workspaceFileObserver;
   }
 

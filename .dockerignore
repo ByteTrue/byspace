@@ -4,8 +4,8 @@
 .dev
 .playwright-mcp
 **/.playwright-mcp
-.paseo
-**/.paseo-provider-history
+.byspace
+**/.byspace-provider-history
 .plans
 .tasks
 .valknut

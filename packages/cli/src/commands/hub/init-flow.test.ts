@@ -3,7 +3,7 @@ import { mkdtemp, mkdir, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, it } from "vitest";
-import type { ProviderSnapshotEntry } from "@getpaseo/protocol/agent-types";
+import type { ProviderSnapshotEntry } from "@bytetrue/byspace-protocol/agent-types";
 import type { HubCredentialStore, StoredHubCredential } from "./credentials.js";
 import type { HubDaemonClient, HubStatus } from "./daemon-client.js";
 import type { HubHttpClient } from "./hub-client/index.js";
@@ -35,7 +35,7 @@ describe("Hub guided setup continuation", () => {
       {
         env: {},
         credentials,
-        flow: { authorize: async () => "paseo_cli_prefix_durable-secret" },
+        flow: { authorize: async () => "byspace_cli_prefix_durable-secret" },
         isInteractive: () => true,
         continueGuidedSetup: (origin) => continueHubGuidedSetup(origin, environment),
         reporter: { progress() {} },
@@ -57,8 +57,8 @@ describe("Hub guided setup continuation", () => {
       ["Read only", "Full access (suggested)"],
     ]);
     assert.deepEqual(prompts.messages, [
-      "Hub app connections ready for this workflow:\nSlack — Paseo\n\nOnly configured connections are shown. To add another, open Hub → Apps, then run `paseo hub init` again.",
-      "Using Slack — Paseo",
+      "Hub app connections ready for this workflow:\nSlack — BySpace\n\nOnly configured connections are shown. To add another, open Hub → Apps, then run `byspace hub init` again.",
+      "Using Slack — BySpace",
     ]);
     assert.deepEqual(calls, [
       { operation: "token", origin: "https://hub.test" },
@@ -68,17 +68,17 @@ describe("Hub guided setup continuation", () => {
       {
         operation: "validate",
         origin: "https://hub.test",
-        files: [".paseo/hub.yml", ".paseo/workflows/slack-help.yml"],
+        files: [".byspace/hub.yml", ".byspace/workflows/slack-help.yml"],
       },
       {
         operation: "install",
         origin: "https://hub.test",
-        files: [".paseo/hub.yml", ".paseo/workflows/slack-help.yml"],
+        files: [".byspace/hub.yml", ".byspace/workflows/slack-help.yml"],
       },
     ]);
     assert.equal(daemon.connections, 1);
     assert.deepEqual(daemon.snapshotCwds, [cwd]);
-    const hub = await readFile(path.join(cwd, ".paseo", "hub.yml"), "utf8");
+    const hub = await readFile(path.join(cwd, ".byspace", "hub.yml"), "utf8");
     assert.match(hub, /daemon: macbook/u);
     assert.match(hub, /provider: codex\n    model: gpt-5\n    mode: full-access/u);
   });
@@ -95,7 +95,7 @@ describe("Hub guided setup continuation", () => {
       setupEnvironment(cwd, credentials, daemon, connectDeclined, []),
     );
     assert.deepEqual(connectDeclined.messages, [
-      "Skipped daemon connection. Run: paseo hub connect https://hub.test; then paseo hub init",
+      "Skipped daemon connection. Run: byspace hub connect https://hub.test; then byspace hub init",
     ]);
 
     const initDeclined = new PromptAnswers([true, false], [], []);
@@ -103,7 +103,7 @@ describe("Hub guided setup continuation", () => {
       "https://hub.test",
       setupEnvironment(cwd, credentials, daemon, initDeclined, []),
     );
-    assert.deepEqual(initDeclined.messages, ["Skipped starter workflow. Run: paseo hub init"]);
+    assert.deepEqual(initDeclined.messages, ["Skipped starter workflow. Run: byspace hub init"]);
   });
 
   it("keeps login successful when no Hub app connection can initialize a workflow", async () => {
@@ -118,7 +118,7 @@ describe("Hub guided setup continuation", () => {
       {
         env: {},
         credentials,
-        flow: { authorize: async () => "paseo_cli_prefix_durable-secret" },
+        flow: { authorize: async () => "byspace_cli_prefix_durable-secret" },
         isInteractive: () => true,
         continueGuidedSetup: (origin) =>
           continueHubGuidedSetup(
@@ -132,22 +132,22 @@ describe("Hub guided setup continuation", () => {
     );
 
     assert.deepEqual(prompts.messages, [
-      "No Hub app connection is ready for this workflow.\nConnect GitHub, Slack, or Discord in Hub → Apps, then run `paseo hub init` again.",
+      "No Hub app connection is ready for this workflow.\nConnect GitHub, Slack, or Discord in Hub → Apps, then run `byspace hub init` again.",
     ]);
   });
 
   it("keeps hub init's existing replacement confirmation", async () => {
     const cwd = await temporaryDirectory();
-    await mkdir(path.join(cwd, ".paseo"));
+    await mkdir(path.join(cwd, ".byspace"));
     const prompts = new PromptAnswers([false], [], []);
 
     await assert.rejects(
       runHubGuidedSetup(
         setupEnvironment(cwd, new MemoryCredentials(), new SetupDaemon(), prompts, []),
       ),
-      /Existing .paseo\/ bundle left unchanged/u,
+      /Existing .byspace\/ bundle left unchanged/u,
     );
-    assert.deepEqual(prompts.confirmations, ["Replace the existing .paseo/ Hub bundle?"]);
+    assert.deepEqual(prompts.confirmations, ["Replace the existing .byspace/ Hub bundle?"]);
   });
 
   it("writes the explicitly selected Claude mode when the daemon has no default", async () => {
@@ -179,7 +179,7 @@ describe("Hub guided setup continuation", () => {
       ["Auto"],
     ]);
     assert.match(
-      await readFile(path.join(cwd, ".paseo", "hub.yml"), "utf8"),
+      await readFile(path.join(cwd, ".byspace", "hub.yml"), "utf8"),
       /provider: claude\n    model: sonnet\n    mode: auto/u,
     );
     assert.deepEqual(
@@ -206,7 +206,7 @@ describe("Hub guided setup continuation", () => {
     );
 
     assert.equal(daemon.snapshotCwds.length, 0);
-    await assert.rejects(readFile(path.join(cwd, ".paseo", "hub.yml")), { code: "ENOENT" });
+    await assert.rejects(readFile(path.join(cwd, ".byspace", "hub.yml")), { code: "ENOENT" });
   });
 
   it("waits for fresh-daemon provider discovery before offering runtime choices", async () => {
@@ -260,7 +260,7 @@ function setupEnvironment(
         options.setupResources ?? {
           github: [],
           discord: [],
-          slack: [{ teamId: "T123", teamName: "Paseo" }],
+          slack: [{ teamId: "T123", teamName: "BySpace" }],
         }
       );
     },
@@ -294,7 +294,7 @@ function setupEnvironment(
     env: {},
     credentials,
     hub,
-    login: { authorize: async () => "paseo_cli_prefix_durable-secret" },
+    login: { authorize: async () => "byspace_cli_prefix_durable-secret" },
     daemon: { connect: async () => daemon },
     reporter: { progress() {} },
     cwd: () => cwd,
@@ -439,7 +439,7 @@ function disconnectedStatus(): HubStatus {
 }
 
 async function temporaryDirectory(): Promise<string> {
-  const directory = await mkdtemp(path.join(tmpdir(), "paseo-hub-init-flow-"));
+  const directory = await mkdtemp(path.join(tmpdir(), "byspace-hub-init-flow-"));
   directories.push(directory);
   return directory;
 }

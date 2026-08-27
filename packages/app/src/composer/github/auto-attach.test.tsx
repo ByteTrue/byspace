@@ -8,19 +8,19 @@ import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 import type { UserComposerAttachment } from "@/attachments/types";
 import type { ForgeSearchClient } from "@/git/use-forge-search-query";
-import type { ForgeSearchItem, ForgeSearchResponse } from "@getpaseo/protocol/messages";
+import type { ForgeSearchItem, ForgeSearchResponse } from "@bytetrue/byspace-protocol/messages";
 import { useComposerGithubAutoAttach } from "./auto-attach";
 
 type ForgeSearchPayload = ForgeSearchResponse["payload"];
 
-const remoteUrl = "git@github.com:acme/paseo.git";
+const remoteUrl = "git@github.com:acme/byspace.git";
 const cwd = "/repo";
 
 const pr101: ForgeSearchItem = {
   kind: "change_request",
   number: 101,
   title: "Attach PR",
-  url: "https://github.com/acme/paseo/pull/101",
+  url: "https://github.com/acme/byspace/pull/101",
   state: "open",
   body: null,
   labels: [],
@@ -32,7 +32,7 @@ const pr202: ForgeSearchItem = {
   ...pr101,
   number: 202,
   title: "Attach second PR",
-  url: "https://github.com/acme/paseo/pull/202",
+  url: "https://github.com/acme/byspace/pull/202",
   headRefName: "feature-two",
 };
 
@@ -40,7 +40,7 @@ const issue202: ForgeSearchItem = {
   kind: "issue",
   number: 202,
   title: "Attach issue",
-  url: "https://github.com/acme/paseo/issues/202",
+  url: "https://github.com/acme/byspace/issues/202",
   state: "open",
   body: null,
   labels: [],
@@ -153,7 +153,7 @@ describe("useComposerGithubAutoAttach", () => {
     });
 
     act(() => {
-      result.current.setText("Please review https://github.com/acme/paseo/pull/101");
+      result.current.setText("Please review https://github.com/acme/byspace/pull/101");
     });
     expect(result.current.isResolving).toBe(true);
     expect(onPullRequestDetected).toHaveBeenCalledTimes(1);
@@ -171,7 +171,7 @@ describe("useComposerGithubAutoAttach", () => {
     const { result } = renderHook(() => useHarness(client), { wrapper: createWrapper() });
 
     act(() => {
-      result.current.setText("Other repo https://github.com/other/paseo/pull/101");
+      result.current.setText("Other repo https://github.com/other/byspace/pull/101");
     });
     await flushDebounce();
 
@@ -189,7 +189,7 @@ describe("useComposerGithubAutoAttach", () => {
     });
 
     act(() => {
-      result.current.setText("Already here https://github.com/acme/paseo/pull/101");
+      result.current.setText("Already here https://github.com/acme/byspace/pull/101");
     });
     await flushDebounce();
 
@@ -209,7 +209,7 @@ describe("useComposerGithubAutoAttach", () => {
     act(() => {
       result.current.markGithubAttachmentRemoved(initialAttachments[0]);
       result.current.setAttachments([]);
-      result.current.setText("Re-pasted https://github.com/acme/paseo/pull/101");
+      result.current.setText("Re-pasted https://github.com/acme/byspace/pull/101");
     });
     await flushDebounce();
 
@@ -225,7 +225,7 @@ describe("useComposerGithubAutoAttach", () => {
 
     act(() => {
       result.current.setText(
-        "Refs https://github.com/acme/paseo/pull/101 and https://github.com/acme/paseo/issues/202",
+        "Refs https://github.com/acme/byspace/pull/101 and https://github.com/acme/byspace/issues/202",
       );
     });
     await flushDebounce();
@@ -258,7 +258,7 @@ describe("useComposerGithubAutoAttach", () => {
 
     act(() => {
       result.current.setText(
-        "Refs https://github.com/acme/paseo/pull/101 and https://github.com/acme/paseo/pull/202",
+        "Refs https://github.com/acme/byspace/pull/101 and https://github.com/acme/byspace/pull/202",
       );
     });
     await flushDebounce();
@@ -300,12 +300,12 @@ describe("useComposerGithubAutoAttach", () => {
     });
 
     act(() => {
-      result.current.setText("Review https://github.com/acme/paseo/pull/101");
+      result.current.setText("Review https://github.com/acme/byspace/pull/101");
     });
     await flushDebounce();
     act(() => {
       result.current.setText(
-        "Review https://github.com/acme/paseo/pull/101 and https://github.com/acme/paseo/pull/202",
+        "Review https://github.com/acme/byspace/pull/101 and https://github.com/acme/byspace/pull/202",
       );
     });
     expect(result.current.isResolving).toBe(true);
@@ -345,12 +345,12 @@ describe("useComposerGithubAutoAttach", () => {
 
     act(() => {
       result.current.setText(
-        "Refs https://github.com/acme/paseo/pull/101 and https://github.com/acme/paseo/pull/202",
+        "Refs https://github.com/acme/byspace/pull/101 and https://github.com/acme/byspace/pull/202",
       );
     });
     act(() => {
       result.current.setText(
-        "Refs https://github.com/acme/paseo/pull/202 and https://github.com/acme/paseo/pull/101",
+        "Refs https://github.com/acme/byspace/pull/202 and https://github.com/acme/byspace/pull/101",
       );
     });
     await flushDebounce();
@@ -380,13 +380,13 @@ describe("useComposerGithubAutoAttach", () => {
 
     act(() => {
       result.current.setText(
-        "Refs https://github.com/acme/paseo/pull/101 and https://github.com/acme/paseo/pull/202",
+        "Refs https://github.com/acme/byspace/pull/101 and https://github.com/acme/byspace/pull/202",
       );
     });
     await flushDebounce();
     act(() => {
       result.current.setText(
-        "Refs https://github.com/acme/paseo/pull/202 and https://github.com/acme/paseo/pull/101",
+        "Refs https://github.com/acme/byspace/pull/202 and https://github.com/acme/byspace/pull/101",
       );
     });
     await flushDebounce();
@@ -432,7 +432,7 @@ describe("useComposerGithubAutoAttach", () => {
 
     act(() => {
       result.current.setText(
-        "Refs https://github.com/acme/paseo/pull/101 and https://github.com/acme/paseo/pull/202",
+        "Refs https://github.com/acme/byspace/pull/101 and https://github.com/acme/byspace/pull/202",
       );
     });
     await flushDebounce();
@@ -442,7 +442,7 @@ describe("useComposerGithubAutoAttach", () => {
       await Promise.resolve();
     });
     act(() => {
-      result.current.setText("Still https://github.com/acme/paseo/pull/101");
+      result.current.setText("Still https://github.com/acme/byspace/pull/101");
     });
     await flushDebounce();
 
@@ -468,7 +468,7 @@ describe("useComposerGithubAutoAttach", () => {
     });
 
     act(() => {
-      result.current.setText("Review https://github.com/acme/paseo/pull/101");
+      result.current.setText("Review https://github.com/acme/byspace/pull/101");
     });
     await flushDebounce();
 
@@ -478,7 +478,7 @@ describe("useComposerGithubAutoAttach", () => {
     expect(result.current.isResolving).toBe(false);
 
     act(() => {
-      result.current.setText("Review https://github.com/acme/paseo/pull/101");
+      result.current.setText("Review https://github.com/acme/byspace/pull/101");
     });
     expect(result.current.isResolving).toBe(true);
     await flushDebounce();
@@ -513,7 +513,7 @@ describe("useComposerGithubAutoAttach", () => {
 
     act(() => {
       result.current.setText(
-        "Refs https://github.com/acme/paseo/pull/101 and https://github.com/acme/paseo/pull/202",
+        "Refs https://github.com/acme/byspace/pull/101 and https://github.com/acme/byspace/pull/202",
       );
     });
     await flushDebounce();
@@ -526,7 +526,7 @@ describe("useComposerGithubAutoAttach", () => {
     expect(result.current.isResolving).toBe(true);
 
     act(() => {
-      result.current.setText("Still https://github.com/acme/paseo/pull/202");
+      result.current.setText("Still https://github.com/acme/byspace/pull/202");
     });
     await flushDebounce();
 
@@ -551,13 +551,13 @@ describe("useComposerGithubAutoAttach", () => {
     const { result } = renderHook(() => useHarness(client), { wrapper: createWrapper() });
 
     act(() => {
-      result.current.setText("Review https://github.com/acme/paseo/pull/101");
+      result.current.setText("Review https://github.com/acme/byspace/pull/101");
     });
     await flushDebounce();
 
     act(() => {
       result.current.setAttachments([{ kind: "forge_issue", item: issue202 }]);
-      result.current.setText("Review https://github.com/acme/paseo/pull/101 please");
+      result.current.setText("Review https://github.com/acme/byspace/pull/101 please");
     });
 
     expect(result.current.isResolving).toBe(true);
@@ -584,7 +584,7 @@ describe("useComposerGithubAutoAttach", () => {
     const { result } = renderHook(() => useHarness(client), { wrapper: createWrapper() });
 
     act(() => {
-      result.current.setText("Review https://github.com/acme/paseo/pull/101");
+      result.current.setText("Review https://github.com/acme/byspace/pull/101");
     });
     await flushDebounce();
     act(() => {
@@ -604,7 +604,7 @@ describe("useComposerGithubAutoAttach", () => {
     const { result } = renderHook(() => useHarness(client), { wrapper: createWrapper() });
 
     act(() => {
-      result.current.setText("Review https://github.com/acme/paseo/pull/101");
+      result.current.setText("Review https://github.com/acme/byspace/pull/101");
     });
     await flushDebounce();
 
@@ -632,7 +632,7 @@ describe("useComposerGithubAutoAttach", () => {
     const { result } = renderHook(() => useHarness(firstClient), { wrapper: createWrapper() });
 
     act(() => {
-      result.current.setText("Review https://github.com/acme/paseo/pull/101");
+      result.current.setText("Review https://github.com/acme/byspace/pull/101");
     });
     await flushDebounce();
     act(() => {

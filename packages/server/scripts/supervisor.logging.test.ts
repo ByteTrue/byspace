@@ -22,7 +22,7 @@ async function runSupervisorFixture(options: {
   stdout: string;
   stderr: string;
 }> {
-  const tempDir = await mkdtemp(path.join(tmpdir(), "paseo-supervisor-log-"));
+  const tempDir = await mkdtemp(path.join(tmpdir(), "byspace-supervisor-log-"));
   const logPath = path.join(tempDir, "daemon.log");
   const workerPath = path.join(tempDir, "worker.mjs");
   const runnerPath = path.join(tempDir, "runner.mjs");
@@ -92,19 +92,19 @@ async function runSupervisorFixture(options: {
 
 describe("supervisor durable logging", () => {
   test("resolves rotation defaults", () => {
-    const paseoHome = path.join(path.sep, "tmp", "paseo-home");
-    const logFile = resolveSupervisorLogFile(paseoHome, {}, {});
+    const byspaceHome = path.join(path.sep, "tmp", "byspace-home");
+    const logFile = resolveSupervisorLogFile(byspaceHome, {}, {});
 
     expect(logFile).toEqual({
-      path: path.join(paseoHome, "daemon.log"),
+      path: path.join(byspaceHome, "daemon.log"),
       rotate: { maxSize: "10m", maxFiles: 3 },
     });
   });
 
   test("lets persisted rotation override env rotation defaults", () => {
-    const paseoHome = path.join(path.sep, "tmp", "paseo-home");
+    const byspaceHome = path.join(path.sep, "tmp", "byspace-home");
     const logFile = resolveSupervisorLogFile(
-      paseoHome,
+      byspaceHome,
       {
         log: {
           file: {
@@ -114,30 +114,30 @@ describe("supervisor durable logging", () => {
         },
       },
       {
-        PASEO_LOG_ROTATE_SIZE: "200m",
-        PASEO_LOG_ROTATE_COUNT: "12",
+        BYSPACE_LOG_ROTATE_SIZE: "200m",
+        BYSPACE_LOG_ROTATE_COUNT: "12",
       },
     );
 
     expect(logFile).toEqual({
-      path: path.resolve(paseoHome, "logs", "daemon.log"),
+      path: path.resolve(byspaceHome, "logs", "daemon.log"),
       rotate: { maxSize: "25m", maxFiles: 4 },
     });
   });
 
   test("uses env rotation when persisted rotation is absent", () => {
-    const paseoHome = path.join(path.sep, "tmp", "paseo-home");
+    const byspaceHome = path.join(path.sep, "tmp", "byspace-home");
     const logFile = resolveSupervisorLogFile(
-      paseoHome,
+      byspaceHome,
       {},
       {
-        PASEO_LOG_ROTATE_SIZE: "50m",
-        PASEO_LOG_ROTATE_COUNT: "8",
+        BYSPACE_LOG_ROTATE_SIZE: "50m",
+        BYSPACE_LOG_ROTATE_COUNT: "8",
       },
     );
 
     expect(logFile).toEqual({
-      path: path.join(paseoHome, "daemon.log"),
+      path: path.join(byspaceHome, "daemon.log"),
       rotate: { maxSize: "50m", maxFiles: 8 },
     });
   });
@@ -175,7 +175,7 @@ describe("supervisor durable logging", () => {
   test("logs the worker shutdown reason before signaling the worker", async () => {
     const result = await runSupervisorFixture({
       workerSource: `
-        process.send?.({ type: "paseo:shutdown", reason: "client_shutdown_rpc" });
+        process.send?.({ type: "byspace:shutdown", reason: "client_shutdown_rpc" });
         setInterval(() => {}, 1000);
       `,
     });
@@ -199,11 +199,11 @@ describe("supervisor durable logging", () => {
         if (!existsSync(marker)) {
           writeFileSync(marker, "started");
           setTimeout(() => {
-            process.send?.({ type: "paseo:shutdown", reason: "silent_worker_test_complete" });
+            process.send?.({ type: "byspace:shutdown", reason: "silent_worker_test_complete" });
           }, 16_000);
           setInterval(() => {}, 1_000);
         } else {
-          process.send?.({ type: "paseo:shutdown", reason: "unexpected_silent_worker_restart" });
+          process.send?.({ type: "byspace:shutdown", reason: "unexpected_silent_worker_restart" });
           setInterval(() => {}, 1_000);
         }
       `,
@@ -223,7 +223,7 @@ describe("supervisor durable logging", () => {
         timeoutMs: 15_000,
         workerSource: `
           process.on("SIGTERM", () => {});
-          process.send?.({ type: "paseo:shutdown", reason: "stalled_worker_shutdown" });
+          process.send?.({ type: "byspace:shutdown", reason: "stalled_worker_shutdown" });
           setInterval(() => {}, 1_000);
         `,
       });
@@ -256,10 +256,10 @@ describe("supervisor durable logging", () => {
             );
             descendant.unref();
             process.on("SIGTERM", () => process.exit(0));
-            process.send?.({ type: "paseo:restart", reason: "stdio_descendant" });
+            process.send?.({ type: "byspace:restart", reason: "stdio_descendant" });
             setInterval(() => {}, 1000);
           } else {
-            process.send?.({ type: "paseo:shutdown", reason: "stdio_restart_complete" });
+            process.send?.({ type: "byspace:shutdown", reason: "stdio_restart_complete" });
             setInterval(() => {}, 1000);
           }
         `,

@@ -18,7 +18,7 @@ import type {
   SessionOutboundMessage,
   WorkspaceDescriptorPayload,
   WorkspaceCreateRequest,
-} from "@getpaseo/protocol/messages";
+} from "@bytetrue/byspace-protocol/messages";
 import { DaemonClient } from "./daemon-client.js";
 import type {
   FetchAgentsEntry,
@@ -44,14 +44,14 @@ export type ConnectionState =
   | { status: "disconnected"; reason?: string }
   | { status: "disposed" };
 
-export interface PaseoLogger {
+export interface BySpaceLogger {
   debug(obj: object, msg?: string): void;
   info(obj: object, msg?: string): void;
   warn(obj: object, msg?: string): void;
   error(obj: object, msg?: string): void;
 }
 
-export interface PaseoClientConfig {
+export interface BySpaceClientConfig {
   url: string;
   clientId?: string;
   appVersion?: string;
@@ -59,7 +59,7 @@ export interface PaseoClientConfig {
   password?: string;
   authHeader?: string;
   suppressSendErrors?: boolean;
-  logger?: PaseoLogger;
+  logger?: BySpaceLogger;
   connectTimeoutMs?: number;
   e2ee?: {
     enabled?: boolean;
@@ -74,117 +74,117 @@ export interface PaseoClientConfig {
   runtimeMetricsWindowMs?: number;
 }
 
-export type PaseoWorkspace = WorkspaceDescriptorPayload;
-export type PaseoAgent = AgentSnapshotPayload;
-export type PaseoAgentListOptions = FetchAgentsOptions;
+export type BySpaceWorkspace = WorkspaceDescriptorPayload;
+export type BySpaceAgent = AgentSnapshotPayload;
+export type BySpaceAgentListOptions = FetchAgentsOptions;
 
-export interface PaseoAgentListResult {
+export interface BySpaceAgentListResult {
   requestId: string;
   subscriptionId?: string | null;
   entries: FetchAgentsEntry[];
   pageInfo: FetchAgentsPageInfo;
 }
-export type PaseoWorkspaceListOptions = Omit<
+export type BySpaceWorkspaceListOptions = Omit<
   FetchWorkspacesRequestMessage,
   "type" | "requestId"
 > & {
   requestId?: string;
 };
 
-export interface PaseoWorkspaceListResult {
+export interface BySpaceWorkspaceListResult {
   requestId: string;
   subscriptionId?: string | null;
-  entries: PaseoWorkspace[];
+  entries: BySpaceWorkspace[];
   pageInfo: FetchWorkspacesResponseMessage["payload"]["pageInfo"];
 }
 
-export interface PaseoWorkspaceOpenOptions {
+export interface BySpaceWorkspaceOpenOptions {
   cwd: string;
   requestId?: string;
 }
 
-export type PaseoWorkspaceCreateOptions = Omit<WorkspaceCreateRequest, "type" | "requestId"> & {
+export type BySpaceWorkspaceCreateOptions = Omit<WorkspaceCreateRequest, "type" | "requestId"> & {
   requestId?: string;
 };
 
-export interface PaseoWorkspaceArchiveResult {
+export interface BySpaceWorkspaceArchiveResult {
   requestId: string;
   workspaceId: string;
   archivedAt: string | null;
   error: string | null;
 }
 
-export type PaseoWorkspaceUpdate = Extract<
+export type BySpaceWorkspaceUpdate = Extract<
   SessionOutboundMessage,
   { type: "workspace_update" }
 >["payload"];
 
-export type PaseoWorkspaceUpdateHandler = (update: PaseoWorkspaceUpdate) => void;
+export type BySpaceWorkspaceUpdateHandler = (update: BySpaceWorkspaceUpdate) => void;
 
-export interface PaseoWorkspaceHandle {
+export interface BySpaceWorkspaceHandle {
   readonly id: string;
   readonly projectId: string | null;
   readonly directory: string | null;
   readonly name: string | null;
-  readonly status: PaseoWorkspace["status"] | null;
+  readonly status: BySpaceWorkspace["status"] | null;
   readonly agents: {
-    create(options: PaseoWorkspaceAgentCreateOptions): Promise<PaseoAgentHandle>;
+    create(options: BySpaceWorkspaceAgentCreateOptions): Promise<BySpaceAgentHandle>;
   };
-  current(): PaseoWorkspace | null;
-  refresh(options?: { requestId?: string }): Promise<PaseoWorkspace | null>;
+  current(): BySpaceWorkspace | null;
+  refresh(options?: { requestId?: string }): Promise<BySpaceWorkspace | null>;
   setTitle(title: string | null, requestId?: string): Promise<{ title: string | null }>;
-  archive(requestId?: string): Promise<PaseoWorkspaceArchiveResult>;
+  archive(requestId?: string): Promise<BySpaceWorkspaceArchiveResult>;
   /**
    * Subscribes to already-emitted daemon workspace_update events for this id.
    * This returns a local unsubscribe function; it does not own app cache state or
    * send a daemon unsubscribe RPC. Call `workspaces.list({ subscribe: {} })` when
    * the daemon should start streaming workspace directory updates.
    */
-  subscribe(handler: (update: PaseoWorkspaceUpdate) => void): () => void;
+  subscribe(handler: (update: BySpaceWorkspaceUpdate) => void): () => void;
 }
 
-export interface PaseoWorkspaceActions {
-  list(options?: PaseoWorkspaceListOptions): Promise<PaseoWorkspaceListResult>;
-  ref(workspace: string | PaseoWorkspace): PaseoWorkspaceHandle;
+export interface BySpaceWorkspaceActions {
+  list(options?: BySpaceWorkspaceListOptions): Promise<BySpaceWorkspaceListResult>;
+  ref(workspace: string | BySpaceWorkspace): BySpaceWorkspaceHandle;
   open(
-    input: string | PaseoWorkspaceOpenOptions,
+    input: string | BySpaceWorkspaceOpenOptions,
     requestId?: string,
-  ): Promise<PaseoWorkspaceHandle>;
-  create(options: PaseoWorkspaceCreateOptions): Promise<PaseoWorkspaceHandle>;
+  ): Promise<BySpaceWorkspaceHandle>;
+  create(options: BySpaceWorkspaceCreateOptions): Promise<BySpaceWorkspaceHandle>;
   archive(
-    workspace: string | PaseoWorkspaceHandle,
+    workspace: string | BySpaceWorkspaceHandle,
     requestId?: string,
-  ): Promise<PaseoWorkspaceArchiveResult>;
+  ): Promise<BySpaceWorkspaceArchiveResult>;
   /**
    * Local event subscription over the low-level driver's workspace_update stream.
    * The returned function only removes this SDK listener.
    */
-  subscribe(handler: PaseoWorkspaceUpdateHandler): () => void;
+  subscribe(handler: BySpaceWorkspaceUpdateHandler): () => void;
 }
 
-type PaseoAgentSessionConfig = CreateAgentRequestMessage["config"];
-export type PaseoAgentProvider = PaseoAgentSessionConfig["provider"];
+type BySpaceAgentSessionConfig = CreateAgentRequestMessage["config"];
+export type BySpaceAgentProvider = BySpaceAgentSessionConfig["provider"];
 
-export type PaseoProviderFeatureValues = Record<string, unknown>;
+export type BySpaceProviderFeatureValues = Record<string, unknown>;
 
-export interface PaseoAgentConfig {
+export interface BySpaceAgentConfig {
   /** Provider and model in `provider/model` format. */
   provider: string;
-  modeId?: PaseoAgentSessionConfig["modeId"];
-  thinkingOptionId?: PaseoAgentSessionConfig["thinkingOptionId"];
-  featureValues?: PaseoProviderFeatureValues;
+  modeId?: BySpaceAgentSessionConfig["modeId"];
+  thinkingOptionId?: BySpaceAgentSessionConfig["thinkingOptionId"];
+  featureValues?: BySpaceProviderFeatureValues;
   /** JSON-safe provider-native settings, validated by the selected provider. */
-  options?: PaseoAgentSessionConfig["providerOptions"];
-  systemPrompt?: PaseoAgentSessionConfig["systemPrompt"];
-  toolPolicy?: PaseoAgentSessionConfig["toolPolicy"];
-  mcpServers?: PaseoAgentSessionConfig["mcpServers"];
+  options?: BySpaceAgentSessionConfig["providerOptions"];
+  systemPrompt?: BySpaceAgentSessionConfig["systemPrompt"];
+  toolPolicy?: BySpaceAgentSessionConfig["toolPolicy"];
+  mcpServers?: BySpaceAgentSessionConfig["mcpServers"];
 }
 
-export interface PaseoAgentCreateOptions {
-  config: PaseoAgentConfig;
+export interface BySpaceAgentCreateOptions {
+  config: BySpaceAgentConfig;
   cwd: string;
-  parent?: string | PaseoAgentHandle;
-  title?: PaseoAgentSessionConfig["title"];
+  parent?: string | BySpaceAgentHandle;
+  title?: BySpaceAgentSessionConfig["title"];
   env?: CreateAgentRequestMessage["env"];
   prompt?: string;
   clientMessageId?: string;
@@ -198,14 +198,14 @@ export interface PaseoAgentCreateOptions {
   labels?: Record<string, string>;
 }
 
-export type PaseoWorkspaceAgentCreateOptions = Omit<PaseoAgentCreateOptions, "cwd">;
+export type BySpaceWorkspaceAgentCreateOptions = Omit<BySpaceAgentCreateOptions, "cwd">;
 
-export interface PaseoAgentRefetchResult {
-  agent: PaseoAgent;
+export interface BySpaceAgentRefetchResult {
+  agent: BySpaceAgent;
   project: ProjectPlacementPayload | null;
 }
 
-export interface PaseoAgentTimelineRefetchOptions {
+export interface BySpaceAgentTimelineRefetchOptions {
   direction?: FetchAgentTimelineDirection;
   cursor?: FetchAgentTimelineCursor;
   limit?: number;
@@ -213,128 +213,134 @@ export interface PaseoAgentTimelineRefetchOptions {
   requestId?: string;
 }
 
-export interface PaseoAgentSendOptions {
+export interface BySpaceAgentSendOptions {
   messageId?: string;
   images?: Array<{ data: string; mimeType: string }>;
   attachments?: SendAgentMessageRequest["attachments"];
 }
 
-export interface PaseoAgentRunOptions extends PaseoAgentSendOptions {
+export interface BySpaceAgentRunOptions extends BySpaceAgentSendOptions {
   timeoutMs?: number;
 }
 
-export type PaseoAgentRunResult = WaitForFinishResult;
+export type BySpaceAgentRunResult = WaitForFinishResult;
 
-export type PaseoAgentUpdate = Extract<SessionOutboundMessage, { type: "agent_update" }>["payload"];
+export type BySpaceAgentUpdate = Extract<
+  SessionOutboundMessage,
+  { type: "agent_update" }
+>["payload"];
 
-export type PaseoAgentStream = Extract<SessionOutboundMessage, { type: "agent_stream" }>["payload"];
+export type BySpaceAgentStream = Extract<
+  SessionOutboundMessage,
+  { type: "agent_stream" }
+>["payload"];
 
-export type PaseoAgentUpdateHandler = (update: PaseoAgentUpdate) => void;
+export type BySpaceAgentUpdateHandler = (update: BySpaceAgentUpdate) => void;
 
-export interface PaseoAgentTimelineHandle {
+export interface BySpaceAgentTimelineHandle {
   /**
    * Fetches a fresh timeline page through the existing daemon RPC. If the daemon
    * includes an agent snapshot in the response, the parent handle is updated to
    * that value.
    */
-  refetch(options?: PaseoAgentTimelineRefetchOptions): Promise<FetchAgentTimelinePayload>;
+  refetch(options?: BySpaceAgentTimelineRefetchOptions): Promise<FetchAgentTimelinePayload>;
   /**
    * Local listener for agent_stream events matching this handle id. It does not
    * retain timeline entries or own application cache state.
    */
-  subscribe(handler: (event: PaseoAgentStream) => void): () => void;
+  subscribe(handler: (event: BySpaceAgentStream) => void): () => void;
 }
 
-export interface PaseoAgentHandle {
+export interface BySpaceAgentHandle {
   readonly id: string;
   readonly workspaceId: string | null;
   readonly cwd: string | null;
-  readonly status: PaseoAgent["status"] | null;
-  readonly timeline: PaseoAgentTimelineHandle;
-  current(): PaseoAgent | null;
-  refresh(requestId?: string): Promise<PaseoAgentRefetchResult | null>;
-  send(text: string, options?: PaseoAgentSendOptions): Promise<void>;
+  readonly status: BySpaceAgent["status"] | null;
+  readonly timeline: BySpaceAgentTimelineHandle;
+  current(): BySpaceAgent | null;
+  refresh(requestId?: string): Promise<BySpaceAgentRefetchResult | null>;
+  send(text: string, options?: BySpaceAgentSendOptions): Promise<void>;
   /** Sends a prompt and resolves when that turn finishes or needs attention. */
-  run(text: string, options?: PaseoAgentRunOptions): Promise<PaseoAgentRunResult>;
+  run(text: string, options?: BySpaceAgentRunOptions): Promise<BySpaceAgentRunResult>;
   /** Waits for the current turn, including one started with `prompt`. */
-  waitForFinish(timeoutMs?: number): Promise<PaseoAgentRunResult>;
+  waitForFinish(timeoutMs?: number): Promise<BySpaceAgentRunResult>;
   archive(): Promise<{ archivedAt: string }>;
   detach(): Promise<void>;
-  subscribe(handler: (update: PaseoAgentUpdate) => void): () => void;
+  subscribe(handler: (update: BySpaceAgentUpdate) => void): () => void;
 }
 
-export interface PaseoAgentActions {
-  list(options?: PaseoAgentListOptions): Promise<PaseoAgentListResult>;
-  ref(agent: string | PaseoAgent): PaseoAgentHandle;
-  create(options: PaseoAgentCreateOptions): Promise<PaseoAgentHandle>;
+export interface BySpaceAgentActions {
+  list(options?: BySpaceAgentListOptions): Promise<BySpaceAgentListResult>;
+  ref(agent: string | BySpaceAgent): BySpaceAgentHandle;
+  create(options: BySpaceAgentCreateOptions): Promise<BySpaceAgentHandle>;
   /**
    * Local event subscription over the low-level driver's agent_update stream.
    * The returned function only removes this SDK listener.
    */
-  subscribe(handler: PaseoAgentUpdateHandler): () => void;
+  subscribe(handler: BySpaceAgentUpdateHandler): () => void;
 }
 
-export type PaseoProviderModelsResult = ListProviderModelsResponseMessage["payload"];
-export type PaseoProviderModesResult = ListProviderModesResponseMessage["payload"];
-type PaseoProviderFeaturesDraft = ListProviderFeaturesRequestMessage["draftConfig"];
-export interface PaseoProviderFeaturesInput extends Omit<
-  PaseoProviderFeaturesDraft,
+export type BySpaceProviderModelsResult = ListProviderModelsResponseMessage["payload"];
+export type BySpaceProviderModesResult = ListProviderModesResponseMessage["payload"];
+type BySpaceProviderFeaturesDraft = ListProviderFeaturesRequestMessage["draftConfig"];
+export interface BySpaceProviderFeaturesInput extends Omit<
+  BySpaceProviderFeaturesDraft,
   "provider" | "model"
 > {
   /** Provider and model in `provider/model` format. */
   provider: string;
 }
-export type PaseoProviderFeaturesResult = ListProviderFeaturesResponseMessage["payload"];
-export type PaseoProviderAvailabilityResult = ListAvailableProvidersResponse["payload"];
-export type PaseoProviderSnapshotResult = GetProvidersSnapshotResponseMessage["payload"];
-export type PaseoProviderSnapshotUpdate = Extract<
+export type BySpaceProviderFeaturesResult = ListProviderFeaturesResponseMessage["payload"];
+export type BySpaceProviderAvailabilityResult = ListAvailableProvidersResponse["payload"];
+export type BySpaceProviderSnapshotResult = GetProvidersSnapshotResponseMessage["payload"];
+export type BySpaceProviderSnapshotUpdate = Extract<
   SessionOutboundMessage,
   { type: "providers_snapshot_update" }
 >["payload"];
-export type PaseoProviderRefreshResult = RefreshProvidersSnapshotResponseMessage["payload"];
-export type PaseoProviderDiagnosticResult = ProviderDiagnosticResponseMessage["payload"];
+export type BySpaceProviderRefreshResult = RefreshProvidersSnapshotResponseMessage["payload"];
+export type BySpaceProviderDiagnosticResult = ProviderDiagnosticResponseMessage["payload"];
 
-export interface PaseoProviderListOptions {
+export interface BySpaceProviderListOptions {
   cwd?: string;
   requestId?: string;
 }
 
-export interface PaseoProviderRefreshOptions {
+export interface BySpaceProviderRefreshOptions {
   cwd?: string;
-  providers?: PaseoAgentProvider[];
+  providers?: BySpaceAgentProvider[];
   requestId?: string;
 }
 
-export interface PaseoProviderWaitOptions extends PaseoProviderListOptions {
+export interface BySpaceProviderWaitOptions extends BySpaceProviderListOptions {
   timeoutMs?: number;
 }
 
-export interface PaseoProviderActions {
+export interface BySpaceProviderActions {
   listModels(
-    provider: PaseoAgentProvider,
-    options?: PaseoProviderListOptions,
-  ): Promise<PaseoProviderModelsResult>;
+    provider: BySpaceAgentProvider,
+    options?: BySpaceProviderListOptions,
+  ): Promise<BySpaceProviderModelsResult>;
   listModes(
-    provider: PaseoAgentProvider,
-    options?: PaseoProviderListOptions,
-  ): Promise<PaseoProviderModesResult>;
+    provider: BySpaceAgentProvider,
+    options?: BySpaceProviderListOptions,
+  ): Promise<BySpaceProviderModesResult>;
   listFeatures(
-    draftConfig: PaseoProviderFeaturesInput,
+    draftConfig: BySpaceProviderFeaturesInput,
     options?: { requestId?: string },
-  ): Promise<PaseoProviderFeaturesResult>;
-  listAvailable(options?: { requestId?: string }): Promise<PaseoProviderAvailabilityResult>;
-  snapshot(options?: PaseoProviderListOptions): Promise<PaseoProviderSnapshotResult>;
+  ): Promise<BySpaceProviderFeaturesResult>;
+  listAvailable(options?: { requestId?: string }): Promise<BySpaceProviderAvailabilityResult>;
+  snapshot(options?: BySpaceProviderListOptions): Promise<BySpaceProviderSnapshotResult>;
   /** Resolves after the daemon's lazy provider discovery has finished. */
-  waitForReady(options?: PaseoProviderWaitOptions): Promise<PaseoProviderSnapshotResult>;
-  refresh(options?: PaseoProviderRefreshOptions): Promise<PaseoProviderRefreshResult>;
+  waitForReady(options?: BySpaceProviderWaitOptions): Promise<BySpaceProviderSnapshotResult>;
+  refresh(options?: BySpaceProviderRefreshOptions): Promise<BySpaceProviderRefreshResult>;
   diagnostic(
-    provider: PaseoAgentProvider,
+    provider: BySpaceAgentProvider,
     options?: { requestId?: string },
-  ): Promise<PaseoProviderDiagnosticResult>;
-  subscribe(handler: (update: PaseoProviderSnapshotUpdate) => void): () => void;
+  ): Promise<BySpaceProviderDiagnosticResult>;
+  subscribe(handler: (update: BySpaceProviderSnapshotUpdate) => void): () => void;
 }
 
-export interface PaseoConfigActions {
+export interface BySpaceConfigActions {
   /**
    * Reads daemon config through the existing config RPC. Provider profiles,
    * custom provider entries, keys/env, custom binaries, and provider enablement
@@ -354,28 +360,28 @@ export interface PaseoConfigActions {
   ): Promise<{ requestId: string; config: MutableDaemonConfig }>;
 }
 
-export interface PaseoApi {
-  readonly workspaces: PaseoWorkspaceActions;
-  readonly agents: PaseoAgentActions;
-  readonly providers: PaseoProviderActions;
-  readonly config: PaseoConfigActions;
+export interface BySpaceApi {
+  readonly workspaces: BySpaceWorkspaceActions;
+  readonly agents: BySpaceAgentActions;
+  readonly providers: BySpaceProviderActions;
+  readonly config: BySpaceConfigActions;
 }
 
-export interface PaseoClient extends PaseoApi {
+export interface BySpaceClient extends BySpaceApi {
   connect(): Promise<void>;
   close(): Promise<void>;
   ensureConnected(): void;
   getConnectionState(): ConnectionState;
 }
 
-export function createPaseoClient(config: PaseoClientConfig): PaseoClient {
+export function createBySpaceClient(config: BySpaceClientConfig): BySpaceClient {
   const daemonClient = new DaemonClient({
     ...config,
     clientId: config.clientId ?? createGeneratedClientId(),
     clientType: "cli",
   });
   return {
-    ...createPaseoApi(daemonClient),
+    ...createBySpaceApi(daemonClient),
     connect: () => daemonClient.connect(),
     close: () => daemonClient.close(),
     ensureConnected: () => daemonClient.ensureConnected(),
@@ -383,10 +389,10 @@ export function createPaseoClient(config: PaseoClientConfig): PaseoClient {
   };
 }
 
-export function createPaseoApi(daemonClient: DaemonClient): PaseoApi {
+export function createBySpaceApi(daemonClient: DaemonClient): BySpaceApi {
   const createAgentHandle = createAgentHandleFactory(daemonClient);
   const createAgent = async (
-    options: PaseoAgentCreateOptions,
+    options: BySpaceAgentCreateOptions,
     placement?: { workspaceId: string; cwd: string },
   ) => {
     const { config: agentConfig, cwd, parent, title, prompt, ...requestOptions } = options;
@@ -464,12 +470,12 @@ export function createPaseoApi(daemonClient: DaemonClient): PaseoApi {
   };
 }
 
-type WorkspaceHandleFactory = (workspace: string | PaseoWorkspace) => PaseoWorkspaceHandle;
-type AgentHandleFactory = (agent: string | PaseoAgent) => PaseoAgentHandle;
+type WorkspaceHandleFactory = (workspace: string | BySpaceWorkspace) => BySpaceWorkspaceHandle;
+type AgentHandleFactory = (agent: string | BySpaceAgent) => BySpaceAgentHandle;
 type CreateAgent = (
-  options: PaseoAgentCreateOptions,
+  options: BySpaceAgentCreateOptions,
   placement?: { workspaceId: string; cwd: string },
-) => Promise<PaseoAgentHandle>;
+) => Promise<BySpaceAgentHandle>;
 
 function createWorkspaceHandleFactory(
   daemonClient: DaemonClient,
@@ -556,7 +562,7 @@ function createAgentHandleFactory(daemonClient: DaemonClient): AgentHandleFactor
     const id = typeof agent === "string" ? agent : agent.id;
     let current = typeof agent === "string" ? null : agent;
 
-    const handle: PaseoAgentHandle = {
+    const handle: BySpaceAgentHandle = {
       id,
       timeline: {
         refetch: async (options) => {
@@ -644,9 +650,9 @@ function createAgentHandleFactory(daemonClient: DaemonClient): AgentHandleFactor
 async function openWorkspace(
   daemonClient: DaemonClient,
   createWorkspaceHandle: WorkspaceHandleFactory,
-  input: string | PaseoWorkspaceOpenOptions,
+  input: string | BySpaceWorkspaceOpenOptions,
   requestId?: string,
-): Promise<PaseoWorkspaceHandle> {
+): Promise<BySpaceWorkspaceHandle> {
   const options = typeof input === "string" ? { cwd: input, requestId } : input;
   const result = await daemonClient.openProject(options.cwd, options.requestId);
   if (result.error || !result.workspace) {
@@ -655,11 +661,11 @@ async function openWorkspace(
   return createWorkspaceHandle(result.workspace);
 }
 
-function resolveWorkspaceId(workspace: string | PaseoWorkspaceHandle): string {
+function resolveWorkspaceId(workspace: string | BySpaceWorkspaceHandle): string {
   return typeof workspace === "string" ? workspace : workspace.id;
 }
 
-function resolveAgentId(agent: string | PaseoAgentHandle): string {
+function resolveAgentId(agent: string | BySpaceAgentHandle): string {
   return typeof agent === "string" ? agent : agent.id;
 }
 
@@ -676,8 +682,8 @@ function parseProviderModel(selection: string): { provider: string; model: strin
 
 function waitForProvidersReady(
   daemonClient: DaemonClient,
-  options: PaseoProviderWaitOptions = {},
-): Promise<PaseoProviderSnapshotResult> {
+  options: BySpaceProviderWaitOptions = {},
+): Promise<BySpaceProviderSnapshotResult> {
   // COMPAT(providersSnapshotCwd): added in v0.3.2, remove gate after 2027-02-10.
   if (daemonClient.getLastServerInfoMessage()?.features?.providersSnapshotCwd !== true) {
     return Promise.reject(new Error("Update the host to wait for provider discovery."));
@@ -689,14 +695,14 @@ function waitForProvidersReady(
     let settled = false;
     let requestId: string | null = null;
     let snapshotCwd: string | undefined;
-    const pendingUpdates = new Map<string | undefined, PaseoProviderSnapshotUpdate>();
-    let latestEntries: PaseoProviderSnapshotResult["entries"] = [];
+    const pendingUpdates = new Map<string | undefined, BySpaceProviderSnapshotUpdate>();
+    let latestEntries: BySpaceProviderSnapshotResult["entries"] = [];
 
     const cleanup = () => {
       clearTimeout(timeout);
       unsubscribe();
     };
-    const finish = (snapshot: PaseoProviderSnapshotResult) => {
+    const finish = (snapshot: BySpaceProviderSnapshotResult) => {
       if (settled) return;
       settled = true;
       cleanup();
@@ -708,7 +714,7 @@ function waitForProvidersReady(
       cleanup();
       reject(error instanceof Error ? error : new Error(String(error)));
     };
-    const updateMatches = (update: PaseoProviderSnapshotUpdate) => update.cwd === snapshotCwd;
+    const updateMatches = (update: BySpaceProviderSnapshotUpdate) => update.cwd === snapshotCwd;
 
     const unsubscribe = daemonClient.on("providers_snapshot_update", (message) => {
       const update = message.payload;
@@ -761,5 +767,5 @@ function createGeneratedClientId(): string {
     typeof globalThis.crypto?.randomUUID === "function"
       ? globalThis.crypto.randomUUID()
       : Math.random().toString(36).slice(2);
-  return `paseo-sdk-${randomId}`;
+  return `byspace-sdk-${randomId}`;
 }

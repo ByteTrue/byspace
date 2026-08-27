@@ -1,4 +1,4 @@
-const CANONICAL_HOST = "paseo.sh";
+const CANONICAL_HOST = "byspace.cc.cd";
 
 export function getCanonicalRedirect(
   url: URL,

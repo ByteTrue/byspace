@@ -81,11 +81,11 @@ function createGitRepo(): { tempDir: string; repoDir: string } {
   const repoDir = path.join(tempDir, "repo");
   mkdirSync(repoDir, { recursive: true });
   execFileSync("git", ["init", "-b", "main"], { cwd: repoDir, stdio: "pipe" });
-  execFileSync("git", ["config", "user.email", "test@getpaseo.local"], {
+  execFileSync("git", ["config", "user.email", "test@bytetrue.local"], {
     cwd: repoDir,
     stdio: "pipe",
   });
-  execFileSync("git", ["config", "user.name", "Paseo Test"], {
+  execFileSync("git", ["config", "user.name", "BySpace Test"], {
     cwd: repoDir,
     stdio: "pipe",
   });
@@ -96,9 +96,9 @@ function createGitRepo(): { tempDir: string; repoDir: string } {
   return { tempDir, repoDir };
 }
 
-async function createPaseoOwnedWorktree(
+async function createBySpaceOwnedWorktree(
   repoDir: string,
-  paseoHome: string,
+  byspaceHome: string,
   worktreeSlug: string,
 ): Promise<WorktreeConfig> {
   return createWorktree({
@@ -110,14 +110,14 @@ async function createPaseoOwnedWorktree(
       branchName: worktreeSlug,
     },
     runSetup: false,
-    paseoHome,
+    byspaceHome,
   });
 }
 
 interface ArchiveDepsInput {
-  paseoHome: string;
+  byspaceHome: string;
   activeWorkspaces: ActiveWorkspaceRef[];
-  paseoWorktreesBaseRoot?: string;
+  byspaceWorktreesBaseRoot?: string;
   findWorkspaceIdForCwd?: (cwd: string) => Promise<string | null>;
 }
 
@@ -134,8 +134,8 @@ function createArchiveDeps(input: ArchiveDepsInput): ArchiveTestDependencies {
   const archivedSnapshotIds: string[] = [];
 
   return {
-    paseoHome: input.paseoHome,
-    paseoWorktreesBaseRoot: input.paseoWorktreesBaseRoot,
+    byspaceHome: input.byspaceHome,
+    byspaceWorktreesBaseRoot: input.byspaceWorktreesBaseRoot,
     github: createGitHubServiceStub(),
     workspaceGitService: {
       getSnapshot: vi.fn(async () => null),
@@ -190,13 +190,13 @@ function assertArchiveResult(
 describe("archiveByScope", () => {
   test("workspace scope archives the record and removes the directory on last reference", async () => {
     const { tempDir, repoDir } = createGitRepo();
-    const paseoHome = path.join(tempDir, ".paseo");
-    const worktree = await createPaseoOwnedWorktree(repoDir, paseoHome, "last-ref-workspace");
+    const byspaceHome = path.join(tempDir, ".byspace");
+    const worktree = await createBySpaceOwnedWorktree(repoDir, byspaceHome, "last-ref-workspace");
     const workspaceId = "ws-last-ref";
 
     const result = await archiveByScope(
       createArchiveDeps({
-        paseoHome,
+        byspaceHome,
         activeWorkspaces: [
           {
             workspaceId,
@@ -221,11 +221,11 @@ describe("archiveByScope", () => {
   test("workspace scope runs teardown while keeping a directory referenced by a sibling", async () => {
     const { tempDir, repoDir } = createGitRepo();
     writeFileSync(
-      path.join(repoDir, "paseo.json"),
+      path.join(repoDir, "byspace.json"),
       JSON.stringify({
         worktree: {
           teardown: [
-            "node -e \"require('fs').writeFileSync(process.env.PASEO_SOURCE_CHECKOUT_PATH + '/shared-teardown.log', 'ok')\"",
+            "node -e \"require('fs').writeFileSync(process.env.BYSPACE_SOURCE_CHECKOUT_PATH + '/shared-teardown.log', 'ok')\"",
           ],
         },
       }),
@@ -235,14 +235,14 @@ describe("archiveByScope", () => {
       cwd: repoDir,
       stdio: "pipe",
     });
-    const paseoHome = path.join(tempDir, ".paseo");
-    const worktree = await createPaseoOwnedWorktree(repoDir, paseoHome, "sibling-workspace");
+    const byspaceHome = path.join(tempDir, ".byspace");
+    const worktree = await createBySpaceOwnedWorktree(repoDir, byspaceHome, "sibling-workspace");
     const workspaceA = "ws-sibling-a";
     const workspaceB = "ws-sibling-b";
 
     const result = await archiveByScope(
       createArchiveDeps({
-        paseoHome,
+        byspaceHome,
         activeWorkspaces: [
           { workspaceId: workspaceA, cwd: worktree.worktreePath, kind: "worktree" },
           { workspaceId: workspaceB, cwd: worktree.worktreePath, kind: "local_checkout" },
@@ -264,8 +264,8 @@ describe("archiveByScope", () => {
 
   test("workspace scope keeps a worktree for an active workspace in a subdirectory", async () => {
     const { tempDir, repoDir } = createGitRepo();
-    const paseoHome = path.join(tempDir, ".paseo");
-    const worktree = await createPaseoOwnedWorktree(repoDir, paseoHome, "subdirectory-sibling");
+    const byspaceHome = path.join(tempDir, ".byspace");
+    const worktree = await createBySpaceOwnedWorktree(repoDir, byspaceHome, "subdirectory-sibling");
     const sourceWorkspaceId = "ws-subdirectory-source";
     const siblingWorkspaceId = "ws-subdirectory-sibling";
     const siblingDirectory = path.join(worktree.worktreePath, "packages", "app");
@@ -273,21 +273,21 @@ describe("archiveByScope", () => {
 
     const result = await archiveByScope(
       createArchiveDeps({
-        paseoHome,
+        byspaceHome,
         activeWorkspaces: [
           {
             workspaceId: sourceWorkspaceId,
             cwd: worktree.worktreePath,
             kind: "worktree",
             worktreeRoot: worktree.worktreePath,
-            isPaseoOwnedWorktree: true,
+            isBySpaceOwnedWorktree: true,
           },
           {
             workspaceId: siblingWorkspaceId,
             cwd: siblingDirectory,
             kind: "worktree",
             worktreeRoot: worktree.worktreePath,
-            isPaseoOwnedWorktree: true,
+            isBySpaceOwnedWorktree: true,
           },
         ],
       }),
@@ -306,8 +306,8 @@ describe("archiveByScope", () => {
 
   test("archiving a subdirectory workspace keeps its active worktree root", async () => {
     const { tempDir, repoDir } = createGitRepo();
-    const paseoHome = path.join(tempDir, ".paseo");
-    const worktree = await createPaseoOwnedWorktree(repoDir, paseoHome, "subdirectory-target");
+    const byspaceHome = path.join(tempDir, ".byspace");
+    const worktree = await createBySpaceOwnedWorktree(repoDir, byspaceHome, "subdirectory-target");
     const rootWorkspaceId = "ws-subdirectory-root";
     const subdirectoryWorkspaceId = "ws-subdirectory-target";
     const subdirectory = path.join(worktree.worktreePath, "packages", "app");
@@ -315,21 +315,21 @@ describe("archiveByScope", () => {
 
     const result = await archiveByScope(
       createArchiveDeps({
-        paseoHome,
+        byspaceHome,
         activeWorkspaces: [
           {
             workspaceId: rootWorkspaceId,
             cwd: worktree.worktreePath,
             kind: "worktree",
             worktreeRoot: worktree.worktreePath,
-            isPaseoOwnedWorktree: true,
+            isBySpaceOwnedWorktree: true,
           },
           {
             workspaceId: subdirectoryWorkspaceId,
             cwd: subdirectory,
             kind: "worktree",
             worktreeRoot: worktree.worktreePath,
-            isPaseoOwnedWorktree: true,
+            isBySpaceOwnedWorktree: true,
           },
         ],
       }),
@@ -352,11 +352,11 @@ describe("archiveByScope", () => {
     const sourceNested = path.join(repoDir, nestedRelative);
     mkdirSync(sourceNested, { recursive: true });
     writeFileSync(
-      path.join(sourceNested, "paseo.json"),
+      path.join(sourceNested, "byspace.json"),
       JSON.stringify({
         worktree: {
           teardown: [
-            "node -e \"require('fs').writeFileSync(process.env.PASEO_SOURCE_CHECKOUT_PATH + '/nested-teardown.log', process.cwd())\"",
+            "node -e \"require('fs').writeFileSync(process.env.BYSPACE_SOURCE_CHECKOUT_PATH + '/nested-teardown.log', process.cwd())\"",
           ],
         },
       }),
@@ -367,22 +367,22 @@ describe("archiveByScope", () => {
       stdio: "pipe",
     });
 
-    const paseoHome = path.join(tempDir, ".paseo");
-    const worktree = await createPaseoOwnedWorktree(repoDir, paseoHome, "nested-teardown");
+    const byspaceHome = path.join(tempDir, ".byspace");
+    const worktree = await createBySpaceOwnedWorktree(repoDir, byspaceHome, "nested-teardown");
     const workspaceCwd = path.join(worktree.worktreePath, nestedRelative);
     const matchesWorkspaceCwd = createRealpathAwarePathMatcher(workspaceCwd);
     const workspaceId = "ws-nested-teardown";
 
     const result = await archiveByScope(
       createArchiveDeps({
-        paseoHome,
+        byspaceHome,
         activeWorkspaces: [
           {
             workspaceId,
             cwd: workspaceCwd,
             kind: "worktree",
             worktreeRoot: worktree.worktreePath,
-            isPaseoOwnedWorktree: true,
+            isBySpaceOwnedWorktree: true,
             mainRepoRoot: repoDir,
           },
         ],
@@ -409,21 +409,21 @@ describe("archiveByScope", () => {
     const sourceNested = path.join(repoDir, nestedRelative);
     mkdirSync(sourceNested, { recursive: true });
     writeFileSync(
-      path.join(repoDir, "paseo.json"),
+      path.join(repoDir, "byspace.json"),
       JSON.stringify({
         worktree: {
           teardown: [
-            "node -e \"const fs=require('fs');const out=process.env.PASEO_SOURCE_CHECKOUT_PATH+'/root-scope-teardown.log';if(fs.existsSync(out))process.exit(2);fs.writeFileSync(out,'ok')\"",
+            "node -e \"const fs=require('fs');const out=process.env.BYSPACE_SOURCE_CHECKOUT_PATH+'/root-scope-teardown.log';if(fs.existsSync(out))process.exit(2);fs.writeFileSync(out,'ok')\"",
           ],
         },
       }),
     );
     writeFileSync(
-      path.join(sourceNested, "paseo.json"),
+      path.join(sourceNested, "byspace.json"),
       JSON.stringify({
         worktree: {
           teardown: [
-            "node -e \"require('fs').writeFileSync(process.env.PASEO_SOURCE_CHECKOUT_PATH+'/nested-scope-teardown.log','ok')\"",
+            "node -e \"require('fs').writeFileSync(process.env.BYSPACE_SOURCE_CHECKOUT_PATH+'/nested-scope-teardown.log','ok')\"",
           ],
         },
       }),
@@ -433,8 +433,8 @@ describe("archiveByScope", () => {
       cwd: repoDir,
       stdio: "pipe",
     });
-    const paseoHome = path.join(tempDir, ".paseo");
-    const worktree = await createPaseoOwnedWorktree(repoDir, paseoHome, "worktree-scope");
+    const byspaceHome = path.join(tempDir, ".byspace");
+    const worktree = await createBySpaceOwnedWorktree(repoDir, byspaceHome, "worktree-scope");
     const workspaceA = "ws-worktree-a";
     const workspaceB = "ws-worktree-b";
     const workspaceC = "ws-worktree-subdirectory";
@@ -442,28 +442,28 @@ describe("archiveByScope", () => {
 
     const result = await archiveByScope(
       createArchiveDeps({
-        paseoHome,
+        byspaceHome,
         activeWorkspaces: [
           {
             workspaceId: workspaceA,
             cwd: worktree.worktreePath,
             kind: "worktree",
             worktreeRoot: worktree.worktreePath,
-            isPaseoOwnedWorktree: true,
+            isBySpaceOwnedWorktree: true,
           },
           {
             workspaceId: workspaceB,
             cwd: worktree.worktreePath,
             kind: "worktree",
             worktreeRoot: worktree.worktreePath,
-            isPaseoOwnedWorktree: true,
+            isBySpaceOwnedWorktree: true,
           },
           {
             workspaceId: workspaceC,
             cwd: subdirectory,
             kind: "worktree",
             worktreeRoot: worktree.worktreePath,
-            isPaseoOwnedWorktree: true,
+            isBySpaceOwnedWorktree: true,
           },
         ],
       }),
@@ -483,14 +483,14 @@ describe("archiveByScope", () => {
     expect(readFileSync(path.join(repoDir, "nested-scope-teardown.log"), "utf8")).toBe("ok");
   });
 
-  test("workspace scope never removes a non-Paseo-owned directory", async () => {
+  test("workspace scope never removes a non-BySpace-owned directory", async () => {
     const { tempDir } = createGitRepo();
     const localCheckoutDir = mkdtempSync(path.join(tempDir, "local-checkout-"));
     const workspaceId = "ws-local-checkout";
 
     const result = await archiveByScope(
       createArchiveDeps({
-        paseoHome: path.join(tempDir, ".paseo"),
+        byspaceHome: path.join(tempDir, ".byspace"),
         activeWorkspaces: [{ workspaceId, cwd: localCheckoutDir, kind: "local_checkout" }],
       }),
       {
@@ -508,13 +508,13 @@ describe("archiveByScope", () => {
 
   test("worktree scope keeps the directory when one record teardown fails", async () => {
     const { tempDir, repoDir } = createGitRepo();
-    const paseoHome = path.join(tempDir, ".paseo");
-    const worktree = await createPaseoOwnedWorktree(repoDir, paseoHome, "partial-failure");
+    const byspaceHome = path.join(tempDir, ".byspace");
+    const worktree = await createBySpaceOwnedWorktree(repoDir, byspaceHome, "partial-failure");
     const workspaceA = "ws-partial-a";
     const workspaceB = "ws-partial-b";
 
     const deps = createArchiveDeps({
-      paseoHome,
+      byspaceHome,
       activeWorkspaces: [
         { workspaceId: workspaceA, cwd: worktree.worktreePath, kind: "worktree" },
         { workspaceId: workspaceB, cwd: worktree.worktreePath, kind: "worktree" },
@@ -541,10 +541,10 @@ describe("archiveByScope", () => {
 
   test("workspace scope with unknown workspace id is a clean no-op", async () => {
     const { tempDir } = createGitRepo();
-    const paseoHome = path.join(tempDir, ".paseo");
+    const byspaceHome = path.join(tempDir, ".byspace");
 
     const deps = createArchiveDeps({
-      paseoHome,
+      byspaceHome,
       activeWorkspaces: [],
     });
     const originalArchiveWorkspaceRecord = deps.archiveWorkspaceRecord;
@@ -568,12 +568,12 @@ describe("archiveByScope", () => {
 
   test("worktree scope removes an owned directory with zero matching records", async () => {
     const { tempDir, repoDir } = createGitRepo();
-    const paseoHome = path.join(tempDir, ".paseo");
-    const worktree = await createPaseoOwnedWorktree(repoDir, paseoHome, "zero-records");
+    const byspaceHome = path.join(tempDir, ".byspace");
+    const worktree = await createBySpaceOwnedWorktree(repoDir, byspaceHome, "zero-records");
 
     const result = await archiveByScope(
       createArchiveDeps({
-        paseoHome,
+        byspaceHome,
         activeWorkspaces: [],
       }),
       {
@@ -591,12 +591,12 @@ describe("archiveByScope", () => {
 
   test("marks archiving, emits an upsert carrying the archiving state, then clears it and emits a remove", async () => {
     const { tempDir, repoDir } = createGitRepo();
-    const paseoHome = path.join(tempDir, ".paseo");
-    const worktree = await createPaseoOwnedWorktree(repoDir, paseoHome, "lifecycle");
+    const byspaceHome = path.join(tempDir, ".byspace");
+    const worktree = await createBySpaceOwnedWorktree(repoDir, byspaceHome, "lifecycle");
     const workspaceId = "ws-lifecycle";
 
     const deps = createArchiveDeps({
-      paseoHome,
+      byspaceHome,
       activeWorkspaces: [{ workspaceId, cwd: worktree.worktreePath, kind: "worktree" }],
     });
 
@@ -675,8 +675,8 @@ describe("archiveByScope", () => {
 
   test("archives stored snapshots only for the target workspace", async () => {
     const { tempDir, repoDir } = createGitRepo();
-    const paseoHome = path.join(tempDir, ".paseo");
-    const worktree = await createPaseoOwnedWorktree(repoDir, paseoHome, "snapshot-scope");
+    const byspaceHome = path.join(tempDir, ".byspace");
+    const worktree = await createBySpaceOwnedWorktree(repoDir, byspaceHome, "snapshot-scope");
     const targetWorkspaceId = "ws-snapshot-target";
     const otherWorkspaceId = "ws-snapshot-other";
     const liveAgentId = "agent-live";
@@ -684,7 +684,7 @@ describe("archiveByScope", () => {
     const otherStoredAgentId = "agent-stored-other";
 
     const deps = createArchiveDeps({
-      paseoHome,
+      byspaceHome,
       activeWorkspaces: [
         { workspaceId: targetWorkspaceId, cwd: worktree.worktreePath, kind: "worktree" },
       ],
@@ -731,11 +731,11 @@ describe("archiveByScope", () => {
 
   test("archives the durable snapshot when an observed live agent closes before teardown", async () => {
     const { tempDir, repoDir } = createGitRepo();
-    const paseoHome = path.join(tempDir, ".paseo");
+    const byspaceHome = path.join(tempDir, ".byspace");
     const workspaceId = "ws-live-teardown-race";
     const agentId = "agent-live-teardown-race";
     const deps = createArchiveDeps({
-      paseoHome,
+      byspaceHome,
       activeWorkspaces: [{ workspaceId, cwd: repoDir, kind: "local_checkout" }],
     });
     deps.agentManager = {
@@ -763,15 +763,15 @@ describe("archiveByScope", () => {
 
   test("worktree scope archives three workspaces on the directory and removes it", async () => {
     const { tempDir, repoDir } = createGitRepo();
-    const paseoHome = path.join(tempDir, ".paseo");
-    const worktree = await createPaseoOwnedWorktree(repoDir, paseoHome, "worktree-scope-n3");
+    const byspaceHome = path.join(tempDir, ".byspace");
+    const worktree = await createBySpaceOwnedWorktree(repoDir, byspaceHome, "worktree-scope-n3");
     const workspaceA = "ws-worktree-n3-a";
     const workspaceB = "ws-worktree-n3-b";
     const workspaceC = "ws-worktree-n3-c";
 
     const result = await archiveByScope(
       createArchiveDeps({
-        paseoHome,
+        byspaceHome,
         activeWorkspaces: [
           { workspaceId: workspaceA, cwd: worktree.worktreePath, kind: "worktree" },
           { workspaceId: workspaceB, cwd: worktree.worktreePath, kind: "worktree" },

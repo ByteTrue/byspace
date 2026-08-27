@@ -133,9 +133,9 @@ export function addHubDeployCommand(
     addHubResolutionHelp(
       hub
         .command("deploy")
-        .description("Discover, validate, and activate the canonical .paseo Hub bundle")
+        .description("Discover, validate, and activate the canonical .byspace Hub bundle")
         .option("-p, --project <slug>", "Target project slug")
-        .option("--hub <origin>", "Paseo Hub origin")
+        .option("--hub <origin>", "BySpace Hub origin")
         .option("--api-key <secret>", "Organization API key")
         .option("--dry-run", "Validate without installing or activating"),
     ),

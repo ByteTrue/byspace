@@ -5,9 +5,9 @@ describe("desktop agent navigation", () => {
   it("finds an agent deep link among Electron launch arguments", () => {
     expect(
       parseAgentDeepLinkFromArgv([
-        "/Applications/Paseo.app/Contents/MacOS/Paseo",
+        "/Applications/BySpace.app/Contents/MacOS/BySpace",
         "--no-sandbox",
-        "paseo://h/server-1/agent/agent-2",
+        "byspace://h/server-1/agent/agent-2",
       ]),
     ).toEqual({ serverId: "server-1", agentId: "agent-2" });
   });

@@ -10,7 +10,7 @@ category: Hub
 
 A trigger says which provider event can start a workflow. The [Hub workflows](/docs/hub/workflows) page covers the steps, inputs, routing, prompts, and deadlines that run after a match.
 
-`.paseo/workflows/github-issue.yml`:
+`.byspace/workflows/github-issue.yml`:
 
 ```yaml
 name: triage-issue
@@ -27,7 +27,7 @@ steps:
     agent: codex
     prompt:
       - text: Call hub.finish_execution when the step is complete.
-      - text: ${{ paseo.prompt }}
+      - text: ${{ byspace.prompt }}
 ```
 
 Field-by-field detail is in the [configuration reference](/docs/hub/configuration/hub-yml).

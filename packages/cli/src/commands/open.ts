@@ -1,14 +1,17 @@
 import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
-import { spawnProcess } from "@getpaseo/server";
-import { buildAgentDeepLink, type AgentDeepLinkTarget } from "@getpaseo/protocol/agent-deep-link";
+import { spawnProcess } from "@bytetrue/byspace-server";
+import {
+  buildAgentDeepLink,
+  type AgentDeepLinkTarget,
+} from "@bytetrue/byspace-protocol/agent-deep-link";
 
 function findDesktopApp(): string | null {
   if (process.platform === "darwin") {
     const candidates = [
-      "/Applications/Paseo.app",
-      path.join(homedir(), "Applications", "Paseo.app"),
+      "/Applications/BySpace.app",
+      path.join(homedir(), "Applications", "BySpace.app"),
     ];
 
     for (const candidate of candidates) {
@@ -22,9 +25,9 @@ function findDesktopApp(): string | null {
 
   if (process.platform === "linux") {
     const candidates = [
-      "/usr/bin/Paseo",
-      "/opt/Paseo/Paseo",
-      path.join(homedir(), "Applications", "Paseo.AppImage"),
+      "/usr/bin/BySpace",
+      "/opt/BySpace/BySpace",
+      path.join(homedir(), "Applications", "BySpace.AppImage"),
     ];
 
     for (const candidate of candidates) {
@@ -42,7 +45,7 @@ function findDesktopApp(): string | null {
       return null;
     }
 
-    const candidate = path.join(localAppData, "Programs", "Paseo", "Paseo.exe");
+    const candidate = path.join(localAppData, "Programs", "BySpace", "BySpace.exe");
     return existsSync(candidate) ? candidate : null;
   }
 
@@ -56,7 +59,7 @@ function cleanEnvForDesktopLaunch(): NodeJS.ProcessEnv {
   // desktop app would start as a bare Node process instead of Electron.
   delete env.ELECTRON_RUN_AS_NODE;
   delete env.ELECTRON_NO_ATTACH_CONSOLE;
-  delete env.PASEO_NODE_ENV;
+  delete env.BYSPACE_NODE_ENV;
   return env;
 }
 
@@ -69,14 +72,14 @@ function spawnDetached(command: string, args: string[]): void {
 }
 
 function launchDesktop(args: string[]): void {
-  if (process.env.PASEO_DESKTOP_CLI === "1") {
-    throw new Error("Cannot open Paseo Desktop while running in desktop CLI passthrough mode.");
+  if (process.env.BYSPACE_DESKTOP_CLI === "1") {
+    throw new Error("Cannot open BySpace Desktop while running in desktop CLI passthrough mode.");
   }
 
   const desktopApp = findDesktopApp();
   if (!desktopApp) {
     throw new Error(
-      "Paseo desktop app not found. Install it from https://github.com/getpaseo/paseo/releases",
+      "BySpace desktop app not found. Install it from https://github.com/ByteTrue/byspace/releases",
     );
   }
 

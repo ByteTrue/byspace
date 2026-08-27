@@ -1,4 +1,4 @@
-appId: sh.paseo
+appId: com.bytetrue.byspace
 ---
 - launchApp:
     clearState: false

@@ -33,7 +33,7 @@ describe("Hub HTTP client", () => {
         body: {
           status: "authorized",
           interval: 5,
-          credential: "paseo_cli_prefix_durable-secret-value",
+          credential: "byspace_cli_prefix_durable-secret-value",
           organizationId: "organization-1",
         },
       };
@@ -63,8 +63,8 @@ describe("Hub HTTP client", () => {
             projects: [
               {
                 id: "a50e05af-4f20-4c8f-8dcc-58e5ea360663",
-                slug: "paseo",
-                name: "Paseo",
+                slug: "byspace",
+                name: "BySpace",
               },
             ],
           },
@@ -83,7 +83,7 @@ describe("Hub HTTP client", () => {
     const projects = await hub.listProjects(origin, "human-secret");
     const token = await hub.issueEnrollmentToken(origin, "human-secret");
 
-    assert.equal(projects[0]?.slug, "paseo");
+    assert.equal(projects[0]?.slug, "byspace");
     assert.equal(token, "one-time-enrollment-token-with-enough-length");
     assert.deepEqual(
       requests.map((request) => request.url),
@@ -100,14 +100,14 @@ describe("Hub HTTP client", () => {
           daemons: [{ id: "a50e05af-4f20-4c8f-8dcc-58e5ea360663", slug: "macbook" }],
           github: [
             {
-              slug: "getpaseo",
-              accountLogin: "getpaseo",
+              slug: "ByteTrue",
+              accountLogin: "ByteTrue",
               accountType: "Organization",
-              repositories: ["getpaseo/paseo"],
+              repositories: ["ByteTrue/byspace"],
             },
           ],
-          discord: [{ slug: "paseo", guildName: "Paseo" }],
-          slack: [{ slug: "paseo", teamName: "Paseo" }],
+          discord: [{ slug: "byspace", guildName: "BySpace" }],
+          slack: [{ slug: "byspace", teamName: "BySpace" }],
         },
       }),
       requests,
@@ -116,7 +116,7 @@ describe("Hub HTTP client", () => {
     const resources = await new HubHttpClient().listConfigurationResources(origin, "secret");
 
     assert.equal(resources.daemons[0]?.slug, "macbook");
-    assert.equal(resources.discord[0]?.slug, "paseo");
+    assert.equal(resources.discord[0]?.slug, "byspace");
     assert.equal(requests[0]?.url, "/api/v1/configuration-resources");
   });
 
@@ -128,14 +128,14 @@ describe("Hub HTTP client", () => {
         body: {
           github: [
             {
-              slug: "getpaseo",
-              accountLogin: "getpaseo",
+              slug: "ByteTrue",
+              accountLogin: "ByteTrue",
               accountType: "Organization",
-              repositories: ["getpaseo/paseo"],
+              repositories: ["ByteTrue/byspace"],
             },
           ],
-          discord: [{ guildId: "guild-123", guildName: "Paseo" }],
-          slack: [{ teamId: "team-123", teamName: "Paseo" }],
+          discord: [{ guildId: "guild-123", guildName: "BySpace" }],
+          slack: [{ teamId: "team-123", teamName: "BySpace" }],
         },
       }),
       requests,
@@ -149,8 +149,12 @@ describe("Hub HTTP client", () => {
   });
 
   it.each([
-    { github: [], discord: [], slack: [{ teamId: "team-123", teamName: "Paseo", slug: "wrong" }] },
-    { github: [], discord: [], slack: [{ teamId: 123, teamName: "Paseo" }] },
+    {
+      github: [],
+      discord: [],
+      slack: [{ teamId: "team-123", teamName: "BySpace", slug: "wrong" }],
+    },
+    { github: [], discord: [], slack: [{ teamId: 123, teamName: "BySpace" }] },
   ])("rejects malformed or unknown setup resource fields", async (body) => {
     const requests: Array<{ url: string | undefined; body: string }> = [];
     const origin = await startServer(
@@ -181,7 +185,7 @@ describe("Hub HTTP client", () => {
           requestId: "request-1",
           issues: [
             {
-              path: [".paseo/workflows/answer.yml", "steps", "work", "agent"],
+              path: [".byspace/workflows/answer.yml", "steps", "work", "agent"],
               message: "unknown named agent operator-secret",
             },
           ],
@@ -196,7 +200,7 @@ describe("Hub HTTP client", () => {
         origin,
         apiKey: "operator-secret",
         projectSlug: "studio",
-        files: [{ path: ".paseo/hub.yml", content: "sensitive bundle content" }],
+        files: [{ path: ".byspace/hub.yml", content: "sensitive bundle content" }],
       }),
       (error: unknown) => {
         assert.ok(error instanceof HubCommandError);
@@ -207,7 +211,7 @@ describe("Hub HTTP client", () => {
         assert.equal(error.details?.includes("sensitive bundle content"), false);
         assert.equal(
           error.details,
-          ".paseo/workflows/answer.yml: steps.work.agent: unknown named agent [redacted]",
+          ".byspace/workflows/answer.yml: steps.work.agent: unknown named agent [redacted]",
         );
         return true;
       },
