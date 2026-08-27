@@ -8,11 +8,11 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, MoreVertical, Pencil, Plus } from "lucide-react-native";
 import { ProjectIconView } from "@/components/project-icon-view";
 import type {
-  BySpaceConfigRaw,
-  BySpaceConfigRevision,
+  PaseoConfigRaw,
+  PaseoConfigRevision,
   ProjectConfigRpcError,
-} from "@bytetrue/byspace-protocol/messages";
-import type { DaemonClient } from "@bytetrue/byspace-client/internal/daemon-client";
+} from "@getpaseo/protocol/messages";
+import type { DaemonClient } from "@getpaseo/client/internal/daemon-client";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -87,7 +87,7 @@ const METADATA_PROMPT_FIELDS: Record<MetadataPromptKey, MetadataPromptField> = {
   },
 };
 
-const WORKTREE_DOCS_URL = "https://byspace.cc.cd/docs/worktrees";
+const WORKTREE_DOCS_URL = "https://paseo.sh/docs/worktrees";
 
 type ReadProjectConfigData = Awaited<ReturnType<DaemonClient["readProjectConfig"]>>;
 
@@ -254,8 +254,8 @@ function ProjectSettingsBody({
       selectedHost.projectName,
     ],
   );
-  const loadedConfig: BySpaceConfigRaw | null = data?.ok ? (data.config ?? {}) : null;
-  const loadedRevision: BySpaceConfigRevision | null = data?.ok ? data.revision : null;
+  const loadedConfig: PaseoConfigRaw | null = data?.ok ? (data.config ?? {}) : null;
+  const loadedRevision: PaseoConfigRevision | null = data?.ok ? data.revision : null;
   const hasUncommittedWorktreeSetupChanges =
     data?.ok === true && data.hasUncommittedWorktreeSetupChanges === true;
   const readError: ProjectConfigRpcError | null = data && !data.ok ? data.error : null;
@@ -324,8 +324,8 @@ function ProjectSettingsBody({
 
 interface RenderContentInput {
   readQuery: ReturnType<typeof useQuery<ReadProjectConfigData>>;
-  loadedConfig: BySpaceConfigRaw | null;
-  loadedRevision: BySpaceConfigRevision | null;
+  loadedConfig: PaseoConfigRaw | null;
+  loadedRevision: PaseoConfigRevision | null;
   hasUncommittedWorktreeSetupChanges: boolean;
   readError: ProjectConfigRpcError | null;
   selectedHost: ProjectHostEntry;
@@ -399,7 +399,7 @@ function renderContent({
   );
 }
 
-function revisionToKey(revision: BySpaceConfigRevision | null): string {
+function revisionToKey(revision: PaseoConfigRevision | null): string {
   if (!revision) return "none";
   return `${revision.mtimeMs}-${revision.size}`;
 }
@@ -469,8 +469,8 @@ function errorToDetail(error: unknown): string | null {
 }
 
 interface ProjectConfigFormProps {
-  baseConfig: BySpaceConfigRaw;
-  revision: BySpaceConfigRevision | null;
+  baseConfig: PaseoConfigRaw;
+  revision: PaseoConfigRevision | null;
   hasUncommittedWorktreeSetupChanges: boolean;
   repoRoot: string;
   queryKey: readonly [string, string, string];
@@ -497,8 +497,8 @@ function ProjectConfigForm({
 
   const saveMutation = useMutation({
     mutationFn: async (input: {
-      config: BySpaceConfigRaw;
-      expectedRevision: BySpaceConfigRevision | null;
+      config: PaseoConfigRaw;
+      expectedRevision: PaseoConfigRevision | null;
     }) => {
       return client.writeProjectConfig({
         repoRoot,

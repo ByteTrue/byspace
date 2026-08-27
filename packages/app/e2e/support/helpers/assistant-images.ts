@@ -261,9 +261,9 @@ async function beginVisibleImageStabilityObservation(
       record.inspect();
       (
         window as unknown as {
-          __byspaceAssistantImageObservation?: typeof record;
+          __paseoAssistantImageObservation?: typeof record;
         }
-      ).__byspaceAssistantImageObservation = record;
+      ).__paseoAssistantImageObservation = record;
     },
     {
       accessibleName: alt,
@@ -276,18 +276,18 @@ async function beginVisibleImageStabilityObservation(
 async function expectNoVisibleImageInstability(page: Page): Promise<void> {
   const observation = await page.evaluate(() => {
     const owner = window as unknown as {
-      __byspaceAssistantImageObservation?: {
+      __paseoAssistantImageObservation?: {
         errorSeen: boolean;
         missingSeen: boolean;
         inspect(): void;
         observer: MutationObserver | null;
       };
     };
-    const record = owner.__byspaceAssistantImageObservation;
+    const record = owner.__paseoAssistantImageObservation;
     if (!record) throw new Error("Assistant image stability observation was not started");
     record.inspect();
     record.observer?.disconnect();
-    delete owner.__byspaceAssistantImageObservation;
+    delete owner.__paseoAssistantImageObservation;
     return { errorSeen: record.errorSeen, missingSeen: record.missingSeen };
   });
   expect(observation).toEqual({ errorSeen: false, missingSeen: false });

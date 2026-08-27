@@ -9,13 +9,13 @@ import { isBearerTokenValid } from "./auth.js";
 const roots: string[] = [];
 const CONFIG_PASSWORD_HASH = "$2b$12$OLxyuuP9uLK30Uzc4wQX0O6liuU/Q1t5P2b0Ebf36mULvpVK3DRZW";
 
-async function createBySpaceHome(config: unknown): Promise<string> {
-  const root = await mkdtemp(path.join(os.tmpdir(), "byspace-config-auth-"));
+async function createPaseoHome(config: unknown): Promise<string> {
+  const root = await mkdtemp(path.join(os.tmpdir(), "paseo-config-auth-"));
   roots.push(root);
-  const byspaceHome = path.join(root, ".byspace");
-  await mkdir(byspaceHome, { recursive: true });
-  await writeFile(path.join(byspaceHome, "config.json"), JSON.stringify(config, null, 2));
-  return byspaceHome;
+  const paseoHome = path.join(root, ".paseo");
+  await mkdir(paseoHome, { recursive: true });
+  await writeFile(path.join(paseoHome, "config.json"), JSON.stringify(config, null, 2));
+  return paseoHome;
 }
 
 describe("daemon auth config", () => {
@@ -24,14 +24,14 @@ describe("daemon auth config", () => {
   });
 
   test("loads optional auth password hash from config.json", async () => {
-    const byspaceHome = await createBySpaceHome({
+    const paseoHome = await createPaseoHome({
       version: 1,
       daemon: {
         auth: { password: CONFIG_PASSWORD_HASH },
       },
     });
 
-    const config = loadConfig(byspaceHome, { env: {} });
+    const config = loadConfig(paseoHome, { env: {} });
 
     expect(config.auth?.password).toBe(CONFIG_PASSWORD_HASH);
     expect(isBearerTokenValid({ password: config.auth?.password, token: "correct-password" })).toBe(
@@ -39,16 +39,16 @@ describe("daemon auth config", () => {
     );
   });
 
-  test("lets BYSPACE_PASSWORD override config.json auth password hash", async () => {
-    const byspaceHome = await createBySpaceHome({
+  test("lets PASEO_PASSWORD override config.json auth password hash", async () => {
+    const paseoHome = await createPaseoHome({
       version: 1,
       daemon: {
         auth: { password: CONFIG_PASSWORD_HASH },
       },
     });
 
-    const config = loadConfig(byspaceHome, {
-      env: { BYSPACE_PASSWORD: "from-env" },
+    const config = loadConfig(paseoHome, {
+      env: { PASEO_PASSWORD: "from-env" },
     });
 
     expect(config.auth?.password).not.toBe(CONFIG_PASSWORD_HASH);

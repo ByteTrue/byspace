@@ -1,13 +1,9 @@
 {
-  "name": "@bytetrue/byspace",
-  "version": "0.9.0",
-  "description": "BySpace CLI - control your AI coding agents from the command line",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/ByteTrue/byspace.git"
-  },
+  "name": "@getpaseo/cli",
+  "version": "0.6.1",
+  "description": "Paseo CLI - control your AI coding agents from the command line",
   "bin": {
-    "byspace": "bin/byspace"
+    "paseo": "bin/paseo"
   },
   "files": [
     "bin",
@@ -15,64 +11,40 @@
     "!dist/**/*.map"
   ],
   "type": "module",
-  "exports": {
-    ".": {
-      "types": "./dist/index.d.ts",
-      "default": "./dist/index.js"
-    },
-    "./bin/byspace": "./bin/byspace",
-    "./plugin": {
-      "types": "./dist/plugin.d.ts",
-      "default": "./dist/plugin.js"
-    },
-    "./plugin/server": {
-      "types": "./dist/plugin-server.d.ts",
-      "default": "./dist/plugin-server.js"
-    },
-    "./plugin/host": {
-      "types": "./dist/plugin-host.d.ts",
-      "default": "./dist/plugin-host.js"
-    },
-    "./package.json": "./package.json"
-  },
   "publishConfig": {
     "access": "public"
   },
   "scripts": {
     "clean": "node ../../scripts/clean-package-dist.mjs",
-    "build": "npm --prefix ../.. run build:plugin && tsc -p tsconfig.json --incremental false && node scripts/stage-plugin-sdk.mjs",
+    "build": "tsc -p tsconfig.json --incremental false",
     "build:clean": "npm run clean && npm run build",
     "prepack": "npm run build:clean",
     "typecheck": "tsgo --noEmit",
-    "test": "npm run test:local",
+    "test": "npm run test:unit && npm run test:local",
+    "test:unit": "vitest run src",
     "test:local": "tsx tests/run-all.ts",
     "test:e2e": "npm run test:local",
     "test:e2e:lifecycle": "npx tsx tests/e2e/agent-lifecycle.test.ts"
   },
   "dependencies": {
-    "@bytetrue/byspace-client": "0.9.0",
-    "@bytetrue/byspace-protocol": "0.9.0",
-    "@bytetrue/byspace-server": "0.9.0",
     "@clack/prompts": "^1.0.0",
+    "@getpaseo/client": "0.6.1",
+    "@getpaseo/protocol": "0.6.1",
+    "@getpaseo/server": "0.6.1",
     "chalk": "^5.3.0",
     "commander": "^12.0.0",
     "mime-types": "^2.1.35",
     "tree-kill": "^1.2.2",
-    "use-sync-external-store": "^1.6.0",
     "ws": "^8.14.2",
-    "yaml": "^2.8.4"
+    "yaml": "^2.8.4",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@bytetrue/byspace-plugin": "0.9.0",
     "@types/mime-types": "^3.0.1",
     "@types/ws": "^8.5.8",
     "tsx": "^4.6.0",
     "typescript": "^5.2.2",
-    "vitest": "^4.1.10",
+    "vitest": "^4.1.6",
     "zx": "^8.8.5"
-  },
-  "peerDependencies": {
-    "react": "19.1.0",
-    "zod": "^4.4.3"
   }
 }

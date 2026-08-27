@@ -9,20 +9,20 @@ function makeSources(): DesktopDiagnosticSources {
     getStatus: async () => ({
       serverId: "server-1",
       status: "running",
-      listen: "127.0.0.1:6777",
+      listen: "127.0.0.1:6767",
       hostname: "host",
       pid: 4242,
-      home: "/byspace/home",
+      home: "/paseo/home",
       version: "1.2.3",
       desktopManaged: true,
       error: null,
     }),
     getDaemonLogs: async () => ({
-      logPath: "/byspace/home/daemon.log",
+      logPath: "/paseo/home/daemon.log",
       contents: "daemon line one\ndaemon line two",
     }),
     getAppLogs: async () => ({
-      logPath: "/logs/BySpace/main.log",
+      logPath: "/logs/Paseo/main.log",
       contents: "[login-shell-env] start\n[login-shell-env] failed",
     }),
   };
@@ -64,8 +64,8 @@ describe("desktop diagnostic report", () => {
     const report = result.sections.join("\n\n");
 
     expect(result.status).toBe("done");
-    expect(report).toContain("  Log path: /byspace/home/daemon.log");
-    expect(report).toContain("  App log path: /logs/BySpace/main.log");
+    expect(report).toContain("  Log path: /paseo/home/daemon.log");
+    expect(report).toContain("  App log path: /logs/Paseo/main.log");
     expect(report).toContain("Desktop daemon log tail\n  daemon line one\n  daemon line two");
     expect(report).toContain(
       "Desktop app log tail\n  [login-shell-env] start\n  [login-shell-env] failed",

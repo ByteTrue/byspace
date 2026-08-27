@@ -1,12 +1,12 @@
-name = "byspace-website"
+name = "paseo-website"
 account_id = "10ed39a1dbf316e30abd0c409bed40d6"
 compatibility_date = "2024-12-01"
 compatibility_flags = ["nodejs_compat"]
 main = "./src/server-entry.ts"
 
 routes = [
-  { pattern = "byspace.cc.cd", custom_domain = true },
-  { pattern = "www.byspace.cc.cd", custom_domain = true },
+  { pattern = "paseo.sh", custom_domain = true },
+  { pattern = "www.paseo.sh", custom_domain = true },
 ]
 
 [observability]

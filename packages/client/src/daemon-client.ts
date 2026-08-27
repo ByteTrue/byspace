@@ -1,6 +1,6 @@
 import type { z } from "zod";
-import { CLIENT_CAPS, type ClientCapability } from "@bytetrue/byspace-protocol/client-capabilities";
-import type { AgentAttentionNotificationPayload } from "@bytetrue/byspace-protocol/agent-attention-notification";
+import { CLIENT_CAPS, type ClientCapability } from "@getpaseo/protocol/client-capabilities";
+import type { AgentAttentionNotificationPayload } from "@getpaseo/protocol/agent-attention-notification";
 import {
   AgentCreateFailedStatusPayloadSchema,
   AgentCreatedStatusPayloadSchema,
@@ -15,15 +15,15 @@ import {
   SessionInboundMessageSchema,
   type ActiveTurnBehavior,
   type ServerInfoStatusPayload,
-} from "@bytetrue/byspace-protocol/messages";
-import { validateWSOutboundMessage } from "@bytetrue/byspace-protocol/validation/ws-outbound";
+} from "@getpaseo/protocol/messages";
+import { validateWSOutboundMessage } from "@getpaseo/protocol/validation/ws-outbound";
 import type {
   AgentStreamEventPayload,
   AgentSnapshotPayload,
   ProjectPlacementPayload,
   AgentPermissionResolvedMessage,
   CreateAgentRequestMessage,
-  CreateBySpaceWorktreeRequest,
+  CreatePaseoWorktreeRequest,
   FileDownloadTokenResponse,
   FileUploadResponse,
   FileExplorerResponse,
@@ -61,8 +61,8 @@ import type {
   GitHubSearchResponse,
   GitHubSearchRequest,
   DirectorySuggestionsResponse,
-  BySpaceWorktreeListResponse,
-  BySpaceWorktreeArchiveResponse,
+  PaseoWorktreeListResponse,
+  PaseoWorktreeArchiveResponse,
   ProjectIconSource,
   ProjectIconResponse,
   ProjectIconGetResponse,
@@ -99,8 +99,8 @@ import type {
   SessionInboundMessage,
   SessionOutboundMessage,
   SendAgentMessageRequest,
-  BySpaceConfigRaw,
-  BySpaceConfigRevision,
+  PaseoConfigRaw,
+  PaseoConfigRevision,
   WorkspaceCreateRequest,
   WorkspaceRecoveryState,
   PluginListItem,
@@ -108,7 +108,7 @@ import type {
   AgentSkillSelection,
   AgentSkillsStatus,
   AgentSkillsSaveResult,
-} from "@bytetrue/byspace-protocol/messages";
+} from "@getpaseo/protocol/messages";
 import type {
   AgentPermissionRequest,
   AgentPermissionResponse,
@@ -116,14 +116,14 @@ import type {
   AgentProviderNotice,
   AgentProvider,
   AgentSessionConfig,
-} from "@bytetrue/byspace-protocol/agent-types";
+} from "@getpaseo/protocol/agent-types";
 import type {
   AgentConfigApply,
   MutableDaemonConfig,
   MutableDaemonConfigPatch,
-} from "@bytetrue/byspace-protocol/messages";
-import { isRelayClientWebSocketUrl } from "@bytetrue/byspace-protocol/daemon-endpoints";
-import { terminalSubscriptionKey } from "@bytetrue/byspace-protocol/terminal-subscription-key";
+} from "@getpaseo/protocol/messages";
+import { isRelayClientWebSocketUrl } from "@getpaseo/protocol/daemon-endpoints";
+import { terminalSubscriptionKey } from "@getpaseo/protocol/terminal-subscription-key";
 import {
   asUint8Array,
   decodeFileTransferFrame,
@@ -132,7 +132,7 @@ import {
   FileTransferOpcode,
   TerminalStreamOpcode,
   type FileTransferFrame,
-} from "@bytetrue/byspace-protocol/binary-frames/index";
+} from "@getpaseo/protocol/binary-frames/index";
 import {
   createRelayE2eeTransportFactory,
   createWebSocketTransportFactory,
@@ -154,7 +154,7 @@ import { TerminalStreamRouter, type TerminalStreamEvent } from "./terminal-strea
 import type {
   BrowserAutomationExecuteRequest,
   BrowserAutomationExecuteResponse,
-} from "@bytetrue/byspace-protocol/browser-automation/rpc-schemas";
+} from "@getpaseo/protocol/browser-automation/rpc-schemas";
 
 export interface Logger {
   debug(obj: object, msg?: string): void;
@@ -377,8 +377,8 @@ export interface CreateAgentRequestOptions extends AgentConfigOverrides {
   labels?: Record<string, string>;
 }
 
-export interface CreateBySpaceWorktreeInput extends Pick<
-  CreateBySpaceWorktreeRequest,
+export interface CreatePaseoWorktreeInput extends Pick<
+  CreatePaseoWorktreeRequest,
   | "cwd"
   | "projectId"
   | "worktreeSlug"
@@ -419,11 +419,11 @@ type BranchSuggestionsPayload = BranchSuggestionsResponse["payload"];
 type ForgeSearchPayload = ForgeSearchResponse["payload"];
 type GitHubSearchPayload = GitHubSearchResponse["payload"];
 type DirectorySuggestionsPayload = DirectorySuggestionsResponse["payload"];
-type BySpaceWorktreeListPayload = BySpaceWorktreeListResponse["payload"];
-type BySpaceWorktreeArchivePayload = BySpaceWorktreeArchiveResponse["payload"];
-type CreateBySpaceWorktreePayload = Extract<
+type PaseoWorktreeListPayload = PaseoWorktreeListResponse["payload"];
+type PaseoWorktreeArchivePayload = PaseoWorktreeArchiveResponse["payload"];
+type CreatePaseoWorktreePayload = Extract<
   SessionOutboundMessage,
-  { type: "create_byspace_worktree_response" }
+  { type: "create_paseo_worktree_response" }
 >["payload"];
 type WorkspaceCreatePayload = Extract<
   SessionOutboundMessage,
@@ -478,8 +478,8 @@ type ListCommandsDraftConfig = Pick<
 >;
 export interface WriteProjectConfigInput {
   repoRoot: string;
-  config: BySpaceConfigRaw;
-  expectedRevision: BySpaceConfigRevision | null;
+  config: PaseoConfigRaw;
+  expectedRevision: PaseoConfigRevision | null;
   requestId?: string;
 }
 interface ListCommandsOptions {
@@ -1202,7 +1202,7 @@ export class DaemonClient {
     } else if (this.config.authHeader) {
       headers.Authorization = this.config.authHeader;
     }
-    const protocols = password ? [`byspace.bearer.${password}`] : undefined;
+    const protocols = password ? [`paseo.bearer.${password}`] : undefined;
 
     try {
       // Reconnect can overlap with browser close/error delivery ordering.
@@ -1529,7 +1529,7 @@ export class DaemonClient {
   }
 
   private sendJsonMessage(envelopeType: string, messageType: string, message: unknown): void {
-    this.traceInstant("byspace.ws.message.outbound", {
+    this.traceInstant("paseo.ws.message.outbound", {
       envelopeType,
       messageType,
     });
@@ -1540,7 +1540,7 @@ export class DaemonClient {
     if (!this.transport) {
       throw new Error("Transport not connected");
     }
-    const isOpen = this.beginTraceSection("byspace.ws.frame.outbound", {
+    const isOpen = this.beginTraceSection("paseo.ws.frame.outbound", {
       kind: typeof frame === "string" ? "text" : "binary",
       size: String(getTransportFrameSize(frame)),
     });
@@ -1582,7 +1582,7 @@ export class DaemonClient {
       throw new Error(`Transport not connected (status: ${this.connectionState.status})`);
     }
     try {
-      this.traceInstant("byspace.ws.message.outbound", {
+      this.traceInstant("paseo.ws.message.outbound", {
         envelopeType: "binary",
         messageType: "binary",
       });
@@ -4107,7 +4107,7 @@ export class DaemonClient {
 
   async stashList(
     cwd: string,
-    options?: { byspaceOnly?: boolean },
+    options?: { paseoOnly?: boolean },
     requestId?: string,
   ): Promise<StashListPayload> {
     return this.sendCorrelatedSessionRequest({
@@ -4115,28 +4115,28 @@ export class DaemonClient {
       message: {
         type: "stash_list_request",
         cwd,
-        byspaceOnly: options?.byspaceOnly,
+        paseoOnly: options?.paseoOnly,
       },
       responseType: "stash_list_response",
     });
   }
 
-  async getBySpaceWorktreeList(
+  async getPaseoWorktreeList(
     input: { cwd?: string; repoRoot?: string },
     requestId?: string,
-  ): Promise<BySpaceWorktreeListPayload> {
+  ): Promise<PaseoWorktreeListPayload> {
     return this.sendCorrelatedSessionRequest({
       requestId,
       message: {
-        type: "byspace_worktree_list_request",
+        type: "paseo_worktree_list_request",
         cwd: input.cwd,
         repoRoot: input.repoRoot,
       },
-      responseType: "byspace_worktree_list_response",
+      responseType: "paseo_worktree_list_response",
     });
   }
 
-  async archiveBySpaceWorktree(
+  async archivePaseoWorktree(
     input: {
       worktreePath?: string;
       repoRoot?: string;
@@ -4145,29 +4145,29 @@ export class DaemonClient {
       scope?: "workspace" | "worktree";
     },
     requestId?: string,
-  ): Promise<BySpaceWorktreeArchivePayload> {
+  ): Promise<PaseoWorktreeArchivePayload> {
     return this.sendCorrelatedSessionRequest({
       requestId,
       message: {
-        type: "byspace_worktree_archive_request",
+        type: "paseo_worktree_archive_request",
         worktreePath: input.worktreePath,
         repoRoot: input.repoRoot,
         branchName: input.branchName,
         ...(input.workspaceId !== undefined ? { workspaceId: input.workspaceId } : {}),
         ...(input.scope !== undefined ? { scope: input.scope } : {}),
       },
-      responseType: "byspace_worktree_archive_response",
+      responseType: "paseo_worktree_archive_response",
     });
   }
 
-  async createBySpaceWorktree(
-    input: CreateBySpaceWorktreeInput,
+  async createPaseoWorktree(
+    input: CreatePaseoWorktreeInput,
     requestId?: string,
-  ): Promise<CreateBySpaceWorktreePayload> {
+  ): Promise<CreatePaseoWorktreePayload> {
     return this.sendCorrelatedSessionRequest({
       requestId,
       message: {
-        type: "create_byspace_worktree_request",
+        type: "create_paseo_worktree_request",
         cwd: input.cwd,
         ...(input.projectId !== undefined ? { projectId: input.projectId } : {}),
         worktreeSlug: input.worktreeSlug,
@@ -4179,7 +4179,7 @@ export class DaemonClient {
         ...(input.checkoutSource !== undefined ? { checkoutSource: input.checkoutSource } : {}),
         ...(input.githubPrNumber !== undefined ? { githubPrNumber: input.githubPrNumber } : {}),
       },
-      responseType: "create_byspace_worktree_response",
+      responseType: "create_paseo_worktree_response",
     });
   }
 
@@ -5633,7 +5633,7 @@ export class DaemonClient {
 
     const rawBytes = asUint8Array(rawData);
     const isOpen = this.beginTraceSection(
-      "byspace.ws.frame.inbound",
+      "paseo.ws.frame.inbound",
       describeInboundTransportFrame(rawData, rawBytes),
     );
     try {
@@ -5654,7 +5654,7 @@ export class DaemonClient {
     const bytes = rawBytesLength ?? payload.length;
     const startMs = perfNow();
     let parsedJson: unknown;
-    const parseTraceOpen = this.beginTraceSection("byspace.ws.json.parse", {
+    const parseTraceOpen = this.beginTraceSection("paseo.ws.json.parse", {
       size: String(bytes),
     });
     try {
@@ -5689,7 +5689,7 @@ export class DaemonClient {
     this.consecutiveLivenessFailures = 0;
 
     if (parsed.data.type === "pong") {
-      this.traceInstant("byspace.ws.message.inbound", {
+      this.traceInstant("paseo.ws.message.inbound", {
         envelopeType: "pong",
         messageType: "pong",
       });
@@ -5698,7 +5698,7 @@ export class DaemonClient {
       return;
     }
 
-    this.traceInstant("byspace.ws.message.inbound", {
+    this.traceInstant("paseo.ws.message.inbound", {
       envelopeType: "session",
       messageType: parsed.data.message.type,
     });
@@ -5713,7 +5713,7 @@ export class DaemonClient {
   private tryHandleBinaryFrame(rawBytes: Uint8Array): boolean {
     const fileFrame = decodeFileTransferFrame(rawBytes);
     if (fileFrame) {
-      this.traceInstant("byspace.ws.message.inbound", {
+      this.traceInstant("paseo.ws.message.inbound", {
         envelopeType: "binary",
         messageType: "file",
         opcode: String(fileFrame.opcode),
@@ -5728,7 +5728,7 @@ export class DaemonClient {
     if (!frame) {
       return false;
     }
-    this.traceInstant("byspace.ws.message.inbound", {
+    this.traceInstant("paseo.ws.message.inbound", {
       envelopeType: "binary",
       messageType: "terminal",
       opcode: String(frame.opcode),

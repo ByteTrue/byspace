@@ -1,4 +1,4 @@
-import type { AgentAttachment } from "@bytetrue/byspace-protocol/messages";
+import type { AgentAttachment } from "@getpaseo/protocol/messages";
 
 function isLikelyWindowsPath(path: string): boolean {
   return /^[a-zA-Z]:\//.test(path);

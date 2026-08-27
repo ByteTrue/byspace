@@ -2,7 +2,7 @@ import {
   compareMatchScores,
   type MatchScore,
   scoreTextFields,
-} from "@bytetrue/byspace-protocol/search/text-match";
+} from "@getpaseo/protocol/search/text-match";
 
 export type ComboboxOptionKind = "directory" | "file";
 

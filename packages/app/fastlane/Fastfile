@@ -1,6 +1,6 @@
 default_platform(:ios)
 
-APP_IDENTIFIER = "com.bytetrue.byspace"
+APP_IDENTIFIER = "sh.paseo"
 
 platform :ios do
   desc "Submit the latest TestFlight build to App Store Review"

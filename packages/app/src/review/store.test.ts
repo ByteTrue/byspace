@@ -146,17 +146,17 @@ describe("normalizePersistedState", () => {
       activeModesByScope: { "review:scope": "base" },
     };
     backing.values.set(
-      "@byspace:review-draft-store",
+      "@paseo:review-draft-store",
       JSON.stringify({ state: legacyState, version: 1 }),
     );
     const storage = createValidatedPersistStorage(backing, SerializedReviewDraftStateSchema);
 
-    const stored = await storage.getItem("@byspace:review-draft-store");
+    const stored = await storage.getItem("@paseo:review-draft-store");
     const normalized = normalizePersistedState(stored?.state);
 
     expect(normalized.drafts["review:key"]).toEqual([makeComment()]);
     expect(normalized.diffModeOverrides).toEqual({});
-    expect(backing.values.has("@byspace:review-draft-store")).toBe(true);
+    expect(backing.values.has("@paseo:review-draft-store")).toBe(true);
   });
 
   it("rejects the complete payload when any draft comment or field is invalid", () => {
@@ -404,7 +404,7 @@ describe("buildReviewAttachmentSnapshot", () => {
       commentCount: 1,
       attachment: {
         type: "review",
-        mimeType: "application/byspace-review",
+        mimeType: "application/paseo-review",
         cwd: "/repo",
         mode: "base",
         baseRef: "main",

@@ -10,15 +10,11 @@ export const Route = createFileRoute("/docs/")({
     const doc = getDoc("");
     if (!doc)
       return pageMeta(
-        "Docs - BySpace",
-        "Install BySpace and start running coding agents from your phone, desktop, and terminal.",
+        "Docs - Paseo",
+        "Install Paseo and start running coding agents from your phone, desktop, and terminal.",
         "/docs",
       );
-    return pageMeta(
-      `${doc.frontmatter.title} - BySpace Docs`,
-      doc.frontmatter.description,
-      "/docs",
-    );
+    return pageMeta(`${doc.frontmatter.title} - Paseo Docs`, doc.frontmatter.description, "/docs");
   },
   component: DocsIndex,
 });

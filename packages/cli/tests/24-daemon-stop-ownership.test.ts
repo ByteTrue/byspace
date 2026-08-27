@@ -1,7 +1,7 @@
 #!/usr/bin/env npx tsx
 
 /**
- * Regression: `byspace daemon stop` must only act on daemon ownership state and
+ * Regression: `paseo daemon stop` must only act on daemon ownership state and
  * must not discover/kill processes via home-scoped `ps` command heuristics.
  */
 
@@ -15,9 +15,9 @@ import { $ } from "zx";
 $.verbose = false;
 
 const testEnv = {
-  BYSPACE_LOCAL_SPEECH_AUTO_DOWNLOAD: process.env.BYSPACE_LOCAL_SPEECH_AUTO_DOWNLOAD ?? "0",
-  BYSPACE_DICTATION_ENABLED: process.env.BYSPACE_DICTATION_ENABLED ?? "0",
-  BYSPACE_VOICE_MODE_ENABLED: process.env.BYSPACE_VOICE_MODE_ENABLED ?? "0",
+  PASEO_LOCAL_SPEECH_AUTO_DOWNLOAD: process.env.PASEO_LOCAL_SPEECH_AUTO_DOWNLOAD ?? "0",
+  PASEO_DICTATION_ENABLED: process.env.PASEO_DICTATION_ENABLED ?? "0",
+  PASEO_VOICE_MODE_ENABLED: process.env.PASEO_VOICE_MODE_ENABLED ?? "0",
 };
 
 function sleep(ms: number): Promise<void> {
@@ -52,7 +52,7 @@ async function waitForRunning(pid: number, timeoutMs: number): Promise<void> {
 
 console.log("=== Daemon Stop Ownership Regression ===\n");
 
-const byspaceHome = await mkdtemp(join(tmpdir(), "byspace-stop-ownership-"));
+const paseoHome = await mkdtemp(join(tmpdir(), "paseo-stop-ownership-"));
 let decoyProcess: ChildProcess | null = null;
 
 try {
@@ -69,7 +69,7 @@ try {
     {
       env: {
         ...process.env,
-        BYSPACE_HOME: byspaceHome,
+        PASEO_HOME: paseoHome,
       },
       stdio: "ignore",
       detached: process.platform !== "win32",
@@ -85,7 +85,7 @@ try {
   console.log("Test 2: daemon stop should report not_running and leave decoy untouched");
 
   const stopResult =
-    await $`BYSPACE_HOME=${byspaceHome} BYSPACE_LOCAL_SPEECH_AUTO_DOWNLOAD=${testEnv.BYSPACE_LOCAL_SPEECH_AUTO_DOWNLOAD} BYSPACE_DICTATION_ENABLED=${testEnv.BYSPACE_DICTATION_ENABLED} BYSPACE_VOICE_MODE_ENABLED=${testEnv.BYSPACE_VOICE_MODE_ENABLED} npx byspace daemon stop --home ${byspaceHome} --json`.nothrow();
+    await $`PASEO_HOME=${paseoHome} PASEO_LOCAL_SPEECH_AUTO_DOWNLOAD=${testEnv.PASEO_LOCAL_SPEECH_AUTO_DOWNLOAD} PASEO_DICTATION_ENABLED=${testEnv.PASEO_DICTATION_ENABLED} PASEO_VOICE_MODE_ENABLED=${testEnv.PASEO_VOICE_MODE_ENABLED} npx paseo daemon stop --home ${paseoHome} --json`.nothrow();
   assert.strictEqual(stopResult.exitCode, 0, `stop should succeed: ${stopResult.stderr}`);
 
   const parsed = JSON.parse(stopResult.stdout) as { action?: unknown };
@@ -114,8 +114,8 @@ try {
     }
   }
 
-  await $`BYSPACE_HOME=${byspaceHome} npx byspace daemon stop --home ${byspaceHome} --force`.nothrow();
-  await rm(byspaceHome, { recursive: true, force: true });
+  await $`PASEO_HOME=${paseoHome} npx paseo daemon stop --home ${paseoHome} --force`.nothrow();
+  await rm(paseoHome, { recursive: true, force: true });
 }
 
 console.log("=== Daemon stop ownership regression test passed ===");

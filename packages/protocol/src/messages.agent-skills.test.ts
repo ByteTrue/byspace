@@ -12,8 +12,8 @@ describe("agent skills protocol", () => {
       AgentSkillsSaveSelectionRequestSchema.parse({
         type: "agent.skills.save_selection.request",
         requestId: "request-1",
-        selection: { mode: "custom", skills: ["byspace"] },
-        confirmedRemovals: ["byspace-loop"],
+        selection: { mode: "custom", skills: ["paseo"] },
+        confirmedRemovals: ["paseo-loop"],
       }),
     ).toMatchObject({ requestId: "request-1" });
     expect(
@@ -31,8 +31,8 @@ describe("agent skills protocol", () => {
         payload: {
           requestId: "request-3",
           state: "not-installed",
-          ops: [{ kind: "add", name: "byspace" }],
-          available: ["byspace"],
+          ops: [{ kind: "add", name: "paseo" }],
+          available: ["paseo"],
           installed: [],
           selection: { mode: "all" },
         },

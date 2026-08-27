@@ -21,7 +21,7 @@ vi.mock("electron-log/main", () => ({
   default: { warn: vi.fn() },
 }));
 
-vi.mock("@bytetrue/byspace-server", () => ({
+vi.mock("@getpaseo/server", () => ({
   spawnProcess: vi.fn(),
 }));
 
@@ -54,8 +54,8 @@ describe("runtime-paths", () => {
     mocks.existsSync.mockReturnValue(true);
     setProcessRuntime({
       platform: "darwin",
-      execPath: "/Applications/BySpace.app/Contents/MacOS/BySpace",
-      resourcesPath: "/Applications/BySpace.app/Contents/Resources",
+      execPath: "/Applications/Paseo.app/Contents/MacOS/Paseo",
+      resourcesPath: "/Applications/Paseo.app/Contents/Resources",
     });
   });
 
@@ -70,7 +70,7 @@ describe("runtime-paths", () => {
 
   it("uses the macOS Helper executable for packaged daemon node launches", () => {
     expect(resolveNodeExecPath()).toBe(
-      "/Applications/BySpace.app/Contents/Frameworks/BySpace Helper.app/Contents/MacOS/BySpace Helper",
+      "/Applications/Paseo.app/Contents/Frameworks/Paseo Helper.app/Contents/MacOS/Paseo Helper",
     );
   });
 });

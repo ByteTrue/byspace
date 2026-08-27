@@ -170,13 +170,13 @@ function routeLabelKey(
   kind: WorkspaceScriptLinkKind,
 ):
   | "workspace.scripts.routes.public"
-  | "workspace.scripts.routes.byspace"
+  | "workspace.scripts.routes.paseo"
   | "workspace.scripts.routes.direct" {
   switch (kind) {
     case "public":
       return "workspace.scripts.routes.public";
-    case "byspace":
-      return "workspace.scripts.routes.byspace";
+    case "paseo":
+      return "workspace.scripts.routes.paseo";
     case "direct":
       return "workspace.scripts.routes.direct";
   }

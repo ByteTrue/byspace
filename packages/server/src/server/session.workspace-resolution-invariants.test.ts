@@ -9,7 +9,7 @@ import path from "node:path";
 import { expect, test, vi } from "vitest";
 
 import { Session, type SessionOptions } from "./session.js";
-import type { SessionOutboundMessage } from "@bytetrue/byspace-protocol/messages";
+import type { SessionOutboundMessage } from "@getpaseo/protocol/messages";
 import { createNoopWorkspaceGitService } from "./test-utils/workspace-git-service-stub.js";
 import { asInternals, createStub } from "./test-utils/class-mocks.js";
 import { createProviderSnapshotManagerStub } from "./test-utils/session-stubs.js";
@@ -59,7 +59,7 @@ function createHarness(input: {
           currentBranch: null,
           remoteUrl: null,
           worktreeRoot: null,
-          isBySpaceOwnedWorktree: false,
+          isPaseoOwnedWorktree: false,
           mainRepoRoot: null,
         };
       }
@@ -69,7 +69,7 @@ function createHarness(input: {
         currentBranch: "main",
         remoteUrl: null,
         worktreeRoot: root,
-        isBySpaceOwnedWorktree: false,
+        isPaseoOwnedWorktree: false,
         mainRepoRoot: null,
       };
     },
@@ -94,7 +94,7 @@ function createHarness(input: {
     logger: createStub<SessionOptions["logger"]>(logger),
     downloadTokenStore: createStub<SessionOptions["downloadTokenStore"]>({}),
     pushNotifications: createStub<SessionOptions["pushNotifications"]>({}),
-    byspaceHome: mkdtempSync(path.join(tmpdir(), "byspace-invariant-test-")),
+    paseoHome: mkdtempSync(path.join(tmpdir(), "paseo-invariant-test-")),
     agentManager: createStub<SessionOptions["agentManager"]>({
       subscribe: () => () => {},
       listAgents: () => [],

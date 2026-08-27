@@ -1,21 +1,21 @@
 ---
 title: OpenChamber Alternative With Linux, Windows, and Mobile
-description: BySpace ships native iOS and Android apps, runs on macOS, Linux, and Windows, and supports 30+ agents. OpenChamber is macOS only with a PWA and is built around OpenCode.
+description: Paseo ships native iOS and Android apps, runs on macOS, Linux, and Windows, and supports 30+ agents. OpenChamber is macOS only with a PWA and is built around OpenCode.
 nav: OpenChamber
 order: 52
 ---
 
-# BySpace vs OpenChamber
+# Paseo vs OpenChamber
 
 OpenChamber is a macOS desktop app for OpenCode. Also available as a PWA. Open source under MIT.
 
-BySpace is an app for orchestrating coding agents, with native clients on desktop, mobile, web, and the CLI. Open source (AGPL-3.0).
+Paseo is an app for orchestrating coding agents, with native clients on desktop, mobile, web, and the CLI. Open source (AGPL-3.0).
 
-![BySpace desktop and mobile app](/hero-mockup.png)
+![Paseo desktop and mobile app](/hero-mockup.png)
 
-## Why pick BySpace
+## Why pick Paseo
 
-OpenChamber runs on macOS, around OpenCode, with a phone PWA. BySpace runs OpenCode too, on macOS, and adds:
+OpenChamber runs on macOS, around OpenCode, with a phone PWA. Paseo runs OpenCode too, on macOS, and adds:
 
 - Linux and Windows desktop
 - A native iOS and Android app
@@ -24,57 +24,57 @@ OpenChamber runs on macOS, around OpenCode, with a phone PWA. BySpace runs OpenC
 
 ## Mobile
 
-BySpace ships a native iOS and Android app with the same feature set as the desktop. Install from the App Store or Google Play.
+Paseo ships a native iOS and Android app with the same feature set as the desktop. Install from the App Store or Google Play.
 
 OpenChamber does not have a native mobile app.
 
 ## Desktop
 
-BySpace ships on macOS, Linux, and Windows.
+Paseo ships on macOS, Linux, and Windows.
 
 OpenChamber ships on macOS.
 
 ## Providers
 
-BySpace runs Claude Code, Codex, OpenCode, and Pi natively, plus 30+ more agents through the in-app catalog including GitHub Copilot, Cursor, Gemini CLI, and Amp. BySpace speaks the [Agent Client Protocol](https://agentclientprotocol.com), so any ACP agent works. Custom providers run any CLI agent. See [Supported providers](/docs/supported-providers).
+Paseo runs Claude Code, Codex, OpenCode, and Pi natively, plus 30+ more agents through the in-app catalog including GitHub Copilot, Cursor, Gemini CLI, and Amp. Paseo speaks the [Agent Client Protocol](https://agentclientprotocol.com), so any ACP agent works. Custom providers run any CLI agent. See [Supported providers](/docs/supported-providers).
 
 OpenChamber is built around OpenCode.
 
 ## Panes
 
-BySpace's app has split panes and tabs (⌘D for vertical, ⌘⇧D for horizontal). Panes include a terminal alongside your agents, a diff viewer, and a browser for testing running services.
+Paseo's app has split panes and tabs (⌘D for vertical, ⌘⇧D for horizontal). Panes include a terminal alongside your agents, a diff viewer, and a browser for testing running services.
 
 ## GitHub
 
-BySpace's app handles commit, push, opening PRs, watching checks and reviews, and merging.
+Paseo's app handles commit, push, opening PRs, watching checks and reviews, and merging.
 
 ## CLI
 
-BySpace has a CLI that mirrors the app:
+Paseo has a CLI that mirrors the app:
 
 ```bash
-byspace run --provider codex "implement OAuth"
-byspace run --host devbox:6777 "run the test suite"
-byspace ls
-byspace send <agent-id> "add tests"
-byspace schedule create --cron "0 9 * * 1" "audit the codebase"
+paseo run --provider codex "implement OAuth"
+paseo run --host devbox:6767 "run the test suite"
+paseo ls
+paseo send <agent-id> "add tests"
+paseo schedule create --cron "0 9 * * 1" "audit the codebase"
 ```
 
-`byspace run --host` connects to a remote daemon. `byspace schedule` runs an agent on a cron.
+`paseo run --host` connects to a remote daemon. `paseo schedule` runs an agent on a cron.
 
 OpenChamber does not have a CLI.
 
 ## Worktrees and services
 
-BySpace runs each agent in its own git worktree. Each worktree gets its own dev server URL like `web.fix-auth.my-app.localhost`, so parallel agents don't fight for ports.
+Paseo runs each agent in its own git worktree. Each worktree gets its own dev server URL like `web.fix-auth.my-app.localhost`, so parallel agents don't fight for ports.
 
 ## Voice
 
-BySpace's speech-to-text and text-to-speech run locally on your device. OpenChamber does not have voice.
+Paseo's speech-to-text and text-to-speech run locally on your device. OpenChamber does not have voice.
 
 ## Comparison
 
-|                              | BySpace                                                         | OpenChamber       |
+|                              | Paseo                                                           | OpenChamber       |
 | ---------------------------- | --------------------------------------------------------------- | ----------------- |
 | License                      | Open source (AGPL-3.0)                                          | Open source (MIT) |
 | Desktop platforms            | macOS, Linux, Windows                                           | macOS             |
@@ -90,4 +90,4 @@ BySpace's speech-to-text and text-to-speech run locally on your device. OpenCham
 | Local voice (on-device)      | Yes                                                             | —                 |
 | Self-hosted daemon           | Yes                                                             | —                 |
 
-See also: [BySpace vs Conductor](/alternatives/conductor), [BySpace vs Superset](/alternatives/superset), [BySpace vs Happy Coder](/alternatives/happy-coder).
+See also: [Paseo vs Conductor](/alternatives/conductor), [Paseo vs Superset](/alternatives/superset), [Paseo vs Happy Coder](/alternatives/happy-coder).

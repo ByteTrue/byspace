@@ -1,9 +1,9 @@
 import { QueryClient } from "@tanstack/react-query";
 import { beforeEach, describe, expect, it } from "vitest";
 
-import type { DaemonClient } from "@bytetrue/byspace-client/internal/daemon-client";
-import type { ProviderSnapshotEntry } from "@bytetrue/byspace-protocol/agent-types";
-import { compactProviderSnapshot } from "@bytetrue/byspace-protocol/provider-snapshot-codec";
+import type { DaemonClient } from "@getpaseo/client/internal/daemon-client";
+import type { ProviderSnapshotEntry } from "@getpaseo/protocol/agent-types";
+import { compactProviderSnapshot } from "@getpaseo/protocol/provider-snapshot-codec";
 import type { CachedProviderSnapshot, ProviderSnapshotCache } from "@/data/provider-snapshot-cache";
 import { draftAgentCommandsQueryKey } from "@/hooks/agent-commands-query";
 import { applyProvidersSnapshotUpdate, type ProvidersSnapshotUpdate } from "@/data/push-router";

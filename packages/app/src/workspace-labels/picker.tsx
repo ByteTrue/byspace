@@ -15,7 +15,7 @@ import {
   WORKSPACE_LABEL_COLORS,
   type WorkspaceLabelColor,
   type WorkspaceLabelDefinition,
-} from "@bytetrue/byspace-protocol/workspace-labels";
+} from "@getpaseo/protocol/workspace-labels";
 import {
   MenuHint,
   MenuItem,

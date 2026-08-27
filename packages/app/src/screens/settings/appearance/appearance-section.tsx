@@ -8,7 +8,7 @@ import {
   SYNTAX_THEME_OPTIONS,
   type SyntaxThemeId,
   type SyntaxThemeOption,
-} from "@bytetrue/byspace-highlight";
+} from "@getpaseo/highlight";
 import {
   DropdownMenu,
   DropdownMenuContent,

@@ -4,8 +4,8 @@ import {
   formatResolvedCommand,
   profileTakesPrompt,
   substitutePrompt,
-} from "@bytetrue/byspace-protocol/terminal-profiles";
-import type { TerminalProfile } from "@bytetrue/byspace-protocol/messages";
+} from "@getpaseo/protocol/terminal-profiles";
+import type { TerminalProfile } from "@getpaseo/protocol/messages";
 import { resolveLaunchProfile, type LaunchTarget } from "./target";
 
 export interface TerminalComposerState {

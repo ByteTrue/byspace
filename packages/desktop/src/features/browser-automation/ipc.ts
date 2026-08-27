@@ -1,10 +1,10 @@
 import type { Rectangle } from "electron";
 import { ipcMain } from "electron";
-import { BrowserAutomationExecuteRequestSchema } from "@bytetrue/byspace-protocol/browser-automation/rpc-schemas";
+import { BrowserAutomationExecuteRequestSchema } from "@getpaseo/protocol/browser-automation/rpc-schemas";
 import type {
   BrowserAutomationConsoleLogEntry,
   BrowserAutomationDialogEvent,
-} from "@bytetrue/byspace-protocol/browser-automation/rpc-schemas";
+} from "@getpaseo/protocol/browser-automation/rpc-schemas";
 import type { TabContents, BrowserRegistry, TabImage } from "./service.js";
 import type { IsolatedKeyboardInputEvent } from "./trusted-input.js";
 import { CdpSessionQueue } from "./cdp-session-queue.js";
@@ -19,11 +19,11 @@ import {
 import { executeAutomationCommand } from "./service.js";
 import { BrowserSnapshotEngine } from "./snapshot-engine.js";
 import {
-  listRegisteredBySpaceBrowserIds,
-  listRegisteredBySpaceBrowserIdsForWorkspace,
-  getBySpaceBrowserWebContentsForHostWindow,
-  getWorkspaceActiveBySpaceBrowserIdForHostWindow,
-  getBySpaceBrowserWorkspaceId,
+  listRegisteredPaseoBrowserIds,
+  listRegisteredPaseoBrowserIdsForWorkspace,
+  getPaseoBrowserWebContentsForHostWindow,
+  getWorkspaceActivePaseoBrowserIdForHostWindow,
+  getPaseoBrowserWorkspaceId,
 } from "../browser-webviews/index.js";
 
 const MAX_CONSOLE_MESSAGES_PER_TAB = 200;
@@ -386,15 +386,15 @@ function normalizeConsoleMessage(input: {
 
 function createRegistry(hostWebContentsId: number): BrowserRegistry {
   return {
-    listRegisteredBrowserIds: listRegisteredBySpaceBrowserIds,
-    listRegisteredBrowserIdsForWorkspace: listRegisteredBySpaceBrowserIdsForWorkspace,
+    listRegisteredBrowserIds: listRegisteredPaseoBrowserIds,
+    listRegisteredBrowserIdsForWorkspace: listRegisteredPaseoBrowserIdsForWorkspace,
     getTabContents(browserId: string): TabContents | null {
-      const contents = getBySpaceBrowserWebContentsForHostWindow(browserId, hostWebContentsId);
+      const contents = getPaseoBrowserWebContentsForHostWindow(browserId, hostWebContentsId);
       return contents ? adaptWebContents(contents) : null;
     },
-    getBrowserWorkspaceId: getBySpaceBrowserWorkspaceId,
+    getBrowserWorkspaceId: getPaseoBrowserWorkspaceId,
     getWorkspaceActiveBrowserId(workspaceId: string): string | null {
-      return getWorkspaceActiveBySpaceBrowserIdForHostWindow(workspaceId, hostWebContentsId);
+      return getWorkspaceActivePaseoBrowserIdForHostWindow(workspaceId, hostWebContentsId);
     },
   };
 }
@@ -402,7 +402,7 @@ function createRegistry(hostWebContentsId: number): BrowserRegistry {
 export function registerBrowserAutomationIpc(options?: { ipc?: IpcHandlerRegistry }): void {
   const ipc = options?.ipc ?? ipcMain;
 
-  ipc.handle("byspace:browser:execute-automation-command", async (event, rawRequest: unknown) => {
+  ipc.handle("paseo:browser:execute-automation-command", async (event, rawRequest: unknown) => {
     const hostContents = (event as { sender?: HostWebContents }).sender;
     const hostWebContentsId = hostContents?.id;
     if (!hostContents || typeof hostWebContentsId !== "number") {

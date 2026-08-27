@@ -357,7 +357,7 @@ describe("Command Center query tokenization", () => {
   });
 
   it("requires each token to be adjacent characters, not a subsequence", () => {
-    // Unlike the composer's slash-command list, where "/pasbab" finds "/byspace-babysit". Dropping
+    // Unlike the composer's slash-command list, where "/pasbab" finds "/paseo-babysit". Dropping
     // the subsequence tier is what keeps "No matches" meaning no matches: this list preselects
     // its first row, so a query that should find nothing must not put an action under Enter.
     for (const query of ["labdes", "lbl", "lasdsgn"]) {
@@ -517,7 +517,7 @@ describe("joinSubtitleParts", () => {
   });
 
   it("drops empty strings (Boolean parity — agents subtitle refactor guard)", () => {
-    expect(joinSubtitleParts(["", "byspace", "master"])).toBe("byspace · master");
+    expect(joinSubtitleParts(["", "paseo", "master"])).toBe("paseo · master");
   });
 
   it("returns an empty string when every part is null or empty", () => {
@@ -525,15 +525,15 @@ describe("joinSubtitleParts", () => {
   });
 
   it("returns a single part unchanged, with no separator", () => {
-    expect(joinSubtitleParts([null, "byspace", null])).toBe("byspace");
+    expect(joinSubtitleParts([null, "paseo", null])).toBe("paseo");
   });
 
   it("builds the workspace subtitle in host · project · branch order", () => {
     // Single-host: host gated away, project leads.
-    expect(joinSubtitleParts([null, "byspace", "master"])).toBe("byspace · master");
+    expect(joinSubtitleParts([null, "paseo", "master"])).toBe("paseo · master");
     // Multi-host: host first, then project, then branch.
-    expect(joinSubtitleParts(["host", "byspace", "master"])).toBe("host · byspace · master");
+    expect(joinSubtitleParts(["host", "paseo", "master"])).toBe("host · paseo · master");
     // No branch: degrades to project (or host · project).
-    expect(joinSubtitleParts([null, "byspace", null])).toBe("byspace");
+    expect(joinSubtitleParts([null, "paseo", null])).toBe("paseo");
   });
 });

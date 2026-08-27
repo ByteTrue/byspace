@@ -1,12 +1,12 @@
 import { QueryClient } from "@tanstack/react-query";
-import { createBySpaceApi, type BySpaceApi } from "@bytetrue/byspace-client";
-import { DaemonClient } from "@bytetrue/byspace-client/internal/daemon-client";
+import { createPaseoApi, type PaseoApi } from "@getpaseo/client";
+import { DaemonClient } from "@getpaseo/client/internal/daemon-client";
 import {
   defineRpc,
   type PluginAgentSnapshot,
   type PluginCommandCenterItemContribution,
   type PluginWorkspaceSnapshot,
-} from "@bytetrue/byspace-plugin";
+} from "@getpaseo/plugin";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import type { InstalledPlugin } from "../types";
@@ -15,9 +15,9 @@ import { buildPluginCommandCenterContributions } from "./contributions";
 const workspace: PluginWorkspaceSnapshot = {
   id: "workspace-1",
   projectId: "project-1",
-  projectDisplayName: "BySpace",
-  projectRootPath: "/repo/byspace",
-  directory: "/repo/byspace/review",
+  projectDisplayName: "Paseo",
+  projectRootPath: "/repo/paseo",
+  directory: "/repo/paseo/review",
   projectKind: "git",
   kind: "worktree",
   name: "Review",
@@ -123,7 +123,7 @@ function createRuntime(pluginId: string) {
     clientType: "cli",
   });
   return {
-    byspace: createBySpaceApi(client),
+    paseo: createPaseoApi(client),
     invoke: async (method: string, input: unknown) => {
       expect(pluginId).toBe("review");
       expect(method).toBe("review.inspect");
@@ -173,11 +173,11 @@ describe("plugin Command Center contributions", () => {
   it("supplies the direct API, typed RPC, snapshots, and narrow navigation", async () => {
     const opened: string[] = [];
     let rpcValue = 0;
-    let receivedBySpace: BySpaceApi | null = null;
+    let receivedPaseo: PaseoApi | null = null;
     const installed = plugin(async (context) => {
       expect(context.workspace).toBe(workspace);
       expect(context.agent).toBe(agent);
-      receivedBySpace = context.byspace;
+      receivedPaseo = context.paseo;
       rpcValue = (await context.rpc(inspect, { value: 4 })).value;
       context.openSurface("main");
       context.openPanel("details", { location: "explorer" });
@@ -208,7 +208,7 @@ describe("plugin Command Center contributions", () => {
     await actions.find((action) => action.id === "review:agent")?.run();
 
     expect(rpcValue).toBe(5);
-    expect(receivedBySpace).toBe(runtime.byspace);
+    expect(receivedPaseo).toBe(runtime.paseo);
     expect(opened).toEqual(["review/surface/main", "review/agent/details/agent-1/explorer"]);
   });
 

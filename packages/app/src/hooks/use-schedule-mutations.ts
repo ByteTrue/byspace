@@ -10,8 +10,8 @@ import type {
   CreateScheduleOptions,
   DaemonClient,
   UpdateScheduleOptions,
-} from "@bytetrue/byspace-client/internal/daemon-client";
-import type { ScheduleSummary } from "@bytetrue/byspace-protocol/schedule/types";
+} from "@getpaseo/client/internal/daemon-client";
+import type { ScheduleSummary } from "@getpaseo/protocol/schedule/types";
 import type {
   AggregatedSchedule,
   FetchAggregatedSchedulesState,

@@ -49,8 +49,8 @@ export function addHubConnectCommand(parent: Command, dependencies: HubConnectDe
     addHubResolutionHelp(
       parent
         .command("connect")
-        .description("Enroll this daemon with a BySpace Hub")
-        .argument("[origin]", "BySpace Hub origin")
+        .description("Enroll this daemon with a Paseo Hub")
+        .argument("[origin]", "Paseo Hub origin")
         .option("--api-key <secret>", "Organization API key"),
     ),
   ).action(

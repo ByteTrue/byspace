@@ -1,6 +1,6 @@
 import type { ReplicaCacheStorage } from "./index";
 
-const DATABASE_NAME = "byspace-replica-cache";
+const DATABASE_NAME = "paseo-replica-cache";
 const STORE_NAME = "key-value";
 
 let databasePromise: Promise<IDBDatabase> | null = null;

@@ -216,7 +216,7 @@ test.describe("Workspace model regressions", () => {
 
       await page.addInitScript(() => {
         localStorage.setItem(
-          "@byspace:create-agent-preferences",
+          "@paseo:create-agent-preferences",
           JSON.stringify({
             provider: "mock",
             providerPreferences: {

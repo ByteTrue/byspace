@@ -1,8 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import type {
-  DaemonClient,
-  FetchAgentsEntry,
-} from "@bytetrue/byspace-client/internal/daemon-client";
+import type { DaemonClient, FetchAgentsEntry } from "@getpaseo/client/internal/daemon-client";
 import { useSessionStore, type Agent, type WorkspaceDescriptor } from "@/stores/session-store";
 import { deriveWorkspaceAgentVisibility } from "@/workspace-tabs/agent-visibility";
 import { buildWorkspaceStructureProjects } from "@/projects/workspace-structure";
@@ -67,7 +64,7 @@ function legacyAgent(input: {
         currentBranch: "main",
         remoteUrl: "git@example.com:repo/app.git",
         worktreeRoot: input.cwd,
-        isBySpaceOwnedWorktree: false,
+        isPaseoOwnedWorktree: false,
         mainRepoRoot: "/repo",
       },
     },

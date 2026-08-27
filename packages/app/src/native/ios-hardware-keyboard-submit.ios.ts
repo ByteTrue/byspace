@@ -2,7 +2,7 @@ import { requireNativeModule, type EventSubscription } from "expo-modules-core";
 
 type HardwareKeyboardSubmitHandler = () => void;
 
-interface BySpaceHardwareKeyboardModule {
+interface PaseoHardwareKeyboardModule {
   setHardwareKeyboardSubmitEnabled(enabled: boolean): void;
   addListener(
     eventName: "onHardwareKeyboardSubmit",
@@ -10,7 +10,7 @@ interface BySpaceHardwareKeyboardModule {
   ): EventSubscription;
 }
 
-const module = requireNativeModule<BySpaceHardwareKeyboardModule>("BySpaceHardwareKeyboard");
+const module = requireNativeModule<PaseoHardwareKeyboardModule>("PaseoHardwareKeyboard");
 
 export function setHardwareKeyboardSubmitEnabled(enabled: boolean) {
   module.setHardwareKeyboardSubmitEnabled(enabled);

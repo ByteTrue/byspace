@@ -6,7 +6,7 @@ import type {
   ProviderUsageStatus,
   ProviderUsageTone,
   ProviderUsageWindow,
-} from "@bytetrue/byspace-protocol/messages";
+} from "@getpaseo/protocol/messages";
 
 export type {
   ProviderUsage,

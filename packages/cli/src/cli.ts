@@ -51,8 +51,8 @@ export function createCli(): Command {
   const program = new Command();
 
   program
-    .name("byspace")
-    .description("BySpace CLI - control your AI coding agents from the command line")
+    .name("paseo")
+    .description("Paseo CLI - control your AI coding agents from the command line")
     .version(VERSION, "-v, --version", "output the version number")
     // Global output options
     .option("-o, --format <format>", "output format: table, json, yaml", "table")
@@ -75,7 +75,7 @@ export function createCli(): Command {
   addJsonAndDaemonHostOptions(
     program
       .command("clone")
-      .description("Clone a GitHub repo and register it as a BySpace workspace")
+      .description("Clone a GitHub repo and register it as a Paseo workspace")
       .argument("<repo>", "GitHub repo in owner/repo format or a full git remote URL")
       .requiredOption("--dir <path>", "Parent directory to clone into (for example: ~/workspace)"),
   )
@@ -122,23 +122,21 @@ export function createCli(): Command {
   addJsonOption(
     program
       .command("status")
-      .description('Show local daemon status (alias for "byspace daemon status")'),
+      .description('Show local daemon status (alias for "paseo daemon status")'),
   )
-    .option("--home <path>", "BySpace home directory (default: ~/.byspace)")
+    .option("--home <path>", "Paseo home directory (default: ~/.paseo)")
     .action(withOutput(runDaemonStatusCommand));
 
   addJsonAndDaemonHostOptions(
-    program
-      .command("reload")
-      .description('Reload daemon config (alias for "byspace daemon reload")'),
+    program.command("reload").description('Reload daemon config (alias for "paseo daemon reload")'),
   ).action(withOutput(runDaemonReloadCommand));
 
   addJsonOption(
     program
       .command("restart")
-      .description('Restart local daemon (alias for "byspace daemon restart")'),
+      .description('Restart local daemon (alias for "paseo daemon restart")'),
   )
-    .option("--home <path>", "BySpace home directory (default: ~/.byspace)")
+    .option("--home <path>", "Paseo home directory (default: ~/.paseo)")
     .option("--timeout <seconds>", "Wait timeout before force step (default: 15)")
     .option("--force", "Send SIGKILL if graceful stop times out")
     .option(

@@ -1,4 +1,4 @@
-const SITE_ORIGIN = "https://byspace.cc.cd";
+const SITE_ORIGIN = "https://paseo.sh";
 
 export function pageMeta(title: string, description: string, path: string) {
   const url = `${SITE_ORIGIN}${path}`;

@@ -5,9 +5,9 @@ import {
   defineRpc,
   type PluginHandlerContext,
   type PluginRpcContract,
-} from "@bytetrue/byspace-plugin/server";
-import { createBySpaceApi, type BySpaceApi } from "@bytetrue/byspace-client";
-import { DaemonClient } from "@bytetrue/byspace-client/internal/daemon-client";
+} from "@getpaseo/plugin/server";
+import { createPaseoApi, type PaseoApi } from "@getpaseo/client";
+import { DaemonClient } from "@getpaseo/client/internal/daemon-client";
 import { createPluginDaemonTransportFactory } from "./daemon-transport.js";
 import { isPluginSdkSpecifier } from "./plugin-sdk-specifiers.js";
 
@@ -21,7 +21,7 @@ interface RegisteredRpc {
 const handlers = new Map<string, RegisteredRpc>();
 let cleanup: (() => void | Promise<void>) | null = null;
 let daemonClient: DaemonClient | null = null;
-let byspace: BySpaceApi | null = null;
+let paseo: PaseoApi | null = null;
 let stopping = false;
 const nodeRequire = createRequire(import.meta.url);
 
@@ -102,7 +102,7 @@ async function initialize(message: Extract<PluginProcessRequest, { type: "initia
     reconnect: { enabled: false },
     transportFactory,
   });
-  byspace = createBySpaceApi(daemonClient);
+  paseo = createPaseoApi(daemonClient);
   await daemonClient.connect();
   evaluateBundle(message.bundle);
   send({ type: "ready", methods: [...handlers.keys()].sort() });
@@ -119,9 +119,9 @@ async function shutdown(): Promise<void> {
     console.error("Plugin cleanup failed", error);
   }
   await daemonClient?.close().catch(() => undefined);
-  await sendAndWait({ type: "byspace_close" });
+  await sendAndWait({ type: "paseo_close" });
   daemonClient = null;
-  byspace = null;
+  paseo = null;
   process.disconnect();
 }
 
@@ -137,7 +137,7 @@ process.on("message", (message: PluginProcessRequest) => {
     void shutdown();
     return;
   }
-  if (message.type === "byspace_frame" || message.type === "byspace_close") return;
+  if (message.type === "paseo_frame" || message.type === "paseo_close") return;
   if (stopping) return;
   const registered = handlers.get(message.method);
   if (!registered) {
@@ -151,8 +151,8 @@ process.on("message", (message: PluginProcessRequest) => {
   void registered.contract.input
     .parseAsync(message.input)
     .then((input) => {
-      if (!byspace) throw new Error("Plugin BySpace API is unavailable");
-      return registered.handler(input, { byspace });
+      if (!paseo) throw new Error("Plugin Paseo API is unavailable");
+      return registered.handler(input, { paseo });
     })
     .then((output) => registered.contract.output.parseAsync(output))
     .then(

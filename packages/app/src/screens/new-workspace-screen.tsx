@@ -34,8 +34,8 @@ import { useForgeSearchQuery } from "@/git/use-forge-search-query";
 import { useCheckoutStatusQuery } from "@/git/use-status-query";
 import { ensureCheckoutStatus } from "@/git/checkout-status-cache";
 import { useDaemonConfig } from "@/hooks/use-daemon-config";
-import { resolveTerminalProfiles } from "@bytetrue/byspace-protocol/terminal-profiles";
-import type { TerminalProfile } from "@bytetrue/byspace-protocol/messages";
+import { resolveTerminalProfiles } from "@getpaseo/protocol/terminal-profiles";
+import type { TerminalProfile } from "@getpaseo/protocol/messages";
 import { LaunchControl } from "@/new-workspace-launch/launch-control";
 import { resolveLaunchTarget, type LaunchTarget } from "@/new-workspace-launch/target";
 import { useTerminalComposerState } from "@/new-workspace-launch/composer-state";
@@ -87,9 +87,9 @@ import type { ComposerAttachment } from "@/attachments/types";
 import { useDraftWorkspaceAttachmentScopeKey } from "@/attachments/workspace-attachments-store";
 import type { MessagePayload } from "@/composer/types";
 import type { UserComposerAttachment } from "@/attachments/types";
-import type { AgentAttachment, ForgeSearchItem } from "@bytetrue/byspace-protocol/messages";
-import type { CreateBySpaceWorktreeInput } from "@bytetrue/byspace-client/internal/daemon-client";
-import type { AgentProvider } from "@bytetrue/byspace-protocol/agent-types";
+import type { AgentAttachment, ForgeSearchItem } from "@getpaseo/protocol/messages";
+import type { CreatePaseoWorktreeInput } from "@getpaseo/client/internal/daemon-client";
+import type { AgentProvider } from "@getpaseo/protocol/agent-types";
 import type { WorkspaceDraftTabSetup, WorkspaceTabTarget } from "@/workspace-tabs/model";
 import { isEmptyWorkspaceSubmission, runCreateEmptyWorkspace } from "./new-workspace-empty";
 import {
@@ -773,7 +773,7 @@ interface WorkspaceDraftSubmissionConfig {
 async function createAndMergeWorkspace(input: {
   client: NonNullable<ReturnType<typeof useHostRuntimeClient>>;
   createInput: Parameters<
-    NonNullable<ReturnType<typeof useHostRuntimeClient>>["createBySpaceWorktree"]
+    NonNullable<ReturnType<typeof useHostRuntimeClient>>["createPaseoWorktree"]
   >[0];
   mergeWorkspaces: (
     serverId: string,
@@ -782,7 +782,7 @@ async function createAndMergeWorkspace(input: {
   serverId: string;
   createFailedMessage: string;
 }): Promise<ReturnType<typeof normalizeWorkspaceDescriptor>> {
-  const payload = await input.client.createBySpaceWorktree(input.createInput);
+  const payload = await input.client.createPaseoWorktree(input.createInput);
   if (payload.error || !payload.workspace) {
     throw new Error(payload.error ?? input.createFailedMessage);
   }
@@ -1934,7 +1934,7 @@ export function NewWorkspaceScreen({
       prompt: string;
       attachments: AgentAttachment[];
       checkoutRequest: PickerCheckoutRequest | undefined;
-    }): CreateBySpaceWorktreeInput => {
+    }): CreatePaseoWorktreeInput => {
       if (!selectedProject) {
         throw new Error("Choose a project");
       }

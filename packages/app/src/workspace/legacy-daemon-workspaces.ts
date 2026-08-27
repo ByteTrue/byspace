@@ -2,11 +2,11 @@ import type {
   DaemonClient,
   FetchAgentsEntry,
   FetchAgentsOptions,
-} from "@bytetrue/byspace-client/internal/daemon-client";
+} from "@getpaseo/client/internal/daemon-client";
 import {
   deriveAgentStateBucket,
   getWorkspaceStateBucketPriority,
-} from "@bytetrue/byspace-protocol/agent-state-bucket";
+} from "@getpaseo/protocol/agent-state-bucket";
 import type {
   Agent,
   DaemonServerInfo,
@@ -335,7 +335,7 @@ function createLegacyWorkspace(
       ? {
           currentBranch: checkout.currentBranch,
           remoteUrl: checkout.remoteUrl,
-          isBySpaceOwnedWorktree: checkout.isBySpaceOwnedWorktree,
+          isPaseoOwnedWorktree: checkout.isPaseoOwnedWorktree,
           isDirty: null,
           aheadBehind: null,
           aheadOfOrigin: null,
@@ -353,7 +353,7 @@ function resolveLegacyWorkspaceKind(
   if (!checkout.isGit) {
     return "directory";
   }
-  if (checkout.isBySpaceOwnedWorktree) {
+  if (checkout.isPaseoOwnedWorktree) {
     return "worktree";
   }
   return "checkout";

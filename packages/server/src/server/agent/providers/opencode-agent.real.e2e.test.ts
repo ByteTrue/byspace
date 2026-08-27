@@ -22,10 +22,10 @@ import { OpenCodeAgentClient } from "./opencode-agent.js";
 import { OpenCodeServerManager } from "./opencode/server-manager.js";
 
 const MODEL = "openai/gpt-5.4";
-const NORMAL_SENTINEL = "BYSPACE_NORMAL_RECOVERY_SENTINEL_7F31";
-const ROOT_SENTINEL = "BYSPACE_ROOT_RECOVERY_SENTINEL_8C42";
-const CHILD_SENTINEL = "BYSPACE_CHILD_RECOVERY_SENTINEL_5A19";
-const PARENT_SENTINEL = "BYSPACE_PARENT_RECOVERY_SENTINEL_6B20";
+const NORMAL_SENTINEL = "PASEO_NORMAL_RECOVERY_SENTINEL_7F31";
+const ROOT_SENTINEL = "PASEO_ROOT_RECOVERY_SENTINEL_8C42";
+const CHILD_SENTINEL = "PASEO_CHILD_RECOVERY_SENTINEL_5A19";
+const PARENT_SENTINEL = "PASEO_PARENT_RECOVERY_SENTINEL_6B20";
 const TIMEOUT_MS = 240_000;
 
 describe.sequential("OpenCode real event recovery", () => {
@@ -141,9 +141,9 @@ describe.sequential("OpenCode real event recovery", () => {
 });
 
 async function createRealHarness() {
-  const artifactDir = mkdtempSync(path.join(os.tmpdir(), "byspace-opencode-recovery-"));
+  const artifactDir = mkdtempSync(path.join(os.tmpdir(), "paseo-opencode-recovery-"));
   const runtime = createDisposableRuntime();
-  const { runtimeDir, home, byspaceHome, xdgConfig, xdgData, xdgCache, xdgState, workspace } =
+  const { runtimeDir, home, paseoHome, xdgConfig, xdgData, xdgCache, xdgState, workspace } =
     runtime;
 
   let setupManager: OpenCodeServerManager | null = null;
@@ -155,7 +155,7 @@ async function createRealHarness() {
     const isolatedEnv = {
       ...process.env,
       HOME: home,
-      BYSPACE_HOME: byspaceHome,
+      PASEO_HOME: paseoHome,
       XDG_CONFIG_HOME: xdgConfig,
       XDG_DATA_HOME: xdgData,
       XDG_CACHE_HOME: xdgCache,
@@ -297,24 +297,16 @@ function createDisposableRuntime(
 ) {
   let runtimeDir: string | null = null;
   try {
-    runtimeDir = mkdtempSync(path.join(os.tmpdir(), "byspace-opencode-runtime-"));
+    runtimeDir = mkdtempSync(path.join(os.tmpdir(), "paseo-opencode-runtime-"));
     onCreate?.(runtimeDir);
     const home = path.join(runtimeDir, "home");
-    const byspaceHome = path.join(runtimeDir, "byspace-home");
+    const paseoHome = path.join(runtimeDir, "paseo-home");
     const xdgConfig = path.join(runtimeDir, "xdg-config");
     const xdgData = path.join(runtimeDir, "xdg-data");
     const xdgCache = path.join(runtimeDir, "xdg-cache");
     const xdgState = path.join(runtimeDir, "xdg-state");
     const workspace = path.join(runtimeDir, "workspace");
-    for (const directory of [
-      home,
-      byspaceHome,
-      xdgConfig,
-      xdgData,
-      xdgCache,
-      xdgState,
-      workspace,
-    ]) {
+    for (const directory of [home, paseoHome, xdgConfig, xdgData, xdgCache, xdgState, workspace]) {
       mkdirSync(directory, { recursive: true });
     }
     const isolatedAuthDirectory = path.join(xdgData, "opencode");
@@ -323,7 +315,7 @@ function createDisposableRuntime(
       path.join(os.homedir(), ".local", "share", "opencode", "auth.json"),
       path.join(isolatedAuthDirectory, "auth.json"),
     );
-    return { runtimeDir, home, byspaceHome, xdgConfig, xdgData, xdgCache, xdgState, workspace };
+    return { runtimeDir, home, paseoHome, xdgConfig, xdgData, xdgCache, xdgState, workspace };
   } catch (error) {
     if (runtimeDir) {
       rmSync(runtimeDir, { recursive: true, force: true });

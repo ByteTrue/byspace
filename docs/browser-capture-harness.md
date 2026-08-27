@@ -27,21 +27,21 @@ It validates the compositor behavior that unit tests cannot see:
 Run it with the repo Electron:
 
 ```bash
-npm run capture-harness --workspace=@bytetrue/byspace-desktop
+npm run capture-harness --workspace=@getpaseo/desktop
 ```
 
 Build the desktop main process before the automation group so its production guest
 preload is available:
 
 ```bash
-npm run build:main --workspace=@bytetrue/byspace-desktop
-BYSPACE_CAPTURE_HARNESS_GROUP=automation npm run capture-harness --workspace=@bytetrue/byspace-desktop
+npm run build:main --workspace=@getpaseo/desktop
+PASEO_CAPTURE_HARNESS_GROUP=automation npm run capture-harness --workspace=@getpaseo/desktop
 ```
 
 Run the shared browser profile fixture with:
 
 ```bash
-BYSPACE_CAPTURE_HARNESS_GROUP=browser-profile npm run capture-harness --workspace=@bytetrue/byspace-desktop
+PASEO_CAPTURE_HARNESS_GROUP=browser-profile npm run capture-harness --workspace=@getpaseo/desktop
 ```
 
 The browser profile group runs two Electron processes in sequence. It verifies that each

@@ -7,7 +7,7 @@ import { getBundledCliShimPath } from "../integrations/cli-install";
 import { createDaemonCommandHandlers } from "./daemon-manager";
 
 const mocks = vi.hoisted(() => ({
-  byspaceHome: "/tmp/byspace-desktop-daemon-manager-test-home",
+  paseoHome: "/tmp/paseo-desktop-daemon-manager-test-home",
   settings: {
     releaseChannel: "stable",
     daemon: {
@@ -25,13 +25,13 @@ const mocks = vi.hoisted(() => ({
   spawnProcess: vi.fn(),
   logInfo: vi.fn(),
   logError: vi.fn(),
-  appLogPath: "/tmp/byspace-desktop-daemon-manager-test-main.log",
+  appLogPath: "/tmp/paseo-desktop-daemon-manager-test-main.log",
   getElectronLogFile: vi.fn(),
 }));
 
 vi.mock("electron", () => ({
   app: {
-    getPath: vi.fn(() => "/tmp/byspace-user-data"),
+    getPath: vi.fn(() => "/tmp/paseo-user-data"),
     getVersion: vi.fn(() => "1.2.3"),
     isPackaged: true,
   },
@@ -51,8 +51,8 @@ vi.mock("electron-log/main", () => ({
   },
 }));
 
-vi.mock("@bytetrue/byspace-server", () => ({
-  resolveBySpaceHome: vi.fn(() => mocks.byspaceHome),
+vi.mock("@getpaseo/server", () => ({
+  resolvePaseoHome: vi.fn(() => mocks.paseoHome),
   spawnProcess: mocks.spawnProcess,
 }));
 
@@ -121,12 +121,12 @@ describe("daemon-manager commands", () => {
     mocks.logError.mockReset();
     mocks.getElectronLogFile.mockReset();
     mocks.getElectronLogFile.mockReturnValue({ path: mocks.appLogPath });
-    rmSync(mocks.byspaceHome, { recursive: true, force: true });
+    rmSync(mocks.paseoHome, { recursive: true, force: true });
     rmSync(mocks.appLogPath, { force: true });
   });
 
   afterEach(() => {
-    rmSync(mocks.byspaceHome, { recursive: true, force: true });
+    rmSync(mocks.paseoHome, { recursive: true, force: true });
     rmSync(mocks.appLogPath, { force: true });
   });
 
@@ -159,7 +159,7 @@ describe("daemon-manager commands", () => {
       listen: null,
       hostname: null,
       pid: null,
-      home: mocks.byspaceHome,
+      home: mocks.paseoHome,
       version: null,
       desktopManaged: false,
       error: null,
@@ -174,7 +174,7 @@ describe("daemon-manager commands", () => {
         localDaemon: "running",
         serverId: "server-1",
         pid: 4242,
-        listen: "127.0.0.1:6777",
+        listen: "127.0.0.1:6767",
         desktopManaged: true,
       })
       .mockResolvedValueOnce({ action: "stopped" })
@@ -190,7 +190,7 @@ describe("daemon-manager commands", () => {
       listen: null,
       hostname: null,
       pid: null,
-      home: mocks.byspaceHome,
+      home: mocks.paseoHome,
       version: null,
       desktopManaged: false,
       error: null,
@@ -250,7 +250,7 @@ describe("daemon-manager commands", () => {
         connectedDaemon: "reachable",
         serverId: "server-1",
         pid: 7675,
-        listen: "127.0.0.1:6777",
+        listen: "127.0.0.1:6767",
         daemonVersion: "1.2.2",
         desktopManaged: true,
       })
@@ -268,7 +268,7 @@ describe("daemon-manager commands", () => {
       listen: null,
       hostname: null,
       pid: null,
-      home: mocks.byspaceHome,
+      home: mocks.paseoHome,
       version: null,
       desktopManaged: false,
       error: null,
@@ -292,7 +292,7 @@ describe("daemon-manager commands", () => {
         localDaemon: "running",
         serverId: "server-1",
         pid: 4242,
-        listen: "127.0.0.1:6777",
+        listen: "127.0.0.1:6767",
         desktopManaged: true,
       })
       .mockResolvedValueOnce({ action: "stopped", reason: "lifecycle_shutdown_rpc" })
@@ -325,7 +325,7 @@ describe("daemon-manager commands", () => {
       connectedDaemon: "reachable",
       serverId: "server-1",
       pid: 7675,
-      listen: "127.0.0.1:6777",
+      listen: "127.0.0.1:6767",
       hostname: "dev-host",
       daemonVersion: "1.2.3",
       desktopManaged: true,
@@ -335,10 +335,10 @@ describe("daemon-manager commands", () => {
     await expect(handlers.start_desktop_daemon()).resolves.toEqual({
       serverId: "server-1",
       status: "running",
-      listen: "127.0.0.1:6777",
+      listen: "127.0.0.1:6767",
       hostname: "dev-host",
       pid: null,
-      home: mocks.byspaceHome,
+      home: mocks.paseoHome,
       version: "1.2.3",
       desktopManaged: true,
       error: null,
@@ -354,7 +354,7 @@ describe("daemon-manager commands", () => {
         connectedDaemon: "reachable",
         serverId: "server-1",
         pid: 7675,
-        listen: "127.0.0.1:6777",
+        listen: "127.0.0.1:6767",
         hostname: "dev-host",
         daemonVersion: "1.2.2",
         desktopManaged: true,
@@ -364,7 +364,7 @@ describe("daemon-manager commands", () => {
         connectedDaemon: "reachable",
         serverId: "server-1",
         pid: 7675,
-        listen: "127.0.0.1:6777",
+        listen: "127.0.0.1:6767",
         daemonVersion: "1.2.2",
         desktopManaged: true,
       })
@@ -379,7 +379,7 @@ describe("daemon-manager commands", () => {
         connectedDaemon: "reachable",
         serverId: "server-2",
         pid: 8888,
-        listen: "127.0.0.1:6777",
+        listen: "127.0.0.1:6767",
         hostname: "dev-host",
         daemonVersion: "1.2.3",
         desktopManaged: true,
@@ -390,10 +390,10 @@ describe("daemon-manager commands", () => {
     await expect(handlers.start_desktop_daemon()).resolves.toEqual({
       serverId: "server-2",
       status: "running",
-      listen: "127.0.0.1:6777",
+      listen: "127.0.0.1:6767",
       hostname: "dev-host",
       pid: 8888,
-      home: mocks.byspaceHome,
+      home: mocks.paseoHome,
       version: "1.2.3",
       desktopManaged: true,
       error: null,
@@ -413,9 +413,9 @@ describe("daemon-manager commands", () => {
   });
 
   it("starts the managed daemon detached from desktop stdio and reports daemon log failures", async () => {
-    mkdirSync(mocks.byspaceHome, { recursive: true });
+    mkdirSync(mocks.paseoHome, { recursive: true });
     writeFileSync(
-      `${mocks.byspaceHome}/daemon.log`,
+      `${mocks.paseoHome}/daemon.log`,
       ["old log line", "recent daemon failure"].join("\n"),
     );
     mocks.runExternalCliJsonCommand.mockResolvedValue({
@@ -453,8 +453,8 @@ describe("daemon-manager commands", () => {
         detached: true,
         stdio: ["ignore", "ignore", "ignore"],
         envOverlay: expect.objectContaining({
-          BYSPACE_CLI: getBundledCliShimPath(),
-          BYSPACE_WEB_UI_ENABLED: "false",
+          PASEO_CLI: getBundledCliShimPath(),
+          PASEO_WEB_UI_ENABLED: "false",
         }),
       }),
     );
@@ -466,7 +466,7 @@ describe("daemon-manager commands", () => {
       connectedDaemon: "unreachable",
       serverId: "",
       pid: 7675,
-      listen: "127.0.0.1:6777",
+      listen: "127.0.0.1:6767",
       desktopManaged: true,
     });
     mocks.spawnProcess.mockImplementation(() => {

@@ -8,16 +8,16 @@ import {
   buildWorkspaceScriptPayloads,
   createScriptStatusEmitter,
 } from "./script-status-projection.js";
-import { WorkspaceScriptPayloadSchema } from "@bytetrue/byspace-protocol/messages";
+import { WorkspaceScriptPayloadSchema } from "@getpaseo/protocol/messages";
 import type { ScriptHealthState } from "./script-health-monitor.js";
 import { WorkspaceScriptRuntimeStore } from "./workspace-script-runtime-store.js";
-import { readBySpaceConfig } from "../utils/worktree.js";
-import type { BySpaceConfig } from "@bytetrue/byspace-protocol/byspace-config-schema";
+import { readPaseoConfig } from "../utils/worktree.js";
+import type { PaseoConfig } from "@getpaseo/protocol/paseo-config-schema";
 import { createTestLogger } from "../test-utils/test-logger.js";
 
 function createWorkspaceRepo(options?: {
   branchName?: string;
-  byspaceConfig?: Record<string, unknown>;
+  paseoConfig?: Record<string, unknown>;
 }): { tempDir: string; repoDir: string; cleanup: () => void } {
   const tempDir = realpathSync(mkdtempSync(path.join(tmpdir(), "script-projection-")));
   const repoDir = path.join(tempDir, "repo");
@@ -32,11 +32,8 @@ function createWorkspaceRepo(options?: {
   });
   execFileSync("git", ["config", "user.name", "Test"], { cwd: repoDir, stdio: "pipe" });
   writeFileSync(path.join(repoDir, "README.md"), "hello\n");
-  if (options?.byspaceConfig) {
-    writeFileSync(
-      path.join(repoDir, "byspace.json"),
-      JSON.stringify(options.byspaceConfig, null, 2),
-    );
+  if (options?.paseoConfig) {
+    writeFileSync(path.join(repoDir, "paseo.json"), JSON.stringify(options.paseoConfig, null, 2));
   }
   execFileSync("git", ["add", "."], { cwd: repoDir, stdio: "pipe" });
   execFileSync("git", ["-c", "commit.gpgsign=false", "commit", "-m", "initial"], {
@@ -56,7 +53,7 @@ function createWorkspaceRepo(options?: {
 function buildPayloads(input: {
   workspaceId: string;
   workspaceDirectory: string;
-  byspaceConfig?: BySpaceConfig | null;
+  paseoConfig?: PaseoConfig | null;
   routeStore?: ScriptRouteStore;
   serviceProxy?: ScriptRouteStore;
   runtimeStore: WorkspaceScriptRuntimeStore;
@@ -65,18 +62,18 @@ function buildPayloads(input: {
   gitMetadata?: { projectSlug: string; currentBranch: string | null };
   resolveHealth?: (hostname: string) => ScriptHealthState | null;
 }) {
-  const byspaceConfig =
-    input.byspaceConfig !== undefined ? input.byspaceConfig : loadConfig(input.workspaceDirectory);
+  const paseoConfig =
+    input.paseoConfig !== undefined ? input.paseoConfig : loadConfig(input.workspaceDirectory);
   const { routeStore, serviceProxy, ...rest } = input;
   return buildWorkspaceScriptPayloads({
     ...rest,
     serviceProxy: serviceProxy ?? routeStore ?? new ScriptRouteStore(),
-    byspaceConfig,
+    paseoConfig,
   });
 }
 
-function loadConfig(repoRoot: string): BySpaceConfig | null {
-  const result = readBySpaceConfig(repoRoot);
+function loadConfig(repoRoot: string): PaseoConfig | null {
+  const result = readPaseoConfig(repoRoot);
   return result.ok ? result.config : null;
 }
 
@@ -99,7 +96,7 @@ describe("script-status-projection", () => {
   it("projects plain scripts and services differently", () => {
     const workspaceId = "workspace-plain-and-service";
     const workspace = createWorkspaceRepo({
-      byspaceConfig: {
+      paseoConfig: {
         scripts: {
           typecheck: { command: "npm run typecheck" },
           web: { type: "service", command: "npm run web", port: 3000 },
@@ -124,7 +121,7 @@ describe("script-status-projection", () => {
           workspaceDirectory: workspace.repoDir,
           routeStore,
           runtimeStore,
-          daemonPort: 6777,
+          daemonPort: 6767,
         }),
       ).toEqual([
         {
@@ -143,9 +140,9 @@ describe("script-status-projection", () => {
           type: "service",
           hostname: "web--repo.localhost",
           port: 3000,
-          localProxyUrl: "http://web--repo.localhost:6777",
+          localProxyUrl: "http://web--repo.localhost:6767",
           publicProxyUrl: null,
-          proxyUrl: "http://web--repo.localhost:6777",
+          proxyUrl: "http://web--repo.localhost:6767",
           lifecycle: "stopped",
           health: null,
           exitCode: null,
@@ -161,7 +158,7 @@ describe("script-status-projection", () => {
     const workspaceId = "workspace-service-metadata";
     const workspace = createWorkspaceRepo({
       branchName: "local-branch-that-should-not-be-read",
-      byspaceConfig: {
+      paseoConfig: {
         scripts: {
           web: { type: "service", command: "npm run web", port: 3000 },
         },
@@ -176,7 +173,7 @@ describe("script-status-projection", () => {
         workspaceDirectory: workspace.repoDir,
         serviceProxy: routeStore,
         runtimeStore,
-        daemonPort: 6777,
+        daemonPort: 6767,
         gitMetadata: {
           projectSlug: "service-provided",
           currentBranch: "feature/from-service",
@@ -189,9 +186,9 @@ describe("script-status-projection", () => {
           type: "service",
           hostname: "web--feature-from-service--service-provided.localhost",
           port: 3000,
-          localProxyUrl: "http://web--feature-from-service--service-provided.localhost:6777",
+          localProxyUrl: "http://web--feature-from-service--service-provided.localhost:6767",
           publicProxyUrl: null,
-          proxyUrl: "http://web--feature-from-service--service-provided.localhost:6777",
+          proxyUrl: "http://web--feature-from-service--service-provided.localhost:6767",
           lifecycle: "stopped",
           health: null,
           exitCode: null,
@@ -206,7 +203,7 @@ describe("script-status-projection", () => {
   it("projects local and public service URLs while keeping proxyUrl public-first", () => {
     const workspaceId = "workspace-public-service";
     const workspace = createWorkspaceRepo({
-      byspaceConfig: {
+      paseoConfig: {
         scripts: {
           web: { type: "service", command: "npm run web", port: 3000 },
         },
@@ -222,7 +219,7 @@ describe("script-status-projection", () => {
           workspaceDirectory: workspace.repoDir,
           routeStore,
           runtimeStore,
-          daemonPort: 6777,
+          daemonPort: 6767,
           serviceProxyPublicBaseUrl: "https://services.example.com",
           gitMetadata: { projectSlug: "repo", currentBranch: "feature/card" },
         }),
@@ -232,7 +229,7 @@ describe("script-status-projection", () => {
           type: "service",
           hostname: "web--feature-card--repo.localhost",
           port: 3000,
-          localProxyUrl: "http://web--feature-card--repo.localhost:6777",
+          localProxyUrl: "http://web--feature-card--repo.localhost:6767",
           publicProxyUrl: "https://web--feature-card--repo.services.example.com",
           proxyUrl: "https://web--feature-card--repo.services.example.com",
           lifecycle: "stopped",
@@ -250,7 +247,7 @@ describe("script-status-projection", () => {
     const workspaceId = "workspace-running-service";
     const workspace = createWorkspaceRepo({
       branchName: "feature/card",
-      byspaceConfig: {
+      paseoConfig: {
         scripts: {
           web: { type: "service", command: "npm run web" },
         },
@@ -281,7 +278,7 @@ describe("script-status-projection", () => {
           workspaceDirectory: workspace.repoDir,
           routeStore,
           runtimeStore,
-          daemonPort: 6777,
+          daemonPort: 6767,
           resolveHealth: () => "healthy",
         }),
       ).toEqual([
@@ -290,9 +287,9 @@ describe("script-status-projection", () => {
           type: "service",
           hostname: "web--feature-card--repo.localhost",
           port: 4321,
-          localProxyUrl: "http://web--feature-card--repo.localhost:6777",
+          localProxyUrl: "http://web--feature-card--repo.localhost:6767",
           publicProxyUrl: null,
-          proxyUrl: "http://web--feature-card--repo.localhost:6777",
+          proxyUrl: "http://web--feature-card--repo.localhost:6767",
           lifecycle: "running",
           health: "healthy",
           exitCode: null,
@@ -307,7 +304,7 @@ describe("script-status-projection", () => {
   it("maps internal pending health to null on the wire", () => {
     const workspaceId = "workspace-pending-health";
     const workspace = createWorkspaceRepo({
-      byspaceConfig: {
+      paseoConfig: {
         scripts: {
           web: { type: "service", command: "npm run web" },
         },
@@ -338,7 +335,7 @@ describe("script-status-projection", () => {
           workspaceDirectory: workspace.repoDir,
           routeStore,
           runtimeStore,
-          daemonPort: 6777,
+          daemonPort: 6767,
           resolveHealth: () => "pending",
         }),
       ).toEqual([
@@ -347,9 +344,9 @@ describe("script-status-projection", () => {
           type: "service",
           hostname: "web--repo.localhost",
           port: 4321,
-          localProxyUrl: "http://web--repo.localhost:6777",
+          localProxyUrl: "http://web--repo.localhost:6767",
           publicProxyUrl: null,
-          proxyUrl: "http://web--repo.localhost:6777",
+          proxyUrl: "http://web--repo.localhost:6767",
           lifecycle: "running",
           health: null,
           exitCode: null,
@@ -389,7 +386,7 @@ describe("script-status-projection", () => {
           workspaceDirectory: workspace.repoDir,
           routeStore,
           runtimeStore,
-          daemonPort: 6777,
+          daemonPort: 6767,
         }),
       ).toEqual([
         {
@@ -397,9 +394,9 @@ describe("script-status-projection", () => {
           type: "service",
           hostname: "docs--repo.localhost",
           port: 3002,
-          localProxyUrl: "http://docs--repo.localhost:6777",
+          localProxyUrl: "http://docs--repo.localhost:6767",
           publicProxyUrl: null,
-          proxyUrl: "http://docs--repo.localhost:6777",
+          proxyUrl: "http://docs--repo.localhost:6767",
           lifecycle: "running",
           health: null,
           exitCode: null,
@@ -432,7 +429,7 @@ describe("script-status-projection", () => {
           workspaceDirectory: workspace.repoDir,
           routeStore,
           runtimeStore,
-          daemonPort: 6777,
+          daemonPort: 6767,
         }),
       ).toEqual([
         {
@@ -452,16 +449,16 @@ describe("script-status-projection", () => {
     }
   });
 
-  it("readBySpaceConfig fails with configPath and error when byspace.json is malformed", () => {
+  it("readPaseoConfig fails with configPath and error when paseo.json is malformed", () => {
     const workspace = createWorkspaceRepo();
-    const configPath = path.join(workspace.repoDir, "byspace.json");
+    const configPath = path.join(workspace.repoDir, "paseo.json");
     writeFileSync(
       configPath,
       '{\n<<<<<<< HEAD\n  "scripts": {}\n=======\n  "scripts": {}\n>>>>>>> origin/main\n}\n',
     );
 
     try {
-      const result = readBySpaceConfig(workspace.repoDir);
+      const result = readPaseoConfig(workspace.repoDir);
       expect(result.ok).toBe(false);
       if (result.ok) throw new Error("unreachable");
       expect(result.configPath).toBe(configPath);
@@ -471,7 +468,7 @@ describe("script-status-projection", () => {
     }
   });
 
-  it("buildWorkspaceScriptPayloads given byspaceConfig=null still surfaces orphaned runtime scripts", () => {
+  it("buildWorkspaceScriptPayloads given paseoConfig=null still surfaces orphaned runtime scripts", () => {
     const workspaceId = "workspace-null-config";
     const workspace = createWorkspaceRepo();
     const routeStore = new ScriptRouteStore();
@@ -490,10 +487,10 @@ describe("script-status-projection", () => {
         buildPayloads({
           workspaceId,
           workspaceDirectory: workspace.repoDir,
-          byspaceConfig: null,
+          paseoConfig: null,
           routeStore,
           runtimeStore,
-          daemonPort: 6777,
+          daemonPort: 6767,
         }),
       ).toEqual([
         {
@@ -516,7 +513,7 @@ describe("script-status-projection", () => {
   it("createScriptStatusEmitter overlays health onto the projected workspace script list", async () => {
     const workspaceId = "workspace-emitter";
     const workspace = createWorkspaceRepo({
-      byspaceConfig: {
+      paseoConfig: {
         scripts: {
           api: { type: "service", command: "npm run api" },
           typecheck: { command: "npm run typecheck" },
@@ -546,7 +543,7 @@ describe("script-status-projection", () => {
       sessions: () => [session],
       serviceProxy: routeStore,
       runtimeStore,
-      daemonPort: 6777,
+      daemonPort: 6767,
       resolveWorkspaceDirectory: async (requestedWorkspaceId) =>
         requestedWorkspaceId === "workspace-emitter" ? workspace.repoDir : null,
       logger: createTestLogger(),
@@ -573,9 +570,9 @@ describe("script-status-projection", () => {
               type: "service",
               hostname: "api--repo.localhost",
               port: 3001,
-              localProxyUrl: "http://api--repo.localhost:6777",
+              localProxyUrl: "http://api--repo.localhost:6767",
               publicProxyUrl: null,
-              proxyUrl: "http://api--repo.localhost:6777",
+              proxyUrl: "http://api--repo.localhost:6767",
               lifecycle: "running",
               health: "healthy",
               exitCode: null,

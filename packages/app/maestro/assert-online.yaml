@@ -1,8 +1,8 @@
-appId: com.bytetrue.byspace
+appId: sh.paseo
 ---
 - runFlow:
     when:
-      visible: "Open in.*BySpace.*\\?"
+      visible: "Open in.*Paseo.*\\?"
     commands:
       - tapOn: "Open"
 

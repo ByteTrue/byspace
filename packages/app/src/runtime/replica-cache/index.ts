@@ -5,8 +5,8 @@ import {
   AgentStatusSchema,
   AgentTimelineItemPayloadSchema,
   WorkspaceGitHubRuntimePayloadSchema,
-} from "@bytetrue/byspace-protocol/messages";
-import { AgentProviderSchema } from "@bytetrue/byspace-protocol/provider-manifest";
+} from "@getpaseo/protocol/messages";
+import { AgentProviderSchema } from "@getpaseo/protocol/provider-manifest";
 import {
   normalizeProjectDescriptor,
   normalizeWorkspaceDescriptor,
@@ -22,7 +22,7 @@ import {
 import { isUnreconciledLocalUserMessage, type StreamItem } from "@/types/stream";
 import { normalizeAgentSnapshot } from "@/utils/agent-snapshots";
 
-const STORAGE_KEY = "@byspace:replica-cache";
+const STORAGE_KEY = "@paseo:replica-cache";
 const CACHE_VERSION = 6;
 const PERSIST_AFTER_USER_INACTIVITY_MS = 5_000;
 const MAX_TIMELINE_ITEMS = 50;
@@ -127,7 +127,7 @@ const StoredProjectCheckoutSchema = z.union([
     currentBranch: z.null(),
     remoteUrl: z.null(),
     worktreeRoot: z.null(),
-    isBySpaceOwnedWorktree: z.literal(false),
+    isPaseoOwnedWorktree: z.literal(false),
     mainRepoRoot: z.null(),
   }),
   z.strictObject({
@@ -136,7 +136,7 @@ const StoredProjectCheckoutSchema = z.union([
     currentBranch: z.string().nullable(),
     remoteUrl: z.string().nullable(),
     worktreeRoot: z.string(),
-    isBySpaceOwnedWorktree: z.literal(false),
+    isPaseoOwnedWorktree: z.literal(false),
     mainRepoRoot: z.string().nullable(),
   }),
   z.strictObject({
@@ -145,7 +145,7 @@ const StoredProjectCheckoutSchema = z.union([
     currentBranch: z.string().nullable(),
     remoteUrl: z.string().nullable(),
     worktreeRoot: z.string(),
-    isBySpaceOwnedWorktree: z.literal(true),
+    isPaseoOwnedWorktree: z.literal(true),
     mainRepoRoot: z.string(),
   }),
 ]);
@@ -213,7 +213,7 @@ const WorkspaceGitRuntimeSchema = z
   .strictObject({
     currentBranch: z.string().nullable().optional(),
     remoteUrl: z.string().nullable().optional(),
-    isBySpaceOwnedWorktree: z.boolean().optional(),
+    isPaseoOwnedWorktree: z.boolean().optional(),
     isDirty: z.boolean().nullable().optional(),
     aheadBehind: z.strictObject({ ahead: z.number(), behind: z.number() }).nullable().optional(),
     aheadOfOrigin: z.number().nullable().optional(),

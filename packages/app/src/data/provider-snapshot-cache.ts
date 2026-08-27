@@ -1,16 +1,16 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Buffer } from "buffer";
-import type { ProviderSnapshotEntry } from "@bytetrue/byspace-protocol/agent-types";
+import type { ProviderSnapshotEntry } from "@getpaseo/protocol/agent-types";
 import {
   expandProviderSnapshot,
   type CompactProviderSnapshot,
-} from "@bytetrue/byspace-protocol/provider-snapshot-codec";
-import { CompactProviderSnapshotSchema } from "@bytetrue/byspace-protocol/messages";
+} from "@getpaseo/protocol/provider-snapshot-codec";
+import { CompactProviderSnapshotSchema } from "@getpaseo/protocol/messages";
 import { z } from "zod";
 
 const CACHE_VERSION = 1;
-const CACHE_KEY_PREFIX = "@byspace/provider-snapshot/v1";
-const CACHE_INDEX_KEY = "@byspace/provider-snapshot-index/v1";
+const CACHE_KEY_PREFIX = "@paseo/provider-snapshot/v1";
+const CACHE_INDEX_KEY = "@paseo/provider-snapshot-index/v1";
 const CACHE_INDEX_VERSION = 1;
 const DEFAULT_MAX_CACHE_BYTES = 4 * 1024 * 1024;
 

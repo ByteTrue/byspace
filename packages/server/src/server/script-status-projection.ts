@@ -3,9 +3,9 @@ import type {
   ScriptStatusUpdateMessage,
   SessionOutboundMessage,
   WorkspaceScriptPayload,
-} from "@bytetrue/byspace-protocol/messages";
-import type { BySpaceConfig } from "@bytetrue/byspace-protocol/byspace-config-schema";
-import { getScriptConfigs, isServiceScript, readBySpaceConfig } from "../utils/worktree.js";
+} from "@getpaseo/protocol/messages";
+import type { PaseoConfig } from "@getpaseo/protocol/paseo-config-schema";
+import { getScriptConfigs, isServiceScript, readPaseoConfig } from "../utils/worktree.js";
 import { deriveProjectSlug } from "./workspace-git-metadata.js";
 import type { ScriptHealthEntry, ScriptHealthState } from "./script-health-monitor.js";
 import type {
@@ -21,7 +21,7 @@ interface SessionEmitter {
 interface BuildWorkspaceScriptPayloadsOptions {
   workspaceId: string;
   workspaceDirectory: string;
-  byspaceConfig: BySpaceConfig | null;
+  paseoConfig: PaseoConfig | null;
   serviceProxy: ServiceProxySubsystem;
   runtimeStore: WorkspaceScriptRuntimeStore;
   daemonPort: number | null;
@@ -33,17 +33,17 @@ interface BuildWorkspaceScriptPayloadsOptions {
   resolveHealth?: (hostname: string) => ScriptHealthState | null;
 }
 
-export function readBySpaceConfigForProjection(
+export function readPaseoConfigForProjection(
   workspaceDirectory: string,
   logger: Logger,
-): BySpaceConfig | null {
-  const result = readBySpaceConfig(workspaceDirectory);
+): PaseoConfig | null {
+  const result = readPaseoConfig(workspaceDirectory);
   if (result.ok) {
     return result.config;
   }
   logger.warn(
     { configPath: result.configPath, workspaceDirectory, err: result.error },
-    "Failed to parse byspace.json; treating workspace as having no scripts",
+    "Failed to parse paseo.json; treating workspace as having no scripts",
   );
   return null;
 }
@@ -218,7 +218,7 @@ export function buildWorkspaceScriptPayloads(
   const workspaceDirectory = options.workspaceDirectory;
   const projectSlug = options.gitMetadata?.projectSlug ?? deriveProjectSlug(workspaceDirectory);
   const branchName = options.gitMetadata?.currentBranch ?? null;
-  const scriptConfigs = getScriptConfigs(options.byspaceConfig);
+  const scriptConfigs = getScriptConfigs(options.paseoConfig);
   const runtimeEntries = new Map(
     options.runtimeStore
       .listForWorkspace(workspaceId)
@@ -304,7 +304,7 @@ export function createScriptStatusEmitter({
       const projected = buildWorkspaceScriptPayloads({
         workspaceId,
         workspaceDirectory,
-        byspaceConfig: readBySpaceConfigForProjection(workspaceDirectory, logger),
+        paseoConfig: readPaseoConfigForProjection(workspaceDirectory, logger),
         serviceProxy,
         runtimeStore,
         daemonPort: resolvedDaemonPort,

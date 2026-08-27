@@ -1,5 +1,5 @@
 import { Command } from "commander";
-import type { PluginListItem, PluginLogEntry } from "@bytetrue/byspace-protocol/messages";
+import type { PluginListItem, PluginLogEntry } from "@getpaseo/protocol/messages";
 import type { CommandOptions, ListResult, OutputSchema, SingleResult } from "../../output/index.js";
 import { withOutput } from "../../output/index.js";
 import { addJsonAndDaemonHostOptions, addJsonOption } from "../../utils/command-options.js";
@@ -124,7 +124,7 @@ export function createPluginCommand(): Command {
       .command("install")
       .description("Install a local plugin directory")
       .argument("<directory>", "Host filesystem directory")
-      .option("--id <id>", "Runtime plugin ID (defaults to byspace-plugin.json id)"),
+      .option("--id <id>", "Runtime plugin ID (defaults to paseo-plugin.json id)"),
   ).action(withOutput(install));
   for (const action of ["reload", "enable", "disable"] as const) {
     addJsonAndDaemonHostOptions(

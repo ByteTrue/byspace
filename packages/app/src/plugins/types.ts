@@ -7,7 +7,7 @@ import type {
   PluginThemeContribution,
   PluginPanelLocation,
   PluginWorkspacePanelContribution,
-} from "@bytetrue/byspace-plugin";
+} from "@getpaseo/plugin";
 
 export type EvaluatedPluginWorkspacePanelContribution = PluginWorkspacePanelContribution & {
   locations: readonly PluginPanelLocation[];

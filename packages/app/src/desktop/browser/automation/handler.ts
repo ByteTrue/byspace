@@ -1,7 +1,4 @@
-import type {
-  SessionInboundMessage,
-  SessionOutboundMessage,
-} from "@bytetrue/byspace-protocol/messages";
+import type { SessionInboundMessage, SessionOutboundMessage } from "@getpaseo/protocol/messages";
 import { getDesktopHost, type DesktopHostBridge } from "@/desktop/host";
 import {
   ensureResidentBrowserWebview as ensureResidentBrowserWebviewDefault,

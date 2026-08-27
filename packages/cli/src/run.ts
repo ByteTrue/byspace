@@ -24,7 +24,7 @@ export function createCliParseArgv(input: {
     return invocation;
   }
 
-  const nodeArgv = input.nodeArgv ?? ["byspace", "byspace"];
+  const nodeArgv = input.nodeArgv ?? ["paseo", "paseo"];
   const isOnboardRootFlag = invocation.argv[0] === "--relay" || invocation.argv[0] === "--no-relay";
   let cliArgv = invocation.argv;
   if (invocation.argv.length === 0) {

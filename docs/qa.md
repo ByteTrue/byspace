@@ -1,6 +1,6 @@
 # QA
 
-QA is the main bottleneck of BySpace's product development.
+QA is the main bottleneck of Paseo's product development.
 
 The bar is four questions:
 
@@ -36,7 +36,7 @@ The two things that go wrong most often:
 
 ## Does it regress anything else
 
-BySpace is composable by design, which means your change sits next to features you didn't touch. Open the surfaces around it. A change to the agent list affects archive, subagents, and tabs; a change to git actions affects worktrees and the checkout flow.
+Paseo is composable by design, which means your change sits next to features you didn't touch. Open the surfaces around it. A change to the agent list affects archive, subagents, and tabs; a change to git actions affects worktrees and the checkout flow.
 
 Performance is part of this. The app is Expo React Native, not a web app in a native shell. You are not writing CSS, styles resolve differently, and performance characteristics differ per platform. What feels instant in a desktop dev build can be visibly slow on a phone.
 

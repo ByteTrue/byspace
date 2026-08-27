@@ -1,6 +1,6 @@
 import { Command, Option } from "commander";
-import { getStructuredAgentResponse, StructuredAgentResponseError } from "@bytetrue/byspace-server";
-import type { AgentSnapshotPayload } from "@bytetrue/byspace-protocol/messages";
+import { getStructuredAgentResponse, StructuredAgentResponseError } from "@getpaseo/server";
+import type { AgentSnapshotPayload } from "@getpaseo/protocol/messages";
 import { connectToDaemon, getDaemonHost } from "../../utils/client.js";
 import type {
   CommandOptions,
@@ -339,7 +339,7 @@ function validateRunWorkspaceOptions(options: AgentRunOptions): void {
     throw {
       code: "INVALID_OPTIONS",
       message: "Worktree options require --new-workspace worktree",
-      details: "Usage: byspace run --new-workspace worktree [worktree options] <prompt>",
+      details: "Usage: paseo run --new-workspace worktree [worktree options] <prompt>",
     } satisfies CommandError;
   }
 
@@ -378,7 +378,7 @@ function validateRunOptions(prompt: string, options: AgentRunOptions, outputSche
     throw {
       code: "MISSING_PROMPT",
       message: "A prompt is required",
-      details: "Usage: byspace agent run [options] <prompt>",
+      details: "Usage: paseo agent run [options] <prompt>",
     } satisfies CommandError;
   }
 
@@ -493,7 +493,7 @@ async function connectToDaemonOrThrow(
     throw {
       code: "DAEMON_NOT_RUNNING",
       message: `Cannot connect to daemon at ${host}: ${message}`,
-      details: "Start the daemon with: byspace daemon start",
+      details: "Start the daemon with: paseo daemon start",
     } satisfies CommandError;
   }
 }
@@ -532,10 +532,10 @@ export async function resolveExistingRunWorkspace(
   } satisfies CommandError;
 }
 
-// Workspace policy for `byspace run`. Precedence:
+// Workspace policy for `paseo run`. Precedence:
 //   1. --workspace <id>            -> run in that existing workspace
-//   2. $BYSPACE_AGENT_ID             -> daemon resolves the caller's workspace
-//   3. $BYSPACE_WORKSPACE_ID         -> exported by workspace terminals
+//   2. $PASEO_AGENT_ID             -> daemon resolves the caller's workspace
+//   3. $PASEO_WORKSPACE_ID         -> exported by workspace terminals
 //   4. --new-workspace <kind>      -> mint a new workspace explicitly
 //   5. bare run                    -> mint a new local-backed workspace for cwd
 async function resolveRunWorkspace(
@@ -554,7 +554,7 @@ async function resolveRunWorkspace(
     return { cwd };
   }
 
-  const ambientWorkspaceId = newWorkspace ? undefined : process.env.BYSPACE_WORKSPACE_ID?.trim();
+  const ambientWorkspaceId = newWorkspace ? undefined : process.env.PASEO_WORKSPACE_ID?.trim();
   if (ambientWorkspaceId) {
     console.error(`Using workspace ${ambientWorkspaceId}`);
     return resolveExistingRunWorkspace(client, ambientWorkspaceId);
@@ -576,7 +576,7 @@ async function resolveRunWorkspace(
   const label = branch ? `${result.workspace.name} (${branch})` : result.workspace.name;
   console.error(`Created workspace ${result.workspace.id} - ${label}`);
   console.error(
-    "Tip: pass --workspace <id> (or set BYSPACE_WORKSPACE_ID) to run in an existing workspace.",
+    "Tip: pass --workspace <id> (or set PASEO_WORKSPACE_ID) to run in an existing workspace.",
   );
   return { id: result.workspace.id, cwd: result.workspace.workspaceDirectory ?? cwd };
 }
@@ -606,7 +606,7 @@ export async function runRunCommand(
         code: "INVALID_THINKING_OPTION",
         message: "--thinking cannot be empty",
         details:
-          'Provide a thinking option ID. Use "byspace provider models <provider> --thinking" to list valid IDs.',
+          'Provide a thinking option ID. Use "paseo provider models <provider> --thinking" to list valid IDs.',
       };
       throw error;
     }
@@ -752,7 +752,7 @@ export async function runRunCommand(
 }
 
 export function resolveRunCallerAgentId(
-  env: { BYSPACE_AGENT_ID?: string } = process.env,
+  env: { PASEO_AGENT_ID?: string } = process.env,
 ): string | undefined {
-  return env.BYSPACE_AGENT_ID?.trim() || undefined;
+  return env.PASEO_AGENT_ID?.trim() || undefined;
 }

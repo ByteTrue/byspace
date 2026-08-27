@@ -1,10 +1,7 @@
 import { Platform } from "react-native";
 import { getElectronHost } from "@/desktop/electron/host";
 import type { BrowserKeyboardPolicy } from "@/desktop/browser/shortcuts";
-import type {
-  SessionInboundMessage,
-  SessionOutboundMessage,
-} from "@bytetrue/byspace-protocol/messages";
+import type { SessionInboundMessage, SessionOutboundMessage } from "@getpaseo/protocol/messages";
 
 type BrowserAutomationExecuteRequest = Extract<
   SessionOutboundMessage,
@@ -194,7 +191,7 @@ export interface DesktopHostBridge {
 
 declare global {
   interface Window {
-    byspaceDesktop?: DesktopHostBridge;
+    paseoDesktop?: DesktopHostBridge;
   }
 }
 

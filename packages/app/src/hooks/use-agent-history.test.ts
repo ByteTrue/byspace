@@ -3,7 +3,7 @@ import type {
   DaemonClient,
   FetchAgentHistoryEntry,
   FetchAgentHistoryOptions,
-} from "@bytetrue/byspace-client/internal/daemon-client";
+} from "@getpaseo/client/internal/daemon-client";
 import type { AgentHistoryClient, AgentHistoryHost } from "./use-agent-history";
 import { allAgentHistoryQueryKey } from "./agent-history-query-key";
 
@@ -131,7 +131,7 @@ function historyEntry(input: {
         currentBranch: null,
         remoteUrl: null,
         worktreeRoot: null,
-        isBySpaceOwnedWorktree: false,
+        isPaseoOwnedWorktree: false,
         mainRepoRoot: null,
       },
     },

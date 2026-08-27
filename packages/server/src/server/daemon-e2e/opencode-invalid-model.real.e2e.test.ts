@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import pino from "pino";
 
-import { createTestBySpaceDaemon } from "../test-utils/byspace-daemon.js";
+import { createTestPaseoDaemon } from "../test-utils/paseo-daemon.js";
 import { DaemonClient } from "../test-utils/daemon-client.js";
 import { canRunRealProvider, createRealProviderClients } from "./real-provider-test-config.js";
 
@@ -14,10 +14,10 @@ function tmpCwd(): string {
 
 async function createHarness(): Promise<{
   client: DaemonClient;
-  daemon: Awaited<ReturnType<typeof createTestBySpaceDaemon>>;
+  daemon: Awaited<ReturnType<typeof createTestPaseoDaemon>>;
 }> {
   const logger = pino({ level: "silent" });
-  const daemon = await createTestBySpaceDaemon({
+  const daemon = await createTestPaseoDaemon({
     agentClients: createRealProviderClients(["opencode"], logger),
     logger,
   });

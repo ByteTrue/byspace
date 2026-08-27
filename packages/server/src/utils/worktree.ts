@@ -17,38 +17,35 @@ import {
   buildStringCommandShellInvocation,
   createStringCommandShellEnv,
 } from "./string-command-shell.js";
-import { readBySpaceConfigJson, resolveBySpaceConfigPath } from "./byspace-config-file.js";
+import { readPaseoConfigJson, resolvePaseoConfigPath } from "./paseo-config-file.js";
 export {
-  BySpaceConfigRawSchema,
-  BySpaceLifecycleCommandRawSchema,
-  BySpaceScriptEntryRawSchema,
-  BySpaceWorktreeConfigRawSchema,
-  BySpaceConfigSchema,
-  type BySpaceConfig,
-  type BySpaceConfigRaw,
-} from "@bytetrue/byspace-protocol/byspace-config-schema";
+  PaseoConfigRawSchema,
+  PaseoLifecycleCommandRawSchema,
+  PaseoScriptEntryRawSchema,
+  PaseoWorktreeConfigRawSchema,
+  PaseoConfigSchema,
+  type PaseoConfig,
+  type PaseoConfigRaw,
+} from "@getpaseo/protocol/paseo-config-schema";
+import { PaseoConfigSchema, type PaseoConfig } from "@getpaseo/protocol/paseo-config-schema";
 import {
-  BySpaceConfigSchema,
-  type BySpaceConfig,
-} from "@bytetrue/byspace-protocol/byspace-config-schema";
-import {
-  createBySpaceWorktreeChangeRequestHint,
+  createPaseoWorktreeChangeRequestHint,
   normalizeBaseRefName,
-  type BySpaceWorktreeChangeRequestHint,
-  readBySpaceWorktreeMetadata,
-  readBySpaceWorktreeRuntimePort,
-  writeBySpaceWorktreeMetadata,
-  writeBySpaceWorktreeRuntimeMetadata,
+  type PaseoWorktreeChangeRequestHint,
+  readPaseoWorktreeMetadata,
+  readPaseoWorktreeRuntimePort,
+  writePaseoWorktreeMetadata,
+  writePaseoWorktreeRuntimeMetadata,
 } from "./worktree-metadata.js";
 import { runGitCommand } from "./run-git-command.js";
 import { spawnProcess } from "./spawn.js";
-import { resolveBySpaceHome } from "../server/byspace-home.js";
-import { createExternalProcessEnv } from "../server/byspace-env.js";
+import { resolvePaseoHome } from "../server/paseo-home.js";
+import { createExternalProcessEnv } from "../server/paseo-env.js";
 import { parseGitRevParsePath, resolveGitRevParsePath } from "./git-rev-parse-path.js";
 import { expandTilde, getRealpathAwareRelativePath, isPathInsideRoot } from "./path.js";
 import { terminateWithTreeKill } from "./tree-kill.js";
 
-export { slugify, validateBranchSlug } from "@bytetrue/byspace-protocol/branch-slug";
+export { slugify, validateBranchSlug } from "@getpaseo/protocol/branch-slug";
 
 const execFileAsync = promisify(execFile);
 const READ_ONLY_GIT_ENV = {
@@ -62,11 +59,11 @@ export interface WorktreeConfig {
 
 export interface WorktreeRuntimeEnv {
   [key: string]: string;
-  BYSPACE_SOURCE_CHECKOUT_PATH: string;
-  BYSPACE_ROOT_PATH: string;
-  BYSPACE_WORKTREE_PATH: string;
-  BYSPACE_BRANCH_NAME: string;
-  BYSPACE_WORKTREE_PORT: string;
+  PASEO_SOURCE_CHECKOUT_PATH: string;
+  PASEO_ROOT_PATH: string;
+  PASEO_WORKTREE_PATH: string;
+  PASEO_BRANCH_NAME: string;
+  PASEO_WORKTREE_PORT: string;
 }
 
 export interface WorktreeSetupCommandResult {
@@ -152,26 +149,26 @@ export class WorktreeTeardownError extends Error {
   }
 }
 
-export interface BySpaceWorktreeInfo {
+export interface PaseoWorktreeInfo {
   path: string;
   createdAt: string;
   branchName?: string;
   head?: string;
 }
 
-export interface BySpaceWorktreeOwnership {
+export interface PaseoWorktreeOwnership {
   allowed: boolean;
   repoRoot?: string;
   worktreeRoot?: string;
   worktreePath?: string;
 }
 
-export interface BySpaceWorktreeOwnershipOptions extends WorktreeRootOptions {
+export interface PaseoWorktreeOwnershipOptions extends WorktreeRootOptions {
   knownGitCommonDir?: string | null;
 }
 
 export interface WorktreeRootOptions {
-  byspaceHome?: string;
+  paseoHome?: string;
   worktreesRoot?: string;
 }
 
@@ -212,7 +209,7 @@ export interface CreateWorktreeOptions {
   worktreeSlug: string;
   source: WorktreeSource;
   runSetup: boolean;
-  byspaceHome?: string;
+  paseoHome?: string;
   worktreesRoot?: string;
 }
 
@@ -248,47 +245,47 @@ export class InvalidGitBranchNameError extends Error {
   }
 }
 
-export type ReadBySpaceConfigResult =
-  | { ok: true; config: BySpaceConfig | null }
+export type ReadPaseoConfigResult =
+  | { ok: true; config: PaseoConfig | null }
   | { ok: false; configPath: string; error: unknown };
 
-export function readBySpaceConfig(repoRoot: string): ReadBySpaceConfigResult {
+export function readPaseoConfig(repoRoot: string): ReadPaseoConfigResult {
   try {
-    const json = readBySpaceConfigJson(repoRoot);
+    const json = readPaseoConfigJson(repoRoot);
     if (json === null) {
       return { ok: true, config: null };
     }
-    return { ok: true, config: BySpaceConfigSchema.parse(json) };
+    return { ok: true, config: PaseoConfigSchema.parse(json) };
   } catch (error) {
-    return { ok: false, configPath: resolveBySpaceConfigPath(repoRoot), error };
+    return { ok: false, configPath: resolvePaseoConfigPath(repoRoot), error };
   }
 }
 
-export function byspaceConfigParseError(failure: { configPath: string; error: unknown }): Error {
+export function paseoConfigParseError(failure: { configPath: string; error: unknown }): Error {
   const detail = failure.error instanceof Error ? failure.error.message : String(failure.error);
-  return new Error(`Failed to parse byspace.json at ${failure.configPath}: ${detail}`, {
+  return new Error(`Failed to parse paseo.json at ${failure.configPath}: ${detail}`, {
     cause: failure.error,
   });
 }
 
-function readBySpaceConfigOrThrow(repoRoot: string): BySpaceConfig | null {
-  const result = readBySpaceConfig(repoRoot);
+function readPaseoConfigOrThrow(repoRoot: string): PaseoConfig | null {
+  const result = readPaseoConfig(repoRoot);
   if (!result.ok) {
-    throw byspaceConfigParseError(result);
+    throw paseoConfigParseError(result);
   }
   return result.config;
 }
 
 export function getWorktreeSetupCommands(repoRoot: string): string[] {
-  return readBySpaceConfigOrThrow(repoRoot)?.worktree?.setup ?? [];
+  return readPaseoConfigOrThrow(repoRoot)?.worktree?.setup ?? [];
 }
 
 export function getWorktreeTeardownCommands(repoRoot: string): string[] {
-  return readBySpaceConfigOrThrow(repoRoot)?.worktree?.teardown ?? [];
+  return readPaseoConfigOrThrow(repoRoot)?.worktree?.teardown ?? [];
 }
 
 export function getWorktreeTerminalSpecs(repoRoot: string): WorktreeTerminalConfig[] {
-  const terminals = readBySpaceConfigOrThrow(repoRoot)?.worktree?.terminals;
+  const terminals = readPaseoConfigOrThrow(repoRoot)?.worktree?.terminals;
   if (!Array.isArray(terminals) || terminals.length === 0) {
     return [];
   }
@@ -321,7 +318,7 @@ export function getWorktreeTerminalSpecs(repoRoot: string): WorktreeTerminalConf
   return specs;
 }
 
-export function getScriptConfigs(config: BySpaceConfig | null): Map<string, ScriptConfig> {
+export function getScriptConfigs(config: PaseoConfig | null): Map<string, ScriptConfig> {
   const scripts = config?.scripts;
   if (!scripts || typeof scripts !== "object") {
     return new Map();
@@ -643,7 +640,7 @@ export async function runWorktreeSetupCommands(options: {
   signal?: AbortSignal;
   onEvent?: (event: WorktreeSetupCommandProgressEvent) => void;
 }): Promise<WorktreeSetupCommandResult[]> {
-  // Read byspace.json from the worktree (it will have the same content as the source repo)
+  // Read paseo.json from the worktree (it will have the same content as the source repo)
   const setupCommands = getWorktreeSetupCommands(options.worktreePath);
   if (setupCommands.length === 0) {
     return [];
@@ -724,12 +721,12 @@ export async function resolveWorktreeRuntimeEnv(options: {
   const branchName =
     options.branchName ?? (await resolveBranchNameForWorktreePath(options.worktreePath));
 
-  let worktreePort = readBySpaceWorktreeRuntimePort(options.worktreePath);
+  let worktreePort = readPaseoWorktreeRuntimePort(options.worktreePath);
   if (worktreePort === null) {
     worktreePort = await getAvailablePort();
-    const metadata = readBySpaceWorktreeMetadata(options.worktreePath);
+    const metadata = readPaseoWorktreeMetadata(options.worktreePath);
     if (metadata) {
-      writeBySpaceWorktreeRuntimeMetadata(options.worktreePath, { worktreePort });
+      writePaseoWorktreeRuntimeMetadata(options.worktreePath, { worktreePort });
     }
   } else {
     await assertPortAvailable(worktreePort);
@@ -739,12 +736,12 @@ export async function resolveWorktreeRuntimeEnv(options: {
     // Source checkout path is the original git repo root (shared across worktrees), not the
     // worktree itself. This allows setup scripts to copy local files (e.g. .env) from the
     // source checkout.
-    BYSPACE_SOURCE_CHECKOUT_PATH: repoRootPath,
+    PASEO_SOURCE_CHECKOUT_PATH: repoRootPath,
     // Backward-compatible alias.
-    BYSPACE_ROOT_PATH: repoRootPath,
-    BYSPACE_WORKTREE_PATH: options.worktreePath,
-    BYSPACE_BRANCH_NAME: branchName,
-    BYSPACE_WORKTREE_PORT: String(worktreePort),
+    PASEO_ROOT_PATH: repoRootPath,
+    PASEO_WORKTREE_PATH: options.worktreePath,
+    PASEO_BRANCH_NAME: branchName,
+    PASEO_WORKTREE_PORT: String(worktreePort),
   };
 }
 
@@ -767,19 +764,19 @@ export async function runWorktreeTeardownCommands(options: {
     options.repoRootPath ?? (await inferRepoRootPathFromWorktreePath(options.worktreePath));
   const branchName =
     options.branchName ?? (await resolveBranchNameForWorktreePath(options.worktreePath));
-  const worktreePort = readBySpaceWorktreeRuntimePort(options.worktreePath);
+  const worktreePort = readPaseoWorktreeRuntimePort(options.worktreePath);
 
   const teardownEnv: NodeJS.ProcessEnv = createStringCommandShellEnv(
     createExternalProcessEnv(process.env, {
       // Source checkout path is the original git repo root (shared across worktrees), not the
       // worktree itself. This allows lifecycle scripts to copy or clean resources using paths
       // from the source checkout.
-      BYSPACE_SOURCE_CHECKOUT_PATH: repoRootPath,
+      PASEO_SOURCE_CHECKOUT_PATH: repoRootPath,
       // Backward-compatible alias.
-      BYSPACE_ROOT_PATH: repoRootPath,
-      BYSPACE_WORKTREE_PATH: options.worktreePath,
-      BYSPACE_BRANCH_NAME: branchName,
-      ...(worktreePort !== null ? { BYSPACE_WORKTREE_PORT: String(worktreePort) } : {}),
+      PASEO_ROOT_PATH: repoRootPath,
+      PASEO_WORKTREE_PATH: options.worktreePath,
+      PASEO_BRANCH_NAME: branchName,
+      ...(worktreePort !== null ? { PASEO_WORKTREE_PORT: String(worktreePort) } : {}),
     }),
   );
 
@@ -802,12 +799,12 @@ export async function runWorktreeTeardownCommands(options: {
   return results;
 }
 
-export async function seedBySpaceConfigFile(options: {
+export async function seedPaseoConfigFile(options: {
   sourceCwd: string;
   targetCwd: string;
 }): Promise<void> {
-  const sourceConfigPath = join(options.sourceCwd, "byspace.json");
-  const targetConfigPath = join(options.targetCwd, "byspace.json");
+  const sourceConfigPath = join(options.sourceCwd, "paseo.json");
+  const targetConfigPath = join(options.targetCwd, "paseo.json");
   await copyFile(sourceConfigPath, targetConfigPath, fsConstants.COPYFILE_EXCL).catch((error) => {
     const code = (error as NodeJS.ErrnoException).code;
     if (code !== "EEXIST" && code !== "ENOENT") throw error;
@@ -853,26 +850,26 @@ export async function deriveWorktreeProjectHash(cwd: string): Promise<string> {
   }
 }
 
-export function resolveBySpaceWorktreesBaseRoot(options?: WorktreeRootOptions): string {
+export function resolvePaseoWorktreesBaseRoot(options?: WorktreeRootOptions): string {
   if (options?.worktreesRoot) {
     const expandedRoot = expandTilde(options.worktreesRoot);
     if (isAbsolute(expandedRoot)) {
       return resolve(expandedRoot);
     }
-    const home = options.byspaceHome ? resolve(options.byspaceHome) : resolveBySpaceHome();
+    const home = options.paseoHome ? resolve(options.paseoHome) : resolvePaseoHome();
     return resolve(home, expandedRoot);
   }
 
-  const home = options?.byspaceHome ? resolve(options.byspaceHome) : resolveBySpaceHome();
+  const home = options?.paseoHome ? resolve(options.paseoHome) : resolvePaseoHome();
   return join(home, "worktrees");
 }
 
-export async function getBySpaceWorktreesRoot(
+export async function getPaseoWorktreesRoot(
   cwd: string,
-  byspaceHome?: string,
+  paseoHome?: string,
   worktreesRoot?: string,
 ): Promise<string> {
-  const baseRoot = resolveBySpaceWorktreesBaseRoot({ byspaceHome, worktreesRoot });
+  const baseRoot = resolvePaseoWorktreesBaseRoot({ paseoHome, worktreesRoot });
   const projectHash = await deriveWorktreeProjectHash(cwd);
   return join(baseRoot, projectHash);
 }
@@ -880,10 +877,10 @@ export async function getBySpaceWorktreesRoot(
 export async function computeWorktreePath(
   cwd: string,
   slug: string,
-  byspaceHome?: string,
+  paseoHome?: string,
   worktreesRoot?: string,
 ): Promise<string> {
-  const projectWorktreesRoot = await getBySpaceWorktreesRoot(cwd, byspaceHome, worktreesRoot);
+  const projectWorktreesRoot = await getPaseoWorktreesRoot(cwd, paseoHome, worktreesRoot);
   return join(projectWorktreesRoot, slug);
 }
 
@@ -932,10 +929,10 @@ function resolveRepoRootFromGitCommonDir(commonDir: string): string {
     : normalizedCommonDir;
 }
 
-export async function isBySpaceOwnedWorktreeCwd(
+export async function isPaseoOwnedWorktreeCwd(
   cwd: string,
-  options?: BySpaceWorktreeOwnershipOptions,
-): Promise<BySpaceWorktreeOwnership> {
+  options?: PaseoWorktreeOwnershipOptions,
+): Promise<PaseoWorktreeOwnership> {
   const resolvedCwd = normalizePathForOwnership(cwd);
 
   // repoRoot is best-effort: git may be unreachable from the worktree (e.g. a
@@ -953,11 +950,11 @@ export async function isBySpaceOwnedWorktreeCwd(
     }
   }
 
-  const worktreesBaseRoot = resolveBySpaceWorktreesBaseRoot(options);
+  const worktreesBaseRoot = resolvePaseoWorktreesBaseRoot(options);
   const relativePath = getRealpathAwareRelativePath(worktreesBaseRoot, resolvedCwd);
 
   // Ownership is defined by the path living under <worktrees-root>/<hash>/<slug>[/...].
-  // The <hash>/<slug> prefix is BySpace-private — nothing else writes there — so the
+  // The <hash>/<slug> prefix is Paseo-private — nothing else writes there — so the
   // path shape alone is sufficient proof of ownership, even when git has already
   // forgotten about the worktree.
   if (relativePath === null) {
@@ -986,11 +983,11 @@ export async function isBySpaceOwnedWorktreeCwd(
   };
 }
 
-type ParsedBySpaceWorktreeInfo = Omit<BySpaceWorktreeInfo, "createdAt">;
+type ParsedPaseoWorktreeInfo = Omit<PaseoWorktreeInfo, "createdAt">;
 
-function parseWorktreeList(output: string): ParsedBySpaceWorktreeInfo[] {
-  const entries: ParsedBySpaceWorktreeInfo[] = [];
-  let current: ParsedBySpaceWorktreeInfo | null = null;
+function parseWorktreeList(output: string): ParsedPaseoWorktreeInfo[] {
+  const entries: ParsedPaseoWorktreeInfo[] = [];
+  let current: ParsedPaseoWorktreeInfo | null = null;
 
   for (const line of output.split("\n")) {
     if (line.startsWith("worktree ")) {
@@ -1037,16 +1034,16 @@ function resolveWorktreeCreatedAtIso(worktreePath: string): string {
   }
 }
 
-export async function listBySpaceWorktrees({
+export async function listPaseoWorktrees({
   cwd,
-  byspaceHome,
+  paseoHome,
   worktreesRoot,
 }: {
   cwd: string;
-  byspaceHome?: string;
+  paseoHome?: string;
   worktreesRoot?: string;
-}): Promise<BySpaceWorktreeInfo[]> {
-  const projectWorktreesRoot = await getBySpaceWorktreesRoot(cwd, byspaceHome, worktreesRoot);
+}): Promise<PaseoWorktreeInfo[]> {
+  const projectWorktreesRoot = await getPaseoWorktreesRoot(cwd, paseoHome, worktreesRoot);
   const { stdout } = await runGitCommand(["worktree", "list", "--porcelain"], {
     cwd,
     envOverlay: READ_ONLY_GIT_ENV,
@@ -1060,25 +1057,25 @@ export async function listBySpaceWorktrees({
     );
 }
 
-export interface DeleteBySpaceWorktreeOptions {
+export interface DeletePaseoWorktreeOptions {
   cwd: string | null;
   worktreePath?: string;
   teardownCwds?: string[];
   worktreeSlug?: string;
   worktreesRoot?: string;
-  byspaceHome?: string;
+  paseoHome?: string;
   worktreesBaseRoot?: string;
 }
 
-export async function deleteBySpaceWorktree({
+export async function deletePaseoWorktree({
   cwd,
   worktreePath,
   teardownCwds,
   worktreeSlug,
   worktreesRoot,
-  byspaceHome,
+  paseoHome,
   worktreesBaseRoot,
-}: DeleteBySpaceWorktreeOptions): Promise<void> {
+}: DeletePaseoWorktreeOptions): Promise<void> {
   if (!worktreePath && !worktreeSlug) {
     throw new Error("worktreePath or worktreeSlug is required");
   }
@@ -1090,15 +1087,15 @@ export async function deleteBySpaceWorktree({
   if (worktreesRoot) {
     resolvedWorktreesRoot = worktreesRoot;
   } else if (cwd) {
-    resolvedWorktreesRoot = await getBySpaceWorktreesRoot(cwd, byspaceHome, worktreesBaseRoot);
+    resolvedWorktreesRoot = await getPaseoWorktreesRoot(cwd, paseoHome, worktreesBaseRoot);
   } else {
-    throw new Error("cwd or worktreesRoot is required to delete a BySpace worktree");
+    throw new Error("cwd or worktreesRoot is required to delete a Paseo worktree");
   }
 
   const requestedPath = worktreePath ?? join(resolvedWorktreesRoot, worktreeSlug!);
   const resolvedRequested = normalizePathForOwnership(requestedPath);
-  const ownership = await isBySpaceOwnedWorktreeCwd(requestedPath, {
-    byspaceHome,
+  const ownership = await isPaseoOwnedWorktreeCwd(requestedPath, {
+    paseoHome,
     worktreesRoot: worktreesBaseRoot,
   });
   const resolvedWorktree =
@@ -1109,7 +1106,7 @@ export async function deleteBySpaceWorktree({
     resolvedWorktree,
   );
   if (relativeWorktreePath === null || relativeWorktreePath === "") {
-    throw new Error("Refusing to delete non-BySpace worktree");
+    throw new Error("Refusing to delete non-Paseo worktree");
   }
 
   if (await pathExists(resolvedWorktree)) {
@@ -1146,13 +1143,13 @@ export async function deleteBySpaceWorktree({
   }
 }
 
-export async function rollbackCreatedBySpaceWorktree(
-  options: DeleteBySpaceWorktreeOptions,
+export async function rollbackCreatedPaseoWorktree(
+  options: DeletePaseoWorktreeOptions,
   cause: unknown,
 ): Promise<never> {
   let cleanupError: unknown;
   try {
-    await deleteBySpaceWorktree(options);
+    await deletePaseoWorktree(options);
   } catch (error) {
     cleanupError = error;
   }
@@ -1216,14 +1213,11 @@ export const createWorktree = async ({
   source,
   worktreeSlug,
   runSetup,
-  byspaceHome,
+  paseoHome,
   worktreesRoot,
 }: CreateWorktreeOptions): Promise<WorktreeConfig> => {
   const sourcePlan = await resolveWorktreeSourcePlan({ cwd, source, desiredSlug: worktreeSlug });
-  let worktreePath = join(
-    await getBySpaceWorktreesRoot(cwd, byspaceHome, worktreesRoot),
-    worktreeSlug,
-  );
+  let worktreePath = join(await getPaseoWorktreesRoot(cwd, paseoHome, worktreesRoot), worktreeSlug);
   mkdirSync(dirname(worktreePath), { recursive: true });
 
   // Also handle worktree path collision
@@ -1256,7 +1250,7 @@ export const createWorktree = async ({
     });
   }
 
-  writeBySpaceWorktreeMetadata(worktreePath, {
+  writePaseoWorktreeMetadata(worktreePath, {
     baseRefName: sourcePlan.metadataBaseRefName,
     ...(sourcePlan.metadataBaseRef ? { baseRef: sourcePlan.metadataBaseRef } : {}),
     ...(sourcePlan.changeRequestLookupTarget
@@ -1264,7 +1258,7 @@ export const createWorktree = async ({
       : {}),
   });
 
-  await seedBySpaceConfigFile({ sourceCwd: cwd, targetCwd: worktreePath });
+  await seedPaseoConfigFile({ sourceCwd: cwd, targetCwd: worktreePath });
 
   if (runSetup) {
     await runWorktreeSetupCommands({
@@ -1293,7 +1287,7 @@ interface WorktreeSourcePlan {
   // upstream — so comparisons and actions read the ref and the UI reads the name.
   metadataBaseRefName: string;
   metadataBaseRef?: string;
-  changeRequestLookupTarget?: BySpaceWorktreeChangeRequestHint;
+  changeRequestLookupTarget?: PaseoWorktreeChangeRequestHint;
   addArguments: string[];
   pushRemote?: {
     name: string;
@@ -1327,7 +1321,7 @@ async function resolveWorktreeSourcePlan({
         branchName: newBranchName,
         metadataBaseRefName: normalizedBaseBranch,
         metadataBaseRef: resolvedBaseBranch,
-        changeRequestLookupTarget: createBySpaceWorktreeChangeRequestHint({
+        changeRequestLookupTarget: createPaseoWorktreeChangeRequestHint({
           headRef: newBranchName,
           localBranchName: newBranchName,
         }),
@@ -1351,7 +1345,7 @@ async function resolveWorktreeSourcePlan({
         return {
           branchName,
           metadataBaseRefName: source.branchName,
-          changeRequestLookupTarget: createBySpaceWorktreeChangeRequestHint({
+          changeRequestLookupTarget: createPaseoWorktreeChangeRequestHint({
             headRef: branchName,
             localBranchName: branchName,
           }),
@@ -1362,7 +1356,7 @@ async function resolveWorktreeSourcePlan({
       return {
         branchName: source.branchName,
         metadataBaseRefName: source.branchName,
-        changeRequestLookupTarget: createBySpaceWorktreeChangeRequestHint({
+        changeRequestLookupTarget: createPaseoWorktreeChangeRequestHint({
           headRef: source.branchName,
           localBranchName: source.branchName,
         }),
@@ -1394,7 +1388,7 @@ async function resolveWorktreeSourcePlan({
         : undefined;
       const remotePlan: Pick<WorktreeSourcePlan, "pushRemote" | "trackingRemote"> = {};
       if (source.pushRemoteUrl) {
-        const remoteName = `byspace-pr-${changeRequestNumber}`;
+        const remoteName = `paseo-pr-${changeRequestNumber}`;
         remotePlan.pushRemote = {
           name: remoteName,
           url: source.pushRemoteUrl,
@@ -1405,7 +1399,7 @@ async function resolveWorktreeSourcePlan({
         const originUrl = await getWorktreeRemotePushUrl(cwd, "origin");
         if (originUrl) {
           remotePlan.pushRemote = {
-            name: `byspace-pr-${changeRequestNumber}`,
+            name: `paseo-pr-${changeRequestNumber}`,
             url: originUrl,
             headRef: source.headRef,
             track: false,
@@ -1419,7 +1413,7 @@ async function resolveWorktreeSourcePlan({
       return {
         branchName: localBranchName,
         metadataBaseRefName: normalizedBaseRefName,
-        changeRequestLookupTarget: createBySpaceWorktreeChangeRequestHint({
+        changeRequestLookupTarget: createPaseoWorktreeChangeRequestHint({
           headRef: source.headRef,
           ...(source.headRepositoryOwner
             ? { headRepositoryOwner: source.headRepositoryOwner }
@@ -1608,10 +1602,10 @@ async function validateGitBranchName(cwd: string, branchName: string): Promise<v
 function normalizeRequiredBaseBranch(baseBranch: string): string {
   const normalizedBaseBranch = normalizeBaseRefName(baseBranch);
   if (!normalizedBaseBranch) {
-    throw new Error("Base branch is required when creating a BySpace worktree");
+    throw new Error("Base branch is required when creating a Paseo worktree");
   }
   if (normalizedBaseBranch === "HEAD") {
-    throw new Error("Base branch cannot be HEAD when creating a BySpace worktree");
+    throw new Error("Base branch cannot be HEAD when creating a Paseo worktree");
   }
   return normalizedBaseBranch;
 }

@@ -15,8 +15,8 @@ import {
   PluginIdSchema,
   PluginSourceSchema,
   TerminalProfileSchema,
-} from "@bytetrue/byspace-protocol/messages";
-import { BySpaceServicePortAllocationSchema } from "@bytetrue/byspace-protocol/byspace-config-schema";
+} from "@getpaseo/protocol/messages";
+import { PaseoServicePortAllocationSchema } from "@getpaseo/protocol/paseo-config-schema";
 
 export const LogLevelSchema = z.enum(["trace", "debug", "info", "warn", "error", "fatal"]);
 export const LogFormatSchema = z.enum(["pretty", "json"]);
@@ -84,7 +84,7 @@ const ProvidersSchema = z
 const WorktreesConfigSchema = z
   .object({
     root: z.string().min(1).optional(),
-    servicePorts: BySpaceServicePortAllocationSchema.optional(),
+    servicePorts: PaseoServicePortAllocationSchema.optional(),
   })
   .strict();
 
@@ -347,16 +347,16 @@ const CONFIG_FILENAME = "config.json";
 const DEFAULT_PERSISTED_CONFIG = PersistedConfigSchema.parse({
   version: 1,
   daemon: {
-    listen: "127.0.0.1:6777",
+    listen: "127.0.0.1:6767",
     cors: {
-      allowedOrigins: ["https://app.byspace.cc.cd"],
+      allowedOrigins: ["https://app.paseo.sh"],
     },
     relay: {
       enabled: false,
     },
   },
   app: {
-    baseUrl: "https://app.byspace.cc.cd",
+    baseUrl: "https://app.paseo.sh",
   },
 }) as PersistedConfig;
 
@@ -365,8 +365,8 @@ interface LoggerLike {
   info(...args: unknown[]): void;
 }
 
-function getConfigPath(byspaceHome: string): string {
-  return path.join(byspaceHome, CONFIG_FILENAME);
+function getConfigPath(paseoHome: string): string {
+  return path.join(paseoHome, CONFIG_FILENAME);
 }
 
 function getLogger(logger: LoggerLike | undefined): LoggerLike | undefined {
@@ -412,9 +412,9 @@ function stripRemovedConfigFields(parsed: unknown): unknown {
   return root;
 }
 
-export function loadPersistedConfig(byspaceHome: string, logger?: LoggerLike): PersistedConfig {
+export function loadPersistedConfig(paseoHome: string, logger?: LoggerLike): PersistedConfig {
   const log = getLogger(logger);
-  const configPath = getConfigPath(byspaceHome);
+  const configPath = getConfigPath(paseoHome);
 
   if (!existsSync(configPath)) {
     try {
@@ -464,12 +464,12 @@ export function loadPersistedConfig(byspaceHome: string, logger?: LoggerLike): P
 }
 
 export function savePersistedConfig(
-  byspaceHome: string,
+  paseoHome: string,
   config: PersistedConfig,
   logger?: LoggerLike,
 ): void {
   const log = getLogger(logger);
-  const configPath = getConfigPath(byspaceHome);
+  const configPath = getConfigPath(paseoHome);
 
   const result = PersistedConfigSchema.safeParse(config);
   if (!result.success) {

@@ -11,7 +11,7 @@ category: Hub
 A project configuration is one versioned bundle:
 
 ```text
-.byspace/
+.paseo/
 ├── hub.yml
 └── workflows/
     ├── <workflow>.yml
@@ -21,14 +21,14 @@ A project configuration is one versioned bundle:
 
 `hub.yml` owns named environments and agents. Each direct-child workflow file owns one trigger and its ordered inline steps. Prompt partials referenced by those workflows live below `workflows/partials/`. Workflow discovery is fixed by convention; there is no manifest or include list.
 
-[single-repo-team-bot](https://github.com/ByteTrue/hub/tree/main/examples/single-repo-team-bot) is a complete bundle in this shape: Discord, Slack, and GitHub workflows running a classifier and a worker on shared partials. Copy `.byspace/` into your repository and replace the placeholders its README lists.
+[single-repo-team-bot](https://github.com/getpaseo/hub/tree/main/examples/single-repo-team-bot) is a complete bundle in this shape: Discord, Slack, and GitHub workflows running a classifier and a worker on shared partials. Copy `.paseo/` into your repository and replace the placeholders its README lists.
 
 ## Generated starter bundle
 
-`byspace hub init`, and the guided setup that interactive `byspace hub login` offers, write two files for the directory you run them in:
+`paseo hub init`, and the guided setup that interactive `paseo hub login` offers, write two files for the directory you run them in:
 
 ```yaml
-# .byspace/hub.yml
+# .paseo/hub.yml
 environments:
   my-macbook:
     kind: daemon
@@ -44,7 +44,7 @@ agents:
 The environment is named after the connected daemon and points at the directory setup ran in. `provider`, `model`, and `mode` are the runtime you chose from what that daemon reported, so the starter agent is a complete selection before its first run. `mode` is omitted for a provider that exposes none.
 
 ```yaml
-# .byspace/workflows/slack-help.yml
+# .paseo/workflows/slack-help.yml
 name: slack-help
 on: slack.mention
 max_runtime: 2h
@@ -63,7 +63,7 @@ steps:
           Answer with hub.reply, then complete this request and call hub.finish_execution when done.
 
           <user-prompt>
-          ${{ byspace.prompt }}
+          ${{ paseo.prompt }}
           </user-prompt>
     allow_outputs:
       - type: slack.reply
@@ -81,7 +81,7 @@ The generated workflow allows one user in one workspace. Read [Hub security](/do
 
 A configuration comes from one source:
 
-- **GitHub source**: the complete `.byspace` bundle on the repository's default branch.
+- **GitHub source**: the complete `.paseo` bundle on the repository's default branch.
 - **Manual source**: source files edited and activated in the dashboard.
 - **CLI/API install**: a complete bundle sent with organization authority.
 
@@ -92,26 +92,26 @@ The **Configuration** tab shows the active revision, source files, and latest sy
 Run from the project root:
 
 ```sh
-byspace hub login https://hub.example.com
-byspace hub deploy -p my-project --dry-run
-byspace hub deploy -p my-project
+paseo hub login https://hub.example.com
+paseo hub deploy -p my-project --dry-run
+paseo hub deploy -p my-project
 ```
 
-Both commands discover `.byspace/hub.yml`, every direct `.byspace/workflows/*.yml` file, and each referenced file below `.byspace/workflows/partials/`. Files are sent in deterministic path order through the same bundle request. Dry-run calls server-side validation and does not create or activate a revision.
+Both commands discover `.paseo/hub.yml`, every direct `.paseo/workflows/*.yml` file, and each referenced file below `.paseo/workflows/partials/`. Files are sent in deterministic path order through the same bundle request. Dry-run calls server-side validation and does not create or activate a revision.
 
 The CLI rejects missing resource or workflow files, `.yaml` workflow extensions, nested workflow files, unsafe partial paths, symlinked bundle paths, and unreadable files before contacting Hub. Errors name paths but never print file contents or credentials.
 
 Origin precedence:
 
 1. `--hub`
-2. `BYSPACE_HUB_URL`
+2. `PASEO_HUB_URL`
 3. Active stored login
-4. `https://hub.byspace.cc.cd`
+4. `https://hub.paseo.sh`
 
 Credential precedence:
 
 1. `--api-key`
-2. `BYSPACE_HUB_API_KEY`
+2. `PASEO_HUB_API_KEY`
 3. Stored login for the exact resolved origin
 
 Flags and environment keys are not stored. Endpoint and credential behavior is unchanged between deploy and dry-run.

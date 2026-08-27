@@ -1,5 +1,5 @@
 import type pino from "pino";
-import type { FirstAgentContext } from "@bytetrue/byspace-protocol/messages";
+import type { FirstAgentContext } from "@getpaseo/protocol/messages";
 
 import { resolveFirstAgentPromptTitle } from "./agent/create-agent-title.js";
 import type { AgentManager } from "./agent/agent-manager.js";
@@ -8,7 +8,7 @@ import type { StructuredGenerationDaemonConfig } from "./agent/structured-genera
 import {
   attemptFirstAgentBranchAutoName,
   type AttemptFirstAgentBranchAutoNameResult,
-} from "./byspace-worktree-service.js";
+} from "./paseo-worktree-service.js";
 import type { GitMutationService } from "./session/git-mutation/git-mutation-service.js";
 import type { WorkspaceGitService } from "./workspace-git-service.js";
 import type { PersistedWorkspaceRecord, WorkspaceRegistry } from "./workspace-registry.js";

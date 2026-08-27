@@ -33,7 +33,7 @@ async function resolveTsPath(basePath) {
 }
 
 const aliasPlugin = {
-  name: "byspace-alias",
+  name: "paseo-alias",
   setup(build) {
     build.onResolve({ filter: /^@\// }, async (args) => ({
       path: await resolveTsPath(path.join(appRoot, "src", args.path.slice(2))),

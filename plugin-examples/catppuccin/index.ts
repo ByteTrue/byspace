@@ -1,4 +1,4 @@
-import type { PluginContext } from "@bytetrue/byspace-plugin";
+import type { PluginContext } from "@getpaseo/plugin";
 
 export default function contribute(plugin: PluginContext) {
   plugin.addTheme({

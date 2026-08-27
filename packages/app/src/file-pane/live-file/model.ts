@@ -1,5 +1,5 @@
-import type { FileReadResult } from "@bytetrue/byspace-client/internal/daemon-client";
-import type { FileVersion } from "@bytetrue/byspace-protocol/messages";
+import type { FileReadResult } from "@getpaseo/client/internal/daemon-client";
+import type { FileVersion } from "@getpaseo/protocol/messages";
 
 export interface LiveFileTarget {
   cwd: string;

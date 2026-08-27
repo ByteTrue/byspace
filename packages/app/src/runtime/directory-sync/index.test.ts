@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
-import type { DaemonClient } from "@bytetrue/byspace-client/internal/daemon-client";
-import type { SessionOutboundMessage } from "@bytetrue/byspace-protocol/messages";
+import type { DaemonClient } from "@getpaseo/client/internal/daemon-client";
+import type { SessionOutboundMessage } from "@getpaseo/protocol/messages";
 import { normalizeProjectDescriptor, useSessionStore } from "@/stores/session-store";
 import { DirectoryRefreshSupersededError, DirectorySync } from "./index";
 

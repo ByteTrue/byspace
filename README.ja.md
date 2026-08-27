@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="packages/website/public/logo.svg" width="64" height="64" alt="BySpace logo">
+  <img src="packages/website/public/logo.svg" width="64" height="64" alt="Paseo logo">
 </p>
 
-<h1 align="center">BySpace</h1>
+<h1 align="center">Paseo</h1>
 
 <p align="center">
   <a href="README.md">English</a> ·
@@ -12,11 +12,11 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/ByteTrue/byspace/stargazers">
-    <img src="https://img.shields.io/github/stars/ByteTrue/byspace?style=flat&logo=github" alt="GitHub stars">
+  <a href="https://github.com/getpaseo/paseo/stargazers">
+    <img src="https://img.shields.io/github/stars/getpaseo/paseo?style=flat&logo=github" alt="GitHub stars">
   </a>
-  <a href="https://github.com/ByteTrue/byspace/releases">
-    <img src="https://img.shields.io/github/v/release/ByteTrue/byspace?style=flat&logo=github" alt="GitHub release">
+  <a href="https://github.com/getpaseo/paseo/releases">
+    <img src="https://img.shields.io/github/v/release/getpaseo/paseo?style=flat&logo=github" alt="GitHub release">
   </a>
   <a href="https://x.com/moboudra">
     <img src="https://img.shields.io/badge/%40moboudra-555?logo=x" alt="X">
@@ -24,7 +24,7 @@
   <a href="https://discord.gg/jz8T2uahpH">
     <img src="https://img.shields.io/badge/Discord-555?logo=discord" alt="Discord">
   </a>
-  <a href="https://www.reddit.com/r/BySpaceAI/">
+  <a href="https://www.reddit.com/r/PaseoAI/">
     <img src="https://img.shields.io/badge/Reddit-555?logo=reddit" alt="Reddit">
   </a>
 </p>
@@ -32,11 +32,11 @@
 <p align="center">Claude Code、Codex、Copilot、OpenCode、Pi のエージェントを、ひとつのインターフェースで。</p>
 
 <p align="center">
-  <img src="https://byspace.cc.cd/hero-mockup.png" alt="BySpace アプリのスクリーンショット" width="100%">
+  <img src="https://paseo.sh/hero-mockup.png" alt="Paseo アプリのスクリーンショット" width="100%">
 </p>
 
 <p align="center">
-  <img src="https://byspace.cc.cd/mobile-mockup.png" alt="BySpace モバイルアプリ" width="100%">
+  <img src="https://paseo.sh/mobile-mockup.png" alt="Paseo モバイルアプリ" width="100%">
 </p>
 
 > [!NOTE]
@@ -51,11 +51,11 @@
 - **マルチプロバイダー:** Claude Code、Codex、Copilot、OpenCode、Pi を同一のインターフェースで利用。タスクに合ったモデルを選べます。
 - **音声コントロール:** 音声モードでタスクを口述したり問題を話し合ったりできます。ハンズフリーが必要なときに便利です。
 - **クロスデバイス:** iOS、Android、デスクトップ、Web、CLI に対応。机で作業を始め、スマートフォンで確認し、ターミナルから自動化できます。
-- **プライバシー優先:** BySpace にはテレメトリー・トラッキング・強制ログインは一切ありません。
+- **プライバシー優先:** Paseo にはテレメトリー・トラッキング・強制ログインは一切ありません。
 
 ## はじめかた
 
-BySpace はコーディングエージェントを管理するローカルサーバー（デーモン）を起動します。デスクトップアプリ・モバイルアプリ・Web アプリ・CLI などのクライアントがこのデーモンに接続します。
+Paseo はコーディングエージェントを管理するローカルサーバー（デーモン）を起動します。デスクトップアプリ・モバイルアプリ・Web アプリ・CLI などのクライアントがこのデーモンに接続します。
 
 ### 前提条件
 
@@ -69,68 +69,68 @@ BySpace はコーディングエージェントを管理するローカルサー
 
 ### デスクトップアプリ（推奨）
 
-[byspace.cc.cd/download](https://byspace.cc.cd/download) または [GitHub のリリースページ](https://github.com/ByteTrue/byspace/releases)からダウンロードしてください。アプリを開くとデーモンが自動的に起動します。追加のインストールは不要です。
+[paseo.sh/download](https://paseo.sh/download) または [GitHub のリリースページ](https://github.com/getpaseo/paseo/releases)からダウンロードしてください。アプリを開くとデーモンが自動的に起動します。追加のインストールは不要です。
 
 スマートフォンから接続するには、Settings 画面に表示される QR コードをスキャンしてください。
 
 ### CLI / ヘッドレス
 
-CLI をインストールして BySpace を起動します。
+CLI をインストールして Paseo を起動します。
 
 ```bash
-npm install -g @bytetrue/byspace
-byspace
+npm install -g @getpaseo/cli
+paseo
 ```
 
 ターミナルに QR コードが表示されます。どのクライアントからでも接続できます。サーバーやリモートマシンでの利用に適しています。
 
 詳しいセットアップと設定については以下を参照してください。
 
-- [ドキュメント](https://byspace.cc.cd/docs)
-- [設定リファレンス](https://byspace.cc.cd/docs/configuration)
+- [ドキュメント](https://paseo.sh/docs)
+- [設定リファレンス](https://paseo.sh/docs/configuration)
 
 ## CLI
 
 アプリでできることはすべてターミナルからも実行できます。
 
 ```bash
-byspace run --provider claude/opus-4.6 "implement user authentication"
-byspace run --provider codex/gpt-5.4 --worktree feature-x "implement feature X"
+paseo run --provider claude/opus-4.6 "implement user authentication"
+paseo run --provider codex/gpt-5.4 --worktree feature-x "implement feature X"
 
-byspace ls                           # 実行中のエージェントを一覧表示
-byspace attach abc123                # ライブ出力をストリーミング
-byspace send abc123 "also add tests" # 追加タスクを送信
+paseo ls                           # 実行中のエージェントを一覧表示
+paseo attach abc123                # ライブ出力をストリーミング
+paseo send abc123 "also add tests" # 追加タスクを送信
 
 # リモートデーモンで実行
-byspace --host workstation.local:6777 run "run the full test suite"
+paseo --host workstation.local:6767 run "run the full test suite"
 ```
 
-詳細は[完全な CLI リファレンス](https://byspace.cc.cd/docs/cli)を参照してください。
+詳細は[完全な CLI リファレンス](https://paseo.sh/docs/cli)を参照してください。
 
 ## スキル
 
-スキルはエージェントに BySpace を使って他のエージェントをオーケストレーションする方法を教えます。
+スキルはエージェントに Paseo を使って他のエージェントをオーケストレーションする方法を教えます。
 
 ```bash
-npx skills add ByteTrue/byspace
+npx skills add getpaseo/paseo
 ```
 
 どのエージェントとの会話でも使用できます。
 
-- `/byspace-handoff` — エージェント間で作業を引き継ぎます。私はこれを使って Claude で計画し、Codex に実装を引き継いでいます。
-- `/byspace-advisor` — 単一のエージェントをアドバイザーとして起動し、作業を委任せずにセカンドオピニオンを得ます。
-- `/byspace-committee` — 対照的な2つのエージェントで委員会を構成し、一歩引いた視点で根本原因を分析して計画を作成します。
+- `/paseo-handoff` — エージェント間で作業を引き継ぎます。私はこれを使って Claude で計画し、Codex に実装を引き継いでいます。
+- `/paseo-advisor` — 単一のエージェントをアドバイザーとして起動し、作業を委任せずにセカンドオピニオンを得ます。
+- `/paseo-committee` — 対照的な2つのエージェントで委員会を構成し、一歩引いた視点で根本原因を分析して計画を作成します。
 
 ## 開発
 
 モノレポのパッケージ構成：
 
-- `packages/server`: BySpace デーモン（エージェントプロセスのオーケストレーション、WebSocket API、MCP サーバー）
+- `packages/server`: Paseo デーモン（エージェントプロセスのオーケストレーション、WebSocket API、MCP サーバー）
 - `packages/app`: Expo クライアント（iOS、Android、Web）
-- `packages/cli`: デーモンおよびエージェントワークフロー向け `byspace` CLI
+- `packages/cli`: デーモンおよびエージェントワークフロー向け `paseo` CLI
 - `packages/desktop`: Electron デスクトップアプリ
 - `packages/relay`: リモート接続用リレーパッケージ
-- `packages/website`: マーケティングサイトとドキュメント（`byspace.cc.cd`）
+- `packages/website`: マーケティングサイトとドキュメント（`paseo.sh`）
 
 よく使うコマンド：
 
@@ -153,9 +153,9 @@ npm run typecheck
 
 ## 関連プロジェクト
 
-- [ByteTrue/byspace-relay](https://github.com/ByteTrue/byspace-relay) — Elixir 製の公式分散リレー
-- [byspace-skins](https://github.com/huangguang1999/byspace-skins) — BySpace デスクトップ向けコミュニティテーマと、Agent Skill 対応のゼロパッチテーマローダー
-- [byspace-vscode](https://marketplace.visualstudio.com/items?itemName=hinnes.byspace-vscode) — VS Code 拡張機能
+- [getpaseo/paseo-relay](https://github.com/getpaseo/paseo-relay) — Elixir 製の公式分散リレー
+- [paseo-skins](https://github.com/huangguang1999/paseo-skins) — Paseo デスクトップ向けコミュニティテーマと、Agent Skill 対応のゼロパッチテーマローダー
+- [paseo-vscode](https://marketplace.visualstudio.com/items?itemName=hinnes.paseo-vscode) — VS Code 拡張機能
 
 ## ライセンス
 

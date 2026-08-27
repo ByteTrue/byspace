@@ -9,11 +9,8 @@ import { captureTerminalLines, type CaptureTerminalLinesResult } from "./termina
 import { randomBytes, randomUUID } from "node:crypto";
 import { resolve, sep } from "node:path";
 import { assertAbsolutePath, isSameOrDescendantPath } from "../server/path-utils.js";
-import type {
-  TerminalActivity,
-  TerminalActivityState,
-} from "@bytetrue/byspace-protocol/terminal-activity";
-import { deriveTerminalActivityStatusBucket } from "@bytetrue/byspace-protocol/terminal-activity";
+import type { TerminalActivity, TerminalActivityState } from "@getpaseo/protocol/terminal-activity";
+import { deriveTerminalActivityStatusBucket } from "@getpaseo/protocol/terminal-activity";
 
 export interface TerminalListItem {
   id: string;
@@ -339,9 +336,9 @@ export function createTerminalManager(
           ? (managerOptions.getTerminalActivityUrl?.() ?? null)
           : options.activityUrl;
       const activityEnv = {
-        BYSPACE_TERMINAL_ID: terminalId,
-        BYSPACE_ACTIVITY_TOKEN: activityToken,
-        ...(terminalActivityUrl ? { BYSPACE_TERMINAL_ACTIVITY_URL: terminalActivityUrl } : {}),
+        PASEO_TERMINAL_ID: terminalId,
+        PASEO_ACTIVITY_TOKEN: activityToken,
+        ...(terminalActivityUrl ? { PASEO_TERMINAL_ACTIVITY_URL: terminalActivityUrl } : {}),
       };
       terminalActivityTokenById.set(terminalId, activityToken);
       let session: TerminalSession;

@@ -10,9 +10,9 @@ import {
   serializeConnectionUriForStorage,
   shouldUseTlsForDefaultHostedRelay,
   type HostPortParts,
-} from "@bytetrue/byspace-protocol/daemon-endpoints";
+} from "@getpaseo/protocol/daemon-endpoints";
 
-export { decodeOfferFragmentPayload } from "@bytetrue/byspace-protocol/connection-offer";
+export { decodeOfferFragmentPayload } from "@getpaseo/protocol/connection-offer";
 
 export type { HostPortParts };
 

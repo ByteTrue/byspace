@@ -1,9 +1,9 @@
-import type { AgentProviderDefinition } from "@bytetrue/byspace-protocol/provider-manifest";
+import type { AgentProviderDefinition } from "@getpaseo/protocol/provider-manifest";
 import type {
   AgentModelDefinition,
   AgentProvider,
   ProviderSnapshotEntry,
-} from "@bytetrue/byspace-protocol/agent-types";
+} from "@getpaseo/protocol/agent-types";
 import {
   mergeProviderPreferences,
   type FormPreferences,

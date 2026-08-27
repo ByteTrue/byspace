@@ -4,7 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { randomUUID } from "node:crypto";
 import type pino from "pino";
-import type { PluginLogEntry } from "@bytetrue/byspace-protocol/messages";
+import type { PluginLogEntry } from "@getpaseo/protocol/messages";
 import { compilePlugin } from "./compiler.js";
 import { readPluginManifest } from "./manifest.js";
 import type { PluginProcessMessage, PluginProcessRequest } from "./plugin-process-protocol.js";
@@ -53,7 +53,7 @@ interface LoadedPlugin {
 
 interface PluginRuntimeDependencies {
   spawnChild?: () => PluginChild;
-  sessionHost?: PluginBySpaceSessionHost;
+  sessionHost?: PluginPaseoSessionHost;
 }
 
 interface PluginLogTail {
@@ -129,7 +129,7 @@ class PluginOutputCapture {
   }
 }
 
-export interface PluginBySpaceSessionHost {
+export interface PluginPaseoSessionHost {
   attachPluginSocket(
     pluginId: string,
     socket: PluginSessionSocket,
@@ -201,7 +201,7 @@ export class PluginRuntime {
   private readonly logTails = new Map<string, PluginLogTail>();
   private readonly logger: pino.Logger;
   private readonly spawnChild: () => PluginChild;
-  private sessionHost: PluginBySpaceSessionHost | null;
+  private sessionHost: PluginPaseoSessionHost | null;
   private readonly listeners = new Set<(pluginId: string, error?: string) => void>();
 
   constructor(logger: pino.Logger, dependencies: PluginRuntimeDependencies = {}) {
@@ -210,7 +210,7 @@ export class PluginRuntime {
     this.sessionHost = dependencies.sessionHost ?? null;
   }
 
-  bindBySpaceSessionHost(sessionHost: PluginBySpaceSessionHost): void {
+  bindPaseoSessionHost(sessionHost: PluginPaseoSessionHost): void {
     if (this.plugins.size > 0)
       throw new Error("Cannot replace the plugin session host while running");
     this.sessionHost = sessionHost;
@@ -227,13 +227,9 @@ export class PluginRuntime {
     canPublish: () => boolean = () => true,
   ): Promise<void> {
     if (this.plugins.has(pluginId)) throw new Error(`Plugin is already running: ${pluginId}`);
-    this.appendLog(pluginId, "stdout", "[byspace] Loading plugin");
+    this.appendLog(pluginId, "stdout", "[paseo] Loading plugin");
     const loaded = await this.loadDirectoryPlugin(pluginId, configuredPath).catch((error) => {
-      this.appendLog(
-        pluginId,
-        "stderr",
-        `[byspace] Plugin failed to load: ${describeError(error)}`,
-      );
+      this.appendLog(pluginId, "stderr", `[paseo] Plugin failed to load: ${describeError(error)}`);
       throw error;
     });
     if (!canPublish()) {
@@ -241,7 +237,7 @@ export class PluginRuntime {
       throw new Error(`Plugin start cancelled: ${pluginId}`);
     }
     this.plugins.set(pluginId, loaded);
-    this.appendLog(pluginId, "stdout", "[byspace] Plugin ready");
+    this.appendLog(pluginId, "stdout", "[paseo] Plugin ready");
   }
 
   async stopPluginById(pluginId: string): Promise<boolean> {
@@ -312,7 +308,7 @@ export class PluginRuntime {
     const entryPath = await resolveEntryPath(directory);
     const bundles = await compilePlugin(entryPath);
     const sessionHost = this.sessionHost;
-    if (!sessionHost) throw new Error("Plugin BySpace session host is not attached");
+    if (!sessionHost) throw new Error("Plugin Paseo session host is not attached");
     const child = this.spawnChild();
     const outputCapture = new PluginOutputCapture(child, (stream, message) => {
       this.appendLog(pluginId, stream, message);
@@ -341,9 +337,9 @@ export class PluginRuntime {
           reject(error);
         };
         child.on("message", (message) => {
-          if (message.type === "byspace_frame") {
+          if (message.type === "paseo_frame") {
             sessionSocket.receive(message.data, message.isBinary);
-          } else if (message.type === "byspace_close") {
+          } else if (message.type === "paseo_close") {
             sessionSocket.peerClosed();
           } else if (message.type === "ready") {
             if (settled) return;
@@ -412,11 +408,11 @@ export class PluginRuntime {
   }
 
   private async stopPlugin(loaded: LoadedPlugin): Promise<void> {
-    this.appendLog(loaded.id, "stdout", "[byspace] Stopping plugin");
+    this.appendLog(loaded.id, "stdout", "[paseo] Stopping plugin");
     if (loaded.child.killed) {
       loaded.sessionSocket.peerClosed();
       await loaded.sessionClosed;
-      this.appendLog(loaded.id, "stdout", "[byspace] Plugin stopped");
+      this.appendLog(loaded.id, "stdout", "[paseo] Plugin stopped");
       return;
     }
     const closed = new Promise<void>((resolve) =>
@@ -430,7 +426,7 @@ export class PluginRuntime {
     await closed;
     loaded.sessionSocket.peerClosed();
     await loaded.sessionClosed;
-    this.appendLog(loaded.id, "stdout", "[byspace] Plugin stopped");
+    this.appendLog(loaded.id, "stdout", "[paseo] Plugin stopped");
   }
 
   private rejectPending(loaded: LoadedPlugin, message: string): void {

@@ -33,9 +33,9 @@ const heartbeatDeleteSchema: OutputSchema<HeartbeatDeleteRow> = {
 };
 
 function requireCallerAgentId(): string {
-  const agentId = process.env.BYSPACE_AGENT_ID?.trim();
+  const agentId = process.env.PASEO_AGENT_ID?.trim();
   if (!agentId) {
-    throw new Error("Heartbeat commands must run inside a BySpace agent");
+    throw new Error("Heartbeat commands must run inside a Paseo agent");
   }
   return agentId;
 }

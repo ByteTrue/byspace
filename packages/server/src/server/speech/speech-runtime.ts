@@ -2,7 +2,7 @@ import { stat } from "node:fs/promises";
 import { join } from "node:path";
 import type { Logger } from "pino";
 
-import type { BySpaceOpenAIConfig, BySpaceSpeechConfig } from "../bootstrap.js";
+import type { PaseoOpenAIConfig, PaseoSpeechConfig } from "../bootstrap.js";
 import type { LocalSpeechModelId } from "./providers/local/config.js";
 import {
   ensureLocalSpeechModels,
@@ -54,7 +54,7 @@ export interface SpeechReadinessSnapshot {
 }
 
 function resolveRequestedSpeechProviders(
-  speechConfig: BySpaceSpeechConfig | null,
+  speechConfig: PaseoSpeechConfig | null,
 ): RequestedSpeechProviders {
   const defaults: RequestedSpeechProviders = {
     dictationStt: { provider: "local", explicit: false, enabled: true },
@@ -356,8 +356,8 @@ export interface SpeechService {
 
 export function createSpeechService(params: {
   logger: Logger;
-  openaiConfig?: BySpaceOpenAIConfig;
-  speechConfig?: BySpaceSpeechConfig;
+  openaiConfig?: PaseoOpenAIConfig;
+  speechConfig?: PaseoSpeechConfig;
 }): SpeechService {
   const logger = params.logger.child({ module: "speech-runtime" });
   const speechConfig = params.speechConfig ?? null;

@@ -1,7 +1,7 @@
 {
-  "name": "@bytetrue/byspace-relay",
-  "version": "0.9.0",
-  "description": "BySpace relay for bridging daemon and client connections",
+  "name": "@getpaseo/relay",
+  "version": "0.6.1",
+  "description": "Paseo relay for bridging daemon and client connections",
   "files": [
     "dist",
     "!dist/**/*.map"

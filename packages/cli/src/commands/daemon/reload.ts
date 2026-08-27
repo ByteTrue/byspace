@@ -20,7 +20,7 @@ export const daemonReloadSchema: OutputSchema<DaemonReloadResult> = {
         "Warning: These changes require a daemon restart:",
         ...result.data.restartRequiredPaths.map((path) => `  ${path}`),
         "",
-        "Run: byspace daemon restart",
+        "Run: paseo daemon restart",
       );
     }
     if (result.data.overrideControlledPaths.length > 0) {

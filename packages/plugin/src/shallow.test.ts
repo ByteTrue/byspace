@@ -4,9 +4,9 @@ import { shallowEqual } from "./shallow.js";
 describe("plugin selector shallow equality", () => {
   it("keeps equivalent selector objects and arrays stable", () => {
     const shared = { id: "shared" };
-    expect(shallowEqual({ name: "BySpace", shared }, { name: "BySpace", shared })).toBe(true);
-    expect(shallowEqual(["BySpace", shared], ["BySpace", shared])).toBe(true);
-    expect(shallowEqual({ name: "BySpace" }, { name: "Changed" })).toBe(false);
+    expect(shallowEqual({ name: "Paseo", shared }, { name: "Paseo", shared })).toBe(true);
+    expect(shallowEqual(["Paseo", shared], ["Paseo", shared])).toBe(true);
+    expect(shallowEqual({ name: "Paseo" }, { name: "Changed" })).toBe(false);
   });
 
   it("compares map and set selections by their shallow entries", () => {

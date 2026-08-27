@@ -1,6 +1,6 @@
 # NOTE: Maestro requires a config section for every flow file, even when used
 # via `runFlow`. Keep this aligned with the dev build application id.
-appId: com.bytetrue.byspace
+appId: sh.paseo
 ---
 - launchApp:
     clearState: true
@@ -22,11 +22,11 @@ appId: com.bytetrue.byspace
 - tapOn:
     id: "direct-host-input"
 - eraseText
-- inputText: "127.0.0.1:6777"
+- inputText: "127.0.0.1:6767"
 
 - assertVisible:
     id: "direct-host-input"
-    text: "127.0.0.1:6777"
+    text: "127.0.0.1:6767"
 
 - tapOn:
     id: "direct-host-submit"

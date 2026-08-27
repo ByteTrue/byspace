@@ -87,11 +87,6 @@ export function getReleaseInfoFromSourceTag(sourceTag) {
   };
 }
 
-export function buildNpmVersionArgs(version) {
-  parseReleaseVersion(version);
-  return ["version", version, "--include-workspace-root", "--no-git-tag-version"];
-}
-
 export function computeNextReleaseVersion(currentVersion, mode) {
   const parsed = parseReleaseVersion(currentVersion);
 

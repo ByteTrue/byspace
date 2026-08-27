@@ -1,10 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
-import {
-  highlightCode,
-  isLanguageSupported,
-  type HighlightToken,
-} from "@bytetrue/byspace-highlight";
+import { highlightCode, isLanguageSupported, type HighlightToken } from "@getpaseo/highlight";
 
 const MAX_DIFF_HIGHLIGHT_LINE_CHARS = 10_000;
 

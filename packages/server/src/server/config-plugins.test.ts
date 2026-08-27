@@ -6,13 +6,13 @@ import { loadConfig } from "./config.js";
 
 const roots: string[] = [];
 
-async function createBySpaceHome(config: unknown): Promise<string> {
-  const root = await mkdtemp(path.join(os.tmpdir(), "byspace-config-plugins-"));
+async function createPaseoHome(config: unknown): Promise<string> {
+  const root = await mkdtemp(path.join(os.tmpdir(), "paseo-config-plugins-"));
   roots.push(root);
-  const byspaceHome = path.join(root, ".byspace");
-  await mkdir(byspaceHome, { recursive: true });
-  await writeFile(path.join(byspaceHome, "config.json"), JSON.stringify(config, null, 2));
-  return byspaceHome;
+  const paseoHome = path.join(root, ".paseo");
+  await mkdir(paseoHome, { recursive: true });
+  await writeFile(path.join(paseoHome, "config.json"), JSON.stringify(config, null, 2));
+  return paseoHome;
 }
 
 describe("daemon plugin config", () => {
@@ -21,13 +21,13 @@ describe("daemon plugin config", () => {
   });
 
   test("defaults plugins off when config is absent", async () => {
-    const home = await createBySpaceHome({ version: 1 });
+    const home = await createPaseoHome({ version: 1 });
 
     expect(loadConfig(home, { env: {} }).pluginsEnabled).toBe(false);
   });
 
   test("loads the explicit plugin opt-in", async () => {
-    const home = await createBySpaceHome({ version: 1, pluginsEnabled: true });
+    const home = await createPaseoHome({ version: 1, pluginsEnabled: true });
 
     expect(loadConfig(home, { env: {} }).pluginsEnabled).toBe(true);
   });

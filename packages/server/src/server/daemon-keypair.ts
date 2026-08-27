@@ -10,7 +10,7 @@ import {
   importPublicKey,
   importSecretKey,
   type KeyPair,
-} from "@bytetrue/byspace-relay/e2ee";
+} from "@getpaseo/relay/e2ee";
 import { ensurePrivateFile, writePrivateFileAtomicSync } from "./private-files.js";
 
 const KeyPairSchema = z.object({
@@ -29,11 +29,11 @@ export interface DaemonKeyPairBundle {
 }
 
 export async function loadOrCreateDaemonKeyPair(
-  byspaceHome: string,
+  paseoHome: string,
   logger?: pino.Logger,
 ): Promise<DaemonKeyPairBundle> {
   const log = logger?.child({ module: "daemon-keypair" });
-  const filePath = path.join(byspaceHome, KEYPAIR_FILENAME);
+  const filePath = path.join(paseoHome, KEYPAIR_FILENAME);
 
   if (existsSync(filePath)) {
     try {

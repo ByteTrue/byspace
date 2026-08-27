@@ -386,12 +386,12 @@ export class FakePiSession implements PiRuntimeSession {
       type: "extension_ui_request",
       id: `submitted-user-${entry.id}`,
       method: "notify",
-      message: `BYSPACE_SUBMITTED_USER_ENTRY ${JSON.stringify({ entry })}`,
+      message: `PASEO_SUBMITTED_USER_ENTRY ${JSON.stringify({ entry })}`,
     });
   }
 
   private handleTreeNavigationCommand(message: string): void {
-    const prefix = "/byspace_tree ";
+    const prefix = "/paseo_tree ";
     if (!message.startsWith(prefix)) {
       return;
     }
@@ -407,7 +407,7 @@ export class FakePiSession implements PiRuntimeSession {
   }
 
   private handleEntryCaptureCommand(message: string): void {
-    const prefix = "/byspace_capture_entries ";
+    const prefix = "/paseo_capture_entries ";
     if (!message.startsWith(prefix)) {
       return;
     }
@@ -428,7 +428,7 @@ export class FakePiSession implements PiRuntimeSession {
       type: "extension_ui_request",
       id: `capture-${requestId ?? reason}`,
       method: "notify",
-      message: `BYSPACE_ENTRY_CAPTURE ${JSON.stringify({
+      message: `PASEO_ENTRY_CAPTURE ${JSON.stringify({
         reason,
         requestId,
         entries: this.capturedUserEntries,
@@ -444,7 +444,7 @@ export class FakePiSession implements PiRuntimeSession {
       type: "extension_ui_request",
       id: `command-${requestId}`,
       method: "notify",
-      message: `BYSPACE_COMMAND_RESULT ${JSON.stringify({ requestId, ...result })}`,
+      message: `PASEO_COMMAND_RESULT ${JSON.stringify({ requestId, ...result })}`,
     });
   }
 }

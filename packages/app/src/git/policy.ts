@@ -2,10 +2,7 @@ import type { ReactElement } from "react";
 
 import type { ActionStatus } from "@/components/ui/dropdown-menu";
 import { i18n } from "@/i18n/i18next";
-import type {
-  CheckoutPrMergeMethod,
-  PullRequestMergeable,
-} from "@bytetrue/byspace-protocol/messages";
+import type { CheckoutPrMergeMethod, PullRequestMergeable } from "@getpaseo/protocol/messages";
 
 import type { MergeCapability } from "./merge-capability";
 
@@ -69,7 +66,7 @@ export interface BuildGitActionsInput {
   pullRequestMergeable: PullRequestMergeable;
   mergeCapability: MergeCapability | null;
   hasRemote: boolean;
-  isBySpaceOwnedWorktree: boolean;
+  isPaseoOwnedWorktree: boolean;
   isOnBaseBranch: boolean;
   hasUncommittedChanges: boolean;
   baseRefAvailable: boolean;
@@ -350,9 +347,9 @@ function getPrimaryActionId(input: BuildGitActionsInput): GitActionId | null {
     return "pr";
   }
 
-  // Only BySpace-owned worktrees get Archive as a fallback primary action.
+  // Only Paseo-owned worktrees get Archive as a fallback primary action.
   // Regular Git checkouts should not show the destructive archive CTA by default.
-  if (input.isBySpaceOwnedWorktree) {
+  if (input.isPaseoOwnedWorktree) {
     return "archive-workspace";
   }
 
@@ -524,9 +521,9 @@ function hasPushableCommits(input: BuildGitActionsInput): boolean {
   if ((input.aheadOfOrigin ?? 0) > 0) {
     return true;
   }
-  // No-upstream BySpace worktrees are first-pushable: the daemon push sets upstream with `git push -u`.
+  // No-upstream Paseo worktrees are first-pushable: the daemon push sets upstream with `git push -u`.
   // Do not fold this into aheadOfOrigin; null also covers deleted/pruned upstream branches.
-  return input.isBySpaceOwnedWorktree && input.aheadOfOrigin === null && input.aheadCount > 0;
+  return input.isPaseoOwnedWorktree && input.aheadOfOrigin === null && input.aheadCount > 0;
 }
 
 function canMergeFromBase(input: BuildGitActionsInput): boolean {

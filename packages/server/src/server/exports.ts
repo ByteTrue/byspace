@@ -1,7 +1,7 @@
-// CLI exports for @bytetrue/byspace-server
-export { createBySpaceDaemon, type BySpaceDaemon, type BySpaceDaemonConfig } from "./bootstrap.js";
+// CLI exports for @getpaseo/server
+export { createPaseoDaemon, type PaseoDaemon, type PaseoDaemonConfig } from "./bootstrap.js";
 export { loadConfig, type CliConfigOverrides } from "./config.js";
-export { resolveBySpaceHome } from "./byspace-home.js";
+export { resolvePaseoHome } from "./paseo-home.js";
 export { getOrCreateServerId } from "./server-id.js";
 export { createRootLogger, type LogLevel, type LogFormat } from "./logger.js";
 export {
@@ -16,21 +16,21 @@ export {
   decodeOfferFragmentPayload,
   parseConnectionOfferFromUrl,
   type ConnectionOffer,
-} from "@bytetrue/byspace-protocol/connection-offer";
-export { buildRelayWebSocketUrl } from "@bytetrue/byspace-protocol/daemon-endpoints";
+} from "@getpaseo/protocol/connection-offer";
+export { buildRelayWebSocketUrl } from "@getpaseo/protocol/daemon-endpoints";
 export {
   buildDaemonWebSocketUrl,
   deriveLabelFromEndpoint,
   normalizeHostPort,
   parseConnectionUri,
   shouldUseTlsForDefaultHostedRelay,
-} from "@bytetrue/byspace-protocol/daemon-endpoints";
-export { PARENT_AGENT_ID_LABEL } from "@bytetrue/byspace-protocol/agent-labels";
+} from "@getpaseo/protocol/daemon-endpoints";
+export { PARENT_AGENT_ID_LABEL } from "@getpaseo/protocol/agent-labels";
 export {
   DirectTcpHostConnectionSchema,
   type DirectTcpHostConnection,
   type NormalizedDirectTcpHostConnection,
-} from "@bytetrue/byspace-protocol/host-connection-schema";
+} from "@getpaseo/protocol/host-connection-schema";
 export {
   ensureLocalSpeechModels,
   listLocalSpeechModels,
@@ -61,7 +61,7 @@ export {
   AGENT_PROVIDER_DEFINITIONS,
   BUILTIN_PROVIDER_IDS,
   type AgentProviderDefinition,
-} from "@bytetrue/byspace-protocol/provider-manifest";
+} from "@getpaseo/protocol/provider-manifest";
 
 // Agent SDK types for CLI commands
 export type {
@@ -95,4 +95,4 @@ export type {
   AgentSnapshotPayload,
   AgentStreamEventPayload,
   AgentStreamMessage,
-} from "@bytetrue/byspace-protocol/messages";
+} from "@getpaseo/protocol/messages";

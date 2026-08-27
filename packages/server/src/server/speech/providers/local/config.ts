@@ -90,7 +90,7 @@ function shouldIncludeLocalProviderConfig(params: {
 
   return (
     localRequestedByFeature ||
-    params.env.BYSPACE_LOCAL_MODELS_DIR !== undefined ||
+    params.env.PASEO_LOCAL_MODELS_DIR !== undefined ||
     params.persisted.providers?.local?.modelsDir !== undefined
   );
 }
@@ -121,13 +121,13 @@ function buildLocalSpeechLanguageResolutionInput(params: {
   const { env, persisted } = params;
   return {
     dictationLanguage: firstNonEmptyString([
-      env.BYSPACE_DICTATION_LANGUAGE,
+      env.PASEO_DICTATION_LANGUAGE,
       persisted.features?.dictation?.stt?.language,
       DEFAULT_STT_LANGUAGE,
     ]),
     voiceLanguage: firstNonEmptyString([
-      env.BYSPACE_VOICE_LANGUAGE,
-      env.BYSPACE_DICTATION_LANGUAGE,
+      env.PASEO_VOICE_LANGUAGE,
+      env.PASEO_DICTATION_LANGUAGE,
       persisted.features?.voiceMode?.stt?.language,
       persisted.features?.dictation?.stt?.language,
       DEFAULT_STT_LANGUAGE,
@@ -136,22 +136,22 @@ function buildLocalSpeechLanguageResolutionInput(params: {
 }
 
 function buildLocalSpeechResolutionInput(params: {
-  byspaceHome: string;
+  paseoHome: string;
   env: NodeJS.ProcessEnv;
   persisted: PersistedConfig;
   providers: RequestedSpeechProviders;
   includeProviderConfig: boolean;
 }): Record<string, unknown> {
-  const { byspaceHome, env, persisted, providers, includeProviderConfig } = params;
+  const { paseoHome, env, persisted, providers, includeProviderConfig } = params;
   return {
     includeProviderConfig,
     modelsDir: firstDefinedValue<string>([
-      env.BYSPACE_LOCAL_MODELS_DIR,
+      env.PASEO_LOCAL_MODELS_DIR,
       persisted.providers?.local?.modelsDir,
-      path.join(byspaceHome, DEFAULT_LOCAL_MODELS_SUBDIR),
+      path.join(paseoHome, DEFAULT_LOCAL_MODELS_SUBDIR),
     ]),
     dictationLocalSttModel: firstDefinedValue<string>([
-      env.BYSPACE_DICTATION_LOCAL_STT_MODEL,
+      env.PASEO_DICTATION_LOCAL_STT_MODEL,
       persistedLocalFeatureModel(
         providers.dictationStt.provider,
         providers.dictationStt.enabled,
@@ -160,7 +160,7 @@ function buildLocalSpeechResolutionInput(params: {
       DEFAULT_LOCAL_STT_MODEL,
     ]),
     voiceLocalSttModel: firstDefinedValue<string>([
-      env.BYSPACE_VOICE_LOCAL_STT_MODEL,
+      env.PASEO_VOICE_LOCAL_STT_MODEL,
       persistedLocalFeatureModel(
         providers.voiceStt.provider,
         providers.voiceStt.enabled,
@@ -169,7 +169,7 @@ function buildLocalSpeechResolutionInput(params: {
       DEFAULT_LOCAL_STT_MODEL,
     ]),
     voiceLocalTtsModel: firstDefinedValue<string>([
-      env.BYSPACE_VOICE_LOCAL_TTS_MODEL,
+      env.PASEO_VOICE_LOCAL_TTS_MODEL,
       persistedLocalFeatureModel(
         providers.voiceTts.provider,
         providers.voiceTts.enabled,
@@ -179,18 +179,18 @@ function buildLocalSpeechResolutionInput(params: {
     ]),
     ...buildLocalSpeechLanguageResolutionInput({ env, persisted }),
     voiceLocalTtsSpeakerId: firstDefinedValue<string | number>([
-      env.BYSPACE_VOICE_LOCAL_TTS_SPEAKER_ID,
+      env.PASEO_VOICE_LOCAL_TTS_SPEAKER_ID,
       persisted.features?.voiceMode?.tts?.speakerId,
     ]),
     voiceLocalTtsSpeed: firstDefinedValue<string | number>([
-      env.BYSPACE_VOICE_LOCAL_TTS_SPEED,
+      env.PASEO_VOICE_LOCAL_TTS_SPEED,
       persisted.features?.voiceMode?.tts?.speed,
     ]),
   };
 }
 
 export function resolveLocalSpeechConfig(params: {
-  byspaceHome: string;
+  paseoHome: string;
   env: NodeJS.ProcessEnv;
   persisted: PersistedConfig;
   providers: RequestedSpeechProviders;

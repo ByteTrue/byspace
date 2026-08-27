@@ -3,8 +3,8 @@ import { describe, expect, test } from "vitest";
 import {
   TerminalStreamOpcode,
   decodeTerminalStreamFrame,
-} from "@bytetrue/byspace-protocol/binary-frames/index";
-import type { TerminalCell, TerminalState } from "@bytetrue/byspace-protocol/messages";
+} from "@getpaseo/protocol/binary-frames/index";
+import type { TerminalCell, TerminalState } from "@getpaseo/protocol/messages";
 import {
   encodeTerminalRestoreFrame,
   resolveRestoreAfterOutputOverflow,

@@ -1,4 +1,4 @@
-export { createTestBySpaceDaemon, type TestBySpaceDaemon } from "./byspace-daemon.js";
+export { createTestPaseoDaemon, type TestPaseoDaemon } from "./paseo-daemon.js";
 export {
   DaemonClient,
   type DaemonClientConfig,

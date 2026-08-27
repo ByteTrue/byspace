@@ -19,8 +19,8 @@ import { createTempGitRepo } from "../support/helpers/workspace";
 
 const PRIMARY_HOST_LABEL = "Primary host";
 const SECONDARY_HOST_LABEL = "Secondary host";
-const SHARED_PROJECT_NAME = "BySpace";
-const SHARED_REMOTE_URL = "https://github.com/ByteTrue/byspace.git";
+const SHARED_PROJECT_NAME = "Paseo";
+const SHARED_REMOTE_URL = "https://github.com/getpaseo/paseo.git";
 
 interface CreatedProject {
   projectId: string;
@@ -94,14 +94,14 @@ const test = base.extend<{ crossHostProject: CrossHostProjectScenario }>({
       "new-workspace-project-preservation-secondary",
     );
     const contextRepo = await createTempGitRepo("new-workspace-context-");
-    const primarySharedRepo = await createTempGitRepo("new-workspace-byspace-primary-", {
+    const primarySharedRepo = await createTempGitRepo("new-workspace-paseo-primary-", {
       originUrl: SHARED_REMOTE_URL,
     });
-    const primaryDuplicateRepo = await createTempGitRepo("new-workspace-byspace-duplicate-", {
+    const primaryDuplicateRepo = await createTempGitRepo("new-workspace-paseo-duplicate-", {
       originUrl: SHARED_REMOTE_URL,
     });
     const secondaryFallbackRepo = await createTempGitRepo("new-workspace-fallback-");
-    const secondarySharedRepo = await createTempGitRepo("new-workspace-byspace-secondary-", {
+    const secondarySharedRepo = await createTempGitRepo("new-workspace-paseo-secondary-", {
       originUrl: SHARED_REMOTE_URL,
     });
     const primaryClient = await connectSeedClient();
@@ -119,13 +119,13 @@ const test = base.extend<{ crossHostProject: CrossHostProjectScenario }>({
       const primarySharedProject = await createProject(primaryClient, {
         projectPath: primarySharedRepo.path,
         projectName: SHARED_PROJECT_NAME,
-        workspaceName: "Primary BySpace workspace",
+        workspaceName: "Primary Paseo workspace",
       });
       primaryProjects.push(primarySharedProject);
       const primaryDuplicateProject = await createProject(primaryClient, {
         projectPath: primaryDuplicateRepo.path,
-        projectName: "BySpace duplicate",
-        workspaceName: "Duplicate BySpace workspace",
+        projectName: "Paseo duplicate",
+        workspaceName: "Duplicate Paseo workspace",
       });
       primaryProjects.push(primaryDuplicateProject);
       secondaryProjects.push(
@@ -138,7 +138,7 @@ const test = base.extend<{ crossHostProject: CrossHostProjectScenario }>({
       const secondarySharedProject = await createProject(secondaryClient, {
         projectPath: secondarySharedRepo.path,
         projectName: SHARED_PROJECT_NAME,
-        workspaceName: "Secondary BySpace workspace",
+        workspaceName: "Secondary Paseo workspace",
       });
       secondaryProjects.push(secondarySharedProject);
 
@@ -146,7 +146,7 @@ const test = base.extend<{ crossHostProject: CrossHostProjectScenario }>({
         primarySharedProject.projectKey !== primaryDuplicateProject.projectKey ||
         primarySharedProject.projectKey !== secondarySharedProject.projectKey
       ) {
-        throw new Error("Expected the BySpace clones to have the same equivalence key");
+        throw new Error("Expected the Paseo clones to have the same equivalence key");
       }
 
       await provide({

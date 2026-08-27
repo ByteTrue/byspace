@@ -1,9 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type {
-  DaemonClient,
-  FetchAgentsEntry,
-} from "@bytetrue/byspace-client/internal/daemon-client";
-import type { AgentSnapshotPayload } from "@bytetrue/byspace-protocol/messages";
+import type { DaemonClient, FetchAgentsEntry } from "@getpaseo/client/internal/daemon-client";
+import type { AgentSnapshotPayload } from "@getpaseo/protocol/messages";
 import { useSessionStore } from "@/stores/session-store";
 import { AgentDirectoryReplica } from "./agent-replica";
 
@@ -46,7 +43,7 @@ function entry(agent: AgentSnapshotPayload): FetchAgentsEntry {
         currentBranch: null,
         remoteUrl: null,
         worktreeRoot: null,
-        isBySpaceOwnedWorktree: false,
+        isPaseoOwnedWorktree: false,
         mainRepoRoot: null,
       },
     },

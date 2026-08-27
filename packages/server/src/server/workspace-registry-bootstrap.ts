@@ -15,7 +15,7 @@ import {
   type ProjectRegistry,
   type WorkspaceRegistry,
 } from "./workspace-registry.js";
-import { pinBySpaceWorktreeBranchIdentityIfMissing } from "../utils/worktree-metadata.js";
+import { pinPaseoWorktreeBranchIdentityIfMissing } from "../utils/worktree-metadata.js";
 
 function minIsoDate(left: string | null, right: string | null): string | null {
   if (!left) {
@@ -47,7 +47,7 @@ function resolveAgentUpdatedAt(record: StoredAgentRecord): string {
 
 export async function bootstrapWorkspaceRegistries(options: {
   serverId?: string;
-  byspaceHome: string;
+  paseoHome: string;
   agentStorage: AgentStorage;
   projectRegistry: ProjectRegistry;
   workspaceRegistry: WorkspaceRegistry;
@@ -67,14 +67,14 @@ export async function bootstrapWorkspaceRegistries(options: {
   for (const workspace of await options.workspaceRegistry.list()) {
     if (
       workspace.archivedAt ||
-      !workspace.isBySpaceOwnedWorktree ||
+      !workspace.isPaseoOwnedWorktree ||
       !workspace.worktreeRoot ||
       !workspace.branch
     ) {
       continue;
     }
     try {
-      pinBySpaceWorktreeBranchIdentityIfMissing(workspace.worktreeRoot, workspace.branch);
+      pinPaseoWorktreeBranchIdentityIfMissing(workspace.worktreeRoot, workspace.branch);
     } catch (error) {
       options.logger.warn(
         { err: error, workspaceId: workspace.workspaceId },
@@ -209,8 +209,8 @@ export async function bootstrapWorkspaceRegistries(options: {
 
   options.logger.info(
     {
-      projectsFile: path.join(options.byspaceHome, "projects", "projects.json"),
-      workspacesFile: path.join(options.byspaceHome, "projects", "workspaces.json"),
+      projectsFile: path.join(options.paseoHome, "projects", "projects.json"),
+      workspacesFile: path.join(options.paseoHome, "projects", "workspaces.json"),
       materializedProjects: projectRanges.size,
       materializedWorkspaces: recordsByDirectoryKey.size,
     },

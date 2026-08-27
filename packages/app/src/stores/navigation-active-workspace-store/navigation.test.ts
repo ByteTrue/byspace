@@ -173,7 +173,7 @@ describe("workspace navigation", () => {
 
     expect(selection).toEqual({
       serverId: "server-1",
-      workspaceId: "/tmp/byspace-missing-workspace",
+      workspaceId: "/tmp/paseo-missing-workspace",
     });
   });
 

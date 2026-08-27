@@ -29,28 +29,28 @@ export interface RealDaemonState {
 
 /**
  * Reads live state from the running E2E test daemon: version from the HTTP
- * status endpoint, PID from the byspace.pid lock file, log path from the
- * E2E_BYSPACE_HOME directory. Call this in Node test code (not in the browser).
+ * status endpoint, PID from the paseo.pid lock file, log path from the
+ * E2E_PASEO_HOME directory. Call this in Node test code (not in the browser).
  */
 export async function loadRealDaemonState(): Promise<RealDaemonState> {
   const port = getE2EDaemonPort();
-  const byspaceHome = process.env.E2E_BYSPACE_HOME;
-  if (!byspaceHome) throw new Error("E2E_BYSPACE_HOME not set — the worker fixture must run first");
+  const paseoHome = process.env.E2E_PASEO_HOME;
+  if (!paseoHome) throw new Error("E2E_PASEO_HOME not set — the worker fixture must run first");
 
   const resp = await fetch(`http://127.0.0.1:${port}/api/status`);
   const data: DaemonApiStatus = await resp.json();
 
   let pid: number | null = null;
   try {
-    const raw = readFileSync(`${byspaceHome}/byspace.pid`, "utf8");
+    const raw = readFileSync(`${paseoHome}/paseo.pid`, "utf8");
     const pidContent: PidFileContent = JSON.parse(raw);
     pid = pidContent.pid ?? null;
   } catch (err) {
     // PID file may not be present yet on a very fresh daemon start
-    console.warn("[desktop-updates] byspace.pid not found:", err);
+    console.warn("[desktop-updates] paseo.pid not found:", err);
   }
 
-  return { version: data.version, pid, logPath: `${byspaceHome}/daemon.log` };
+  return { version: data.version, pid, logPath: `${paseoHome}/daemon.log` };
 }
 
 export interface DesktopRuntimeConfig {
@@ -65,7 +65,7 @@ export interface DesktopRuntimeConfig {
   daemonLogPath?: string;
   /** Initial manageBuiltInDaemon setting. Defaults to false. */
   manageBuiltInDaemon?: boolean;
-  /** Daemon listen address reported by desktop_daemon_status. Defaults to 127.0.0.1:6777. */
+  /** Daemon listen address reported by desktop_daemon_status. Defaults to 127.0.0.1:6767. */
   daemonListen?: string;
   /** Keep start_desktop_daemon pending to hold the desktop startup blocker open. */
   hangDaemonStart?: boolean;
@@ -112,7 +112,7 @@ declare global {
 }
 
 /**
- * Injects window.byspaceDesktop before app load so all Electron-gated code
+ * Injects window.paseoDesktop before app load so all Electron-gated code
  * activates. The update-check IPC is mocked at the boundary so the real
  * auto-updater never fires. Daemon start/stop commands are stateful: the mock
  * tracks running state and assigns a fresh PID on each start, letting tests
@@ -145,7 +145,7 @@ export async function installDesktopRuntime(
       return {
         serverId: cfg.serverId,
         status: daemonRunning ? "running" : "stopped",
-        listen: cfg.daemonListen ?? "127.0.0.1:6777",
+        listen: cfg.daemonListen ?? "127.0.0.1:6767",
         hostname: null,
         pid: currentPid,
         home: "",
@@ -293,7 +293,7 @@ export async function installDesktopRuntime(
     }
 
     window.__capturedDialogOpenCalls = [];
-    (window as unknown as { byspaceDesktop: unknown }).byspaceDesktop = desktopBridge;
+    (window as unknown as { paseoDesktop: unknown }).paseoDesktop = desktopBridge;
   }, config);
 }
 

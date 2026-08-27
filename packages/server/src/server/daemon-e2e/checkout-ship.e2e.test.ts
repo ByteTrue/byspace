@@ -21,7 +21,7 @@ interface LegacyCreateWorktreeTestOptions {
   baseBranch: string;
   worktreeSlug: string;
   runSetup?: boolean;
-  byspaceHome?: string;
+  paseoHome?: string;
 }
 
 function createLegacyWorktreeForTest(
@@ -40,7 +40,7 @@ function createLegacyWorktreeForTest(
       branchName: options.branchName,
     },
     runSetup: options.runSetup ?? true,
-    byspaceHome: options.byspaceHome,
+    paseoHome: options.paseoHome,
   });
 }
 
@@ -64,11 +64,11 @@ const testWithGitHubCliAuth = hasGitHubCliAuth() ? test : test.skip;
 
 function initGitRepo(repoDir: string): void {
   execSync("git init -b main", { cwd: repoDir, stdio: "pipe" });
-  execSync("git config user.email 'byspace-test@example.com'", {
+  execSync("git config user.email 'paseo-test@example.com'", {
     cwd: repoDir,
     stdio: "pipe",
   });
-  execSync("git config user.name 'BySpace Test'", {
+  execSync("git config user.name 'Paseo Test'", {
     cwd: repoDir,
     stdio: "pipe",
   });
@@ -146,7 +146,7 @@ describe("daemon checkout ship loop", () => {
           cwd: repoDir,
           baseBranch: "main",
           worktreeSlug: "ship-loop",
-          byspaceHome: ctx.daemon.byspaceHome,
+          paseoHome: ctx.daemon.paseoHome,
         });
 
         const agent = await ctx.client.createAgent({
@@ -160,7 +160,7 @@ describe("daemon checkout ship loop", () => {
 
         const status = await ctx.client.getCheckoutStatus(worktree.worktreePath);
         expect(status.isGit).toBe(true);
-        expect(status.isBySpaceOwnedWorktree).toBe(true);
+        expect(status.isPaseoOwnedWorktree).toBe(true);
         expect(realpathSync(status.repoRoot)).toBe(realpathSync(worktree.worktreePath));
         if (status.isGit) {
           expect(status.baseRef).toBe("main");
@@ -237,7 +237,7 @@ describe("daemon checkout ship loop", () => {
         });
         expect(baseDiffAfterMerge.files.length).toBe(0);
 
-        const worktreeList = await ctx.client.getBySpaceWorktreeList({
+        const worktreeList = await ctx.client.getPaseoWorktreeList({
           cwd: repoDir,
         });
         expect(worktreeList.error).toBeNull();
@@ -249,7 +249,7 @@ describe("daemon checkout ship loop", () => {
           ),
         ).toBe(true);
 
-        const archiveResult = await ctx.client.archiveBySpaceWorktree({
+        const archiveResult = await ctx.client.archivePaseoWorktree({
           worktreePath: worktree.worktreePath,
         });
         expect(archiveResult.error).toBeNull();
@@ -257,7 +257,7 @@ describe("daemon checkout ship loop", () => {
 
         // Archiving removes the agent from the active list but leaves the
         // worktree on disk — disk deletion is a separate, explicit step.
-        const worktreeListAfter = await ctx.client.getBySpaceWorktreeList({
+        const worktreeListAfter = await ctx.client.getPaseoWorktreeList({
           cwd: repoDir,
         });
         expect(
@@ -295,7 +295,7 @@ describe("daemon checkout ship loop", () => {
         cwd: repoDir,
         baseBranch: "main",
         worktreeSlug: "merge-from-base",
-        byspaceHome: ctx.daemon.byspaceHome,
+        paseoHome: ctx.daemon.paseoHome,
       });
 
       const agent = await ctx.client.createAgent({

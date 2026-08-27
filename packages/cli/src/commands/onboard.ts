@@ -2,9 +2,9 @@ import { cancel, confirm, intro, isCancel, log, note, outro, spinner } from "@cl
 import { Command, Option } from "commander";
 import { writeFileSync } from "node:fs";
 import path from "node:path";
-import { loadPersistedConfig, type PersistedConfig } from "@bytetrue/byspace-server";
+import { loadPersistedConfig, type PersistedConfig } from "@getpaseo/server";
 import {
-  resolveLocalBySpaceHome,
+  resolveLocalPaseoHome,
   resolveLocalDaemonState,
   resolveTcpHostFromListen,
   startLocalDaemonDetached,
@@ -69,8 +69,8 @@ function parseTimeoutMs(raw: string | undefined): number {
   return Math.ceil(seconds * 1000);
 }
 
-function savePersistedConfig(byspaceHome: string, config: OnboardPersistedConfig): void {
-  const configPath = path.join(byspaceHome, "config.json");
+function savePersistedConfig(paseoHome: string, config: OnboardPersistedConfig): void {
+  const configPath = path.join(paseoHome, "config.json");
   writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`);
 }
 
@@ -263,22 +263,22 @@ async function waitForDaemonReady(args: {
   return poll({ lastStatus: "", lastPrintedAt: 0 });
 }
 
-function printNextSteps(pairingUrl: string | null, byspaceHome: string, richUi: boolean): void {
-  const daemonLogPath = path.join(byspaceHome, "daemon.log");
+function printNextSteps(pairingUrl: string | null, paseoHome: string, richUi: boolean): void {
+  const daemonLogPath = path.join(paseoHome, "daemon.log");
   const nextStepsLines = [
     pairingUrl
-      ? "1. Open BySpace and scan the QR code above, or paste the pairing link."
-      : "1. Open BySpace and connect to your daemon.",
-    "2. Web app: https://app.byspace.cc.cd",
-    "3. Desktop app: https://github.com/ByteTrue/byspace/releases/latest",
-    "4. Docs: https://byspace.cc.cd/docs",
-    '5. Example: byspace run --output-schema schema.json "extract fields"',
+      ? "1. Open Paseo and scan the QR code above, or paste the pairing link."
+      : "1. Open Paseo and connect to your daemon.",
+    "2. Web app: https://app.paseo.sh",
+    "3. Desktop app: https://github.com/getpaseo/paseo/releases/latest",
+    "4. Docs: https://paseo.sh/docs",
+    '5. Example: paseo run --output-schema schema.json "extract fields"',
   ];
   const quickReferenceLines = [
-    "1. byspace --help",
-    "2. byspace ls",
-    '3. byspace run "your prompt"',
-    "4. byspace status",
+    "1. paseo --help",
+    "2. paseo ls",
+    '3. paseo run "your prompt"',
+    "4. paseo status",
     `5. Daemon logs: ${daemonLogPath}`,
   ];
 
@@ -304,8 +304,8 @@ export function onboardCommand(): Command {
   return new Command("onboard")
     .description("Run first-time setup, start daemon, and print pairing instructions")
     .option("--listen <listen>", "Listen target (host:port, port, or unix socket path)")
-    .option("--port <port>", "Port to listen on (default: 6777)")
-    .option("--home <path>", "BySpace home directory (default: ~/.byspace)")
+    .option("--port <port>", "Port to listen on (default: 6767)")
+    .option("--home <path>", "Paseo home directory (default: ~/.paseo)")
     .option("--relay", "Enable relay connection without prompting")
     .option("--no-relay", "Disable relay connection")
     .option("--no-mcp", "Disable the Agent MCP HTTP endpoint")
@@ -325,10 +325,10 @@ export function onboardCommand(): Command {
 }
 
 async function resolveAndPersistVoice(
-  byspaceHome: string,
+  paseoHome: string,
   options: OnboardOptions,
 ): Promise<boolean> {
-  let persisted = loadPersistedConfig(byspaceHome) as OnboardPersistedConfig;
+  let persisted = loadPersistedConfig(paseoHome) as OnboardPersistedConfig;
   const persistedVoiceSelection = resolvePersistedVoiceSelection(persisted);
   const shouldPrompt = options.voice === "ask" || options.voice === undefined;
   let voiceEnabled: boolean;
@@ -350,7 +350,7 @@ async function resolveAndPersistVoice(
   }
 
   persisted = applyVoiceSelection(persisted, voiceEnabled);
-  savePersistedConfig(byspaceHome, persisted);
+  savePersistedConfig(paseoHome, persisted);
   return voiceEnabled;
 }
 
@@ -423,7 +423,7 @@ async function waitForDaemonReadyWithUi(args: {
 export async function runOnboard(options: OnboardOptions): Promise<void> {
   const richUi = process.stdin.isTTY && process.stdout.isTTY;
   if (richUi) {
-    intro("Welcome to BySpace");
+    intro("Welcome to Paseo");
   }
 
   if (options.listen && options.port) {
@@ -440,12 +440,12 @@ export async function runOnboard(options: OnboardOptions): Promise<void> {
     process.exit(1);
   }
 
-  const byspaceHome = resolveLocalBySpaceHome(options.home);
+  const paseoHome = resolveLocalPaseoHome(options.home);
   if (richUi) {
-    renderNote(byspaceHome, "BySpace home");
+    renderNote(paseoHome, "Paseo home");
   }
 
-  const voiceEnabled = await resolveAndPersistVoice(byspaceHome, options);
+  const voiceEnabled = await resolveAndPersistVoice(paseoHome, options);
   log.message(
     voiceEnabled
       ? "Voice features enabled. Local speech models will be downloaded automatically if missing."
@@ -454,20 +454,20 @@ export async function runOnboard(options: OnboardOptions): Promise<void> {
 
   await ensureDaemonStarted(options, richUi);
   await waitForDaemonReadyWithUi({
-    home: options.home ?? byspaceHome,
+    home: options.home ?? paseoHome,
     timeoutMs,
     richUi,
   });
 
   if (options.relay === false) {
     log.message("Relay pairing skipped because --no-relay was provided.");
-    printNextSteps(null, byspaceHome, richUi);
-    if (richUi) outro("BySpace daemon is running.");
+    printNextSteps(null, paseoHome, richUi);
+    if (richUi) outro("Paseo daemon is running.");
     return;
   }
 
   let pairing = await resolveLocalPairingOffer({
-    byspaceHome,
+    paseoHome,
     enableRelay: options.relay === true,
   });
 
@@ -475,19 +475,19 @@ export async function runOnboard(options: OnboardOptions): Promise<void> {
     const shouldEnable = richUi ? await confirmRelayPairing() : false;
     if (!shouldEnable) {
       printDirectConnectionGuidance();
-      printNextSteps(null, byspaceHome, richUi);
-      if (richUi) outro("BySpace daemon is running.");
+      printNextSteps(null, paseoHome, richUi);
+      if (richUi) outro("Paseo daemon is running.");
       return;
     }
-    pairing = await resolveLocalPairingOffer({ byspaceHome, enableRelay: true });
+    pairing = await resolveLocalPairingOffer({ paseoHome, enableRelay: true });
     log.success("Relay enabled");
   }
 
   if (!pairing.url) {
     log.warn("Relay pairing URL is unavailable for this daemon configuration.");
-    printNextSteps(null, byspaceHome, richUi);
+    printNextSteps(null, paseoHome, richUi);
     if (richUi) {
-      outro("BySpace daemon is running.");
+      outro("Paseo daemon is running.");
     }
     return;
   }
@@ -499,8 +499,8 @@ export async function runOnboard(options: OnboardOptions): Promise<void> {
       columns: process.stdout.columns,
     }),
   );
-  printNextSteps(pairing.url, byspaceHome, richUi);
+  printNextSteps(pairing.url, paseoHome, richUi);
   if (richUi) {
-    outro("BySpace is ready!");
+    outro("Paseo is ready!");
   }
 }

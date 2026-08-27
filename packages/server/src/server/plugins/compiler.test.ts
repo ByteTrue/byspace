@@ -73,12 +73,12 @@ afterEach(async () => {
 });
 
 describe("plugin author module externals", () => {
-  // COMPAT(plugin-sdk-scope): plugins written against the unpublished @byspace/plugin name must
+  // COMPAT(plugin-sdk-scope): plugins written against the unpublished @paseo/plugin name must
   // keep compiling. Drop that case with the specifiers in plugin-sdk-specifiers.ts.
-  it.each(["@bytetrue/byspace-plugin", "@byspace/plugin"])(
+  it.each(["@getpaseo/plugin", "@paseo/plugin"])(
     "leaves %s/server external in both bundles",
     async (sdk) => {
-      const directory = await mkdtemp(path.join(tmpdir(), "byspace-plugin-compiler-"));
+      const directory = await mkdtemp(path.join(tmpdir(), "paseo-plugin-compiler-"));
       temporaryDirectories.push(directory);
       const entryPath = path.join(directory, "index.ts");
       await writeFile(

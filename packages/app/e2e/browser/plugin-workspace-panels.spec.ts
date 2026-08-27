@@ -31,7 +31,7 @@ function isSettledWorkspaceUrl(url: URL): boolean {
 function pluginSource(): string {
   return `import React, { useRef } from "react";
 import { Text, View } from "react-native";
-import { useAgent, useWorkspace } from "@bytetrue/byspace-plugin";
+import { useAgent, useWorkspace } from "@getpaseo/plugin";
 
 function WorkspacePanel({ workspaceId, host, layout }) {
   const workspace = useWorkspace(workspaceId, (value) => ({ id: value.id }));
@@ -109,7 +109,7 @@ test.describe("plugin workspace panels and Command Center", () => {
   test("follows workspace, agent, host, compact, and unavailable state", async ({
     page,
   }, testInfo) => {
-    const directory = await mkdtemp(path.join(tmpdir(), "byspace-plugin-workspace-panel-e2e-"));
+    const directory = await mkdtemp(path.join(tmpdir(), "paseo-plugin-workspace-panel-e2e-"));
     const primaryClient = await connectNewWorkspaceDaemonClient({ ownProjects: false });
     const previousConfig = await primaryClient.getDaemonConfig();
     const primary = await seedWorkspace({ repoPrefix: "plugin-panel-primary-" });
@@ -118,7 +118,7 @@ test.describe("plugin workspace panels and Command Center", () => {
       repoPrefix: "plugin-panel-secondary-",
       port: secondaryDaemon.port,
     });
-    await writeFile(path.join(directory, "byspace-plugin.json"), JSON.stringify({ id: PLUGIN_ID }));
+    await writeFile(path.join(directory, "paseo-plugin.json"), JSON.stringify({ id: PLUGIN_ID }));
     await writeFile(path.join(directory, "index.tsx"), pluginSource());
 
     try {

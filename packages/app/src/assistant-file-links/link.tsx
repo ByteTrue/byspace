@@ -80,7 +80,7 @@ export function AssistantMarkdownLink({
 
   const anchor = (
     <a
-      {...(unwrapForMarkdownCopy ? { "data-byspace-markdown-unwrap": "true" } : {})}
+      {...(unwrapForMarkdownCopy ? { "data-paseo-markdown-unwrap": "true" } : {})}
       href={source.href}
       title={source.title}
       onClickCapture={preventAnchorNavigation}

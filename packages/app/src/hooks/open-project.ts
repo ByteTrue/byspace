@@ -1,9 +1,9 @@
-import type { DaemonClient } from "@bytetrue/byspace-client/internal/daemon-client";
+import type { DaemonClient } from "@getpaseo/client/internal/daemon-client";
 import type {
   ProjectGithubCloneProtocol,
   ProjectAddResponse,
   WorkspaceProjectDescriptorPayload,
-} from "@bytetrue/byspace-protocol/messages";
+} from "@getpaseo/protocol/messages";
 import { normalizeProjectDescriptor, type ProjectDescriptor } from "@/stores/session-store";
 
 type OpenProjectPayload = ProjectAddResponse["payload"];

@@ -2,7 +2,7 @@ import type {
   AgentAttachment,
   ForgeSearchItem,
   UploadedFileAttachment,
-} from "@bytetrue/byspace-protocol/messages";
+} from "@getpaseo/protocol/messages";
 import type { PluginResourceComposerAttachment } from "@/plugins/attachments";
 
 export type AttachmentStorageType = "web-indexeddb" | "desktop-file" | "native-file";

@@ -16,10 +16,7 @@ import {
 import { AgentStorage } from "./agent-storage.js";
 import { InMemoryAgentTimelineStore } from "./agent-timeline-store.js";
 import { toAgentPayload } from "./agent-projections.js";
-import {
-  getOpenAgentTabLabel,
-  PARENT_AGENT_ID_LABEL,
-} from "@bytetrue/byspace-protocol/agent-labels";
+import { getOpenAgentTabLabel, PARENT_AGENT_ID_LABEL } from "@getpaseo/protocol/agent-labels";
 import { formatSystemNotificationPrompt, startAgentRun } from "./agent-prompt.js";
 import { ensureAgentLoaded, ensureUnarchivedAgentLoaded } from "./agent-loading.js";
 import type { StoredAgentRecord } from "./agent-storage.js";
@@ -48,7 +45,7 @@ import type {
   ImportProviderSessionContext,
   ResolveAgentDefaultModeInput,
 } from "./agent-sdk-types.js";
-import type { BySpaceToolCatalog } from "./tools/types.js";
+import type { PaseoToolCatalog } from "./tools/types.js";
 import type { ProviderDefinition } from "./provider-registry.js";
 
 const DESKTOP_OPEN_AGENT_TAB_LABEL = getOpenAgentTabLabel("desktop-client");
@@ -402,7 +399,7 @@ class EnvProbeAgentClient extends TestAgentClient {
     const script = `
       process.stdout.write(JSON.stringify({
         probe: process.env.CHUNK14_PROBE ?? null,
-        agentId: process.env.BYSPACE_AGENT_ID ?? null
+        agentId: process.env.PASEO_AGENT_ID ?? null
       }));
     `;
     const child = spawn(process.execPath, ["-e", script], {
@@ -2512,8 +2509,8 @@ test("createAgent passes daemon launch env through the provider launch context",
   expect(client.lastLaunchContext).toEqual({
     agentId: snapshot.id,
     env: {
-      BYSPACE_AGENT_ID: snapshot.id,
-      BYSPACE_AGENT_CWD: workdir,
+      PASEO_AGENT_ID: snapshot.id,
+      PASEO_AGENT_CWD: workdir,
     },
   });
 });
@@ -2593,7 +2590,7 @@ test("createAgent persists workspaceId on the stored record and emits it in the 
   }
 });
 
-test("createAgent injects byspace MCP server only into provider launch config", async () => {
+test("createAgent injects paseo MCP server only into provider launch config", async () => {
   const workdir = mkdtempSync(join(tmpdir(), "agent-manager-test-"));
   const storagePath = join(workdir, "agents");
   const storage = new AgentStorage(storagePath, logger);
@@ -2614,7 +2611,7 @@ test("createAgent injects byspace MCP server only into provider launch config", 
     },
     registry: storage,
     logger,
-    mcpBaseUrl: "http://127.0.0.1:6777/mcp/agents",
+    mcpBaseUrl: "http://127.0.0.1:6767/mcp/agents",
     idFactory: () => "00000000-0000-4000-8000-000000000103",
   });
 
@@ -2640,9 +2637,9 @@ test("createAgent injects byspace MCP server only into provider launch config", 
     },
   });
   expect(client.lastConfig?.mcpServers).toEqual({
-    byspace: {
+    paseo: {
       type: "http",
-      url: `http://127.0.0.1:6777/mcp/agents?callerAgentId=${snapshot.id}`,
+      url: `http://127.0.0.1:6767/mcp/agents?callerAgentId=${snapshot.id}`,
     },
     custom: {
       type: "stdio",
@@ -2817,12 +2814,12 @@ test("reloadAgentSession preserves the live session when its replacement cannot 
   }
 });
 
-test("createAgent passes native BySpace tools through launch context without internal MCP", async () => {
+test("createAgent passes native Paseo tools through launch context without internal MCP", async () => {
   const workdir = mkdtempSync(join(tmpdir(), "agent-manager-test-"));
   const storagePath = join(workdir, "agents");
   const storage = new AgentStorage(storagePath, logger);
 
-  const byspaceTools: BySpaceToolCatalog = {
+  const paseoTools: PaseoToolCatalog = {
     tools: new Map(),
     getTool: () => undefined,
     executeTool: async () => {
@@ -2834,7 +2831,7 @@ test("createAgent passes native BySpace tools through launch context without int
     override readonly capabilities = {
       ...TEST_CAPABILITIES,
       supportsMcpServers: true,
-      supportsNativeBySpaceTools: true,
+      supportsNativePaseoTools: true,
     };
     lastConfig: AgentSessionConfig | null = null;
     lastLaunchContext: AgentLaunchContext | undefined;
@@ -2856,8 +2853,8 @@ test("createAgent passes native BySpace tools through launch context without int
     },
     registry: storage,
     logger,
-    mcpBaseUrl: "http://127.0.0.1:6777/mcp/agents",
-    byspaceToolCatalogFactory: () => byspaceTools,
+    mcpBaseUrl: "http://127.0.0.1:6767/mcp/agents",
+    paseoToolCatalogFactory: () => paseoTools,
     idFactory: () => "00000000-0000-4000-8000-000000000106",
   });
 
@@ -2876,7 +2873,7 @@ test("createAgent passes native BySpace tools through launch context without int
     { workspaceId: undefined },
   );
 
-  expect(client.lastLaunchContext?.byspaceTools).toBe(byspaceTools);
+  expect(client.lastLaunchContext?.paseoTools).toBe(paseoTools);
   expect(client.lastConfig?.mcpServers).toEqual({
     custom: {
       type: "stdio",
@@ -2920,7 +2917,7 @@ test("createAgent allows best-effort internal MCP when the provider session repo
     },
     registry: storage,
     logger,
-    mcpBaseUrl: "http://127.0.0.1:6777/mcp/agents",
+    mcpBaseUrl: "http://127.0.0.1:6767/mcp/agents",
     mcpAuthToken: "cap-token",
     idFactory: () => "00000000-0000-4000-8000-000000000104",
   });
@@ -2935,16 +2932,16 @@ test("createAgent allows best-effort internal MCP when the provider session repo
   );
 
   expect(manager.getMcpAuthToken()).toBe("cap-token");
-  expect(client.lastConfig?.mcpServers?.byspace).toEqual({
+  expect(client.lastConfig?.mcpServers?.paseo).toEqual({
     type: "http",
-    url: `http://127.0.0.1:6777/mcp/agents?callerAgentId=${snapshot.id}`,
+    url: `http://127.0.0.1:6767/mcp/agents?callerAgentId=${snapshot.id}`,
     headers: { Authorization: "Bearer cap-token" },
   });
 
   rmSync(workdir, { recursive: true, force: true });
 });
 
-test("resumeAgentFromPersistence replaces stored internal byspace MCP with current runtime URL", async () => {
+test("resumeAgentFromPersistence replaces stored internal paseo MCP with current runtime URL", async () => {
   const workdir = mkdtempSync(join(tmpdir(), "agent-manager-test-"));
   const storagePath = join(workdir, "agents");
   const storage = new AgentStorage(storagePath, logger);
@@ -2969,9 +2966,9 @@ test("resumeAgentFromPersistence replaces stored internal byspace MCP with curre
   const snapshot = await manager.resumeAgentFromPersistence(handle, {
     cwd: workdir,
     mcpServers: {
-      byspace: {
+      paseo: {
         type: "http",
-        url: "http://127.0.0.1:6777/mcp/agents?callerAgentId=stale-agent",
+        url: "http://127.0.0.1:6767/mcp/agents?callerAgentId=stale-agent",
       },
       custom: {
         type: "stdio",
@@ -2981,7 +2978,7 @@ test("resumeAgentFromPersistence replaces stored internal byspace MCP with curre
   });
 
   expect(client.resumeOverrides[0]?.mcpServers).toEqual({
-    byspace: {
+    paseo: {
       type: "http",
       url: `http://127.0.0.1:6768/mcp/agents?callerAgentId=${snapshot.id}`,
     },
@@ -2998,7 +2995,7 @@ test("resumeAgentFromPersistence replaces stored internal byspace MCP with curre
   });
 });
 
-test("resumeAgentFromPersistence drops stored internal byspace MCP when runtime injection is disabled", async () => {
+test("resumeAgentFromPersistence drops stored internal paseo MCP when runtime injection is disabled", async () => {
   const workdir = mkdtempSync(join(tmpdir(), "agent-manager-test-"));
   const storagePath = join(workdir, "agents");
   const storage = new AgentStorage(storagePath, logger);
@@ -3021,9 +3018,9 @@ test("resumeAgentFromPersistence drops stored internal byspace MCP when runtime 
   const snapshot = await manager.resumeAgentFromPersistence(handle, {
     cwd: workdir,
     mcpServers: {
-      byspace: {
+      paseo: {
         type: "http",
-        url: "http://127.0.0.1:6777/mcp/agents?callerAgentId=stale-agent",
+        url: "http://127.0.0.1:6767/mcp/agents?callerAgentId=stale-agent",
       },
     },
   });
@@ -3032,7 +3029,7 @@ test("resumeAgentFromPersistence drops stored internal byspace MCP when runtime 
   expect(snapshot.config.mcpServers).toBeUndefined();
 });
 
-test("createAgent preserves a user-provided byspace MCP config", async () => {
+test("createAgent preserves a user-provided paseo MCP config", async () => {
   const workdir = mkdtempSync(join(tmpdir(), "agent-manager-test-"));
   const storagePath = join(workdir, "agents");
   const storage = new AgentStorage(storagePath, logger);
@@ -3053,7 +3050,7 @@ test("createAgent preserves a user-provided byspace MCP config", async () => {
     },
     registry: storage,
     logger,
-    mcpBaseUrl: "http://127.0.0.1:6777/mcp/agents",
+    mcpBaseUrl: "http://127.0.0.1:6767/mcp/agents",
     idFactory: () => "00000000-0000-4000-8000-000000000104",
   });
 
@@ -3062,9 +3059,9 @@ test("createAgent preserves a user-provided byspace MCP config", async () => {
       provider: "codex",
       cwd: workdir,
       mcpServers: {
-        byspace: {
+        paseo: {
           type: "http",
-          url: "https://example.com/custom-byspace",
+          url: "https://example.com/custom-paseo",
         },
       },
     },
@@ -3073,9 +3070,9 @@ test("createAgent preserves a user-provided byspace MCP config", async () => {
   );
 
   expect(snapshot.config.mcpServers).toEqual({
-    byspace: {
+    paseo: {
       type: "http",
-      url: "https://example.com/custom-byspace",
+      url: "https://example.com/custom-paseo",
     },
   });
   expect(client.lastConfig?.mcpServers).toEqual(snapshot.config.mcpServers);
@@ -3448,30 +3445,30 @@ test("resumeAgentFromPersistence keeps metadata config, applies overrides, and p
     cwd: workdir,
     systemPrompt: "new prompt",
     mcpServers: {
-      byspace: {
+      paseo: {
         type: "stdio",
         command: "node",
-        args: ["/tmp/mcp-bridge.mjs", "--socket", "/tmp/byspace.sock"],
+        args: ["/tmp/mcp-bridge.mjs", "--socket", "/tmp/paseo.sock"],
       },
     },
   });
 
   expect(resumed.config.systemPrompt).toBe("new prompt");
   expect(resumed.config.mcpServers).toEqual({
-    byspace: {
+    paseo: {
       type: "stdio",
       command: "node",
-      args: ["/tmp/mcp-bridge.mjs", "--socket", "/tmp/byspace.sock"],
+      args: ["/tmp/mcp-bridge.mjs", "--socket", "/tmp/paseo.sock"],
     },
   });
   expect(client.lastResumeOverrides).toMatchObject({
     model: "gpt-5.4",
     systemPrompt: "new prompt",
     mcpServers: {
-      byspace: {
+      paseo: {
         type: "stdio",
         command: "node",
-        args: ["/tmp/mcp-bridge.mjs", "--socket", "/tmp/byspace.sock"],
+        args: ["/tmp/mcp-bridge.mjs", "--socket", "/tmp/paseo.sock"],
       },
     },
   });
@@ -3479,8 +3476,8 @@ test("resumeAgentFromPersistence keeps metadata config, applies overrides, and p
   expect(client.lastResumeLaunchContext).toEqual({
     agentId: resumed.id,
     env: {
-      BYSPACE_AGENT_ID: resumed.id,
-      BYSPACE_AGENT_CWD: workdir,
+      PASEO_AGENT_ID: resumed.id,
+      PASEO_AGENT_CWD: workdir,
     },
   });
 });
@@ -3587,8 +3584,8 @@ test("importProviderSession imports the selected session without listing and pub
   expect(client.importLaunchContext).toEqual({
     agentId: imported.id,
     env: {
-      BYSPACE_AGENT_ID: imported.id,
-      BYSPACE_AGENT_CWD: workdir,
+      PASEO_AGENT_ID: imported.id,
+      PASEO_AGENT_CWD: workdir,
     },
   });
   expect(imported.lifecycle).toBe("idle");
@@ -3690,8 +3687,8 @@ test("reloadAgentSession passes daemon launch env through the provider launch co
   expect(client.lastCreateLaunchContext).toEqual({
     agentId: snapshot.id,
     env: {
-      BYSPACE_AGENT_ID: snapshot.id,
-      BYSPACE_AGENT_CWD: workdir,
+      PASEO_AGENT_ID: snapshot.id,
+      PASEO_AGENT_CWD: workdir,
     },
   });
 
@@ -3702,8 +3699,8 @@ test("reloadAgentSession passes daemon launch env through the provider launch co
   expect(client.lastResumeLaunchContext).toEqual({
     agentId: snapshot.id,
     env: {
-      BYSPACE_AGENT_ID: snapshot.id,
-      BYSPACE_AGENT_CWD: workdir,
+      PASEO_AGENT_ID: snapshot.id,
+      PASEO_AGENT_CWD: workdir,
     },
   });
 });
@@ -9870,7 +9867,7 @@ test("listImportableSessions skips providers that lack supportsSessionListing ev
   expect(result.map((d) => d.provider)).toEqual(["claude"]);
 });
 
-test("user_message events wrapping a byspace-system envelope are not added to the timeline", async () => {
+test("user_message events wrapping a paseo-system envelope are not added to the timeline", async () => {
   const workdir = mkdtempSync(join(tmpdir(), "agent-manager-envelope-live-"));
   const storagePath = join(workdir, "agents");
   const storage = new AgentStorage(storagePath, logger);
@@ -9905,7 +9902,7 @@ test("user_message events wrapping a byspace-system envelope are not added to th
   expect(userMessages[0].text).toBe("plain user message");
 });
 
-test("user_message events wrapping a byspace-system envelope are not restored during history replay", async () => {
+test("user_message events wrapping a paseo-system envelope are not restored during history replay", async () => {
   const workdir = mkdtempSync(join(tmpdir(), "agent-manager-envelope-history-"));
   const storagePath = join(workdir, "agents");
   const storage = new AgentStorage(storagePath, logger);

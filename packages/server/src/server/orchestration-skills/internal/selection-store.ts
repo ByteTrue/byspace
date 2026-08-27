@@ -1,4 +1,4 @@
-import type { AgentSkillSelection } from "@bytetrue/byspace-protocol/messages";
+import type { AgentSkillSelection } from "@getpaseo/protocol/messages";
 
 import type { DaemonConfigStore } from "../../daemon-config-store.js";
 

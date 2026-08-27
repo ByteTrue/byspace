@@ -706,7 +706,7 @@ export const ar: TranslationResources = {
       },
       routes: {
         public: "الوكيل العكسي",
-        byspace: "Memorable",
+        paseo: "Memorable",
         direct: "مباشر",
       },
       states: {
@@ -815,7 +815,7 @@ export const ar: TranslationResources = {
           updateCurrent: "التحديث غير متاح لأن هذا الفرع محدث بالفعل باستخدام{{baseRef}}",
           mergePrNoGithub: "دمج PR غير متاح الآن لأن GitHub غير متصل",
           archiveNotWorktree:
-            "الأرشيف غير متاح هنا لأنه لم يتم إنشاء مساحة العمل هذه كشجرة عمل BySpace",
+            "الأرشيف غير متاح هنا لأنه لم يتم إنشاء مساحة العمل هذه كشجرة عمل Paseo",
           mergePrNoForge: "دمج {{noun}} غير متاح الآن لأن {{brand}} غير متصل",
           mergePrMissing: "دمج PR غير متاح لأنه لا يوجد طلب سحب حتى الآن",
           mergePrDraft: "دمج PR غير متاح لأن طلب السحب لا يزال مسودة",
@@ -1084,7 +1084,7 @@ export const ar: TranslationResources = {
       discord: "Discord",
       github: "إنشاء مشكلة على GitHub",
       whatsNew: "ما الجديد",
-      appName: "BySpace",
+      appName: "Paseo",
     },
     sections: {
       sessions: "السجل",
@@ -1222,7 +1222,7 @@ export const ar: TranslationResources = {
       close: "إغلاق النافذة",
     },
     quitting: {
-      title: "جارٍ إنهاء BySpace...",
+      title: "جارٍ إنهاء Paseo...",
       detail: "إيقاف البرنامج الخفي المحلي.",
     },
     daemon: {
@@ -1236,20 +1236,20 @@ export const ar: TranslationResources = {
       },
       management: {
         title: "إدارة البرنامج الخفي المدمج",
-        hint: "اسمح لـ BySpace ببدء تشغيل البرنامج الخفي المدمج وإيقافه",
+        hint: "اسمح لـ Paseo ببدء تشغيل البرنامج الخفي المدمج وإيقافه",
         pauseTitle: "وقفة المدمج في البرنامج الخفي",
         pauseMessage:
           "سيؤدي هذا إلى إيقاف البرنامج الخفي المدمج على الفور. سيتم إيقاف تشغيل الوكلاء والمحطات الطرفية المتصلة بالبرنامج الخفي المدمج.",
         pauseAndStop: "وقفة وتوقف",
         registrationFailed:
-          "Built-in daemon started, but BySpace could not save the localhost connection. Toggle daemon management off and on again, or add localhost manually.",
+          "Built-in daemon started, but Paseo could not save the localhost connection. Toggle daemon management off and on again, or add localhost manually.",
         pausedStopFailed:
-          "تم إيقاف إدارة البرنامج الخفي المضمنة مؤقتًا، لكن لم يتمكن BySpace من إيقاف البرنامج الخفي.",
+          "تم إيقاف إدارة البرنامج الخفي المضمنة مؤقتًا، لكن لم يتمكن Paseo من إيقاف البرنامج الخفي.",
         updateFailed: "غير قادر على تحديث إدارة البرنامج الخفي المضمنة.",
       },
       keepRunning: {
         title: "استمر في تشغيل البرنامج الخفي بعد الإقلاع عن التدخين",
-        hint: "يستمر تشغيل Daemon عند إنهاء BySpace",
+        hint: "يستمر تشغيل Daemon عند إنهاء Paseo",
       },
       logs: {
         title: "ملف السجل",
@@ -1264,7 +1264,7 @@ export const ar: TranslationResources = {
       fullStatus: {
         title: "الوضع الكامل",
         modalTitle: "حالة Daemon",
-        hint: "يقوم بتشغيل`byspace daemon status`ويظهر الإخراج",
+        hint: "يقوم بتشغيل`paseo daemon status`ويظهر الإخراج",
         view: "عرض الحالة",
         copied: "تم نسخ الحالة إلى الحافظة.",
         fetchFailed: "فشل جلب حالة البرنامج الخفي:{{message}}",
@@ -1315,7 +1315,7 @@ export const ar: TranslationResources = {
     },
     rosetta: {
       title: "قم بتنزيل نسخة Apple Silicon",
-      runningIntel: "أنت تقوم بتشغيل إصدار Intel من BySpace ضمن Rosetta على Apple Silicon.",
+      runningIntel: "أنت تقوم بتشغيل إصدار Intel من Paseo ضمن Rosetta على Apple Silicon.",
       highCpu:
         "يؤدي هذا إلى ارتفاع استخدام وحدة المعالجة المركزية. قم بتنزيل إصدار Apple Silicon لإصلاحه.",
       download: "تحميل",
@@ -1358,7 +1358,7 @@ export const ar: TranslationResources = {
         microphone: "لم يتم التحقق من حالة الميكروفون بعد.",
       },
       testNotification: {
-        title: "اختبار الإخطار BySpace",
+        title: "اختبار الإخطار Paseo",
         body: "إذا كان بإمكانك رؤية ذلك، فهذا يعني أن إشعارات سطح المكتب تعمل.",
         notDelivered: "لم يتم تسليم الإخطار. تحقق من إعدادات النظام > الإشعارات.",
         failed: "فشل في إرسال الإخطار.",
@@ -1367,12 +1367,12 @@ export const ar: TranslationResources = {
     integrations: {
       cli: {
         statusFailed: "غير قادر على التحقق من حالة تثبيت CLI.",
-        installFailed: "غير قادر على تثبيت BySpaceCLI.",
+        installFailed: "غير قادر على تثبيت PaseoCLI.",
       },
     },
   },
   rootError: {
-    title: "واجه BySpace مشكلة.",
+    title: "واجه Paseo مشكلة.",
     body: "جرّب مرة أخرى لإعادة تحميل التطبيق. إذا استمر حدوث ذلك، فأرفق التفاصيل أدناه عند الإبلاغ عنه.",
     details: "التفاصيل",
   },
@@ -1466,7 +1466,7 @@ export const ar: TranslationResources = {
     },
   },
   onboarding: {
-    title: "مرحبا بكم في BySpace",
+    title: "مرحبا بكم في Paseo",
     subtitle: "قم بتوصيل جهاز الكمبيوتر الخاص بك للبدء",
     actions: {
       settings: "إعدادات",
@@ -1550,7 +1550,7 @@ export const ar: TranslationResources = {
     },
     direct: {
       title: "اتصال مباشر",
-      helper: "أدخل عنوان خادم BySpace.",
+      helper: "أدخل عنوان خادم Paseo.",
       fields: {
         host: "Host",
         port: "ميناء",
@@ -1631,15 +1631,15 @@ export const ar: TranslationResources = {
       enableDescription:
         "يتيح التتابع لهذا الجهاز الاتصال من أي مكان. حركة مرور الإقران مشفرة من طرف إلى طرف.",
       relayDocs: "كيفية عمل التتابع",
-      relayDocsAccessibility: "اقرأ كيفية عمل تتابع BySpace",
+      relayDocsAccessibility: "اقرأ كيفية عمل تتابع Paseo",
       enableRelay: "تمكين التتابع",
       enablingRelay: "جارٍ التمكين...",
       notNow: "ليس الآن",
       directConnectionHint:
         "بدون التتابع، اتصل مباشرة عبر TCP أو Tailscale أو شبكة VPN أخرى. لن يتم إنشاء رمز QR.",
-      updateRequired: "حدّث المضيف لتمكين التتابع من BySpace Desktop.",
+      updateRequired: "حدّث المضيف لتمكين التتابع من Paseo Desktop.",
       unavailable: "عرض الاقتران غير متاح.",
-      hint: "قم بمسح رمز QR هذا باستخدام BySpace على هاتفك، أو انسخ الرابط أدناه.",
+      hint: "قم بمسح رمز QR هذا باستخدام Paseo على هاتفك، أو انسخ الرابط أدناه.",
       securityWarning:
         "تعامل مع رابط الاقتران هذا ككلمة مرور. يمكن لأي شخص يملكه الوصول إلى هذا البرنامج الخفي.",
       qrUnavailable: "رمز QR غير متاح.",
@@ -1674,7 +1674,7 @@ export const ar: TranslationResources = {
   serviceUrl: {
     title: "افتح الخدمة URL",
     message: "افتح{{url}}؟",
-    inBySpace: "في BySpace",
+    inPaseo: "في Paseo",
     externalBrowser: "متصفح خارجي",
     dontAskAgain: "لا تسأل مرة أخرى",
   },
@@ -1793,9 +1793,9 @@ export const ar: TranslationResources = {
       one: "استخدم {{count}} أداة أخرى",
       other: "استخدم {{count}} أدوات أخرى",
     },
-    byspaceCalls: {
-      one: "استدعى BySpace {{count}} مرة",
-      other: "استدعى BySpace {{count}} مرات",
+    paseoCalls: {
+      one: "استدعى Paseo {{count}} مرة",
+      other: "استدعى Paseo {{count}} مرات",
     },
     and: "و",
   },
@@ -1876,7 +1876,7 @@ export const ar: TranslationResources = {
       send: "إرسال",
       sending: "جارٍ الإرسال...",
       sentTitle: "تم إرسال إشعار الاختبار",
-      sentDescription: "سلّم BySpace الإشعار إلى نظام التشغيل.",
+      sentDescription: "سلّم Paseo الإشعار إلى نظام التشغيل.",
       sendFailedTitle: "تعذر إرسال إشعار الاختبار",
     },
     hostSections: {
@@ -1895,14 +1895,14 @@ export const ar: TranslationResources = {
     metadataGeneration: {
       title: "إنشاء البيانات الوصفية",
       description:
-        "اختر النموذج الذي يستخدمه BySpace لعناوين مساحات العمل وأسماء الفروع ورسائل الالتزام ومسودات طلبات السحب",
+        "اختر النموذج الذي يستخدمه Paseo لعناوين مساحات العمل وأسماء الفروع ورسائل الالتزام ومسودات طلبات السحب",
       selection: "اختيار النموذج",
       automatic: "تلقائي",
       preferred: "يدوي",
-      automaticHint: "يختار BySpace نموذجًا سريعًا متاحًا",
-      preferredHint: "اختر النموذج الذي يستخدمه BySpace",
+      automaticHint: "يختار Paseo نموذجًا سريعًا متاحًا",
+      preferredHint: "اختر النموذج الذي يستخدمه Paseo",
       model: "النموذج",
-      fallbackHint: "إذا لم يكن متاحًا، يستخدم BySpace نموذجًا آخر متاحًا",
+      fallbackHint: "إذا لم يكن متاحًا، يستخدم Paseo نموذجًا آخر متاحًا",
       docs: "الوثائق",
       saveError: "تعذر تحديث إنشاء البيانات الوصفية",
     },
@@ -1911,7 +1911,7 @@ export const ar: TranslationResources = {
       browserData: {
         title: "بيانات المتصفح",
         siteData: "ملفات تعريف الارتباط وبيانات المواقع",
-        description: "تتشارك علامات تبويب المتصفح تسجيلات الدخول وبيانات المواقع عبر BySpace.",
+        description: "تتشارك علامات تبويب المتصفح تسجيلات الدخول وبيانات المواقع عبر Paseo.",
         clear: "مسح بيانات المتصفح",
         clearing: "جارٍ المسح...",
         confirmTitle: "هل تريد مسح بيانات المتصفح؟",
@@ -1939,7 +1939,7 @@ export const ar: TranslationResources = {
         description: "مكان فتح عناوين URL من تشغيل البرامج النصية",
         options: {
           ask: "بسأل",
-          inApp: "في BySpace",
+          inApp: "في Paseo",
           external: "متصفح خارجي",
         },
       },
@@ -2023,7 +2023,7 @@ export const ar: TranslationResources = {
         label: "تحديثات التطبيق",
         readyToInstall: "جاهز للتثبيت:{{version}}",
         installTitle: "تثبيت تحديث سطح المكتب",
-        installMessage: "يؤدي هذا إلى تحديث BySpace على هذا الكمبيوتر",
+        installMessage: "يؤدي هذا إلى تحديث Paseo على هذا الكمبيوتر",
         installConfirm: "تثبيت التحديث",
         update: "تحديث",
         updateTo: "التحديث إلى{{version}}",
@@ -2246,10 +2246,10 @@ export const ar: TranslationResources = {
         title: "مهارات التنسيق",
         description: "قم بتعليم عملائك كيفية التنسيق من خلال CLI",
         updateAvailable: "التحديث متاح",
-        updateTitle: "تحديث مهارات BySpace ؟",
+        updateTitle: "تحديث مهارات Paseo ؟",
         updateFallback: "مزامنة المهارات المجمعة لجهازك.",
-        uninstallTitle: "إلغاء تثبيت مهارات BySpace ؟",
-        uninstallMessage: "يزيل جميع مهارات تنسيق BySpace من ~/.agents ، ~/.claude ، ~/.codex.",
+        uninstallTitle: "إلغاء تثبيت مهارات Paseo ؟",
+        uninstallMessage: "يزيل جميع مهارات تنسيق Paseo من ~/.agents ، ~/.claude ، ~/.codex.",
         choose: "اختيار المهارات",
         chooseAll: "كل المهارات",
         chooseAllHint: "أبقِ جميع المهارات المرفقة مثبتة، بما فيها ما يُضاف لاحقًا.",
@@ -2285,9 +2285,9 @@ export const ar: TranslationResources = {
         title: "التنسيق",
         unavailable: "اتصل بهذا المضيف لإدارة التنسيق",
         enableTools: {
-          title: "تمكين أدوات BySpace",
+          title: "تمكين أدوات Paseo",
           hint: "سيتمكن الوكلاء من إدارة أشجار العمل والوكلاء والجداول الزمنية",
-          accessibilityLabel: "حقن أدوات BySpace",
+          accessibilityLabel: "حقن أدوات Paseo",
         },
         systemPrompt: {
           title: "موجه النظام",
@@ -2389,15 +2389,15 @@ export const ar: TranslationResources = {
             "هذا المضيف غير متصل. انتظر حتى يصبح متصلاً بالإنترنت قبل إعادة التشغيل.",
           offlineTitle: "Host غير متصل",
           offlineMessage:
-            "هذا المضيف غير متصل.  يقوم BySpace بإعادة الاتصال تلقائيًا - انتظر حتى يتم الاتصال بالإنترنت مرة أخرى قبل إعادة التشغيل.",
+            "هذا المضيف غير متصل.  يقوم Paseo بإعادة الاتصال تلقائيًا - انتظر حتى يتم الاتصال بالإنترنت مرة أخرى قبل إعادة التشغيل.",
           requestFailedTitle: "خطأ",
           requestFailedMessage:
-            "فشل في إرسال طلب إعادة التشغيل.  يقوم BySpace بإعادة الاتصال تلقائيًا - حاول مرة أخرى بمجرد ظهور المضيف على أنه متصل بالإنترنت.",
+            "فشل في إرسال طلب إعادة التشغيل.  يقوم Paseo بإعادة الاتصال تلقائيًا - حاول مرة أخرى بمجرد ظهور المضيف على أنه متصل بالإنترنت.",
           dialogFailedMessage: "غير قادر على فتح مربع حوار تأكيد إعادة التشغيل.",
         },
         update: {
           desktopManagedHint:
-            "يدير BySpace Desktop هذا البرنامج الخفي. حدّث BySpace Desktop على المضيف.",
+            "يدير Paseo Desktop هذا البرنامج الخفي. حدّث Paseo Desktop على المضيف.",
           title: "Update daemon",
           hint: "Update the daemon to the latest version and restart it",
           confirm: "Update",
@@ -2516,13 +2516,13 @@ export const ar: TranslationResources = {
         savedToast: "تم تحديث المشروع",
       },
       readFailures: {
-        invalidTitle: "تعذر تحليل byspace.json",
+        invalidTitle: "تعذر تحليل paseo.json",
         invalidDescription: "قم بإصلاح الملف على القرص، ثم أعد تحميله.",
         missingTitle: "هذا المضيف ليس لديه هذا المشروع",
         missingSingleHost: "المضيف المحدد ليس لديه سجل لهذا المشروع.",
-        transportTitle: "تعذر تحميل byspace.json",
+        transportTitle: "تعذر تحميل paseo.json",
         transportFallback: "المضيف لم يستجب.",
-        failedTitle: "تعذر تحميل byspace.json",
+        failedTitle: "تعذر تحميل paseo.json",
         failedDescription: "أعد التحميل للمحاولة مرة أخرى.",
       },
       worktree: {
@@ -2532,7 +2532,7 @@ export const ar: TranslationResources = {
         docsTooltip: "راجع المستندات لمزيد من التفاصيل ومتغيرات البيئة المتاحة لهذه الأوامر",
         setup: "يثبت",
         setupAccessibility: "أوامر إعداد شجرة العمل",
-        uncommittedTitle: "ثبّت تغييرات byspace.json",
+        uncommittedTitle: "ثبّت تغييرات paseo.json",
         uncommittedDescription:
           "تستخدم أشجار العمل الجديدة نص الإعداد البرمجي من الفرع الأساسي الذي تحدده.",
         teardown: "هدم",
@@ -2557,7 +2557,7 @@ export const ar: TranslationResources = {
         newScript: "نص جديد",
         editScript: "تحرير{{name}}",
         runAsService: "تشغيل كخدمة",
-        serviceHint: "يشرف BySpace على العملية ويعين منفذًا عبر $BYSPACE_PORT",
+        serviceHint: "يشرف Paseo على العملية ويعين منفذًا عبر $PASEO_PORT",
         actions: {
           add: "إضافة البرنامج النصي",
           edit: "يحرر",
@@ -2566,7 +2566,7 @@ export const ar: TranslationResources = {
       },
       metadata: {
         title: "توليد البيانات الوصفية",
-        info: "تعليمات خاصة بالمشروع يتم إدخالها في الذكاء الاصطناعي الذي يستخدمه BySpace لإنشاء بيانات التعريف - استخدمها لفرض اصطلاحات فريقك مثل تسمية الفرع أو نمط الالتزام أو تنسيق PR",
+        info: "تعليمات خاصة بالمشروع يتم إدخالها في الذكاء الاصطناعي الذي يستخدمه Paseo لإنشاء بيانات التعريف - استخدمها لفرض اصطلاحات فريقك مثل تسمية الفرع أو نمط الالتزام أو تنسيق PR",
         branchName: "اسماء الفروع",
         branchNamePlaceholder: "بادئة الفروع بـ fet/ أو Fix/, mb/ للفروع الشخصية",
         commitMessage: "ارتكاب الرسائل",
@@ -2576,8 +2576,8 @@ export const ar: TranslationResources = {
       },
       writeFailures: {
         staleTitle: "تم تغيير التكوين على القرص",
-        staleDescription: "أعد التحميل لجلب أحدث ملف byspace.json قبل الحفظ.",
-        failedTitle: "تعذر حفظ byspace.json",
+        staleDescription: "أعد التحميل لجلب أحدث ملف paseo.json قبل الحفظ.",
+        failedTitle: "تعذر حفظ paseo.json",
         failedDescription: "حاول مرة أخرى، أو أعد تحميل الإصدار الأحدث من القرص.",
       },
       actions: {

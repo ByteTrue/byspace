@@ -11,7 +11,7 @@ import type {
   AgentStreamEvent,
   AgentTimelineItem,
 } from "../../../agent-sdk-types.js";
-import type { BySpaceToolCatalog } from "../../../tools/types.js";
+import type { PaseoToolCatalog } from "../../../tools/types.js";
 import {
   OmpAgentClient,
   OmpAgentSession,
@@ -22,7 +22,7 @@ import type { OmpUsagePollScheduler } from "../usage-poller.js";
 import type { OmpAgentMessage, OmpRpcSlashCommand } from "../rpc-types.js";
 import { FakeOmp } from "./fake-omp.js";
 
-const CWD = "/tmp/byspace-omp-agent-test";
+const CWD = "/tmp/paseo-omp-agent-test";
 
 interface OmpHistoryMessage {
   id: string;
@@ -35,7 +35,7 @@ interface OmpResumeHistory {
 }
 
 async function writeOmpHistory(history: OmpResumeHistory): Promise<string> {
-  const directory = await mkdtemp(join(tmpdir(), "byspace-omp-resume-"));
+  const directory = await mkdtemp(join(tmpdir(), "paseo-omp-resume-"));
   const sessionFile = join(directory, "session.jsonl");
   const entries = [
     { type: "session", id: "session-root", parentId: null },
@@ -92,11 +92,11 @@ export class OmpHarness {
 
   async start(
     config: Partial<AgentSessionConfig> = {},
-    byspaceTools?: BySpaceToolCatalog,
+    paseoTools?: PaseoToolCatalog,
   ): Promise<void> {
     const session = await this.client.createSession(
       { provider: "omp", cwd: CWD, ...config },
-      byspaceTools ? { byspaceTools } : undefined,
+      paseoTools ? { paseoTools } : undefined,
     );
     if (!(session instanceof OmpAgentSession)) {
       throw new Error("OMP client returned a non-OMP session");

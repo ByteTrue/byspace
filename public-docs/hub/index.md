@@ -8,7 +8,7 @@ category: Hub
 
 # Hub
 
-A daemon runs agents on one machine, for you. BySpace Hub is the layer above your daemons. You register your daemons with it, and it gives them capabilities they do not have on their own.
+A daemon runs agents on one machine, for you. Paseo Hub is the layer above your daemons. You register your daemons with it, and it gives them capabilities they do not have on their own.
 
 ```text
              Hub
@@ -31,7 +31,7 @@ Your daemons keep running agents where they always did. Hub decides when to ask 
 Guided setup creates a project resource file for environments and agents, plus one safe starter workflow:
 
 ```text
-.byspace/
+.paseo/
 ├── hub.yml
 └── workflows/
     └── slack-help.yml

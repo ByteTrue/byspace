@@ -37,7 +37,7 @@ function run(command, args, options) {
 
 async function exportBrowserWebApp() {
   console.log("Exporting browser web app...");
-  await run("npm", ["run", "build:web", "--workspace=@bytetrue/byspace-app"], {
+  await run("npm", ["run", "build:web", "--workspace=@getpaseo/app"], {
     cwd: REPO_ROOT,
   });
 }

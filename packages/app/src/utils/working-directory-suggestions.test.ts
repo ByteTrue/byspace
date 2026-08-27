@@ -4,50 +4,47 @@ import { buildWorkingDirectorySuggestions } from "./working-directory-suggestion
 describe("buildWorkingDirectorySuggestions", () => {
   it("returns de-duplicated recommendations when query is empty", () => {
     const results = buildWorkingDirectorySuggestions({
-      recommendedPaths: ["/Users/me/projects/byspace", "/Users/me/projects/byspace"],
+      recommendedPaths: ["/Users/me/projects/paseo", "/Users/me/projects/paseo"],
       serverPaths: ["/Users/me/projects/playground"],
       query: "",
     });
 
-    expect(results).toEqual(["/Users/me/projects/byspace"]);
+    expect(results).toEqual(["/Users/me/projects/paseo"]);
   });
 
   it("keeps fuzzy recommendation matches before de-duplicated daemon suggestions", () => {
     const results = buildWorkingDirectorySuggestions({
-      recommendedPaths: ["/Users/me/projects/byspace-desktop", "/Users/me/documents"],
-      serverPaths: ["/Users/me/projects/byspace-plan", "/Users/me/projects/byspace-desktop"],
+      recommendedPaths: ["/Users/me/projects/paseo-desktop", "/Users/me/documents"],
+      serverPaths: ["/Users/me/projects/paseo-plan", "/Users/me/projects/paseo-desktop"],
       query: "pso",
     });
 
-    expect(results).toEqual([
-      "/Users/me/projects/byspace-desktop",
-      "/Users/me/projects/byspace-plan",
-    ]);
+    expect(results).toEqual(["/Users/me/projects/paseo-desktop", "/Users/me/projects/paseo-plan"]);
   });
 
   it("does not reinterpret daemon-ranked suggestions", () => {
     const results = buildWorkingDirectorySuggestions({
       recommendedPaths: [],
-      serverPaths: ["/Users/me/projects/byspace-desktop"],
+      serverPaths: ["/Users/me/projects/paseo-desktop"],
       query: "a-query-ranked-by-the-daemon",
     });
 
-    expect(results).toEqual(["/Users/me/projects/byspace-desktop"]);
+    expect(results).toEqual(["/Users/me/projects/paseo-desktop"]);
   });
 
   it("matches recommended paths using the complete path text", () => {
     const results = buildWorkingDirectorySuggestions({
       recommendedPaths: [
-        "/Users/me/archive/projects/byspace-desktop",
-        "/Users/me/projects/byspace-desktop",
+        "/Users/me/archive/projects/paseo-desktop",
+        "/Users/me/projects/paseo-desktop",
       ],
       serverPaths: [],
       query: "projects/pso",
     });
 
     expect(results).toEqual([
-      "/Users/me/archive/projects/byspace-desktop",
-      "/Users/me/projects/byspace-desktop",
+      "/Users/me/archive/projects/paseo-desktop",
+      "/Users/me/projects/paseo-desktop",
     ]);
   });
 
@@ -63,13 +60,13 @@ describe("buildWorkingDirectorySuggestions", () => {
 
   it("treats '~' as an active query and includes daemon suggestions", () => {
     const results = buildWorkingDirectorySuggestions({
-      recommendedPaths: ["/Users/me/projects/byspace"],
+      recommendedPaths: ["/Users/me/projects/paseo"],
       serverPaths: ["/Users/me/documents", "/Users/me/projects"],
       query: "~",
     });
 
     expect(results).toEqual([
-      "/Users/me/projects/byspace",
+      "/Users/me/projects/paseo",
       "/Users/me/documents",
       "/Users/me/projects",
     ]);

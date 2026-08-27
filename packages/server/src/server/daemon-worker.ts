@@ -1,34 +1,34 @@
 import { appendFileSync, mkdirSync } from "node:fs";
 import path from "node:path";
-import { createBySpaceDaemon } from "./bootstrap.js";
+import { createPaseoDaemon } from "./bootstrap.js";
 import { loadConfig } from "./config.js";
-import { resolveBySpaceHome } from "./byspace-home.js";
+import { resolvePaseoHome } from "./paseo-home.js";
 import { createRootLogger } from "./logger.js";
 import type { DaemonLifecycleIntent } from "./bootstrap.js";
 import { getProcessDiagnostics } from "./process-diagnostics.js";
 
-process.title = "BySpace Daemon";
+process.title = "Paseo Daemon";
 
 type SupervisorLifecycleMessage =
   | {
-      type: "byspace:shutdown";
+      type: "paseo:shutdown";
       reason: string;
     }
   | {
-      type: "byspace:ready";
+      type: "paseo:ready";
       listen: string;
     }
   | {
-      type: "byspace:restart";
+      type: "paseo:restart";
       reason?: string;
     };
 
 interface SupervisorHeartbeatMessage {
-  type: "byspace:supervisor-heartbeat";
+  type: "paseo:supervisor-heartbeat";
 }
 
 interface BootstrapResult {
-  byspaceHome: string;
+  paseoHome: string;
   logger: ReturnType<typeof createRootLogger>;
   config: ReturnType<typeof loadConfig>;
 }
@@ -46,12 +46,12 @@ function isPidAlive(pid: number): boolean {
 }
 
 function writeWorkerLifecycleLog(
-  byspaceHome: string,
+  paseoHome: string,
   message: string,
   fields: Record<string, unknown> = {},
 ): void {
   try {
-    const logPath = path.join(byspaceHome, "daemon.log");
+    const logPath = path.join(paseoHome, "daemon.log");
     mkdirSync(path.dirname(logPath), { recursive: true });
     appendFileSync(
       logPath,
@@ -72,10 +72,10 @@ function writeWorkerLifecycleLog(
 
 function bootstrapFromEnvironment(): BootstrapResult {
   try {
-    const byspaceHome = resolveBySpaceHome();
-    const config = loadConfig(byspaceHome);
-    const logger = createRootLogger({ log: config.log }, { byspaceHome, file: false });
-    return { byspaceHome, logger, config };
+    const paseoHome = resolvePaseoHome();
+    const config = loadConfig(paseoHome);
+    const logger = createRootLogger({ log: config.log }, { paseoHome, file: false });
+    return { paseoHome, logger, config };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     process.stderr.write(`${message}\n`);
@@ -132,8 +132,8 @@ function applyCliFlagOverrides(config: ReturnType<typeof loadConfig>): void {
 }
 
 async function main() {
-  const { byspaceHome, logger, config } = bootstrapFromEnvironment();
-  let daemon: Awaited<ReturnType<typeof createBySpaceDaemon>> | null = null;
+  const { paseoHome, logger, config } = bootstrapFromEnvironment();
+  let daemon: Awaited<ReturnType<typeof createPaseoDaemon>> | null = null;
   let shutdownPromise: Promise<number> | null = null;
   let exitHookInstalled = false;
 
@@ -217,7 +217,7 @@ async function main() {
         { clientId: intent.clientId, requestId: intent.requestId, reason: intent.reason },
         "Shutdown requested via websocket",
       );
-      if (sendSupervisorLifecycleMessage({ type: "byspace:shutdown", reason: intent.reason })) {
+      if (sendSupervisorLifecycleMessage({ type: "paseo:shutdown", reason: intent.reason })) {
         return;
       }
       beginShutdown("shutdown lifecycle intent", { reason: intent.reason });
@@ -230,7 +230,7 @@ async function main() {
     );
     if (
       sendSupervisorLifecycleMessage({
-        type: "byspace:restart",
+        type: "paseo:restart",
         ...(intent.reason ? { reason: intent.reason } : {}),
       })
     ) {
@@ -256,7 +256,7 @@ async function main() {
       }
       supervisorExitRequested = true;
 
-      writeWorkerLifecycleLog(byspaceHome, "Supervisor liveness lost; worker exiting", {
+      writeWorkerLifecycleLog(paseoHome, "Supervisor liveness lost; worker exiting", {
         reason,
         ...getProcessDiagnostics(),
         supervisorPid,
@@ -276,7 +276,7 @@ async function main() {
         typeof message === "object" &&
         message !== null &&
         "type" in message &&
-        (message as SupervisorHeartbeatMessage).type === "byspace:supervisor-heartbeat"
+        (message as SupervisorHeartbeatMessage).type === "paseo:supervisor-heartbeat"
       ) {
         lastSupervisorHeartbeatAt = Date.now();
       }
@@ -306,7 +306,7 @@ async function main() {
   installSupervisorLivenessGuard();
 
   try {
-    daemon = await createBySpaceDaemon(
+    daemon = await createPaseoDaemon(
       {
         ...config,
         onLifecycleIntent: handleLifecycleIntent,
@@ -328,7 +328,7 @@ async function main() {
     if (!listen) {
       throw new Error("Daemon did not expose a listen target after startup");
     }
-    sendSupervisorLifecycleMessage({ type: "byspace:ready", listen });
+    sendSupervisorLifecycleMessage({ type: "paseo:ready", listen });
   } catch (err) {
     logger.fatal({ err }, "Daemon failed to start listening");
     throw err;

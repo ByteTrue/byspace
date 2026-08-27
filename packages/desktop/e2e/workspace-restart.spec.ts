@@ -19,14 +19,14 @@ type StartupPresentation = "splash" | "app";
 
 declare global {
   interface Window {
-    __byspaceStartupPresentationTrace?: StartupPresentation[];
+    __paseoStartupPresentationTrace?: StartupPresentation[];
   }
 }
 
 async function observeStartupPresentation(page: Page): Promise<void> {
   await page.addInitScript(() => {
     const trace: StartupPresentation[] = [];
-    window.__byspaceStartupPresentationTrace = trace;
+    window.__paseoStartupPresentationTrace = trace;
 
     document.addEventListener("DOMContentLoaded", () => {
       const recordPresentation = () => {
@@ -54,7 +54,7 @@ async function observeStartupPresentation(page: Page): Promise<void> {
 }
 
 async function getStartupPresentation(page: Page): Promise<StartupPresentation[]> {
-  return page.evaluate(() => window.__byspaceStartupPresentationTrace?.slice() ?? []);
+  return page.evaluate(() => window.__paseoStartupPresentationTrace?.slice() ?? []);
 }
 
 async function expectWorkspaceLocation(

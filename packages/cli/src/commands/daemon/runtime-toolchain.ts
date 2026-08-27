@@ -1,5 +1,5 @@
 import { platform } from "node:os";
-import { execCommand } from "@bytetrue/byspace-server";
+import { execCommand } from "@getpaseo/server";
 
 export interface NodePathFromPidResult {
   nodePath: string | null;

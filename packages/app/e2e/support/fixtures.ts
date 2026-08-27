@@ -11,7 +11,7 @@ import {
 import { connectSeedClient, type SeedDaemonClient } from "./helpers/seed-client";
 import { createWithWorkspace, type WithWorkspace } from "./helpers/with-workspace";
 
-const EXTRA_HOSTS_KEY = "@byspace:e2e-extra-hosts";
+const EXTRA_HOSTS_KEY = "@paseo:e2e-extra-hosts";
 
 interface TrackedProjectPickerFixture extends ProjectPickerFixture {
   rememberProjectId: (projectId: string) => void;
@@ -89,14 +89,14 @@ const daemonTest = metroTest.extend<
 });
 
 const test = daemonTest.extend<{
-  byspaceE2ESetup: void;
+  paseoE2ESetup: void;
   outdatedDaemon: OutdatedDaemon;
   desktopManagedOutdatedDaemon: OutdatedDaemon;
   relayConfigOutdatedDaemon: OutdatedDaemon;
   projectPickerFixture: TrackedProjectPickerFixture;
   withWorkspace: WithWorkspace;
 }>({
-  byspaceE2ESetup: [
+  paseoE2ESetup: [
     async ({ page }, provide, testInfo) => {
       const daemonPort = getE2EDaemonPort();
       const metroPort = process.env.E2E_METRO_PORT;
@@ -107,10 +107,10 @@ const test = daemonTest.extend<{
       }
 
       // Hard guardrail: never allow tests to hit the developer's default daemon.
-      // This blocks both HTTP and WS attempts to :6777 (before any navigation).
-      await page.route(/:(6777)\b/, (route) => route.abort());
-      await page.routeWebSocket(/:(6777)\b/, async (ws) => {
-        await ws.close({ code: 1008, reason: "Blocked connection to localhost:6777 during e2e." });
+      // This blocks both HTTP and WS attempts to :6767 (before any navigation).
+      await page.route(/:(6767)\b/, (route) => route.abort());
+      await page.routeWebSocket(/:(6767)\b/, async (ws) => {
+        await ws.close({ code: 1008, reason: "Blocked connection to localhost:6767 during e2e." });
       });
 
       const entries: string[] = [];
@@ -141,7 +141,7 @@ const test = daemonTest.extend<{
           // `addInitScript` runs on every navigation (including reloads). Some tests intentionally
           // override storage and reload; they can opt out of seeding for the *next* navigation by
           // setting this flag before the reload.
-          const disableOnceKey = "@byspace:e2e-disable-default-seed-once";
+          const disableOnceKey = "@paseo:e2e-disable-default-seed-once";
           const disableValue = localStorage.getItem(disableOnceKey);
           if (disableValue) {
             localStorage.removeItem(disableOnceKey);
@@ -150,16 +150,16 @@ const test = daemonTest.extend<{
             }
           }
 
-          localStorage.setItem("@byspace:e2e", "1");
-          localStorage.setItem("@byspace:e2e-seed-nonce", nonce);
+          localStorage.setItem("@paseo:e2e", "1");
+          localStorage.setItem("@paseo:e2e-seed-nonce", nonce);
 
           const rawExtraHosts = localStorage.getItem(extraHostsKey);
           const extraHosts = rawExtraHosts ? JSON.parse(rawExtraHosts) : [];
 
           // Hard-reset anything that could point to a developer's real daemon.
-          localStorage.setItem("@byspace:daemon-registry", JSON.stringify([daemon, ...extraHosts]));
-          localStorage.removeItem("@byspace:settings");
-          localStorage.setItem("@byspace:create-agent-preferences", JSON.stringify(preferences));
+          localStorage.setItem("@paseo:daemon-registry", JSON.stringify([daemon, ...extraHosts]));
+          localStorage.removeItem("@paseo:settings");
+          localStorage.setItem("@paseo:create-agent-preferences", JSON.stringify(preferences));
         },
         {
           daemon: testDaemon,

@@ -5,7 +5,7 @@ import {
   StoredScheduleSchema,
   type ScheduleTarget,
   type StoredSchedule,
-} from "@bytetrue/byspace-protocol/schedule/types";
+} from "@getpaseo/protocol/schedule/types";
 import { writeJsonFileAtomic } from "../atomic-file.js";
 
 function generateScheduleId(): string {

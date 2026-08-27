@@ -9,7 +9,7 @@ export function alternativeRouteOptions(slug: string) {
   return {
     head: () =>
       pageMeta(
-        page?.title ?? "Alternative - BySpace",
+        page?.title ?? "Alternative - Paseo",
         page?.description ?? "",
         `/alternatives/${slug}`,
       ),

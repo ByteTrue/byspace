@@ -6,7 +6,7 @@ import type {
   HubExecutionAgentValidationIssue,
   HubExecutionControlRequest,
   SessionOutboundMessage,
-} from "@bytetrue/byspace-protocol/messages";
+} from "@getpaseo/protocol/messages";
 import {
   ProviderOptionsValidationError,
   ToolPolicyUnsupportedError,

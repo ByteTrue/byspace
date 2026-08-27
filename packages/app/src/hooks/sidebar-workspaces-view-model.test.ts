@@ -69,7 +69,7 @@ describe("createSidebarWorkspaceEntry forge threading", () => {
 });
 
 describe("createSidebarWorkspaceEntry workspace directory label", () => {
-  it("uses the daemon-provided slug for a BySpace-owned worktree", () => {
+  it("uses the daemon-provided slug for a Paseo-owned worktree", () => {
     const descriptor = workspaceWithForge(undefined, "https://github.com/acme/repo/pull/42");
     descriptor.workspaceDirectory = "/worktrees/feature/packages/app";
     descriptor.worktreeSlug = "feature";
@@ -274,19 +274,19 @@ describe("buildSidebarProjectsFromStructure", () => {
           projectKey: "project-1",
           hosts: [
             {
-              serverId: "relay:byspace-host",
+              serverId: "relay:paseo-host",
               iconWorkingDir: "/repo/project-1",
               worktreeSupport: "supported" as const,
             },
           ],
-          workspaceKeys: ["relay:byspace-host:ws-main"],
+          workspaceKeys: ["relay:paseo-host:ws-main"],
         }),
       ],
     });
 
     expect(projects[0]?.workspaces[0]).toMatchObject({
-      workspaceKey: "relay:byspace-host:ws-main",
-      serverId: "relay:byspace-host",
+      workspaceKey: "relay:paseo-host:ws-main",
+      serverId: "relay:paseo-host",
       workspaceId: "ws-main",
     });
   });
@@ -297,18 +297,18 @@ describe("shared sidebar workspace model", () => {
     const model = buildSidebarWorkspacePlacementModel({
       projects: [
         project({
-          projectKey: "ByteTrue/byspace",
-          projectName: "ByteTrue/byspace",
-          iconWorkingDir: "/repo/ByteTrue/byspace",
+          projectKey: "getpaseo/paseo",
+          projectName: "getpaseo/paseo",
+          iconWorkingDir: "/repo/getpaseo/paseo",
           hosts: [
             {
               serverId: "host-a",
-              iconWorkingDir: "/repo/ByteTrue/byspace",
+              iconWorkingDir: "/repo/getpaseo/paseo",
               worktreeSupport: "supported" as const,
             },
             {
               serverId: "host-b",
-              iconWorkingDir: "/repo/ByteTrue/byspace",
+              iconWorkingDir: "/repo/getpaseo/paseo",
               worktreeSupport: "supported" as const,
             },
           ],
@@ -328,8 +328,8 @@ describe("shared sidebar workspace model", () => {
               workspace({
                 id: "main",
                 name: "main",
-                projectId: "ByteTrue/byspace",
-                projectDisplayName: "ByteTrue/byspace",
+                projectId: "getpaseo/paseo",
+                projectDisplayName: "getpaseo/paseo",
                 status: "done",
               }),
             ],
@@ -344,8 +344,8 @@ describe("shared sidebar workspace model", () => {
               workspace({
                 id: "feature",
                 name: "feature/status-flow",
-                projectId: "ByteTrue/byspace",
-                projectDisplayName: "ByteTrue/byspace",
+                projectId: "getpaseo/paseo",
+                projectDisplayName: "getpaseo/paseo",
                 status: "running",
                 statusEnteredAt: new Date("2026-06-10T00:00:00.000Z"),
               }),
@@ -361,18 +361,18 @@ describe("shared sidebar workspace model", () => {
     ]);
     expect(model.projects).toEqual([
       expect.objectContaining({
-        viewKey: "ByteTrue/byspace",
+        viewKey: "getpaseo/paseo",
         hosts: [
           {
             serverId: "host-a",
-            projectId: "ByteTrue/byspace",
-            iconWorkingDir: "/repo/ByteTrue/byspace",
+            projectId: "getpaseo/paseo",
+            iconWorkingDir: "/repo/getpaseo/paseo",
             worktreeSupport: "supported" as const,
           },
           {
             serverId: "host-b",
-            projectId: "ByteTrue/byspace",
-            iconWorkingDir: "/repo/ByteTrue/byspace",
+            projectId: "getpaseo/paseo",
+            iconWorkingDir: "/repo/getpaseo/paseo",
             worktreeSupport: "supported" as const,
           },
         ],
@@ -400,9 +400,7 @@ describe("shared sidebar workspace model", () => {
       ["host-a:main", "done", "main"],
       ["host-b:feature", "running", "feature/status-flow"],
     ]);
-    expect(model.projectNamesByViewKey).toEqual(
-      new Map([["ByteTrue/byspace", "ByteTrue/byspace"]]),
-    );
+    expect(model.projectNamesByViewKey).toEqual(new Map([["getpaseo/paseo", "getpaseo/paseo"]]));
   });
 
   it("preserves unchanged row identities when another workspace updates", () => {
@@ -534,16 +532,16 @@ describe("shouldShowSidebarHostLabels", () => {
     const projects = buildSidebarProjectsFromStructure({
       projects: [
         project({
-          projectKey: "ByteTrue/byspace",
+          projectKey: "getpaseo/paseo",
           hosts: [
             {
               serverId: "host-a",
-              iconWorkingDir: "/repo/byspace",
+              iconWorkingDir: "/repo/paseo",
               worktreeSupport: "supported" as const,
             },
             {
               serverId: "host-b",
-              iconWorkingDir: "/repo/byspace",
+              iconWorkingDir: "/repo/paseo",
               worktreeSupport: "supported" as const,
             },
           ],

@@ -1,7 +1,7 @@
 #!/usr/bin/env npx tsx
 
 /**
- * Regression: `byspace daemon stop` must stop a reachable daemon even when the
+ * Regression: `paseo daemon stop` must stop a reachable daemon even when the
  * local pid file points at a dead supervisor owner.
  */
 
@@ -18,9 +18,9 @@ $.verbose = false;
 
 const pollIntervalMs = 100;
 const testEnv = {
-  BYSPACE_LOCAL_SPEECH_AUTO_DOWNLOAD: process.env.BYSPACE_LOCAL_SPEECH_AUTO_DOWNLOAD ?? "0",
-  BYSPACE_DICTATION_ENABLED: process.env.BYSPACE_DICTATION_ENABLED ?? "0",
-  BYSPACE_VOICE_MODE_ENABLED: process.env.BYSPACE_VOICE_MODE_ENABLED ?? "0",
+  PASEO_LOCAL_SPEECH_AUTO_DOWNLOAD: process.env.PASEO_LOCAL_SPEECH_AUTO_DOWNLOAD ?? "0",
+  PASEO_DICTATION_ENABLED: process.env.PASEO_DICTATION_ENABLED ?? "0",
+  PASEO_VOICE_MODE_ENABLED: process.env.PASEO_VOICE_MODE_ENABLED ?? "0",
 };
 
 function sleep(ms: number): Promise<void> {
@@ -63,9 +63,9 @@ interface DaemonStatus {
   pid: number | null;
 }
 
-async function readDaemonStatus(byspaceHome: string): Promise<DaemonStatus> {
+async function readDaemonStatus(paseoHome: string): Promise<DaemonStatus> {
   const result =
-    await $`BYSPACE_HOME=${byspaceHome} BYSPACE_LOCAL_SPEECH_AUTO_DOWNLOAD=${testEnv.BYSPACE_LOCAL_SPEECH_AUTO_DOWNLOAD} BYSPACE_DICTATION_ENABLED=${testEnv.BYSPACE_DICTATION_ENABLED} BYSPACE_VOICE_MODE_ENABLED=${testEnv.BYSPACE_VOICE_MODE_ENABLED} npx byspace daemon status --home ${byspaceHome} --json`.nothrow();
+    await $`PASEO_HOME=${paseoHome} PASEO_LOCAL_SPEECH_AUTO_DOWNLOAD=${testEnv.PASEO_LOCAL_SPEECH_AUTO_DOWNLOAD} PASEO_DICTATION_ENABLED=${testEnv.PASEO_DICTATION_ENABLED} PASEO_VOICE_MODE_ENABLED=${testEnv.PASEO_VOICE_MODE_ENABLED} npx paseo daemon status --home ${paseoHome} --json`.nothrow();
   if (result.exitCode !== 0) {
     return { localDaemon: null, connectedDaemon: null, pid: null };
   }
@@ -101,10 +101,10 @@ function findUnusedPid(): number {
 console.log("=== Daemon Stop (stale pid, reachable worker regression) ===\n");
 
 const port = await getAvailablePort();
-const byspaceHome = await mkdtemp(join(tmpdir(), "byspace-stop-stale-reachable-"));
+const paseoHome = await mkdtemp(join(tmpdir(), "paseo-stop-stale-reachable-"));
 const cliRoot = join(import.meta.dirname, "..");
 const host = `127.0.0.1:${port}`;
-const pidPath = join(byspaceHome, "byspace.pid");
+const pidPath = join(paseoHome, "paseo.pid");
 const stalePid = findUnusedPid();
 
 let workerProcess: ChildProcess | null = null;
@@ -135,9 +135,9 @@ try {
       env: {
         ...process.env,
         ...testEnv,
-        BYSPACE_HOME: byspaceHome,
-        BYSPACE_LISTEN: host,
-        BYSPACE_RELAY_ENABLED: "false",
+        PASEO_HOME: paseoHome,
+        PASEO_LISTEN: host,
+        PASEO_RELAY_ENABLED: "false",
         CI: "true",
       },
       stdio: ["ignore", "pipe", "pipe"],
@@ -146,23 +146,23 @@ try {
 
   await waitFor(
     async () => {
-      const status = await readDaemonStatus(byspaceHome);
+      const status = await readDaemonStatus(paseoHome);
       return status.localDaemon === "stale_pid" && status.connectedDaemon === "reachable";
     },
     120000,
     "daemon did not enter stale_pid + reachable state in time",
   );
 
-  const statusBeforeStop = await readDaemonStatus(byspaceHome);
+  const statusBeforeStop = await readDaemonStatus(paseoHome);
   assert.strictEqual(statusBeforeStop.pid, stalePid, "status should report the stale owner pid");
   assert(workerProcess.pid && isProcessRunning(workerProcess.pid), "worker should be running");
   console.log(`✓ fixture has stale pid ${stalePid} and live worker ${workerProcess.pid}\n`);
 
   console.log(
-    "Test 2: `byspace daemon stop` should stop reachable worker instead of saying not_running",
+    "Test 2: `paseo daemon stop` should stop reachable worker instead of saying not_running",
   );
   const stopResult =
-    await $`BYSPACE_HOME=${byspaceHome} BYSPACE_LOCAL_SPEECH_AUTO_DOWNLOAD=${testEnv.BYSPACE_LOCAL_SPEECH_AUTO_DOWNLOAD} BYSPACE_DICTATION_ENABLED=${testEnv.BYSPACE_DICTATION_ENABLED} BYSPACE_VOICE_MODE_ENABLED=${testEnv.BYSPACE_VOICE_MODE_ENABLED} npx byspace daemon stop --home ${byspaceHome} --json`.nothrow();
+    await $`PASEO_HOME=${paseoHome} PASEO_LOCAL_SPEECH_AUTO_DOWNLOAD=${testEnv.PASEO_LOCAL_SPEECH_AUTO_DOWNLOAD} PASEO_DICTATION_ENABLED=${testEnv.PASEO_DICTATION_ENABLED} PASEO_VOICE_MODE_ENABLED=${testEnv.PASEO_VOICE_MODE_ENABLED} npx paseo daemon stop --home ${paseoHome} --json`.nothrow();
   assert.strictEqual(stopResult.exitCode, 0, `stop should succeed: ${stopResult.stderr}`);
   const stopJson = JSON.parse(stopResult.stdout) as {
     action?: unknown;
@@ -200,8 +200,8 @@ try {
     });
   }
 
-  await $`BYSPACE_HOME=${byspaceHome} BYSPACE_LOCAL_SPEECH_AUTO_DOWNLOAD=${testEnv.BYSPACE_LOCAL_SPEECH_AUTO_DOWNLOAD} BYSPACE_DICTATION_ENABLED=${testEnv.BYSPACE_DICTATION_ENABLED} BYSPACE_VOICE_MODE_ENABLED=${testEnv.BYSPACE_VOICE_MODE_ENABLED} npx byspace daemon stop --home ${byspaceHome} --force`.nothrow();
-  await rm(byspaceHome, { recursive: true, force: true });
+  await $`PASEO_HOME=${paseoHome} PASEO_LOCAL_SPEECH_AUTO_DOWNLOAD=${testEnv.PASEO_LOCAL_SPEECH_AUTO_DOWNLOAD} PASEO_DICTATION_ENABLED=${testEnv.PASEO_DICTATION_ENABLED} PASEO_VOICE_MODE_ENABLED=${testEnv.PASEO_VOICE_MODE_ENABLED} npx paseo daemon stop --home ${paseoHome} --force`.nothrow();
+  await rm(paseoHome, { recursive: true, force: true });
 }
 
 console.log("=== Stale reachable stop regression test passed ===");

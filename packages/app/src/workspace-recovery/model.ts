@@ -1,4 +1,4 @@
-import type { WorkspaceRecoveryState as AuthoritativeWorkspaceRecoveryState } from "@bytetrue/byspace-protocol/messages";
+import type { WorkspaceRecoveryState as AuthoritativeWorkspaceRecoveryState } from "@getpaseo/protocol/messages";
 
 type AuthoritativeRecoverableWorkspace = Extract<
   AuthoritativeWorkspaceRecoveryState,

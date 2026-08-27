@@ -55,21 +55,21 @@ describe("normalizeStoredHostProfile", () => {
       label: "Old Host",
       connections: [
         {
-          id: "direct:127.0.0.1:6777",
+          id: "direct:127.0.0.1:6767",
           type: "directTcp",
-          endpoint: "127.0.0.1:6777",
+          endpoint: "127.0.0.1:6767",
         },
       ],
-      preferredConnectionId: "direct:127.0.0.1:6777",
+      preferredConnectionId: "direct:127.0.0.1:6767",
       createdAt: "2026-01-01T00:00:00.000Z",
       updatedAt: "2026-01-02T00:00:00.000Z",
     });
 
     expect(profile).not.toBeNull();
     expect(profile?.connections[0]).toEqual({
-      id: "direct:localhost:6777",
+      id: "direct:localhost:6767",
       type: "directTcp",
-      endpoint: "localhost:6777",
+      endpoint: "localhost:6767",
       useTls: false,
     });
     expect(profile?.connections[0]).not.toHaveProperty("password");
@@ -123,7 +123,7 @@ describe("normalizeStoredHostProfile", () => {
     const profile = normalizeStoredHostProfile({
       serverId: "srv_old",
       connections: [
-        { id: "socket:/tmp/byspace.sock", type: "directSocket", path: "/tmp/byspace.sock" },
+        { id: "socket:/tmp/paseo.sock", type: "directSocket", path: "/tmp/paseo.sock" },
       ],
     });
 
@@ -135,7 +135,7 @@ describe("normalizeStoredHostProfile", () => {
       serverId: "srv_new",
       appearance: { color: "teal", badgeDisplay: "icon" },
       connections: [
-        { id: "socket:/tmp/byspace.sock", type: "directSocket", path: "/tmp/byspace.sock" },
+        { id: "socket:/tmp/paseo.sock", type: "directSocket", path: "/tmp/paseo.sock" },
       ],
     });
 
@@ -145,9 +145,9 @@ describe("normalizeStoredHostProfile", () => {
 
 describe("upsertHostConnectionInProfiles", () => {
   const connection: HostConnection = {
-    id: "socket:/tmp/byspace.sock",
+    id: "socket:/tmp/paseo.sock",
     type: "directSocket",
-    path: "/tmp/byspace.sock",
+    path: "/tmp/paseo.sock",
   };
 
   it("gives a newly discovered host the default appearance", () => {
@@ -178,9 +178,9 @@ describe("upsertHostConnectionInProfiles", () => {
 
   it("replaces a direct connection when its settings change", () => {
     const existingConnection: HostConnection = {
-      id: "direct:example.test:6777",
+      id: "direct:example.test:6767",
       type: "directTcp",
-      endpoint: "example.test:6777",
+      endpoint: "example.test:6767",
       useTls: false,
       password: "old-secret",
     };

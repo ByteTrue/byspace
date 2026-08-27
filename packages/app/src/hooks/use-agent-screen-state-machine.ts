@@ -3,7 +3,7 @@ import type {
   AgentCapabilityFlags,
   AgentFeature,
   AgentProvider,
-} from "@bytetrue/byspace-protocol/agent-types";
+} from "@getpaseo/protocol/agent-types";
 import type { ViewedTimelineStatus } from "@/timeline/viewed-timeline-sync";
 
 export interface AgentScreenAgent {

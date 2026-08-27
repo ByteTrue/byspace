@@ -37,15 +37,15 @@ import {
 } from "../utils/worktree.js";
 import { toCheckoutError } from "./checkout-git-utils.js";
 import type {
-  CreateBySpaceWorktreeInput,
-  CreateBySpaceWorktreeResult,
-} from "./byspace-worktree-service.js";
+  CreatePaseoWorktreeInput,
+  CreatePaseoWorktreeResult,
+} from "./paseo-worktree-service.js";
 import type { ArchiveDependencies } from "./workspace-archive-service.js";
 import { toWorktreeWireError } from "./worktree-errors.js";
 import {
   archiveCommand,
-  createBySpaceWorktreeCommand,
-  listBySpaceWorktreesCommand,
+  createPaseoWorktreeCommand,
+  listPaseoWorktreesCommand,
 } from "./worktree/commands.js";
 import type { WorkspaceSetupOperation } from "./workspace-setup-runtime.js";
 
@@ -76,17 +76,17 @@ type AgentWorktreeSetupTimelineWriter = (input: {
 }) => Promise<boolean>;
 
 interface BuildAgentSessionConfigDependencies {
-  byspaceHome?: string;
+  paseoHome?: string;
   worktreesRoot?: string;
   sessionLogger: Logger;
   workspaceGitService?: WorkspaceGitService;
-  createBySpaceWorktree: (
-    input: CreateBySpaceWorktreeInput,
+  createPaseoWorktree: (
+    input: CreatePaseoWorktreeInput,
     options?: {
       resolveDefaultBranch?: (repoRoot: string) => Promise<string>;
-      setupContinuation?: CreateBySpaceWorktreeSetupContinuationInput;
+      setupContinuation?: CreatePaseoWorktreeSetupContinuationInput;
     },
-  ) => Promise<CreateBySpaceWorktreeWorkflowResult>;
+  ) => Promise<CreatePaseoWorktreeWorkflowResult>;
   checkoutExistingBranch: (cwd: string, branch: string) => Promise<CheckoutExistingBranchResult>;
   createBranchFromBase: (params: {
     cwd: string;
@@ -95,8 +95,8 @@ interface BuildAgentSessionConfigDependencies {
   }) => Promise<void>;
 }
 
-interface CreateBySpaceWorktreeInBackgroundDependencies {
-  byspaceHome?: string;
+interface CreatePaseoWorktreeInBackgroundDependencies {
+  paseoHome?: string;
   worktreesRoot?: string;
   emitWorkspaceUpdateForWorkspaceId: (workspaceId: string) => Promise<void>;
   cacheWorkspaceSetupSnapshot: (workspaceId: string, snapshot: WorkspaceSetupSnapshot) => void;
@@ -112,13 +112,13 @@ interface CreateBySpaceWorktreeInBackgroundDependencies {
   onScriptsChanged: ((workspaceId: string, workspaceDirectory: string) => void) | null;
 }
 
-interface CreateBySpaceWorktreeWorkflowDependencies extends CreateBySpaceWorktreeInBackgroundDependencies {
-  createBySpaceWorktree: (
-    input: CreateBySpaceWorktreeInput,
+interface CreatePaseoWorktreeWorkflowDependencies extends CreatePaseoWorktreeInBackgroundDependencies {
+  createPaseoWorktree: (
+    input: CreatePaseoWorktreeInput,
     options?: {
       resolveDefaultBranch?: (repoRoot: string) => Promise<string>;
     },
-  ) => Promise<CreateBySpaceWorktreeResult>;
+  ) => Promise<CreatePaseoWorktreeResult>;
   warmWorkspaceGitData: (workspace: PersistedWorkspaceRecord) => Promise<void>;
   autoNameWorkspaceBranchForFirstAgent: (input: {
     workspace: PersistedWorkspaceRecord;
@@ -135,7 +135,7 @@ interface AgentWorktreeSetupContinuationInput {
   logger: Logger;
 }
 
-export type CreateBySpaceWorktreeSetupContinuationInput =
+export type CreatePaseoWorktreeSetupContinuationInput =
   | { kind: "workspace" }
   | AgentWorktreeSetupContinuationInput;
 
@@ -144,38 +144,38 @@ export interface AgentWorktreeSetupContinuation {
   startAfterAgentCreate: (input: { agentId: string }) => void;
 }
 
-export type CreateBySpaceWorktreeWorkflowResult = CreateBySpaceWorktreeResult & {
+export type CreatePaseoWorktreeWorkflowResult = CreatePaseoWorktreeResult & {
   setupContinuation?: AgentWorktreeSetupContinuation;
 };
 
-export type CreateBySpaceWorktreeWorkflowFn = (
-  input: CreateBySpaceWorktreeInput,
+export type CreatePaseoWorktreeWorkflowFn = (
+  input: CreatePaseoWorktreeInput,
   options?: {
     resolveDefaultBranch?: (repoRoot: string) => Promise<string>;
-    setupContinuation?: CreateBySpaceWorktreeSetupContinuationInput;
+    setupContinuation?: CreatePaseoWorktreeSetupContinuationInput;
   },
-) => Promise<CreateBySpaceWorktreeWorkflowResult>;
+) => Promise<CreatePaseoWorktreeWorkflowResult>;
 
 interface HandleWorkspaceSetupStatusRequestDependencies {
   emit: EmitSessionMessage;
   workspaceSetupSnapshots: ReadonlyMap<string, WorkspaceSetupSnapshot>;
 }
 
-interface HandleCreateBySpaceWorktreeRequestDependencies {
-  byspaceHome?: string;
+interface HandleCreatePaseoWorktreeRequestDependencies {
+  paseoHome?: string;
   worktreesRoot?: string;
   describeWorkspaceRecord: (
-    result: CreateBySpaceWorktreeResult,
+    result: CreatePaseoWorktreeResult,
   ) => Promise<WorkspaceDescriptorPayload>;
   emit: EmitSessionMessage;
   sessionLogger: Logger;
-  createBySpaceWorktreeWorkflow: (
-    input: CreateBySpaceWorktreeInput,
-  ) => Promise<CreateBySpaceWorktreeWorkflowResult>;
+  createPaseoWorktreeWorkflow: (
+    input: CreatePaseoWorktreeInput,
+  ) => Promise<CreatePaseoWorktreeWorkflowResult>;
 }
 
 function normalizeFirstAgentContext(
-  request: Extract<SessionInboundMessage, { type: "create_byspace_worktree_request" }>,
+  request: Extract<SessionInboundMessage, { type: "create_paseo_worktree_request" }>,
 ): FirstAgentContext | undefined {
   if (request.firstAgentContext) {
     return request.firstAgentContext;
@@ -222,7 +222,7 @@ export async function buildAgentSessionConfig(
       "Creating worktree through createWorktreeCore",
     );
 
-    const createdWorktree = await dependencies.createBySpaceWorktree(
+    const createdWorktree = await dependencies.createPaseoWorktree(
       {
         cwd,
         worktreeSlug: normalized.worktreeSlug,
@@ -232,7 +232,7 @@ export async function buildAgentSessionConfig(
         githubPrNumber: normalized.githubPrNumber,
         firstAgentContext,
         runSetup: false,
-        byspaceHome: dependencies.byspaceHome,
+        paseoHome: dependencies.paseoHome,
         worktreesRoot: dependencies.worktreesRoot,
       },
       {
@@ -242,7 +242,7 @@ export async function buildAgentSessionConfig(
               resolveGitCreateBaseBranch(
                 repoRoot,
                 dependencies.workspaceGitService,
-                dependencies.byspaceHome,
+                dependencies.paseoHome,
               ),
       },
     );
@@ -255,7 +255,7 @@ export async function buildAgentSessionConfig(
       (await resolveGitCreateBaseBranch(
         cwd,
         dependencies.workspaceGitService,
-        dependencies.byspaceHome,
+        dependencies.paseoHome,
       ));
     await dependencies.createBranchFromBase({
       cwd,
@@ -385,7 +385,7 @@ export function assertSafeGitRef(ref: string, label: string): void {
 export async function resolveGitCreateBaseBranch(
   cwd: string,
   workspaceGitService?: WorkspaceGitService,
-  _byspaceHome?: string,
+  _paseoHome?: string,
 ): Promise<string> {
   if (!workspaceGitService) {
     throw new Error("WorkspaceGitService is required to resolve the repository root");
@@ -394,19 +394,19 @@ export async function resolveGitCreateBaseBranch(
   return workspaceGitService.resolveDefaultBranch(cwd);
 }
 
-export async function handleBySpaceWorktreeListRequest(
+export async function handlePaseoWorktreeListRequest(
   dependencies: {
     emit: EmitSessionMessage;
-    byspaceHome?: string;
+    paseoHome?: string;
     workspaceGitService: WorkspaceGitService;
   },
-  msg: Extract<SessionInboundMessage, { type: "byspace_worktree_list_request" }>,
+  msg: Extract<SessionInboundMessage, { type: "paseo_worktree_list_request" }>,
 ): Promise<void> {
   const { requestId } = msg;
   const cwd = msg.repoRoot ?? msg.cwd;
   if (!cwd) {
     dependencies.emit({
-      type: "byspace_worktree_list_response",
+      type: "paseo_worktree_list_response",
       payload: {
         worktrees: [],
         error: { code: "UNKNOWN", message: "cwd or repoRoot is required" },
@@ -417,12 +417,12 @@ export async function handleBySpaceWorktreeListRequest(
   }
 
   try {
-    const worktrees = await listBySpaceWorktreesCommand(
+    const worktrees = await listPaseoWorktreesCommand(
       { workspaceGitService: dependencies.workspaceGitService },
       { cwd },
     );
     dependencies.emit({
-      type: "byspace_worktree_list_response",
+      type: "paseo_worktree_list_response",
       payload: {
         worktrees: worktrees.map((entry) => ({
           worktreePath: entry.path,
@@ -436,7 +436,7 @@ export async function handleBySpaceWorktreeListRequest(
     });
   } catch (error) {
     dependencies.emit({
-      type: "byspace_worktree_list_response",
+      type: "paseo_worktree_list_response",
       payload: {
         worktrees: [],
         error: toCheckoutError(error),
@@ -446,7 +446,7 @@ export async function handleBySpaceWorktreeListRequest(
   }
 }
 
-export async function handleBySpaceWorktreeArchiveRequest(
+export async function handlePaseoWorktreeArchiveRequest(
   dependencies: Omit<
     ArchiveDependencies,
     "emitWorkspaceUpdatesForWorkspaceIds" | "workspaceGitService"
@@ -455,7 +455,7 @@ export async function handleBySpaceWorktreeArchiveRequest(
     workspaceGitService: Pick<WorkspaceGitService, "getSnapshot" | "listWorktrees">;
     emitWorkspaceUpdatesForWorkspaceIds: (workspaceIds: Iterable<string>) => Promise<void>;
   },
-  msg: Extract<SessionInboundMessage, { type: "byspace_worktree_archive_request" }>,
+  msg: Extract<SessionInboundMessage, { type: "paseo_worktree_archive_request" }>,
 ): Promise<void> {
   const { requestId } = msg;
 
@@ -470,7 +470,7 @@ export async function handleBySpaceWorktreeArchiveRequest(
     });
     if (!result.ok) {
       dependencies.emit({
-        type: "byspace_worktree_archive_response",
+        type: "paseo_worktree_archive_response",
         payload: {
           success: false,
           removedAgents: result.removedAgents,
@@ -485,7 +485,7 @@ export async function handleBySpaceWorktreeArchiveRequest(
     }
 
     dependencies.emit({
-      type: "byspace_worktree_archive_response",
+      type: "paseo_worktree_archive_response",
       payload: {
         success: true,
         removedAgents: result.removedAgents,
@@ -495,7 +495,7 @@ export async function handleBySpaceWorktreeArchiveRequest(
     });
   } catch (error) {
     dependencies.emit({
-      type: "byspace_worktree_archive_response",
+      type: "paseo_worktree_archive_response",
       payload: {
         success: false,
         removedAgents: [],
@@ -506,16 +506,16 @@ export async function handleBySpaceWorktreeArchiveRequest(
   }
 }
 
-export async function handleCreateBySpaceWorktreeRequest(
-  dependencies: HandleCreateBySpaceWorktreeRequestDependencies,
-  request: Extract<SessionInboundMessage, { type: "create_byspace_worktree_request" }>,
+export async function handleCreatePaseoWorktreeRequest(
+  dependencies: HandleCreatePaseoWorktreeRequestDependencies,
+  request: Extract<SessionInboundMessage, { type: "create_paseo_worktree_request" }>,
 ): Promise<void> {
   try {
-    const commandResult = await createBySpaceWorktreeCommand(
+    const commandResult = await createPaseoWorktreeCommand(
       {
-        byspaceHome: dependencies.byspaceHome,
+        paseoHome: dependencies.paseoHome,
         worktreesRoot: dependencies.worktreesRoot,
-        createBySpaceWorktreeWorkflow: dependencies.createBySpaceWorktreeWorkflow,
+        createPaseoWorktreeWorkflow: dependencies.createPaseoWorktreeWorkflow,
       },
       {
         cwd: request.cwd,
@@ -535,7 +535,7 @@ export async function handleCreateBySpaceWorktreeRequest(
         "Failed to create worktree",
       );
       dependencies.emit({
-        type: "create_byspace_worktree_response",
+        type: "create_paseo_worktree_response",
         payload: {
           workspace: null,
           error: commandResult.error.message,
@@ -550,7 +550,7 @@ export async function handleCreateBySpaceWorktreeRequest(
     const createdWorktree = commandResult.createdWorktree;
     const descriptor = await dependencies.describeWorkspaceRecord(createdWorktree);
     dependencies.emit({
-      type: "create_byspace_worktree_response",
+      type: "create_paseo_worktree_response",
       payload: {
         workspace: descriptor,
         error: null,
@@ -572,7 +572,7 @@ export async function handleCreateBySpaceWorktreeRequest(
       "Failed to create worktree",
     );
     dependencies.emit({
-      type: "create_byspace_worktree_response",
+      type: "create_paseo_worktree_response",
       payload: {
         workspace: null,
         error: wireError.message,
@@ -584,19 +584,19 @@ export async function handleCreateBySpaceWorktreeRequest(
   }
 }
 
-export async function createBySpaceWorktreeWorkflow(
-  dependencies: CreateBySpaceWorktreeWorkflowDependencies,
-  input: CreateBySpaceWorktreeInput,
+export async function createPaseoWorktreeWorkflow(
+  dependencies: CreatePaseoWorktreeWorkflowDependencies,
+  input: CreatePaseoWorktreeInput,
   options?: {
     resolveDefaultBranch?: (repoRoot: string) => Promise<string>;
-    setupContinuation?: CreateBySpaceWorktreeSetupContinuationInput;
+    setupContinuation?: CreatePaseoWorktreeSetupContinuationInput;
   },
-): Promise<CreateBySpaceWorktreeWorkflowResult> {
-  const createdWorktree = await dependencies.createBySpaceWorktree(
+): Promise<CreatePaseoWorktreeWorkflowResult> {
+  const createdWorktree = await dependencies.createPaseoWorktree(
     {
       ...input,
       runSetup: false,
-      byspaceHome: input.byspaceHome ?? dependencies.byspaceHome,
+      paseoHome: input.paseoHome ?? dependencies.paseoHome,
       worktreesRoot: input.worktreesRoot ?? dependencies.worktreesRoot,
     },
     options?.resolveDefaultBranch
@@ -688,7 +688,7 @@ export async function handleWorkspaceSetupStatusRequest(
 }
 
 export async function runWorktreeSetupInBackground(
-  dependencies: CreateBySpaceWorktreeInBackgroundDependencies,
+  dependencies: CreatePaseoWorktreeInBackgroundDependencies,
   options: {
     requestCwd: string;
     repoRoot: string;

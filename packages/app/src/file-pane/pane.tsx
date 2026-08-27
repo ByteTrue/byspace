@@ -8,7 +8,7 @@ import React, {
   useState,
   useSyncExternalStore,
 } from "react";
-import type { DaemonClient } from "@bytetrue/byspace-client/internal/daemon-client";
+import type { DaemonClient } from "@getpaseo/client/internal/daemon-client";
 import { Image as RNImage, ScrollView as RNScrollView, Text, View } from "react-native";
 import { StyleSheet, UnistylesRuntime, withUnistyles } from "react-native-unistyles";
 import { useTranslation } from "react-i18next";

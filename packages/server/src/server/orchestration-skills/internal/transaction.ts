@@ -51,12 +51,12 @@ interface CapturedDirectory {
   backupPath: string | null;
 }
 
-const MANIFEST_OWNER = "byspace-skills-transaction";
+const MANIFEST_OWNER = "paseo-skills-transaction";
 const MANIFEST_FILENAME = "transaction.json";
-const TRANSACTION_PREFIX = ".byspace-skills-transaction-";
-const RECOVERED_PREFIX = ".byspace-skills-recovered-";
+const TRANSACTION_PREFIX = ".paseo-skills-transaction-";
+const RECOVERED_PREFIX = ".paseo-skills-recovered-";
 const BACKUP_DIRNAME = "backup";
-const MANAGED_FILES_MANIFEST = ".byspace-managed-files.json";
+const MANAGED_FILES_MANIFEST = ".paseo-managed-files.json";
 
 async function isDirectory(target: string): Promise<boolean> {
   const info = await stat(target).catch(() => null);

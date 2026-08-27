@@ -33,6 +33,6 @@ export type {
   PluginWorkspacePanelProps,
   PluginWorkspaceSnapshot,
 } from "./contracts.js";
-export { useBySpace } from "./byspace-context.js";
+export { usePaseo } from "./paseo-context.js";
 export { useAgent, useWorkspace } from "./client-state.js";
 export { useRpc } from "./rpc-context.js";

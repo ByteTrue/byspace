@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="packages/website/public/logo.svg" width="64" height="64" alt="BySpace logo">
+  <img src="packages/website/public/logo.svg" width="64" height="64" alt="Paseo logo">
 </p>
 
-<h1 align="center">BySpace</h1>
+<h1 align="center">Paseo</h1>
 
 <p align="center">
   <a href="README.md">English</a> ·
@@ -12,11 +12,11 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/ByteTrue/byspace/stargazers">
-    <img src="https://img.shields.io/github/stars/ByteTrue/byspace?style=flat&logo=github" alt="GitHub stars">
+  <a href="https://github.com/getpaseo/paseo/stargazers">
+    <img src="https://img.shields.io/github/stars/getpaseo/paseo?style=flat&logo=github" alt="GitHub stars">
   </a>
-  <a href="https://github.com/ByteTrue/byspace/releases">
-    <img src="https://img.shields.io/github/v/release/ByteTrue/byspace?style=flat&logo=github" alt="GitHub release">
+  <a href="https://github.com/getpaseo/paseo/releases">
+    <img src="https://img.shields.io/github/v/release/getpaseo/paseo?style=flat&logo=github" alt="GitHub release">
   </a>
   <a href="https://x.com/moboudra">
     <img src="https://img.shields.io/badge/%40moboudra-555?logo=x" alt="X">
@@ -24,7 +24,7 @@
   <a href="https://discord.gg/jz8T2uahpH">
     <img src="https://img.shields.io/badge/Discord-555?logo=discord" alt="Discord">
   </a>
-  <a href="https://www.reddit.com/r/BySpaceAI/">
+  <a href="https://www.reddit.com/r/PaseoAI/">
     <img src="https://img.shields.io/badge/Reddit-555?logo=reddit" alt="Reddit">
   </a>
 </p>
@@ -32,11 +32,11 @@
 <p align="center">One interface for Claude Code, Codex, Copilot, OpenCode, and Pi agents.</p>
 
 <p align="center">
-  <img src="https://byspace.cc.cd/hero-mockup.png" alt="BySpace app screenshot" width="100%">
+  <img src="https://paseo.sh/hero-mockup.png" alt="Paseo app screenshot" width="100%">
 </p>
 
 <p align="center">
-  <img src="https://byspace.cc.cd/mobile-mockup.png" alt="BySpace mobile app" width="100%">
+  <img src="https://paseo.sh/mobile-mockup.png" alt="Paseo mobile app" width="100%">
 </p>
 
 Run agents in parallel on your own machines. Ship from your phone or your desk.
@@ -45,11 +45,11 @@ Run agents in parallel on your own machines. Ship from your phone or your desk.
 - **Multi-provider:** Claude Code, Codex, Copilot, OpenCode, and Pi through the same interface. Pick the right model for each job.
 - **Voice control:** Dictate tasks or talk through problems in voice mode. Hands-free when you need it.
 - **Cross-device:** iOS, Android, desktop, web, and CLI. Start work at your desk, check in from your phone, script it from the terminal.
-- **Privacy-first:** BySpace doesn't have any telemetry, tracking, or forced log-ins.
+- **Privacy-first:** Paseo doesn't have any telemetry, tracking, or forced log-ins.
 
 ## Getting Started
 
-BySpace runs a local server called the daemon that manages your coding agents. Clients like the desktop app, mobile app, web app, and CLI connect to it.
+Paseo runs a local server called the daemon that manages your coding agents. Clients like the desktop app, mobile app, web app, and CLI connect to it.
 
 ### Prerequisites
 
@@ -63,68 +63,68 @@ You need at least one agent CLI installed and configured with your credentials:
 
 ### Desktop app (recommended)
 
-Download it from [byspace.cc.cd/download](https://byspace.cc.cd/download) or the [GitHub releases page](https://github.com/ByteTrue/byspace/releases). Open the app and the daemon starts automatically. Nothing else to install.
+Download it from [paseo.sh/download](https://paseo.sh/download) or the [GitHub releases page](https://github.com/getpaseo/paseo/releases). Open the app and the daemon starts automatically. Nothing else to install.
 
 To connect from your phone, open **Settings → your host → Pair Device**.
 
 ### CLI / headless
 
-Install the CLI and start BySpace:
+Install the CLI and start Paseo:
 
 ```bash
-npm install -g @bytetrue/byspace
-byspace
+npm install -g @getpaseo/cli
+paseo
 ```
 
-BySpace starts locally, then asks whether to enable the end-to-end encrypted relay for device pairing. If you decline, connect directly over TCP, Tailscale, or another VPN. This path is useful for servers and remote machines.
+Paseo starts locally, then asks whether to enable the end-to-end encrypted relay for device pairing. If you decline, connect directly over TCP, Tailscale, or another VPN. This path is useful for servers and remote machines.
 
 For full setup and configuration, see:
 
-- [Docs](https://byspace.cc.cd/docs)
-- [Connectivity guide](https://byspace.cc.cd/docs/connectivity)
-- [Configuration reference](https://byspace.cc.cd/docs/configuration)
+- [Docs](https://paseo.sh/docs)
+- [Connectivity guide](https://paseo.sh/docs/connectivity)
+- [Configuration reference](https://paseo.sh/docs/configuration)
 
 ### Docker
 
-Run the BySpace daemon and self-hosted web UI in Docker:
+Run the Paseo daemon and self-hosted web UI in Docker:
 
 ```bash
-docker run -d --name byspace \
-  -p 6777:6777 \
-  -e BYSPACE_PASSWORD=change-me \
-  -v "$PWD/byspace-home:/home/byspace" \
+docker run -d --name paseo \
+  -p 6767:6767 \
+  -e PASEO_PASSWORD=change-me \
+  -v "$PWD/paseo-home:/home/paseo" \
   -v "$PWD:/workspace" \
-  ghcr.io/ByteTrue/byspace:latest
+  ghcr.io/getpaseo/paseo:latest
 ```
 
-Open `http://localhost:6777` after it starts. Extend the base image with the agent CLIs you use, then provide credentials through environment variables or the persistent `/home/byspace` volume. See the [Docker documentation](docs/docker.md) for full setup details.
+Open `http://localhost:6767` after it starts. Extend the base image with the agent CLIs you use, then provide credentials through environment variables or the persistent `/home/paseo` volume. See the [Docker documentation](docs/docker.md) for full setup details.
 
 ## CLI
 
 Everything you can do in the app, you can do from the terminal.
 
 ```bash
-byspace run --provider claude/opus-4.6 "implement user authentication"
-byspace run --provider codex/gpt-5.5 --worktree feature-x "implement feature X"
+paseo run --provider claude/opus-4.6 "implement user authentication"
+paseo run --provider codex/gpt-5.5 --worktree feature-x "implement feature X"
 
-byspace ls                           # list running agents
-byspace attach abc123                # stream live output
-byspace send abc123 "also add tests" # follow-up task
+paseo ls                           # list running agents
+paseo attach abc123                # stream live output
+paseo send abc123 "also add tests" # follow-up task
 
 # run on a remote daemon
-byspace --host workstation.local:6777 run "run the full test suite"
+paseo --host workstation.local:6767 run "run the full test suite"
 ```
 
-See the [full CLI reference](https://byspace.cc.cd/docs/cli) for more.
+See the [full CLI reference](https://paseo.sh/docs/cli) for more.
 
 ## TypeScript SDK
 
-Build issue integrations, dashboards, and orchestration services with `@bytetrue/byspace-client`:
+Build issue integrations, dashboards, and orchestration services with `@getpaseo/client`:
 
 ```ts
-import { createBySpaceClient } from "@bytetrue/byspace-client";
+import { createPaseoClient } from "@getpaseo/client";
 
-const client = createBySpaceClient({ url: "ws://127.0.0.1:6777/ws" });
+const client = createPaseoClient({ url: "ws://127.0.0.1:6767/ws" });
 await client.connect();
 
 const agent = await client.agents.create({
@@ -139,32 +139,32 @@ console.log(result.lastMessage);
 await client.close();
 ```
 
-See the [SDK quickstart](https://byspace.cc.cd/docs/sdk/quickstart), [recipes](https://byspace.cc.cd/docs/sdk/recipes), and [API reference](https://byspace.cc.cd/docs/sdk/reference).
+See the [SDK quickstart](https://paseo.sh/docs/sdk/quickstart), [recipes](https://paseo.sh/docs/sdk/recipes), and [API reference](https://paseo.sh/docs/sdk/reference).
 
 ## Skills
 
-Skills teach your agent to use BySpace to orchestrate other agents.
+Skills teach your agent to use Paseo to orchestrate other agents.
 
 ```bash
-npx skills add ByteTrue/byspace
+npx skills add getpaseo/paseo
 ```
 
 Then use them in any agent conversation:
 
-- `/byspace-handoff` — hand off work between agents. I use this to plan with Claude and then handoff to Codex to implement.
-- `/byspace-advisor` — spin up a single agent as an advisor for a second opinion, without delegating the work itself.
-- `/byspace-committee` — form a committee of two contrasting agents to step back, do root cause analysis, and produce a plan.
+- `/paseo-handoff` — hand off work between agents. I use this to plan with Claude and then handoff to Codex to implement.
+- `/paseo-advisor` — spin up a single agent as an advisor for a second opinion, without delegating the work itself.
+- `/paseo-committee` — form a committee of two contrasting agents to step back, do root cause analysis, and produce a plan.
 
 ## Development
 
 Quick monorepo package map:
 
-- `packages/server`: BySpace daemon (agent process orchestration, WebSocket API, MCP server)
+- `packages/server`: Paseo daemon (agent process orchestration, WebSocket API, MCP server)
 - `packages/app`: Expo client (iOS, Android, web)
-- `packages/cli`: `byspace` CLI for daemon and agent workflows
+- `packages/cli`: `paseo` CLI for daemon and agent workflows
 - `packages/desktop`: Electron desktop app
 - `packages/relay`: Relay transport and encryption used by the daemon and clients
-- `packages/website`: Marketing site and documentation (`byspace.cc.cd`)
+- `packages/website`: Marketing site and documentation (`paseo.sh`)
 
 Common commands:
 
@@ -187,9 +187,9 @@ npm run typecheck
 
 ## Related projects
 
-- [ByteTrue/byspace-relay](https://github.com/ByteTrue/byspace-relay) — official distributed relay, written in Elixir
-- [byspace-skins](https://github.com/huangguang1999/byspace-skins) — community themes and a zero-patch desktop theme loader with an Agent Skill
-- [byspace-vscode](https://marketplace.visualstudio.com/items?itemName=hinnes.byspace-vscode) — VS Code extension
+- [getpaseo/paseo-relay](https://github.com/getpaseo/paseo-relay) — official distributed relay, written in Elixir
+- [paseo-skins](https://github.com/huangguang1999/paseo-skins) — community themes and a zero-patch desktop theme loader with an Agent Skill
+- [paseo-vscode](https://marketplace.visualstudio.com/items?itemName=hinnes.paseo-vscode) — VS Code extension
 
 ## License
 

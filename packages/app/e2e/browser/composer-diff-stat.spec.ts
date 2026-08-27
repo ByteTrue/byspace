@@ -4,7 +4,7 @@ import { expect, test, type Page } from "../support/fixtures";
 import { openAgentRoute, seedMockAgentWorkspace } from "../support/helpers/mock-agent";
 import { openFilesPanel } from "../support/helpers/workspace-tabs";
 
-const APP_SETTINGS_KEY = "@byspace:app-settings";
+const APP_SETTINGS_KEY = "@paseo:app-settings";
 
 function visibleMainPane(page: Page) {
   return page.getByTestId("workspace-pane-main").filter({ visible: true });

@@ -1,6 +1,6 @@
 import { vi } from "vitest";
 
-import { getAgentProviderDefinition } from "@bytetrue/byspace-protocol/provider-manifest";
+import { getAgentProviderDefinition } from "@getpaseo/protocol/provider-manifest";
 
 import type {
   AgentMode,
@@ -18,7 +18,7 @@ import type { SessionOptions } from "../session.js";
 import type {
   HubExecutionAgentValidationIssue,
   SessionOutboundMessage,
-} from "@bytetrue/byspace-protocol/messages";
+} from "@getpaseo/protocol/messages";
 import { asInternals, createStub } from "./class-mocks.js";
 
 // ---------------------------------------------------------------------------

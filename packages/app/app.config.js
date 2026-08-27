@@ -7,8 +7,8 @@ const withFdroidAutolinking = require("./plugins/with-fdroid-autolinking");
 const withPasteInput = require("./plugins/with-paste-input");
 const { getNativeReleaseVersion } = require("./native-release-version");
 const appVariant = process.env.APP_VARIANT ?? "production";
-const isFdroidBuild = process.env.BYSPACE_FDROID_BUILD === "1";
-const isProfileBuild = process.env.BYSPACE_PROFILE_BUILD === "1";
+const isFdroidBuild = process.env.PASEO_FDROID_BUILD === "1";
+const isProfileBuild = process.env.PASEO_PROFILE_BUILD === "1";
 
 const buildProfile = isFdroidBuild
   ? {
@@ -66,8 +66,8 @@ function resolveSecretFile(params) {
 
 const variants = {
   production: {
-    name: "BySpace",
-    packageId: "com.bytetrue.byspace",
+    name: "Paseo",
+    packageId: "sh.paseo",
     googleServicesFile: resolveSecretFile({
       envKey: "GOOGLE_SERVICES_FILE_PROD",
       fallbackRelativePath: "./.secrets/google-services.prod.json",
@@ -78,8 +78,8 @@ const variants = {
     }),
   },
   development: {
-    name: "BySpace Debug",
-    packageId: "com.bytetrue.byspace.debug",
+    name: "Paseo Debug",
+    packageId: "sh.paseo.debug",
     googleServicesFile: resolveSecretFile({
       envKey: "GOOGLE_SERVICES_FILE_DEBUG",
       fallbackRelativePath: "./.secrets/google-services.debug.json",
@@ -101,7 +101,7 @@ export default {
     version: nativeReleaseVersion.appVersion,
     orientation: "portrait",
     icon: "./assets/images/icon.png",
-    scheme: "byspace",
+    scheme: "paseo",
     userInterfaceStyle: "automatic",
     newArchEnabled: true,
     ios: {
@@ -191,6 +191,6 @@ export default {
         projectId: "0e7f65ce-0367-46c8-a238-2b65963d235a",
       },
     },
-    owner: "ByteTrue",
+    owner: "getpaseo",
   },
 };

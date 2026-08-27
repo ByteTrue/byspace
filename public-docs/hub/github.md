@@ -16,7 +16,7 @@ on: github.issue_comment
 max_runtime: 2h
 filters:
   repo: example/project
-  contains: "@byspace"
+  contains: "@paseo"
   from_users: [maintainer]
 steps:
   - id: implement
@@ -34,7 +34,7 @@ steps:
       - text: |
           Implement the request, push a branch, and open a pull request with gh.
           Call hub.finish_execution when done.
-          ${{ byspace.prompt }}
+          ${{ paseo.prompt }}
 ```
 
 The agent can use `git` and `gh` within the declared repositories and permissions. Hub mints the token when the step starts and revokes it when execution ends.
@@ -70,7 +70,7 @@ Connection values for other integrations remain explicit step environment values
 
 ```yaml
 env:
-  SOME_TOKEN: "${{ byspace.connections.some-connection.token }}"
+  SOME_TOKEN: "${{ paseo.connections.some-connection.token }}"
 ```
 
 Hub resolves the value for the step and does not persist it. See [Hub security](/docs/hub/security) for provider and host boundaries.

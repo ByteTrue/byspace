@@ -1,21 +1,21 @@
 ---
 title: Open Source Conductor Alternative With Linux, Windows, and Mobile
-description: BySpace is open source, runs on macOS, Linux, and Windows, ships native iOS and Android apps, and supports 30+ agents through the in-app catalog plus any ACP or CLI agent. Conductor is macOS only and Claude Code or Codex only.
+description: Paseo is open source, runs on macOS, Linux, and Windows, ships native iOS and Android apps, and supports 30+ agents through the in-app catalog plus any ACP or CLI agent. Conductor is macOS only and Claude Code or Codex only.
 nav: Conductor
 order: 50
 ---
 
-# BySpace vs Conductor
+# Paseo vs Conductor
 
 Conductor is a macOS app for running Claude Code and Codex in parallel git worktrees. Closed source.
 
-BySpace is an app for orchestrating coding agents, with native clients on desktop, mobile, web, and the CLI. Open source (AGPL-3.0).
+Paseo is an app for orchestrating coding agents, with native clients on desktop, mobile, web, and the CLI. Open source (AGPL-3.0).
 
-![BySpace desktop and mobile app](/hero-mockup.png)
+![Paseo desktop and mobile app](/hero-mockup.png)
 
-## Why pick BySpace
+## Why pick Paseo
 
-Conductor runs on macOS, with Claude Code and Codex, in parallel git worktrees. BySpace does all of that. Pick BySpace if you want:
+Conductor runs on macOS, with Claude Code and Codex, in parallel git worktrees. Paseo does all of that. Pick Paseo if you want:
 
 - Linux or Windows alongside macOS
 - A native iOS and Android app
@@ -26,13 +26,13 @@ Conductor runs on macOS, with Claude Code and Codex, in parallel git worktrees. 
 
 ## Architecture
 
-The BySpace daemon runs as its own process. Desktop, web, mobile, and CLI all connect to it over a websocket. Run the daemon on your laptop, on a VM, in Docker, or across a fleet, and connect to any of them from any client.
+The Paseo daemon runs as its own process. Desktop, web, mobile, and CLI all connect to it over a websocket. Run the daemon on your laptop, on a VM, in Docker, or across a fleet, and connect to any of them from any client.
 
 Conductor's desktop app is the host. Agents run inside it.
 
 ## Providers
 
-BySpace runs Claude Code, Codex, OpenCode, and Pi natively, plus 30+ more agents through the in-app catalog including GitHub Copilot, Cursor, Gemini CLI, and Amp. BySpace speaks the [Agent Client Protocol](https://agentclientprotocol.com), so any ACP agent works. Custom providers run any CLI agent. See [Supported providers](/docs/supported-providers).
+Paseo runs Claude Code, Codex, OpenCode, and Pi natively, plus 30+ more agents through the in-app catalog including GitHub Copilot, Cursor, Gemini CLI, and Amp. Paseo speaks the [Agent Client Protocol](https://agentclientprotocol.com), so any ACP agent works. Custom providers run any CLI agent. See [Supported providers](/docs/supported-providers).
 
 Conductor runs Claude Code and Codex.
 
@@ -40,25 +40,25 @@ Both tools launch the official CLIs as subprocesses with your own credentials. N
 
 ## Panes
 
-BySpace's app has split panes and tabs (⌘D for vertical, ⌘⇧D for horizontal). Panes include a terminal alongside your agents, a diff viewer, and a browser for testing running services.
+Paseo's app has split panes and tabs (⌘D for vertical, ⌘⇧D for horizontal). Panes include a terminal alongside your agents, a diff viewer, and a browser for testing running services.
 
 ## GitHub
 
-BySpace's app handles commit, push, opening PRs, watching checks and reviews, and merging.
+Paseo's app handles commit, push, opening PRs, watching checks and reviews, and merging.
 
 ## CLI
 
-BySpace has a CLI that mirrors the app:
+Paseo has a CLI that mirrors the app:
 
 ```bash
-byspace run --provider codex "implement OAuth"
-byspace run --host devbox:6777 "run the test suite"
-byspace ls
-byspace send <agent-id> "add tests"
-byspace schedule create --cron "0 9 * * 1" "audit the codebase"
+paseo run --provider codex "implement OAuth"
+paseo run --host devbox:6767 "run the test suite"
+paseo ls
+paseo send <agent-id> "add tests"
+paseo schedule create --cron "0 9 * * 1" "audit the codebase"
 ```
 
-`byspace run --host` connects to a remote daemon. `byspace schedule` runs an agent on a cron.
+`paseo run --host` connects to a remote daemon. `paseo schedule` runs an agent on a cron.
 
 Conductor does not have a CLI.
 
@@ -66,19 +66,19 @@ Conductor does not have a CLI.
 
 Both tools isolate parallel agents in git worktrees.
 
-BySpace also gives each worktree its own dev server URL. Two agents running their dev servers at the same time get `web.fix-auth.my-app.localhost` and `web.add-search.my-app.localhost` instead of port collisions.
+Paseo also gives each worktree its own dev server URL. Two agents running their dev servers at the same time get `web.fix-auth.my-app.localhost` and `web.add-search.my-app.localhost` instead of port collisions.
 
 ## Mobile
 
-BySpace ships native iOS and Android apps with the same feature set as the desktop app. Conductor has no mobile app.
+Paseo ships native iOS and Android apps with the same feature set as the desktop app. Conductor has no mobile app.
 
 ## Voice
 
-BySpace's speech-to-text and text-to-speech run locally on your device. Nothing leaves your network. Conductor does not have voice.
+Paseo's speech-to-text and text-to-speech run locally on your device. Nothing leaves your network. Conductor does not have voice.
 
 ## Comparison
 
-|                              | BySpace                                                         | Conductor          |
+|                              | Paseo                                                           | Conductor          |
 | ---------------------------- | --------------------------------------------------------------- | ------------------ |
 | License                      | Open source (AGPL-3.0)                                          | Closed source      |
 | Platforms                    | macOS, Linux, Windows                                           | macOS only         |
@@ -94,4 +94,4 @@ BySpace's speech-to-text and text-to-speech run locally on your device. Nothing 
 | Local voice (on-device)      | Yes                                                             | —                  |
 | Self-hosted daemon           | Yes                                                             | —                  |
 
-See also: [BySpace vs Superset](/alternatives/superset), [BySpace vs OpenChamber](/alternatives/openchamber), [BySpace vs Happy Coder](/alternatives/happy-coder).
+See also: [Paseo vs Superset](/alternatives/superset), [Paseo vs OpenChamber](/alternatives/openchamber), [Paseo vs Happy Coder](/alternatives/happy-coder).

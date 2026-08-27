@@ -10,7 +10,7 @@ import type {
   ManagedProcessRegistry,
   ManagedProcessReapResult,
 } from "./managed-processes/managed-processes.js";
-import { createBySpaceDaemon, type BySpaceDaemonConfig } from "./bootstrap.js";
+import { createPaseoDaemon, type PaseoDaemonConfig } from "./bootstrap.js";
 import { createTestAgentClients } from "./test-utils/fake-agent-client.js";
 
 let tempRoot: string | null = null;
@@ -27,25 +27,25 @@ afterEach(async () => {
 
 describe("daemon managed process bootstrap", () => {
   test("reaps stale helper process records during daemon bootstrap", async () => {
-    tempRoot = await mkdtemp(path.join(os.tmpdir(), "byspace-managed-bootstrap-"));
-    staticDir = await mkdtemp(path.join(os.tmpdir(), "byspace-static-"));
-    const byspaceHome = path.join(tempRoot, ".byspace");
+    tempRoot = await mkdtemp(path.join(os.tmpdir(), "paseo-managed-bootstrap-"));
+    staticDir = await mkdtemp(path.join(os.tmpdir(), "paseo-static-"));
+    const paseoHome = path.join(tempRoot, ".paseo");
     const managedProcesses = new FakeManagedProcesses();
-    const daemon = await createBySpaceDaemon(
+    const daemon = await createPaseoDaemon(
       {
         listen: "127.0.0.1:0",
-        byspaceHome,
+        paseoHome,
         corsAllowedOrigins: [],
         hostnames: true,
         mcpEnabled: false,
         staticDir,
         mcpDebug: false,
         agentClients: createTestAgentClients(),
-        agentStoragePath: path.join(byspaceHome, "agents"),
+        agentStoragePath: path.join(paseoHome, "agents"),
         relayEnabled: false,
-        appBaseUrl: "https://app.byspace.cc.cd",
+        appBaseUrl: "https://app.paseo.sh",
         managedProcesses,
-      } as BySpaceDaemonConfig,
+      } as PaseoDaemonConfig,
       pino({ level: "silent" }),
     );
 

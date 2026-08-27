@@ -16,7 +16,7 @@ export interface WaitForServerOptions {
 type ServerProbe = (host: string, port: number) => Promise<void>;
 
 const RESERVED_LOCAL_PORTS = new Set([
-  6777, // Developer daemon.
+  6767, // Developer daemon.
   61680, // OpenCode's default local server.
 ]);
 
@@ -157,7 +157,7 @@ function startMetro(port: number, buffer: ReturnType<typeof createLineBuffer>): 
     env: {
       ...process.env,
       BROWSER: "none",
-      ...(process.env.E2E_DESKTOP_RUNTIME === "1" ? { BYSPACE_WEB_PLATFORM: "electron" } : {}),
+      ...(process.env.E2E_DESKTOP_RUNTIME === "1" ? { PASEO_WEB_PLATFORM: "electron" } : {}),
     },
     stdio: ["ignore", "pipe", "pipe"],
     detached: false,

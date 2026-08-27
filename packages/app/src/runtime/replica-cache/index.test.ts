@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { WorkspaceDescriptorPayload } from "@bytetrue/byspace-protocol/messages";
+import type { WorkspaceDescriptorPayload } from "@getpaseo/protocol/messages";
 import { normalizeAgentSnapshot } from "@/utils/agent-snapshots";
 import {
   normalizeProjectDescriptor,
@@ -34,12 +34,12 @@ class MemoryStorage implements ReplicaCacheStorage {
 function workspace(
   id = "workspace-1",
   projectId = "project-1",
-  workspaceDirectory = "/repo/byspace",
+  workspaceDirectory = "/repo/paseo",
 ): WorkspaceDescriptorPayload {
   return {
     id,
     projectId,
-    projectDisplayName: "BySpace",
+    projectDisplayName: "Paseo",
     projectRootPath: workspaceDirectory,
     workspaceDirectory,
     projectKind: "git",
@@ -54,7 +54,7 @@ function workspace(
   };
 }
 
-function agent(id: string, workspaceId = "workspace-1", cwd = "/repo/byspace") {
+function agent(id: string, workspaceId = "workspace-1", cwd = "/repo/paseo") {
   return {
     ...normalizeAgentSnapshot(
       {
@@ -94,7 +94,7 @@ function agent(id: string, workspaceId = "workspace-1", cwd = "/repo/byspace") {
         currentBranch: null,
         remoteUrl: null,
         worktreeRoot: null,
-        isBySpaceOwnedWorktree: false as const,
+        isPaseoOwnedWorktree: false as const,
         mainRepoRoot: null,
       },
     },
@@ -157,9 +157,9 @@ function seedSession(): void {
   store.setProjects(SERVER_ID, [
     normalizeProjectDescriptor({
       projectId: "project-1",
-      projectKey: "remote:github.com/ByteTrue/byspace",
-      projectDisplayName: "BySpace",
-      projectRootPath: "/repo/byspace",
+      projectKey: "remote:github.com/getpaseo/paseo",
+      projectDisplayName: "Paseo",
+      projectRootPath: "/repo/paseo",
       projectKind: "git",
     }),
     normalizeProjectDescriptor({
@@ -288,7 +288,7 @@ describe("ReplicaCache", () => {
     expect(Array.from(session.workspaces.keys())).toEqual(["workspace-1"]);
     expect(Array.from(session.projects.keys())).toEqual(["project-1", "empty-project"]);
     expect(session.agents.get("agent-1")?.updatedAt).toBeInstanceOf(Date);
-    expect(session.agents.get("agent-1")?.projectPlacement?.checkout.cwd).toBe("/repo/byspace");
+    expect(session.agents.get("agent-1")?.projectPlacement?.checkout.cwd).toBe("/repo/paseo");
     expect(session.workspaces.get("workspace-1")?.statusEnteredAt).toBeInstanceOf(Date);
     expect(session.workspaces.get("workspace-1")?.worktreeSlug).toBe("owned-worktree");
     // A restored row draws its label chips. The reconnect cursor is current, so nothing re-sends
@@ -455,7 +455,7 @@ describe("ReplicaCache", () => {
       items: secondTimeline.slice(-50),
     });
 
-    const persisted = JSON.parse(storage.values.get("@byspace:replica-cache") ?? "null") as {
+    const persisted = JSON.parse(storage.values.get("@paseo:replica-cache") ?? "null") as {
       version: number;
       hosts: Array<{ timeline: Record<string, unknown> | null }>;
     };
@@ -630,7 +630,7 @@ describe("ReplicaCache", () => {
   it("rejects and clears version 5 cache data before overwriting it on flush", async () => {
     const storage = new MemoryStorage();
     storage.values.set(
-      "@byspace:replica-cache",
+      "@paseo:replica-cache",
       JSON.stringify({
         version: 5,
         hosts: [
@@ -653,11 +653,11 @@ describe("ReplicaCache", () => {
     cache.setHosts([SERVER_ID]);
 
     await cache.restore();
-    expect(storage.values.has("@byspace:replica-cache")).toBe(false);
+    expect(storage.values.has("@paseo:replica-cache")).toBe(false);
     await cache.flush();
 
     expect(useSessionStore.getState().sessions[SERVER_ID]).toBeUndefined();
-    expect(JSON.parse(storage.values.get("@byspace:replica-cache") ?? "null")).toEqual({
+    expect(JSON.parse(storage.values.get("@paseo:replica-cache") ?? "null")).toEqual({
       version: 6,
       hosts: [],
     });

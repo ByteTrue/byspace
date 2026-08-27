@@ -59,7 +59,7 @@ export class PrivateHubCredentialStore implements HubCredentialStore {
   private readonly filePath: string;
 
   constructor(env: Readonly<Record<string, string | undefined>> = process.env) {
-    this.filePath = path.join(resolveBySpaceHome(env), "hub-credentials.json");
+    this.filePath = path.join(resolvePaseoHome(env), "hub-credentials.json");
   }
 
   active(): StoredHubCredential | null {
@@ -136,8 +136,8 @@ export class PrivateHubCredentialStore implements HubCredentialStore {
   }
 }
 
-function resolveBySpaceHome(env: Readonly<Record<string, string | undefined>>): string {
-  const configured = env.BYSPACE_HOME ?? "~/.byspace";
+function resolvePaseoHome(env: Readonly<Record<string, string | undefined>>): string {
+  const configured = env.PASEO_HOME ?? "~/.paseo";
   const expanded = configured === "~" ? homedir() : configured.replace(/^~\//u, `${homedir()}/`);
   return path.resolve(expanded);
 }
@@ -158,13 +158,13 @@ function isMissingFile(error: unknown): boolean {
 function invalidCredentialFile(): HubCommandError {
   return new HubCommandError(
     "HUB_CREDENTIALS_INVALID",
-    "Stored Hub login is invalid. Run `byspace hub login <origin>` to replace it.",
+    "Stored Hub login is invalid. Run `paseo hub login <origin>` to replace it.",
   );
 }
 
 function credentialStorageError(): HubCommandError {
   return new HubCommandError(
     "HUB_CREDENTIALS_UNAVAILABLE",
-    "Could not access the private Hub credential store under BYSPACE_HOME.",
+    "Could not access the private Hub credential store under PASEO_HOME.",
   );
 }

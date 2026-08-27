@@ -6,18 +6,15 @@ import type {
   ServerRequest,
 } from "@modelcontextprotocol/sdk/types.js";
 
-import { addModelVisibleStructuredContent } from "./tools/byspace-tool-serialization.js";
-import {
-  createBySpaceToolCatalog,
-  type BySpaceToolHostDependencies,
-} from "./tools/byspace-tools.js";
-import type { BySpaceToolResult } from "./tools/types.js";
+import { addModelVisibleStructuredContent } from "./tools/paseo-tool-serialization.js";
+import { createPaseoToolCatalog, type PaseoToolHostDependencies } from "./tools/paseo-tools.js";
+import type { PaseoToolResult } from "./tools/types.js";
 
-export type AgentMcpServerOptions = BySpaceToolHostDependencies;
+export type AgentMcpServerOptions = PaseoToolHostDependencies;
 
 type McpToolContext = RequestHandlerExtra<ServerRequest, ServerNotification>;
 
-function toMcpToolResult(result: BySpaceToolResult): CallToolResult {
+function toMcpToolResult(result: PaseoToolResult): CallToolResult {
   const modelVisibleResult = addModelVisibleStructuredContent(result);
   return {
     content: modelVisibleResult.content as CallToolResult["content"],
@@ -32,7 +29,7 @@ function toMcpToolResult(result: BySpaceToolResult): CallToolResult {
 }
 
 export async function createAgentMcpServer(options: AgentMcpServerOptions): Promise<McpServer> {
-  const catalog = await createBySpaceToolCatalog(options);
+  const catalog = await createPaseoToolCatalog(options);
   const server = new McpServer({
     name: "agent-mcp",
     version: "2.0.0",

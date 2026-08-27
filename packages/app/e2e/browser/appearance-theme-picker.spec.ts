@@ -26,7 +26,7 @@ test("keeps the selected workspace visible in Pure black", async ({ page }, test
 
   try {
     await page.addInitScript(() => {
-      localStorage.setItem("@byspace:app-settings", JSON.stringify({ theme: "pureBlack" }));
+      localStorage.setItem("@paseo:app-settings", JSON.stringify({ theme: "pureBlack" }));
     });
     await gotoAppShell(page);
 
@@ -47,7 +47,7 @@ test("keeps the selected workspace visible in Pure black", async ({ page }, test
 
 test("applies the interface font size to settings text", async ({ page }) => {
   await page.addInitScript(() => {
-    localStorage.setItem("@byspace:app-settings", JSON.stringify({ uiBaseFontSize: 21 }));
+    localStorage.setItem("@paseo:app-settings", JSON.stringify({ uiBaseFontSize: 21 }));
   });
   await page.goto("/settings");
   await expect(page.getByTestId("settings-sidebar")).toBeVisible();

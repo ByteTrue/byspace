@@ -1,5 +1,5 @@
 import type { ComponentType } from "react";
-import type { BySpaceApi } from "@bytetrue/byspace-client";
+import type { PaseoApi } from "@getpaseo/client";
 import type { ZodType, input as ZodInput, output as ZodOutput } from "zod";
 import type { PluginRpcContract } from "./rpc.js";
 
@@ -137,7 +137,7 @@ export interface PluginAttachmentSourceContribution {
 }
 
 export interface PluginCommandCapabilities {
-  byspace: BySpaceApi;
+  paseo: PaseoApi;
   rpc<InputSchema extends ZodType, OutputSchema extends ZodType>(
     contract: PluginRpcContract<InputSchema, OutputSchema>,
     input: ZodInput<InputSchema>,
@@ -184,7 +184,7 @@ export type PluginCommandCenterItemContribution =
     });
 
 export interface PluginHandlerContext {
-  byspace: BySpaceApi;
+  paseo: PaseoApi;
 }
 
 export interface PluginContext {

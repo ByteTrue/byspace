@@ -1,45 +1,45 @@
 import type { z } from "zod";
 
-export interface BySpaceToolExecutionContext {
+export interface PaseoToolExecutionContext {
   signal?: AbortSignal;
-  sendUpdate?: (update: BySpaceToolResult) => void;
+  sendUpdate?: (update: PaseoToolResult) => void;
 }
 
-export interface BySpaceToolResult {
+export interface PaseoToolResult {
   content: Array<{ type: string; text?: string; [key: string]: unknown }>;
   structuredContent?: unknown;
   isError?: boolean;
 }
 
-export interface BySpaceToolConfig {
+export interface PaseoToolConfig {
   title?: string;
   description?: string;
   inputSchema?: z.ZodRawShape | z.ZodType;
   outputSchema?: z.ZodRawShape;
 }
 
-export interface BySpaceToolDefinition extends BySpaceToolConfig {
+export interface PaseoToolDefinition extends PaseoToolConfig {
   name: string;
   description: string;
-  handler: (input: unknown, context: BySpaceToolExecutionContext) => Promise<BySpaceToolResult>;
+  handler: (input: unknown, context: PaseoToolExecutionContext) => Promise<PaseoToolResult>;
 }
 
-export interface BySpaceToolCatalog {
-  tools: ReadonlyMap<string, BySpaceToolDefinition>;
-  getTool(name: string): BySpaceToolDefinition | undefined;
+export interface PaseoToolCatalog {
+  tools: ReadonlyMap<string, PaseoToolDefinition>;
+  getTool(name: string): PaseoToolDefinition | undefined;
   executeTool(
     name: string,
     input: unknown,
-    context?: BySpaceToolExecutionContext,
-  ): Promise<BySpaceToolResult>;
+    context?: PaseoToolExecutionContext,
+  ): Promise<PaseoToolResult>;
 }
 
-export interface BySpaceToolRuntimeContext {
+export interface PaseoToolRuntimeContext {
   callerAgentId?: string;
   enableVoiceTools?: boolean;
   voiceOnly?: boolean;
 }
 
-export type BySpaceToolCatalogFactory = (
-  context: BySpaceToolRuntimeContext,
-) => BySpaceToolCatalog | Promise<BySpaceToolCatalog>;
+export type PaseoToolCatalogFactory = (
+  context: PaseoToolRuntimeContext,
+) => PaseoToolCatalog | Promise<PaseoToolCatalog>;

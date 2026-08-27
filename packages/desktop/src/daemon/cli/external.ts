@@ -1,4 +1,4 @@
-import { spawnProcess } from "@bytetrue/byspace-server";
+import { spawnProcess } from "@getpaseo/server";
 import log from "electron-log/main";
 import type { NodeEntrypointInvocation } from "../node-entrypoint-launcher.js";
 import { createNodeEntrypointInvocation } from "../runtime-paths.js";

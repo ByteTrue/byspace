@@ -3,7 +3,7 @@ import type {
   ListTerminalsResponse,
   MutableDaemonConfig,
   SessionOutboundMessage,
-} from "@bytetrue/byspace-protocol/messages";
+} from "@getpaseo/protocol/messages";
 import { agentCommandsQueryRoot } from "@/hooks/agent-commands-query";
 import { orderCheckoutDiffFiles } from "@/git/diff-order";
 import { daemonConfigQueryKey } from "@/data/daemon-config";

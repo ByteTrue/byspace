@@ -7,7 +7,7 @@ failure screenshot proves the intended behavior, not just that the app launched.
 
 `ios-sidebar-close-regression.yaml` exercises close swipes over a semantic header
 and the nested workspace list without activating the content below the swipe.
-Start the `com.bytetrue.byspace.debug` dev client against the intended Metro server first;
+Start the `sh.paseo.debug` dev client against the intended Metro server first;
 the flow preserves that running connection.
 
 ```bash
@@ -58,7 +58,7 @@ The reusable pieces live in `flows/`:
 Compose new workspace scenarios out of these primitives instead of copying the
 old full flow. The shell scripts render the top-level flows and every `flows/*.yaml`
 file into the same temp directory, so nested `runFlow: flows/...` paths keep
-working with `${BYSPACE_MAESTRO_*}` placeholders.
+working with `${PASEO_MAESTRO_*}` placeholders.
 
 The flow is intentionally strict. It must:
 
@@ -76,9 +76,9 @@ Do not weaken this flow to only wait for `message-input-root`. That can pass on
 the wrong route. The header assertion and the `New workspace` negative assertion
 are what prove the redirect actually completed.
 
-The scripts assume a development build with package id `com.bytetrue.byspace.debug`, an
-already-running local daemon on `127.0.0.1:6777`, and a connected Android device
-or emulator. They call `adb reverse tcp:6777 tcp:6777`; they do not restart the
+The scripts assume a development build with package id `sh.paseo.debug`, an
+already-running local daemon on `127.0.0.1:6767`, and a connected Android device
+or emulator. They call `adb reverse tcp:6767 tcp:6767`; they do not restart the
 daemon.
 
 ```bash
@@ -89,8 +89,8 @@ bash packages/app/maestro/record-workspace-create-android-focus.sh
 Optional environment:
 
 ```bash
-BYSPACE_MAESTRO_APP_ID=com.bytetrue.byspace.debug
-BYSPACE_MAESTRO_DIRECT_ENDPOINT=127.0.0.1:6777
-BYSPACE_MAESTRO_DAEMON_WS_URL=ws://127.0.0.1:6777/ws
-BYSPACE_MAESTRO_PROJECT_PATH=/path/to/git/repo
+PASEO_MAESTRO_APP_ID=sh.paseo.debug
+PASEO_MAESTRO_DIRECT_ENDPOINT=127.0.0.1:6767
+PASEO_MAESTRO_DAEMON_WS_URL=ws://127.0.0.1:6767/ws
+PASEO_MAESTRO_PROJECT_PATH=/path/to/git/repo
 ```

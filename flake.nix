@@ -1,5 +1,5 @@
 {
-  description = "BySpace - self-hosted daemon for AI coding agents";
+  description = "Paseo - self-hosted daemon for AI coding agents";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
@@ -25,8 +25,8 @@
         system:
         let
           pkgs = pkgsFor system;
-          byspace = pkgs.callPackage ./nix/package.nix { };
-          versionParts = pkgs.lib.splitString "." byspace.version;
+          paseo = pkgs.callPackage ./nix/package.nix { };
+          versionParts = pkgs.lib.splitString "." paseo.version;
           sourceRevision = if self ? revCount && self.revCount != null then self.revCount else 0;
           buildRevision = sourceRevision - (sourceRevision / 10000) * 10000;
           desktopBuildVersion = pkgs.lib.concatStringsSep "." [
@@ -36,21 +36,21 @@
           ];
         in
         {
-          default = byspace;
-          byspace = byspace;
+          default = paseo;
+          paseo = paseo;
           desktop = pkgs.callPackage ./nix/desktop-package.nix {
-            inherit byspace;
+            inherit paseo;
             buildVersion = desktopBuildVersion;
           };
         }
       );
 
-      nixosModules.default = self.nixosModules.byspace;
-      nixosModules.byspace =
+      nixosModules.default = self.nixosModules.paseo;
+      nixosModules.paseo =
         { pkgs, lib, ... }:
         {
           imports = [ ./nix/module.nix ];
-          services.byspace.package = lib.mkDefault self.packages.${pkgs.stdenv.hostPlatform.system}.default;
+          services.paseo.package = lib.mkDefault self.packages.${pkgs.stdenv.hostPlatform.system}.default;
         };
 
       devShells = forAllSystems (

@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import pino from "pino";
 
-import { createTestBySpaceDaemon } from "../test-utils/byspace-daemon.js";
+import { createTestPaseoDaemon } from "../test-utils/paseo-daemon.js";
 import { DaemonClient } from "../test-utils/daemon-client.js";
 import {
   canRunRealProvider,
@@ -33,7 +33,7 @@ describe("daemon E2E (real claude) - send while running recovery", () => {
   test("clears input processing when the interrupt transition is missed", async () => {
     const logger = pino({ level: "silent" });
     const cwd = tmpCwd();
-    const daemon = await createTestBySpaceDaemon({
+    const daemon = await createTestPaseoDaemon({
       agentClients: createRealProviderClients(["claude"], logger),
       logger,
     });

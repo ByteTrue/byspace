@@ -416,7 +416,7 @@ export const useDraftStore = create<DraftStore>()(
       },
     }),
     {
-      name: "byspace-drafts",
+      name: "paseo-drafts",
       version: DRAFT_STORE_VERSION,
       storage: draftPersistStorage,
       partialize: ({ drafts, createModalDraft }) => ({ drafts, createModalDraft }),

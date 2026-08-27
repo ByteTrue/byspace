@@ -13,7 +13,7 @@ import {
   keymap,
   lineNumbers,
 } from "@codemirror/view";
-import { createCodeMirrorHighlightStyle, type HighlightStyle } from "@bytetrue/byspace-highlight";
+import { createCodeMirrorHighlightStyle, type HighlightStyle } from "@getpaseo/highlight";
 
 export interface EditorVisualTheme {
   colorScheme: "light" | "dark";

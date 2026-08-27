@@ -1,4 +1,4 @@
-appId: com.bytetrue.byspace
+appId: sh.paseo
 ---
 - runFlow: flows/land-in-chat.yaml
 

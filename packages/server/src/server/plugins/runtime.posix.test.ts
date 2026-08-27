@@ -11,9 +11,9 @@ import type { PluginSessionSocket } from "./session-socket.js";
 const temporaryDirectories: string[] = [];
 
 async function createPlugin(id: string, source: string): Promise<string> {
-  const directory = await mkdtemp(path.join(tmpdir(), "byspace-plugin-"));
+  const directory = await mkdtemp(path.join(tmpdir(), "paseo-plugin-"));
   temporaryDirectories.push(directory);
-  await writeFile(path.join(directory, "byspace-plugin.json"), JSON.stringify({ id }), "utf8");
+  await writeFile(path.join(directory, "paseo-plugin.json"), JSON.stringify({ id }), "utf8");
   await writeFile(path.join(directory, "index.tsx"), source, "utf8");
   return directory;
 }
@@ -161,10 +161,10 @@ describe("PluginRuntime", () => {
     expect(
       runtime.getLogs("lifecycle").map(({ stream, message }) => ({ stream, message })),
     ).toEqual([
-      { stream: "stdout", message: "[byspace] Loading plugin" },
-      { stream: "stdout", message: "[byspace] Plugin ready" },
-      { stream: "stdout", message: "[byspace] Stopping plugin" },
-      { stream: "stdout", message: "[byspace] Plugin stopped" },
+      { stream: "stdout", message: "[paseo] Loading plugin" },
+      { stream: "stdout", message: "[paseo] Plugin ready" },
+      { stream: "stdout", message: "[paseo] Stopping plugin" },
+      { stream: "stdout", message: "[paseo] Plugin stopped" },
     ]);
   });
 
@@ -186,7 +186,7 @@ describe("PluginRuntime", () => {
     const logs = runtime.getLogs("output");
     expect(
       logs
-        .filter((entry) => !entry.message.startsWith("[byspace]"))
+        .filter((entry) => !entry.message.startsWith("[paseo]"))
         .map(({ stream, message }) => ({ stream, message })),
     ).toEqual([
       { stream: "stdout", message: "first" },
@@ -308,7 +308,7 @@ describe("PluginRuntime", () => {
     ).toEqual([
       {
         stream: "stdout",
-        message: "[byspace] Loading plugin",
+        message: "[paseo] Loading plugin",
       },
       {
         stream: "stderr",
@@ -361,7 +361,7 @@ describe("PluginRuntime", () => {
   });
 
   it("waits for asynchronous plugin cleanup before stopping", async () => {
-    const cleanupFile = path.join(tmpdir(), `byspace-plugin-cleanup-${Date.now()}`);
+    const cleanupFile = path.join(tmpdir(), `paseo-plugin-cleanup-${Date.now()}`);
     const directory = await createPlugin(
       "async-cleanup",
       `import { writeFile } from "node:fs/promises";
@@ -501,7 +501,7 @@ export default function contribute(plugin: unknown) {
 import { platform } from "node:os";
 import { Text } from "react-native";
 import { z } from "zod";
-import { defineAttachmentSource, defineRpc } from "@bytetrue/byspace-plugin";
+import { defineAttachmentSource, defineRpc } from "@getpaseo/plugin";
 
 const greetRpc = defineRpc({
   name: "greet",
@@ -552,8 +552,8 @@ export default function contribute(plugin: any) {
     expect(catalog[0]?.clientBundle).toContain("Open review");
     expect(catalog[0]?.clientBundle).not.toContain("node:os");
     expect(catalog[0]?.clientBundle).not.toContain("get: () => from[key]");
-    await expect(runtime.invoke("hello", "greet", { name: "BySpace" })).resolves.toMatchObject({
-      message: "Hello, BySpace",
+    await expect(runtime.invoke("hello", "greet", { name: "Paseo" })).resolves.toMatchObject({
+      message: "Hello, Paseo",
     });
     await expect(runtime.invoke("hello", "greet", { name: 7 })).rejects.toThrow();
 
@@ -561,12 +561,12 @@ export default function contribute(plugin: any) {
   });
 
   // COMPAT(plugin-sdk-scope): plugins scaffolded through 0.5.0-beta.1 import the unpublished
-  // @byspace/plugin name. Drop with the specifiers in plugin-sdk-specifiers.ts.
-  it("loads a plugin that imports the pre-rename @byspace/plugin specifier", async () => {
+  // @paseo/plugin name. Drop with the specifiers in plugin-sdk-specifiers.ts.
+  it("loads a plugin that imports the pre-rename @paseo/plugin specifier", async () => {
     const directory = await createPlugin(
       "legacy-sdk",
       `import { z } from "zod";
-import { defineRpc } from "@byspace/plugin/server";
+import { defineRpc } from "@paseo/plugin/server";
 
 const pingRpc = defineRpc({
   name: "ping",
@@ -589,17 +589,17 @@ export default function contribute(plugin: any) {
   });
 
   it("keeps client and server modules in their target runtime", async () => {
-    const directory = await mkdtemp(path.join(tmpdir(), "byspace-plugin-"));
+    const directory = await mkdtemp(path.join(tmpdir(), "paseo-plugin-"));
     temporaryDirectories.push(directory);
     await Promise.all([
       writeFile(
-        path.join(directory, "byspace-plugin.json"),
+        path.join(directory, "paseo-plugin.json"),
         JSON.stringify({ id: "split-runtime" }),
         "utf8",
       ),
       writeFile(
         path.join(directory, "index.ts"),
-        `import type { PluginContext } from "@bytetrue/byspace-plugin";
+        `import type { PluginContext } from "@getpaseo/plugin";
 import { Surface } from "./surface.client";
 import { inspectRpc } from "./inspect.shared";
 import { inspectHost } from "./inspect.server";
@@ -625,7 +625,7 @@ export function Surface() {
       ),
       writeFile(
         path.join(directory, "inspect.shared.ts"),
-        `import { defineRpc } from "@bytetrue/byspace-plugin/server";
+        `import { defineRpc } from "@getpaseo/plugin/server";
 import { z } from "zod";
 
 export const inspectRpc = defineRpc({
@@ -661,17 +661,17 @@ export function inspectHost(_input: z.input<typeof inspectRpc.input>) {
   });
 
   it("rejects server imports from client-only modules", async () => {
-    const directory = await mkdtemp(path.join(tmpdir(), "byspace-plugin-"));
+    const directory = await mkdtemp(path.join(tmpdir(), "paseo-plugin-"));
     temporaryDirectories.push(directory);
     await Promise.all([
       writeFile(
-        path.join(directory, "byspace-plugin.json"),
+        path.join(directory, "paseo-plugin.json"),
         JSON.stringify({ id: "cross-runtime-import" }),
         "utf8",
       ),
       writeFile(
         path.join(directory, "index.ts"),
-        `import type { PluginContext } from "@bytetrue/byspace-plugin";
+        `import type { PluginContext } from "@getpaseo/plugin";
 import { Surface } from "./surface.client";
 
 export default function contribute(plugin: PluginContext) {
@@ -701,17 +701,17 @@ export function Surface() { return readSecret(); }`,
   });
 
   it("rejects client imports from server-only modules", async () => {
-    const directory = await mkdtemp(path.join(tmpdir(), "byspace-plugin-"));
+    const directory = await mkdtemp(path.join(tmpdir(), "paseo-plugin-"));
     temporaryDirectories.push(directory);
     await Promise.all([
       writeFile(
-        path.join(directory, "byspace-plugin.json"),
+        path.join(directory, "paseo-plugin.json"),
         JSON.stringify({ id: "cross-runtime-import" }),
         "utf8",
       ),
       writeFile(
         path.join(directory, "index.ts"),
-        `import type { PluginContext } from "@bytetrue/byspace-plugin";
+        `import type { PluginContext } from "@getpaseo/plugin";
 import { inspect } from "./inspect.server";
 import { inspectRpc } from "./inspect.shared";
 
@@ -723,7 +723,7 @@ export default function contribute(plugin: PluginContext) {
       ),
       writeFile(
         path.join(directory, "inspect.shared.ts"),
-        `import { defineRpc } from "@bytetrue/byspace-plugin";
+        `import { defineRpc } from "@getpaseo/plugin";
 import { z } from "zod";
 export const inspectRpc = defineRpc({
   name: "inspect",
@@ -756,7 +756,7 @@ export function inspect() { void Surface; return {}; }`,
     const directory = await createPlugin(
       "invalid-output",
       `import { z } from "zod";
-import { defineRpc } from "@bytetrue/byspace-plugin";
+import { defineRpc } from "@getpaseo/plugin";
 const brokenRpc = defineRpc({
   name: "broken",
   input: z.object({}),

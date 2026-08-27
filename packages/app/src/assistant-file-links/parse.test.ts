@@ -351,32 +351,32 @@ describe("parseAssistantFileLink", () => {
 
   it("keeps tilde hrefs as direct home-relative file targets", () => {
     expect(
-      parseAssistantFileLink("~/.byspace/plans/file-preview.md", {
+      parseAssistantFileLink("~/.paseo/plans/file-preview.md", {
         workspaceRoot: "/Users/test/project",
       }),
     ).toEqual({
-      raw: "~/.byspace/plans/file-preview.md",
-      path: "~/.byspace/plans/file-preview.md",
+      raw: "~/.paseo/plans/file-preview.md",
+      path: "~/.paseo/plans/file-preview.md",
       lineStart: undefined,
       lineEnd: undefined,
     });
     expect(
-      parseAssistantFileLink("~/.byspace/plans/file-preview.md:12", {
+      parseAssistantFileLink("~/.paseo/plans/file-preview.md:12", {
         workspaceRoot: "/Users/test/project",
       }),
     ).toEqual({
-      raw: "~/.byspace/plans/file-preview.md:12",
-      path: "~/.byspace/plans/file-preview.md",
+      raw: "~/.paseo/plans/file-preview.md:12",
+      path: "~/.paseo/plans/file-preview.md",
       lineStart: 12,
       lineEnd: undefined,
     });
     expect(
-      parseAssistantFileLink("~\\.byspace\\plans\\file-preview.md", {
+      parseAssistantFileLink("~\\.paseo\\plans\\file-preview.md", {
         workspaceRoot: "/Users/test/project",
       }),
     ).toEqual({
-      raw: "~\\.byspace\\plans\\file-preview.md",
-      path: "~/.byspace/plans/file-preview.md",
+      raw: "~\\.paseo\\plans\\file-preview.md",
+      path: "~/.paseo/plans/file-preview.md",
       lineStart: undefined,
       lineEnd: undefined,
     });
@@ -448,10 +448,10 @@ describe("normalizeInlinePathTarget", () => {
 
   it("keeps tilde paths as home-relative file targets", () => {
     expect(
-      normalizeInlinePathTarget("~/.byspace/plans/file-preview.md", "/Users/test/project"),
+      normalizeInlinePathTarget("~/.paseo/plans/file-preview.md", "/Users/test/project"),
     ).toEqual({
-      directory: "~/.byspace/plans",
-      file: "~/.byspace/plans/file-preview.md",
+      directory: "~/.paseo/plans",
+      file: "~/.paseo/plans/file-preview.md",
     });
   });
 

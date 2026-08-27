@@ -1,13 +1,13 @@
-import type { DaemonClientTrace } from "@bytetrue/byspace-client/internal/daemon-client";
+import type { DaemonClientTrace } from "@getpaseo/client/internal/daemon-client";
 import { requireOptionalNativeModule } from "expo-modules-core";
 import { isProfileBuild } from "@/constants/build-profile";
 
-interface BySpaceNativeTraceModule {
+interface PaseoNativeTraceModule {
   beginSection(name: string): void;
   endSection(): void;
 }
 
-const traceModule = requireOptionalNativeModule<BySpaceNativeTraceModule>("BySpaceNativeTrace");
+const traceModule = requireOptionalNativeModule<PaseoNativeTraceModule>("PaseoNativeTrace");
 
 export const nativePerformanceTrace: DaemonClientTrace = {
   isEnabled() {

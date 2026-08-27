@@ -5,7 +5,7 @@ import { runPairCommand, type PairCommandOutput, type PairingOffer } from "./pai
 const disabledOffer: PairingOffer = { relayEnabled: false, url: null, qr: null };
 const enabledOffer: PairingOffer = {
   relayEnabled: true,
-  url: "https://app.byspace.cc.cd/#offer=test",
+  url: "https://app.paseo.sh/#offer=test",
   qr: null,
 };
 
@@ -58,7 +58,7 @@ describe("daemon pair workflow", () => {
 
   test("interactive consent enables relay and prints the refreshed offer", async () => {
     const resolveOffer = vi
-      .fn<(options: { byspaceHome: string; enableRelay?: boolean }) => Promise<PairingOffer>>()
+      .fn<(options: { paseoHome: string; enableRelay?: boolean }) => Promise<PairingOffer>>()
       .mockResolvedValueOnce(disabledOffer)
       .mockResolvedValueOnce(enabledOffer);
     const output = createRecordedOutput();

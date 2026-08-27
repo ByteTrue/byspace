@@ -36,7 +36,7 @@ import {
   type ProviderRefreshContext,
   type ToolCallDetail,
 } from "../../agent-sdk-types.js";
-import type { BySpaceToolCatalog } from "../../tools/types.js";
+import type { PaseoToolCatalog } from "../../tools/types.js";
 import { importSessionFromPersistence } from "../../provider-session-import.js";
 import { runProviderRefreshActivity } from "../../provider-refresh-deadline.js";
 import { runProviderTurn } from "../provider-runner.js";
@@ -185,7 +185,7 @@ interface OmpAgentSessionOptions {
   providerIdleScheduler?: OmpProviderIdleScheduler;
   noTurnScheduler?: OmpNoTurnScheduler;
   usagePollScheduler?: OmpUsagePollScheduler;
-  byspaceTools?: BySpaceToolCatalog;
+  paseoTools?: PaseoToolCatalog;
   /**
    * When false (resumed sessions), replayed session events are dropped until
    * the first prompt or agent_start so history is not re-emitted as live
@@ -463,7 +463,7 @@ function withOmpCapabilities(): AgentCapabilityFlags {
   return {
     ...OMP_CORE_CAPABILITIES,
     supportsMcpServers: false,
-    supportsNativeBySpaceTools: true,
+    supportsNativePaseoTools: true,
   };
 }
 
@@ -881,7 +881,7 @@ export class OmpAgentSession implements AgentSession {
     this.state = options.initialState;
     this.currentModeId = options.currentModeId ?? null;
     this.logger = options.logger;
-    this.byspaceTools = options.byspaceTools;
+    this.paseoTools = options.paseoTools;
     this.live = options.live ?? true;
     this.providerIdleScheduler = options.providerIdleScheduler ?? createOmpProviderIdleScheduler();
     this.noTurnScheduler = options.noTurnScheduler ?? createOmpNoTurnScheduler();
@@ -929,7 +929,7 @@ export class OmpAgentSession implements AgentSession {
   private readonly runtimeSession: OmpRuntimeSession;
   private readonly config: AgentSessionConfig;
   private readonly logger: Logger;
-  private readonly byspaceTools?: BySpaceToolCatalog;
+  private readonly paseoTools?: PaseoToolCatalog;
 
   get id(): string | null {
     return this.state.sessionId;
@@ -1625,7 +1625,7 @@ export class OmpAgentSession implements AgentSession {
     if (
       handleOmpHostToolRuntimeEvent(event, {
         runtimeSession: this.runtimeSession,
-        byspaceTools: this.byspaceTools,
+        paseoTools: this.paseoTools,
         logger: this.logger,
       })
     ) {
@@ -1886,7 +1886,7 @@ export class OmpAgentSession implements AgentSession {
           return;
         }
         // A state request is processed after OMP's RPC loop becomes promptable,
-        // so do not advertise BySpace idle until it reports that transition.
+        // so do not advertise Paseo idle until it reports that transition.
         void this.completeTurnAfterProviderIdle(turnId, terminalMessages);
         return;
       }
@@ -2216,9 +2216,9 @@ export class OmpAgentClient implements AgentClient {
     this.runtime = options.runtime ?? createRuntime(options.logger, runtimeSettings);
   }
 
-  private async configureNativeBySpaceTools(
+  private async configureNativePaseoTools(
     runtimeSession: OmpRuntimeSession,
-    catalog: BySpaceToolCatalog | undefined,
+    catalog: PaseoToolCatalog | undefined,
   ): Promise<void> {
     if (!catalog) {
       return;
@@ -2243,7 +2243,7 @@ export class OmpAgentClient implements AgentClient {
       env: launchContext?.env,
     });
     try {
-      await this.configureNativeBySpaceTools(runtimeSession, launchContext?.byspaceTools);
+      await this.configureNativePaseoTools(runtimeSession, launchContext?.paseoTools);
       return new OmpAgentSession({
         runtimeSession,
         config,
@@ -2254,7 +2254,7 @@ export class OmpAgentClient implements AgentClient {
         providerIdleScheduler: this.providerIdleScheduler,
         noTurnScheduler: this.noTurnScheduler,
         usagePollScheduler: this.usagePollScheduler,
-        byspaceTools: launchContext?.byspaceTools,
+        paseoTools: launchContext?.paseoTools,
       });
     } catch (error) {
       await runtimeSession.close().catch(() => undefined);
@@ -2285,7 +2285,7 @@ export class OmpAgentClient implements AgentClient {
       }),
     );
     try {
-      await this.configureNativeBySpaceTools(runtimeSession, launchContext?.byspaceTools);
+      await this.configureNativePaseoTools(runtimeSession, launchContext?.paseoTools);
       return new OmpAgentSession({
         runtimeSession,
         config: resumeConfig.config,
@@ -2296,7 +2296,7 @@ export class OmpAgentClient implements AgentClient {
         providerIdleScheduler: this.providerIdleScheduler,
         noTurnScheduler: this.noTurnScheduler,
         usagePollScheduler: this.usagePollScheduler,
-        byspaceTools: launchContext?.byspaceTools,
+        paseoTools: launchContext?.paseoTools,
         live: false,
       });
     } catch (error) {

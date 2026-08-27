@@ -1,8 +1,8 @@
-import { createBySpaceApi, type BySpaceApi } from "@bytetrue/byspace-client";
-import type { DaemonClient } from "@bytetrue/byspace-client/internal/daemon-client";
+import { createPaseoApi, type PaseoApi } from "@getpaseo/client";
+import type { DaemonClient } from "@getpaseo/client/internal/daemon-client";
 
 export interface PluginSurfaceRuntime {
-  byspace: BySpaceApi;
+  paseo: PaseoApi;
   invoke(method: string, input: unknown): Promise<unknown>;
 }
 
@@ -12,7 +12,7 @@ export function createPluginSurfaceRuntime(
 ): PluginSurfaceRuntime | null {
   if (!client) return null;
   return {
-    byspace: createBySpaceApi(client),
+    paseo: createPaseoApi(client),
     invoke: (method, input) => client.invokePluginRpc(pluginId, method, input),
   };
 }

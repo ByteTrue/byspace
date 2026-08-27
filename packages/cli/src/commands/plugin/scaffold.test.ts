@@ -31,11 +31,9 @@ describe("plugin scaffold", () => {
         ts.flattenDiagnosticMessageText(diagnostic.messageText, "\n"),
       ),
     ).toEqual([]);
-    expect(JSON.parse(await readFile(path.join(directory, "byspace-plugin.json"), "utf8"))).toEqual(
-      {
-        id: "hello-plugin",
-      },
-    );
+    expect(JSON.parse(await readFile(path.join(directory, "paseo-plugin.json"), "utf8"))).toEqual({
+      id: "hello-plugin",
+    });
     await expect(readFile(path.join(directory, "index.ts"), "utf8")).resolves.toContain(
       'from "./main.client"',
     );
@@ -44,15 +42,15 @@ describe("plugin scaffold", () => {
     );
   });
 
-  it("typechecks client and server BySpace API access", async () => {
+  it("typechecks client and server Paseo API access", async () => {
     const parent = await mkdtemp(path.join(process.cwd(), ".plugin-scaffold-"));
     directories.push(parent);
-    const directory = path.join(parent, "byspace-api-plugin");
+    const directory = path.join(parent, "paseo-api-plugin");
     await scaffoldPluginDirectory(directory);
     await Promise.all([
       writeFile(
         path.join(directory, "inspect.shared.ts"),
-        `import { defineRpc } from "@bytetrue/byspace-plugin/server";
+        `import { defineRpc } from "@getpaseo/plugin/server";
 import { z } from "zod";
 
 export const inspect = defineRpc({
@@ -64,15 +62,15 @@ export const inspect = defineRpc({
       ),
       writeFile(
         path.join(directory, "inspect.server.ts"),
-        `import type { PluginHandlerContext } from "@bytetrue/byspace-plugin/server";
+        `import type { PluginHandlerContext } from "@getpaseo/plugin/server";
 import type { output as ZodOutput } from "zod";
 import { inspect } from "./inspect.shared";
 
 export async function inspectConfig(
   _input: ZodOutput<typeof inspect.input>,
-  { byspace }: PluginHandlerContext,
+  { paseo }: PluginHandlerContext,
 ) {
-  return { configured: Boolean((await byspace.config.get()).config) };
+  return { configured: Boolean((await paseo.config.get()).config) };
 }
 `,
       ),
@@ -83,17 +81,17 @@ import { Text } from "react-native";
 import {
   type PluginAgentPanelProps,
   useAgent,
-  useBySpace,
+  usePaseo,
   useWorkspace,
-} from "@bytetrue/byspace-plugin";
+} from "@getpaseo/plugin";
 
 export function Surface() {
-  const byspace = useBySpace();
-  const createWorkspace = () => byspace.workspaces.create({
+  const paseo = usePaseo();
+  const createWorkspace = () => paseo.workspaces.create({
     source: { kind: "directory", path: "/repo" },
   });
   void createWorkspace;
-  return <Text>BySpace API</Text>;
+  return <Text>Paseo API</Text>;
 }
 
 export function AgentPanel({ workspaceId, agentId }: PluginAgentPanelProps) {
@@ -113,7 +111,7 @@ export function AgentPanel({ workspaceId, agentId }: PluginAgentPanelProps) {
       ),
       writeFile(
         path.join(directory, "index.ts"),
-        `import type { PluginContext } from "@bytetrue/byspace-plugin";
+        `import type { PluginContext } from "@getpaseo/plugin";
 import { AgentPanel, Surface } from "./main.client";
 import { inspectConfig } from "./inspect.server";
 import { inspect } from "./inspect.shared";
@@ -133,8 +131,8 @@ export default function contribute(plugin: PluginContext) {
     title: "Open review",
     icon: "Scan",
     context: "agent",
-    async onSelect({ byspace, rpc, workspace, openPanel }) {
-      await byspace.workspaces.ref(workspace.id).setTitle("Review");
+    async onSelect({ paseo, rpc, workspace, openPanel }) {
+      await paseo.workspaces.ref(workspace.id).setTitle("Review");
       await rpc(inspect, {});
       openPanel("review");
     },
@@ -160,7 +158,7 @@ export default function contribute(plugin: PluginContext) {
   }, 20_000);
 
   it("refuses to write into a non-empty directory", async () => {
-    const directory = await mkdtemp(path.join(tmpdir(), "byspace-plugin-scaffold-"));
+    const directory = await mkdtemp(path.join(tmpdir(), "paseo-plugin-scaffold-"));
     directories.push(directory);
     await writeFile(path.join(directory, "notes.txt"), "keep me");
 

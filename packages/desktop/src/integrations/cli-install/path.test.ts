@@ -7,10 +7,10 @@ describe("cli-install-path", () => {
       resolveCliInstallSourcePath({
         platform: "darwin",
         isPackaged: true,
-        executablePath: "/Applications/BySpace.app/Contents/MacOS/BySpace",
-        shimPath: "/Applications/BySpace.app/Contents/Resources/bin/byspace",
+        executablePath: "/Applications/Paseo.app/Contents/MacOS/Paseo",
+        shimPath: "/Applications/Paseo.app/Contents/Resources/bin/paseo",
       }),
-    ).toBe("/Applications/BySpace.app/Contents/Resources/bin/byspace");
+    ).toBe("/Applications/Paseo.app/Contents/Resources/bin/paseo");
   });
 
   it("prefers the original AppImage path on linux", () => {
@@ -18,11 +18,11 @@ describe("cli-install-path", () => {
       resolveCliInstallSourcePath({
         platform: "linux",
         isPackaged: true,
-        executablePath: "/tmp/.mount_byspace123/byspace",
-        shimPath: "/tmp/.mount_byspace123/resources/bin/byspace",
-        appImagePath: "/home/user/Applications/BySpace.AppImage",
+        executablePath: "/tmp/.mount_paseo123/paseo",
+        shimPath: "/tmp/.mount_paseo123/resources/bin/paseo",
+        appImagePath: "/home/user/Applications/Paseo.AppImage",
       }),
-    ).toBe("/home/user/Applications/BySpace.AppImage");
+    ).toBe("/home/user/Applications/Paseo.AppImage");
   });
 
   it("falls back to the shim on windows and in development", () => {
@@ -30,18 +30,18 @@ describe("cli-install-path", () => {
       resolveCliInstallSourcePath({
         platform: "win32",
         isPackaged: true,
-        executablePath: "C:\\Users\\user\\AppData\\Local\\Programs\\BySpace\\BySpace.exe",
-        shimPath: "C:\\Users\\user\\AppData\\Local\\Programs\\BySpace\\resources\\bin\\byspace.cmd",
+        executablePath: "C:\\Users\\user\\AppData\\Local\\Programs\\Paseo\\Paseo.exe",
+        shimPath: "C:\\Users\\user\\AppData\\Local\\Programs\\Paseo\\resources\\bin\\paseo.cmd",
       }),
-    ).toBe("C:\\Users\\user\\AppData\\Local\\Programs\\BySpace\\resources\\bin\\byspace.cmd");
+    ).toBe("C:\\Users\\user\\AppData\\Local\\Programs\\Paseo\\resources\\bin\\paseo.cmd");
 
     expect(
       resolveCliInstallSourcePath({
         platform: "linux",
         isPackaged: false,
-        executablePath: "/opt/BySpace/byspace",
-        shimPath: "/opt/BySpace/resources/bin/byspace",
+        executablePath: "/opt/Paseo/paseo",
+        shimPath: "/opt/Paseo/resources/bin/paseo",
       }),
-    ).toBe("/opt/BySpace/resources/bin/byspace");
+    ).toBe("/opt/Paseo/resources/bin/paseo");
   });
 });

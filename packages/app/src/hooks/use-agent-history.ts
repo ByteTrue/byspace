@@ -2,8 +2,8 @@ import type {
   DaemonClient,
   FetchAgentHistoryOptions,
   FetchAgentHistoryPageInfo,
-} from "@bytetrue/byspace-client/internal/daemon-client";
-import type { AgentSearchMatch } from "@bytetrue/byspace-protocol/messages";
+} from "@getpaseo/client/internal/daemon-client";
+import type { AgentSearchMatch } from "@getpaseo/protocol/messages";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { useCallback, useMemo, useSyncExternalStore } from "react";
 import { useTranslation } from "react-i18next";

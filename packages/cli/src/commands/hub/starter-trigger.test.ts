@@ -8,33 +8,33 @@ describe("starter trigger connections", () => {
         {
           github: [
             {
-              slug: "github-ByteTrue",
-              accountLogin: "ByteTrue",
+              slug: "github-getpaseo",
+              accountLogin: "getpaseo",
               accountType: "Organization",
-              repositories: ["ByteTrue/byspace"],
+              repositories: ["getpaseo/paseo"],
             },
           ],
-          slack: [{ teamId: "T123", teamName: "BySpace" }],
-          discord: [{ guildId: "456", guildName: "BySpace Discord" }],
+          slack: [{ teamId: "T123", teamName: "Paseo" }],
+          discord: [{ guildId: "456", guildName: "Paseo Discord" }],
         },
-        "ByteTrue/byspace",
+        "getpaseo/paseo",
       ),
     ).toEqual([
       {
-        id: "github:ByteTrue/byspace",
-        label: "GitHub — ByteTrue/byspace",
+        id: "github:getpaseo/paseo",
+        label: "GitHub — getpaseo/paseo",
         provider: "github",
-        filters: { repo: "ByteTrue/byspace" },
+        filters: { repo: "getpaseo/paseo" },
       },
       {
         id: "slack:T123",
-        label: "Slack — BySpace",
+        label: "Slack — Paseo",
         provider: "slack",
         filters: { workspace: "T123" },
       },
       {
         id: "discord:456",
-        label: "Discord — BySpace Discord",
+        label: "Discord — Paseo Discord",
         provider: "discord",
         filters: { guild: "456" },
       },
@@ -47,16 +47,16 @@ describe("starter trigger connections", () => {
         {
           github: [
             {
-              slug: "github-ByteTrue",
-              accountLogin: "ByteTrue",
+              slug: "github-getpaseo",
+              accountLogin: "getpaseo",
               accountType: "Organization",
-              repositories: ["ByteTrue/hub"],
+              repositories: ["getpaseo/hub"],
             },
           ],
           slack: [],
           discord: [],
         },
-        "ByteTrue/byspace",
+        "getpaseo/paseo",
       ),
     ).toEqual([]);
   });

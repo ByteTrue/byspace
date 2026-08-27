@@ -3,7 +3,7 @@ const path = require("path");
 
 const { smokePackagedDesktopApp } = require("../e2e/packaged-app-smoke.js");
 
-const EXECUTABLE_NAME = "BySpace";
+const EXECUTABLE_NAME = "Paseo";
 
 // electron-builder arch enum → Node.js arch string
 const ARCH_MAP = { 0: "ia32", 1: "x64", 2: "armv7l", 3: "arm64", 4: "universal" };
@@ -36,7 +36,7 @@ function pruneClaudeAgentSdk(nodeModules, platform, arch) {
   }
 
   // SDK ≥0.2.113 ships per-platform Claude Code binaries via optionalDependencies
-  // (~210 MB each). BySpace requires user-installed `claude` on PATH, matching how
+  // (~210 MB each). Paseo requires user-installed `claude` on PATH, matching how
   // Codex/OpenCode are integrated, so drop every bundled copy.
   const anthropicDir = path.join(nodeModules, "@anthropic-ai");
   if (fs.existsSync(anthropicDir)) {
@@ -127,7 +127,7 @@ exports.default = async function afterPack(context) {
 };
 
 async function smokeUnpackedAppIfRequested(appOutDir) {
-  if (process.env.BYSPACE_DESKTOP_SMOKE !== "1") {
+  if (process.env.PASEO_DESKTOP_SMOKE !== "1") {
     return;
   }
 

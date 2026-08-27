@@ -10,9 +10,9 @@ describe("runCli", () => {
       createCliParseArgv({
         argv: [],
         cwd: process.cwd(),
-        nodeArgv: ["node", "byspace"],
+        nodeArgv: ["node", "paseo"],
       }),
-    ).toEqual(["node", "byspace", "onboard"]);
+    ).toEqual(["node", "paseo", "onboard"]);
   });
 
   it("routes explicit root relay flags to onboard", () => {
@@ -20,16 +20,16 @@ describe("runCli", () => {
       createCliParseArgv({
         argv: ["--relay"],
         cwd: process.cwd(),
-        nodeArgv: ["node", "byspace"],
+        nodeArgv: ["node", "paseo"],
       }),
-    ).toEqual(["node", "byspace", "onboard", "--relay"]);
+    ).toEqual(["node", "paseo", "onboard", "--relay"]);
     expect(
       createCliParseArgv({
         argv: ["--no-relay"],
         cwd: process.cwd(),
-        nodeArgv: ["node", "byspace"],
+        nodeArgv: ["node", "paseo"],
       }),
-    ).toEqual(["node", "byspace", "onboard", "--no-relay"]);
+    ).toEqual(["node", "paseo", "onboard", "--no-relay"]);
   });
 
   it("preserves known CLI command argv", () => {
@@ -37,9 +37,9 @@ describe("runCli", () => {
       createCliParseArgv({
         argv: ["daemon", "set-password"],
         cwd: process.cwd(),
-        nodeArgv: ["node", "byspace"],
+        nodeArgv: ["node", "paseo"],
       }),
-    ).toEqual(["node", "byspace", "daemon", "set-password"]);
+    ).toEqual(["node", "paseo", "daemon", "set-password"]);
   });
 
   it("preserves the hooks command argv", () => {
@@ -47,13 +47,13 @@ describe("runCli", () => {
       createCliParseArgv({
         argv: ["hooks", "claude", "UserPromptSubmit"],
         cwd: process.cwd(),
-        nodeArgv: ["node", "byspace"],
+        nodeArgv: ["node", "paseo"],
       }),
-    ).toEqual(["node", "byspace", "hooks", "claude", "UserPromptSubmit"]);
+    ).toEqual(["node", "paseo", "hooks", "claude", "UserPromptSubmit"]);
   });
 
   it("classifies existing unknown directories as open-project invocations", () => {
-    const root = mkdtempSync(path.join(tmpdir(), "byspace-cli-run-"));
+    const root = mkdtempSync(path.join(tmpdir(), "paseo-cli-run-"));
     const project = path.join(root, "repository");
     mkdirSync(project);
 
@@ -62,7 +62,7 @@ describe("runCli", () => {
         createCliParseArgv({
           argv: ["repository"],
           cwd: root,
-          nodeArgv: ["node", "byspace"],
+          nodeArgv: ["node", "paseo"],
         }),
       ).toEqual({
         kind: "open-project",

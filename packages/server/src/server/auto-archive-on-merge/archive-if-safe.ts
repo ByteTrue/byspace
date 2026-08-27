@@ -14,12 +14,12 @@ import type {
 } from "../workspace-git-service.js";
 import type { ForgeService } from "../../services/forge-service.js";
 import type { TerminalManager } from "../../terminal/terminal-manager.js";
-import { isBySpaceOwnedWorktreeCwd } from "../../utils/worktree.js";
+import { isPaseoOwnedWorktreeCwd } from "../../utils/worktree.js";
 import type { WorkspaceArchiveContext } from "../workspace-registry.js";
 
 export interface AutoArchiveArchiveOptions {
-  byspaceHome: string;
-  byspaceWorktreesBaseRoot?: string;
+  paseoHome: string;
+  paseoWorktreesBaseRoot?: string;
   daemonConfigStore: DaemonConfigStore;
   workspaceGitService: WorkspaceGitServiceImpl;
   github: ForgeService;
@@ -37,13 +37,13 @@ export interface AutoArchiveArchiveOptions {
 
 export interface ArchiveIfSafeDependencies {
   archiveByScope: typeof archiveByScope;
-  isBySpaceOwnedWorktreeCwd: typeof isBySpaceOwnedWorktreeCwd;
+  isPaseoOwnedWorktreeCwd: typeof isPaseoOwnedWorktreeCwd;
   killTerminalsForWorkspace: typeof killTerminalsForWorkspace;
 }
 
 const defaultDependencies: ArchiveIfSafeDependencies = {
   archiveByScope,
-  isBySpaceOwnedWorktreeCwd,
+  isPaseoOwnedWorktreeCwd,
   killTerminalsForWorkspace,
 };
 
@@ -69,9 +69,9 @@ export async function archiveIfSafe(input: {
     return;
   }
 
-  const ownership = await deps.isBySpaceOwnedWorktreeCwd(cwd, {
-    byspaceHome: options.byspaceHome,
-    worktreesRoot: options.byspaceWorktreesBaseRoot,
+  const ownership = await deps.isPaseoOwnedWorktreeCwd(cwd, {
+    paseoHome: options.paseoHome,
+    worktreesRoot: options.paseoWorktreesBaseRoot,
   });
   if (!ownership.allowed) {
     return;
@@ -85,8 +85,8 @@ export async function archiveIfSafe(input: {
 
     await deps.archiveByScope(
       {
-        byspaceHome: options.byspaceHome,
-        byspaceWorktreesBaseRoot: options.byspaceWorktreesBaseRoot,
+        paseoHome: options.paseoHome,
+        paseoWorktreesBaseRoot: options.paseoWorktreesBaseRoot,
         github: options.github,
         workspaceGitService: options.workspaceGitService,
         agentManager: options.agentManager,

@@ -4,10 +4,10 @@ import equal from "fast-deep-equal";
 import { useStoreWithEqualityFn } from "zustand/traditional";
 import { useSessionStore, type Agent } from "@/stores/session-store";
 import { refreshProviderSubagents, useProviderSubagentStore } from "./provider-store";
-import type { ProviderSubagentDescriptorPayload } from "@bytetrue/byspace-protocol/messages";
+import type { ProviderSubagentDescriptorPayload } from "@getpaseo/protocol/messages";
 
-export interface BySpaceSubagentRow {
-  kind: "byspace";
+export interface PaseoSubagentRow {
+  kind: "paseo";
   id: Agent["id"];
   provider: Agent["provider"];
   title: Agent["title"];
@@ -36,7 +36,7 @@ export interface ProviderSubagentRow {
   createdAt: Date;
 }
 
-export type SubagentRow = BySpaceSubagentRow | ProviderSubagentRow;
+export type SubagentRow = PaseoSubagentRow | ProviderSubagentRow;
 
 type SessionStoreSnapshot = ReturnType<typeof useSessionStore.getState>;
 type ProviderSubagentStoreSnapshot = ReturnType<typeof useProviderSubagentStore.getState>;
@@ -51,7 +51,7 @@ const EMPTY_PROVIDER_SUBAGENT_ROWS: ProviderSubagentRow[] = [];
 
 function toSubagentRow(agent: Agent): SubagentRow {
   return {
-    kind: "byspace",
+    kind: "paseo",
     id: agent.id,
     provider: agent.provider,
     title: agent.title,
@@ -122,7 +122,7 @@ export function selectProviderSubagentsForParent(
 
 export function useSubagentsForParent(params: SelectSubagentsParams): SubagentRow[] {
   const pendingArchiveIds = usePendingArchiveAgentIds(params.serverId);
-  const byspaceRows = useStoreWithEqualityFn(
+  const paseoRows = useStoreWithEqualityFn(
     useSessionStore,
     (state) => selectSubagentsForParent(state, params, pendingArchiveIds),
     equal,
@@ -145,9 +145,9 @@ export function useSubagentsForParent(params: SelectSubagentsParams): SubagentRo
   }, [client, params.parentAgentId, params.serverId, supported]);
 
   return useMemo(() => {
-    if (providerRows.length === 0) return byspaceRows;
-    const rows = [...byspaceRows, ...providerRows];
+    if (providerRows.length === 0) return paseoRows;
+    const rows = [...paseoRows, ...providerRows];
     rows.sort((left, right) => left.createdAt.getTime() - right.createdAt.getTime());
     return rows;
-  }, [byspaceRows, providerRows]);
+  }, [paseoRows, providerRows]);
 }

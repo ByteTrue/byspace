@@ -83,7 +83,7 @@ function createWorkspaceRuntimeSnapshot(
       mainRepoRoot: null,
       currentBranch: "main",
       remoteUrl: "https://github.com/acme/repo.git",
-      isBySpaceOwnedWorktree: false,
+      isPaseoOwnedWorktree: false,
       isDirty: false,
       baseRef: "main",
       aheadBehind: { ahead: 0, behind: 0 },
@@ -196,7 +196,7 @@ function createSessionForWorkspaceGitWatchTests(options?: {
     logger: createStub<pino.Logger>(logger),
     downloadTokenStore: createStub<SessionOptions["downloadTokenStore"]>({}),
     pushNotifications: createStub<SessionOptions["pushNotifications"]>({}),
-    byspaceHome: "/tmp/byspace-test",
+    paseoHome: "/tmp/paseo-test",
     agentManager: createStub<SessionOptions["agentManager"]>({
       subscribe: () => () => {},
       listAgents: () => [],
@@ -267,7 +267,7 @@ function createSessionForWorkspaceGitWatchTests(options?: {
     serviceProxy: options?.serviceProxy,
     scriptRuntimeStore: options?.scriptRuntimeStore,
     onBranchChanged: options?.onBranchChanged,
-    getDaemonTcpPort: () => 6777,
+    getDaemonTcpPort: () => 6767,
   });
 
   asInternals<SessionInternals>(session).listAgentPayloads = async () => [];
@@ -439,7 +439,7 @@ describe("workspace git watch targets", () => {
       behindOfOrigin: 1,
       hasRemote: true,
       remoteUrl: "https://github.com/acme/repo.git",
-      isBySpaceOwnedWorktree: false,
+      isPaseoOwnedWorktree: false,
       error: null,
       requestId: REPO_SUBSCRIPTION_REQUEST_ID,
     });
@@ -456,7 +456,7 @@ describe("workspace git watch targets", () => {
     serviceProxy.registerWorkspaceService({
       port: 4321,
       workspaceId: "ws-10",
-      projectSlug: "byspace",
+      projectSlug: "paseo",
       branchName: "old-branch",
       scriptName: "app",
     });
@@ -502,7 +502,7 @@ describe("workspace git watch targets", () => {
 
     expect(serviceProxy.getWorkspaceHealthTargets("ws-10")).toEqual([
       expect.objectContaining({
-        hostname: "app--new-branch--byspace.localhost",
+        hostname: "app--new-branch--paseo.localhost",
         scriptName: "app",
       }),
     ]);

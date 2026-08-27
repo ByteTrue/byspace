@@ -5,7 +5,7 @@ import type {
   AgentSkillSelection,
   AgentSkillsSaveResult,
   AgentSkillsStatus,
-} from "@bytetrue/byspace-protocol/messages";
+} from "@getpaseo/protocol/messages";
 import { useToast } from "@/contexts/toast-context";
 import { useFetchQuery } from "@/data/query";
 import { useHostFeature } from "@/runtime/host-features";

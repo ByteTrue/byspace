@@ -16,12 +16,12 @@ import pino, { type Logger } from "pino";
 import type { SessionOutboundMessage, WorkspaceDescriptorPayload } from "./messages.js";
 import {
   buildAgentSessionConfig,
-  createBySpaceWorktreeWorkflow,
-  handleBySpaceWorktreeArchiveRequest,
-  handleBySpaceWorktreeListRequest,
+  createPaseoWorktreeWorkflow,
+  handlePaseoWorktreeArchiveRequest,
+  handlePaseoWorktreeListRequest,
   resolveGitCreateBaseBranch,
   runWorktreeSetupInBackground,
-  handleCreateBySpaceWorktreeRequest,
+  handleCreatePaseoWorktreeRequest,
   handleWorkspaceSetupStatusRequest,
 } from "./worktree-session.js";
 import {
@@ -42,9 +42,9 @@ import {
 import type { ForgeService } from "../services/forge-service.js";
 import { areEquivalentPaths } from "../utils/path.js";
 import {
-  createBySpaceWorktree as createBySpaceWorktreeService,
-  type CreateBySpaceWorktreeFn,
-} from "./byspace-worktree-service.js";
+  createPaseoWorktree as createPaseoWorktreeService,
+  type CreatePaseoWorktreeFn,
+} from "./paseo-worktree-service.js";
 import { WorkspaceGitServiceImpl } from "./workspace-git-service.js";
 import type { WorkspaceGitService } from "./workspace-git-service.js";
 import { isPlatform } from "../test-utils/platform.js";
@@ -56,7 +56,7 @@ interface LegacyCreateWorktreeTestOptions {
   baseBranch: string;
   worktreeSlug: string;
   runSetup?: boolean;
-  byspaceHome?: string;
+  paseoHome?: string;
 }
 
 function createLegacyWorktreeForTest(
@@ -75,7 +75,7 @@ function createLegacyWorktreeForTest(
       branchName: options.branchName,
     },
     runSetup: options.runSetup ?? true,
-    byspaceHome: options.byspaceHome,
+    paseoHome: options.paseoHome,
   });
 }
 
@@ -88,8 +88,8 @@ function createLogger(): Logger {
 }
 
 function createWorkflowForRequestTest(options: {
-  byspaceHome: string;
-  createBySpaceWorktree?: CreateBySpaceWorktreeFn;
+  paseoHome: string;
+  createPaseoWorktree?: CreatePaseoWorktreeFn;
   warmWorkspaceGitData?: (workspace: PersistedWorkspaceRecord) => Promise<void>;
   onSetupStarted?: (input: {
     requestCwd: string;
@@ -99,14 +99,13 @@ function createWorkflowForRequestTest(options: {
     shouldBootstrap: boolean;
   }) => void;
 }) {
-  return async (input: Parameters<CreateBySpaceWorktreeFn>[0]) => {
-    const createBySpaceWorktree =
-      options.createBySpaceWorktree ??
-      createBySpaceWorktreeForTest({ byspaceHome: options.byspaceHome });
-    return createBySpaceWorktreeWorkflow(
+  return async (input: Parameters<CreatePaseoWorktreeFn>[0]) => {
+    const createPaseoWorktree =
+      options.createPaseoWorktree ?? createPaseoWorktreeForTest({ paseoHome: options.paseoHome });
+    return createPaseoWorktreeWorkflow(
       {
-        byspaceHome: options.byspaceHome,
-        createBySpaceWorktree,
+        paseoHome: options.paseoHome,
+        createPaseoWorktree,
         warmWorkspaceGitData: options.warmWorkspaceGitData ?? (async () => {}),
         autoNameWorkspaceBranchForFirstAgent: () => {},
         emitWorkspaceUpdateForWorkspaceId: async () => {},
@@ -290,15 +289,15 @@ function createWorkspaceDescriptor(input: {
   };
 }
 
-function createBySpaceWorktreeForTest(options: {
-  byspaceHome: string;
+function createPaseoWorktreeForTest(options: {
+  paseoHome: string;
   events?: string[];
-}): CreateBySpaceWorktreeFn {
+}): CreatePaseoWorktreeFn {
   const projects = new Map<string, PersistedProjectRecord>();
   const workspaces = new Map<string, PersistedWorkspaceRecord>();
   const workspaceGitService = new WorkspaceGitServiceImpl({
     logger: createLogger(),
-    byspaceHome: options.byspaceHome,
+    paseoHome: options.paseoHome,
     deps: {
       forgeOverrides: { github: createGitHubServiceStub() },
     },
@@ -369,7 +368,7 @@ function createBySpaceWorktreeForTest(options: {
   });
 
   return (input, serviceOptions) => {
-    return createBySpaceWorktreeService(input, {
+    return createPaseoWorktreeService(input, {
       github: createGitHubServiceStub(),
       ...(serviceOptions?.resolveDefaultBranch
         ? { resolveDefaultBranch: serviceOptions.resolveDefaultBranch }
@@ -380,13 +379,13 @@ function createBySpaceWorktreeForTest(options: {
   };
 }
 
-describe("handleBySpaceWorktreeListRequest", () => {
+describe("handlePaseoWorktreeListRequest", () => {
   test("lists worktrees through the workspace git service", async () => {
     const emitted: SessionOutboundMessage[] = [];
     const workspaceGitService = {
       listWorktrees: vi.fn().mockResolvedValue([
         {
-          path: "/tmp/byspace-home/worktrees/repo/feature",
+          path: "/tmp/paseo-home/worktrees/repo/feature",
           createdAt: "2026-04-12T00:00:00.000Z",
           branchName: "feature",
           head: "abc123",
@@ -394,14 +393,14 @@ describe("handleBySpaceWorktreeListRequest", () => {
       ]),
     };
 
-    await handleBySpaceWorktreeListRequest(
+    await handlePaseoWorktreeListRequest(
       {
         emit: (message) => emitted.push(message),
-        byspaceHome: "/tmp/byspace-home",
+        paseoHome: "/tmp/paseo-home",
         workspaceGitService: workspaceGitService as unknown as WorkspaceGitService,
       },
       {
-        type: "byspace_worktree_list_request",
+        type: "paseo_worktree_list_request",
         cwd: "/tmp/repo",
         requestId: "request-worktrees",
       },
@@ -410,11 +409,11 @@ describe("handleBySpaceWorktreeListRequest", () => {
     expect(workspaceGitService.listWorktrees).toHaveBeenCalledTimes(1);
     expect(workspaceGitService.listWorktrees).toHaveBeenCalledWith("/tmp/repo");
     expect(emitted).toContainEqual({
-      type: "byspace_worktree_list_response",
+      type: "paseo_worktree_list_response",
       payload: {
         worktrees: [
           {
-            worktreePath: "/tmp/byspace-home/worktrees/repo/feature",
+            worktreePath: "/tmp/paseo-home/worktrees/repo/feature",
             createdAt: "2026-04-12T00:00:00.000Z",
             branchName: "feature",
             head: "abc123",
@@ -454,16 +453,16 @@ describe("resolveGitCreateBaseBranch", () => {
 describe("create-agent worktree setup boundary", () => {
   test("agent setup continuation starts setup for the created agent timeline", async () => {
     const { tempDir, repoDir } = createGitRepo();
-    const byspaceHome = path.join(tempDir, ".byspace");
+    const paseoHome = path.join(tempDir, ".paseo");
     const appendedItems: Array<{ name: string; status: string }> = [];
     const liveItems: Array<{ name: string; status: string }> = [];
     const workspaceSetupEvents: SessionOutboundMessage[] = [];
 
     try {
-      const result = await createBySpaceWorktreeWorkflow(
+      const result = await createPaseoWorktreeWorkflow(
         {
-          byspaceHome,
-          createBySpaceWorktree: createBySpaceWorktreeForTest({ byspaceHome }),
+          paseoHome,
+          createPaseoWorktree: createPaseoWorktreeForTest({ paseoHome }),
           warmWorkspaceGitData: async () => {},
           autoNameWorkspaceBranchForFirstAgent: () => {},
           emitWorkspaceUpdateForWorkspaceId: async () => {},
@@ -482,7 +481,7 @@ describe("create-agent worktree setup boundary", () => {
           cwd: repoDir,
           worktreeSlug: "agent-setup-after-create",
           runSetup: false,
-          byspaceHome,
+          paseoHome,
         },
         {
           setupContinuation: {
@@ -516,7 +515,7 @@ describe("create-agent worktree setup boundary", () => {
 
       await vi.waitFor(() => {
         expect(appendedItems).toContainEqual({
-          name: "byspace_worktree_setup",
+          name: "paseo_worktree_setup",
           status: "completed",
         });
       });
@@ -550,7 +549,7 @@ function createArchiveWorkspaceRecordMutator(
   };
 }
 
-function createGitRepo(options?: { byspaceConfig?: Record<string, unknown> }) {
+function createGitRepo(options?: { paseoConfig?: Record<string, unknown> }) {
   const tempDir = realpathSync.native(mkdtempSync(path.join(tmpdir(), "worktree-session-test-")));
   const repoDir = path.join(tempDir, "repo");
   mkdirSync(repoDir, { recursive: true });
@@ -558,11 +557,8 @@ function createGitRepo(options?: { byspaceConfig?: Record<string, unknown> }) {
   execFileSync("git", ["config", "user.email", "test@test.com"], { cwd: repoDir, stdio: "pipe" });
   execFileSync("git", ["config", "user.name", "Test"], { cwd: repoDir, stdio: "pipe" });
   writeFileSync(path.join(repoDir, "README.md"), "hello\n");
-  if (options?.byspaceConfig) {
-    writeFileSync(
-      path.join(repoDir, "byspace.json"),
-      JSON.stringify(options.byspaceConfig, null, 2),
-    );
+  if (options?.paseoConfig) {
+    writeFileSync(path.join(repoDir, "paseo.json"), JSON.stringify(options.paseoConfig, null, 2));
   }
   execFileSync("git", ["add", "."], { cwd: repoDir, stdio: "pipe" });
   execFileSync("git", ["-c", "commit.gpgsign=false", "commit", "-m", "initial"], {
@@ -616,7 +612,7 @@ describe("runWorktreeSetupInBackground", () => {
     const sourceWorkspaceCwd = path.join(repoDir, "packages", "app");
     mkdirSync(sourceWorkspaceCwd, { recursive: true });
     writeFileSync(
-      path.join(sourceWorkspaceCwd, "byspace.json"),
+      path.join(sourceWorkspaceCwd, "paseo.json"),
       JSON.stringify({
         worktree: {
           setup: ["pwd > setup-cwd.txt"],
@@ -629,20 +625,20 @@ describe("runWorktreeSetupInBackground", () => {
       stdio: "pipe",
     });
 
-    const byspaceHome = path.join(tempDir, ".byspace");
+    const paseoHome = path.join(tempDir, ".paseo");
     const createdWorktree = await createLegacyWorktreeForTest({
       branchName: "feature-subdirectory-setup",
       cwd: repoDir,
       baseBranch: "main",
       worktreeSlug: "feature-subdirectory-setup",
       runSetup: false,
-      byspaceHome,
+      paseoHome,
     });
     const workspaceCwd = path.join(createdWorktree.worktreePath, "packages", "app");
 
     await runWorktreeSetupInBackground(
       {
-        byspaceHome,
+        paseoHome,
         emitWorkspaceUpdateForWorkspaceId: async () => {},
         cacheWorkspaceSetupSnapshot: () => {},
         emit: () => {},
@@ -668,7 +664,7 @@ describe("runWorktreeSetupInBackground", () => {
 
   test("emits running then completed snapshots for no-setup workspaces without auto-starting scripts", async () => {
     const { tempDir, repoDir } = createGitRepo({
-      byspaceConfig: {
+      paseoConfig: {
         scripts: {
           web: {
             command: "npm run dev",
@@ -678,14 +674,14 @@ describe("runWorktreeSetupInBackground", () => {
     });
     cleanupPaths.push(tempDir);
 
-    const byspaceHome = path.join(tempDir, ".byspace");
+    const paseoHome = path.join(tempDir, ".paseo");
     const createdWorktree = await createLegacyWorktreeForTest({
       branchName: "feature-no-setup",
       cwd: repoDir,
       baseBranch: "main",
       worktreeSlug: "feature-no-setup",
       runSetup: false,
-      byspaceHome,
+      paseoHome,
     });
     const worktreePath = createdWorktree.worktreePath;
     const emitted: SessionOutboundMessage[] = [];
@@ -697,7 +693,7 @@ describe("runWorktreeSetupInBackground", () => {
 
     await runWorktreeSetupInBackground(
       {
-        byspaceHome,
+        paseoHome,
         emitWorkspaceUpdateForWorkspaceId,
         cacheWorkspaceSetupSnapshot: (workspaceId, snapshot) =>
           snapshots.set(workspaceId, snapshot),
@@ -770,21 +766,21 @@ describe("runWorktreeSetupInBackground", () => {
     const { tempDir, repoDir } = createGitRepo();
     cleanupPaths.push(tempDir);
 
-    writeFileSync(path.join(repoDir, "byspace.json"), "{ invalid json\n");
-    execFileSync("git", ["add", "byspace.json"], { cwd: repoDir, stdio: "pipe" });
+    writeFileSync(path.join(repoDir, "paseo.json"), "{ invalid json\n");
+    execFileSync("git", ["add", "paseo.json"], { cwd: repoDir, stdio: "pipe" });
     execFileSync("git", ["-c", "commit.gpgsign=false", "commit", "-m", "broken config"], {
       cwd: repoDir,
       stdio: "pipe",
     });
 
-    const byspaceHome = path.join(tempDir, ".byspace");
+    const paseoHome = path.join(tempDir, ".paseo");
     const createdWorktree = await createLegacyWorktreeForTest({
       branchName: "broken-feature",
       cwd: repoDir,
       baseBranch: "main",
       worktreeSlug: "broken-feature",
       runSetup: false,
-      byspaceHome,
+      paseoHome,
     });
     const worktreePath = createdWorktree.worktreePath;
     const emitted: SessionOutboundMessage[] = [];
@@ -796,7 +792,7 @@ describe("runWorktreeSetupInBackground", () => {
 
     await runWorktreeSetupInBackground(
       {
-        byspaceHome,
+        paseoHome,
         emitWorkspaceUpdateForWorkspaceId,
         cacheWorkspaceSetupSnapshot: (snapshotWorkspaceId, snapshot) =>
           snapshots.set(snapshotWorkspaceId, snapshot),
@@ -828,12 +824,12 @@ describe("runWorktreeSetupInBackground", () => {
     expect(progressMessages[0]?.payload.error).toBeNull();
     expect(progressMessages[1]?.payload.status).toBe("failed");
     expect(progressMessages[1]?.payload.error).toMatch(
-      /Failed to parse byspace\.json at .*byspace\.json/,
+      /Failed to parse paseo\.json at .*paseo\.json/,
     );
     expect(progressMessages[1]?.payload.detail.commands).toEqual([]);
     expect(snapshots.get(workspaceId)).toMatchObject({
       status: "failed",
-      error: expect.stringMatching(/Failed to parse byspace\.json at .*byspace\.json/),
+      error: expect.stringMatching(/Failed to parse paseo\.json at .*paseo\.json/),
     });
     expect(archiveWorkspaceRecord).toHaveBeenCalledWith(workspaceId);
     expect(emitWorkspaceUpdateForWorkspaceId).toHaveBeenCalledWith(workspaceId);
@@ -844,7 +840,7 @@ describe("runWorktreeSetupInBackground", () => {
     "emits running setup snapshots before completed for real setup commands",
     async () => {
       const { tempDir, repoDir } = createGitRepo({
-        byspaceConfig: {
+        paseoConfig: {
           worktree: {
             setup: ["sh -c \"printf 'phase-one\\\\n'; sleep 0.1; printf 'phase-two\\\\n'\""],
           },
@@ -852,14 +848,14 @@ describe("runWorktreeSetupInBackground", () => {
       });
       cleanupPaths.push(tempDir);
 
-      const byspaceHome = path.join(tempDir, ".byspace");
+      const paseoHome = path.join(tempDir, ".paseo");
       const createdWorktree = await createLegacyWorktreeForTest({
         branchName: "feature-running-setup",
         cwd: repoDir,
         baseBranch: "main",
         worktreeSlug: "feature-running-setup",
         runSetup: false,
-        byspaceHome,
+        paseoHome,
       });
       const worktreePath = createdWorktree.worktreePath;
       const emitted: SessionOutboundMessage[] = [];
@@ -870,7 +866,7 @@ describe("runWorktreeSetupInBackground", () => {
 
       await runWorktreeSetupInBackground(
         {
-          byspaceHome,
+          paseoHome,
           emitWorkspaceUpdateForWorkspaceId,
           cacheWorkspaceSetupSnapshot: (workspaceId, snapshot) =>
             snapshots.set(workspaceId, snapshot),
@@ -962,7 +958,7 @@ describe("runWorktreeSetupInBackground", () => {
 
   test("emits completed when reusing an existing worktree without bootstrapping or auto-starting scripts", async () => {
     const { tempDir, repoDir } = createGitRepo({
-      byspaceConfig: {
+      paseoConfig: {
         worktree: {
           setup: ["printf 'ran' > setup-ran.txt"],
         },
@@ -975,14 +971,14 @@ describe("runWorktreeSetupInBackground", () => {
     });
     cleanupPaths.push(tempDir);
 
-    const byspaceHome = path.join(tempDir, ".byspace");
+    const paseoHome = path.join(tempDir, ".paseo");
     const existingWorktree = await createLegacyWorktreeForTest({
       branchName: "reused-worktree",
       cwd: repoDir,
       baseBranch: "main",
       worktreeSlug: "reused-worktree",
       runSetup: false,
-      byspaceHome,
+      paseoHome,
     });
 
     const emitted: SessionOutboundMessage[] = [];
@@ -994,7 +990,7 @@ describe("runWorktreeSetupInBackground", () => {
 
     await runWorktreeSetupInBackground(
       {
-        byspaceHome,
+        paseoHome,
         emitWorkspaceUpdateForWorkspaceId,
         cacheWorkspaceSetupSnapshot: (workspaceId, snapshot) =>
           snapshots.set(workspaceId, snapshot),
@@ -1056,7 +1052,7 @@ describe("runWorktreeSetupInBackground", () => {
 
   test("keeps setup completed without attempting script launch afterward", async () => {
     const { tempDir, repoDir } = createGitRepo({
-      byspaceConfig: {
+      paseoConfig: {
         scripts: {
           web: {
             command: "npm run dev",
@@ -1066,14 +1062,14 @@ describe("runWorktreeSetupInBackground", () => {
     });
     cleanupPaths.push(tempDir);
 
-    const byspaceHome = path.join(tempDir, ".byspace");
+    const paseoHome = path.join(tempDir, ".paseo");
     const createdWorktree = await createLegacyWorktreeForTest({
       branchName: "feature-service-failure",
       cwd: repoDir,
       baseBranch: "main",
       worktreeSlug: "feature-service-failure",
       runSetup: false,
-      byspaceHome,
+      paseoHome,
     });
     const worktreePath = createdWorktree.worktreePath;
     const emitted: SessionOutboundMessage[] = [];
@@ -1089,7 +1085,7 @@ describe("runWorktreeSetupInBackground", () => {
 
     await runWorktreeSetupInBackground(
       {
-        byspaceHome,
+        paseoHome,
         emitWorkspaceUpdateForWorkspaceId,
         cacheWorkspaceSetupSnapshot: (workspaceId, snapshot) =>
           snapshots.set(workspaceId, snapshot),
@@ -1142,7 +1138,7 @@ describe("runWorktreeSetupInBackground", () => {
 
   test("does not auto-start scripts in socket mode", async () => {
     const { tempDir, repoDir } = createGitRepo({
-      byspaceConfig: {
+      paseoConfig: {
         scripts: {
           web: {
             command: "npm run dev",
@@ -1152,14 +1148,14 @@ describe("runWorktreeSetupInBackground", () => {
     });
     cleanupPaths.push(tempDir);
 
-    const byspaceHome = path.join(tempDir, ".byspace");
+    const paseoHome = path.join(tempDir, ".paseo");
     const createdWorktree = await createLegacyWorktreeForTest({
       branchName: "feature-socket-mode",
       cwd: repoDir,
       baseBranch: "main",
       worktreeSlug: "feature-socket-mode",
       runSetup: false,
-      byspaceHome,
+      paseoHome,
     });
     const worktreePath = createdWorktree.worktreePath;
     const emitted: SessionOutboundMessage[] = [];
@@ -1171,7 +1167,7 @@ describe("runWorktreeSetupInBackground", () => {
 
     await runWorktreeSetupInBackground(
       {
-        byspaceHome,
+        paseoHome,
         emitWorkspaceUpdateForWorkspaceId,
         cacheWorkspaceSetupSnapshot: (workspaceId, snapshot) =>
           snapshots.set(workspaceId, snapshot),
@@ -1212,7 +1208,7 @@ describe("runWorktreeSetupInBackground", () => {
           status: "completed",
           detail: {
             type: "worktree_setup",
-            worktreePath: "/repo/.byspace/worktrees/feature-a",
+            worktreePath: "/repo/.paseo/worktrees/feature-a",
             branchName: "feature-a",
             log: "done",
             commands: [],
@@ -1243,7 +1239,7 @@ describe("runWorktreeSetupInBackground", () => {
           status: "completed",
           detail: {
             type: "worktree_setup",
-            worktreePath: "/repo/.byspace/worktrees/feature-a",
+            worktreePath: "/repo/.paseo/worktrees/feature-a",
             branchName: "feature-a",
             log: "done",
             commands: [],
@@ -1280,7 +1276,7 @@ describe("runWorktreeSetupInBackground", () => {
   });
 });
 
-describe("handleCreateBySpaceWorktreeRequest", () => {
+describe("handleCreatePaseoWorktreeRequest", () => {
   const cleanupPaths: string[] = [];
 
   afterEach(() => {
@@ -1295,19 +1291,19 @@ describe("handleCreateBySpaceWorktreeRequest", () => {
 
     const emitted: SessionOutboundMessage[] = [];
     const logger = createLogger();
-    const byspaceHome = path.join(tempDir, ".byspace");
+    const paseoHome = path.join(tempDir, ".paseo");
 
-    await handleCreateBySpaceWorktreeRequest(
+    await handleCreatePaseoWorktreeRequest(
       {
-        byspaceHome,
+        paseoHome,
         describeWorkspaceRecord: async (result) =>
           createWorkspaceDescriptor({ workspace: result.workspace, repoDir }),
         emit: (message) => emitted.push(message),
         sessionLogger: logger,
-        createBySpaceWorktreeWorkflow: createWorkflowForRequestTest({ byspaceHome }),
+        createPaseoWorktreeWorkflow: createWorkflowForRequestTest({ paseoHome }),
       },
       {
-        type: "create_byspace_worktree_request",
+        type: "create_paseo_worktree_request",
         requestId: "req-pr-worktree",
         cwd: repoDir,
         worktreeSlug: "review-pr-123",
@@ -1320,8 +1316,8 @@ describe("handleCreateBySpaceWorktreeRequest", () => {
     const response = emitted.find(
       (
         message,
-      ): message is Extract<SessionOutboundMessage, { type: "create_byspace_worktree_response" }> =>
-        message.type === "create_byspace_worktree_response",
+      ): message is Extract<SessionOutboundMessage, { type: "create_paseo_worktree_response" }> =>
+        message.type === "create_paseo_worktree_response",
     );
 
     expect(response?.payload.error).toBeNull();
@@ -1352,14 +1348,14 @@ describe("handleCreateBySpaceWorktreeRequest", () => {
 
     const result = await buildAgentSessionConfig(
       {
-        byspaceHome: path.join(tempDir, ".byspace"),
+        paseoHome: path.join(tempDir, ".paseo"),
         sessionLogger: createLogger(),
         workspaceGitService: {
           resolveRepoRoot: vi.fn(async () => repoDir),
           resolveDefaultBranch: vi.fn(async () => "main"),
         } as unknown as WorkspaceGitService,
-        createBySpaceWorktree: createBySpaceWorktreeForTest({
-          byspaceHome: path.join(tempDir, ".byspace"),
+        createPaseoWorktree: createPaseoWorktreeForTest({
+          paseoHome: path.join(tempDir, ".paseo"),
           events,
         }),
         checkoutExistingBranch: async () => {
@@ -1397,17 +1393,17 @@ describe("handleCreateBySpaceWorktreeRequest", () => {
   test("buildAgentSessionConfig uses the normalized new branch name as the worktree slug fallback", async () => {
     const { tempDir, repoDir } = createGitRepo();
     cleanupPaths.push(tempDir);
-    const byspaceHome = path.join(tempDir, ".byspace");
+    const paseoHome = path.join(tempDir, ".paseo");
 
     const result = await buildAgentSessionConfig(
       {
-        byspaceHome,
+        paseoHome,
         sessionLogger: createLogger(),
         workspaceGitService: {
           resolveRepoRoot: vi.fn(async () => repoDir),
           resolveDefaultBranch: vi.fn(async () => "main"),
         } as unknown as WorkspaceGitService,
-        createBySpaceWorktree: createBySpaceWorktreeForTest({ byspaceHome }),
+        createPaseoWorktree: createPaseoWorktreeForTest({ paseoHome }),
         checkoutExistingBranch: async () => {
           throw new Error("should not checkout existing branch");
         },
@@ -1430,7 +1426,7 @@ describe("handleCreateBySpaceWorktreeRequest", () => {
   });
 
   test("buildAgentSessionConfig passes prompt and attachment context into worktree creation", async () => {
-    const createBySpaceWorktree = vi.fn(async () => ({
+    const createPaseoWorktree = vi.fn(async () => ({
       worktree: {
         branchName: "fix-attached-pr-context",
         worktreePath: "/tmp/worktrees/fix-attached-pr-context",
@@ -1461,7 +1457,7 @@ describe("handleCreateBySpaceWorktreeRequest", () => {
           mimeType: "application/github-pr",
           number: 123,
           title: "Fix worktree naming",
-          url: "https://github.com/ByteTrue/byspace/pull/123",
+          url: "https://github.com/getpaseo/paseo/pull/123",
           baseRefName: "main",
           headRefName: "fix/worktree-naming",
         },
@@ -1474,7 +1470,7 @@ describe("handleCreateBySpaceWorktreeRequest", () => {
         workspaceGitService: {
           resolveDefaultBranch: vi.fn(async () => "main"),
         } as unknown as WorkspaceGitService,
-        createBySpaceWorktree,
+        createPaseoWorktree,
         checkoutExistingBranch: async () => {
           throw new Error("should not checkout existing branch");
         },
@@ -1494,7 +1490,7 @@ describe("handleCreateBySpaceWorktreeRequest", () => {
       firstAgentContext,
     );
 
-    expect(createBySpaceWorktree).toHaveBeenCalledWith(
+    expect(createPaseoWorktree).toHaveBeenCalledWith(
       expect.objectContaining({
         firstAgentContext,
       }),
@@ -1507,14 +1503,14 @@ describe("handleCreateBySpaceWorktreeRequest", () => {
     const invalidate = vi.fn();
     const createBranchFromBase = vi.fn(async () => {});
     const checkoutExistingBranch = vi.fn(async () => ({ source: "local" as const }));
-    const createBySpaceWorktree = vi.fn(async () => {
+    const createPaseoWorktree = vi.fn(async () => {
       throw new Error("should not create worktree");
     });
 
     await buildAgentSessionConfig(
       {
         sessionLogger: createLogger(),
-        createBySpaceWorktree,
+        createPaseoWorktree,
         checkoutExistingBranch,
         createBranchFromBase,
         workspaceGitService: { invalidateForge: invalidate } as unknown as WorkspaceGitService,
@@ -1542,7 +1538,7 @@ describe("handleCreateBySpaceWorktreeRequest", () => {
     await buildAgentSessionConfig(
       {
         sessionLogger: createLogger(),
-        createBySpaceWorktree,
+        createPaseoWorktree,
         checkoutExistingBranch,
         createBranchFromBase,
         workspaceGitService: { invalidateForge: invalidate } as unknown as WorkspaceGitService,
@@ -1560,19 +1556,19 @@ describe("handleCreateBySpaceWorktreeRequest", () => {
     expect(invalidate).toHaveBeenCalledWith("/tmp/repo");
   });
 
-  test("createBySpaceWorktreeForTest forwards the default branch resolver for branch-off intents", async () => {
+  test("createPaseoWorktreeForTest forwards the default branch resolver for branch-off intents", async () => {
     const { tempDir, repoDir } = createGitRepo();
     cleanupPaths.push(tempDir);
-    const byspaceHome = path.join(tempDir, ".byspace");
+    const paseoHome = path.join(tempDir, ".paseo");
     const resolveDefaultBranch = vi.fn(async () => "main");
 
-    const result = await createBySpaceWorktreeForTest({ byspaceHome })(
+    const result = await createPaseoWorktreeForTest({ paseoHome })(
       {
         cwd: repoDir,
         worktreeSlug: "resolver-feature",
         action: "branch-off",
         runSetup: false,
-        byspaceHome,
+        paseoHome,
       },
       { resolveDefaultBranch },
     );
@@ -1588,22 +1584,22 @@ describe("handleCreateBySpaceWorktreeRequest", () => {
   });
 });
 
-describe("handleCreateBySpaceWorktreeRequest", () => {
+describe("handleCreatePaseoWorktreeRequest", () => {
   test("registers a pending workspace and emits a successful create response", async () => {
     const { tempDir, repoDir } = createGitRepo();
-    const byspaceHome = path.join(tempDir, ".byspace");
+    const paseoHome = path.join(tempDir, ".paseo");
     const emitted: SessionOutboundMessage[] = [];
     const events: string[] = [];
 
     try {
-      await handleCreateBySpaceWorktreeRequest(
+      await handleCreatePaseoWorktreeRequest(
         {
-          byspaceHome,
+          paseoHome,
           sessionLogger: createLogger(),
           emit: (message) => emitted.push(message),
-          createBySpaceWorktreeWorkflow: createWorkflowForRequestTest({
-            byspaceHome,
-            createBySpaceWorktree: createBySpaceWorktreeForTest({ byspaceHome, events }),
+          createPaseoWorktreeWorkflow: createWorkflowForRequestTest({
+            paseoHome,
+            createPaseoWorktree: createPaseoWorktreeForTest({ paseoHome, events }),
           }),
           describeWorkspaceRecord: vi.fn(async (result) => ({
             id: result.workspace.workspaceId,
@@ -1620,7 +1616,7 @@ describe("handleCreateBySpaceWorktreeRequest", () => {
             gitRuntime: {
               currentBranch: "single-call",
               remoteUrl: null,
-              isBySpaceOwnedWorktree: true,
+              isPaseoOwnedWorktree: true,
               isDirty: false,
               aheadBehind: null,
               aheadOfOrigin: null,
@@ -1630,7 +1626,7 @@ describe("handleCreateBySpaceWorktreeRequest", () => {
           })),
         },
         {
-          type: "create_byspace_worktree_request",
+          type: "create_paseo_worktree_request",
           cwd: repoDir,
           worktreeSlug: "single-call",
           requestId: "req-single-call",
@@ -1641,10 +1637,8 @@ describe("handleCreateBySpaceWorktreeRequest", () => {
       const response = emitted.find(
         (
           message,
-        ): message is Extract<
-          SessionOutboundMessage,
-          { type: "create_byspace_worktree_response" }
-        > => message.type === "create_byspace_worktree_response",
+        ): message is Extract<SessionOutboundMessage, { type: "create_paseo_worktree_response" }> =>
+          message.type === "create_paseo_worktree_response",
       );
       expect(response?.payload.error).toBeNull();
     } finally {
@@ -1654,22 +1648,22 @@ describe("handleCreateBySpaceWorktreeRequest", () => {
 
   test("creates the worktree before emitting the response", async () => {
     const { tempDir, repoDir } = createGitRepo();
-    const byspaceHome = path.join(tempDir, ".byspace");
+    const paseoHome = path.join(tempDir, ".paseo");
     const emitted: SessionOutboundMessage[] = [];
     const backgroundWork = vi.fn(async () => {});
     const warmWorkspaceGitData = vi.fn(async () => {});
     let registeredWorktreePath: string | null = null;
 
     try {
-      await handleCreateBySpaceWorktreeRequest(
+      await handleCreatePaseoWorktreeRequest(
         {
-          byspaceHome,
+          paseoHome,
           sessionLogger: createLogger(),
           emit: (message) => emitted.push(message),
-          createBySpaceWorktreeWorkflow: createWorkflowForRequestTest({
-            byspaceHome,
-            createBySpaceWorktree: async (input) => {
-              const result = await createBySpaceWorktreeForTest({ byspaceHome })(input);
+          createPaseoWorktreeWorkflow: createWorkflowForRequestTest({
+            paseoHome,
+            createPaseoWorktree: async (input) => {
+              const result = await createPaseoWorktreeForTest({ paseoHome })(input);
               expect(existsSync(result.worktree.worktreePath)).toBe(true);
               registeredWorktreePath = result.worktree.worktreePath;
               return result;
@@ -1682,7 +1676,7 @@ describe("handleCreateBySpaceWorktreeRequest", () => {
           ),
         },
         {
-          type: "create_byspace_worktree_request",
+          type: "create_paseo_worktree_request",
           cwd: repoDir,
           worktreeSlug: "response-after-create",
           requestId: "req-1",
@@ -1692,15 +1686,13 @@ describe("handleCreateBySpaceWorktreeRequest", () => {
       const response = emitted.find(
         (
           message,
-        ): message is Extract<
-          SessionOutboundMessage,
-          { type: "create_byspace_worktree_response" }
-        > => message.type === "create_byspace_worktree_response",
+        ): message is Extract<SessionOutboundMessage, { type: "create_paseo_worktree_response" }> =>
+          message.type === "create_paseo_worktree_response",
       );
       expect(response?.payload.error).toBeNull();
       expect(response?.payload.workspace?.id).toBeTruthy();
       expect(emitted.map((message) => message.type).slice(0, 2)).toEqual([
-        "create_byspace_worktree_response",
+        "create_paseo_worktree_response",
         "workspace_update",
       ]);
       const workspaceUpdate = emitted[1];
@@ -1741,22 +1733,22 @@ describe("handleCreateBySpaceWorktreeRequest", () => {
 
   test("emits a machine-readable error code for invalid worktree intent", async () => {
     const { tempDir, repoDir } = createGitRepo();
-    const byspaceHome = path.join(tempDir, ".byspace");
+    const paseoHome = path.join(tempDir, ".paseo");
     const emitted: SessionOutboundMessage[] = [];
 
     try {
-      await handleCreateBySpaceWorktreeRequest(
+      await handleCreatePaseoWorktreeRequest(
         {
-          byspaceHome,
+          paseoHome,
           sessionLogger: createLogger(),
           emit: (message) => emitted.push(message),
-          createBySpaceWorktreeWorkflow: createWorkflowForRequestTest({ byspaceHome }),
+          createPaseoWorktreeWorkflow: createWorkflowForRequestTest({ paseoHome }),
           describeWorkspaceRecord: vi.fn(async (result) =>
             createWorkspaceDescriptor({ workspace: result.workspace, repoDir }),
           ),
         },
         {
-          type: "create_byspace_worktree_request",
+          type: "create_paseo_worktree_request",
           cwd: repoDir,
           action: "checkout",
           requestId: "req-missing-target",
@@ -1766,10 +1758,8 @@ describe("handleCreateBySpaceWorktreeRequest", () => {
       const response = emitted.find(
         (
           message,
-        ): message is Extract<
-          SessionOutboundMessage,
-          { type: "create_byspace_worktree_response" }
-        > => message.type === "create_byspace_worktree_response",
+        ): message is Extract<SessionOutboundMessage, { type: "create_paseo_worktree_response" }> =>
+          message.type === "create_paseo_worktree_response",
       );
       expect(response?.payload.workspace).toBeNull();
       expect(response?.payload.error).toBe('action "checkout" requires refName or checkoutSource');
@@ -1781,22 +1771,22 @@ describe("handleCreateBySpaceWorktreeRequest", () => {
 
   test("emits a machine-readable error code for unknown checkout branches", async () => {
     const { tempDir, repoDir } = createGitRepo();
-    const byspaceHome = path.join(tempDir, ".byspace");
+    const paseoHome = path.join(tempDir, ".paseo");
     const emitted: SessionOutboundMessage[] = [];
 
     try {
-      await handleCreateBySpaceWorktreeRequest(
+      await handleCreatePaseoWorktreeRequest(
         {
-          byspaceHome,
+          paseoHome,
           sessionLogger: createLogger(),
           emit: (message) => emitted.push(message),
-          createBySpaceWorktreeWorkflow: createWorkflowForRequestTest({ byspaceHome }),
+          createPaseoWorktreeWorkflow: createWorkflowForRequestTest({ paseoHome }),
           describeWorkspaceRecord: vi.fn(async (result) =>
             createWorkspaceDescriptor({ workspace: result.workspace, repoDir }),
           ),
         },
         {
-          type: "create_byspace_worktree_request",
+          type: "create_paseo_worktree_request",
           cwd: repoDir,
           action: "checkout",
           refName: "missing-branch",
@@ -1807,10 +1797,8 @@ describe("handleCreateBySpaceWorktreeRequest", () => {
       const response = emitted.find(
         (
           message,
-        ): message is Extract<
-          SessionOutboundMessage,
-          { type: "create_byspace_worktree_response" }
-        > => message.type === "create_byspace_worktree_response",
+        ): message is Extract<SessionOutboundMessage, { type: "create_paseo_worktree_response" }> =>
+          message.type === "create_paseo_worktree_response",
       );
       expect(response?.payload.workspace).toBeNull();
       expect(response?.payload.error).toBe("Unknown branch: missing-branch");
@@ -1821,7 +1809,7 @@ describe("handleCreateBySpaceWorktreeRequest", () => {
   });
 });
 
-describe("handleBySpaceWorktreeArchiveRequest worktree scope", () => {
+describe("handlePaseoWorktreeArchiveRequest worktree scope", () => {
   const cleanupPaths: string[] = [];
 
   afterEach(() => {
@@ -1834,14 +1822,14 @@ describe("handleBySpaceWorktreeArchiveRequest worktree scope", () => {
     const { tempDir, repoDir } = createGitRepo();
     cleanupPaths.push(tempDir);
 
-    const byspaceHome = path.join(tempDir, ".byspace");
+    const paseoHome = path.join(tempDir, ".paseo");
     const created = await createLegacyWorktreeForTest({
       branchName: "archive-worktree-scope",
       cwd: repoDir,
       baseBranch: "main",
       worktreeSlug: "archive-worktree-scope",
       runSetup: false,
-      byspaceHome,
+      paseoHome,
     });
     const sharedCwd = created.worktreePath;
     const workspaceA = "ws-worktree-scope-A";
@@ -1854,9 +1842,9 @@ describe("handleBySpaceWorktreeArchiveRequest worktree scope", () => {
     const listActiveWorkspaces = vi.fn(async () => activeWorkspaces);
     const emitted: SessionOutboundMessage[] = [];
 
-    await handleBySpaceWorktreeArchiveRequest(
+    await handlePaseoWorktreeArchiveRequest(
       {
-        byspaceHome,
+        paseoHome,
         github: createGitHubServiceStub(),
         workspaceGitService: {
           getSnapshot: vi.fn(async () => null),
@@ -1884,7 +1872,7 @@ describe("handleBySpaceWorktreeArchiveRequest worktree scope", () => {
         sessionLogger: createLogger(),
       },
       {
-        type: "byspace_worktree_archive_request",
+        type: "paseo_worktree_archive_request",
         requestId: "req-worktree-scope",
         worktreePath: sharedCwd,
         repoRoot: repoDir,
@@ -1896,7 +1884,7 @@ describe("handleBySpaceWorktreeArchiveRequest worktree scope", () => {
     expect(archivedWorkspaceRecords).toContain(workspaceB);
     expect(existsSync(sharedCwd)).toBe(false);
     expect(
-      emitted.find((message) => message.type === "byspace_worktree_archive_response"),
+      emitted.find((message) => message.type === "paseo_worktree_archive_response"),
     ).toMatchObject({
       payload: {
         success: true,
@@ -1909,14 +1897,14 @@ describe("handleBySpaceWorktreeArchiveRequest worktree scope", () => {
     const { tempDir, repoDir } = createGitRepo();
     cleanupPaths.push(tempDir);
 
-    const byspaceHome = path.join(tempDir, ".byspace");
+    const paseoHome = path.join(tempDir, ".paseo");
     const created = await createLegacyWorktreeForTest({
       branchName: "archive-default-scope",
       cwd: repoDir,
       baseBranch: "main",
       worktreeSlug: "archive-default-scope",
       runSetup: false,
-      byspaceHome,
+      paseoHome,
     });
     const workspaceId = "ws-default-scope";
     const activeWorkspaces = [
@@ -1925,9 +1913,9 @@ describe("handleBySpaceWorktreeArchiveRequest worktree scope", () => {
     const archivedWorkspaceRecords: string[] = [];
     const emitted: SessionOutboundMessage[] = [];
 
-    await handleBySpaceWorktreeArchiveRequest(
+    await handlePaseoWorktreeArchiveRequest(
       {
-        byspaceHome,
+        paseoHome,
         github: createGitHubServiceStub(),
         workspaceGitService: {
           getSnapshot: vi.fn(async () => null),
@@ -1959,7 +1947,7 @@ describe("handleBySpaceWorktreeArchiveRequest worktree scope", () => {
         sessionLogger: createLogger(),
       },
       {
-        type: "byspace_worktree_archive_request",
+        type: "paseo_worktree_archive_request",
         requestId: "req-default-scope",
         worktreePath: created.worktreePath,
         repoRoot: repoDir,
@@ -1969,7 +1957,7 @@ describe("handleBySpaceWorktreeArchiveRequest worktree scope", () => {
     expect(archivedWorkspaceRecords).toEqual([workspaceId]);
     expect(existsSync(created.worktreePath)).toBe(false);
     expect(
-      emitted.find((message) => message.type === "byspace_worktree_archive_response"),
+      emitted.find((message) => message.type === "paseo_worktree_archive_response"),
     ).toMatchObject({
       payload: {
         success: true,
@@ -1982,14 +1970,14 @@ describe("handleBySpaceWorktreeArchiveRequest worktree scope", () => {
     const { tempDir, repoDir } = createGitRepo();
     cleanupPaths.push(tempDir);
 
-    const byspaceHome = path.join(tempDir, ".byspace");
+    const paseoHome = path.join(tempDir, ".paseo");
     const created = await createLegacyWorktreeForTest({
       branchName: "archive-default-scope-sibling",
       cwd: repoDir,
       baseBranch: "main",
       worktreeSlug: "archive-default-scope-sibling",
       runSetup: false,
-      byspaceHome,
+      paseoHome,
     });
     const sharedCwd = created.worktreePath;
     const workspaceA = "ws-default-scope-sibling-A";
@@ -2001,9 +1989,9 @@ describe("handleBySpaceWorktreeArchiveRequest worktree scope", () => {
     const archivedWorkspaceRecords: string[] = [];
     const emitted: SessionOutboundMessage[] = [];
 
-    await handleBySpaceWorktreeArchiveRequest(
+    await handlePaseoWorktreeArchiveRequest(
       {
-        byspaceHome,
+        paseoHome,
         github: createGitHubServiceStub(),
         workspaceGitService: {
           getSnapshot: vi.fn(async () => null),
@@ -2035,7 +2023,7 @@ describe("handleBySpaceWorktreeArchiveRequest worktree scope", () => {
         sessionLogger: createLogger(),
       },
       {
-        type: "byspace_worktree_archive_request",
+        type: "paseo_worktree_archive_request",
         requestId: "req-default-scope-sibling",
         worktreePath: sharedCwd,
         repoRoot: repoDir,
@@ -2045,7 +2033,7 @@ describe("handleBySpaceWorktreeArchiveRequest worktree scope", () => {
     expect(archivedWorkspaceRecords).toEqual([workspaceA]);
     expect(existsSync(sharedCwd)).toBe(true);
     expect(
-      emitted.find((message) => message.type === "byspace_worktree_archive_response"),
+      emitted.find((message) => message.type === "paseo_worktree_archive_response"),
     ).toMatchObject({
       payload: {
         success: true,
@@ -2058,14 +2046,14 @@ describe("handleBySpaceWorktreeArchiveRequest worktree scope", () => {
     const { tempDir, repoDir } = createGitRepo();
     cleanupPaths.push(tempDir);
 
-    const byspaceHome = path.join(tempDir, ".byspace");
+    const paseoHome = path.join(tempDir, ".paseo");
     const created = await createLegacyWorktreeForTest({
       branchName: "archive-delete-flag",
       cwd: repoDir,
       baseBranch: "main",
       worktreeSlug: "archive-delete-flag",
       runSetup: false,
-      byspaceHome,
+      paseoHome,
     });
     const sharedCwd = created.worktreePath;
     const workspaceA = "ws-delete-flag-a";
@@ -2079,7 +2067,7 @@ describe("handleBySpaceWorktreeArchiveRequest worktree scope", () => {
     const listActiveWorkspaces = vi.fn(async () => activeWorkspaces);
 
     const deps = {
-      byspaceHome,
+      paseoHome,
       github: createGitHubServiceStub(),
       workspaceGitService: {
         getSnapshot: vi.fn(async () => null),
@@ -2109,8 +2097,8 @@ describe("handleBySpaceWorktreeArchiveRequest worktree scope", () => {
 
     // First archive: a sibling workspace still references the directory, so the
     // retained deleteWorktreeFromDisk:true flag must NOT force removal.
-    await handleBySpaceWorktreeArchiveRequest(deps, {
-      type: "byspace_worktree_archive_request",
+    await handlePaseoWorktreeArchiveRequest(deps, {
+      type: "paseo_worktree_archive_request",
       requestId: "req-delete-flag-first",
       worktreePath: sharedCwd,
       repoRoot: repoDir,
@@ -2128,8 +2116,8 @@ describe("handleBySpaceWorktreeArchiveRequest worktree scope", () => {
 
     // Second archive: last reference, so removal is derived even though the flag
     // is still ignored.
-    await handleBySpaceWorktreeArchiveRequest(deps, {
-      type: "byspace_worktree_archive_request",
+    await handlePaseoWorktreeArchiveRequest(deps, {
+      type: "paseo_worktree_archive_request",
       requestId: "req-delete-flag-second",
       worktreePath: sharedCwd,
       repoRoot: repoDir,
@@ -2141,7 +2129,7 @@ describe("handleBySpaceWorktreeArchiveRequest worktree scope", () => {
     expect(archivedWorkspaceRecords).toEqual([workspaceB]);
     expect(existsSync(sharedCwd)).toBe(false);
     expect(
-      emitted.filter((message) => message.type === "byspace_worktree_archive_response"),
+      emitted.filter((message) => message.type === "paseo_worktree_archive_response"),
     ).toHaveLength(2);
   });
 });

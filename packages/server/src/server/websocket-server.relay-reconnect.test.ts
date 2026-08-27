@@ -15,8 +15,8 @@ import {
   decodeTerminalStreamFrame,
   encodeTerminalStreamFrame,
   TerminalStreamOpcode,
-} from "@bytetrue/byspace-protocol/terminal-stream-protocol";
-import { CLIENT_CAPS } from "@bytetrue/byspace-protocol/client-capabilities";
+} from "@getpaseo/protocol/terminal-stream-protocol";
+import { CLIENT_CAPS } from "@getpaseo/protocol/client-capabilities";
 
 type SocketListener = (...args: unknown[]) => void;
 
@@ -246,7 +246,7 @@ function createServer(options?: {
     }),
     createStub<AgentStorage>({}),
     createStub<DownloadTokenStore>({}),
-    "/tmp/byspace-test",
+    "/tmp/paseo-test",
     createStub<DaemonConfigStore>(daemonConfigStore),
     null,
     { allowedOrigins: new Set(), startPaused: options?.startPaused },
@@ -387,8 +387,8 @@ function createHelloMessage(
 function createDirectRequest() {
   return {
     headers: {
-      host: "localhost:6777",
-      origin: "http://localhost:6777",
+      host: "localhost:6767",
+      origin: "http://localhost:6767",
       "user-agent": "vitest",
     },
     socket: {

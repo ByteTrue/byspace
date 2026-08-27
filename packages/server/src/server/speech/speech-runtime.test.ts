@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import pino from "pino";
 
-import type { BySpaceSpeechConfig } from "../bootstrap.js";
+import type { PaseoSpeechConfig } from "../bootstrap.js";
 import type { InitializedLocalSpeech } from "./providers/local/runtime.js";
 import type { SpeechToTextProvider, TextToSpeechProvider } from "./speech-provider.js";
 import type { TurnDetectionProvider } from "./turn-detection-provider.js";
@@ -73,7 +73,7 @@ function rejectWhenAborted(signal?: AbortSignal): Promise<never> {
   });
 }
 
-function createSpeechConfig(providers: BySpaceSpeechConfig["providers"]): BySpaceSpeechConfig {
+function createSpeechConfig(providers: PaseoSpeechConfig["providers"]): PaseoSpeechConfig {
   return {
     providers,
     sttLanguages: {

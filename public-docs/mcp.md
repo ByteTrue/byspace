@@ -1,6 +1,6 @@
 ---
 title: MCP reference
-description: Reference for the BySpace tools agents use to manage agents, workspaces, scripts, terminals, and schedules.
+description: Reference for the Paseo tools agents use to manage agents, workspaces, scripts, terminals, and schedules.
 nav: MCP reference
 order: 33
 category: Orchestration
@@ -10,9 +10,9 @@ category: Orchestration
 
 This is the complete catalog behind the workflows in [Orchestration](/docs/orchestration) and [Common workflows](/docs/orchestration-workflows). You normally ask for an outcome in natural language and let the agent choose the tools.
 
-BySpace can inject these tools into every new agent it launches. Open **Settings → your host → Agents** and turn on **Enable BySpace tools**, or set `daemon.mcp.injectIntoAgents` to `true`.
+Paseo can inject these tools into every new agent it launches. Open **Settings → your host → Agents** and turn on **Enable Paseo tools**, or set `daemon.mcp.injectIntoAgents` to `true`.
 
-Depending on the provider, BySpace delivers the catalog through its native tool interface or MCP. The capabilities are the same either way.
+Depending on the provider, Paseo delivers the catalog through its native tool interface or MCP. The capabilities are the same either way.
 
 The MCP server itself is controlled by `daemon.mcp.enabled`. Existing agents may need a reload.
 
@@ -57,15 +57,15 @@ For worktree isolation, `create_workspace` accepts the same useful choices as th
 
 ### Workspace scripts
 
-These tools manage scripts configured in a workspace's `byspace.json`. Each requires an explicit `workspaceId`; start and stop also require the configured `scriptName`.
+These tools manage scripts configured in a workspace's `paseo.json`. Each requires an explicit `workspaceId`; start and stop also require the configured `scriptName`.
 
 | Tool                     | Function                                                                                |
 | ------------------------ | --------------------------------------------------------------------------------------- |
 | `list_workspace_scripts` | List configured scripts with lifecycle, terminal, port, proxy URL, and health metadata. |
-| `start_workspace_script` | Start a configured script through BySpace's managed launcher.                           |
+| `start_workspace_script` | Start a configured script through Paseo's managed launcher.                             |
 | `stop_workspace_script`  | Stop a running script through its supervised terminal.                                  |
 
-See [Git worktrees](/docs/worktrees#scripts-and-services) for `byspace.json` configuration.
+See [Git worktrees](/docs/worktrees#scripts-and-services) for `paseo.json` configuration.
 
 ### Terminals
 

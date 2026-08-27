@@ -5,7 +5,7 @@ import { openSettingsSection } from "../../app/e2e/support/helpers/settings";
 
 // Settings > Keyboard Shortcuts is desktop-only (`desktopOnly` in
 // settings-screen.tsx), and the gate reads `getIsElectronRuntime()`, which only
-// checks for `window.byspaceDesktop` -- so this belongs in the desktop suite even
+// checks for `window.paseoDesktop` -- so this belongs in the desktop suite even
 // though no `.electron.*` module sits in the surface's import path.
 const SHORTCUTS_ROW = "show-shortcuts";
 
@@ -16,7 +16,7 @@ const SHORTCUTS_ROW = "show-shortcuts";
  */
 async function installDesktopBridge(page: Page): Promise<void> {
   await page.addInitScript(() => {
-    window.byspaceDesktop = {
+    window.paseoDesktop = {
       platform: "darwin",
       events: { on: () => () => {} },
       invoke: async (command: string) => {

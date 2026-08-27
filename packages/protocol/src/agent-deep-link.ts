@@ -24,7 +24,7 @@ export function buildAgentDeepLinkRoute(
 }
 
 export function buildAgentDeepLink(target: AgentDeepLinkTarget): string {
-  return `byspace:/${buildAgentDeepLinkRoute(target)}`;
+  return `paseo:/${buildAgentDeepLinkRoute(target)}`;
 }
 
 export function parseAgentDeepLink(input: string): AgentDeepLinkTarget | null {
@@ -36,7 +36,7 @@ export function parseAgentDeepLink(input: string): AgentDeepLinkTarget | null {
   }
 
   if (
-    url.protocol !== "byspace:" ||
+    url.protocol !== "paseo:" ||
     url.hostname !== "h" ||
     url.username ||
     url.password ||

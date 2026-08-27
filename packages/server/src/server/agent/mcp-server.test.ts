@@ -20,7 +20,7 @@ import {
   AgentListItemPayloadSchema,
   AgentPermissionRequestPayloadSchema,
   AgentSnapshotPayloadSchema,
-} from "@bytetrue/byspace-protocol/messages";
+} from "@getpaseo/protocol/messages";
 import {
   createPersistedProjectRecord,
   createPersistedWorkspaceRecord,
@@ -33,16 +33,16 @@ import type {
   CreateScheduleInput,
   StoredSchedule,
   UpdateScheduleInput,
-} from "@bytetrue/byspace-protocol/schedule/types";
+} from "@getpaseo/protocol/schedule/types";
 import type { ScheduleService } from "../schedule/service.js";
 import type { WorkspaceGitService } from "../workspace-git-service.js";
 import {
-  createBySpaceWorktree as createBySpaceWorktreeService,
-  type CreateBySpaceWorktreeInput,
-} from "../byspace-worktree-service.js";
+  createPaseoWorktree as createPaseoWorktreeService,
+  type CreatePaseoWorktreeInput,
+} from "../paseo-worktree-service.js";
 import {
-  createBySpaceWorktreeWorkflow,
-  type CreateBySpaceWorktreeWorkflowFn,
+  createPaseoWorktreeWorkflow,
+  type CreatePaseoWorktreeWorkflowFn,
 } from "../worktree-session.js";
 import { WorkspaceGitServiceImpl } from "../workspace-git-service.js";
 import { WorkspaceAutoName } from "../workspace-auto-name.js";
@@ -51,12 +51,12 @@ import type { GeneratedWorkspaceName } from "../worktree-branch-name-generator.j
 import type { ForgeService } from "../../services/forge-service.js";
 import { areEquivalentPaths } from "../../utils/path.js";
 import type { TerminalManager } from "../../terminal/terminal-manager.js";
-import { PARENT_AGENT_ID_LABEL } from "@bytetrue/byspace-protocol/agent-labels";
-import { MutableDaemonConfigSchema, type AgentProfile } from "@bytetrue/byspace-protocol/messages";
+import { PARENT_AGENT_ID_LABEL } from "@getpaseo/protocol/agent-labels";
+import { MutableDaemonConfigSchema, type AgentProfile } from "@getpaseo/protocol/messages";
 import type { DaemonConfigStore } from "../daemon-config-store.js";
 import type { BrowserToolsBroker, BrowserToolsExecuteInput } from "../browser-tools/broker.js";
 import type { BrowserToolsResponsePayload } from "../browser-tools/errors.js";
-import { readBySpaceWorktreeMetadata } from "../../utils/worktree-metadata.js";
+import { readPaseoWorktreeMetadata } from "../../utils/worktree-metadata.js";
 import { createWorkspaceProvisioningService } from "../session/workspace-provisioning/workspace-provisioning-service.js";
 
 const REPO_CWD = resolvePath("/tmp/repo");
@@ -339,7 +339,7 @@ function configureOpenCodeProviderStub(
   const opencodeModes: AgentMode[] = [
     { id: "build", label: "Build", description: "Can edit" },
     { id: "plan", label: "Plan", description: "Read-only" },
-    { id: "byspace-custom", label: "BySpace Custom", description: "Custom OpenCode agent" },
+    { id: "paseo-custom", label: "Paseo Custom", description: "Custom OpenCode agent" },
   ];
   const entries: ProviderSnapshotEntry[] = [
     buildSnapshotEntry({
@@ -366,7 +366,7 @@ function configureOpenCodeProviderStub(
   ];
   const customOpenCodeModes: AgentMode[] = [
     ...opencodeModes,
-    { id: "byspace-custom", label: "BySpace Custom" },
+    { id: "paseo-custom", label: "Paseo Custom" },
   ];
   if (options.customOpenCodeProvider) {
     entries.push(
@@ -616,7 +616,7 @@ class BoundaryProviderSnapshotManagerFake {
 }
 
 async function connectInMemoryMcpClient(server: Awaited<ReturnType<typeof createAgentMcpServer>>) {
-  const client = new Client({ name: "byspace-test-client", version: "0.0.0" });
+  const client = new Client({ name: "paseo-test-client", version: "0.0.0" });
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
   await server.connect(serverTransport);
   await client.connect(clientTransport);
@@ -660,21 +660,21 @@ function createArchiveWorkspaceRecordMutator(
   };
 }
 
-function createBySpaceWorktreeForMcpTest(options: {
-  byspaceHome: string;
+function createPaseoWorktreeForMcpTest(options: {
+  paseoHome: string;
   broadcasts: string[];
   createdWorkspaceIds?: string[];
   workspaceRecords?: Map<string, PersistedWorkspaceRecord>;
   generateWorkspaceName?: () => Promise<GeneratedWorkspaceName | null>;
   setupContinuations?: Array<"workspace" | "agent" | undefined>;
   startedAgentSetupIds?: string[];
-}): CreateBySpaceWorktreeWorkflowFn {
+}): CreatePaseoWorktreeWorkflowFn {
   const projects = new Map<string, PersistedProjectRecord>();
   const workspaces = options.workspaceRecords ?? new Map<string, PersistedWorkspaceRecord>();
   const github = createGitHubServiceStub();
   const workspaceGitService = new WorkspaceGitServiceImpl({
     logger: createTestLogger(),
-    byspaceHome: options.byspaceHome,
+    paseoHome: options.paseoHome,
     deps: { forgeOverrides: { github } },
   });
   const projectRegistry: ProjectRegistry = {
@@ -763,11 +763,11 @@ function createBySpaceWorktreeForMcpTest(options: {
 
   return async (input, serviceOptions) => {
     options.setupContinuations?.push(serviceOptions?.setupContinuation?.kind);
-    const result = await createBySpaceWorktreeWorkflow(
+    const result = await createPaseoWorktreeWorkflow(
       {
-        byspaceHome: options.byspaceHome,
-        createBySpaceWorktree: (workflowInput, workflowOptions) =>
-          createBySpaceWorktreeService(workflowInput, {
+        paseoHome: options.paseoHome,
+        createPaseoWorktree: (workflowInput, workflowOptions) =>
+          createPaseoWorktreeService(workflowInput, {
             github,
             ...(workflowOptions?.resolveDefaultBranch
               ? { resolveDefaultBranch: workflowOptions.resolveDefaultBranch }
@@ -1009,7 +1009,7 @@ describe("browser MCP tools", () => {
     expect(response.content).toEqual([
       {
         type: "text",
-        text: "No BySpace browser tabs are open. Call browser_new_tab to create one.",
+        text: "No Paseo browser tabs are open. Call browser_new_tab to create one.",
       },
     ]);
     expect(response.structuredContent).toEqual({
@@ -1044,7 +1044,7 @@ describe("browser MCP tools", () => {
     expect(response.content).toEqual([
       {
         type: "text",
-        text: "This browser tool needs a workspace. Start the agent from a BySpace workspace before calling browser_new_tab or browser_list_tabs.",
+        text: "This browser tool needs a workspace. Start the agent from a Paseo workspace before calling browser_new_tab or browser_list_tabs.",
       },
     ]);
     expect(response.structuredContent).toEqual({
@@ -1052,7 +1052,7 @@ describe("browser MCP tools", () => {
       error: {
         code: "browser_denied",
         message:
-          "This browser tool needs a workspace. Start the agent from a BySpace workspace before calling browser_new_tab or browser_list_tabs.",
+          "This browser tool needs a workspace. Start the agent from a Paseo workspace before calling browser_new_tab or browser_list_tabs.",
         retryable: false,
       },
       context: { agentId: "agent-1", cwd: REPO_CWD },
@@ -1705,9 +1705,9 @@ describe("create_agent MCP tool", () => {
 
   it("registers and broadcasts a workspace when create_agent creates a worktree", async () => {
     const { agentManager, agentStorage, spies } = createTestDeps();
-    const tempDir = await mkdtemp(join(tmpdir(), "byspace-mcp-worktree-"));
+    const tempDir = await mkdtemp(join(tmpdir(), "paseo-mcp-worktree-"));
     const repoDir = join(tempDir, "repo");
-    const byspaceHome = join(tempDir, ".byspace");
+    const paseoHome = join(tempDir, ".paseo");
     const broadcasts: string[] = [];
     const createdWorkspaceIds: string[] = [];
     const setupContinuations: Array<"workspace" | "agent" | undefined> = [];
@@ -1742,9 +1742,9 @@ describe("create_agent MCP tool", () => {
         agentManager,
         agentStorage,
         providerSnapshotManager: createOpenCodeManager().manager,
-        byspaceHome,
-        createBySpaceWorktree: createBySpaceWorktreeForMcpTest({
-          byspaceHome,
+        paseoHome,
+        createPaseoWorktree: createPaseoWorktreeForMcpTest({
+          paseoHome,
           broadcasts,
           createdWorkspaceIds,
           setupContinuations,
@@ -1795,9 +1795,9 @@ describe("create_agent MCP tool", () => {
 
   it("creates a create_agent branch-off worktree without invoking the legacy metadata branch rename", async () => {
     const { agentManager, agentStorage, spies } = createTestDeps();
-    const tempDir = await mkdtemp(join(tmpdir(), "byspace-mcp-agent-worktree-name-context-"));
+    const tempDir = await mkdtemp(join(tmpdir(), "paseo-mcp-agent-worktree-name-context-"));
     const repoDir = join(tempDir, "repo");
-    const byspaceHome = join(tempDir, ".byspace");
+    const paseoHome = join(tempDir, ".paseo");
     const broadcasts: string[] = [];
     const workspaceGitService = {
       getSnapshot: vi.fn(async () => {
@@ -1834,8 +1834,8 @@ describe("create_agent MCP tool", () => {
         agentManager,
         agentStorage,
         providerSnapshotManager: createOpenCodeManager().manager,
-        byspaceHome,
-        createBySpaceWorktree: createBySpaceWorktreeForMcpTest({ byspaceHome, broadcasts }),
+        paseoHome,
+        createPaseoWorktree: createPaseoWorktreeForMcpTest({ paseoHome, broadcasts }),
         workspaceGitService: workspaceGitService as unknown as Pick<
           WorkspaceGitService,
           "getSnapshot" | "listWorktrees"
@@ -1873,9 +1873,9 @@ describe("create_agent MCP tool", () => {
 
   it("auto-titles and renames an agent-created branch-off worktree from the initial prompt", async () => {
     const { agentManager, agentStorage, spies } = createTestDeps();
-    const tempDir = await mkdtemp(join(tmpdir(), "byspace-mcp-agent-worktree-auto-title-"));
+    const tempDir = await mkdtemp(join(tmpdir(), "paseo-mcp-agent-worktree-auto-title-"));
     const repoDir = join(tempDir, "repo");
-    const byspaceHome = join(tempDir, ".byspace");
+    const paseoHome = join(tempDir, ".paseo");
     const broadcasts: string[] = [];
     const createdWorkspaceIds: string[] = [];
     const workspaceRecords = new Map<string, PersistedWorkspaceRecord>();
@@ -1909,9 +1909,9 @@ describe("create_agent MCP tool", () => {
         agentManager,
         agentStorage,
         providerSnapshotManager: createOpenCodeManager().manager,
-        byspaceHome,
-        createBySpaceWorktree: createBySpaceWorktreeForMcpTest({
-          byspaceHome,
+        paseoHome,
+        createPaseoWorktree: createPaseoWorktreeForMcpTest({
+          paseoHome,
           broadcasts,
           createdWorkspaceIds,
           workspaceRecords,
@@ -1945,7 +1945,7 @@ describe("create_agent MCP tool", () => {
       })
         .toString()
         .trim();
-      const metadata = readBySpaceWorktreeMetadata(agentCwd);
+      const metadata = readPaseoWorktreeMetadata(agentCwd);
 
       expect(metadata).toMatchObject({
         version: 2,
@@ -1966,9 +1966,9 @@ describe("create_agent MCP tool", () => {
 
   it("keeps a manual workspace title when agent-created worktree naming finishes later", async () => {
     const { agentManager, agentStorage, spies } = createTestDeps();
-    const tempDir = await mkdtemp(join(tmpdir(), "byspace-mcp-agent-worktree-manual-title-"));
+    const tempDir = await mkdtemp(join(tmpdir(), "paseo-mcp-agent-worktree-manual-title-"));
     const repoDir = join(tempDir, "repo");
-    const byspaceHome = join(tempDir, ".byspace");
+    const paseoHome = join(tempDir, ".paseo");
     const broadcasts: string[] = [];
     const createdWorkspaceIds: string[] = [];
     const workspaceRecords = new Map<string, PersistedWorkspaceRecord>();
@@ -2002,9 +2002,9 @@ describe("create_agent MCP tool", () => {
         agentManager,
         agentStorage,
         providerSnapshotManager: createOpenCodeManager().manager,
-        byspaceHome,
-        createBySpaceWorktree: createBySpaceWorktreeForMcpTest({
-          byspaceHome,
+        paseoHome,
+        createPaseoWorktree: createPaseoWorktreeForMcpTest({
+          paseoHome,
           broadcasts,
           createdWorkspaceIds,
           workspaceRecords,
@@ -2065,9 +2065,9 @@ describe("create_agent MCP tool", () => {
 
   it("uses create_agent title for the agent while still auto-titling the worktree workspace", async () => {
     const { agentManager, agentStorage, spies } = createTestDeps();
-    const tempDir = await mkdtemp(join(tmpdir(), "byspace-mcp-agent-title-workspace-title-"));
+    const tempDir = await mkdtemp(join(tmpdir(), "paseo-mcp-agent-title-workspace-title-"));
     const repoDir = join(tempDir, "repo");
-    const byspaceHome = join(tempDir, ".byspace");
+    const paseoHome = join(tempDir, ".paseo");
     const broadcasts: string[] = [];
     const createdWorkspaceIds: string[] = [];
     const workspaceRecords = new Map<string, PersistedWorkspaceRecord>();
@@ -2101,9 +2101,9 @@ describe("create_agent MCP tool", () => {
         agentManager,
         agentStorage,
         providerSnapshotManager: createOpenCodeManager().manager,
-        byspaceHome,
-        createBySpaceWorktree: createBySpaceWorktreeForMcpTest({
-          byspaceHome,
+        paseoHome,
+        createPaseoWorktree: createPaseoWorktreeForMcpTest({
+          paseoHome,
           broadcasts,
           createdWorkspaceIds,
           workspaceRecords,
@@ -2148,13 +2148,13 @@ describe("create_agent MCP tool", () => {
 
   it("auto-titles an agent-created directory workspace from the initial prompt", async () => {
     const { agentManager, agentStorage, spies } = createTestDeps();
-    const tempDir = await mkdtemp(join(tmpdir(), "byspace-mcp-agent-directory-auto-title-"));
+    const tempDir = await mkdtemp(join(tmpdir(), "paseo-mcp-agent-directory-auto-title-"));
     const workspaceDir = join(tempDir, "workspace");
     const workspaceRecords = new Map<string, PersistedWorkspaceRecord>();
     const broadcasts: string[] = [];
     const workspaceGitService = new WorkspaceGitServiceImpl({
       logger: createTestLogger(),
-      byspaceHome: join(tempDir, ".byspace"),
+      paseoHome: join(tempDir, ".paseo"),
       deps: { github: createGitHubServiceStub() },
     });
     const workspaceAutoName = new WorkspaceAutoName({
@@ -2259,9 +2259,9 @@ describe("create_agent MCP tool", () => {
 
   it("auto-titles without renaming a create_agent checkout worktree from the initial prompt", async () => {
     const { agentManager, agentStorage, spies } = createTestDeps();
-    const tempDir = await mkdtemp(join(tmpdir(), "byspace-mcp-agent-checkout-name-context-"));
+    const tempDir = await mkdtemp(join(tmpdir(), "paseo-mcp-agent-checkout-name-context-"));
     const repoDir = join(tempDir, "repo");
-    const byspaceHome = join(tempDir, ".byspace");
+    const paseoHome = join(tempDir, ".paseo");
     const broadcasts: string[] = [];
     const createdWorkspaceIds: string[] = [];
     const workspaceRecords = new Map<string, PersistedWorkspaceRecord>();
@@ -2309,9 +2309,9 @@ describe("create_agent MCP tool", () => {
         agentManager,
         agentStorage,
         providerSnapshotManager: createOpenCodeManager().manager,
-        byspaceHome,
-        createBySpaceWorktree: createBySpaceWorktreeForMcpTest({
-          byspaceHome,
+        paseoHome,
+        createPaseoWorktree: createPaseoWorktreeForMcpTest({
+          paseoHome,
           broadcasts,
           createdWorkspaceIds,
           workspaceRecords,
@@ -2357,7 +2357,7 @@ describe("create_agent MCP tool", () => {
         title: "Generated Checkout Workspace Title",
         branch: "existing-feature",
       });
-      expect(readBySpaceWorktreeMetadata(agentCwd)).toMatchObject({
+      expect(readPaseoWorktreeMetadata(agentCwd)).toMatchObject({
         version: 1,
         baseRefName: "existing-feature",
       });
@@ -2372,10 +2372,10 @@ describe("create_agent MCP tool", () => {
   it("passes create_agent GitHub PR worktrees through workspace creation without metadata branch rename", async () => {
     const { agentManager, agentStorage, spies } = createTestDeps();
     const startedAgentSetupIds: string[] = [];
-    const createBySpaceWorktree = vi.fn(
+    const createPaseoWorktree = vi.fn(
       async (
-        input: CreateBySpaceWorktreeInput,
-        options?: Parameters<CreateBySpaceWorktreeWorkflowFn>[1],
+        input: CreatePaseoWorktreeInput,
+        options?: Parameters<CreatePaseoWorktreeWorkflowFn>[1],
       ) => ({
         worktree: {
           branchName: "pr-123",
@@ -2429,7 +2429,7 @@ describe("create_agent MCP tool", () => {
       agentManager,
       agentStorage,
       providerSnapshotManager: createOpenCodeManager().manager,
-      createBySpaceWorktree,
+      createPaseoWorktree,
       workspaceGitService: workspaceGitService as unknown as Pick<
         WorkspaceGitService,
         "getSnapshot" | "listWorktrees"
@@ -2448,7 +2448,7 @@ describe("create_agent MCP tool", () => {
       background: true,
     });
 
-    expect(createBySpaceWorktree).toHaveBeenCalledWith(
+    expect(createPaseoWorktree).toHaveBeenCalledWith(
       expect.objectContaining({
         githubPrNumber: 123,
         firstAgentContext: { prompt: "Rename this PR branch from prompt" },
@@ -2469,9 +2469,9 @@ describe("create_agent MCP tool", () => {
 
   it("creates a worktree-isolated workspace", async () => {
     const { agentManager, agentStorage } = createTestDeps();
-    const tempDir = await mkdtemp(join(tmpdir(), "byspace-mcp-create-worktree-"));
+    const tempDir = await mkdtemp(join(tmpdir(), "paseo-mcp-create-worktree-"));
     const repoDir = join(tempDir, "repo");
-    const byspaceHome = join(tempDir, ".byspace");
+    const paseoHome = join(tempDir, ".paseo");
     const broadcasts: string[] = [];
     const setupContinuations: Array<"workspace" | "agent" | undefined> = [];
 
@@ -2500,9 +2500,9 @@ describe("create_agent MCP tool", () => {
         agentManager,
         agentStorage,
         providerSnapshotManager: createOpenCodeManager().manager,
-        byspaceHome,
-        createBySpaceWorktree: createBySpaceWorktreeForMcpTest({
-          byspaceHome,
+        paseoHome,
+        createPaseoWorktree: createPaseoWorktreeForMcpTest({
+          paseoHome,
           broadcasts,
           setupContinuations,
         }),
@@ -2543,8 +2543,8 @@ describe("create_agent MCP tool", () => {
       createdAt: "2026-07-18T00:00:00.000Z",
       updatedAt: "2026-07-18T00:00:00.000Z",
     });
-    const receivedInputs: CreateBySpaceWorktreeInput[] = [];
-    const createBySpaceWorktree: CreateBySpaceWorktreeWorkflowFn = async (input) => {
+    const receivedInputs: CreatePaseoWorktreeInput[] = [];
+    const createPaseoWorktree: CreatePaseoWorktreeWorkflowFn = async (input) => {
       receivedInputs.push(input);
       return {
         worktree: { branchName: "project-worktree", worktreePath: TARGET_CWD },
@@ -2571,7 +2571,7 @@ describe("create_agent MCP tool", () => {
         get: async (projectId) => (projectId === project.projectId ? project : null),
         list: async () => [project],
       },
-      createBySpaceWorktree,
+      createPaseoWorktree,
       logger,
     });
 
@@ -2594,7 +2594,7 @@ describe("create_agent MCP tool", () => {
 
   it("preserves branch checkout and pull request checkout workspace modes", async () => {
     const { agentManager, agentStorage } = createTestDeps();
-    const createBySpaceWorktree = vi.fn(async (input: CreateBySpaceWorktreeInput) => ({
+    const createPaseoWorktree = vi.fn(async (input: CreatePaseoWorktreeInput) => ({
       worktree: {
         branchName: input.refName ?? "pr-42",
         worktreePath: "/tmp/worktrees/selected",
@@ -2619,7 +2619,7 @@ describe("create_agent MCP tool", () => {
       agentManager,
       agentStorage,
       providerSnapshotManager: createOpenCodeManager().manager,
-      createBySpaceWorktree,
+      createPaseoWorktree,
       logger,
     });
     const tool = registeredTool(server, "create_workspace");
@@ -2645,7 +2645,7 @@ describe("create_agent MCP tool", () => {
       prNumber: 43,
     });
 
-    expect(createBySpaceWorktree).toHaveBeenNthCalledWith(
+    expect(createPaseoWorktree).toHaveBeenNthCalledWith(
       1,
       expect.objectContaining({
         action: "checkout",
@@ -2653,7 +2653,7 @@ describe("create_agent MCP tool", () => {
         worktreeSlug: "existing-work-copy",
       }),
     );
-    expect(createBySpaceWorktree).toHaveBeenNthCalledWith(
+    expect(createPaseoWorktree).toHaveBeenNthCalledWith(
       2,
       expect.objectContaining({
         action: "checkout",
@@ -2664,7 +2664,7 @@ describe("create_agent MCP tool", () => {
         },
       }),
     );
-    expect(createBySpaceWorktree).toHaveBeenNthCalledWith(
+    expect(createPaseoWorktree).toHaveBeenNthCalledWith(
       3,
       expect.objectContaining({
         action: "checkout",
@@ -2679,10 +2679,10 @@ describe("create_agent MCP tool", () => {
   it("archives a worktree-isolated workspace by workspace id", async () => {
     const { agentManager, agentStorage } = createTestDeps();
     const tempDir = realpathSync.native(
-      await mkdtemp(join(tmpdir(), "byspace-mcp-archive-worktree-")),
+      await mkdtemp(join(tmpdir(), "paseo-mcp-archive-worktree-")),
     );
     const repoDir = join(tempDir, "repo");
-    const byspaceHome = join(tempDir, ".byspace");
+    const paseoHome = join(tempDir, ".paseo");
 
     try {
       execFileSync("git", ["init", repoDir], { stdio: "pipe" });
@@ -2714,8 +2714,8 @@ describe("create_agent MCP tool", () => {
         agentManager,
         agentStorage,
         providerSnapshotManager: createOpenCodeManager().manager,
-        byspaceHome,
-        createBySpaceWorktree: createBySpaceWorktreeForMcpTest({ byspaceHome, broadcasts: [] }),
+        paseoHome,
+        createPaseoWorktree: createPaseoWorktreeForMcpTest({ paseoHome, broadcasts: [] }),
         workspaceGitService: workspaceGitService as unknown as Pick<
           WorkspaceGitService,
           "getSnapshot" | "listWorktrees" | "resolveRepoRoot"
@@ -2786,10 +2786,10 @@ describe("create_agent MCP tool", () => {
   it("keeps an owned worktree while another workspace still references it", async () => {
     const { agentManager, agentStorage } = createTestDeps();
     const tempDir = realpathSync.native(
-      await mkdtemp(join(tmpdir(), "byspace-mcp-archive-worktree-multi-")),
+      await mkdtemp(join(tmpdir(), "paseo-mcp-archive-worktree-multi-")),
     );
     const repoDir = join(tempDir, "repo");
-    const byspaceHome = join(tempDir, ".byspace");
+    const paseoHome = join(tempDir, ".paseo");
 
     try {
       execFileSync("git", ["init", repoDir], { stdio: "pipe" });
@@ -2827,8 +2827,8 @@ describe("create_agent MCP tool", () => {
         agentManager,
         agentStorage,
         providerSnapshotManager: createOpenCodeManager().manager,
-        byspaceHome,
-        createBySpaceWorktree: createBySpaceWorktreeForMcpTest({ byspaceHome, broadcasts: [] }),
+        paseoHome,
+        createPaseoWorktree: createPaseoWorktreeForMcpTest({ paseoHome, broadcasts: [] }),
         workspaceGitService: workspaceGitService as unknown as Pick<
           WorkspaceGitService,
           "getSnapshot" | "listWorktrees" | "resolveRepoRoot"
@@ -2874,10 +2874,10 @@ describe("create_agent MCP tool", () => {
   it("does not expose worktree path or slug operations", async () => {
     const { agentManager, agentStorage } = createTestDeps();
     const tempDir = realpathSync.native(
-      await mkdtemp(join(tmpdir(), "byspace-mcp-archive-worktree-slug-")),
+      await mkdtemp(join(tmpdir(), "paseo-mcp-archive-worktree-slug-")),
     );
     const repoDir = join(tempDir, "repo");
-    const byspaceHome = join(tempDir, ".byspace");
+    const paseoHome = join(tempDir, ".paseo");
 
     try {
       execFileSync("git", ["init", repoDir], { stdio: "pipe" });
@@ -2904,8 +2904,8 @@ describe("create_agent MCP tool", () => {
         agentManager,
         agentStorage,
         providerSnapshotManager: createOpenCodeManager().manager,
-        byspaceHome,
-        createBySpaceWorktree: createBySpaceWorktreeForMcpTest({ byspaceHome, broadcasts: [] }),
+        paseoHome,
+        createPaseoWorktree: createPaseoWorktreeForMcpTest({ paseoHome, broadcasts: [] }),
         workspaceGitService: workspaceGitService as unknown as Pick<
           WorkspaceGitService,
           "getSnapshot" | "listWorktrees" | "resolveRepoRoot"
@@ -2931,7 +2931,7 @@ describe("create_agent MCP tool", () => {
     const workspace = createPersistedWorkspaceRecord({
       workspaceId: "ws-feature",
       projectId: "project-1",
-      cwd: "/tmp/byspace/worktrees/repo/feature",
+      cwd: "/tmp/paseo/worktrees/repo/feature",
       kind: "worktree",
       displayName: "feature",
       createdAt: "2026-07-17T00:00:00.000Z",
@@ -2980,7 +2980,7 @@ describe("create_agent MCP tool", () => {
 
   it("allows caller agents to override cwd and applies caller context labels", async () => {
     const { agentManager, agentStorage, spies } = createTestDeps();
-    const baseDir = await mkdtemp(join(tmpdir(), "byspace-mcp-test-"));
+    const baseDir = await mkdtemp(join(tmpdir(), "paseo-mcp-test-"));
     const subdir = join(baseDir, "subdir");
     await mkdir(subdir, { recursive: true });
     spies.agentManager.getAgent.mockReturnValue({

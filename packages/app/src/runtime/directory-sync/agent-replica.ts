@@ -1,5 +1,5 @@
-import type { FetchAgentsEntry } from "@bytetrue/byspace-client/internal/daemon-client";
-import type { AgentSnapshotPayload } from "@bytetrue/byspace-protocol/messages";
+import type { FetchAgentsEntry } from "@getpaseo/client/internal/daemon-client";
+import type { AgentSnapshotPayload } from "@getpaseo/protocol/messages";
 import { clearArchiveAgentPending } from "@/hooks/use-archive-agent";
 import { queryClient } from "@/data/query-client";
 import { useSessionStore, type Agent } from "@/stores/session-store";

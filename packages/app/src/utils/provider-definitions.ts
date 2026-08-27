@@ -1,10 +1,10 @@
-import type { ProviderSnapshotEntry } from "@bytetrue/byspace-protocol/agent-types";
+import type { ProviderSnapshotEntry } from "@getpaseo/protocol/agent-types";
 import {
   type AgentModeColorTier,
   type AgentModeIcon,
   type AgentProviderDefinition,
   type AgentProviderModeDefinition,
-} from "@bytetrue/byspace-protocol/provider-manifest";
+} from "@getpaseo/protocol/provider-manifest";
 
 function buildProviderModes(entry: ProviderSnapshotEntry): AgentProviderModeDefinition[] {
   const entryModes = entry.modes ?? [];

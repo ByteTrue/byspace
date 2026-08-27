@@ -1,9 +1,9 @@
 import type {
-  BySpaceConfigRaw,
-  BySpaceMetadataGeneration,
-  BySpaceMetadataGenerationEntry,
-  BySpaceScriptEntryRaw,
-} from "@bytetrue/byspace-protocol/messages";
+  PaseoConfigRaw,
+  PaseoMetadataGeneration,
+  PaseoMetadataGenerationEntry,
+  PaseoScriptEntryRaw,
+} from "@getpaseo/protocol/messages";
 
 export type LifecycleOriginalKind = "string" | "array" | "missing";
 
@@ -17,7 +17,7 @@ export interface ProjectScriptDraft {
   commandOriginalKind: LifecycleOriginalKind;
   type: string;
   portText: string;
-  rawEntry: BySpaceScriptEntryRaw;
+  rawEntry: PaseoScriptEntryRaw;
 }
 
 export interface ProjectConfigDraft {
@@ -27,7 +27,7 @@ export interface ProjectConfigDraft {
   teardownOriginalKind: LifecycleOriginalKind;
   scripts: ProjectScriptDraft[];
   metadataPrompts: Record<MetadataPromptKey, string>;
-  metadataGenerationBase: BySpaceMetadataGeneration | undefined;
+  metadataGenerationBase: PaseoMetadataGeneration | undefined;
 }
 
 interface LifecycleProjection {
@@ -106,7 +106,7 @@ function emptyMetadataPrompts(): Record<MetadataPromptKey, string> {
   };
 }
 
-export function configToDraft(config: BySpaceConfigRaw | null | undefined): ProjectConfigDraft {
+export function configToDraft(config: PaseoConfigRaw | null | undefined): ProjectConfigDraft {
   const worktree = config?.worktree ?? {};
   const setup = projectLifecycle(worktree.setup);
   const teardown = projectLifecycle(worktree.teardown);
@@ -148,10 +148,10 @@ export function configToDraft(config: BySpaceConfigRaw | null | undefined): Proj
 
 interface ApplyDraftInput {
   draft: ProjectConfigDraft;
-  base: BySpaceConfigRaw | null | undefined;
+  base: PaseoConfigRaw | null | undefined;
 }
 
-export function applyDraftToConfig(input: ApplyDraftInput): BySpaceConfigRaw {
+export function applyDraftToConfig(input: ApplyDraftInput): PaseoConfigRaw {
   const baseConfig = input.base ?? {};
   const baseWorktree = baseConfig.worktree ?? {};
 
@@ -172,7 +172,7 @@ export function applyDraftToConfig(input: ApplyDraftInput): BySpaceConfigRaw {
     nextWorktree.teardown = nextTeardown;
   }
 
-  const nextScripts: Record<string, BySpaceScriptEntryRaw> = {};
+  const nextScripts: Record<string, PaseoScriptEntryRaw> = {};
   for (const row of input.draft.scripts) {
     const trimmedName = row.name.trim();
     if (trimmedName.length === 0) {
@@ -198,7 +198,7 @@ export function applyDraftToConfig(input: ApplyDraftInput): BySpaceConfigRaw {
     } else {
       nextEntry.port = nextPort;
     }
-    nextScripts[trimmedName] = nextEntry as BySpaceScriptEntryRaw;
+    nextScripts[trimmedName] = nextEntry as PaseoScriptEntryRaw;
   }
 
   const nextMetadataGeneration: Record<string, unknown> = {
@@ -207,7 +207,7 @@ export function applyDraftToConfig(input: ApplyDraftInput): BySpaceConfigRaw {
   for (const key of METADATA_PROMPT_KEYS) {
     const text = input.draft.metadataPrompts[key];
     const baseEntry = input.draft.metadataGenerationBase?.[key] as
-      | BySpaceMetadataGenerationEntry
+      | PaseoMetadataGenerationEntry
       | undefined;
     if (text.trim().length === 0) {
       if (baseEntry) {
@@ -242,5 +242,5 @@ export function applyDraftToConfig(input: ApplyDraftInput): BySpaceConfigRaw {
   } else {
     result.metadataGeneration = nextMetadataGeneration;
   }
-  return result as BySpaceConfigRaw;
+  return result as PaseoConfigRaw;
 }

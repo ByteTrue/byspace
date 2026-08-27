@@ -1,3 +1,3 @@
 # desktop
 
-Electron desktop app for BySpace.
+Electron desktop app for Paseo.

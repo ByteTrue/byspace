@@ -29,23 +29,23 @@ afterEach(async () => {
 describe("Hub init planning", () => {
   it("prints direct resumable commands for declined login continuations", () => {
     expect(hubLoginResumeCommand("connect", "https://hub.test")).toBe(
-      "byspace hub connect https://hub.test",
+      "paseo hub connect https://hub.test",
     );
-    expect(hubLoginResumeCommand("init", "https://hub.test")).toBe("byspace hub init");
+    expect(hubLoginResumeCommand("init", "https://hub.test")).toBe("paseo hub init");
   });
   it("includes login only when there is no active login", () => {
-    expect(planHubInitOpening({ loggedIn: false, byspaceDirectoryExists: false })).toEqual({
+    expect(planHubInitOpening({ loggedIn: false, paseoDirectoryExists: false })).toEqual({
       replaceExisting: false,
       steps: ["login", "connect", "project", "scaffold"],
     });
-    expect(planHubInitOpening({ loggedIn: true, byspaceDirectoryExists: false })).toEqual({
+    expect(planHubInitOpening({ loggedIn: true, paseoDirectoryExists: false })).toEqual({
       replaceExisting: false,
       steps: ["connect", "project", "scaffold"],
     });
   });
 
-  it("plans a confirmed replacement for an existing .byspace directory", () => {
-    expect(planHubInitOpening({ loggedIn: true, byspaceDirectoryExists: true })).toEqual({
+  it("plans a confirmed replacement for an existing .paseo directory", () => {
+    expect(planHubInitOpening({ loggedIn: true, paseoDirectoryExists: true })).toEqual({
       replaceExisting: true,
       steps: ["connect", "project", "scaffold"],
     });
@@ -109,7 +109,7 @@ describe("Hub init scaffold", () => {
   });
 
   it.each([
-    ["github", { repo: "ByteTrue/byspace", user: "boudra" }],
+    ["github", { repo: "getpaseo/paseo", user: "boudra" }],
     ["slack", { workspace: "T123456", user: "U123456" }],
     ["discord", { guild: "123456789", user: "987654321" }],
   ] satisfies readonly [HubInitProvider, Record<string, string>][])(
@@ -127,14 +127,14 @@ describe("Hub init scaffold", () => {
         provider,
         providerFilters,
       });
-      await mkdir(path.join(cwd, ".byspace", "workflows"), { recursive: true });
-      await writeFile(path.join(cwd, ".byspace", "hub.yml"), scaffold.hub);
+      await mkdir(path.join(cwd, ".paseo", "workflows"), { recursive: true });
+      await writeFile(path.join(cwd, ".paseo", "hub.yml"), scaffold.hub);
       await writeFile(path.join(cwd, scaffold.workflowPath), scaffold.workflow);
 
-      const bundle = await discoverHubBundle({ cwd, project: "byspace" });
+      const bundle = await discoverHubBundle({ cwd, project: "paseo" });
       expect(bundle.workflowCount).toBe(1);
       expect(bundle.files.map((file) => file.path)).toEqual([
-        ".byspace/hub.yml",
+        ".paseo/hub.yml",
         scaffold.workflowPath,
       ]);
       const parsed = YAML.parse(scaffold.workflow) as {
@@ -150,10 +150,10 @@ describe("Hub init scaffold", () => {
 
       let validatedPaths: readonly string[] = [];
       const result = await runHubDeploy(
-        { project: "byspace", hub: "https://hub.test", dryRun: true },
+        { project: "paseo", hub: "https://hub.test", dryRun: true },
         {
           cwd,
-          env: { BYSPACE_HUB_API_KEY: "test-key" },
+          env: { PASEO_HUB_API_KEY: "test-key" },
           reporter: { progress() {} },
           hub: {
             async validateConfiguration(input) {
@@ -167,25 +167,25 @@ describe("Hub init scaffold", () => {
           },
         },
       );
-      expect(result.data).toMatchObject({ projectSlug: "byspace", valid: true, workflows: 1 });
-      expect(validatedPaths).toEqual([".byspace/hub.yml", scaffold.workflowPath]);
+      expect(result.data).toMatchObject({ projectSlug: "paseo", valid: true, workflows: 1 });
+      expect(validatedPaths).toEqual([".paseo/hub.yml", scaffold.workflowPath]);
     },
   );
 });
 
 describe("GitHub origin detection", () => {
   it.each([
-    ["git@github.com:ByteTrue/byspace.git", "ByteTrue/byspace"],
-    ["ssh://git@github.com/ByteTrue/byspace.git", "ByteTrue/byspace"],
-    ["https://github.com/ByteTrue/byspace.git", "ByteTrue/byspace"],
-    ["https://gitlab.com/ByteTrue/byspace.git", undefined],
+    ["git@github.com:getpaseo/paseo.git", "getpaseo/paseo"],
+    ["ssh://git@github.com/getpaseo/paseo.git", "getpaseo/paseo"],
+    ["https://github.com/getpaseo/paseo.git", "getpaseo/paseo"],
+    ["https://gitlab.com/getpaseo/paseo.git", undefined],
   ])("resolves %s", (remote, expected) => {
     expect(githubRepositoryFromRemote(remote)).toBe(expected);
   });
 });
 
 async function temporaryDirectory(): Promise<string> {
-  const directory = await mkdtemp(path.join(tmpdir(), "byspace-hub-init-"));
+  const directory = await mkdtemp(path.join(tmpdir(), "paseo-hub-init-"));
   directories.push(directory);
   return directory;
 }

@@ -210,7 +210,7 @@ function SubagentsTrackRow({
             {presentation.subtitle}
           </Text>
         ) : null}
-        {row.kind === "byspace" ? (
+        {row.kind === "paseo" ? (
           <SubagentRowActions
             rowId={row.id}
             displayLabel={displayLabel}

@@ -142,7 +142,7 @@ function createServer(terminalManager: TerminalManager, workspaceRegistry?: Work
     createStub<AgentManager>(agentManager),
     createStub<AgentStorage>({}),
     createStub<DownloadTokenStore>({}),
-    "/tmp/byspace-test",
+    "/tmp/paseo-test",
     createStub<DaemonConfigStore>(daemonConfigStore),
     null,
     { allowedOrigins: new Set() },

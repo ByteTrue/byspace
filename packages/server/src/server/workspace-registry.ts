@@ -75,7 +75,7 @@ const PersistedWorkspaceRecordSchema = z.object({
     .nullable()
     .optional()
     .transform((value) => value ?? null),
-  isBySpaceOwnedWorktree: z.boolean().default(false),
+  isPaseoOwnedWorktree: z.boolean().default(false),
   mainRepoRoot: z.string().nullable().default(null),
   createdAt: z.string(),
   updatedAt: z.string(),
@@ -666,7 +666,7 @@ export function createPersistedWorkspaceRecord(input: {
   branch?: string | null;
   worktreeRoot?: string | null;
   baseBranch?: string | null;
-  isBySpaceOwnedWorktree?: boolean;
+  isPaseoOwnedWorktree?: boolean;
   mainRepoRoot?: string | null;
   createdAt: string;
   updatedAt: string;
@@ -681,7 +681,7 @@ export function createPersistedWorkspaceRecord(input: {
     branch: input.branch ?? null,
     worktreeRoot: input.worktreeRoot ?? null,
     baseBranch: input.baseBranch ?? null,
-    isBySpaceOwnedWorktree: input.isBySpaceOwnedWorktree ?? false,
+    isPaseoOwnedWorktree: input.isPaseoOwnedWorktree ?? false,
     mainRepoRoot: input.mainRepoRoot ?? null,
     archivedAt: input.archivedAt ?? null,
     autoArchivedChangeRequestUrl: input.autoArchivedChangeRequestUrl ?? null,

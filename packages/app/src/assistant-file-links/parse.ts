@@ -345,7 +345,7 @@ export function parseAssistantFileLink(
 
   let parsedUrl: URL;
   try {
-    parsedUrl = new URL(trimmed, "http://byspace.invalid");
+    parsedUrl = new URL(trimmed, "http://paseo.invalid");
   } catch {
     return null;
   }

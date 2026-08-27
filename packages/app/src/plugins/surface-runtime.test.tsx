@@ -1,7 +1,7 @@
-import type { DaemonClient } from "@bytetrue/byspace-client/internal/daemon-client";
-import type { BySpaceApi } from "@bytetrue/byspace-client";
-import { BySpaceApiProvider } from "@bytetrue/byspace-plugin/host";
-import { useBySpace } from "@bytetrue/byspace-plugin";
+import type { DaemonClient } from "@getpaseo/client/internal/daemon-client";
+import type { PaseoApi } from "@getpaseo/client";
+import { PaseoApiProvider } from "@getpaseo/plugin/host";
+import { usePaseo } from "@getpaseo/plugin";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
@@ -34,29 +34,29 @@ function clientWithWorkspace(id: string) {
   };
 }
 
-function borrowFromAppProvider(byspace: BySpaceApi): BySpaceApi {
-  let borrowed: BySpaceApi | null = null;
+function borrowFromAppProvider(paseo: PaseoApi): PaseoApi {
+  let borrowed: PaseoApi | null = null;
   function PluginSurface() {
-    borrowed = useBySpace();
+    borrowed = usePaseo();
     return null;
   }
   renderToStaticMarkup(
-    <BySpaceApiProvider byspace={byspace}>
+    <PaseoApiProvider paseo={paseo}>
       <PluginSurface />
-    </BySpaceApiProvider>,
+    </PaseoApiProvider>,
   );
-  if (!borrowed) throw new Error("Plugin surface did not receive BySpace API");
+  if (!borrowed) throw new Error("Plugin surface did not receive Paseo API");
   return borrowed;
 }
 
 describe("plugin surface host runtime", () => {
-  it("creates a PR worktree and agent through useBySpace on the selected app host", async () => {
+  it("creates a PR worktree and agent through usePaseo on the selected app host", async () => {
     const selected = clientWithWorkspace("workspace-a");
     const runtime = createPluginSurfaceRuntime(selected.client, "workspace-plugin");
     if (!runtime) throw new Error("Expected selected host runtime");
 
-    const byspace = borrowFromAppProvider(runtime.byspace);
-    const workspace = await byspace.workspaces.create({
+    const paseo = borrowFromAppProvider(runtime.paseo);
+    const workspace = await paseo.workspaces.create({
       source: {
         kind: "worktree",
         cwd: "/tmp/repository",
@@ -83,7 +83,7 @@ describe("plugin surface host runtime", () => {
     if (!first || !second) throw new Error("Expected online host runtimes");
 
     await first.invoke("host", {});
-    await borrowFromAppProvider(second.byspace).workspaces.create({
+    await borrowFromAppProvider(second.paseo).workspaces.create({
       source: { kind: "directory", path: "/tmp/workspace-b" },
     });
 

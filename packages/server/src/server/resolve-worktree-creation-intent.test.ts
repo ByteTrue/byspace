@@ -162,9 +162,9 @@ describe("resolveWorktreeCreationIntent", () => {
       number: 1790,
       baseRefName: "main",
       headRefName: "daemon-shutdown-diagnostics",
-      headOwnerLogin: "ByteTrue",
-      headRepositorySshUrl: "git@github.com:ByteTrue/byspace.git",
-      headRepositoryUrl: "https://github.com/ByteTrue/byspace",
+      headOwnerLogin: "getpaseo",
+      headRepositorySshUrl: "git@github.com:getpaseo/paseo.git",
+      headRepositoryUrl: "https://github.com/getpaseo/paseo",
       isCrossRepository: false,
     });
 
@@ -189,8 +189,8 @@ describe("resolveWorktreeCreationIntent", () => {
       baseRefName: "main",
       headRefName: "main",
       headOwnerLogin: "therainisme",
-      headRepositorySshUrl: "git@github.com:therainisme/byspace.git",
-      headRepositoryUrl: "https://github.com/therainisme/byspace",
+      headRepositorySshUrl: "git@github.com:therainisme/paseo.git",
+      headRepositoryUrl: "https://github.com/therainisme/paseo",
       isCrossRepository: true,
     });
 
@@ -205,7 +205,7 @@ describe("resolveWorktreeCreationIntent", () => {
       checkoutRefs: [{ remoteName: "origin", remoteRef: "refs/pull/526/head" }],
       headRepositoryOwner: "therainisme",
       localBranchName: "therainisme/main",
-      pushRemoteUrl: "git@github.com:therainisme/byspace.git",
+      pushRemoteUrl: "git@github.com:therainisme/paseo.git",
     });
     expect(deps.headRefLookups).toEqual([]);
   });

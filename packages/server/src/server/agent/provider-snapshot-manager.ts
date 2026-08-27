@@ -32,14 +32,14 @@ import {
   shutdownAgentClients,
   type ProviderDefinition,
 } from "./provider-registry.js";
-import { BUILTIN_PROVIDER_IDS } from "@bytetrue/byspace-protocol/provider-manifest";
+import { BUILTIN_PROVIDER_IDS } from "@getpaseo/protocol/provider-manifest";
 import { applyMutableProviderConfigToOverrides } from "../daemon-config-store.js";
 import {
   formatProviderDiagnostic,
   formatProviderDiagnosticError,
 } from "./providers/diagnostic-utils.js";
 import type { MutableDaemonConfig } from "../daemon-config-store.js";
-import type { HubExecutionAgentValidationIssue } from "@bytetrue/byspace-protocol/messages";
+import type { HubExecutionAgentValidationIssue } from "@getpaseo/protocol/messages";
 import {
   type AgentConfigurationValidationInput,
   validateAgentConfigurationAgainstProvider,
@@ -48,8 +48,8 @@ import {
 const DEFAULT_REFRESH_TIMEOUT_MS = 120_000;
 const MAX_REFRESH_TIMEOUT_MS = 2_147_483_647;
 const DEFAULT_DIAGNOSTIC_TIMEOUT_MS = 120_000;
-const REFRESH_TIMEOUT_ENV_VAR = "BYSPACE_PROVIDER_REFRESH_TIMEOUT_MS";
-export const GLOBAL_PROVIDER_SNAPSHOT_KEY = "byspace:global";
+const REFRESH_TIMEOUT_ENV_VAR = "PASEO_PROVIDER_REFRESH_TIMEOUT_MS";
+export const GLOBAL_PROVIDER_SNAPSHOT_KEY = "paseo:global";
 
 // Provider refresh probes can be slow on cold starts (e.g. Copilot's first
 // `copilot --acp` invocation, OpenCode workspace probes with many MCP servers).

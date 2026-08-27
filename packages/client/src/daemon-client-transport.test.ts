@@ -12,7 +12,7 @@ import {
 
 const createClientChannelMock = vi.hoisted(() => vi.fn());
 
-vi.mock("@bytetrue/byspace-relay/e2ee", () => ({
+vi.mock("@getpaseo/relay/e2ee", () => ({
   createClientChannel: createClientChannelMock,
 }));
 
@@ -87,12 +87,12 @@ describe("daemon-client transport helpers", () => {
     createWebSocketTransportFactory(socketFactory)({
       url: "ws://example.test",
       headers: { Authorization: "Bearer shared-secret" },
-      protocols: ["byspace.bearer.shared-secret"],
+      protocols: ["paseo.bearer.shared-secret"],
     });
 
     expect(socketFactory).toHaveBeenCalledWith("ws://example.test", {
       headers: { Authorization: "Bearer shared-secret" },
-      protocols: ["byspace.bearer.shared-secret"],
+      protocols: ["paseo.bearer.shared-secret"],
     });
   });
 

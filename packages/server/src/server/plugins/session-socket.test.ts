@@ -18,9 +18,9 @@ describe("PluginSessionSocket", () => {
     socket.send("last");
 
     expect(sent).toEqual([
-      { type: "byspace_frame", data: "first", isBinary: false },
-      { type: "byspace_frame", data: new Uint8Array([1, 2, 3]), isBinary: true },
-      { type: "byspace_frame", data: "last", isBinary: false },
+      { type: "paseo_frame", data: "first", isBinary: false },
+      { type: "paseo_frame", data: new Uint8Array([1, 2, 3]), isBinary: true },
+      { type: "paseo_frame", data: "last", isBinary: false },
     ]);
   });
 

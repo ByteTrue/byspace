@@ -27,10 +27,10 @@ export function registerEditorTargetHandlers(
   const ipc = options.ipc ?? ipcMain;
   const runtime = options.runtime ?? createEditorTargetRuntime();
 
-  ipc.handle("byspace:editor:listTargets", () =>
+  ipc.handle("paseo:editor:listTargets", () =>
     listAvailableEditorTargets(runtime, options.targets),
   );
-  ipc.handle("byspace:editor:openTarget", async (_event, payload: unknown) => {
+  ipc.handle("paseo:editor:openTarget", async (_event, payload: unknown) => {
     const input = EditorTargetLaunchInputSchema.parse(payload);
     await openEditorTarget(input, runtime, options.targets);
   });

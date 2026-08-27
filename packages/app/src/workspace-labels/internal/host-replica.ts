@@ -1,7 +1,7 @@
-import type { WorkspaceLabelDefinition } from "@bytetrue/byspace-protocol/workspace-labels";
-import { workspaceLabelKey } from "@bytetrue/byspace-protocol/workspace-labels";
-import type { WorkspaceLabelListPayload } from "@bytetrue/byspace-client/internal/daemon-client";
-import type { SessionOutboundMessage } from "@bytetrue/byspace-protocol/messages";
+import type { WorkspaceLabelDefinition } from "@getpaseo/protocol/workspace-labels";
+import { workspaceLabelKey } from "@getpaseo/protocol/workspace-labels";
+import type { WorkspaceLabelListPayload } from "@getpaseo/client/internal/daemon-client";
+import type { SessionOutboundMessage } from "@getpaseo/protocol/messages";
 
 type WorkspaceLabelUpdate = Extract<SessionOutboundMessage, { type: "workspace.label.update" }>;
 

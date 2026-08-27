@@ -10,12 +10,9 @@ import {
   fetchProjectedTimelineItems,
   LIVE_HISTORY_FETCH_TIMEOUT_MS,
 } from "../../utils/timeline.js";
-import type { DaemonClient } from "@bytetrue/byspace-client/internal/daemon-client";
-import type { AgentTimelineItem } from "@bytetrue/byspace-protocol/agent-types";
-import type {
-  AgentStreamEventPayload,
-  AgentStreamMessage,
-} from "@bytetrue/byspace-protocol/messages";
+import type { DaemonClient } from "@getpaseo/client/internal/daemon-client";
+import type { AgentTimelineItem } from "@getpaseo/protocol/agent-types";
+import type { AgentStreamEventPayload, AgentStreamMessage } from "@getpaseo/protocol/messages";
 
 export interface AgentAttachOptions {
   host?: string;
@@ -112,7 +109,7 @@ export async function runAttachCommand(
 
   if (!id) {
     console.error("Error: Agent ID required");
-    console.error("Usage: byspace attach <id>");
+    console.error("Usage: paseo attach <id>");
     process.exit(1);
   }
 
@@ -122,7 +119,7 @@ export async function runAttachCommand(
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.error(`Error: Cannot connect to daemon at ${host}: ${message}`);
-    console.error("Start the daemon with: byspace daemon start");
+    console.error("Start the daemon with: paseo daemon start");
     process.exit(1);
   }
 
@@ -130,7 +127,7 @@ export async function runAttachCommand(
     const fetchResult = await client.fetchAgent({ agentId: id });
     if (!fetchResult) {
       console.error(`Error: No agent found matching: ${id}`);
-      console.error("Use `byspace ls` to list available agents");
+      console.error("Use `paseo ls` to list available agents");
       await client.close();
       process.exit(1);
     }

@@ -1,4 +1,4 @@
-import type { TerminalInputModeState } from "@bytetrue/byspace-protocol/terminal-input-mode";
+import type { TerminalInputModeState } from "@getpaseo/protocol/terminal-input-mode";
 import { describe, expect, it } from "vitest";
 import {
   createTerminalKeyInput,

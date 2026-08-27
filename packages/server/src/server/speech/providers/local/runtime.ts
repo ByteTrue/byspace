@@ -1,6 +1,6 @@
 import type { Logger } from "pino";
 
-import type { BySpaceSpeechConfig } from "../../../bootstrap.js";
+import type { PaseoSpeechConfig } from "../../../bootstrap.js";
 import type { SpeechToTextProvider, TextToSpeechProvider } from "../../speech-provider.js";
 import type { RequestedSpeechProviders } from "../../speech-types.js";
 import type { TurnDetectionProvider } from "../../turn-detection-provider.js";
@@ -45,9 +45,7 @@ export interface InitializedLocalSpeech {
   cleanup: () => void;
 }
 
-function resolveConfiguredLocalModels(
-  speechConfig: BySpaceSpeechConfig | null,
-): ResolvedLocalModels {
+function resolveConfiguredLocalModels(speechConfig: PaseoSpeechConfig | null): ResolvedLocalModels {
   return {
     dictationLocalSttModel: LocalSttModelIdSchema.parse(
       speechConfig?.local?.models.dictationStt ?? DEFAULT_LOCAL_STT_MODEL,
@@ -62,7 +60,7 @@ function resolveConfiguredLocalModels(
 }
 
 export function getLocalSpeechAvailability(
-  speechConfig: BySpaceSpeechConfig | null,
+  speechConfig: PaseoSpeechConfig | null,
 ): LocalSpeechAvailability {
   const localConfig = speechConfig?.local ?? null;
   return {
@@ -138,7 +136,7 @@ function initializeLocalVoiceTts(params: {
 
 export async function initializeLocalSpeechServices(params: {
   providers: RequestedSpeechProviders;
-  speechConfig: BySpaceSpeechConfig | null;
+  speechConfig: PaseoSpeechConfig | null;
   logger: Logger;
 }): Promise<InitializedLocalSpeech> {
   const { providers, logger, speechConfig } = params;

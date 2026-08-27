@@ -305,13 +305,13 @@ describe("workspace registries", () => {
   test("reuses an active project for Windows lexical-equivalent root spellings", async () => {
     await projectRegistry.initialize();
     const first = await projectRegistry.getOrCreateActiveByRoot({
-      rootPath: "C:\\Users\\BySpace\\Repo",
+      rootPath: "C:\\Users\\Paseo\\Repo",
       kind: "git",
       displayName: "Repo",
       timestamp: "2026-03-01T00:00:00.000Z",
     });
     const second = await projectRegistry.getOrCreateActiveByRoot({
-      rootPath: "c:/users/byspace/repo/.",
+      rootPath: "c:/users/paseo/repo/.",
       kind: "git",
       displayName: "Repo",
       timestamp: "2026-03-02T00:00:00.000Z",

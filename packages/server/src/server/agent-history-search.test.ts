@@ -22,7 +22,7 @@ function candidate(input: {
     },
     project: {
       projectKey: "key",
-      projectName: input.projectName ?? "ByteTrue/byspace",
+      projectName: input.projectName ?? "getpaseo/paseo",
       workspaceName: input.workspaceName ?? null,
       checkout: {
         cwd: "/tmp/repo",
@@ -30,7 +30,7 @@ function candidate(input: {
         currentBranch: branch,
         remoteUrl: null,
         worktreeRoot: "/tmp/repo",
-        isBySpaceOwnedWorktree: false,
+        isPaseoOwnedWorktree: false,
         mainRepoRoot: null,
       },
     },
@@ -65,7 +65,7 @@ describe("scoreAgentHistoryCandidate", () => {
 
   it("matches the project name", () => {
     expect(
-      scoreAgentHistoryCandidate("byspace", candidate({ projectName: "ByteTrue/byspace" })),
+      scoreAgentHistoryCandidate("paseo", candidate({ projectName: "getpaseo/paseo" })),
     ).not.toBeNull();
   });
 
@@ -115,14 +115,14 @@ describe("rankAgentHistoryCandidates", () => {
 
   it("ranks the workspace name above the project name that every session shares", () => {
     const ranked = rankAgentHistoryCandidates(
-      "byspace",
+      "paseo",
       [
-        candidate({ title: "unrelated work", projectName: "ByteTrue/byspace" }),
-        candidate({ workspaceName: "byspace", projectName: "ByteTrue/byspace" }),
+        candidate({ title: "unrelated work", projectName: "getpaseo/paseo" }),
+        candidate({ workspaceName: "paseo", projectName: "getpaseo/paseo" }),
       ],
       byUpdatedAtDesc,
     );
-    expect(ranked[0].candidate.project.workspaceName).toBe("byspace");
+    expect(ranked[0].candidate.project.workspaceName).toBe("paseo");
   });
 
   it("ranks every exact hit above a typo hit", () => {
