@@ -56,7 +56,7 @@
     "build:client": "npm run build --workspace=@bytetrue/byspace-client",
     "build:client:clean": "npm run build:protocol:clean && npm run build:clean --workspace=@bytetrue/byspace-client",
     "build:server-deps": "concurrently --kill-others-on-fail --names highlight,relay --prefix-colors yellow,blue \"npm run build:highlight\" \"npm run build:relay\" && npm run build:client && npm run build:plugin",
-    "build:server-deps:clean": "npm run build:highlight:clean && npm run build:relay:clean && npm run build:plugin:clean",
+    "build:server-deps:clean": "npm run build:client:clean && npm run build:highlight:clean && npm run build:relay:clean && npm run build:plugin:clean",
     "build:server": "npm run build:server-deps && npm run build --workspace=@bytetrue/byspace-server && npm run build --workspace=@bytetrue/byspace",
     "build:server:clean": "npm run build:server-deps:clean && npm run build:clean --workspace=@bytetrue/byspace-server && npm run build:clean --workspace=@bytetrue/byspace",
     "build:daemon-web-ui": "node scripts/build-daemon-web-ui.mjs",
