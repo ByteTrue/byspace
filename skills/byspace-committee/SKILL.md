@@ -6,24 +6,26 @@ user-invocable: true
 
 # Committee Skill
 
-Two agents from contrasting profiles, fresh context, planning a solution in parallel.
+Two agents from contrasting providers, fresh context, planning a solution in parallel. They stay alive for review after implementation.
+
+The purpose is to step back, not double down. The committee may propose a completely different approach.
 
 **User's additional context:** $ARGUMENTS
 
 ## Prerequisites
 
-Read the **byspace** skill. Call `list_profiles` before choosing committee members. Do not create committee agents until you have read the configured profiles and their `notes`.
+Read the **byspace** skill. Before choosing committee members, read `~/.byspace/orchestration-preferences.json` unless the user explicitly named providers in this request. Do not create committee agents until you have read it.
 
-Contrast is the point of a committee, so pick profiles from different provider families when possible. Materialize each profile into `create_agent`.
+Contrast is the point of a committee, so pick across providers deliberately using the configured preferences rather than hardcoded defaults.
 
 ## Composition
 
-Two members with different reasoning styles, selected from configured Agent profiles:
+Two members with different reasoning styles, selected from orchestration preferences:
 
-- one whose notes fit planning, research, or root-cause analysis
-- one contrasting high-reasoning profile from another provider family
+- one planning/research-strength provider
+- one contrasting high-reasoning provider
 
-If the user names profiles, use those. If fewer than two suitable profiles are configured, use BySpace's provider discovery fallback for the missing member and tell the user. Override the selection only when the user explicitly asks for different members.
+Override only when the user explicitly asks for different members.
 
 ## Hard rules
 
@@ -33,14 +35,49 @@ If the user names profiles, use those. If fewer than two suitable profiles are c
   This is analysis only. Do NOT edit, create, or delete any files. Do NOT write code.
   ```
 
-- **Trust the finish notification.** Do not poll, send hurry-ups, or interrupt. Models can reason for 15–30 minutes. You can go idle and BySpace will notify you.
+- **Trust the wait.** Do not poll, send hurry-ups, or interrupt. GPT-5.4 can reason 15–30 minutes; Opus does extended thinking. Long waits mean it found something worth thinking about.
+- **You are the middleman.** Drive plan → implement → review without yielding to the user, except for divergences that need their call.
 
-## Workflow
+## Phase 1: Plan
 
-1. Write a problem-level prompt
-2. Create both agents in parallel via BySpace with `[Committee] <task>` titles and the same prompt
-3. Wait for both responses
-4. Resolve disagreements by passing their arguments between each other
-5. Keep going until they converge into a response
+Write a problem-level prompt:
 
-Share the consensus with the user. Summarize where the agents diverged and how they resolved it.
+- High-level goal and acceptance criteria
+- Constraints
+- Symptoms (if a bug)
+- What you tried and why it failed
+- Explicit: "do root cause analysis"
+- Explicit: "state assumptions, ask why three levels deep, check whether you're patching a symptom or removing the problem"
+
+Call `create_agent` twice through `byspace tool call`, each with a `[Committee] <task>` title, its selected provider, and the same `initialPrompt`. In agent scope, use `relationship: { "kind": "subagent" }`, `workspace: { "kind": "current" }`, and `notifyOnFinish: true`; launch both asynchronous calls, trust both completion notifications, then call `get_agent_activity` for each response. In terminal scope, follow the base skill's detached/existing-or-create placement rule, omit `background`, run the two blocking CLI processes concurrently as shell jobs, wait for both, and parse both JSON results. Do not continue after only one member finishes.
+
+Read both responses. Challenge them — do not accept at face value:
+
+- "Why does <underlying thing> happen? Symptom or cause?"
+- Verify any assumption the plan makes about the code.
+- "What did you considered and reject?"
+
+Send follow-ups until the plan addresses root cause.
+
+Synthesize:
+
+- Convergence → unified plan.
+- Significant divergence → involve the user.
+
+Confirm the merged plan with both members. Multi-turn until consensus.
+
+## Phase 2: Implement
+
+Default: implement yourself. If the user said **"delegate"**, launch one impl agent and pass the merged plan.
+
+The committee stays clean — not involved in implementation.
+
+## Phase 3: Review
+
+Send the diff to the committee:
+
+> Implementation is done. Review changes against the plan. Flag drift or missing pieces. <no-edits suffix>
+
+Apply feedback yourself, or send to the impl agent. Repeat 2 → 3 until consensus.
+
+After ~10 iterations without convergence, start a fresh committee with the full history of what was tried — the current committee's context may have drifted too far.

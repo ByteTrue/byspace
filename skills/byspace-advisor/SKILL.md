@@ -2,7 +2,7 @@
 name: byspace-advisor
 description: Spin up a single agent as an advisor — second opinion on the current task. Use when the user says "advisor", "second opinion", "what does X think", or wants an outside take without delegating the work itself.
 user-invocable: true
-argument-hint: "[--profile <name>] <question or topic>"
+argument-hint: "[--provider <name>] <question or topic>"
 ---
 
 # BySpace Advisor
@@ -13,15 +13,16 @@ Single agent. Reads the situation you're in. Gives a judgment. You decide what t
 
 ## Prerequisites
 
-Read the **byspace** skill. Call `list_profiles` before choosing the advisor. Do not create the advisor until you have read the configured profiles and their `notes`.
+Read the **byspace** skill. Before choosing a provider, read `~/.byspace/orchestration-preferences.json` unless the user explicitly named a provider in this request. Do not create the advisor until you have read it.
 
 ## Picking the advisor
 
-1. **User named a profile** (`--profile UI Work`) → select it by name.
-2. **Otherwise** choose the profile whose `notes` best fit the question. Match the actual work: design and approach, audit and review, or research and root-cause analysis.
-3. **Contrast helps.** When several profiles fit, prefer a different provider family from your own so the second opinion is genuinely fresh.
-
-Materialize the selected profile into `create_agent` as described by the **byspace** skill. If no profile fits, use BySpace's provider discovery fallback.
+1. **User named one** (`--provider claude/opus`) → use it.
+2. **Otherwise** resolve from preferences — pick the category that matches the question:
+   - Design / approach question → `planning`
+   - "Did I miss something" review → `audit`
+   - "Is this even right" → `research`
+3. **Contrast helps.** If your own provider matches what preferences would pick, swap to a different family on purpose — fresh perspective is the point.
 
 ## The briefing
 
@@ -56,7 +57,7 @@ Pass through any remaining arguments after the skill name as the skill's own inp
 
 ## Launch and synthesize
 
-Create the advisor agent via BySpace with a `[Advisor] <topic>` title and the briefing as the initial prompt. Wait for it to finish. Read its response. Synthesize for the user — the advisor's verdict + your recommendation.
+Call `create_agent` through `byspace tool call` with a `[Advisor] <topic>` title, the selected provider, and the briefing as `initialPrompt`. In agent scope, use `relationship: { "kind": "subagent" }` and `workspace: { "kind": "current" }`; creation is asynchronous, so wait for its completion notification and call `get_agent_activity`. In terminal scope, follow the base skill's detached/existing-or-create placement rule and omit `background` so the call blocks and returns the answer. Read the actual response before synthesizing; never treat the returned agent ID as the verdict.
 
 ## Persistent advisor
 

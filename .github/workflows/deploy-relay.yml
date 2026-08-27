@@ -1,16 +1,60 @@
 name: Deploy Relay
 
 on:
-  # Manual-only while relay.byspace.bytetrue.com bridges traffic to the Fly deployment.
-  # A release or main push must not redeploy the temporary Cloudflare bridge.
-  workflow_dispatch:
+  workflow_run:
+    workflows: ["Publish npm"]
+    types: [completed]
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: deploy-relay-${{ contains(github.event.workflow_run.head_branch, '-') && 'beta' || 'stable' }}
+  cancel-in-progress: false
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    if: >-
+      ${{ vars.CLOUDFLARE_DEPLOY_ENABLED == 'true' &&
+          github.event.workflow_run.conclusion == 'success' &&
+          github.event.workflow_run.event == 'push' &&
+          github.event.workflow_run.head_repository.full_name == github.repository &&
+          startsWith(github.event.workflow_run.head_branch, 'v') }}
+    env:
+      EXPECTED_SHA: ${{ github.event.workflow_run.head_sha }}
+      RELEASE_TAG: ${{ github.event.workflow_run.head_branch }}
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXPECTED_SHA }}
+          fetch-depth: 0
+
+      - name: Verify trusted immutable release input
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-beta\.[0-9]+)?$ ]]
+          git fetch --force origin "refs/tags/$RELEASE_TAG:refs/tags/$RELEASE_TAG"
+          git fetch origin main
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          test "$(git rev-parse "refs/tags/$RELEASE_TAG^{commit}")" = "$EXPECTED_SHA"
+          git merge-base --is-ancestor "$EXPECTED_SHA" origin/main
+          successes="$(gh run list --repo "$GITHUB_REPOSITORY" --workflow CI --commit "$EXPECTED_SHA" --event push --status success --json databaseId --jq 'length')"
+          test "$successes" -ge 1
+          version="$(node -p 'require("./package.json").version')"
+          test "$RELEASE_TAG" = "v$version"
+          if [[ "$version" == *-* ]]; then
+            echo "RELAY_ENV_ARGS=--env beta" >> "$GITHUB_ENV"
+            echo "RELEASE_CHANNEL=beta" >> "$GITHUB_ENV"
+            echo "NPM_DIST_TAG=beta" >> "$GITHUB_ENV"
+          else
+            echo "RELAY_ENV_ARGS=" >> "$GITHUB_ENV"
+            echo "RELEASE_CHANNEL=stable" >> "$GITHUB_ENV"
+            echo "NPM_DIST_TAG=latest" >> "$GITHUB_ENV"
+          fi
 
       - uses: actions/setup-node@v4
         with:
@@ -23,7 +67,21 @@ jobs:
       - name: Typecheck
         run: npm run typecheck --workspace=@bytetrue/byspace-relay
 
-      - name: Deploy worker
-        run: cd packages/relay && npx wrangler deploy
+      - name: Recheck immutable channel release
+        run: |
+          git fetch --force origin "refs/tags/$RELEASE_TAG:refs/tags/$RELEASE_TAG"
+          test "$(git rev-parse "refs/tags/$RELEASE_TAG^{commit}")" = "$EXPECTED_SHA"
+          version="$(node -p 'require("./package.json").version')"
+          test "$(npm view "@bytetrue/byspace@$NPM_DIST_TAG" version)" = "$version"
+
+      # The Worker name and its custom domain both come from wrangler.toml, so the channel
+      # only selects the environment. $RELAY_ENV_ARGS is intentionally unquoted: it is
+      # either "--env beta" or empty.
+      - name: Deploy release channel Worker
+        run: >-
+          cd packages/relay && npx wrangler deploy
+          $RELAY_ENV_ARGS
+          --tag "$RELEASE_TAG"
+          --message "$RELEASE_TAG ($RELEASE_CHANNEL)"
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

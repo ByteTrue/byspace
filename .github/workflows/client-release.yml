@@ -1,0 +1,582 @@
+name: Publish clients
+
+on:
+  push:
+    tags:
+      - "v*"
+
+concurrency:
+  group: client-release-${{ github.ref_name }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  release-context:
+    name: Verify release context
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+    outputs:
+      tag: ${{ steps.context.outputs.tag }}
+      version: ${{ steps.context.outputs.version }}
+      sha: ${{ steps.context.outputs.sha }}
+      channel: ${{ steps.context.outputs.channel }}
+      updater_channel: ${{ steps.context.outputs.updater_channel }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.ref }}
+
+      - name: Require immutable tag on exact current-main CI SHA
+        id: context
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          INPUT_TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          tag="$INPUT_TAG"
+          version="$(node -p 'require("./package.json").version')"
+          sha="$(git rev-parse HEAD)"
+          test "$tag" = "v$version"
+          test "$(git rev-list -n 1 "$tag")" = "$sha"
+          if [[ "$version" == *-* ]]; then
+            channel=beta
+            updater_channel=beta
+          else
+            channel=stable
+            updater_channel=latest
+          fi
+          git fetch origin main --no-tags
+          test "$sha" = "$(git rev-parse origin/main)"
+          ci_run_id="$(gh run list --repo "$GITHUB_REPOSITORY" --workflow CI --commit "$sha" --event push --status success --limit 1 --json databaseId --jq '.[0].databaseId // empty')"
+          test -n "$ci_run_id"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "channel=$channel" >> "$GITHUB_OUTPUT"
+          echo "updater_channel=$updater_channel" >> "$GITHUB_OUTPUT"
+          echo "Publishing clients for $tag at exact-SHA CI run $ci_run_id"
+
+  mac:
+    name: macOS ${{ matrix.arch }}
+    needs: release-context
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: arm64
+            runner: macos-14
+          - arch: x64
+            runner: macos-15-intel
+    env:
+      DESKTOP_APP_UPDATE_BASE_URL: https://github.com/ByteTrue/byspace/releases/download
+      DESKTOP_APP_UPDATE_CHANNEL: ${{ needs.release-context.outputs.channel }}
+      RELEASE_CHANNEL: ${{ needs.release-context.outputs.channel }}
+      RELEASE_ROLLOUT_HOURS: "0"
+      BYSPACE_DESKTOP_SMOKE: "1"
+      BYSPACE_DESKTOP_SMOKE_ARTIFACT_DIR: ${{ github.workspace }}/.desktop-smoke
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.release-context.outputs.tag }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Validate optional Apple signing credentials
+        id: signing
+        shell: bash
+        env:
+          CSC_LINK: ${{ secrets.APPLE_CERTIFICATE }}
+          CSC_KEY_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -euo pipefail
+          values=("$CSC_LINK" "$CSC_KEY_PASSWORD" "$APPLE_ID" "$APPLE_APP_SPECIFIC_PASSWORD" "$APPLE_TEAM_ID")
+          present=0
+          for value in "${values[@]}"; do [[ -n "$value" ]] && present=$((present + 1)); done
+          if [[ "$present" -ne 0 && "$present" -ne "${#values[@]}" ]]; then
+            echo "Apple signing/notarization credentials must be all present or all absent" >&2
+            exit 1
+          fi
+          if [[ "$present" -eq "${#values[@]}" ]]; then mode=developer-id-notarized; else mode=ad-hoc; fi
+          echo "mode=$mode" >> "$GITHUB_OUTPUT"
+
+      - run: npm ci
+      - run: npm run build:app-deps
+      - name: Export Electron Web bundle
+        env:
+          EXPO_NO_DOTENV: "1"
+          EXPO_PUBLIC_POSTHOG_KEY: ${{ secrets.EXPO_PUBLIC_POSTHOG_KEY }}
+          EXPO_PUBLIC_POSTHOG_HOST: ${{ secrets.EXPO_PUBLIC_POSTHOG_HOST }}
+        run: npm run build:desktop:web
+      - run: npm run build:desktop:runtime
+      - run: npm run build:desktop:main
+      - name: Package macOS
+        working-directory: packages/desktop
+        env:
+          CSC_LINK: ${{ secrets.APPLE_CERTIFICATE }}
+          CSC_KEY_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          for name in CSC_LINK CSC_KEY_PASSWORD APPLE_ID APPLE_APP_SPECIFIC_PASSWORD APPLE_TEAM_ID; do
+            if [[ -z "${!name}" ]]; then unset "$name"; fi
+          done
+          if [[ "${{ steps.signing.outputs.mode }}" == ad-hoc ]]; then export CSC_NAME=-; fi
+          npx electron-builder --mac zip dmg --${{ matrix.arch }} --publish never
+      - name: Verify package and signing
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${{ matrix.arch }}" == arm64 ]]; then
+            app="packages/desktop/release/mac-arm64/BySpace.app"
+          else
+            app="packages/desktop/release/mac/BySpace.app"
+          fi
+          resources="$app/Contents/Resources"
+          codesign --verify --deep --strict "$app"
+          if [[ "${{ steps.signing.outputs.mode }}" == developer-id-notarized ]]; then
+            spctl --assess --type execute --verbose=2 "$app"
+          fi
+          node scripts/verify-desktop-package.mjs "$resources" byspace
+      - name: Upload packaged smoke diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: client-smoke-macos-${{ matrix.arch }}
+          path: ${{ runner.temp }}/desktop-smoke
+          if-no-files-found: ignore
+          retention-days: 7
+      - name: Stage macOS artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p client-artifact
+          find packages/desktop/release -maxdepth 1 -type f \
+            \( -name '*.dmg' -o -name '*.zip' -o -name '*.blockmap' \) \
+            -exec cp {} client-artifact/ \;
+          updater_manifest='${{ needs.release-context.outputs.updater_channel }}-mac.yml'
+          cp "packages/desktop/release/$updater_manifest" "client-artifact/$updater_manifest"
+          printf '%s\n' '${{ steps.signing.outputs.mode }}' > client-artifact/macos-signing.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: client-mac-${{ matrix.arch }}
+          path: client-artifact/*
+          if-no-files-found: error
+          retention-days: 14
+
+  linux:
+    name: Linux x64
+    needs: release-context
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      DESKTOP_APP_UPDATE_BASE_URL: https://github.com/ByteTrue/byspace/releases/download
+      DESKTOP_APP_UPDATE_CHANNEL: ${{ needs.release-context.outputs.channel }}
+      RELEASE_CHANNEL: ${{ needs.release-context.outputs.channel }}
+      RELEASE_ROLLOUT_HOURS: "0"
+      BYSPACE_DESKTOP_SMOKE: "1"
+      BYSPACE_DESKTOP_SMOKE_ARTIFACT_DIR: ${{ github.workspace }}/.desktop-smoke
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.release-context.outputs.tag }}
+
+      - name: Install Linux packaging dependencies
+        run: sudo apt-get update && sudo apt-get install -y libarchive-tools rpm xvfb
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - run: npm run build:app-deps
+      - name: Export Electron Web bundle
+        env:
+          EXPO_NO_DOTENV: "1"
+          EXPO_PUBLIC_POSTHOG_KEY: ${{ secrets.EXPO_PUBLIC_POSTHOG_KEY }}
+          EXPO_PUBLIC_POSTHOG_HOST: ${{ secrets.EXPO_PUBLIC_POSTHOG_HOST }}
+        run: npm run build:desktop:web
+      - run: npm run build:desktop:runtime
+      - run: npm run build:desktop:main
+      - name: Package Linux
+        working-directory: packages/desktop
+        run: npx electron-builder --linux AppImage deb rpm tar.gz --x64 --publish never
+      - name: Verify package contents
+        run: node scripts/verify-desktop-package.mjs packages/desktop/release/linux-unpacked/resources byspace
+      - name: Upload packaged smoke diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: client-smoke-linux-x64
+          path: ${{ runner.temp }}/desktop-smoke
+          if-no-files-found: ignore
+          retention-days: 7
+      - name: Stage Linux artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p client-artifact
+          find packages/desktop/release -maxdepth 1 -type f \
+            \( -name '*.AppImage' -o -name '*.deb' -o -name '*.rpm' -o -name '*.tar.gz' -o -name '*.blockmap' \) \
+            -exec cp {} client-artifact/ \;
+          updater_manifest='${{ needs.release-context.outputs.updater_channel }}-linux.yml'
+          cp "packages/desktop/release/$updater_manifest" "client-artifact/$updater_manifest"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: client-linux-x64
+          path: client-artifact/*
+          if-no-files-found: error
+          retention-days: 14
+
+  windows:
+    name: Windows ${{ matrix.arch }}
+    needs: release-context
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x64
+            runner: windows-2022
+          - arch: arm64
+            runner: windows-11-arm
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    env:
+      CSC_LINK: ${{ secrets.WINDOWS_CERTIFICATE_BASE64 }}
+      CSC_KEY_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+      DESKTOP_APP_UPDATE_BASE_URL: https://github.com/ByteTrue/byspace/releases/download
+      DESKTOP_APP_UPDATE_CHANNEL: ${{ needs.release-context.outputs.channel }}
+      RELEASE_CHANNEL: ${{ needs.release-context.outputs.channel }}
+      RELEASE_ROLLOUT_HOURS: "0"
+      BYSPACE_DESKTOP_SMOKE: "1"
+      BYSPACE_DESKTOP_SMOKE_ARTIFACT_DIR: ${{ github.workspace }}/.desktop-smoke
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.release-context.outputs.tag }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          architecture: x64
+          cache: npm
+      - name: Validate optional Windows signing credentials
+        id: signing
+        shell: pwsh
+        run: |
+          $hasCertificate = -not [string]::IsNullOrWhiteSpace($env:CSC_LINK)
+          $hasPassword = -not [string]::IsNullOrWhiteSpace($env:CSC_KEY_PASSWORD)
+          if ($hasCertificate -ne $hasPassword) { throw "Windows signing credentials must be both present or both absent" }
+          $mode = if ($hasCertificate) { "authenticode" } else { "unsigned" }
+          "mode=$mode" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+      - run: npm ci
+      - run: npm run build:app-deps
+      - name: Export Electron Web bundle
+        env:
+          EXPO_NO_DOTENV: "1"
+          EXPO_PUBLIC_POSTHOG_KEY: ${{ secrets.EXPO_PUBLIC_POSTHOG_KEY }}
+          EXPO_PUBLIC_POSTHOG_HOST: ${{ secrets.EXPO_PUBLIC_POSTHOG_HOST }}
+        run: npm run build:desktop:web
+      - run: npm run build:desktop:runtime
+      - run: npm run build:desktop:main
+      - name: Package Windows
+        working-directory: packages/desktop
+        run: npx electron-builder --win nsis zip --${{ matrix.arch }} --publish never
+      - name: Verify package contents and signatures
+        shell: pwsh
+        run: |
+          $app = if ('${{ matrix.arch }}' -eq 'arm64') {
+            'packages/desktop/release/win-arm64-unpacked'
+          } else {
+            'packages/desktop/release/win-unpacked'
+          }
+          $resources = "$app/resources"
+          node scripts/verify-desktop-package.mjs $resources byspace.cmd
+          if ($LASTEXITCODE -ne 0) { throw "packaged Desktop verification failed for $resources" }
+          if ("${{ steps.signing.outputs.mode }}" -eq "authenticode") {
+            Get-ChildItem packages/desktop/release -Recurse -Filter '*.exe' | ForEach-Object {
+              $signature = Get-AuthenticodeSignature $_.FullName
+              if ($signature.Status -ne 'Valid') { throw "invalid signature for $($_.Name): $($signature.Status)" }
+            }
+          }
+      - name: Upload packaged smoke diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: client-smoke-windows-${{ matrix.arch }}
+          path: ${{ runner.temp }}/desktop-smoke
+          if-no-files-found: ignore
+          retention-days: 7
+      - name: Stage Windows artifacts
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force client-artifact | Out-Null
+          Get-ChildItem packages/desktop/release -File | Where-Object {
+            $_.Name -match '\.(exe|zip|blockmap)$'
+          } | Copy-Item -Destination client-artifact
+          $updaterManifest = '${{ needs.release-context.outputs.updater_channel }}.yml'
+          Copy-Item "packages/desktop/release/$updaterManifest" "client-artifact/$updaterManifest"
+          Set-Content client-artifact/windows-signing.txt '${{ steps.signing.outputs.mode }}'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: client-windows-${{ matrix.arch }}
+          path: client-artifact/*
+          if-no-files-found: error
+          retention-days: 14
+
+  android:
+    name: Android APK
+    needs: release-context
+    runs-on: macos-14
+    timeout-minutes: 90
+    env:
+      BYSPACE_ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_RELEASE_KEY_ALIAS }}
+      BYSPACE_ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_RELEASE_KEY_PASSWORD }}
+      BYSPACE_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_RELEASE_KEYSTORE_PASSWORD }}
+      ANDROID_RELEASE_KEYSTORE_BASE64: ${{ secrets.ANDROID_RELEASE_KEYSTORE_BASE64 }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.release-context.outputs.tag }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: android-actions/setup-android@v3
+      - name: Require Android release signing credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          for name in ANDROID_RELEASE_KEYSTORE_BASE64 BYSPACE_ANDROID_KEYSTORE_PASSWORD BYSPACE_ANDROID_KEY_ALIAS BYSPACE_ANDROID_KEY_PASSWORD; do
+            [[ -n "${!name:-}" ]] || { echo "Missing required secret: $name" >&2; exit 1; }
+          done
+          keystore="$RUNNER_TEMP/byspace-android-release.jks"
+          node -e 'require("node:fs").writeFileSync(process.argv[1], Buffer.from(process.env.ANDROID_RELEASE_KEYSTORE_BASE64, "base64"))' "$keystore"
+          chmod 600 "$keystore"
+          echo "BYSPACE_ANDROID_KEYSTORE_PATH=$keystore" >> "$GITHUB_ENV"
+          echo "BYSPACE_REQUIRE_RELEASE_SIGNING=1" >> "$GITHUB_ENV"
+      - run: npm ci
+      - run: npm run build:app-deps
+      - name: Generate production Android project
+        working-directory: packages/app
+        env:
+          APP_VARIANT: production
+          CI: "1"
+          EXPO_NO_DOTENV: "1"
+          NODE_ENV: production
+        run: npx expo prebuild --platform android --clean --no-install
+      - name: Build signed release APK
+        working-directory: packages/app/android
+        run: |
+          chmod +x gradlew
+          ./gradlew :app:assembleRelease --no-daemon
+      - name: Verify APK identity and release certificate
+        id: signing
+        shell: bash
+        run: |
+          set -euo pipefail
+          apk="$(find packages/app/android/app/build/outputs/apk/release -maxdepth 1 -type f -name '*.apk' -print -quit)"
+          [[ -n "$apk" ]]
+          apksigner="$(find "$ANDROID_HOME/build-tools" -mindepth 2 -maxdepth 2 -type f -name apksigner -print -quit)"
+          apkanalyzer="$(command -v apkanalyzer)"
+          [[ -x "$apksigner" && -x "$apkanalyzer" ]]
+          "$apksigner" verify --verbose --print-certs "$apk" | tee "$RUNNER_TEMP/apksigner.txt"
+          fingerprint="$(node scripts/apksigner-certificate-sha256.mjs "$RUNNER_TEMP/apksigner.txt")"
+          expected="$(node -p 'require("./.github/release/android-signing.json").certificateSha256.toLowerCase()')"
+          test "$fingerprint" = "$expected"
+          package_id="$("$apkanalyzer" manifest application-id "$apk")"
+          version_name="$("$apkanalyzer" manifest version-name "$apk")"
+          test "$package_id" = "com.bytetrue.byspace"
+          test "$version_name" = "${{ needs.release-context.outputs.version }}"
+          mkdir -p client-artifact
+          cp "$apk" "client-artifact/BySpace-${{ needs.release-context.outputs.version }}-android.apk"
+          printf '%s\n' "$fingerprint" > client-artifact/android-certificate-sha256.txt
+          echo "fingerprint=$fingerprint" >> "$GITHUB_OUTPUT"
+      - name: Install and launch signed APK on Android emulator
+        shell: bash
+        run: |
+          set -euo pipefail
+          apk="client-artifact/BySpace-${{ needs.release-context.outputs.version }}-android.apk"
+          sdkmanager 'emulator' 'system-images;android-35;google_apis;arm64-v8a' >/dev/null
+          printf 'no\n' | avdmanager create avd --force --name byspace-release \
+            --package 'system-images;android-35;google_apis;arm64-v8a' --device pixel_7 >/dev/null
+          if [[ -e /dev/kvm ]]; then sudo chmod 666 /dev/kvm; fi
+          "$ANDROID_HOME/emulator/emulator" -avd byspace-release -no-window -no-audio \
+            -no-boot-anim -no-snapshot -gpu swiftshader_indirect >/tmp/byspace-android-emulator.log 2>&1 &
+          emulator_pid=$!
+          trap 'adb emu kill >/dev/null 2>&1 || kill "$emulator_pid" >/dev/null 2>&1 || true' EXIT
+          adb wait-for-device
+          for attempt in {1..120}; do
+            [[ "$(adb shell getprop sys.boot_completed | tr -d '\r')" == "1" ]] && break
+            sleep 2
+          done
+          [[ "$(adb shell getprop sys.boot_completed | tr -d '\r')" == "1" ]]
+          adb install "$apk"
+          package_path="$(adb shell pm path com.bytetrue.byspace | tr -d '\r')"
+          [[ "$package_path" == package:* ]]
+          launch_output="$(adb shell am start -W -n com.bytetrue.byspace/.MainActivity)"
+          printf '%s\n' "$launch_output"
+          grep -q '^Status: ok$' <<< "$launch_output"
+          sleep 10
+          pid="$(adb shell pidof com.bytetrue.byspace | tr -d '\r')"
+          [[ "$pid" =~ ^[0-9]+$ ]]
+          adb emu kill
+          wait "$emulator_pid" || true
+          trap - EXIT
+      - uses: actions/upload-artifact@v4
+        with:
+          name: client-android
+          path: client-artifact/*
+          if-no-files-found: error
+          retention-days: 14
+
+  publish:
+    name: Publish immutable client assets
+    needs: [release-context, mac, linux, windows, android]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ needs.release-context.outputs.tag }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: client-*
+          path: downloaded
+      - name: Assemble deterministic cross-platform release payload
+        shell: bash
+        env:
+          RELEASE_CHANNEL: ${{ needs.release-context.outputs.channel }}
+          UPDATER_CHANNEL: ${{ needs.release-context.outputs.updater_channel }}
+          RELEASE_SHA: ${{ needs.release-context.outputs.sha }}
+          RELEASE_TAG: ${{ needs.release-context.outputs.tag }}
+          RELEASE_VERSION: ${{ needs.release-context.outputs.version }}
+        run: |
+          set -euo pipefail
+          mkdir -p staging
+          copy_unique() {
+            local source="$1" target="staging/$(basename "$1")"
+            if [[ -e "$target" ]]; then
+              cmp --silent "$source" "$target" || { echo "Conflicting client asset: $(basename "$source")" >&2; exit 1; }
+            else
+              cp "$source" "$target"
+            fi
+          }
+          while IFS= read -r -d '' file; do
+            case "$(basename "$file")" in
+              latest.yml|latest-mac.yml|latest-linux.yml|beta.yml|beta-mac.yml|beta-linux.yml|*-signing.txt|*-certificate-sha256.txt) ;;
+              *) copy_unique "$file" ;;
+            esac
+          done < <(find downloaded -type f -print0)
+
+          arm_manifest="$(find downloaded/client-mac-arm64 -type f -name "${UPDATER_CHANNEL}-mac.yml" -print -quit)"
+          x64_manifest="$(find downloaded/client-mac-x64 -type f -name "${UPDATER_CHANNEL}-mac.yml" -print -quit)"
+          linux_manifest="$(find downloaded/client-linux-x64 -type f -name "${UPDATER_CHANNEL}-linux.yml" -print -quit)"
+          windows_x64_manifest="$(find downloaded/client-windows-x64 -type f -name "${UPDATER_CHANNEL}.yml" -print -quit)"
+          windows_arm_manifest="$(find downloaded/client-windows-arm64 -type f -name "${UPDATER_CHANNEL}.yml" -print -quit)"
+          test -n "$arm_manifest" && test -n "$x64_manifest" && test -n "$linux_manifest"
+          test -n "$windows_x64_manifest" && test -n "$windows_arm_manifest"
+          node scripts/merge-updater-manifest.mjs "$arm_manifest" "$x64_manifest" "staging/${UPDATER_CHANNEL}-mac.yml"
+          node scripts/merge-updater-manifest.mjs "$windows_x64_manifest" "$windows_arm_manifest" "staging/${UPDATER_CHANNEL}.yml"
+          cp "$linux_manifest" "staging/${UPDATER_CHANNEL}-linux.yml"
+          release_date="$(git for-each-ref "refs/tags/$RELEASE_TAG" --format='%(taggerdate:iso-strict)')"
+          test -n "$release_date"
+          node scripts/stamp-rollout.mjs --release-date "$release_date" --rollout-hours 0 staging/*.yml
+
+          macos_signing="$(tr -d '\r\n' < downloaded/client-mac-arm64/macos-signing.txt)"
+          test "$macos_signing" = "$(tr -d '\r\n' < downloaded/client-mac-x64/macos-signing.txt)"
+          windows_signing="$(tr -d '\r\n' < downloaded/client-windows-x64/windows-signing.txt)"
+          test "$windows_signing" = "$(tr -d '\r\n' < downloaded/client-windows-arm64/windows-signing.txt)"
+          android_fingerprint="$(tr -d '\r\n' < downloaded/client-android/android-certificate-sha256.txt)"
+          node scripts/client-release-manifest.mjs create \
+            --directory staging \
+            --tag "$RELEASE_TAG" \
+            --commit "$RELEASE_SHA" \
+            --version "$RELEASE_VERSION" \
+            --channel "$RELEASE_CHANNEL" \
+            --android-cert-sha256 "$android_fingerprint" \
+            --macos-signing "$macos_signing" \
+            --windows-signing "$windows_signing"
+          node scripts/client-release-manifest.mjs verify \
+            --directory staging --tag "$RELEASE_TAG" --commit "$RELEASE_SHA"
+      - name: Wait for the matching GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ needs.release-context.outputs.tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in {1..120}; do
+            if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then exit 0; fi
+            echo "attempt $attempt/120: waiting for GitHub Release $RELEASE_TAG"
+            sleep 10
+          done
+          echo "GitHub Release $RELEASE_TAG did not appear" >&2
+          exit 1
+      - name: Upload assets without replacing existing bytes
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ needs.release-context.outputs.tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          existing_dir="$(mktemp -d)"
+          upload_one() {
+            local path="$1" name
+            name="$(basename "$path")"
+            if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' | grep -Fqx "$name"; then
+              gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --pattern "$name" --dir "$existing_dir"
+              cmp --silent "$path" "$existing_dir/$name" || {
+                echo "Refusing to replace existing release asset with different bytes: $name" >&2
+                exit 1
+              }
+              echo "Existing asset matches: $name"
+            else
+              gh release upload "$RELEASE_TAG" "$path" --repo "$GITHUB_REPOSITORY"
+            fi
+          }
+          while IFS= read -r file; do upload_one "$file"; done < <(
+            find staging -maxdepth 1 -type f ! -name SHA256SUMS.txt -print | sort
+          )
+          upload_one staging/SHA256SUMS.txt
+      - name: Download and verify published client assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_SHA: ${{ needs.release-context.outputs.sha }}
+          RELEASE_TAG: ${{ needs.release-context.outputs.tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir published
+          gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --dir published
+          node scripts/client-release-manifest.mjs verify \
+            --directory published --tag "$RELEASE_TAG" --commit "$RELEASE_SHA"

@@ -11,10 +11,10 @@ Build or manage the requested plugin directly. Use the current public docs to ca
 
 ## Check current documentation
 
-Fetch [https://byspace.cc.cd/llms.txt](https://byspace.cc.cd/llms.txt) first. Select and fetch the current plugin Markdown pages from that index before changing a plugin:
+Fetch [https://byspace.sh/llms.txt](https://byspace.sh/llms.txt) first. Select and fetch the current plugin Markdown pages from that index before changing a plugin:
 
-- [Plugin quickstart](https://byspace.cc.cd/docs/plugins.md) ([browser page](https://byspace.cc.cd/docs/plugins))
-- [Plugin reference](https://byspace.cc.cd/docs/plugins/reference.md) ([browser page](https://byspace.cc.cd/docs/plugins/reference))
+- [Plugin quickstart](https://byspace.sh/docs/plugins.md) ([browser page](https://byspace.sh/docs/plugins))
+- [Plugin reference](https://byspace.sh/docs/plugins/reference.md) ([browser page](https://byspace.sh/docs/plugins/reference))
 
 Use the deployed docs when they disagree with this skill. Do not send the user away to read them instead of completing the work.
 
@@ -50,7 +50,7 @@ The manifest supplies the default install ID:
 Default-export one contribution function. It must return cleanup, even when there is nothing to clean:
 
 ```tsx
-import type { PluginContext } from "@bytetrue/byspace-plugin";
+import type { PluginContext } from "@bytetrue/byspace/plugin";
 
 export default function contribute(plugin: PluginContext) {
   // Register contributions here.
@@ -71,7 +71,7 @@ import {
   type PluginContext,
   type PluginWorkspacePanelProps,
   useWorkspace,
-} from "@bytetrue/byspace-plugin";
+} from "@bytetrue/byspace/plugin";
 import { useMemo } from "react";
 import { Text, View } from "react-native";
 
@@ -127,7 +127,7 @@ the active workspace or agent. Command callbacks receive the selected host's `by
 Plugin surfaces use React Native primitives and work across desktop, browser, iOS, and Android. Register the surface before its sidebar item. Color text from `theme.colors` and pad from `layout.compact`.
 
 ```tsx
-import type { PluginContext, PluginSurfaceProps } from "@bytetrue/byspace-plugin";
+import type { PluginContext, PluginSurfaceProps } from "@bytetrue/byspace/plugin";
 import React, { useMemo, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 
@@ -176,12 +176,12 @@ export default function contribute(plugin: PluginContext) {
 
 Icons are Lucide icon names. `theme` is a typed `PluginTheme` on every surface and panel. Primary text uses `theme.colors.foreground`; labels use `theme.colors.foregroundMuted`; the root view uses `theme.colors.surface0`. `layout.compact` is true on mobile and narrow windows. BySpace owns the route, header, host picker, close action, error boundary, and per-installation query client.
 
-Client code may import `react`, `react-native`, `@tanstack/react-query`, `zod`, `@bytetrue/byspace-plugin`, and `@bytetrue/byspace-plugin/server`. Install dependencies locally for typechecking; BySpace supplies these runtime modules.
+Client code may import `react`, `react-native`, `@tanstack/react-query`, `zod`, `@bytetrue/byspace/plugin`, and `@bytetrue/byspace/plugin/server`. Install dependencies locally for typechecking; BySpace supplies these runtime modules.
 
 | Module                            | Use it for                                           |
 | --------------------------------- | ---------------------------------------------------- |
-| `@bytetrue/byspace-plugin`        | hooks and UI types                                   |
-| `@bytetrue/byspace-plugin/server` | `defineRpc`, `defineAttachmentSource`, handler types |
+| `@bytetrue/byspace/plugin`        | hooks and UI types                                   |
+| `@bytetrue/byspace/plugin/server` | `defineRpc`, `defineAttachmentSource`, handler types |
 
 ## Choose the correct API
 
@@ -192,7 +192,7 @@ Use the existing BySpace SDK for normal BySpace operations. Use plugin RPC only 
 `useBySpace()` borrows the selected host's current connection. Never create another client inside a surface.
 
 ```tsx
-import { useBySpace } from "@bytetrue/byspace-plugin";
+import { useBySpace } from "@bytetrue/byspace/plugin";
 
 function PullRequestAction() {
   const byspace = useBySpace();
@@ -218,16 +218,16 @@ function PullRequestAction() {
 }
 ```
 
-The API covers workspaces, agents, providers, and daemon config. It omits connection lifecycle because BySpace owns the connection. Consult the current [SDK reference](https://byspace.cc.cd/docs/sdk/reference.md) for method details.
+The API covers workspaces, agents, providers, and daemon config. It omits connection lifecycle because BySpace owns the connection. Consult the current [SDK reference](https://byspace.sh/docs/sdk/reference.md) for method details.
 
 ### Add daemon-side behavior
 
 Define one Zod contract, register its subprocess handler, and call it with `useRpc()`:
 
 ```tsx
-import type { PluginContext } from "@bytetrue/byspace-plugin";
-import { useRpc } from "@bytetrue/byspace-plugin";
-import { defineRpc } from "@bytetrue/byspace-plugin/server";
+import type { PluginContext } from "@bytetrue/byspace/plugin";
+import { useRpc } from "@bytetrue/byspace/plugin";
+import { defineRpc } from "@bytetrue/byspace/plugin/server";
 import { z } from "zod";
 
 const greeting = defineRpc({
@@ -279,8 +279,8 @@ daemon log. Never log credentials or other secrets.
 Define a search RPC and register a declarative source:
 
 ```tsx
-import type { PluginContext } from "@bytetrue/byspace-plugin";
-import { defineAttachmentSource, defineRpc } from "@bytetrue/byspace-plugin/server";
+import type { PluginContext } from "@bytetrue/byspace/plugin";
+import { defineAttachmentSource, defineRpc } from "@bytetrue/byspace/plugin/server";
 import { z } from "zod";
 
 const searchIssues = defineRpc({

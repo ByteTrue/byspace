@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { test } from "vitest";
+import test from "node:test";
 import { stampRollout } from "./stamp-rollout.mjs";
 
 test("rewrites rollout fields and preserves unrelated manifest data", () => {

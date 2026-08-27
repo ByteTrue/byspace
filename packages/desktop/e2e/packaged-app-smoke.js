@@ -660,17 +660,7 @@ async function smokeColdCliDaemonStart({ appPath }) {
     await runCliShimCommand({
       appPath,
       env,
-      args: [
-        "daemon",
-        "start",
-        "--home",
-        home,
-        "--listen",
-        listen,
-        "--no-relay",
-        "--no-mcp",
-        "--no-inject-mcp",
-      ],
+      args: ["daemon", "start", "--home", home, "--listen", listen, "--no-relay", "--no-mcp"],
       label: "Bundled CLI shim cold daemon start",
     });
 

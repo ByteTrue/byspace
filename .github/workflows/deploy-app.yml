@@ -1,40 +1,106 @@
 name: Deploy App
 
 on:
-  push:
-    tags:
-      - "v*"
-      - "!v*-beta.*"
-      - "app-v*"
-      - "!app-v*-beta.*"
-  workflow_dispatch:
+  workflow_run:
+    workflows: ["Publish npm"]
+    types: [completed]
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: deploy-app-${{ contains(github.event.workflow_run.head_branch, '-') && 'beta' || 'stable' }}
+  cancel-in-progress: false
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    if: >-
+      ${{ vars.CLOUDFLARE_DEPLOY_ENABLED == 'true' &&
+          github.event.workflow_run.conclusion == 'success' &&
+          github.event.workflow_run.event == 'push' &&
+          github.event.workflow_run.head_repository.full_name == github.repository &&
+          startsWith(github.event.workflow_run.head_branch, 'v') }}
+    env:
+      EXPECTED_SHA: ${{ github.event.workflow_run.head_sha }}
+      RELEASE_TAG: ${{ github.event.workflow_run.head_branch }}
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXPECTED_SHA }}
+          fetch-depth: 0
+
+      - name: Verify trusted immutable release input
+        id: release_input
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-beta\.[0-9]+)?$ ]]
+          git fetch --force origin "refs/tags/$RELEASE_TAG:refs/tags/$RELEASE_TAG"
+          git fetch origin main
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          test "$(git rev-parse "refs/tags/$RELEASE_TAG^{commit}")" = "$EXPECTED_SHA"
+          git merge-base --is-ancestor "$EXPECTED_SHA" origin/main
+          ci_run_id="$(gh run list --repo "$GITHUB_REPOSITORY" --workflow CI --commit "$EXPECTED_SHA" --event push --status success --limit 1 --json databaseId --jq '.[0].databaseId // empty')"
+          test -n "$ci_run_id"
+          echo "ci_run_id=$ci_run_id" >> "$GITHUB_OUTPUT"
+          echo "Promoting Web artifact from CI run $ci_run_id for $EXPECTED_SHA"
+          version="$(node -p 'require("./package.json").version')"
+          test "$RELEASE_TAG" = "v$version"
+          if [[ "$version" == *-* ]]; then
+            echo "PAGES_PROJECT=byspace-beta" >> "$GITHUB_ENV"
+            echo "RELEASE_CHANNEL=beta" >> "$GITHUB_ENV"
+            echo "NPM_DIST_TAG=beta" >> "$GITHUB_ENV"
+          else
+            echo "PAGES_PROJECT=byspace" >> "$GITHUB_ENV"
+            echo "RELEASE_CHANNEL=stable" >> "$GITHUB_ENV"
+            echo "NPM_DIST_TAG=latest" >> "$GITHUB_ENV"
+          fi
 
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
           cache: "npm"
-          registry-url: "https://npm.pkg.github.com"
-          scope: "@boudra"
+          cache-dependency-path: package-lock.json
+
+      - name: Download exact-SHA Web artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: byspace-web-app
+          path: artifacts
+          repository: ${{ github.repository }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ steps.release_input.outputs.ci_run_id }}
+
+      - name: Verify and extract exact-SHA Web artifact
+        run: |
+          node scripts/release-artifact-manifest.mjs verify --kind web --manifest artifacts/web-artifact.json --commit "$EXPECTED_SHA"
+          version="$(node -p 'require("./package.json").version')"
+          rm -rf packages/app/dist
+          tar -xzf "artifacts/byspace-web-${version}.tgz" -C packages/app
 
       - name: Install dependencies
         run: node scripts/npm-retry.mjs ci
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - name: Build app dependencies
-        run: npm run build:app-deps
+          ONNXRUNTIME_NODE_INSTALL_CUDA: skip
 
-      - name: Typecheck
-        run: npm run typecheck --workspace=@bytetrue/byspace-app
+      - name: Recheck immutable channel release
+        run: |
+          git fetch --force origin "refs/tags/$RELEASE_TAG:refs/tags/$RELEASE_TAG"
+          test "$(git rev-parse "refs/tags/$RELEASE_TAG^{commit}")" = "$EXPECTED_SHA"
+          version="$(node -p 'require("./package.json").version')"
+          test "$(npm view "@bytetrue/byspace@$NPM_DIST_TAG" version)" = "$version"
 
-      - name: Build and deploy to Cloudflare Pages
-        run: npm run deploy:web --workspace=@bytetrue/byspace-app
+      - name: Deploy release channel to Cloudflare Pages
+        run: >-
+          cd packages/app && npx wrangler pages deploy dist
+          --project-name "$PAGES_PROJECT"
+          --branch main
+          --commit-hash "$EXPECTED_SHA"
+          --commit-message "$RELEASE_TAG ($RELEASE_CHANNEL)"
+          --commit-dirty=false
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: 10ed39a1dbf316e30abd0c409bed40d6
+          CLOUDFLARE_ACCOUNT_ID: 835cd580057df97323a7854a8069c5f1
