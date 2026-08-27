@@ -19,7 +19,7 @@ const requiredAsarEntries = [
   "node_modules/esbuild/lib/main.js",
 ];
 
-async function createFixture() {
+async function createFixture({ windowsAsarPaths = false } = {}) {
   const directory = mkdtempSync(path.join(tmpdir(), "byspace-desktop-package-"));
   const source = path.join(directory, "source");
   const resources = path.join(directory, "resources");
@@ -29,7 +29,7 @@ async function createFixture() {
     JSON.stringify({ name: "@bytetrue/byspace-desktop", version: "1.0.0" }),
   );
   for (const entry of requiredAsarEntries) {
-    const target = path.join(source, entry);
+    const target = path.join(source, windowsAsarPaths ? entry.replaceAll("/", "\\") : entry);
     mkdirSync(path.dirname(target), { recursive: true });
     writeFileSync(target, "export {};\n");
   }
@@ -48,6 +48,18 @@ async function createFixture() {
 
 test("accepts the real packaged Desktop ASAR layout", async () => {
   const fixture = await createFixture();
+  try {
+    const output = execFileSync(process.execPath, [verifier, fixture.resources, "byspace"], {
+      encoding: "utf8",
+    });
+    assert.match(output, /Verified packaged Desktop resources/);
+  } finally {
+    rmSync(fixture.directory, { recursive: true, force: true });
+  }
+});
+
+test("accepts Windows-style ASAR path separators", async () => {
+  const fixture = await createFixture({ windowsAsarPaths: true });
   try {
     const output = execFileSync(process.execPath, [verifier, fixture.resources, "byspace"], {
       encoding: "utf8",

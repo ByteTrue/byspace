@@ -343,7 +343,7 @@ jobs:
     name: Android APK
     needs: release-context
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 90
     env:
       BYSPACE_ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_RELEASE_KEY_ALIAS }}
       BYSPACE_ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_RELEASE_KEY_PASSWORD }}
@@ -401,7 +401,7 @@ jobs:
           apksigner="$build_tools/apksigner"
           apkanalyzer="$ANDROID_HOME/cmdline-tools/latest/bin/apkanalyzer"
           "$apksigner" verify --verbose --print-certs "$apk" | tee "$RUNNER_TEMP/apksigner.txt"
-          fingerprint="$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p' "$RUNNER_TEMP/apksigner.txt" | head -1 | tr '[:upper:]' '[:lower:]')"
+          fingerprint="$(node scripts/apksigner-certificate-sha256.mjs "$RUNNER_TEMP/apksigner.txt")"
           expected="$(node -p 'require("./.github/release/android-signing.json").certificateSha256.toLowerCase()')"
           test "$fingerprint" = "$expected"
           package_id="$("$apkanalyzer" manifest application-id "$apk")"

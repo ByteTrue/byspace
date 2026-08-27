@@ -115,7 +115,7 @@ Before the tag, source can be fixed normally. After the tag, npm and client asse
 
 ## Incident-derived client build controls
 
-The first `v0.7.1` through `v0.7.5` client matrices failed before asset publication and established these additional controls:
+The first `v0.7.1` through `v0.7.6` client matrices failed before asset publication and established these additional controls:
 
 - Electron Web export is owned by the root `build:desktop:web` script. macOS, Linux, Windows, and local Desktop builds call that one script; a workflow must never route `build:web` to the Desktop workspace.
 - Electron server runtime and main-process compilation are owned by the tested root `build:desktop:runtime` and `build:desktop:main` scripts. Workflows must not invent package-script names that local builds do not execute.
@@ -128,6 +128,9 @@ The first `v0.7.1` through `v0.7.5` client matrices failed before asset publicat
 - Desktop ownership is persisted in `byspace.pid`. CLI `daemon status --json` must preserve the additive `desktopManaged` field so the Electron manager can distinguish and safely stop/restart the daemon it owns.
 - Both macOS entitlement files are release inputs and must be tracked by Git; local existence is not proof that a tag contains them. The release workflow test checks them with `git ls-files --error-unmatch`. When Developer ID credentials are absent, the `afterSign` hook explicitly applies and verifies a deep ad-hoc signature so Intel and arm64 runners cannot diverge on auto-discovery behavior.
 - Desktop packages use `asar: true`. Post-package validation checks JavaScript entrypoints including `esbuild` inside `app.asar`, native `node-pty` plus platform `@esbuild` binaries under `app.asar.unpacked`, the platform CLI wrapper, and updater metadata through `scripts/verify-desktop-package.mjs`; checks for a nonexistent unpacked `resources/app`, standalone `resources/server`, or a platform-independent unpack layout are invalid.
+- `@electron/asar` returns platform-native entry separators, so package verification normalizes backslashes before checking archive paths. Focused fixtures must include Windows-style ASAR entries instead of proving only the current development host.
+- Signed Android native compilation may outlast a transient hosted-runner window. The Android client job allows 90 minutes, but a longer timeout never weakens the fixed-certificate, application ID/version, emulator install, launch, or aggregate-upload gates.
+- `apksigner --print-certs` labels differ across Android build-tools versions. Certificate extraction uses `scripts/apksigner-certificate-sha256.mjs`, accepts current `V2 Signer` and legacy `Signer #1` labels, requires exactly one signer and one unique digest, then compares that digest to the repository pin.
 
 ## Evidence in this repository
 

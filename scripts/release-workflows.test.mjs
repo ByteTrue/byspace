@@ -94,7 +94,10 @@ test("client publisher builds every public client from one immutable exact-CI ta
   assert.match(workflow, /BYSPACE_REQUIRE_RELEASE_SIGNING=1/);
   assert.match(workflow, /ANDROID_RELEASE_KEYSTORE_BASE64/);
   assert.match(workflow, /apksigner.*verify --verbose --print-certs/);
+  assert.match(workflow, /apksigner-certificate-sha256\.mjs/);
+  assert.doesNotMatch(workflow, /\^Signer #1 certificate SHA-256 digest/);
   assert.match(workflow, /android-signing\.json/);
+  assert.match(workflow, /android:\n    name: Android APK[\s\S]*?timeout-minutes: 90/);
   assert.match(workflow, /merge-updater-manifest\.mjs/);
   assert.match(workflow, /runner: macos-14/);
   assert.match(workflow, /runner: macos-15-intel/);

@@ -29,7 +29,7 @@ if (packageJson.name !== "@bytetrue/byspace-desktop") {
   throw new Error(`Unexpected packaged Desktop package name: ${String(packageJson.name)}`);
 }
 
-const entries = new Set(listPackage(asar));
+const entries = new Set(listPackage(asar).map((entry) => entry.replaceAll("\\", "/")));
 for (const entry of [
   "/dist/main.js",
   "/dist/preload.js",
