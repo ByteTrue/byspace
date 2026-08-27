@@ -1,34 +1,40 @@
 # Changelog
 
+## 0.7.6 - 2026-08-27
+
+- Tracks both macOS entitlement files as release inputs, applies and verifies an explicit post-package ad-hoc signature whenever Developer ID credentials are absent, and keeps Developer ID/notarization mode unchanged when all Apple credentials are present.
+- Makes the cross-platform package verifier check the real split runtime: JavaScript entrypoints including `esbuild` inside `app.asar`, native `node-pty` and platform `@esbuild` binaries under `app.asar.unpacked`, the updater config, and the platform CLI wrapper.
+- Locks the entitlement inputs into the Git index with a release regression test and validates the corrected path with focused verifier tests plus a real local macOS package, signing, renderer, daemon, CLI, terminal, and ASAR smoke.
+- Leaves the immutable 0.7.1–0.7.5 tags untouched after their client matrices stopped before asset upload; iOS remains maintained source/prebuild/test-only and is excluded from active CD.
+
 ## 0.7.5 - 2026-08-27
 
-- Completes the public multi-client release tuple: every Stable/Beta tag publishes checksummed Electron Desktop packages for macOS, Linux, and Windows plus a BySpace release-key-signed Android APK alongside npm, Web/PWA, and Relay.
-- Makes all Desktop packagers run from the Desktop project directory, forces explicit ad-hoc macOS signing when Developer ID credentials are absent, and validates the real ASAR package layout through one cross-platform verifier backed by focused tests and a real local package smoke.
-- Publishes immutable exact-tag client manifests, SHA-256 checksums, updater metadata, actual macOS/Windows signing state, public re-download verification, and Android certificate identity; iOS source and validation remain maintained while active CD builds and uploads no iOS artifact.
-- Leaves the immutable 0.7.1–0.7.4 tags untouched after their client matrices stopped before asset upload, and fixes forward without reconstructing old-tag artifacts from newer workflow code.
+- Publishes npm, Stable Web, and Stable Relay successfully. Linux completed its full Desktop job and both Windows architectures packaged and ran the real app smoke, but the client matrix stopped before aggregate publication, so the GitHub Release has no client assets.
+- macOS revealed that both entitlement files existed only in an ignored local `build/` directory, while the Intel runner skipped ad-hoc signing; Windows revealed that `esbuild` JavaScript lives in ASAR while only the platform binary is unpacked.
+- Client publication is fixed forward in 0.7.6 without moving the 0.7.5 tag or rebuilding it from later workflow code.
 
 ## 0.7.4 - 2026-08-27
 
 - Publishes npm, Stable Web, and Stable Relay successfully and hardens packaged-client validation by scoping optional Apple credentials, removing a retired daemon option, preserving Desktop-managed daemon ownership through CLI status, and using x64 Node build tooling on the native Windows arm64 runner.
 - The client matrix stopped before aggregate upload because macOS packaging resolved entitlements from the wrong working directory and post-package checks assumed an unpacked `resources/app` tree instead of the real `app.asar` layout; no client asset reached the GitHub Release.
-- Client publication is fixed forward in 0.7.5 without moving the 0.7.4 tag or rebuilding it from later workflow code.
+- Client publication is fixed forward in 0.7.6 without moving the 0.7.4 tag or rebuilding it from later workflow code.
 
 ## 0.7.3 - 2026-08-27
 
 - Publishes npm, Stable Web, and Stable Relay successfully, makes macOS/Linux/Windows/local Desktop builds share tested root Web/runtime/main entrypoints, and waits up to six minutes for a newly published npm tarball to become downloadable.
 - The client matrix stopped before aggregate upload because empty optional Apple credential variables confused electron-builder, packaged smoke used a retired CLI flag, Windows arm64 build tooling encountered an unsupported `workerd` host, and the Android hosted runner shut down during emulator boot; no client asset reached the GitHub Release.
-- Client publication is fixed forward in 0.7.5 without moving the 0.7.3 tag or rebuilding it from later workflow code.
+- Client publication is fixed forward in 0.7.6 without moving the 0.7.3 tag or rebuilding it from later workflow code.
 
 ## 0.7.2 - 2026-08-27
 
 - Publishes npm, Stable Web, and Stable Relay successfully and repairs the first client matrix's Electron Web export and Windows npm lifecycle shell failures.
 - Extends the client publisher with exact-tag manifests, SHA-256 checksums, updater metadata, actual signing state, Android certificate identity, and an explicit iOS no-CD boundary, but the `v0.7.2` Desktop matrix stopped before asset upload because its workflow referenced undefined root runtime/main build scripts.
-- Recovers an npm post-publish verification race by retrying the same immutable tag after the exact registry tarball became available; no package was republished and no incomplete client asset reached the GitHub Release. Client publication is ultimately fixed forward in 0.7.5.
+- Recovers an npm post-publish verification race by retrying the same immutable tag after the exact registry tarball became available; no package was republished and no incomplete client asset reached the GitHub Release. Client publication is ultimately fixed forward in 0.7.6.
 
 ## 0.7.1 - 2026-08-27
 
 - Adds the unified Desktop/Android release infrastructure, long-term Android signing identity, release manifest/checksum tooling, iOS no-CD boundary, and matching release skills, documentation, website downloads, and CodeStable contract.
-- Publishes npm, Stable Web, and Stable Relay successfully. The first Desktop/Android client matrix stopped before uploading any GitHub Release asset because Electron Web export targeted the wrong workspace and Windows npm lifecycle scripts were forced through Windows PowerShell; client publication is ultimately fixed forward in 0.7.5 without moving or rebuilding the 0.7.1 tag.
+- Publishes npm, Stable Web, and Stable Relay successfully. The first Desktop/Android client matrix stopped before uploading any GitHub Release asset because Electron Web export targeted the wrong workspace and Windows npm lifecycle scripts were forced through Windows PowerShell; client publication is ultimately fixed forward in 0.7.6 without moving or rebuilding the 0.7.1 tag.
 
 ## 0.7.0 - 2026-08-27
 

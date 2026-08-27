@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import test from "node:test";
@@ -43,6 +44,10 @@ test("client publisher builds every public client from one immutable exact-CI ta
     resolve(root, "packages", "desktop", "e2e", "packaged-app-smoke.js"),
     "utf8",
   );
+  const desktopAfterSign = readFileSync(
+    resolve(root, "packages", "desktop", "scripts", "after-sign.js"),
+    "utf8",
+  );
   assert.match(workflow, /push:\n    tags:\n      - "v\*"/);
   assert.doesNotMatch(workflow, /workflow_dispatch|inputs\.tag/);
   assert.doesNotMatch(workflow, /checkout_ref|--clobber|eas-cli|--platform ios|\.ipa/);
@@ -66,6 +71,20 @@ test("client publisher builds every public client from one immutable exact-CI ta
     /for name in CSC_LINK CSC_KEY_PASSWORD APPLE_ID APPLE_APP_SPECIFIC_PASSWORD APPLE_TEAM_ID/,
   );
   assert.match(packagedDesktopSmoke, /"--no-mcp"/);
+  for (const entitlements of [
+    "packages/desktop/build/entitlements.mac.plist",
+    "packages/desktop/build/entitlements.mac.inherit.plist",
+  ]) {
+    assert.doesNotThrow(() =>
+      execFileSync("git", ["ls-files", "--error-unmatch", entitlements], {
+        cwd: root,
+        stdio: "pipe",
+      }),
+    );
+  }
+  assert.match(desktopAfterSign, /execFileSync\(\s*"codesign"/);
+  assert.match(desktopAfterSign, /"--deep"/);
+  assert.match(desktopAfterSign, /entitlements\.mac\.plist/);
   assert.doesNotMatch(packagedDesktopSmoke, /--no-inject-mcp/);
   assert.match(
     workflow,

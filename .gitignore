@@ -3,6 +3,10 @@ node_modules/
 
 # Build outputs
 build/
+!packages/desktop/build/
+packages/desktop/build/*
+!packages/desktop/build/entitlements.mac.plist
+!packages/desktop/build/entitlements.mac.inherit.plist
 dist/
 .next/
 out/

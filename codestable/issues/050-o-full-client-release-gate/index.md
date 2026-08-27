@@ -1,12 +1,12 @@
 ---
 kind: issue
-title: 完整客户端发行闸门与 v0.7.5 恢复发布
+title: 完整客户端发行闸门与 v0.7.6 恢复发布
 type: bug
 status: open
 created: 2026-08-27
 ---
 
-# 完整客户端发行闸门与 v0.7.5 恢复发布
+# 完整客户端发行闸门与 v0.7.6 恢复发布
 
 ## 做成以后是什么样
 
@@ -39,7 +39,7 @@ created: 2026-08-27
 - **可靠性：** 只构建 immutable tag；自动发布必须继承 `Publish npm` 的 exact-SHA 成功证据；所有平台 build 成功后才进入上传阶段。重跑只能补齐缺失且逐字节一致的资产，不能 `--clobber` 已发布文件。
 - **信息安全性：** Android 禁止 debug key；固定并验证 release certificate SHA-256。Secrets 不进入日志、artifact 或仓库。无 Apple/Windows 证书时，macOS ad-hoc/Windows unsigned 状态必须进入 manifest、Release notes 与下载说明，不能伪称 notarized/AuthentiCode signed。
 - **可维护性：** Stable/Beta、failed-job retry 与文档读取同一 release tuple；静态测试阻止恢复 `checkout_ref`、`--clobber`、debug-signed Android、active iOS publish 或 Web-only 完成声明。
-- **兼容性：** `v0.7.0` 至 `v0.7.4` 的 tag/资产均不移动。`v0.7.1` 至 `v0.7.4` 的客户端矩阵都在资产上传前失败；通过 `v0.7.5` fix-forward 完成全量发行。Stable/Beta Web、Relay、npm 与 Desktop update channel 继续隔离。
+- **兼容性：** `v0.7.0` 至 `v0.7.5` 的 tag/资产均不移动。`v0.7.1` 至 `v0.7.5` 的客户端矩阵都在资产上传前失败；通过 `v0.7.6` fix-forward 完成全量发行。Stable/Beta Web、Relay、npm 与 Desktop update channel 继续隔离。
 
 ## 实现安排
 
@@ -48,9 +48,9 @@ created: 2026-08-27
 3. Android prebuild 后用专用 release key 运行 Gradle `assembleRelease`，通过 `apksigner` 校验证书指纹；key 仅保存为本机受限备份和 GitHub Actions Secrets。
 4. 将 iOS EAS workflow definitions 移出 active workflow directory并标为 inactive reference source；active GitHub/EAS CD 不得包含 iOS build/submit。Fastlane、EAS profiles、prebuild 和测试保留。
 5. 更新所有当前事实入口与 release Skills；历史关闭文档追加新发行 Issue 链接，所有 current-source-of-truth 文档只陈述新边界。
-6. 本地完成三平台/Android 可执行验证与完整 release gate；`v0.7.1` 至 `v0.7.4` 的真实 tag 矩阵暴露 CI/打包机械缺陷后，均不修改旧 tag，通过 `v0.7.5` fix-forward，等待 npm/Web/Relay/Clients 全部完成并做真实安装验证。
+6. 本地完成三平台/Android 可执行验证与完整 release gate；`v0.7.1` 至 `v0.7.5` 的真实 tag 矩阵暴露 CI/打包机械缺陷后，均不修改旧 tag，通过 `v0.7.6` fix-forward，等待 npm/Web/Relay/Clients 全部完成并做真实安装验证。
 
-## v0.7.1 至 v0.7.4 客户端发布事故与恢复
+## v0.7.1 至 v0.7.5 客户端发布事故与恢复
 
 `v0.7.1` 的 npm、Stable Web 与 Stable Relay 已成功，但 `Publish clients` 首次真实矩阵在任何 Release asset 上传前失败：
 
@@ -83,12 +83,20 @@ created: 2026-08-27
 
 `v0.7.5` fix-forward 让三个平台的 electron-builder 都以 `packages/desktop` 为工作目录，ad-hoc macOS 显式设置 `CSC_NAME=-`，并用 `scripts/verify-desktop-package.mjs` 在三平台统一检查真实 ASAR 入口、daemon/CLI runtime、native unpacked dependencies、updater 与平台 CLI wrapper；focused tests 与本机真实 signed package 均覆盖该路径。`v0.7.4` tag 保持不动。
 
+`v0.7.5` 的 npm、Stable Web 与 Stable Relay 已成功，但客户端矩阵仍在 aggregate upload 前停止：
+
+- Linux x64 全 job 成功；Windows x64/arm64 均完成 package 与真实 App smoke，但 verifier 错把 macOS 的 unpacked `node_modules/esbuild` 形态当成跨平台契约。Windows 的 JavaScript `esbuild` 在 `app.asar`，平台二进制在 `app.asar.unpacked/node_modules/@esbuild`。
+- 两个 macOS entitlement 文件只存在于本机被 `.gitignore` 排除的 `packages/desktop/build/`，tag 并不包含它们；arm64 在 electron-builder signing 阶段失败。Intel runner 还跳过了 auto-discovered ad-hoc signing，package/smoke 完成后被 `codesign --verify` 拒绝。
+- 各失败均发生在平台 Actions artifact staging 或 aggregate publication 之前；GitHub Release 客户端资产仍为 0。
+
+`v0.7.6` fix-forward 将两份 entitlement 明确加入 Git index 并用 `git ls-files --error-unmatch` 锁门；无 Developer ID 凭据时，`afterSign` 显式执行并验证 deep ad-hoc codesign；统一 verifier 改为检查 ASAR 中的 `esbuild` JavaScript 与 unpacked `@esbuild` 平台二进制。focused tests 与本机真实 macOS package/codesign/renderer/daemon/CLI/terminal/ASAR smoke 均通过。`v0.7.5` tag 保持不动。
+
 ## 验证
 
 - 静态/单元：release workflow、channel isolation、release metadata、Android signing config plugin、active-iOS-absence tests。
 - 本机构建：Desktop macOS package；Android release APK + `apksigner verify --print-certs`；Web export；typecheck/lint/format/diff。
-- CI 穿刺：workflow 静态契约、本机 macOS package（含真实 renderer、Desktop-managed daemon、CLI status、terminal、ASAR 内容验证）和 Android 产物验证与 exact-SHA 主 CI 先通过；`v0.7.5` tag 端到端执行 macOS/Linux/Windows/Android publisher。客户端工作流不提供绕过上传的假发布模式。
-- 发布：`v0.7.5` exact-SHA CI；npm latest、Stable Web、Stable Relay、Publish Clients 全绿。
+- CI 穿刺：workflow 静态契约、本机 macOS package（含真实 renderer、Desktop-managed daemon、CLI status、terminal、ASAR 内容验证）和 Android 产物验证与 exact-SHA 主 CI 先通过；`v0.7.6` tag 端到端执行 macOS/Linux/Windows/Android publisher。客户端工作流不提供绕过上传的假发布模式。
+- 发布：`v0.7.6` exact-SHA CI；npm latest、Stable Web、Stable Relay、Publish Clients 全绿。
 - Release 资产：按 manifest 逐个下载、SHA-256 校验；macOS/Windows/Linux 启动 smoke；Android 安装/启动/Direct+Relay smoke；iOS asset/job/submit 为 0。
 - 渠道：Beta npm/Web/Relay/Desktop 基线不变。
 - 独立 Reviewer 只读审查 exact-tag/exact-SHA、anti-clobber、Android 固定证书签名、Desktop 五目标/updater、iOS active-CD 排除与 docs/skills/网站一致性：无 Blocker / High。

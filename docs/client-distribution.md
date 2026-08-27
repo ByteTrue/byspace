@@ -37,14 +37,14 @@ Desktop builds publish:
 
 Each architecture is built and smoked on a native-architecture GitHub runner (`macos-14` arm64, `macos-15-intel` x64, `windows-11-arm` arm64, `windows-2022` x64). This prevents host-architecture optional/native dependencies from leaking into a cross-compiled package.
 
-All platform packagers run from `packages/desktop`. `scripts/verify-desktop-package.mjs` validates the real `app.asar` package entries, unpacked native dependencies, updater metadata, and platform CLI wrapper after the packaged runtime smoke; release checks must not assume an unpacked `resources/app` tree.
+All platform packagers run from `packages/desktop`. `scripts/verify-desktop-package.mjs` validates JavaScript runtime entries inside `app.asar`, native `node-pty` and platform `@esbuild` binaries under `app.asar.unpacked`, updater metadata, and the platform CLI wrapper after the packaged runtime smoke; release checks must not assume an unpacked `resources/app` tree.
 
 Every public file is covered by `SHA256SUMS.txt` and the client manifest. OS code signing is applied when the corresponding GitHub release credentials are configured:
 
 - macOS GitHub secrets: `APPLE_CERTIFICATE`, `APPLE_CERTIFICATE_PASSWORD`, `APPLE_ID`, `APPLE_PASSWORD`, `APPLE_TEAM_ID`;
 - Windows GitHub secrets: `WINDOWS_CERTIFICATE_BASE64`, `WINDOWS_CERTIFICATE_PASSWORD`.
 
-Missing all credentials for one Desktop OS produces an official checksummed but OS-unsigned artifact; partially configured credentials are a release error. The release notes must disclose the signing state. Signing or notarization must never be claimed without verification from the produced artifact.
+Both macOS entitlement files are tracked release inputs. Without Apple credentials, the `afterSign` hook applies and verifies an ad-hoc signature: it proves bundle integrity but is not Developer ID trust or notarization. Without Windows credentials, the checksummed Windows artifact is unsigned. Partially configured credentials are a release error, and release notes must disclose the verified signing state.
 
 Electron updater manifests are immutable release assets. Rollout for a new release starts at 100%; a workflow must never mutate a previously published manifest to change rollout percentage.
 

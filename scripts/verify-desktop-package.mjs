@@ -15,7 +15,7 @@ const requiredResources = [
   path.join(resources, "app-update.yml"),
   path.join(resources, "bin", binName),
   path.join(resources, "app.asar.unpacked", "node_modules", "node-pty"),
-  path.join(resources, "app.asar.unpacked", "node_modules", "esbuild"),
+  path.join(resources, "app.asar.unpacked", "node_modules", "@esbuild"),
 ];
 
 for (const requiredPath of [asar, ...requiredResources]) {
@@ -37,6 +37,7 @@ for (const entry of [
   "/node_modules/@bytetrue/byspace/bin/byspace",
   "/node_modules/@bytetrue/byspace-server/dist/scripts/supervisor-entrypoint.js",
   "/node_modules/@bytetrue/byspace-server/dist/server/server/daemon-worker.js",
+  "/node_modules/esbuild/lib/main.js",
 ]) {
   if (!entries.has(entry)) {
     throw new Error(`Missing packaged Desktop ASAR entry: ${entry}`);
