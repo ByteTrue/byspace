@@ -1,6 +1,6 @@
 ---
 title: Cloudflare Relay 生产部署、滥用边界与真实链路 smoke
-status: open
+status: closed
 kind: tracer
 milestone: Epic 002
 created: 2026-08-28
@@ -63,15 +63,15 @@ Epic 002 Issues 001–003 已经在本地 Wrangler、真实 Chromium、Go daemon
 
 ## 验收标准
 
-- [ ] Relay package unit/type/build 和 Wrangler dry-run 通过。
-- [ ] canonical v2 server ID validation 与 edge 429 有 deterministic unit tests，且 rate-limit rejection 不调用 `RELAY.idFromName/get/fetch`。
-- [ ] `workers.dev` / preview exposure、custom domain、DO migration、observability 与 rate-limit binding 在 production config 显式声明。
-- [ ] authenticated Wrangler deployment 成功并记录非敏感 deployment/version evidence。
-- [ ] `curl https://relay.byspace.cc.cd/health` 返回预期 JSON；404 与 malformed `/ws` probes fail closed。
-- [ ] live raw Relay v2 binary bridge smoke 通过。
-- [ ] live Go daemon ↔ TypeScript client Agent turn + Go CLI observation smoke 通过，wire/log/stdout 不含 prompt 或 pairing secret。
-- [ ] focused security/operability review 无阻塞项。
-- [ ] Epic/spec/README 写回完成；满足 gate 后按 standing authorization 关闭本 Issue。
+- [x] Relay package unit/type/build 和 Wrangler dry-run 通过。
+- [x] canonical v2 server ID validation 与 edge 429 有 deterministic unit tests，且 rate-limit rejection 不调用 `RELAY.idFromName/get/fetch`。
+- [x] `workers.dev` / preview exposure、custom domain、DO migration、observability 与 rate-limit binding 在 production config 显式声明。
+- [x] authenticated Wrangler deployment 成功并记录非敏感 deployment/version evidence。
+- [x] `curl https://relay.byspace.cc.cd/health` 返回预期 JSON；404 与 malformed `/ws` probes fail closed。
+- [x] live raw Relay v2 binary bridge smoke 通过。
+- [x] live Go daemon ↔ TypeScript client Agent turn + Go CLI observation smoke 通过，wire/log/stdout 不含 prompt 或 pairing secret。
+- [x] focused security/operability review 无阻塞项。
+- [x] Epic/spec/README 写回完成；满足 gate 后按 standing authorization 关闭本 Issue。
 
 ## 风险验证
 
@@ -89,11 +89,19 @@ Epic 002 Issues 001–003 已经在本地 Wrangler、真实 Chromium、Go daemon
 ## 当前实现进展（2026-08-28）
 
 - `cloudflare-adapter.ts` 已在 Worker entry、DO lookup 之前完成 role/upgrade/version/canonical v2 server ID validation，并通过 `RELAY_RATE_LIMITER` 以 `role:CF-Connecting-IP` 做 120 requests / 60s / PoP 的 initial-upgrade admission；limiter rejection/exception 都不触达 DO。
-- `wrangler.toml` 已显式关闭 `workers_dev` / preview URLs，保留 custom domain、observability、SQLite DO migration，并加入稳定 account-local rate-limit namespace `791437345`。Wrangler 4.127.0 dry-run 已识别所有 bindings，bundle 为 18.23 KiB / gzip 4.39 KiB。
-- local Relay suite 已通过 71 tests（另 1 个 opt-in live skip）；既有 local E2E 已改为 canonical random `srv_` IDs。追加全链验证通过：Go vet/race、`internal/relay` race 100 轮、Windows amd64 cross-build、Web build、全 workspace typecheck/tests/lint、103 browser tests 与 Go-daemon Playwright E2E。
+- `wrangler.toml` 已显式关闭 `workers_dev` / preview URLs，保留 custom domain、observability、SQLite DO migration，并加入稳定 account-local rate-limit namespace `791437345`。Wrangler 4.127.0 dry-run 已识别所有 bindings，最终 bundle 为 18.41 KiB / gzip 4.40 KiB。
+- local Relay suite 已通过 72 tests（另 1 个 opt-in live skip）；既有 local E2E 已改为 canonical random `srv_` IDs。追加全链验证通过：Go vet/race、`internal/relay` race 100 轮、Windows amd64 cross-build、Web build、全 workspace typecheck/tests/lint、103 browser tests 与 Go-daemon Playwright E2E。
 - `live-relay.e2e.test.ts` 已改为真实 v2 server-assigned connection ID contract，并在当前 `relay.byspace.cc.cd` 上通过双向 encrypted binary bridge。
 - `go-daemon-relay.e2e.test.ts` 已加入 opt-in production tracer，并在当前公开 endpoint 上通过真实 Go daemon outbound control/data、fresh challenge/HMAC + NaCl `DaemonClient` Agent turn、stdin CLI host import、remote Agent list/Timeline 与 secret redaction，全程使用临时 homes 和 fake Pi。
 
-## 当前阻塞
+## 生产部署与关闭证据（2026-08-28）
 
-- 当前 shell 的 `npx wrangler whoami` 返回未认证；真正 deploy/deployment inspection 需要 operator 在可信终端完成 `wrangler login`，或仅在进程环境提供 scoped `CLOUDFLARE_API_TOKEN`。Wrangler OAuth 当前请求一组较广的标准写入 scopes，因此未替用户确认授权。在此之前不能证明公开 endpoint 对应当前 source，也不能关闭 Issue。
+- 当前实现以 GitHub 分支 `rewrite/go-daemon` 的 commit `6d939b4806fc9c0bca96c2146f9982955b6baeda` 为唯一部署输入；仓库 Actions secret 仅注入 Wrangler 进程，没有写入 source、argv 或普通日志。
+- [GitHub Actions run 33170940010](https://github.com/ByteTrue/byspace/actions/runs/33170940010) 依次通过 Relay typecheck、72 tests、protocol/Relay build、Wrangler dry-run、authenticated deploy、HTTP boundary probes 与两层 live smoke。
+- Wrangler 将 `byspace-relay` version `b20690a6-41c1-47f2-80e9-b5327a51d939` 部署到 custom domain `relay.byspace.cc.cd`；deploy output 确认 `RelayDurableObject`、`RELAY_RATE_LIMITER (120 requests/60s)` 与 18.41 KiB / gzip 4.40 KiB bundle。
+- post-deploy probes 确认 `/health` 为精确 `200 {"status":"ok"}`、未知路径为精确 `404 Not found`、带 WebSocket upgrade 的非法 v2 server ID 为精确 `400 Invalid v2 serverId parameter`。
+- live raw bridge 1/1 通过；Go daemon + copied `DaemonClient` + Go CLI suite 2/2 通过，其中 production tracer 完成 mutual-auth E2EE Agent turn 和远程 CLI Timeline observation。
+- Review 首轮发现 orphan server-data socket occupancy、缺失 dry-run/probes gate 与 secret-bearing failure diagnostic；commit `6d939b4` 分别以 live-client tag admission、完整 release gates 和 boolean redaction assertions 修复。复审结论：`No issues found`，Merge `OK`，Issue closure `APPROVED`。
+- Deployment log 对 `clientAuthTokenB64`、daemon private key、`#offer=` 与 bearer credential markers 的扫描为空；测试只使用 ephemeral identity/home 和 fake Pi。
+
+本 Issue 在 standing authorization 下关闭。Epic 002 的全部实现 Issues 已完成；Epic 级关闭仍按其规格等待用户明确确认。

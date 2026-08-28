@@ -46,28 +46,33 @@ The daemon also provides lifecycle ownership, HTTP health/shutdown, a provider-n
 
 Relay E2EE interoperability is fixed by `fixtures/relay/e2ee-v1.json`, consumed by both copied TypeScript Relay tests and Go `internal/relay`. When `--relay-url` or `BYSPACE_RELAY_URL` is set, the daemon opens the Relay v2 control channel and serves the same Agent WebSocket contract over authenticated NaCl E2EE data channels. `byspace pair` emits a version 3 offer whose URL fragment contains the daemon public key and a 256-bit client authentication capability; Relay frames expose routing metadata but not Agent payload plaintext. Keep pairing URLs private.
 
-The copied Web app can persist direct and authenticated Relay hosts together, switch their isolated workspaces and Agents, and automatically recover a remote host after page, Relay, or daemon restart. A production-bundle Chromium tracer verifies host-scoped outage state, direct-host continuity, canonical Timeline recovery, and Pi native-session resume against two real Go daemons and the repository's Cloudflare Wrangler Relay. The Go CLI independently imports the same v3 offer and observes remote Agent catalogs and canonical Timeline updates through the shared mutual-authenticated E2EE transport. The public `relay.byspace.cc.cd` hostname currently resolves and passes raw v2 plus full daemon/client/CLI smoke; authenticated Wrangler deployment provenance and rollout of the current admission-hardening source are still pending.
+The copied Web app can persist direct and authenticated Relay hosts together, switch their isolated workspaces and Agents, and automatically recover a remote host after page, Relay, or daemon restart. A production-bundle Chromium tracer verifies host-scoped outage state, direct-host continuity, canonical Timeline recovery, and Pi native-session resume against two real Go daemons and the repository's Cloudflare Wrangler Relay. The Go CLI independently imports the same v3 offer and observes remote Agent catalogs and canonical Timeline updates through the shared mutual-authenticated E2EE transport. The current Relay source is deployed to `relay.byspace.cc.cd` through the repository's authenticated GitHub Actions workflow and passes exact HTTP boundary probes, raw Relay v2 bridge smoke, and the full daemon/client/CLI mutual-authenticated E2EE tracer.
 
 ## Production Relay
 
 `packages/relay/wrangler.toml` is the production config for `relay.byspace.cc.cd`. It disables alternate `workers.dev`/preview exposure, binds the SQLite-backed `RelayDurableObject`, and applies source/role admission rate limiting before requests reach a Durable Object.
 
-Authenticate Wrangler outside the repository (either `npx wrangler login` or a scoped `CLOUDFLARE_API_TOKEN` in the process environment), then validate and deploy:
+Production deployment is manual-dispatch only through [`.github/workflows/deploy-relay.yml`](.github/workflows/deploy-relay.yml). It consumes the repository's scoped `CLOUDFLARE_API_TOKEN` secret and gates deployment on tests, builds, Wrangler dry-run, post-deploy HTTP probes, and both live smoke layers:
 
 ```bash
-npx wrangler deploy --config packages/relay/wrangler.toml --dry-run
-npx wrangler deploy --config packages/relay/wrangler.toml
-curl -fsS https://relay.byspace.cc.cd/health
+gh workflow run deploy-relay.yml --repo ByteTrue/byspace --ref <trusted-ref>
+gh run list --repo ByteTrue/byspace --workflow deploy-relay.yml --limit 1
 ```
 
-Run the opt-in public endpoint smoke tests after deployment. They use random Relay IDs, temporary daemon homes, and the offline fake Pi fixture:
+For local, non-mutating config validation:
 
 ```bash
-RUN_LIVE_RELAY_E2E=1 npm test --workspace @byspace/relay -- --run src/live-relay.e2e.test.ts
-RUN_LIVE_RELAY_E2E=1 npx vitest run packages/client/src/go-daemon-relay.e2e.test.ts --testNamePattern='production Relay'
+(cd packages/relay && npx wrangler deploy --dry-run)
 ```
 
-Do not place a Cloudflare token, pairing offer, or `clientAuthTokenB64` in repository files or command arguments.
+The opt-in public endpoint smoke tests use random Relay IDs, temporary daemon homes, and the offline fake Pi fixture:
+
+```bash
+RUN_LIVE_RELAY_E2E=1 npm test --workspace=@byspace/relay -- src/live-relay.e2e.test.ts
+RUN_LIVE_RELAY_E2E=1 npm test --workspace=@byspace/client -- src/go-daemon-relay.e2e.test.ts
+```
+
+Do not place a Cloudflare token, pairing offer, or `clientAuthTokenB64` in repository files, command arguments, or logs.
 
 Go validation:
 

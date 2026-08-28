@@ -19,7 +19,7 @@ Relay 只看到随机路由标识、连接生命周期和密文字节，不持�
 - [`issues/001-x-relay-v2-agent-tracer.md`](issues/001-x-relay-v2-agent-tracer.md) 已关闭：Go daemon 拥有稳定 Relay identity、authenticated v3 pairing offer、outbound Relay v2 control/data runtime 和 daemon-side E2EE adapter；direct 与 remote 进入同一个 Agent session dispatcher。
 - copied `@byspace/client` / `@byspace/relay` / Web HostRuntime 已保存并使用 `clientAuthTokenB64`，以 fresh challenge + HMAC proof 双向认证 channel；authenticated pairing 强制双方提交并确认 binary-ciphertext capability，不允许 plaintext downgrade。按 copied channel contract，text logical frame 使用 base64 ciphertext text wire，binary logical frame 使用 raw binary wire。
 - 跨语言 E2E 已由 copied `DaemonClient` 经忠实 local Relay v2 harness 访问真实 Go daemon，覆盖 Agent create/send/live Timeline、Relay/daemon restart、Pi resume、wire privacy、auth/replay/tamper negative cases。
-- `packages/relay` 的 Cloudflare Worker + Durable Object 已与同一 v2 query/control contract 对齐，并有 server-assigned connection ID、frame/byte/socket budgets、replacement-safe lifecycle 与 Wrangler E2E/dry-run 证据；`relay.byspace.cc.cd` 当前已有 DNS/TLS endpoint 且 raw v2 / full daemon-client-CLI live smoke 通过，但 authenticated deployment provenance 与当前 admission-hardening source rollout 尚未完成。
+- [`issues/004-x-cloudflare-relay-production.md`](issues/004-x-cloudflare-relay-production.md) 已关闭：`packages/relay` 的 Cloudflare Worker + Durable Object 已从 GitHub branch 的精确 commit 经 authenticated Wrangler deploy 发布到 `relay.byspace.cc.cd`；server-assigned connection ID、pre-DO rate limiting、frame/byte/socket budgets、orphan server-data rejection、custom-domain-only exposure 与 Wrangler dry-run/deploy/live smoke 均有生产证据。
 - [`issues/002-x-web-multi-host-relay-tracer.md`](issues/002-x-web-multi-host-relay-tracer.md) 已关闭：copied Web 在真实 Chromium 中同时运行 direct daemon A 与 Relay daemon B，经真实 offer fragment import、Hosts/project UI、production E2EE transport 和 Cloudflare Wrangler Relay 验证了 host 隔离、远程 Agent、reload、Relay/daemon restart 与 Pi resume。
 - Web host registry 的初始加载与 placeholder migration 采用共享 single-flight；新 offer 持久化必须等待该加载完成，避免旧异步快照覆盖新 authenticated host。连接状态以 host-scoped accessible status 呈现，不用全局错误污染仍在线的其它主机。
 - [`issues/003-x-go-cli-remote-target.md`](issues/003-x-go-cli-remote-target.md) 已关闭：Go CLI 可通过 stdin/私有文件导入 canonical v3 offer，以独立原子 registry 保存 trust material，并让 `agent list` / `timeline [--follow]` 经共享 mutual-auth E2EE transport 显式访问 remote host；跨语言 E2E 已覆盖 wrong token/key/identity 和 Relay/daemon restart。
@@ -50,11 +50,9 @@ Relay 只看到随机路由标识、连接生命周期和密文字节，不持�
 
 [`issues/003-x-go-cli-remote-target.md`](issues/003-x-go-cli-remote-target.md) 已让现有 `byspace agent list` / `timeline` 显式选择独立私有 registry 中的 remote connection，复用相同 Relay v2、mutual-auth E2EE transport、pairing identity 和 daemon session protocol；offer 只从 stdin/私有文件导入，不进入 shell history、process argv 或普通日志。local-default 语义、secret redaction、wrong trust/identity、Relay/daemon restart 与 Pi resume 都有跨语言证据。
 
-### 4. Cloudflare Relay 部署与运行边界（当前推进）
+### 4. Cloudflare Relay 部署与运行边界（已关闭）
 
-当前 tracer：[`issues/004-o-cloudflare-relay-production.md`](issues/004-o-cloudflare-relay-production.md)。
-
-将 Worker/Durable Object 配置、migrations、limits、health/diagnostics、abuse controls 和 deployment docs 固定在仓库中；在 `relay.byspace.cc.cd` 完成 TLS、v2 control/data、并发 client 与断线清理 smoke。生产凭据只存在于 Cloudflare/secret store，不进入仓库、fixture 或 Agent 输出。
+[`issues/004-x-cloudflare-relay-production.md`](issues/004-x-cloudflare-relay-production.md) 已将 Worker/Durable Object config、SQLite migration、pre-DO admission、capacity/buffer limits、health/404 diagnostics 和 GitHub Actions release gate 固定在仓库中。Commit `6d939b4` 经 authenticated Wrangler 发布为 Worker version `b20690a6-41c1-47f2-80e9-b5327a51d939`；production dry-run、custom-domain HTTP boundaries、raw v2 binary bridge 与 full daemon/client/CLI mutual-auth E2EE smoke 全部通过，部署日志未发现 credential/pairing secret markers。
 
 ### 5. 远程生命周期硬化（已关闭）
 
@@ -86,4 +84,4 @@ Relay 只看到随机路由标识、连接生命周期和密文字节，不持�
 
 ## 关闭判断
 
-只有 copied Web 与 Go CLI 都能经 byspace 自有 Cloudflare Relay 访问真实 Go daemon、E2EE/identity/reconnect/多主机隔离有跨语言与真实部署证据、direct path 无回归、所有 Issues 已通过 focused review 与自测并关闭后，本 Epic 才能请求用户确认关闭。
+Copied Web 与 Go CLI 已能经 byspace 自有 Cloudflare Relay 访问真实 Go daemon；E2EE/identity/reconnect/多主机隔离已有跨语言与真实部署证据，direct path 无回归，Issues 001–005 均已通过 focused review、自测与规格写回后关闭。Epic 002 已满足技术关闭条件，当前只等待用户明确确认 Epic 级关闭。
