@@ -33,6 +33,11 @@ jobs:
           npm run typecheck --workspace=@byspace/relay
           npm test --workspace=@byspace/relay
 
+      - name: Build live smoke dependencies
+        run: |
+          npm run build:protocol
+          npm run build:relay
+
       - name: Deploy Relay Worker
         working-directory: packages/relay
         run: npx wrangler deploy
