@@ -67,7 +67,7 @@ Hub ── authorized relationship ──────────┤
 
 - 当前项目现实、已验证能力和活跃主线 → [`../spec/index.md`](../spec/index.md)
 - foundation 迁移地图与证据 → [`../epics/001-o-rewrite-foundation/spec.md`](../epics/001-o-rewrite-foundation/spec.md)
-- 当前 Relay 远程连接主线 → [`../epics/002-o-relay-remote-connectivity/spec.md`](../epics/002-o-relay-remote-connectivity/spec.md)
+- 已完成的 Relay E2EE 远程连接、多主机与生产部署主线 → [`../epics/002-x-relay-remote-connectivity/spec.md`](../epics/002-x-relay-remote-connectivity/spec.md)
 - 想理解产品最终服务哪些旅程 → 从本页“用户怎样获得结果”开始。
 - 想判断某个 Paseo 组件是复制、适配、Go 重写还是外部依赖 → 读 foundation Epic 的迁移地图。
 - 想开始具体实现 → 先读 Project Spec 标出的活跃 Epic，再进入其当前 Issue；阶段顺序不代表最终产品删减。

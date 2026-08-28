@@ -2,7 +2,7 @@
 kind: epic
 title: "打通 Relay E2EE 远程连接与多主机控制"
 type: feature
-status: open
+status: closed
 created: 2026-08-27
 ---
 
@@ -82,6 +82,8 @@ Relay 只看到随机路由标识、连接生命周期和密文字节，不持�
 
 这些都不等于从产品范围删除，只是不混入本次 Relay 多主机闭环。
 
-## 关闭判断
+## 关闭与毕业
 
-Copied Web 与 Go CLI 已能经 byspace 自有 Cloudflare Relay 访问真实 Go daemon；E2EE/identity/reconnect/多主机隔离已有跨语言与真实部署证据，direct path 无回归，Issues 001–005 均已通过 focused review、自测与规格写回后关闭。Epic 002 已满足技术关闭条件，当前只等待用户明确确认 Epic 级关闭。
+用户于 2026-08-28 明确确认关闭本 Epic。Copied Web 与 Go CLI 已能经 byspace 自有 Cloudflare Relay 访问真实 Go daemon；E2EE/identity/reconnect/多主机隔离已有跨语言与真实部署证据，direct path 无回归，Issues 001–005 均已通过 focused review、自测与规格写回后关闭。
+
+稳定成果已具体毕业到 [`../../spec/index.md`](../../spec/index.md) 的“远程连接与 Relay 当前契约”：同一 direct/remote daemon protocol、pairing trust、host-scoped state、零知识 Relay metadata boundary、resource/lifecycle bounds、production release gate，以及 Relay 与 Hub 的职责分界均可独立阅读。Vision 的产品目标未改变；其演化地图只更新本 Epic 的已完成状态与历史链接。Hub 授权自动化、terminal/files/Git 等范围仍留给后续 Epic。

@@ -2,7 +2,7 @@
 
 ## 当前是什么
 
-byspace 已从 Paseo 导入并建立独立的 Web-only 构建基线：当前仓库可用干净安装导出可安装的 PWA 静态产物，并包含前端所需的 client、protocol、Relay client/Worker、highlight 与 plugin workspace。`go/` 中已实现共享协议 fixtures/codec、统一 `byspace` 二进制的 daemon lifecycle/CLI 监督骨架、由 daemon 拥有的 provider-neutral Agent/Timeline manager 与 Pi RPC adapter、local-only `/ws` Agent contract、Agent/Timeline 原子持久化和 Pi native session resume，以及 single-directory workspace/project catalog、Pi provider snapshot、同源 Web 托管和 read-only Agent CLI。Copied Web 已在真实浏览器中通过真实 Go daemon + deterministic fake Pi 完成 create/send/stream/idle、refresh、daemon stop/start、同一 Agent resume/续写及并发 CLI Timeline observation。Go daemon Relay v2 transport、mutual-auth E2EE、authenticated pairing offer、copied client remote Agent tracer、Web/PWA direct + Relay 多主机浏览器闭环，以及 Go CLI saved remote target observation 已实现；当前 commit 已经 authenticated GitHub Actions/Wrangler 发布到 `relay.byspace.cc.cd` 并通过 production smoke，Hub 尚未实现。当前建设主线位于 [`../epics/002-o-relay-remote-connectivity/spec.md`](../epics/002-o-relay-remote-connectivity/spec.md)，其全部 Issues 已完成并等待用户确认 Epic 级关闭。
+byspace 已从 Paseo 导入并建立独立的 Web-only 构建基线：当前仓库可用干净安装导出可安装的 PWA 静态产物，并包含前端所需的 client、protocol、Relay client/Worker、highlight 与 plugin workspace。`go/` 中已实现共享协议 fixtures/codec、统一 `byspace` 二进制的 daemon lifecycle/CLI 监督骨架、由 daemon 拥有的 provider-neutral Agent/Timeline manager 与 Pi RPC adapter、local-only `/ws` Agent contract、Agent/Timeline 原子持久化和 Pi native session resume，以及 single-directory workspace/project catalog、Pi provider snapshot、同源 Web 托管和 read-only Agent CLI。Copied Web 已在真实浏览器中通过真实 Go daemon + deterministic fake Pi 完成 create/send/stream/idle、refresh、daemon stop/start、同一 Agent resume/续写及并发 CLI Timeline observation。Go daemon Relay v2 transport、mutual-auth E2EE、authenticated pairing offer、copied client remote Agent tracer、Web/PWA direct + Relay 多主机浏览器闭环，以及 Go CLI saved remote target observation 已实现；当前 commit 已经 authenticated GitHub Actions/Wrangler 发布到 `relay.byspace.cc.cd` 并通过 production smoke，Hub 尚未实现。Relay 远程连接主线已毕业到本 Project Spec，设计与验证历史保留在 [`../epics/002-x-relay-remote-connectivity/spec.md`](../epics/002-x-relay-remote-connectivity/spec.md)；下一条建设主线进入 Hub 授权自动化。
 
 当前参考实现位于本机 `~/workspace/forks/paseo`，导入基线固定在 commit `a8734a972495cf343f628d1017e87775767aade5`。它继续提供产品行为、协议与测试证据；byspace 不在该目录直接开发。
 
@@ -19,12 +19,12 @@ byspace 已从 Paseo 导入并建立独立的 Web-only 构建基线：当前仓�
 - 查看 workspace/provider catalog、同源 Web 托管与 Agent CLI 闭环 → [`../epics/001-o-rewrite-foundation/issues/008-x-web-workspace-provider-bootstrap.md`](../epics/001-o-rewrite-foundation/issues/008-x-web-workspace-provider-bootstrap.md)
 - 查看 Relay E2EE 的 Go↔TypeScript golden contract → [`../epics/001-o-rewrite-foundation/issues/009-x-relay-e2ee-interop.md`](../epics/001-o-rewrite-foundation/issues/009-x-relay-e2ee-interop.md)
 - 查看 Windows Agent state protected-DACL 修复与原生运行证据 → [`../epics/001-o-rewrite-foundation/issues/010-x-windows-private-agent-state.md`](../epics/001-o-rewrite-foundation/issues/010-x-windows-private-agent-state.md)
-- 查看当前 Relay remote connectivity 建设主线 → [`../epics/002-o-relay-remote-connectivity/spec.md`](../epics/002-o-relay-remote-connectivity/spec.md)
-- 查看已关闭的 authenticated Relay v2 remote Agent tracer → [`../epics/002-o-relay-remote-connectivity/issues/001-x-relay-v2-agent-tracer.md`](../epics/002-o-relay-remote-connectivity/issues/001-x-relay-v2-agent-tracer.md)
-- 查看已关闭的 Web/PWA direct + Relay 多主机 tracer → [`../epics/002-o-relay-remote-connectivity/issues/002-x-web-multi-host-relay-tracer.md`](../epics/002-o-relay-remote-connectivity/issues/002-x-web-multi-host-relay-tracer.md)
-- 查看已关闭的 Go CLI authenticated Relay remote target 切片 → [`../epics/002-o-relay-remote-connectivity/issues/003-x-go-cli-remote-target.md`](../epics/002-o-relay-remote-connectivity/issues/003-x-go-cli-remote-target.md)
-- 查看已关闭的 Cloudflare Relay production deploy/smoke 切片 → [`../epics/002-o-relay-remote-connectivity/issues/004-x-cloudflare-relay-production.md`](../epics/002-o-relay-remote-connectivity/issues/004-x-cloudflare-relay-production.md)
-- 查看已关闭的 Relay data-session retry/generation/slow-consumer lifecycle hardening → [`../epics/002-o-relay-remote-connectivity/issues/005-x-relay-session-lifecycle-hardening.md`](../epics/002-o-relay-remote-connectivity/issues/005-x-relay-session-lifecycle-hardening.md)
+- 查看已关闭的 Relay remote connectivity 建设主线 → [`../epics/002-x-relay-remote-connectivity/spec.md`](../epics/002-x-relay-remote-connectivity/spec.md)
+- 查看已关闭的 authenticated Relay v2 remote Agent tracer → [`../epics/002-x-relay-remote-connectivity/issues/001-x-relay-v2-agent-tracer.md`](../epics/002-x-relay-remote-connectivity/issues/001-x-relay-v2-agent-tracer.md)
+- 查看已关闭的 Web/PWA direct + Relay 多主机 tracer → [`../epics/002-x-relay-remote-connectivity/issues/002-x-web-multi-host-relay-tracer.md`](../epics/002-x-relay-remote-connectivity/issues/002-x-web-multi-host-relay-tracer.md)
+- 查看已关闭的 Go CLI authenticated Relay remote target 切片 → [`../epics/002-x-relay-remote-connectivity/issues/003-x-go-cli-remote-target.md`](../epics/002-x-relay-remote-connectivity/issues/003-x-go-cli-remote-target.md)
+- 查看已关闭的 Cloudflare Relay production deploy/smoke 切片 → [`../epics/002-x-relay-remote-connectivity/issues/004-x-cloudflare-relay-production.md`](../epics/002-x-relay-remote-connectivity/issues/004-x-cloudflare-relay-production.md)
+- 查看已关闭的 Relay data-session retry/generation/slow-consumer lifecycle hardening → [`../epics/002-x-relay-remote-connectivity/issues/005-x-relay-session-lifecycle-hardening.md`](../epics/002-x-relay-remote-connectivity/issues/005-x-relay-session-lifecycle-hardening.md)
 
 ## 当前开发边界
 
@@ -32,6 +32,15 @@ byspace 已从 Paseo 导入并建立独立的 Web-only 构建基线：当前仓�
 - 当前只复制已经由 Web build 证明的六个 workspace 闭包；后续不得以“未来会需要”为由无差别复制 Paseo 的 server、CLI、desktop 或 native app 代码。
 - 当前静态 Web 仍保留 Paseo wire/type/storage 兼容层作为 Go 重写标尺；首轮 fixtures 只固定 copied Web 所需契约，没有对 stock Paseo 客户端的永久兼容承诺，也没有正式发布或数据迁移义务。
 - Electron 桌面原生客户端和 iOS/Android 移动原生客户端是已确认的永久排除项。其余能力的先后顺序见 Vision 和 Epic，不在 Project Spec 提前宣称已实现。
+
+## 远程连接与 Relay 当前契约
+
+- Web/PWA 与 Go CLI 都能以 direct `/ws` 或 Relay E2EE 进入同一个 Go daemon 应用协议与 Agent dispatcher；Relay 不是第二套业务 API，也不能让 daemon `/ws` 直接暴露公网。
+- Pairing offer 是私有 capability：client 固定 daemon public key，daemon 以 stable private identity、fresh challenge 和 pairing-secret HMAC 认证 client；长期 key、auth secret、provider 凭据与业务明文只存在端点，损坏或认证不确定时 fail closed。
+- Web 按 `serverId` 隔离 host registry、workspace/project/Agent snapshot、Timeline 与连接状态；direct host 故障不会污染 Relay host，反之亦然。Go CLI 使用独立私有 registry，并只从 stdin 或受保护文件导入 offer，避免 secret 进入 argv 和普通输出。
+- Relay v2 只拥有 route metadata、短生命周期 connection ID、frame 大小/时序和 opaque ciphertext。client connection ID 由 Relay 分配；control reconnect、data generation replacement、nonce replay protection、retry/backoff、frame/queue/socket capacity 和 teardown 都有硬上限。
+- `relay.byspace.cc.cd` 由仓库 Cloudflare Worker/Durable Object 实现承载；custom-domain-only config、pre-DO canonical-ID/rate-limit admission、SQLite migration 与 post-deploy probes 固定在 manual-dispatch GitHub Actions release gate 中。生产部署必须继续用真实 raw bridge 和 daemon/client/CLI mutual-auth E2EE smoke 作证，不能以 health 或 local mock 代替。
+- Relay 不负责 Hub 的用户/组织授权、外部事件或 workflow execution，不合并 daemon 事实源，也不承诺新代码长期兼容 Relay v1。
 
 ## 当前质量基线
 
@@ -56,4 +65,4 @@ byspace 已从 Paseo 导入并建立独立的 Web-only 构建基线：当前仓�
 - 产品源码和 manifests 不再引用 `@getpaseo/*`，排除的 desktop/server/CLI/native app 路径不存在；Apache-2.0 许可证和 Paseo 修改归属保留。
 - Playwright 已升级到支持 Ubuntu 26.04 的 1.62.1；Chrome for Testing 151.0.7922.34 下 11 个 browser test files / 103 个 tests 通过。生产依赖审计仍有非 critical 的 Expo/markdown 传递风险，这是可见缺口，不是绿色证据。
 
-首个 Epic 的 Issues 001–010 已在实现、focused review、自测与规格回写通过后关闭，Epic 001 已满足技术关闭条件并等待 Epic 级明确确认。Epic 002 的 Issues 001–005 也已全部关闭：Relay v2 tracer、copied Web 多主机、Go CLI remote target、生产 Cloudflare deployment/smoke 与 remote lifecycle hardening 均有复审通过证据；Epic 002 当前等待用户明确确认 Epic 级关闭。Hub 与其它 daemon 领域继续进入后续 Epic。
+首个 Epic 的 Issues 001–010 已在实现、focused review、自测与规格回写通过后关闭，Epic 001 已满足技术关闭条件并等待 Epic 级明确确认。Epic 002 已在用户确认后关闭并毕业到“远程连接与 Relay 当前契约”：Relay v2 tracer、copied Web 多主机、Go CLI remote target、生产 Cloudflare deployment/smoke 与 remote lifecycle hardening 均有复审通过证据。下一条建设主线进入 Hub；其它 daemon 领域继续进入后续 Epic。
