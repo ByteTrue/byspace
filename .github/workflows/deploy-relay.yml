@@ -38,11 +38,28 @@ jobs:
           npm run build:protocol
           npm run build:relay
 
+      - name: Validate Relay deployment
+        working-directory: packages/relay
+        run: npx wrangler deploy --dry-run
+
       - name: Deploy Relay Worker
         working-directory: packages/relay
         run: npx wrangler deploy
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+
+      - name: Probe production Relay HTTP boundary
+        run: |
+          test "$(curl -fsS https://relay.byspace.cc.cd/health)" = '{"status":"ok"}'
+          test "$(curl -sS -o /tmp/relay-not-found -w '%{http_code}' https://relay.byspace.cc.cd/not-found)" = 404
+          test "$(cat /tmp/relay-not-found)" = 'Not found'
+          test "$(curl -sS --http1.1 -o /tmp/relay-invalid-ws -w '%{http_code}' \
+            -H 'Connection: Upgrade' \
+            -H 'Upgrade: websocket' \
+            -H 'Sec-WebSocket-Version: 13' \
+            -H 'Sec-WebSocket-Key: AAAAAAAAAAAAAAAAAAAAAA==' \
+            'https://relay.byspace.cc.cd/ws?role=server&serverId=bad&v=2')" = 400
+          test "$(cat /tmp/relay-invalid-ws)" = 'Invalid v2 serverId parameter'
 
       - name: Smoke live Relay bridge
         run: npm test --workspace=@byspace/relay -- src/live-relay.e2e.test.ts

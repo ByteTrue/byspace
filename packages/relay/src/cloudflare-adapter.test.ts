@@ -216,6 +216,21 @@ describe("RelayDurableObject control nudge/reset behavior", () => {
     expect(state.acceptWebSocket).not.toHaveBeenCalled();
   });
 
+  it("rejects daemon data sockets without a live Relay-assigned client", async () => {
+    const { state } = createMockState();
+    const relay = new RelayDurableObject(state as unknown as DurableObjectStateArg);
+    const response = await relay.fetch(
+      new Request(
+        "https://relay.test/ws?role=server&serverId=srv_test&connectionId=conn_unknown&v=2",
+        { headers: { Upgrade: "websocket" } },
+      ),
+    );
+
+    expect(response.status).toBe(404);
+    await expect(response.text()).resolves.toBe("Unknown connectionId parameter");
+    expect(state.acceptWebSocket).not.toHaveBeenCalled();
+  });
+
   it("does not disconnect a client when a server-data replacement exists", () => {
     const connectionId = "conn_replaced";
     const oldServer = createMockSocket({

@@ -487,6 +487,9 @@ export class RelayDurableObject {
     ) {
       return new Response("Invalid connectionId parameter", { status: 400 });
     }
+    if (role === "server" && connectionIdRaw !== null && !this.hasClientSocket(connectionId)) {
+      return new Response("Unknown connectionId parameter", { status: 404 });
+    }
 
     return this.fetchV2(request, role, serverId, connectionId);
   }

@@ -311,7 +311,10 @@ test("copied DaemonClient reaches the Go daemon through an authenticated untrust
     ["host", "list", "--home", cliHome, "--json"],
     { cwd: project },
   );
-  expect(hostListOutput).not.toContain(offer.clientAuthTokenB64);
+  expect(
+    hostListOutput.includes(offer.clientAuthTokenB64),
+    "host list output leaked client auth token",
+  ).toBe(false);
   expect(hostListOutput).not.toContain(offer.daemonPublicKeyB64);
   expect(JSON.parse(hostListOutput)).toEqual([
     {
@@ -336,7 +339,10 @@ test("copied DaemonClient reaches the Go daemon through an authenticated untrust
     { cwd: project },
   );
   expect(cliTimeline).toContain("remote tracer secret");
-  expect(cliTimeline).not.toContain(offer.clientAuthTokenB64);
+  expect(
+    cliTimeline.includes(offer.clientAuthTokenB64),
+    "timeline output leaked client auth token",
+  ).toBe(false);
 
   const staleHello = relay.capturedHello;
   if (!staleHello) throw new Error("Relay did not observe the authenticated hello");
@@ -498,7 +504,10 @@ test("copied DaemonClient reaches the Go daemon through an authenticated untrust
   cliFollow.kill("SIGTERM");
   await waitForExit(cliFollow);
   expect(cliFollow.exitCode).toBe(0);
-  expect(cliFollowOutput).not.toContain(offer.clientAuthTokenB64);
+  expect(
+    cliFollowOutput.includes(offer.clientAuthTokenB64),
+    "timeline follow output leaked client auth token",
+  ).toBe(false);
 
   await execFileAsync(daemonBinary, ["daemon", "stop", "--home", home], { cwd: project });
   await waitForExit(daemon);
@@ -636,7 +645,10 @@ liveRelayTest(
       { cwd: project },
     );
     expect(cliAgents).toContain(created.id);
-    expect(cliAgents).not.toContain(offer.clientAuthTokenB64);
+    expect(
+      cliAgents.includes(offer.clientAuthTokenB64),
+      "production agent list leaked client auth token",
+    ).toBe(false);
     expect(cliAgents).not.toContain(offer.daemonPublicKeyB64);
 
     const { stdout: cliTimeline } = await execFileAsync(
@@ -645,7 +657,10 @@ liveRelayTest(
       { cwd: project },
     );
     expect(cliTimeline).toContain(prompt);
-    expect(cliTimeline).not.toContain(offer.clientAuthTokenB64);
+    expect(
+      cliTimeline.includes(offer.clientAuthTokenB64),
+      "production timeline leaked client auth token",
+    ).toBe(false);
     expect(cliTimeline).not.toContain(offer.daemonPublicKeyB64);
 
     await client.close();
