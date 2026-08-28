@@ -363,16 +363,23 @@ func (client *localDaemonClient) readResponse(ctx context.Context, messageType, 
 		if observe != nil {
 			observe(envelope)
 		}
-		if envelope.Type != "session" || envelope.Message.Type != messageType {
+		if envelope.Type != "session" {
 			continue
 		}
 		var identity struct {
 			RequestID string `json:"requestId"`
+			Error     string `json:"error"`
 		}
-		if err := json.Unmarshal(envelope.Message.Payload, &identity); err != nil {
+		if err := json.Unmarshal(envelope.Message.Payload, &identity); err != nil || identity.RequestID != requestID {
 			continue
 		}
-		if identity.RequestID == requestID {
+		if envelope.Message.Type == "rpc_error" {
+			if identity.Error == "" {
+				identity.Error = "daemon RPC failed"
+			}
+			return sessionEnvelope{}, errors.New(identity.Error)
+		}
+		if envelope.Message.Type == messageType {
 			return envelope, nil
 		}
 	}

@@ -90,6 +90,30 @@ type DaemonGetPairingOfferRequest struct {
 
 func (DaemonGetPairingOfferRequest) clientMessage() {}
 
+type HubDaemonConnectRequest struct {
+	Type      string `json:"type"`
+	RequestID string `json:"requestId"`
+	HubURL    string `json:"hubUrl"`
+	Token     string `json:"token"`
+}
+
+func (HubDaemonConnectRequest) clientMessage() {}
+
+type HubDaemonGetStatusRequest struct {
+	Type      string `json:"type"`
+	RequestID string `json:"requestId"`
+}
+
+func (HubDaemonGetStatusRequest) clientMessage() {}
+
+type HubDaemonDisconnectRequest struct {
+	Type      string `json:"type"`
+	RequestID string `json:"requestId"`
+	Force     bool   `json:"force"`
+}
+
+func (HubDaemonDisconnectRequest) clientMessage() {}
+
 type GetDaemonConfigRequest struct {
 	Type      string `json:"type"`
 	RequestID string `json:"requestId"`
@@ -412,6 +436,40 @@ func decodeClientMessage(data []byte) (ClientMessage, error) {
 			}
 		}
 		var message DaemonGetPairingOfferRequest
+		return message, decodeInto(data, &message)
+	case "hub.management.daemon.connect.request":
+		for _, field := range []string{"requestId", "hubUrl", "token"} {
+			value, err := requiredString(object, field)
+			if err != nil {
+				return nil, err
+			}
+			if value == "" {
+				return nil, fmt.Errorf("protocol: %s must not be empty", field)
+			}
+		}
+		var message HubDaemonConnectRequest
+		return message, decodeInto(data, &message)
+	case "hub.management.daemon.get_status.request":
+		if value, err := requiredString(object, "requestId"); err != nil {
+			return nil, err
+		} else if value == "" {
+			return nil, errors.New("protocol: requestId must not be empty")
+		}
+		var message HubDaemonGetStatusRequest
+		return message, decodeInto(data, &message)
+	case "hub.management.daemon.disconnect.request":
+		if value, err := requiredString(object, "requestId"); err != nil {
+			return nil, err
+		} else if value == "" {
+			return nil, errors.New("protocol: requestId must not be empty")
+		}
+		if raw, ok := object["force"]; ok {
+			var force bool
+			if err := json.Unmarshal(raw, &force); err != nil {
+				return nil, errors.New("protocol: force must be a boolean")
+			}
+		}
+		var message HubDaemonDisconnectRequest
 		return message, decodeInto(data, &message)
 	case "get_daemon_config_request":
 		if _, err := requiredString(object, "requestId"); err != nil {

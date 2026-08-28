@@ -8,7 +8,7 @@ byspace 面向需要在一台或多台机器上持续运行 AI 编码 Agent 的�
 
 目标体验的最小本质是：**Agent 和开发环境留在用户控制的主机上，Web 与 CLI 随时连接，Relay 解决安全远程访问，Hub 解决跨主机和外部事件驱动的自动化。**
 
-产品以 Paseo 的产品与架构思路为起点，但不是把 Node daemon 逐行翻译成 Go。Web 界面优先整体复用并适配，daemon 由 byspace 用 Go 完全重写；CLI 作为同一 `byspace` Go 二进制的命令面，保留完整产品能力。Relay 必须有可部署的 byspace 自有实现，Hub 保留 Paseo 的自托管与托管产品能力，具体源码策略后续决定。
+产品以 Paseo 的产品与架构思路为起点，但不是把 Node daemon 逐行翻译成 Go。Web 界面优先整体复用并适配，daemon 由 byspace 用 Go 完全重写；CLI 作为同一 `byspace` Go 二进制的命令面，保留完整产品能力。Relay 必须有可部署的 byspace 自有实现；独立的 Hub 服务采用 fork-and-adapt 保留 Paseo Hub 的自托管与托管产品能力，不为了语言统一重写其成熟 workflow/database 语义。
 
 ## 用户怎样获得结果
 
@@ -48,7 +48,7 @@ Hub ── authorized relationship ──────────┤
 - **Go CLI**：与 daemon 共用同一个 `byspace` 二进制；既管理本地 daemon，也是完整的脚本化客户端，支持直连和 Relay 远程目标。现有 TypeScript CLI 只作为迁移行为与测试标尺。
 - **连接与多主机**：统一直接连接、配对、Relay E2EE、重连和每主机状态隔离。
 - **Relay**：可独立部署到 Cloudflare 的不可信字节转发服务。目标域名为 `relay.byspace.cc.cd`；业务明文只存在于 Web/CLI 与 daemon 端。
-- **Hub**：可部署的自动化控制层，目标域名为 `hub.byspace.cc.cd`；保留 Paseo Hub 的产品能力并在后续梳理服务端来源与重写边界。
+- **Hub**：可部署的可信自动化控制层，目标域名为 `hub.byspace.cc.cd`；从固定 provenance 的 Apache-2.0 Paseo Hub 独立 fork/adapt，保留 Node/PostgreSQL workflow engine，而不取得 daemon 的文件、Agent 或 coding-provider credential 所有权。
 - **Provider 系统**：先以 Pi RPC 打通，再扩展 Codex、Claude、OpenCode、ACP 等 provider。
 - **开发环境能力**：终端、文件、Git、worktree、Forge、Review 等由 daemon 执行，Web 与 CLI 只表达意图和展示结果。
 - **自动化与扩展**：schedule、script、plugin、MCP、Agent 间协作与 Hub 工作流共享 daemon 的权限和资源边界。
@@ -68,6 +68,7 @@ Hub ── authorized relationship ──────────┤
 - 当前项目现实、已验证能力和活跃主线 → [`../spec/index.md`](../spec/index.md)
 - foundation 迁移地图与证据 → [`../epics/001-o-rewrite-foundation/spec.md`](../epics/001-o-rewrite-foundation/spec.md)
 - 已完成的 Relay E2EE 远程连接、多主机与生产部署主线 → [`../epics/002-x-relay-remote-connectivity/spec.md`](../epics/002-x-relay-remote-connectivity/spec.md)
+- 当前 Hub 授权自动化主线与 fork/adapt 边界 → [`../epics/003-o-hub-automation/spec.md`](../epics/003-o-hub-automation/spec.md)
 - 想理解产品最终服务哪些旅程 → 从本页“用户怎样获得结果”开始。
 - 想判断某个 Paseo 组件是复制、适配、Go 重写还是外部依赖 → 读 foundation Epic 的迁移地图。
 - 想开始具体实现 → 先读 Project Spec 标出的活跃 Epic，再进入其当前 Issue；阶段顺序不代表最终产品删减。

@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"byspace/internal/agent"
+	"byspace/internal/hub"
 	"byspace/internal/relay"
 )
 
@@ -110,7 +111,23 @@ func Run(ctx context.Context, options Options) (runErr error) {
 		}
 	}()
 
+	hubManager, err := hub.NewManager(ctx, hub.Options{
+		Home: options.Home, Hostname: record.Hostname, ServerID: record.ServerID,
+		DaemonPublicKey: func() (string, error) {
+			identity, err := relay.LoadOrCreateIdentity(relay.IdentityPath(options.Home))
+			if err != nil {
+				return "", err
+			}
+			return identity.PublicKeyBase64(), nil
+		},
+	})
+	if err != nil {
+		return fmt.Errorf("open Hub relationship manager: %w", err)
+	}
+	defer hubManager.Close()
+
 	webSockets := newAgentWebSocketHandler(agentManager, catalog, record.ServerID, record.Hostname)
+	webSockets.setHubManager(hubManager)
 	defer webSockets.Close()
 
 	output := options.Output

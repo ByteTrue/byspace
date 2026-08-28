@@ -4,7 +4,7 @@
 
 byspace 已从 Paseo 导入并建立独立的 Web-only 构建基线：当前仓库可用干净安装导出可安装的 PWA 静态产物，并包含前端所需的 client、protocol、Relay client/Worker、highlight 与 plugin workspace。`go/` 中已实现共享协议 fixtures/codec、统一 `byspace` 二进制的 daemon lifecycle/CLI 监督骨架、由 daemon 拥有的 provider-neutral Agent/Timeline manager 与 Pi RPC adapter、local-only `/ws` Agent contract、Agent/Timeline 原子持久化和 Pi native session resume，以及 single-directory workspace/project catalog、Pi provider snapshot、同源 Web 托管和 read-only Agent CLI。Copied Web 已在真实浏览器中通过真实 Go daemon + deterministic fake Pi 完成 create/send/stream/idle、refresh、daemon stop/start、同一 Agent resume/续写及并发 CLI Timeline observation。Go daemon Relay v2 transport、mutual-auth E2EE、authenticated pairing offer、copied client remote Agent tracer、Web/PWA direct + Relay 多主机浏览器闭环，以及 Go CLI saved remote target observation 已实现；当前 commit 已经 authenticated GitHub Actions/Wrangler 发布到 `relay.byspace.cc.cd` 并通过 production smoke，Hub 尚未实现。Relay 远程连接主线已毕业到本 Project Spec，设计与验证历史保留在 [`../epics/002-x-relay-remote-connectivity/spec.md`](../epics/002-x-relay-remote-connectivity/spec.md)；下一条建设主线进入 Hub 授权自动化。
 
-当前参考实现位于本机 `~/workspace/forks/paseo`，导入基线固定在 commit `a8734a972495cf343f628d1017e87775767aade5`。它继续提供产品行为、协议与测试证据；byspace 不在该目录直接开发。
+当前 daemon/CLI 参考实现位于本机 `~/workspace/forks/paseo`，导入基线固定在 commit `a8734a972495cf343f628d1017e87775767aade5`。外部 Hub 参考位于 `~/workspace/forks/hub`，审计基线固定在 commit `8eac5f3536a4e0d9afaaf09986ca3d49b7fd53be`。它们继续提供产品行为、协议与测试证据；byspace 不在这些 upstream 工作树直接开发。Hub 主线采用保留 history/provenance/tests 的独立 fork-and-adapt，而不是 Go rewrite 或把整个服务复制进当前前端 workspace closure。
 
 ## 现在从哪里进入
 
@@ -25,11 +25,13 @@ byspace 已从 Paseo 导入并建立独立的 Web-only 构建基线：当前仓�
 - 查看已关闭的 Go CLI authenticated Relay remote target 切片 → [`../epics/002-x-relay-remote-connectivity/issues/003-x-go-cli-remote-target.md`](../epics/002-x-relay-remote-connectivity/issues/003-x-go-cli-remote-target.md)
 - 查看已关闭的 Cloudflare Relay production deploy/smoke 切片 → [`../epics/002-x-relay-remote-connectivity/issues/004-x-cloudflare-relay-production.md`](../epics/002-x-relay-remote-connectivity/issues/004-x-cloudflare-relay-production.md)
 - 查看已关闭的 Relay data-session retry/generation/slow-consumer lifecycle hardening → [`../epics/002-x-relay-remote-connectivity/issues/005-x-relay-session-lifecycle-hardening.md`](../epics/002-x-relay-remote-connectivity/issues/005-x-relay-session-lifecycle-hardening.md)
+- 查看当前 Hub 授权自动化建设主线与 source strategy → [`../epics/003-o-hub-automation/spec.md`](../epics/003-o-hub-automation/spec.md)
+- 查看当前 relationship-only private-preview tracer → [`../epics/003-o-hub-automation/issues/001-o-hub-relationship-tracer.md`](../epics/003-o-hub-automation/issues/001-o-hub-relationship-tracer.md)
 
 ## 当前开发边界
 
 - byspace 工作区与 Paseo 参考仓库分离，运行数据使用独立的 `~/.byspace`，不直接读写 Paseo home。
-- 当前只复制已经由 Web build 证明的六个 workspace 闭包；后续不得以“未来会需要”为由无差别复制 Paseo 的 server、CLI、desktop 或 native app 代码。
+- 当前仓库只复制已经由 Web build 证明的六个 workspace 闭包；后续不得以“未来会需要”为由无差别复制 Paseo 的 daemon、CLI、desktop 或 native app 代码。独立 Hub 服务按专门 fork 保留 upstream history/provenance，不并入这六个 workspace。
 - 当前静态 Web 仍保留 Paseo wire/type/storage 兼容层作为 Go 重写标尺；首轮 fixtures 只固定 copied Web 所需契约，没有对 stock Paseo 客户端的永久兼容承诺，也没有正式发布或数据迁移义务。
 - Electron 桌面原生客户端和 iOS/Android 移动原生客户端是已确认的永久排除项。其余能力的先后顺序见 Vision 和 Epic，不在 Project Spec 提前宣称已实现。
 
@@ -41,6 +43,14 @@ byspace 已从 Paseo 导入并建立独立的 Web-only 构建基线：当前仓�
 - Relay v2 只拥有 route metadata、短生命周期 connection ID、frame 大小/时序和 opaque ciphertext。client connection ID 由 Relay 分配；control reconnect、data generation replacement、nonce replay protection、retry/backoff、frame/queue/socket capacity 和 teardown 都有硬上限。
 - `relay.byspace.cc.cd` 由仓库 Cloudflare Worker/Durable Object 实现承载；custom-domain-only config、pre-DO canonical-ID/rate-limit admission、SQLite migration 与 post-deploy probes 固定在 manual-dispatch GitHub Actions release gate 中。生产部署必须继续用真实 raw bridge 和 daemon/client/CLI mutual-auth E2EE smoke 作证，不能以 health 或 local mock 代替。
 - Relay 不负责 Hub 的用户/组织授权、外部事件或 workflow execution，不合并 daemon 事实源，也不承诺新代码长期兼容 Relay v1。
+
+## Hub 当前决策与未通过门槛
+
+- Hub 是可信 automation control plane，不是零知识 Relay：可持有组织、配置修订、trigger receipt、workflow/execution evidence、允许的结果和 GitHub/Slack 等 integration credential，但不得取得 host files、canonical Agent/Timeline 或 coding-provider credential。
+- Hub 服务从 Apache-2.0 upstream commit `8eac5f3` 独立 fork/adapt，首版保留 Node 22、Drizzle、PostgreSQL/PGlite、durable worker 与进程内 daemon registry；Go rewrite、queue framework 和服务拆分都没有证据支持。
+- copied protocol/client 与 Go daemon/CLI 已实现 relationship management：human device login、origin-scoped private credential、单次 enrollment、durable direct relationship、restart/reconnect/revoke；`ByteTrue/byspace-hub` fork 已建立 immutable provenance 与独立 byspace package/data/deployment namespace。当前仍在完成真实 Hub browser/PostgreSQL 和多平台 gates，不宣称 workflow execution。
+- 当前 Pi adapter 不能证明 per-execution MCP injection 与精确 tool preapproval。Agent idle/turn completion 不等于 Hub execution completion；不得删除 `toolPolicy`、使用 ambient approval 或让 daemon 代调 `finish_execution`。
+- Epic 003 只有在至少一个真实 provider 通过 manual run → exact policy → execution-scoped `finish_execution` → durable terminal result 后才能关闭；test-only provider 只能证明协议 mechanics。
 
 ## 当前质量基线
 

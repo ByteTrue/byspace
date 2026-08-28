@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"byspace/internal/agent"
+	"byspace/internal/hub"
 	"byspace/internal/protocol"
 	"github.com/coder/websocket"
 )
@@ -44,6 +45,7 @@ type agentWebSocketHandler struct {
 	mu                   sync.Mutex
 	closed               bool
 	pairingOfferProvider func(string, string) (pairingOfferResult, error)
+	hubManager           *hub.Manager
 	active               sync.WaitGroup
 }
 
@@ -76,6 +78,18 @@ func (handler *agentWebSocketHandler) pairingOffer(appURL, relayURL string) (pai
 	return provider(appURL, relayURL)
 }
 
+func (handler *agentWebSocketHandler) setHubManager(manager *hub.Manager) {
+	handler.mu.Lock()
+	handler.hubManager = manager
+	handler.mu.Unlock()
+}
+
+func (handler *agentWebSocketHandler) relationshipManager() *hub.Manager {
+	handler.mu.Lock()
+	defer handler.mu.Unlock()
+	return handler.hubManager
+}
+
 func (handler *agentWebSocketHandler) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 	if !isLoopbackPeer(request.RemoteAddr) || !isLoopbackHost(request.Host) || !originAllowed(request) {
 		http.Error(writer, "local WebSocket only", http.StatusForbidden)
@@ -97,7 +111,7 @@ func (handler *agentWebSocketHandler) ServeHTTP(writer http.ResponseWriter, requ
 		return
 	}
 	connection.SetReadLimit(webSocketReadLimit)
-	handler.serveConnection(connection)
+	handler.serveConnection(connection, true)
 }
 
 func (handler *agentWebSocketHandler) Close() {
@@ -122,10 +136,10 @@ func (handler *agentWebSocketHandler) serveRemoteConnection(socket daemonSocket)
 	handler.active.Add(1)
 	handler.mu.Unlock()
 	defer handler.active.Done()
-	handler.serveConnection(socket)
+	handler.serveConnection(socket, false)
 }
 
-func (handler *agentWebSocketHandler) serveConnection(socket daemonSocket) {
+func (handler *agentWebSocketHandler) serveConnection(socket daemonSocket, allowHubManagement bool) {
 	ctx, cancel := context.WithCancel(handler.ctx)
 	defer cancel()
 	defer socket.CloseNow()
@@ -205,6 +219,7 @@ func (handler *agentWebSocketHandler) serveConnection(socket daemonSocket) {
 		return
 	}
 
+	hubManager := handler.relationshipManager()
 	serverInfo := protocol.ServerInfo{
 		Status:   "server_info",
 		ServerID: handler.serverID,
@@ -219,6 +234,7 @@ func (handler *agentWebSocketHandler) serveConnection(socket daemonSocket) {
 			ProvidersSnapshot:     true,
 			ProvidersSnapshotCWD:  true,
 			PairingOfferRPC:       true,
+			HubRelationship:       hubManager != nil && allowHubManagement,
 		},
 	}
 	serverInfoData, err := protocol.EncodeServerMessage(serverInfo)
@@ -251,6 +267,7 @@ func (handler *agentWebSocketHandler) serveConnection(socket daemonSocket) {
 
 	client := agentWebSocketConnection{
 		manager: handler.manager, catalog: handler.catalog, send: send, pairingOffer: handler.pairingOffer,
+		hubManager: hubManager, allowHubManagement: allowHubManagement,
 	}
 	for {
 		messageType, data, err = socket.Read(ctx)
@@ -283,10 +300,12 @@ func (handler *agentWebSocketHandler) serveConnection(socket daemonSocket) {
 }
 
 type agentWebSocketConnection struct {
-	manager      *agent.Manager
-	catalog      *localCatalog
-	send         func(string, any) bool
-	pairingOffer func(string, string) (pairingOfferResult, error)
+	manager            *agent.Manager
+	catalog            *localCatalog
+	send               func(string, any) bool
+	pairingOffer       func(string, string) (pairingOfferResult, error)
+	hubManager         *hub.Manager
+	allowHubManagement bool
 }
 
 func (connection agentWebSocketConnection) handle(ctx context.Context, message protocol.ClientMessage) bool {
@@ -347,6 +366,63 @@ func (connection agentWebSocketConnection) handle(ctx context.Context, message p
 			"icon":      nil,
 			"error":     nil,
 		})
+
+	case protocol.HubDaemonConnectRequest:
+		if !connection.allowHubManagement {
+			return false
+		}
+		status := hub.Status{State: hub.StateNotConnected, Scopes: []string{}}
+		var err error
+		if connection.hubManager == nil {
+			err = errors.New("Hub relationship manager is unavailable")
+		} else {
+			status, err = connection.hubManager.Connect(ctx, request.HubURL, request.Token)
+		}
+		if err != nil {
+			return connection.send("rpc_error", map[string]any{
+				"requestId": request.RequestID, "requestType": request.Type,
+				"error": err.Error(), "code": "HUB_RELATIONSHIP_ERROR",
+			})
+		}
+		return connection.send("hub.management.daemon.connect.response", map[string]any{
+			"requestId": request.RequestID, "status": status,
+		})
+
+	case protocol.HubDaemonGetStatusRequest:
+		if !connection.allowHubManagement {
+			return false
+		}
+		status := hub.Status{State: hub.StateNotConnected, Scopes: []string{}}
+		if connection.hubManager != nil {
+			status = connection.hubManager.Status()
+		}
+		return connection.send("hub.management.daemon.get_status.response", map[string]any{
+			"requestId": request.RequestID,
+			"status":    status,
+		})
+
+	case protocol.HubDaemonDisconnectRequest:
+		if !connection.allowHubManagement {
+			return false
+		}
+		result := hub.DisconnectResult{Status: hub.Status{State: hub.StateNotConnected, Scopes: []string{}}}
+		var err error
+		if connection.hubManager == nil {
+			err = errors.New("Hub relationship manager is unavailable")
+		} else {
+			result, err = connection.hubManager.Disconnect(ctx, request.Force)
+		}
+		if err != nil {
+			return connection.send("rpc_error", map[string]any{
+				"requestId": request.RequestID, "requestType": request.Type,
+				"error": err.Error(), "code": "HUB_RELATIONSHIP_ERROR",
+			})
+		}
+		payload := map[string]any{"requestId": request.RequestID, "status": result.Status}
+		if result.Warning != "" {
+			payload["warning"] = result.Warning
+		}
+		return connection.send("hub.management.daemon.disconnect.response", payload)
 
 	case protocol.DaemonGetPairingOfferRequest:
 		result, err := connection.pairingOffer(request.AppURL, request.RelayURL)

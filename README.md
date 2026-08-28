@@ -48,6 +48,21 @@ Relay E2EE interoperability is fixed by `fixtures/relay/e2ee-v1.json`, consumed 
 
 The copied Web app can persist direct and authenticated Relay hosts together, switch their isolated workspaces and Agents, and automatically recover a remote host after page, Relay, or daemon restart. A production-bundle Chromium tracer verifies host-scoped outage state, direct-host continuity, canonical Timeline recovery, and Pi native-session resume against two real Go daemons and the repository's Cloudflare Wrangler Relay. The Go CLI independently imports the same v3 offer and observes remote Agent catalogs and canonical Timeline updates through the shared mutual-authenticated E2EE transport. The current Relay source is deployed to `relay.byspace.cc.cd` through the repository's authenticated GitHub Actions workflow and passes exact HTTP boundary probes, raw Relay v2 bridge smoke, and the full daemon/client/CLI mutual-authenticated E2EE tracer.
 
+## Hub relationship private preview
+
+The Go CLI and daemon can establish a revocable control-plane relationship with a byspace Hub without giving Hub direct ownership of local files, Agent state, provider credentials, or Relay payloads:
+
+```bash
+./go/byspace hub login <hub-origin>
+./go/byspace hub connect <hub-origin>
+./go/byspace hub status --json
+./go/byspace hub disconnect
+```
+
+`hub login` performs browser device authorization and stores its human credential by canonical origin. `hub connect` exchanges that credential for a single-use enrollment token, then asks the local daemon to enroll using a separate daemon credential. Both stores use the same private Unix mode or protected Windows DACL policy as other byspace state. The daemon reconnects after restart and scrubs its local authority after confirmed Hub revocation, or after an explicitly forced local disconnect. Epic 003 Issue 001 intentionally carries relationship status only; remote execution dispatch and tool/MCP policy are not enabled by this tracer.
+
+The Hub implementation is maintained separately at [`ByteTrue/byspace-hub`](https://github.com/ByteTrue/byspace-hub), with immutable upstream provenance and explicit synchronization policy.
+
 ## Production Relay
 
 `packages/relay/wrangler.toml` is the production config for `relay.byspace.cc.cd`. It disables alternate `workers.dev`/preview exposure, binds the SQLite-backed `RelayDurableObject`, and applies source/role admission rate limiting before requests reach a Durable Object.

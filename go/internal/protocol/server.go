@@ -33,6 +33,7 @@ type ServerFeatures struct {
 	ProvidersSnapshot     bool `json:"providersSnapshot,omitempty"`
 	ProvidersSnapshotCWD  bool `json:"providersSnapshotCwd,omitempty"`
 	PairingOfferRPC       bool `json:"pairingOfferRpc,omitempty"`
+	HubRelationship       bool `json:"hubRelationship,omitempty"`
 }
 
 type ServerInfo struct {

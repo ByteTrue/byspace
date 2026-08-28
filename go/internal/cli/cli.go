@@ -34,6 +34,9 @@ func Run(args []string, stdout, stderr io.Writer) int {
 	if args[0] == "host" {
 		return runHost(args[1:], os.Stdin, stdout, stderr)
 	}
+	if args[0] == "hub" {
+		return runHub(args[1:], stdout, stderr)
+	}
 	if args[0] != "daemon" {
 		fmt.Fprintf(stderr, "unknown command %q\n", args[0])
 		printUsage(stderr)
@@ -326,7 +329,7 @@ func printError(stderr io.Writer, err error) int {
 }
 
 func printUsage(output io.Writer) {
-	fmt.Fprintln(output, "Usage: byspace <daemon|agent|host|pair> [subcommand] [options]")
+	fmt.Fprintln(output, "Usage: byspace <daemon|agent|host|hub|pair> [subcommand] [options]")
 }
 
 func printDaemonUsage(output io.Writer) {

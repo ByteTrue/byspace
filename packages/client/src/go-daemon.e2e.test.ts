@@ -117,6 +117,18 @@ test("copied DaemonClient completes the local Go Agent WebSocket flow", async ()
   state.client = client;
   await client.connect();
 
+  await expect(client.getHubStatus("hub-status-initial")).resolves.toEqual({
+    requestId: "hub-status-initial",
+    status: {
+      state: "not_connected",
+      daemonId: null,
+      hubOrigin: null,
+      scopes: [],
+      connectedAt: null,
+      lastError: null,
+    },
+  });
+
   const workspacePage = await client.fetchWorkspaces();
   expect(workspacePage.entries).toHaveLength(1);
   expect(workspacePage.entries[0]).toMatchObject({

@@ -3,6 +3,7 @@ package daemon
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -12,6 +13,7 @@ import (
 	"time"
 
 	"byspace/internal/agent"
+	"byspace/internal/hub"
 	"byspace/internal/protocol"
 	"github.com/coder/websocket"
 	"github.com/coder/websocket/wsjson"
@@ -134,6 +136,125 @@ func TestAgentWebSocketFlowAndBroadcast(t *testing.T) {
 	}
 	if got := nestedString(canceled, "message", "payload", "agent", "status"); got != "idle" {
 		t.Fatalf("status after cancel = %q", got)
+	}
+}
+
+func TestLocalWebSocketManagesHubRelationship(t *testing.T) {
+	connected := make(chan struct{}, 1)
+	revoked := make(chan struct{}, 1)
+	var hubServer *httptest.Server
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/daemons/enroll", func(response http.ResponseWriter, request *http.Request) {
+		if request.Header.Get("Authorization") != "Bearer "+strings.Repeat("e", 32) {
+			t.Error("enrollment token was not forwarded")
+			response.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		var input struct {
+			DaemonID           string   `json:"daemonId"`
+			CredentialVerifier string   `json:"credentialVerifier"`
+			Scopes             []string `json:"scopes"`
+		}
+		if err := json.NewDecoder(request.Body).Decode(&input); err != nil {
+			t.Error(err)
+			response.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		if input.DaemonID == "" || input.CredentialVerifier == "" || len(input.Scopes) != 1 || input.Scopes[0] != "hub.execution.*" {
+			t.Errorf("invalid enrollment input: %#v", input)
+		}
+		response.Header().Set("Content-Type", "application/json")
+		response.WriteHeader(http.StatusCreated)
+		_ = json.NewEncoder(response).Encode(map[string]any{
+			"daemonId": input.DaemonID, "scopes": input.Scopes,
+			"webSocketUrl": strings.Replace(hubServer.URL, "http://", "ws://", 1) + "/api/daemons/socket",
+		})
+	})
+	mux.HandleFunc("/api/daemons/socket", func(response http.ResponseWriter, request *http.Request) {
+		if request.Header.Get("Authorization") == "" || request.Header.Get("X-Paseo-Daemon-Id") == "" {
+			t.Error("Hub socket authority is incomplete")
+			response.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		connection, err := websocket.Accept(response, request, nil)
+		if err != nil {
+			t.Error(err)
+			return
+		}
+		defer connection.CloseNow()
+		connected <- struct{}{}
+		_, _, _ = connection.Read(request.Context())
+	})
+	mux.HandleFunc("/api/daemons/", func(response http.ResponseWriter, request *http.Request) {
+		if request.Method != http.MethodDelete || request.Header.Get("Authorization") == "" {
+			response.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		revoked <- struct{}{}
+		response.WriteHeader(http.StatusNoContent)
+	})
+	hubServer = httptest.NewServer(mux)
+	defer hubServer.Close()
+
+	hubManager, err := hub.NewManager(t.Context(), hub.Options{
+		Home: t.TempDir(), Hostname: "test-host", ServerID: "srv_123456789012",
+		DaemonPublicKey: func() (string, error) {
+			return base64.StdEncoding.EncodeToString(make([]byte, 32)), nil
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer hubManager.Close()
+	agentManager := agent.NewManager(map[string]agent.Provider{})
+	defer agentManager.Close(context.Background())
+	handler := newAgentWebSocketHandler(agentManager, newTestCatalog(t), "srv_test", "test-host")
+	handler.setHubManager(hubManager)
+	server := httptest.NewServer(handler)
+	defer server.Close()
+	defer handler.Close()
+	connection := dialAndHello(t, server.URL)
+	defer connection.CloseNow()
+
+	writeSession(t, connection, map[string]any{
+		"type": "hub.management.daemon.connect.request", "requestId": "hub-connect-1",
+		"hubUrl": hubServer.URL, "token": strings.Repeat("e", 32),
+	})
+	connectResponse := readUntil(t, connection, func(message map[string]any) bool {
+		return sessionType(message) == "hub.management.daemon.connect.response"
+	})
+	if got := nestedString(connectResponse, "message", "payload", "status", "state"); got != "connecting" {
+		t.Fatalf("connect response state = %q", got)
+	}
+	select {
+	case <-connected:
+	case <-time.After(3 * time.Second):
+		t.Fatal("daemon did not open the authenticated Hub WebSocket")
+	}
+
+	writeSession(t, connection, map[string]any{"type": "hub.management.daemon.get_status.request", "requestId": "hub-status-1"})
+	statusResponse := readUntil(t, connection, func(message map[string]any) bool {
+		return sessionType(message) == "hub.management.daemon.get_status.response"
+	})
+	if got := nestedString(statusResponse, "message", "payload", "status", "state"); got != "connected" {
+		t.Fatalf("Hub state = %q", got)
+	}
+	encoded, _ := json.Marshal(statusResponse)
+	if strings.Contains(string(encoded), strings.Repeat("e", 32)) || strings.Contains(string(encoded), "credentialVerifier") {
+		t.Fatalf("Hub status leaked authority: %s", encoded)
+	}
+
+	writeSession(t, connection, map[string]any{"type": "hub.management.daemon.disconnect.request", "requestId": "hub-disconnect-1", "force": false})
+	disconnectResponse := readUntil(t, connection, func(message map[string]any) bool {
+		return sessionType(message) == "hub.management.daemon.disconnect.response"
+	})
+	if nestedString(disconnectResponse, "message", "payload", "status", "state") != "not_connected" {
+		t.Fatalf("disconnect response = %#v", nestedValue(disconnectResponse, "message", "payload"))
+	}
+	select {
+	case <-revoked:
+	case <-time.After(3 * time.Second):
+		t.Fatal("daemon did not revoke the Hub relationship")
 	}
 }
 

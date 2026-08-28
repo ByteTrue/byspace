@@ -34,6 +34,9 @@ func TestDecodeCatalogRequests(t *testing.T) {
 		{`{"type":"project_icon_request","cwd":"/tmp/project","requestId":"icon-1"}`, ProjectIconRequest{}},
 		{`{"type":"project.icon.get.request","projectId":"project-1","requestId":"icon-2"}`, ProjectIconGetRequest{}},
 		{`{"type":"daemon.get_pairing_offer.request","requestId":"pair-1","appUrl":"https://app.byspace.cc.cd/","relayUrl":"wss://relay.byspace.cc.cd"}`, DaemonGetPairingOfferRequest{}},
+		{`{"type":"hub.management.daemon.connect.request","requestId":"hub-1","hubUrl":"https://hub.byspace.cc.cd","token":"token"}`, HubDaemonConnectRequest{}},
+		{`{"type":"hub.management.daemon.get_status.request","requestId":"hub-2"}`, HubDaemonGetStatusRequest{}},
+		{`{"type":"hub.management.daemon.disconnect.request","requestId":"hub-3","force":true}`, HubDaemonDisconnectRequest{}},
 		{`{"type":"get_daemon_config_request","requestId":"config-1"}`, GetDaemonConfigRequest{}},
 		{`{"type":"checkout_status_request","cwd":"/tmp/project","requestId":"checkout-1"}`, CheckoutStatusRequest{}},
 		{`{"type":"checkout_pr_status_request","cwd":"/tmp/project","requestId":"pr-1"}`, CheckoutPRStatusRequest{}},
@@ -65,6 +68,9 @@ func TestDecodeAgentRequestsRejectMalformedKnownFields(t *testing.T) {
 		`{"type":"session","message":{"type":"send_agent_message_request","requestId":"request-1","agentId":"agent-1","text":"hello","attachments":{}}}`,
 		`{"type":"session","message":{"type":"cancel_agent_request","agentId":"agent-1"}}`,
 		`{"type":"session","message":{"type":"daemon.get_pairing_offer.request","requestId":"request-1","appUrl":1}}`,
+		`{"type":"session","message":{"type":"hub.management.daemon.connect.request","requestId":"request-1","hubUrl":"","token":"token"}}`,
+		`{"type":"session","message":{"type":"hub.management.daemon.connect.request","requestId":"request-1","hubUrl":"https://hub.test"}}`,
+		`{"type":"session","message":{"type":"hub.management.daemon.disconnect.request","requestId":"request-1","force":"yes"}}`,
 	} {
 		if _, err := DecodeClientFrame([]byte(input)); err == nil {
 			t.Fatalf("accepted malformed request: %s", input)
