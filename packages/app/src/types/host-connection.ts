@@ -1,11 +1,11 @@
 import {
   normalizeHostPort,
   normalizeLoopbackToLocalhost,
-} from "@getpaseo/protocol/daemon-endpoints";
+} from "@byspace/protocol/daemon-endpoints";
 import {
   DirectTcpHostConnectionSchema,
   type DirectTcpHostConnection,
-} from "@getpaseo/protocol/host-connection-schema";
+} from "@byspace/protocol/host-connection-schema";
 import {
   type HostAppearance,
   defaultHostAppearance,
@@ -33,6 +33,7 @@ export interface RelayHostConnection {
   relayEndpoint: string;
   useTls?: boolean;
   daemonPublicKeyB64: string;
+  clientAuthTokenB64?: string;
 }
 
 export type HostConnection =
@@ -127,7 +128,8 @@ function hostConnectionEquals(left: HostConnection, right: HostConnection): bool
     return (
       left.relayEndpoint === right.relayEndpoint &&
       left.useTls === right.useTls &&
-      left.daemonPublicKeyB64 === right.daemonPublicKeyB64
+      left.daemonPublicKeyB64 === right.daemonPublicKeyB64 &&
+      left.clientAuthTokenB64 === right.clientAuthTokenB64
     );
   }
 
@@ -318,6 +320,7 @@ const StoredHostConnectionSchema = z.discriminatedUnion("type", [
     relayEndpoint: z.string(),
     useTls: z.boolean().optional(),
     daemonPublicKeyB64: z.string(),
+    clientAuthTokenB64: z.string().optional(),
   }),
 ]);
 const StoredHostProfileSchema = z.strictObject({
@@ -361,6 +364,7 @@ function normalizeStoredConnection(connection: StoredHostConnection): HostConnec
       const relayEndpoint = normalizeHostPort(connection.relayEndpoint);
       const daemonPublicKeyB64 = connection.daemonPublicKeyB64.trim();
       if (!daemonPublicKeyB64) return null;
+      const clientAuthTokenB64 = connection.clientAuthTokenB64?.trim();
       const useTls = connection.useTls;
       return {
         id: useTls === true ? `relay:wss:${relayEndpoint}` : `relay:${relayEndpoint}`,
@@ -368,6 +372,7 @@ function normalizeStoredConnection(connection: StoredHostConnection): HostConnec
         relayEndpoint,
         ...(useTls !== undefined ? { useTls } : {}),
         daemonPublicKeyB64,
+        ...(clientAuthTokenB64 ? { clientAuthTokenB64 } : {}),
       };
     } catch {
       return null;

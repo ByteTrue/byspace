@@ -1,5 +1,5 @@
-import { DaemonClient } from "@getpaseo/client/internal/daemon-client";
-import type { DaemonClientConfig } from "@getpaseo/client/internal/daemon-client";
+import { DaemonClient } from "@byspace/client/internal/daemon-client";
+import type { DaemonClientConfig } from "@byspace/client/internal/daemon-client";
 import type { HostConnection } from "@/types/host-connection";
 import { getOrCreateClientId } from "./client-id";
 import { resolveAppVersion } from "./app-version";
@@ -151,7 +151,13 @@ export async function buildClientConfig(
       useTls: connection.useTls ?? shouldUseTlsForDefaultHostedRelay(connection.relayEndpoint),
       serverId,
     }),
-    e2ee: { enabled: true, daemonPublicKeyB64: connection.daemonPublicKeyB64 },
+    e2ee: {
+      enabled: true,
+      daemonPublicKeyB64: connection.daemonPublicKeyB64,
+      ...(connection.clientAuthTokenB64
+        ? { clientAuthTokenB64: connection.clientAuthTokenB64 }
+        : {}),
+    },
   };
 }
 

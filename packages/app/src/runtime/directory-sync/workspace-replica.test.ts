@@ -1,6 +1,6 @@
 import { expect, it } from "vitest";
-import type { DaemonClient } from "@getpaseo/client/internal/daemon-client";
-import type { WorkspaceDescriptorPayload } from "@getpaseo/protocol/messages";
+import type { DaemonClient } from "@byspace/client/internal/daemon-client";
+import type { WorkspaceDescriptorPayload } from "@byspace/protocol/messages";
 import {
   normalizeProjectDescriptor,
   normalizeWorkspaceDescriptor,
@@ -146,6 +146,52 @@ it("commits the authoritative snapshot before buffered project updates", () => {
     projectDisplayName: "New empty project",
     projectRootPath: "/repo/new-empty",
   });
+  store.clearSession(serverId);
+});
+
+it("preserves unchanged project identity when another project changes", () => {
+  const serverId = "project-identity";
+  const store = useSessionStore.getState();
+  store.initializeSession(serverId, null as unknown as DaemonClient);
+  const replica = new WorkspaceDirectoryReplica(serverId);
+  const first = normalizeProjectDescriptor({
+    projectId: "first",
+    projectDisplayName: "First",
+    projectRootPath: "/repo/first",
+    projectKind: "git",
+  });
+  const second = normalizeProjectDescriptor({
+    projectId: "second",
+    projectDisplayName: "Second",
+    projectRootPath: "/repo/second",
+    projectKind: "git",
+  });
+  replica.commitSnapshot(
+    {
+      workspaces: new Map(),
+      projects: new Map([
+        ["first", first],
+        ["second", second],
+      ]),
+    },
+    [],
+  );
+  const previousSecond = useSessionStore.getState().sessions[serverId]?.projects.get("second");
+
+  replica.commitSnapshot(
+    {
+      workspaces: new Map(),
+      projects: new Map([
+        ["first", { ...first, projectDisplayName: "Updated" }],
+        ["second", { ...second }],
+      ]),
+    },
+    [],
+  );
+
+  expect(useSessionStore.getState().sessions[serverId]?.projects.get("second")).toBe(
+    previousSecond,
+  );
   store.clearSession(serverId);
 });
 

@@ -1,0 +1,12 @@
+{
+  "type": "session",
+  "message": {
+    "type": "send_agent_message_response",
+    "payload": {
+      "requestId": "req-send-1",
+      "agentId": "agent-1",
+      "accepted": true,
+      "error": null
+    }
+  }
+}

@@ -9,7 +9,7 @@ import type { BarcodeScanningResult, BarcodeSettings } from "expo-camera";
 import { useHostMutations } from "@/runtime/host-runtime";
 import { decodeOfferFragmentPayload, normalizeHostPort } from "@/utils/daemon-endpoints";
 import { connectToDaemon } from "@/utils/test-daemon-connection";
-import { ConnectionOfferSchema } from "@getpaseo/protocol/connection-offer";
+import { ConnectionOfferSchema } from "@byspace/protocol/connection-offer";
 import { buildHostRootRoute, buildSettingsHostRoute } from "@/utils/host-routes";
 import { isWeb } from "@/constants/platform";
 import { BackHeader } from "@/components/headers/back-header";
@@ -182,6 +182,7 @@ export default function PairScanScreen() {
             relayEndpoint: normalizeHostPort(offer.relay.endpoint),
             useTls: offer.relay.useTls,
             daemonPublicKeyB64: offer.daemonPublicKeyB64,
+            ...(offer.v === 3 ? { clientAuthTokenB64: offer.clientAuthTokenB64 } : {}),
           },
           { serverId: offer.serverId },
         );

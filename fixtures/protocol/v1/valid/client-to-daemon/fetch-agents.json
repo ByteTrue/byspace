@@ -1,0 +1,7 @@
+{
+  "type": "session",
+  "message": {
+    "type": "fetch_agents_request",
+    "requestId": "req-list-1"
+  }
+}

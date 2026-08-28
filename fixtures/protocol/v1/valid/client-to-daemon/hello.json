@@ -1,0 +1,10 @@
+{
+  "type": "hello",
+  "clientId": "fixture-web-client",
+  "clientType": "browser",
+  "protocolVersion": 1,
+  "capabilities": {
+    "project_updates": true,
+    "timeline_replacement_invalidation": true
+  }
+}

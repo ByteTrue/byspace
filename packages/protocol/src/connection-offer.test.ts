@@ -20,7 +20,7 @@ describe("connection offer", () => {
       v: 2,
       serverId: "server-123",
       daemonPublicKeyB64: "pubkey",
-      relay: { endpoint: "relay.paseo.sh:443" },
+      relay: { endpoint: "relay.byspace.cc.cd:443" },
     };
 
     expect(decodeOfferFragmentPayload(encodeBase64UrlNoPadUtf8(JSON.stringify(payload)))).toEqual(
@@ -33,11 +33,13 @@ describe("connection offer", () => {
       v: 2,
       serverId: "server-123",
       daemonPublicKeyB64: "pubkey",
-      relay: { endpoint: "relay.paseo.sh:443" },
+      relay: { endpoint: "relay.byspace.cc.cd:443" },
     });
     const encoded = encodeBase64UrlNoPadUtf8(JSON.stringify(offer));
 
-    expect(parseConnectionOfferFromUrl(`https://app.paseo.sh/#offer=${encoded}`)).toEqual(offer);
+    expect(parseConnectionOfferFromUrl(`https://app.byspace.cc.cd/#offer=${encoded}`)).toEqual(
+      offer,
+    );
   });
 
   it("leaves relay TLS unset when absent", () => {
@@ -65,7 +67,7 @@ describe("connection offer", () => {
     });
     const encoded = encodeBase64UrlNoPadUtf8(JSON.stringify(offer));
 
-    expect(parseConnectionOfferFromUrl(`https://app.paseo.sh/#offer=${encoded}`)).toEqual({
+    expect(parseConnectionOfferFromUrl(`https://app.byspace.cc.cd/#offer=${encoded}`)).toEqual({
       v: 2,
       serverId: "server-123",
       daemonPublicKeyB64: "pubkey",
@@ -73,7 +75,62 @@ describe("connection offer", () => {
     });
   });
 
+  it("parses authenticated v3 offers without exposing the token outside the fragment", () => {
+    const offer = ConnectionOfferSchema.parse({
+      v: 3,
+      serverId: "srv_AAAAAAAAAAAA",
+      daemonPublicKeyB64: "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=",
+      clientAuthTokenB64: "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=",
+      relay: { endpoint: "relay.byspace.cc.cd:443", useTls: true },
+    });
+    const encoded = encodeBase64UrlNoPadUtf8(JSON.stringify(offer));
+    const url = `https://app.byspace.cc.cd/#offer=${encoded}`;
+
+    expect(parseConnectionOfferFromUrl(url)).toEqual(offer);
+    expect(new URL(url).search).toBe("");
+  });
+
+  it("strictly rejects malformed v3 identity and endpoint fields", () => {
+    const valid = {
+      v: 3 as const,
+      serverId: "srv_AAAAAAAAAAAA",
+      daemonPublicKeyB64: "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=",
+      clientAuthTokenB64: "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=",
+      relay: { endpoint: "relay.byspace.cc.cd:443", useTls: true },
+    };
+    for (const malformed of [
+      { ...valid, serverId: "server-123" },
+      { ...valid, daemonPublicKeyB64: "pubkey" },
+      { ...valid, clientAuthTokenB64: "too-short" },
+      {
+        ...valid,
+        clientAuthTokenB64: "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh9=",
+      },
+      { ...valid, relay: { endpoint: "relay.byspace.cc.cd", useTls: true } },
+      { ...valid, relay: { endpoint: "relay.byspace.cc.cd:0", useTls: true } },
+      { ...valid, relay: { endpoint: "-:443", useTls: true } },
+      { ...valid, relay: { endpoint: "relay..example:443", useTls: true } },
+      { ...valid, relay: { endpoint: "-relay.example:443", useTls: true } },
+      { ...valid, relay: { endpoint: "relay.example-:443", useTls: true } },
+      { ...valid, relay: { endpoint: "999.0.0.1:443", useTls: true } },
+      { ...valid, relay: { endpoint: "[::::]:443", useTls: true } },
+    ]) {
+      expect(() => ConnectionOfferSchema.parse(malformed)).toThrow();
+    }
+
+    for (const endpoint of [
+      "127.0.0.1:8080",
+      "[2001:db8::1]:443",
+      "[::ffff:192.0.2.128]:443",
+      "localhost:8787",
+    ]) {
+      expect(
+        ConnectionOfferSchema.parse({ ...valid, relay: { endpoint, useTls: true } }).relay.endpoint,
+      ).toBe(endpoint);
+    }
+  });
+
   it("returns null when the URL has no offer fragment", () => {
-    expect(parseConnectionOfferFromUrl("https://app.paseo.sh/pair")).toBeNull();
+    expect(parseConnectionOfferFromUrl("https://app.byspace.cc.cd/pair")).toBeNull();
   });
 });

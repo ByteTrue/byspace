@@ -22,7 +22,8 @@ export interface KeyPair {
 
 export type SharedKey = Uint8Array; // 32 bytes (box.before)
 
-const NONCE_LENGTH = nacl.box.nonceLength; // 24
+export const NONCE_LENGTH = nacl.box.nonceLength; // 24
+export const NONCE_PREFIX_LENGTH = 16;
 const ZERO_X25519_SHARED_RESULT = new Uint8Array(nacl.box.sharedKeyLength);
 
 let prngReady = false;
@@ -153,15 +154,30 @@ export function deriveSharedKey(ourSecretKey: Uint8Array, peerPublicKey: Uint8Ar
  * Encrypts data and returns the binary bundle:
  *   [nonce (24)] [ciphertext...]
  */
-export function encrypt(sharedKey: SharedKey, data: string | ArrayBuffer): ArrayBuffer {
+export function randomNoncePrefix(): Uint8Array {
   ensurePrng();
-  const nonce = nacl.randomBytes(NONCE_LENGTH);
+  return nacl.randomBytes(NONCE_PREFIX_LENGTH);
+}
+
+export function encryptWithNonce(
+  sharedKey: SharedKey,
+  data: string | ArrayBuffer,
+  nonce: Uint8Array,
+): ArrayBuffer {
+  if (nonce.byteLength !== NONCE_LENGTH) {
+    throw new Error(`Invalid nonce length (expected ${NONCE_LENGTH})`);
+  }
   const plaintext = toUint8(data);
   const ciphertext = nacl.box.after(plaintext, nonce, sharedKey);
   const out = new Uint8Array(nonce.byteLength + ciphertext.byteLength);
   out.set(nonce, 0);
   out.set(ciphertext, nonce.byteLength);
   return toArrayBuffer(out);
+}
+
+export function encrypt(sharedKey: SharedKey, data: string | ArrayBuffer): ArrayBuffer {
+  ensurePrng();
+  return encryptWithNonce(sharedKey, data, nacl.randomBytes(NONCE_LENGTH));
 }
 
 export function decrypt(sharedKey: SharedKey, data: ArrayBuffer): ArrayBuffer {

@@ -1,0 +1,31 @@
+{
+  "type": "session",
+  "message": {
+    "type": "status",
+    "payload": {
+      "status": "server_info",
+      "serverId": "server-fixture-1",
+      "hostname": "fixture-host",
+      "version": "0.1.0",
+      "capabilities": {
+        "voiceDictation": false,
+        "voiceChat": false,
+        "speechToText": false,
+        "serverAudio": false,
+        "blobUpload": false,
+        "binaryTerminalStream": true,
+        "binaryFileTransfer": true,
+        "terminalReconnectV2": true,
+        "terminalRestore": true,
+        "terminalList": true,
+        "terminalAttach": true,
+        "terminalViewport": false,
+        "agentSessionV2": true
+      },
+      "features": {
+        "directorySync": true,
+        "agentTurnIdentity": true
+      }
+    }
+  }
+}

@@ -1,8 +1,9 @@
-import type { FetchAgentsEntry } from "@getpaseo/client/internal/daemon-client";
+import equal from "fast-deep-equal";
+import type { FetchAgentsEntry } from "@byspace/client/internal/daemon-client";
 import { type Agent, useSessionStore } from "@/stores/session-store";
 import { derivePendingPermissionKey, normalizeAgentSnapshot } from "@/utils/agent-snapshots";
 import { resolveProjectPlacement } from "@/utils/project-placement";
-import type { SessionOutboundMessage } from "@getpaseo/protocol/messages";
+import type { SessionOutboundMessage } from "@byspace/protocol/messages";
 import { clearArchiveAgentPending } from "@/hooks/use-archive-agent";
 import { queryClient } from "@/data/query-client";
 import { acceptAgentDirectoryUpdate } from "@/utils/agent-directory-update-policy";
@@ -187,13 +188,20 @@ export function replaceFetchedAgentDirectory(input: {
     }
   }
 
-  store.setAgents(input.serverId, fetchedAgents);
-  for (const agent of fetchedAgents.values()) {
+  const currentAgents = store.sessions[input.serverId]?.agents ?? new Map<string, Agent>();
+  const agents = new Map<string, Agent>();
+  for (const [agentId, fetchedAgent] of fetchedAgents) {
+    const current = currentAgents.get(agentId);
+    agents.set(agentId, current && equal(current, fetchedAgent) ? current : fetchedAgent);
+  }
+
+  store.setAgents(input.serverId, agents);
+  for (const agent of agents.values()) {
     applyAgentTurnSnapshot(input.serverId, agent);
   }
   store.setAgentDetails(input.serverId, (prev) => {
     let next: Map<string, Agent> | null = null;
-    for (const agentId of fetchedAgents.keys()) {
+    for (const agentId of agents.keys()) {
       if (!prev.has(agentId)) {
         continue;
       }
@@ -204,12 +212,12 @@ export function replaceFetchedAgentDirectory(input: {
   });
 
   const lastActivityByAgentId = new Map<string, Date>();
-  for (const agent of fetchedAgents.values()) {
+  for (const agent of agents.values()) {
     lastActivityByAgentId.set(agent.id, agent.lastActivityAt);
   }
   store.setAgentLastActivityBatch(lastActivityByAgentId);
 
   store.setPendingPermissions(input.serverId, new Map(pendingPermissions));
   store.setHasHydratedAgents(input.serverId, true);
-  return { agents: fetchedAgents };
+  return { agents };
 }

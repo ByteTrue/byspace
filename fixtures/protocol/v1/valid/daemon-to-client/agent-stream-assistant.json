@@ -1,0 +1,22 @@
+{
+  "type": "session",
+  "message": {
+    "type": "agent_stream",
+    "payload": {
+      "agentId": "agent-1",
+      "event": {
+        "type": "timeline",
+        "provider": "pi",
+        "item": {
+          "type": "assistant_message",
+          "text": "fixture-ok",
+          "messageId": "assistant-message-1"
+        },
+        "turnId": "turn-1"
+      },
+      "timestamp": "2026-08-27T00:00:02.000Z",
+      "seq": 1,
+      "epoch": "timeline-epoch-1"
+    }
+  }
+}

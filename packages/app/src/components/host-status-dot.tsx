@@ -8,7 +8,15 @@ import {
 export function HostStatusDot({ serverId }: { serverId: string }) {
   const status = useHostRuntimeConnectionStatus(serverId);
 
-  return <View style={[styles.dot, statusStyle(status)]} />;
+  return (
+    <View
+      accessible
+      accessibilityLabel={`Connection status: ${status}`}
+      accessibilityLiveRegion="polite"
+      testID={`host-status-${serverId}`}
+      style={[styles.dot, statusStyle(status)]}
+    />
+  );
 }
 
 function statusStyle(status: HostRuntimeConnectionStatus) {

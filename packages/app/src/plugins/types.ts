@@ -5,9 +5,11 @@ import type {
   PluginSidebarContribution,
   PluginSurfaceContribution,
   PluginThemeContribution,
+  PluginTimelineRendererContribution,
+  PluginTimelineTransformerContribution,
   PluginPanelLocation,
   PluginWorkspacePanelContribution,
-} from "@getpaseo/plugin";
+} from "@byspace/plugin";
 
 export type EvaluatedPluginWorkspacePanelContribution = PluginWorkspacePanelContribution & {
   locations: readonly PluginPanelLocation[];
@@ -22,6 +24,8 @@ export interface EvaluatedPlugin {
   commandCenterItems: PluginCommandCenterItemContribution[];
   attachmentSources: PluginAttachmentSourceContribution[];
   themes: PluginThemeContribution[];
+  timelineTransformers: PluginTimelineTransformerContribution[];
+  timelineRenderers: PluginTimelineRendererContribution[];
 }
 
 export interface InstalledPlugin extends EvaluatedPlugin {
@@ -36,5 +40,7 @@ export type {
   PluginSidebarContribution,
   PluginSurfaceContribution,
   PluginThemeContribution,
+  PluginTimelineRendererContribution,
+  PluginTimelineTransformerContribution,
   PluginWorkspacePanelContribution,
 };

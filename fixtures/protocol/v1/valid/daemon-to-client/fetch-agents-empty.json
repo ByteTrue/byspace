@@ -1,0 +1,22 @@
+{
+  "type": "session",
+  "message": {
+    "type": "fetch_agents_response",
+    "payload": {
+      "requestId": "req-list-1",
+      "subscriptionId": null,
+      "entries": [],
+      "pageInfo": {
+        "nextCursor": null,
+        "prevCursor": null,
+        "hasMore": false
+      },
+      "sync": {
+        "generation": "agents-generation-1",
+        "headSeq": 0,
+        "mode": "snapshot",
+        "removals": []
+      }
+    }
+  }
+}

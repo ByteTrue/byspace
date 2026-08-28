@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { DaemonClient, FetchAgentsEntry } from "@getpaseo/client/internal/daemon-client";
-import type { AgentSnapshotPayload } from "@getpaseo/protocol/messages";
+import type { DaemonClient, FetchAgentsEntry } from "@byspace/client/internal/daemon-client";
+import type { AgentSnapshotPayload } from "@byspace/protocol/messages";
 import { useSessionStore } from "@/stores/session-store";
 import { AgentDirectoryReplica } from "./agent-replica";
 
@@ -51,6 +51,21 @@ function entry(agent: AgentSnapshotPayload): FetchAgentsEntry {
 }
 
 describe("AgentDirectoryReplica", () => {
+  it("accepts the requested agent from the authoritative timeline after a cache miss", () => {
+    const serverId = "agent-replica-cache-miss";
+    const store = useSessionStore.getState();
+    store.initializeSession(serverId, null as unknown as DaemonClient);
+    const replica = new AgentDirectoryReplica(serverId, () => undefined);
+
+    expect(replica.submitTimelineAgent(replica.captureTimeline("agent"), payload("network"))).toBe(
+      true,
+    );
+    expect(useSessionStore.getState().sessions[serverId]?.agents.get("agent")?.title).toBe(
+      "network",
+    );
+    store.clearSession(serverId);
+  });
+
   it("preserves an unchanged running agent's turn identity during catch-up", () => {
     const serverId = "agent-replica-catch-up";
     const store = useSessionStore.getState();

@@ -138,6 +138,140 @@ describe("EncryptedChannel", () => {
     expect(daemonChannel.isOpen()).toBe(true);
   });
 
+  it("rejects replayed application ciphertext before redispatch", async () => {
+    const [daemonTransport, clientTransport] = createMockTransportPair();
+    const daemonKeyPair = generateKeyPair();
+    const received: Array<string | ArrayBuffer> = [];
+    const daemonChannelPromise = createDaemonChannel(daemonTransport, daemonKeyPair, {
+      onmessage: (message) => received.push(message),
+    });
+    const clientChannel = await createClientChannel(
+      clientTransport,
+      exportPublicKey(daemonKeyPair.publicKey),
+    );
+    await daemonChannelPromise;
+    await waitForAsyncDelivery();
+
+    await clientChannel.send("create-agent-mutation");
+    await waitForAsyncDelivery();
+    expect(received).toEqual(["create-agent-mutation"]);
+
+    const calls = (clientTransport.send as ReturnType<typeof vi.fn>).mock.calls;
+    const captured = calls.at(-1)?.[0] as string | ArrayBuffer;
+    daemonTransport.onmessage?.({
+      data: captured,
+      isBinary: captured instanceof ArrayBuffer,
+    });
+    await waitForAsyncDelivery();
+
+    expect(received).toEqual(["create-agent-mutation"]);
+    expect(daemonTransport.close).toHaveBeenCalled();
+  });
+
+  it("establishes a challenge-authenticated encrypted channel", async () => {
+    const [daemonTransport, clientTransport] = createMockTransportPair();
+    const daemonKeyPair = generateKeyPair();
+    const daemonPubKeyB64 = exportPublicKey(daemonKeyPair.publicKey);
+    const authentication = {
+      clientAuthTokenB64: arrayBufferToBase64(new Uint8Array(32).fill(7).buffer),
+    };
+
+    let clientOpenedResolve: (() => void) | null = null;
+    const clientOpened = new Promise<void>((resolve) => {
+      clientOpenedResolve = resolve;
+    });
+    const daemonChannelPromise = createDaemonChannel(
+      daemonTransport,
+      daemonKeyPair,
+      {},
+      authentication,
+    );
+    const clientChannel = await createClientChannel(
+      clientTransport,
+      daemonPubKeyB64,
+      { onopen: () => clientOpenedResolve?.() },
+      authentication,
+    );
+
+    const daemonChannel = await daemonChannelPromise;
+    await clientOpened;
+    expect(clientChannel.isOpen()).toBe(true);
+    expect(daemonChannel.isOpen()).toBe(true);
+  });
+
+  it("rejects an authenticated ready frame with downgraded capabilities", async () => {
+    const [daemonTransport, clientTransport] = createMockTransportPair();
+    const daemonKeyPair = generateKeyPair();
+    const authentication = {
+      clientAuthTokenB64: arrayBufferToBase64(new Uint8Array(32).fill(7).buffer),
+    };
+    const errors: Error[] = [];
+    const sendReady = daemonTransport.send as ReturnType<typeof vi.fn>;
+    sendReady.mockImplementation((data: string | ArrayBuffer) => {
+      let forwarded = data;
+      if (typeof data === "string") {
+        const parsed = JSON.parse(data) as { type?: string };
+        if (parsed.type === "e2ee_ready") {
+          forwarded = JSON.stringify({ type: "e2ee_ready" });
+        }
+      }
+      setTimeout(
+        () =>
+          clientTransport.onmessage?.({
+            data: forwarded,
+            isBinary: forwarded instanceof ArrayBuffer,
+          }),
+        0,
+      );
+    });
+
+    const daemonChannelPromise = createDaemonChannel(
+      daemonTransport,
+      daemonKeyPair,
+      {},
+      authentication,
+    );
+    const clientChannel = await createClientChannel(
+      clientTransport,
+      exportPublicKey(daemonKeyPair.publicKey),
+      { onerror: (error) => errors.push(error) },
+      authentication,
+    );
+
+    await daemonChannelPromise;
+    await waitForAsyncDelivery();
+    expect(clientChannel.isOpen()).toBe(false);
+    expect(errors[0]?.message).toContain("did not confirm binary ciphertext");
+    expect(clientTransport.close).toHaveBeenCalled();
+  });
+
+  it("rejects a client that cannot prove the pairing secret", async () => {
+    const [daemonTransport, clientTransport] = createMockTransportPair();
+    const daemonKeyPair = generateKeyPair();
+    const daemonAuthentication = {
+      clientAuthTokenB64: arrayBufferToBase64(new Uint8Array(32).fill(7).buffer),
+    };
+    const clientAuthentication = {
+      clientAuthTokenB64: arrayBufferToBase64(new Uint8Array(32).fill(8).buffer),
+    };
+
+    const daemonChannelPromise = createDaemonChannel(
+      daemonTransport,
+      daemonKeyPair,
+      {},
+      daemonAuthentication,
+    );
+    const clientChannel = await createClientChannel(
+      clientTransport,
+      exportPublicKey(daemonKeyPair.publicKey),
+      {},
+      clientAuthentication,
+    );
+
+    await expect(daemonChannelPromise).rejects.toThrow("Invalid Relay client authentication proof");
+    clientChannel.close();
+  });
+
   it("exchanges encrypted messages bidirectionally", async () => {
     const [daemonTransport, clientTransport] = createMockTransportPair();
 

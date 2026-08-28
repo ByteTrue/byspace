@@ -12,7 +12,7 @@ import {
 // This live test uses the hosted relay's real TLS endpoint. Self-hosted relay TLS
 // opt-in is covered at URL-building/integration level so the local E2E does not
 // need to provision trusted certificates.
-const RELAY_BASE_URL = process.env.PASEO_LIVE_RELAY_URL ?? "wss://relay.paseo.sh";
+const RELAY_BASE_URL = process.env.PASEO_LIVE_RELAY_URL ?? "wss://relay.byspace.cc.cd";
 
 async function withRetry<T>(
   fn: () => Promise<T>,
@@ -53,21 +53,41 @@ function waitOpen(ws: WebSocket, label: string): Promise<void> {
   });
 }
 
-function waitForConnected(ws: WebSocket, connectionId: string): Promise<void> {
-  return new Promise<void>((resolve, reject) => {
-    const timeout = setTimeout(() => reject(new Error("Timed out waiting for connected")), 10_000);
+function waitForConnected(ws: WebSocket): Promise<string> {
+  return new Promise<string>((resolve, reject) => {
+    const cleanup = () => {
+      clearTimeout(timeout);
+      ws.off("message", onMessage);
+      ws.off("close", onClose);
+    };
     const onMessage = (raw: WebSocket.RawData) => {
       try {
-        const msg = JSON.parse(raw.toString());
-        if (msg && msg.type === "connected" && msg.connectionId === connectionId) {
-          clearTimeout(timeout);
-          resolve();
+        const msg: unknown = JSON.parse(raw.toString());
+        if (
+          msg &&
+          typeof msg === "object" &&
+          "type" in msg &&
+          msg.type === "connected" &&
+          "connectionId" in msg &&
+          typeof msg.connectionId === "string"
+        ) {
+          cleanup();
+          resolve(msg.connectionId);
         }
       } catch {
         // ignore
       }
     };
+    const onClose = () => {
+      cleanup();
+      reject(new Error("Control websocket closed before connected"));
+    };
+    const timeout = setTimeout(() => {
+      cleanup();
+      reject(new Error("Timed out waiting for connected"));
+    }, 10_000);
     ws.on("message", onMessage);
+    ws.once("close", onClose);
   });
 }
 
@@ -90,21 +110,15 @@ function waitForOnceMessage<T extends "string" | "buffer">(
   });
 }
 
-describe("Live relay (relay.paseo.sh) E2E", () => {
+describe("Live relay (relay.byspace.cc.cd) E2E", () => {
   const liveIt = process.env.RUN_LIVE_RELAY_E2E === "1" ? it : it.skip;
 
   liveIt("bridges encrypted traffic end-to-end", { timeout: 45_000 }, async () => {
     await withRetry(
       async () => {
-        const serverId = `live-${Date.now()}-${Math.random().toString(16).slice(2)}`;
-        const connectionId = `clt_live_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+        const serverId = `srv_${crypto.randomUUID().replace(/-/g, "").slice(0, 12)}`;
         const serverControlUrl = `${RELAY_BASE_URL}/ws?serverId=${encodeURIComponent(serverId)}&role=server&v=2`;
-        const serverDataUrl = `${RELAY_BASE_URL}/ws?serverId=${encodeURIComponent(
-          serverId,
-        )}&role=server&connectionId=${encodeURIComponent(connectionId)}&v=2`;
-        const clientUrl = `${RELAY_BASE_URL}/ws?serverId=${encodeURIComponent(
-          serverId,
-        )}&role=client&connectionId=${encodeURIComponent(connectionId)}&v=2`;
+        const clientUrl = `${RELAY_BASE_URL}/ws?serverId=${encodeURIComponent(serverId)}&role=client&v=2`;
 
         // === Key setup ===
         const daemonKeyPair = generateKeyPair();
@@ -119,7 +133,7 @@ describe("Live relay (relay.paseo.sh) E2E", () => {
         // === Connect ===
         const daemonControlWs = new WebSocket(serverControlUrl);
         const clientWs = new WebSocket(clientUrl);
-        const connected = waitForConnected(daemonControlWs, connectionId);
+        const connected = waitForConnected(daemonControlWs);
         let daemonWs: WebSocket | null = null;
 
         try {
@@ -128,7 +142,10 @@ describe("Live relay (relay.paseo.sh) E2E", () => {
             waitOpen(clientWs, "client"),
           ]);
 
-          await connected;
+          const connectionId = await connected;
+          const serverDataUrl = `${RELAY_BASE_URL}/ws?serverId=${encodeURIComponent(
+            serverId,
+          )}&role=server&connectionId=${encodeURIComponent(connectionId)}&v=2`;
 
           daemonWs = new WebSocket(serverDataUrl);
           await waitOpen(daemonWs, "server-data");

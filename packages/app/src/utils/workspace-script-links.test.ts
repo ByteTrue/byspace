@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { WorkspaceScriptPayload } from "@getpaseo/protocol/messages";
+import type { WorkspaceScriptPayload } from "@byspace/protocol/messages";
 import type { ActiveConnection } from "@/runtime/host-runtime";
 import { resolveWorkspaceScriptLink } from "./workspace-script-links";
 
@@ -127,7 +127,7 @@ describe("resolveWorkspaceScriptLink", () => {
   it("keeps service routes available independently of a relay connection", () => {
     const relay: ActiveConnection = {
       type: "relay",
-      endpoint: "relay.paseo.sh:443",
+      endpoint: "relay.byspace.cc.cd:443",
       display: "relay",
     };
     expect(resolveLink(relay)).toEqual({
@@ -181,7 +181,7 @@ describe("resolveWorkspaceScriptLink", () => {
     const publicUrl = "https://web--feature--paseo.services.example.com";
     expect(
       resolveLink(
-        { type: "relay", endpoint: "relay.paseo.sh:443", display: "relay" },
+        { type: "relay", endpoint: "relay.byspace.cc.cd:443", display: "relay" },
         { ...legacyLocal, proxyUrl: publicUrl },
       ).primary,
     ).toEqual({

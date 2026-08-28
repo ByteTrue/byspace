@@ -1,7 +1,7 @@
 {
-  "name": "@getpaseo/client",
-  "version": "0.6.1",
-  "description": "Paseo client SDK package",
+  "name": "@byspace/client",
+  "version": "0.1.0",
+  "description": "byspace client SDK package",
   "files": [
     "dist",
     "!dist/**/*.map",
@@ -31,7 +31,7 @@
   },
   "scripts": {
     "clean": "node ../../scripts/clean-package-dist.mjs",
-    "build": "npm run build --workspace=@getpaseo/protocol && tsc -p tsconfig.json --incremental false",
+    "build": "npm run build --workspace=@byspace/protocol && tsc -p tsconfig.json --incremental false",
     "build:clean": "npm run clean && npm run build",
     "prepack": "npm run build:clean",
     "typecheck": "tsgo --noEmit",
@@ -39,13 +39,15 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@getpaseo/protocol": "0.6.1",
-    "@getpaseo/relay": "0.6.1",
+    "@byspace/protocol": "0.1.0",
+    "@byspace/relay": "0.1.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/node": "^20.9.0",
+    "@types/ws": "^8.5.8",
     "typescript": "^5.2.2",
-    "vitest": "^4.1.6"
+    "vitest": "^4.1.6",
+    "ws": "^8.14.2"
   }
 }

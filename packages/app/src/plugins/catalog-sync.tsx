@@ -1,8 +1,9 @@
 import { useEffect } from "react";
-import type { DaemonClient } from "@getpaseo/client/internal/daemon-client";
+import type { DaemonClient } from "@byspace/client/internal/daemon-client";
 import { useHostFeature } from "@/runtime/host-features";
 import { useHostRuntimeIsConnected } from "@/runtime/host-runtime";
 import { pluginRegistry } from "./registry";
+import { useSessionStore } from "@/stores/session-store";
 
 export function PluginCatalogSync({
   serverId,
@@ -31,7 +32,14 @@ export function PluginCatalogSync({
           .getPluginCatalog()
           .then((catalog) => {
             if (!cancelled) {
-              pluginRegistry.installCatalog(serverId, catalog, { replacePluginId });
+              const timelineChanged = pluginRegistry.installCatalog(serverId, catalog, {
+                replacePluginId,
+              });
+              if (timelineChanged) {
+                useSessionStore
+                  .getState()
+                  .sessions[serverId]?.viewedTimelineSync?.reprojectVisibleTimelines();
+              }
             }
             return undefined;
           })

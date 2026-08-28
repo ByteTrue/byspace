@@ -1,4 +1,4 @@
-import type { PluginContext } from "@getpaseo/plugin";
+import type { PluginContext } from "@byspace/plugin";
 import { searchIssues } from "./issues.server";
 import { issueAttachments, searchIssuesRpc } from "./issues.shared";
 

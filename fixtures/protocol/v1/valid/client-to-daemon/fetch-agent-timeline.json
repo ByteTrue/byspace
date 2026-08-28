@@ -1,0 +1,16 @@
+{
+  "type": "session",
+  "message": {
+    "type": "fetch_agent_timeline_request",
+    "agentId": "agent-1",
+    "direction": "after",
+    "cursor": {
+      "epoch": "epoch-1",
+      "seq": 7
+    },
+    "projection": "projected",
+    "limit": 0,
+    "mergeWindow": true,
+    "requestId": "req-timeline-1"
+  }
+}

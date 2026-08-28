@@ -31,6 +31,7 @@ function makeHost(): HostProfile {
         relayEndpoint: "relay.secret.test:443",
         useTls: true,
         daemonPublicKeyB64: "daemon-public-key-secret",
+        clientAuthTokenB64: "relay-client-auth-secret",
       },
       {
         id: "socket:/tmp/paseo-secret.sock",
@@ -105,6 +106,7 @@ describe("app diagnostics report", () => {
         "secret.example.test:6767",
         "relay.secret.test:443",
         "daemon-public-key-secret",
+        "clientAuthTokenB64=relay-client-auth-secret",
         "/tmp/paseo-secret.sock",
         "\\\\.\\pipe\\paseo-secret",
         "password=tcp-password",
@@ -116,6 +118,7 @@ describe("app diagnostics report", () => {
     expect(redacted).not.toContain("secret.example.test");
     expect(redacted).not.toContain("relay.secret.test");
     expect(redacted).not.toContain("daemon-public-key-secret");
+    expect(redacted).not.toContain("relay-client-auth-secret");
     expect(redacted).not.toContain("/tmp/paseo-secret.sock");
     expect(redacted).not.toContain("\\\\.\\pipe\\paseo-secret");
     expect(redacted).not.toContain("tcp-password");

@@ -1,196 +1,80 @@
-<p align="center">
-  <img src="packages/website/public/logo.svg" width="64" height="64" alt="Paseo logo">
-</p>
+# byspace
 
-<h1 align="center">Paseo</h1>
+byspace is a Web/PWA and Go daemon environment for controlling AI coding agents on one or more machines.
 
-<p align="center">
-  <a href="README.md">English</a> ·
-  <a href="README.zh-CN.md">简体中文</a> ·
-  <a href="README.ja.md">日本語</a> ·
-  <a href="README.ko.md">한국어</a>
-</p>
+The project is being rebuilt from Paseo's architecture. The Web source is adapted under Apache-2.0; the daemon and CLI are being rewritten in Go.
 
-<p align="center">
-  <a href="https://github.com/getpaseo/paseo/stargazers">
-    <img src="https://img.shields.io/github/stars/getpaseo/paseo?style=flat&logo=github" alt="GitHub stars">
-  </a>
-  <a href="https://github.com/getpaseo/paseo/releases">
-    <img src="https://img.shields.io/github/v/release/getpaseo/paseo?style=flat&logo=github" alt="GitHub release">
-  </a>
-  <a href="https://x.com/moboudra">
-    <img src="https://img.shields.io/badge/%40moboudra-555?logo=x" alt="X">
-  </a>
-  <a href="https://discord.gg/jz8T2uahpH">
-    <img src="https://img.shields.io/badge/Discord-555?logo=discord" alt="Discord">
-  </a>
-  <a href="https://www.reddit.com/r/PaseoAI/">
-    <img src="https://img.shields.io/badge/Reddit-555?logo=reddit" alt="Reddit">
-  </a>
-</p>
-
-<p align="center">One interface for Claude Code, Codex, Copilot, OpenCode, and Pi agents.</p>
-
-<p align="center">
-  <img src="https://paseo.sh/hero-mockup.png" alt="Paseo app screenshot" width="100%">
-</p>
-
-<p align="center">
-  <img src="https://paseo.sh/mobile-mockup.png" alt="Paseo mobile app" width="100%">
-</p>
-
-Run agents in parallel on your own machines. Ship from your phone or your desk.
-
-- **Self-hosted:** Agents run on your machine with your full dev environment. Use your tools, your configs, and your skills.
-- **Multi-provider:** Claude Code, Codex, Copilot, OpenCode, and Pi through the same interface. Pick the right model for each job.
-- **Voice control:** Dictate tasks or talk through problems in voice mode. Hands-free when you need it.
-- **Cross-device:** iOS, Android, desktop, web, and CLI. Start work at your desk, check in from your phone, script it from the terminal.
-- **Privacy-first:** Paseo doesn't have any telemetry, tracking, or forced log-ins.
-
-## Getting Started
-
-Paseo runs a local server called the daemon that manages your coding agents. Clients like the desktop app, mobile app, web app, and CLI connect to it.
-
-### Prerequisites
-
-You need at least one agent CLI installed and configured with your credentials:
-
-- [Claude Code](https://docs.anthropic.com/en/docs/claude-code)
-- [Codex](https://github.com/openai/codex)
-- [GitHub Copilot](https://github.com/features/copilot/cli/)
-- [OpenCode](https://github.com/anomalyco/opencode)
-- [Pi](https://pi.dev)
-
-### Desktop app (recommended)
-
-Download it from [paseo.sh/download](https://paseo.sh/download) or the [GitHub releases page](https://github.com/getpaseo/paseo/releases). Open the app and the daemon starts automatically. Nothing else to install.
-
-To connect from your phone, open **Settings → your host → Pair Device**.
-
-### CLI / headless
-
-Install the CLI and start Paseo:
+## Web development
 
 ```bash
-npm install -g @getpaseo/cli
-paseo
+npm ci
+npm run build:web
+npm run web
 ```
 
-Paseo starts locally, then asks whether to enable the end-to-end encrypted relay for device pairing. If you decline, connect directly over TCP, Tailscale, or another VPN. This path is useful for servers and remote machines.
+The current icons are temporary upstream build assets and are not final byspace branding.
 
-For full setup and configuration, see:
-
-- [Docs](https://paseo.sh/docs)
-- [Connectivity guide](https://paseo.sh/docs/connectivity)
-- [Configuration reference](https://paseo.sh/docs/configuration)
-
-### Docker
-
-Run the Paseo daemon and self-hosted web UI in Docker:
+## Go daemon and Pi agent core
 
 ```bash
-docker run -d --name paseo \
-  -p 6767:6767 \
-  -e PASEO_PASSWORD=change-me \
-  -v "$PWD/paseo-home:/home/paseo" \
-  -v "$PWD:/workspace" \
-  ghcr.io/getpaseo/paseo:latest
+npm run build:web
+(cd go && go build -o byspace ./cmd/byspace)
+./go/byspace daemon start
+# Remote access (or set BYSPACE_RELAY_URL):
+./go/byspace daemon start --relay-url wss://relay.byspace.cc.cd
+./go/byspace pair --relay-url wss://relay.byspace.cc.cd --app-url https://app.byspace.cc.cd
+./go/byspace daemon status
+./go/byspace agent list
+./go/byspace agent timeline <agent-id> --follow
+./go/byspace daemon stop
 ```
 
-Open `http://localhost:6767` after it starts. Extend the base image with the agent CLIs you use, then provide credentials through environment variables or the persistent `/home/paseo` volume. See the [Docker documentation](docs/docker.md) for full setup details.
-
-## CLI
-
-Everything you can do in the app, you can do from the terminal.
+Import an authenticated remote daemon offer without placing its pairing secret in argv, then select it explicitly:
 
 ```bash
-paseo run --provider claude/opus-4.6 "implement user authentication"
-paseo run --provider codex/gpt-5.5 --worktree feature-x "implement feature X"
-
-paseo ls                           # list running agents
-paseo attach abc123                # stream live output
-paseo send abc123 "also add tests" # follow-up task
-
-# run on a remote daemon
-paseo --host workstation.local:6767 run "run the full test suite"
+ssh remote-host './byspace pair' | ./go/byspace host import
+./go/byspace host list
+./go/byspace agent list --host <server-id>
+./go/byspace agent timeline <agent-id> --host <server-id> --follow
 ```
 
-See the [full CLI reference](https://paseo.sh/docs/cli) for more.
+`host import --file <path>` is also supported, but the source must be a private regular file (`0600` on Unix; a protected current-user ACL on Windows). Registry output never includes pairing keys or authentication tokens.
 
-## TypeScript SDK
+Open `http://127.0.0.1:6767` after startup. The daemon serves the copied Web app and `/ws` from the same origin, projects the canonical launch directory as a stable workspace/project, and reports local Pi availability without fabricating models or modes. Asset resolution is `--web-dir`, then `BYSPACE_WEB_DIR`, then `<daemon working directory>/packages/app/dist`; a missing Web build fails startup with an actionable error.
 
-Build issue integrations, dashboards, and orchestration services with `@getpaseo/client`:
+The daemon also provides lifecycle ownership, HTTP health/shutdown, a provider-neutral Agent/Timeline manager, and a supervised `pi --mode rpc` adapter. Agent snapshots, canonical Timeline rows, delivery idempotency, and Pi session handles are atomically persisted under `~/.byspace/state/agents-v1.json`, protected by private Unix modes or a current-user/System DACL on Windows; restarting the daemon resumes the same Pi session and preserves Agent/Timeline identity. Runtime state defaults to `~/.byspace`; use `--home` for an isolated directory. The read-only Agent CLI uses the daemon protocol rather than reading Agent state files: local commands connect through `/ws`, while `--host <server-id>` connects through a saved authenticated Relay target under `~/.byspace/state/remote-hosts-v1/`.
 
-```ts
-import { createPaseoClient } from "@getpaseo/client";
+Relay E2EE interoperability is fixed by `fixtures/relay/e2ee-v1.json`, consumed by both copied TypeScript Relay tests and Go `internal/relay`. When `--relay-url` or `BYSPACE_RELAY_URL` is set, the daemon opens the Relay v2 control channel and serves the same Agent WebSocket contract over authenticated NaCl E2EE data channels. `byspace pair` emits a version 3 offer whose URL fragment contains the daemon public key and a 256-bit client authentication capability; Relay frames expose routing metadata but not Agent payload plaintext. Keep pairing URLs private.
 
-const client = createPaseoClient({ url: "ws://127.0.0.1:6767/ws" });
-await client.connect();
+The copied Web app can persist direct and authenticated Relay hosts together, switch their isolated workspaces and Agents, and automatically recover a remote host after page, Relay, or daemon restart. A production-bundle Chromium tracer verifies host-scoped outage state, direct-host continuity, canonical Timeline recovery, and Pi native-session resume against two real Go daemons and the repository's Cloudflare Wrangler Relay. The Go CLI independently imports the same v3 offer and observes remote Agent catalogs and canonical Timeline updates through the shared mutual-authenticated E2EE transport. The public `relay.byspace.cc.cd` hostname currently resolves and passes raw v2 plus full daemon/client/CLI smoke; authenticated Wrangler deployment provenance and rollout of the current admission-hardening source are still pending.
 
-const agent = await client.agents.create({
-  config: { provider: "codex/gpt-5.5" },
-  cwd: "/Users/me/dev/storefront",
-  prompt: "Review the current diff and name the riskiest change.",
-});
+## Production Relay
 
-const result = await agent.waitForFinish();
-console.log(result.lastMessage);
+`packages/relay/wrangler.toml` is the production config for `relay.byspace.cc.cd`. It disables alternate `workers.dev`/preview exposure, binds the SQLite-backed `RelayDurableObject`, and applies source/role admission rate limiting before requests reach a Durable Object.
 
-await client.close();
-```
-
-See the [SDK quickstart](https://paseo.sh/docs/sdk/quickstart), [recipes](https://paseo.sh/docs/sdk/recipes), and [API reference](https://paseo.sh/docs/sdk/reference).
-
-## Skills
-
-Skills teach your agent to use Paseo to orchestrate other agents.
+Authenticate Wrangler outside the repository (either `npx wrangler login` or a scoped `CLOUDFLARE_API_TOKEN` in the process environment), then validate and deploy:
 
 ```bash
-npx skills add getpaseo/paseo
+npx wrangler deploy --config packages/relay/wrangler.toml --dry-run
+npx wrangler deploy --config packages/relay/wrangler.toml
+curl -fsS https://relay.byspace.cc.cd/health
 ```
 
-Then use them in any agent conversation:
-
-- `/paseo-handoff` — hand off work between agents. I use this to plan with Claude and then handoff to Codex to implement.
-- `/paseo-advisor` — spin up a single agent as an advisor for a second opinion, without delegating the work itself.
-- `/paseo-committee` — form a committee of two contrasting agents to step back, do root cause analysis, and produce a plan.
-
-## Development
-
-Quick monorepo package map:
-
-- `packages/server`: Paseo daemon (agent process orchestration, WebSocket API, MCP server)
-- `packages/app`: Expo client (iOS, Android, web)
-- `packages/cli`: `paseo` CLI for daemon and agent workflows
-- `packages/desktop`: Electron desktop app
-- `packages/relay`: Relay transport and encryption used by the daemon and clients
-- `packages/website`: Marketing site and documentation (`paseo.sh`)
-
-Common commands:
+Run the opt-in public endpoint smoke tests after deployment. They use random Relay IDs, temporary daemon homes, and the offline fake Pi fixture:
 
 ```bash
-# run all local dev services
-npm run dev
-
-# run individual surfaces
-npm run dev:server
-npm run dev:app
-npm run dev:desktop
-npm run dev:website
-
-# build the server stack
-npm run build:server
-
-# repo-wide checks
-npm run typecheck
+RUN_LIVE_RELAY_E2E=1 npm test --workspace @byspace/relay -- --run src/live-relay.e2e.test.ts
+RUN_LIVE_RELAY_E2E=1 npx vitest run packages/client/src/go-daemon-relay.e2e.test.ts --testNamePattern='production Relay'
 ```
 
-## Related projects
+Do not place a Cloudflare token, pairing offer, or `clientAuthTokenB64` in repository files or command arguments.
 
-- [getpaseo/paseo-relay](https://github.com/getpaseo/paseo-relay) — official distributed relay, written in Elixir
-- [paseo-skins](https://github.com/huangguang1999/paseo-skins) — community themes and a zero-patch desktop theme loader with an Agent Skill
-- [paseo-vscode](https://marketplace.visualstudio.com/items?itemName=hinnes.paseo-vscode) — VS Code extension
+Go validation:
 
-## License
+```bash
+cd go
+go vet ./...
+go test -race ./...
+```
 
-AGPL-3.0
+Project evolution is tracked in [`codestable/`](codestable/).

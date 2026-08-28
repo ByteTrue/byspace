@@ -11,12 +11,23 @@ import {
   exportPublicKey,
   importPublicKey,
   deriveSharedKey,
-  encrypt,
+  encryptWithNonce,
   decrypt,
+  randomNoncePrefix,
+  NONCE_LENGTH,
+  NONCE_PREFIX_LENGTH,
   type KeyPair,
   type SharedKey,
 } from "./crypto.js";
 import { arrayBufferToBase64, base64ToArrayBuffer } from "./base64.js";
+import {
+  createClientAuthProof,
+  generateClientAuthChallenge,
+  RELAY_CLIENT_AUTH_SCHEME,
+  verifyClientAuthProof,
+  type RelayClientAuthentication,
+  type RelayClientAuthProof,
+} from "./client-auth.js";
 
 export interface Transport {
   send(data: string | ArrayBuffer): void | Promise<void>;
@@ -51,12 +62,20 @@ interface EncryptedChannelOptions {
    */
   daemonKeyPair?: KeyPair;
   binaryCiphertext?: boolean;
+  requireBinaryCiphertext?: boolean;
 }
 
 interface E2EEHelloMessage {
   type: "e2ee_hello";
   key: string;
   capabilities?: E2EECapabilities;
+  auth?: RelayClientAuthProof;
+}
+
+interface E2EEChallengeMessage {
+  type: "e2ee_challenge";
+  challenge: string;
+  authScheme: typeof RELAY_CLIENT_AUTH_SCHEME;
 }
 
 interface E2EEReadyMessage {
@@ -86,7 +105,22 @@ function isE2EEHelloMessage(value: unknown): value is E2EEHelloMessage {
     value.type === "e2ee_hello" &&
     typeof value.key === "string" &&
     value.key.trim().length > 0 &&
-    isE2EECapabilities(value.capabilities)
+    isE2EECapabilities(value.capabilities) &&
+    (value.auth === undefined ||
+      (isRecord(value.auth) &&
+        value.auth.scheme === RELAY_CLIENT_AUTH_SCHEME &&
+        typeof value.auth.proof === "string" &&
+        value.auth.proof.trim().length > 0))
+  );
+}
+
+function isE2EEChallengeMessage(value: unknown): value is E2EEChallengeMessage {
+  return (
+    isRecord(value) &&
+    value.type === "e2ee_challenge" &&
+    typeof value.challenge === "string" &&
+    value.challenge.trim().length > 0 &&
+    value.authScheme === RELAY_CLIENT_AUTH_SCHEME
   );
 }
 
@@ -117,7 +151,7 @@ function buildInvalidHelloError(rawText: string, parsed?: unknown): Error {
 
 const HANDSHAKE_RETRY_MS = 1000;
 const MAX_PENDING_SENDS = 200;
-const REHANDSHAKE_KEY_MISMATCH_CLOSE_CODE = 1008;
+const REHANDSHAKE_REJECTION_CODE = 1008;
 const ENCRYPTED_PAYLOAD_OVERHEAD_BYTES = 40;
 
 export function base64EncryptedWireByteLength(plaintextBytes: number): number {
@@ -155,28 +189,33 @@ export async function createClientChannel(
   transport: Transport,
   daemonPublicKeyB64: string,
   events: EncryptedChannelEvents = {},
+  authentication?: RelayClientAuthentication,
 ): Promise<EncryptedChannel> {
   const keyPair = generateKeyPair();
   const daemonPublicKey = importPublicKey(daemonPublicKeyB64);
   const sharedKey = deriveSharedKey(keyPair.secretKey, daemonPublicKey);
-
-  const channel = new EncryptedChannel(transport, sharedKey, events);
-
-  // Send e2ee_hello with our public key
   const ourPublicKeyB64 = exportPublicKey(keyPair.publicKey);
-  const hello: E2EEHelloMessage = {
-    type: "e2ee_hello",
-    key: ourPublicKeyB64,
-    capabilities: { binaryCiphertext: true },
-  };
-  const helloText = JSON.stringify(hello);
+  const channel = new EncryptedChannel(transport, sharedKey, events, {
+    requireBinaryCiphertext: authentication !== undefined,
+  });
 
+  let helloText: string | null = authentication
+    ? null
+    : JSON.stringify({
+        type: "e2ee_hello",
+        key: ourPublicKeyB64,
+        capabilities: { binaryCiphertext: true },
+      } satisfies E2EEHelloMessage);
   let retry: ReturnType<typeof setInterval> | null = null;
+  let challenge: string | null = null;
+  let proofPending = false;
+
   const emitSendError = (error: unknown) => {
     const err = error instanceof Error ? error : new Error(String(error));
     events.onerror?.(err);
   };
   const sendHello = () => {
+    if (!helloText) return false;
     try {
       const result = transport.send(helloText);
       if (result) {
@@ -196,22 +235,79 @@ export async function createClientChannel(
       retry = null;
     }
   };
+  const beginRetry = () => {
+    if (retry) return;
+    sendHello();
+    retry = setInterval(() => {
+      if (channel.isOpen()) {
+        clearRetry();
+        return;
+      }
+      sendHello();
+    }, HANDSHAKE_RETRY_MS);
+    // Avoid keeping Node processes alive (e.g. tests) if the handshake is stuck.
+    if (hasUnref(retry)) {
+      retry.unref();
+    }
+  };
 
   channel.onTransitionToOpen(() => clearRetry());
   channel.onClose(() => clearRetry());
 
-  sendHello();
-  retry = setInterval(() => {
-    if (channel.isOpen()) {
-      clearRetry();
-      return;
-    }
-    sendHello();
-  }, HANDSHAKE_RETRY_MS);
-  // Avoid keeping Node processes alive (e.g. tests) if the handshake is stuck.
-  if (hasUnref(retry)) {
-    retry.unref();
+  if (!authentication) {
+    beginRetry();
+    return channel;
   }
+
+  const handleChannelMessage = transport.onmessage;
+  Object.assign(transport, {
+    onmessage: (message: TransportMessage) => {
+      if (!message.isBinary) {
+        try {
+          const parsed: unknown = JSON.parse(decodeTransportText(message.data));
+          if (isE2EEChallengeMessage(parsed)) {
+            if (challenge && challenge !== parsed.challenge) {
+              const error = new Error("Relay E2EE challenge changed during handshake");
+              emitSendError(error);
+              channel.close(4001, error.message);
+              return;
+            }
+            challenge = parsed.challenge;
+            if (helloText) {
+              sendHello();
+              return;
+            }
+            if (!proofPending) {
+              proofPending = true;
+              void createClientAuthProof({
+                tokenB64: authentication.clientAuthTokenB64,
+                challengeB64: parsed.challenge,
+                clientPublicKeyB64: ourPublicKeyB64,
+                binaryCiphertext: true,
+              })
+                .then((auth) => {
+                  helloText = JSON.stringify({
+                    type: "e2ee_hello",
+                    key: ourPublicKeyB64,
+                    capabilities: { binaryCiphertext: true },
+                    auth,
+                  } satisfies E2EEHelloMessage);
+                  beginRetry();
+                })
+                .catch((error: unknown) => {
+                  emitSendError(error);
+                  channel.close(4001, "Relay client authentication failed");
+                });
+            }
+            return;
+          }
+        } catch {
+          // The encrypted channel owns all non-challenge traffic.
+        }
+      }
+      handleChannelMessage?.(message);
+    },
+  });
 
   return channel;
 }
@@ -228,7 +324,9 @@ export async function createDaemonChannel(
   transport: Transport,
   daemonKeyPair: KeyPair,
   events: EncryptedChannelEvents = {},
+  authentication?: RelayClientAuthentication,
 ): Promise<EncryptedChannel> {
+  const challenge = authentication ? generateClientAuthChallenge() : null;
   return new Promise((resolve, reject) => {
     const bufferedMessages: TransportMessage[] = [];
     const shouldIgnorePostHelloPlaintext = (message: TransportMessage): boolean => {
@@ -262,19 +360,41 @@ export async function createDaemonChannel(
 
         const msg = parsed;
 
-        // Buffer any subsequent messages that arrive while we're doing async
-        // WebCrypto work to derive the shared key. Without this, it's possible
-        // for the next message (already encrypted) to be misinterpreted as a
-        // second hello, causing the handshake to fail.
+        // Buffer any subsequent messages while authentication and key
+        // derivation run asynchronously. Otherwise the first ciphertext could
+        // be misinterpreted as another plaintext hello.
         const bufferNext = (next: TransportMessage): void => {
           bufferedMessages.push(next);
         };
         Object.assign(transport, { onmessage: bufferNext });
 
+        const binaryCiphertext = supportsBinaryCiphertext(msg);
+        if (authentication) {
+          if (!binaryCiphertext) {
+            throw new Error(
+              "Authenticated Relay E2EE client did not negotiate binary ciphertext capability",
+            );
+          }
+          if (
+            !challenge ||
+            !msg.auth ||
+            !(await verifyClientAuthProof(
+              {
+                tokenB64: authentication.clientAuthTokenB64,
+                challengeB64: challenge,
+                clientPublicKeyB64: msg.key,
+                binaryCiphertext,
+              },
+              msg.auth,
+            ))
+          ) {
+            throw new Error("Invalid Relay client authentication proof");
+          }
+        }
+
         const clientPublicKey = importPublicKey(msg.key);
         const sharedKey = deriveSharedKey(daemonKeyPair.secretKey, clientPublicKey);
 
-        const binaryCiphertext = supportsBinaryCiphertext(msg);
         await transport.send(
           JSON.stringify({
             type: "e2ee_ready",
@@ -311,6 +431,23 @@ export async function createDaemonChannel(
         reject(new Error(`Connection closed during handshake: ${code} ${reason}`));
       },
     });
+
+    if (challenge) {
+      try {
+        const sent = transport.send(
+          JSON.stringify({
+            type: "e2ee_challenge",
+            challenge,
+            authScheme: RELAY_CLIENT_AUTH_SCHEME,
+          } satisfies E2EEChallengeMessage),
+        );
+        if (sent) {
+          void sent.catch(reject);
+        }
+      } catch (error) {
+        reject(error);
+      }
+    }
   });
 }
 
@@ -324,6 +461,10 @@ export class EncryptedChannel {
   private events: EncryptedChannelEvents;
   private options: EncryptedChannelOptions;
   private pendingSends: Array<string | ArrayBuffer> = [];
+  private readonly outboundNoncePrefix = randomNoncePrefix();
+  private outboundSequence = 0n;
+  private inboundNoncePrefix: Uint8Array | null = null;
+  private inboundSequence = 0n;
   private onOpenCallbacks: Array<() => void> = [];
   private onCloseCallbacks: Array<() => void> = [];
 
@@ -362,7 +503,17 @@ export class EncryptedChannel {
         const text = decodeTransportText(message.data);
         const parsed: unknown = JSON.parse(text);
         if (isE2EEReadyMessage(parsed)) {
-          this.options.binaryCiphertext = supportsBinaryCiphertext(parsed);
+          const binaryCiphertext = supportsBinaryCiphertext(parsed);
+          if (this.options.requireBinaryCiphertext && !binaryCiphertext) {
+            const error = new Error(
+              "Authenticated Relay E2EE peer did not confirm binary ciphertext capability",
+            );
+            this.events.onerror?.(error);
+            this.state = "closed";
+            this.transport.close(4001, error.message);
+            return;
+          }
+          this.options.binaryCiphertext = binaryCiphertext;
           this.state = "open";
           this.events.onopen?.();
           for (const cb of this.onOpenCallbacks) cb();
@@ -442,6 +593,7 @@ export class EncryptedChannel {
 
       if (ciphertext) {
         const plaintextBytes = decrypt(this.sharedKey, ciphertext.data);
+        if (this.options.binaryCiphertext) this.acceptInboundNonce(ciphertext.data);
         const plaintext = decodePlaintext(plaintextBytes, ciphertext.isBinary);
         this.events.onmessage?.(plaintext);
       }
@@ -472,7 +624,7 @@ export class EncryptedChannel {
       throw new Error("Channel not open");
     }
 
-    const ciphertext = encrypt(this.sharedKey, data);
+    const ciphertext = encryptWithNonce(this.sharedKey, data, this.nextOutboundNonce());
     if (this.options.binaryCiphertext && data instanceof ArrayBuffer) {
       await this.transport.send(ciphertext);
       return;
@@ -480,6 +632,36 @@ export class EncryptedChannel {
     // COMPAT(binaryCiphertext): added in v0.2.3, remove base64 binary sends
     // after 2027-01-27 once the supported peer floor includes negotiation.
     await this.transport.send(arrayBufferToBase64(ciphertext));
+  }
+
+  private nextOutboundNonce(): Uint8Array {
+    if (this.outboundSequence > 0xffffffffffffffffn) {
+      throw new Error("Encrypted channel nonce sequence exhausted");
+    }
+    const nonce = new Uint8Array(NONCE_LENGTH);
+    nonce.set(this.outboundNoncePrefix, 0);
+    new DataView(nonce.buffer).setBigUint64(NONCE_PREFIX_LENGTH, this.outboundSequence);
+    this.outboundSequence += 1n;
+    return nonce;
+  }
+
+  private acceptInboundNonce(bundle: ArrayBuffer): void {
+    const nonce = new Uint8Array(bundle, 0, NONCE_LENGTH);
+    const prefix = nonce.slice(0, NONCE_PREFIX_LENGTH);
+    const sequence = new DataView(nonce.buffer, nonce.byteOffset, nonce.byteLength).getBigUint64(
+      NONCE_PREFIX_LENGTH,
+    );
+    if (this.inboundNoncePrefix === null) {
+      if (sequence !== 0n)
+        throw new Error("Encrypted channel nonce sequence did not start at zero");
+      this.inboundNoncePrefix = prefix;
+    } else if (!keysEqual(prefix, this.inboundNoncePrefix)) {
+      throw new Error("Encrypted channel nonce prefix changed");
+    }
+    if (sequence !== this.inboundSequence) {
+      throw new Error("Encrypted channel frame was replayed or reordered");
+    }
+    this.inboundSequence += 1n;
   }
 
   outboundWireByteLength(data: string | ArrayBuffer): number {
@@ -503,31 +685,25 @@ export class EncryptedChannel {
   private async handleDaemonRehello(message: E2EEHelloMessage): Promise<void> {
     if (!this.options.daemonKeyPair) return;
     const clientPublicKey = importPublicKey(message.key);
-    const nextSharedKey = deriveSharedKey(this.options.daemonKeyPair.secretKey, clientPublicKey);
+    const retryKey = deriveSharedKey(this.options.daemonKeyPair.secretKey, clientPublicKey);
+    if (!keysEqual(retryKey, this.sharedKey)) return this.rejectKeyRotation();
+    await this.sendReadyForRetry();
+  }
 
-    // If it's the same client key (handshake retry), re-send
-    // "ready" but do not re-key. Re-keying here would desync
-    // the channel and cause decrypt failures.
-    if (keysEqual(nextSharedKey, this.sharedKey)) {
-      await this.transport.send(
-        JSON.stringify({
-          type: "e2ee_ready",
-          ...(this.options.binaryCiphertext
-            ? { capabilities: { binaryCiphertext: true } satisfies E2EECapabilities }
-            : {}),
-        } satisfies E2EEReadyMessage),
-      );
-      return;
-    }
-
-    // A different key on an already-open encrypted channel is not an
-    // authenticated reconnect. Close and require a fresh transport instead of
-    // allowing the relay to switch this channel to an attacker-chosen key.
-    this.state = "closed";
-    this.transport.close(
-      REHANDSHAKE_KEY_MISMATCH_CLOSE_CODE,
-      REHANDSHAKE_KEY_MISMATCH_CLOSE_REASON,
+  private async sendReadyForRetry(): Promise<void> {
+    await this.transport.send(
+      JSON.stringify({
+        type: "e2ee_ready",
+        ...(this.options.binaryCiphertext
+          ? { capabilities: { binaryCiphertext: true } satisfies E2EECapabilities }
+          : {}),
+      } satisfies E2EEReadyMessage),
     );
+  }
+
+  private rejectKeyRotation(): void {
+    this.state = "closed";
+    this.transport.close(REHANDSHAKE_REJECTION_CODE, REHANDSHAKE_KEY_MISMATCH_CLOSE_REASON);
   }
 
   close(code = 1000, reason = "Normal closure"): void {

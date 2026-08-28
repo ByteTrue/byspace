@@ -1,0 +1,37 @@
+{
+  "type": "session",
+  "message": {
+    "type": "status",
+    "payload": {
+      "status": "agent_created",
+      "agentId": "agent-1",
+      "requestId": "req-create-1",
+      "agent": {
+        "id": "agent-1",
+        "provider": "pi",
+        "cwd": "/tmp/byspace-fixture",
+        "model": "openai-codex/gpt-5.6-sol",
+        "createdAt": "2026-08-27T00:00:00.000Z",
+        "updatedAt": "2026-08-27T00:00:01.000Z",
+        "lastUserMessageAt": "2026-08-27T00:00:01.000Z",
+        "status": "idle",
+        "capabilities": {
+          "supportsStreaming": true,
+          "supportsSessionPersistence": true,
+          "supportsDynamicModes": true,
+          "supportsMcpServers": true,
+          "supportsReasoningStream": true,
+          "supportsToolInvocations": true
+        },
+        "currentModeId": null,
+        "availableModes": [],
+        "pendingPermissions": [],
+        "persistence": null,
+        "title": null,
+        "labels": {
+          "fixture": "true"
+        }
+      }
+    }
+  }
+}

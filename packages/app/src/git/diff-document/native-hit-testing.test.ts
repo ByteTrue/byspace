@@ -1,4 +1,4 @@
-import type { ParsedDiffFile } from "@getpaseo/protocol/messages";
+import type { ParsedDiffFile } from "@byspace/protocol/messages";
 import { describe, expect, it } from "vitest";
 import { buildDiffDocumentModel } from "./model";
 import { hitTestDiffBodyPoint } from "./native-hit-testing";
@@ -20,6 +20,24 @@ describe("native diff body-coordinate hit testing", () => {
       expect(hit?.kind).toBe("cell");
       if (hit?.kind === "cell") expect(hit.position.fileIndex).toBe(row.fileIndex);
     }
+  });
+
+  it("keeps a later expanded file interactive after an earlier body grows", () => {
+    const model = build("unified");
+    const target = model.rows.find(
+      (row) => row.kind === "line" && row.fileIndex === 1 && row.cells[0]?.type === "add",
+    )!;
+    const file = model.files[1]!;
+
+    const hit = hitTestDiffBodyPoint({
+      model,
+      file,
+      locationX: file.gutterWidth + 18,
+      locationY: target.top - file.bodyTop + 2,
+      horizontalOffset: 0,
+    });
+
+    expect(hit?.kind === "cell" ? hit.position.fileIndex : null).toBe(1);
   });
 
   it("applies the touched file's retained horizontal offset", () => {

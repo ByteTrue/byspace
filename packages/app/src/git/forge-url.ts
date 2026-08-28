@@ -10,8 +10,8 @@
  * both ride the manifest's `cloudHosts` only to canonicalize a cloud SSH alias
  * (e.g. ssh.github.com -> github.com); a self-hosted host is used as-is.
  */
-import { getForgeDefinition } from "@getpaseo/protocol/forge-manifest";
-import { normalizeHost, parseGitRemoteLocation } from "@getpaseo/protocol/git-remote";
+import { getForgeDefinition } from "@byspace/protocol/forge-manifest";
+import { normalizeHost, parseGitRemoteLocation } from "@byspace/protocol/git-remote";
 import { getClientForgeLogicModule } from "@/git/forges";
 
 export interface ForgeBlobUrlInput {
@@ -25,6 +25,23 @@ export interface ForgeBlobUrlInput {
 export interface ForgeBranchTreeUrlInput {
   remoteUrl: string | null | undefined;
   branch: string | null | undefined;
+}
+
+export function buildForgeChecksUrl(forge: string, changeRequestUrl: string): string | null {
+  const suffix = getClientForgeLogicModule(forge)?.urlGrammar?.changeRequestChecksSuffix;
+  if (!suffix) {
+    return null;
+  }
+  try {
+    const url = new URL(changeRequestUrl);
+    if (url.protocol !== "http:" && url.protocol !== "https:") {
+      return null;
+    }
+    url.pathname = `${url.pathname.replace(/\/$/, "")}${suffix}`;
+    return url.toString();
+  } catch {
+    return null;
+  }
 }
 
 interface ForgeWebLocation {

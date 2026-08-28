@@ -1,0 +1,8 @@
+{
+  "type": "session",
+  "message": {
+    "type": "send_agent_message_request",
+    "agentId": "agent-1",
+    "text": "Missing correlation id."
+  }
+}

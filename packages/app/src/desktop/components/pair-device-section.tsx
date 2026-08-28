@@ -47,7 +47,8 @@ export function PairDeviceSection({ serverId, onClose }: PairDeviceSectionProps)
   const { patchConfig } = useDaemonConfig(serverId);
   const [copied, setCopied] = useState(false);
   const serverFeatures = client?.getLastServerInfoMessage()?.features;
-  const supportsPairingRpc = serverFeatures?.daemonStatusRpc === true;
+  const supportsPairingRpc =
+    serverFeatures?.pairingOfferRpc === true || serverFeatures?.daemonStatusRpc === true;
   const canConfigureRelay = supportsPairingRpc && serverFeatures?.relayConfig === true;
 
   const pairingQuery = useFetchQuery({

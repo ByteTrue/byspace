@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { AppState } from "react-native";
-import type { DaemonClient } from "@getpaseo/client/internal/daemon-client";
+import type { DaemonClient } from "@byspace/client/internal/daemon-client";
 import { getIsElectron, isWeb, isNative } from "@/constants/platform";
 import { readDesktopSystemIdleTimeMs } from "@/desktop/electron/idle";
 import { invokeDesktopCommand } from "@/desktop/electron/invoke";
@@ -15,7 +15,6 @@ interface ClientActivityOptions {
   client: DaemonClient;
   focusedAgentId: string | null;
   focusedTerminalId: string | null;
-  onUserActivity: () => void;
   onAppResumed?: (awayMs: number) => void;
 }
 
@@ -29,7 +28,6 @@ export function useClientActivity({
   client,
   focusedAgentId,
   focusedTerminalId,
-  onUserActivity,
   onAppResumed,
 }: ClientActivityOptions): void {
   const onAppResumedRef = useRef(onAppResumed);
@@ -44,7 +42,6 @@ export function useClientActivity({
       initialFocusedTerminalId: focusedTerminalId,
       initialAppVisible: AppState.currentState === "active",
       now: () => Date.now(),
-      onUserActivity,
       onAppResumed: (awayMs) => onAppResumedRef.current?.(awayMs),
     });
   }

@@ -10,7 +10,7 @@ import {
 import { useSessionStore } from "@/stores/session-store";
 import { useWorkspaceExists } from "@/stores/session-store-hooks";
 import { useWorkspaceLayoutStore } from "@/stores/workspace-layout-store";
-import type { PluginPanelLocation } from "@getpaseo/plugin";
+import type { PluginPanelLocation } from "@byspace/plugin";
 import { normalizeWorkspaceOpaqueId } from "@/utils/workspace-identity";
 import { createPluginClientStateSource } from "../client-state/source";
 import { buildPluginSurfaceRoute, hostIdFromPathname } from "../routes";

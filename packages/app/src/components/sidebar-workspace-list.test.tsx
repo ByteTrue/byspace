@@ -2,8 +2,8 @@
  * @vitest-environment jsdom
  */
 import { act } from "@testing-library/react";
-import type { DaemonClient } from "@getpaseo/client/internal/daemon-client";
-import type { WorkspaceScriptPayload } from "@getpaseo/protocol/messages";
+import type { DaemonClient } from "@byspace/client/internal/daemon-client";
+import type { WorkspaceScriptPayload } from "@byspace/protocol/messages";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createRoot, type Root } from "react-dom/client";
 import React from "react";
@@ -31,7 +31,6 @@ import {
   type SidebarProjectEntry,
 } from "@/hooks/use-sidebar-workspaces-list";
 import { useSidebarWorkspacesList } from "@/hooks/use-sidebar-workspaces-list";
-import { patchWorkspaceScripts } from "@/contexts/session-workspace-scripts";
 import {
   getHostRuntimeStore,
   type HostRuntimeController,
@@ -393,35 +392,6 @@ describe("sidebar workspace render isolation", () => {
       updateControllerSnapshot({
         probeByConnectionId: new Map(probeByConnectionId),
       });
-    });
-
-    expect(counts).toEqual({
-      frame: 0,
-      headers: {},
-      rows: {},
-      projectSelection: {},
-      rowSelection: {},
-    });
-  });
-
-  it("does not re-render for a deep-equal scripts patch", async () => {
-    const counts: RenderCounts = {
-      frame: 0,
-      headers: {},
-      rows: {},
-      projectSelection: {},
-      rowSelection: {},
-    };
-    ({ root, container } = await renderProbe(counts));
-
-    const applyRunningScript = (current: Parameters<typeof patchWorkspaceScripts>[0]) =>
-      patchWorkspaceScripts(current, {
-        workspaceId: "a-main",
-        scripts: [{ ...runningScript }],
-      });
-
-    act(() => {
-      useSessionStore.getState().setWorkspaces(SERVER_ID, applyRunningScript);
     });
 
     expect(counts).toEqual({

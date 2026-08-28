@@ -6,13 +6,13 @@ import {
   type DaemonTransport,
   type Logger,
 } from "./daemon-client";
-import { CLIENT_CAPS } from "@getpaseo/protocol/client-capabilities";
-import { BROWSER_AUTOMATION_COMMAND_NAMES } from "@getpaseo/protocol/browser-automation/rpc-schemas";
+import { CLIENT_CAPS } from "@byspace/protocol/client-capabilities";
+import { BROWSER_AUTOMATION_COMMAND_NAMES } from "@byspace/protocol/browser-automation/rpc-schemas";
 import {
   decodeFileTransferFrame,
   encodeFileTransferFrame,
   FileTransferOpcode,
-} from "@getpaseo/protocol/binary-frames/index";
+} from "@byspace/protocol/binary-frames/index";
 import {
   asUint8Array,
   decodeTerminalResizePayload,
@@ -20,7 +20,7 @@ import {
   encodeTerminalSnapshotPayload,
   encodeTerminalStreamFrame,
   TerminalStreamOpcode,
-} from "@getpaseo/protocol/terminal-stream-protocol";
+} from "@byspace/protocol/terminal-stream-protocol";
 
 expectTypeOf<"getGitDiff" extends keyof DaemonClient ? true : false>().toEqualTypeOf<false>();
 expectTypeOf<
@@ -1414,6 +1414,8 @@ test("honors explicit getDaemonPairingOffer timeout below the session RPC defaul
   const responsePromise = client.getDaemonPairingOffer({
     requestId: "req-pairing-offer-1",
     timeout: 1_500,
+    appUrl: "https://app.byspace.cc.cd/",
+    relayUrl: "wss://relay.byspace.cc.cd",
   });
   let settled = false;
   void responsePromise.then(
@@ -1430,6 +1432,8 @@ test("honors explicit getDaemonPairingOffer timeout below the session RPC defaul
   expect(parseSentFrame(mock.sent[0])).toEqual({
     type: "daemon.get_pairing_offer.request",
     requestId: "req-pairing-offer-1",
+    appUrl: "https://app.byspace.cc.cd/",
+    relayUrl: "wss://relay.byspace.cc.cd",
   });
 
   await vi.advanceTimersByTimeAsync(1_499);

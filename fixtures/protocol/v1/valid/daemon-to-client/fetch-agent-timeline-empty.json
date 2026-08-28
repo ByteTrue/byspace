@@ -1,0 +1,28 @@
+{
+  "type": "session",
+  "message": {
+    "type": "fetch_agent_timeline_response",
+    "payload": {
+      "requestId": "req-timeline-1",
+      "agentId": "agent-1",
+      "agent": null,
+      "direction": "tail",
+      "projection": "projected",
+      "epoch": "timeline-epoch-1",
+      "reset": true,
+      "staleCursor": false,
+      "gap": false,
+      "window": {
+        "minSeq": 0,
+        "maxSeq": 0,
+        "nextSeq": 1
+      },
+      "startCursor": null,
+      "endCursor": null,
+      "hasOlder": false,
+      "hasNewer": false,
+      "entries": [],
+      "error": null
+    }
+  }
+}

@@ -1,8 +1,8 @@
 {
   "id": "/",
-  "name": "Paseo",
-  "short_name": "Paseo",
-  "description": "Monitor and control local AI coding agents from anywhere.",
+  "name": "byspace",
+  "short_name": "byspace",
+  "description": "Monitor and control AI coding agents from anywhere.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

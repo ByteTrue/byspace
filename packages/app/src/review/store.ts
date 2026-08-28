@@ -23,7 +23,7 @@ import {
 } from "@/review/state";
 import { generateMessageId } from "@/types/stream";
 import { buildNumberedDiffHunks, type NumberedDiffLine } from "@/utils/diff-layout";
-import type { AgentAttachment } from "@getpaseo/protocol/messages";
+import type { AgentAttachment } from "@byspace/protocol/messages";
 import { createValidatedPersistStorage } from "@/storage/validated-persist-storage";
 
 export type {

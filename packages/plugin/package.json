@@ -1,7 +1,7 @@
 {
-  "name": "@getpaseo/plugin",
-  "version": "0.6.1",
-  "description": "Paseo plugin SDK package",
+  "name": "@byspace/plugin",
+  "version": "0.1.0",
+  "description": "byspace plugin SDK package",
   "files": [
     "dist",
     "!dist/**/*.map"
@@ -39,7 +39,8 @@
     "use-sync-external-store": "^1.6.0"
   },
   "devDependencies": {
-    "@getpaseo/client": "0.6.1",
+    "@byspace/client": "0.1.0",
+    "@byspace/protocol": "0.1.0",
     "@types/node": "^20.9.0",
     "@types/react": "~19.2.0",
     "react": "19.1.0",
@@ -48,7 +49,8 @@
     "zod": "^4.4.3"
   },
   "peerDependencies": {
-    "@getpaseo/client": "0.6.1",
+    "@byspace/client": "0.1.0",
+    "@byspace/protocol": "0.1.0",
     "react": "19.1.0",
     "zod": "^4.4.3"
   }

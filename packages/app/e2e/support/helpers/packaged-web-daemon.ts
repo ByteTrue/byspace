@@ -1,4 +1,5 @@
 import { execFile } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import net from "node:net";
 import { tmpdir } from "node:os";
@@ -56,7 +57,7 @@ export async function startPackagedWebDaemon(input: {
 }): Promise<PackagedWebDaemon> {
   const port = await availablePort();
   const home = await mkdtemp(path.join(tmpdir(), "paseo-relay-deployment-e2e-"));
-  const serverId = `relay-deployment-${Date.now().toString(36)}`;
+  const serverId = `srv_${randomUUID().replaceAll("-", "").slice(0, 12)}`;
   const paseo = path.resolve(__dirname, "../../../../../node_modules/.bin/paseo");
   const env: NodeJS.ProcessEnv = {
     ...process.env,

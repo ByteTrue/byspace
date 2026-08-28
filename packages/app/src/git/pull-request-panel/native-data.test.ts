@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { CheckoutPrStatusResponse } from "@getpaseo/protocol/messages";
+import type { CheckoutPrStatusResponse } from "@byspace/protocol/messages";
 import {
   deriveGitlabApprovals,
   deriveGitlabPipelineSummary,
@@ -135,6 +135,7 @@ describe("getNativeFallbackChecks", () => {
         provider: "gitea",
         name: "CI",
         status: "failure",
+        traits: ["warning"],
         url: "https://gitea.com/group/repo/pulls/7",
       },
     ]);

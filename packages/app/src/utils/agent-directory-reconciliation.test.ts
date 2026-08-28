@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { FetchAgentsEntry } from "@getpaseo/client/internal/daemon-client";
-import type { AgentSnapshotPayload } from "@getpaseo/protocol/messages";
+import type { FetchAgentsEntry } from "@byspace/client/internal/daemon-client";
+import type { AgentSnapshotPayload } from "@byspace/protocol/messages";
 import type { Agent } from "@/stores/session-store";
 import { reconcileAgentDirectory } from "./agent-directory-reconciliation";
 

@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "algorithm": "curve25519-xsalsa20-poly1305",
+  "framing": "nonce24-ciphertext",
+  "keys": {
+    "daemonSecretKeyB64": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=",
+    "daemonPublicKeyB64": "j0DFrbaPJWJK5bIU6nZ6bslNgp09e14a0bpvPiE4KF8=",
+    "clientSecretKeyB64": "ICEiIyQlJicoKSorLC0uLzAxMjM0NTY3ODk6Ozw9Pj8=",
+    "clientPublicKeyB64": "NYBy1jZYgNGu6jKa35EhODhR7SGijjt16WXQ0s0WYlQ=",
+    "sharedKeyB64": "Qpth9dluNyaN/FEUhJ1ZnJzqv/22jB9SzQSZrzD1s3c="
+  },
+  "vectors": [
+    {
+      "name": "utf8-json",
+      "encoding": "utf8",
+      "plaintext": "{\"type\":\"hello\",\"clientId\":\"fixture-client\",\"emoji\":\"\u4f60\u597d\"}",
+      "nonceB64": "QEFCQ0RFRkdISUpLTE1OT1BRUlNUVVZX",
+      "bundleB64": "QEFCQ0RFRkdISUpLTE1OT1BRUlNUVVZXdi+l+RJMca65HctkXixESsUXNPe97x/ugTv+DsEXWndBRiryIJOU60V1z5LsNuufqBOTzFpFO1tP0Bj2jlbZnEJJYnGjZ7R/hwtKhz8="
+    },
+    {
+      "name": "binary-edge-bytes",
+      "encoding": "base64",
+      "plaintextB64": "AAECAwD/gH8KDf4=",
+      "nonceB64": "gIGCg4SFhoeIiYqLjI2Oj5CRkpOUlZaX",
+      "bundleB64": "gIGCg4SFhoeIiYqLjI2Oj5CRkpOUlZaX9O5hbdcMuSka2qiG2R2P30OCLwFP98LlOYbK"
+    }
+  ],
+  "invalid": {
+    "lowOrderPublicKeyB64": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+    "shortBundleB64": "QEFCQ0RFRkdISUpLTE1OT1BRUlNUVVZXAAAAAAAAAAAAAAAAAAAA",
+    "tamperedBundleB64": "QEFCQ0RFRkdISUpLTE1OT1BRUlNUVVZXdi+l+RJMca65HctkXixESsUXNPe97x/ugTv+DsEXWndBRiryIJOU60V1z5LsNuufqBOTzFpFO1tP0Bj2jlbZnEJJYnGjZ7R/hwtKhz4="
+  },
+  "clientAuth": {
+    "scheme": "hmac-sha256-v1",
+    "tokenB64": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=",
+    "challengeB64": "ICEiIyQlJicoKSorLC0uLzAxMjM0NTY3ODk6Ozw9Pj8=",
+    "clientPublicKeyB64": "NYBy1jZYgNGu6jKa35EhODhR7SGijjt16WXQ0s0WYlQ=",
+    "binaryCiphertext": true,
+    "proofB64": "kIxRVzu6AP7xefaz2d6vTCqSl2YRRAsZ7O4e0x1ZtuY="
+  }
+}

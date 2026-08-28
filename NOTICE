@@ -1,0 +1,7 @@
+byspace
+Copyright 2026 byspace contributors
+
+This product includes software adapted from Paseo
+(https://github.com/getpaseo/paseo), licensed under the Apache License 2.0.
+The copied Web sources have been modified for a Web-only byspace application,
+including package namespaces, build configuration, and product naming.

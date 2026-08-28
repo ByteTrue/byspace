@@ -31,7 +31,7 @@ function isSettledWorkspaceUrl(url: URL): boolean {
 function pluginSource(): string {
   return `import React, { useRef } from "react";
 import { Text, View } from "react-native";
-import { useAgent, useWorkspace } from "@getpaseo/plugin";
+import { useAgent, useWorkspace } from "@byspace/plugin";
 
 function WorkspacePanel({ workspaceId, host, layout }) {
   const workspace = useWorkspace(workspaceId, (value) => ({ id: value.id }));

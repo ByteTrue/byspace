@@ -8,17 +8,20 @@ import type {
   ListProviderFeaturesRequestMessage,
   ListProviderFeaturesResponseMessage,
   ListProviderModelsResponseMessage,
+  ProjectListRequestMessage,
+  ProjectListResponseMessage,
   ListProviderModesResponseMessage,
   MutableDaemonConfig,
   MutableDaemonConfigPatch,
   ProviderDiagnosticResponseMessage,
   ProjectPlacementPayload,
+  WorkspaceProjectDescriptorPayload,
   RefreshProvidersSnapshotResponseMessage,
   SendAgentMessageRequest,
   SessionOutboundMessage,
   WorkspaceDescriptorPayload,
   WorkspaceCreateRequest,
-} from "@getpaseo/protocol/messages";
+} from "@byspace/protocol/messages";
 import { DaemonClient } from "./daemon-client.js";
 import type {
   FetchAgentsEntry,
@@ -64,6 +67,7 @@ export interface PaseoClientConfig {
   e2ee?: {
     enabled?: boolean;
     daemonPublicKeyB64?: string;
+    clientAuthTokenB64?: string;
   };
   reconnect?: {
     enabled?: boolean;
@@ -77,6 +81,11 @@ export interface PaseoClientConfig {
 export type PaseoWorkspace = WorkspaceDescriptorPayload;
 export type PaseoAgent = AgentSnapshotPayload;
 export type PaseoAgentListOptions = FetchAgentsOptions;
+export type PaseoProject = WorkspaceProjectDescriptorPayload;
+export type PaseoProjectListOptions = Omit<ProjectListRequestMessage, "type" | "requestId"> & {
+  requestId?: string;
+};
+export type PaseoProjectListResult = ProjectListResponseMessage["payload"];
 
 export interface PaseoAgentListResult {
   requestId: string;
@@ -141,6 +150,10 @@ export interface PaseoWorkspaceHandle {
    * the daemon should start streaming workspace directory updates.
    */
   subscribe(handler: (update: PaseoWorkspaceUpdate) => void): () => void;
+}
+
+export interface PaseoProjectActions {
+  list(options?: PaseoProjectListOptions): Promise<PaseoProjectListResult>;
 }
 
 export interface PaseoWorkspaceActions {
@@ -356,6 +369,7 @@ export interface PaseoConfigActions {
 
 export interface PaseoApi {
   readonly workspaces: PaseoWorkspaceActions;
+  readonly projects: PaseoProjectActions;
   readonly agents: PaseoAgentActions;
   readonly providers: PaseoProviderActions;
   readonly config: PaseoConfigActions;
@@ -412,6 +426,9 @@ export function createPaseoApi(daemonClient: DaemonClient): PaseoApi {
   const createWorkspaceHandle = createWorkspaceHandleFactory(daemonClient, createAgent);
 
   return {
+    projects: {
+      list: (options) => daemonClient.listProjects(options),
+    },
     workspaces: {
       list: (options) => daemonClient.fetchWorkspaces(options),
       ref: (workspace) => createWorkspaceHandle(workspace),

@@ -1,0 +1,17 @@
+{
+  "type": "session",
+  "message": {
+    "type": "create_agent_request",
+    "config": {
+      "provider": "pi",
+      "cwd": "/tmp/byspace-fixture",
+      "model": "openai-codex/gpt-5.6-sol"
+    },
+    "labels": {
+      "fixture": "true"
+    },
+    "initialPrompt": "Reply with fixture-ok.",
+    "autoArchive": false,
+    "requestId": "req-create-1"
+  }
+}

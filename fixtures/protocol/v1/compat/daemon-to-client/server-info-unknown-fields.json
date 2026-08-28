@@ -1,0 +1,15 @@
+{
+  "type": "session",
+  "message": {
+    "type": "status",
+    "payload": {
+      "status": "server_info",
+      "serverId": "server-fixture-1",
+      "hostname": "fixture-host",
+      "version": "0.2.0",
+      "futureServerField": {
+        "enabled": true
+      }
+    }
+  }
+}

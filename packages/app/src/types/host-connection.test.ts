@@ -96,6 +96,26 @@ describe("normalizeStoredHostProfile", () => {
     });
   });
 
+  it("preserves authenticated relay pairing secrets", () => {
+    const profile = normalizeStoredHostProfile({
+      serverId: "srv_relay",
+      connections: [
+        {
+          type: "relay",
+          relayEndpoint: "relay.example.com:443",
+          useTls: true,
+          daemonPublicKeyB64: "pubkey",
+          clientAuthTokenB64: "pairing-secret",
+        },
+      ],
+    });
+
+    expect(profile?.connections[0]).toMatchObject({
+      type: "relay",
+      clientAuthTokenB64: "pairing-secret",
+    });
+  });
+
   it("namespaces relay ids only when TLS is true", () => {
     const profile = normalizeStoredHostProfile({
       serverId: "srv_relay",

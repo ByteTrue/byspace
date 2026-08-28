@@ -1,0 +1,11 @@
+{
+  "type": "session",
+  "message": {
+    "type": "send_agent_message_request",
+    "agentId": "agent-1",
+    "text": "Continue from the fixture.",
+    "messageId": "message-1",
+    "activeTurnBehavior": "steer",
+    "requestId": "req-send-1"
+  }
+}

@@ -24,6 +24,14 @@ type RelayProtocolVersion = "1" | "2";
 
 const LEGACY_RELAY_VERSION: RelayProtocolVersion = "1";
 const CURRENT_RELAY_VERSION: RelayProtocolVersion = "2";
+const RELAY_CONNECTION_ID_PATTERN = /^[A-Za-z0-9_-]{1,128}$/;
+const RELAY_V2_SERVER_ID_PATTERN = /^srv_[A-Za-z0-9_-]{12}$/;
+const MAX_RELAY_FRAME_BYTES = 2 << 20;
+const MAX_PENDING_FRAMES_PER_CONNECTION = 200;
+const MAX_PENDING_BYTES_PER_CONNECTION = 2 << 20;
+const MAX_PENDING_CONNECTIONS = 64;
+const MAX_PENDING_BYTES_TOTAL = 16 << 20;
+const MAX_CLIENT_SOCKETS = 256;
 
 function resolveRelayVersion(rawValue: string | null): RelayProtocolVersion | null {
   if (rawValue == null) return LEGACY_RELAY_VERSION;
@@ -98,7 +106,12 @@ function getGlobalWebSocketPair(): (new () => WebSocketPair) | undefined {
 
 interface Env {
   RELAY: DurableObjectNamespace;
+  RELAY_RATE_LIMITER: RateLimitBinding;
   PASEO_RELAY_UPSTREAM?: string;
+}
+
+interface RateLimitBinding {
+  limit(options: { key: string }): Promise<{ success: boolean }>;
 }
 
 interface DurableObjectNamespace {
@@ -124,7 +137,7 @@ interface DurableObjectStub {
  * v2 WebSockets connect in three shapes:
  * - role=server (no connectionId): daemon control socket (one per serverId)
  * - role=server&connectionId=...: daemon per-connection data socket (one per connectionId)
- * - role=client&connectionId=...: app/client socket (many per connectionId)
+ * - role=client: app/client socket; Relay assigns a fresh connectionId
  */
 interface CFResponseInit extends ResponseInit {
   webSocket?: WebSocket;
@@ -133,6 +146,8 @@ interface CFResponseInit extends ResponseInit {
 export class RelayDurableObject {
   private state: DurableObjectState;
   private pendingFrames = new Map<string, Array<string | ArrayBuffer>>();
+  private pendingFrameBytes = new Map<string, number>();
+  private pendingBytesTotal = 0;
 
   constructor(state: DurableObjectState) {
     this.state = state;
@@ -175,22 +190,6 @@ export class RelayDurableObject {
       return this.state.getWebSockets(`client:${connectionId}`).length > 0;
     } catch {
       return false;
-    }
-  }
-
-  private closeExistingServerSockets(args: {
-    isServerControl: boolean;
-    isServerData: boolean;
-    resolvedConnectionId: string;
-  }): void {
-    if (args.isServerControl) {
-      for (const ws of this.state.getWebSockets("server-control")) {
-        ws.close(1008, "Replaced by new connection");
-      }
-    } else if (args.isServerData) {
-      for (const ws of this.state.getWebSockets(`server:${args.resolvedConnectionId}`)) {
-        ws.close(1008, "Replaced by new connection");
-      }
     }
   }
 
@@ -249,26 +248,53 @@ export class RelayDurableObject {
     }, initialDelayMs);
   }
 
-  private bufferFrame(connectionId: string, message: string | ArrayBuffer): void {
-    const existing = this.pendingFrames.get(connectionId) ?? [];
-    existing.push(message);
-    // Prevent unbounded memory growth if a daemon never connects.
-    if (existing.length > 200) {
-      existing.splice(0, existing.length - 200);
+  private frameBytes(message: string | ArrayBuffer): number {
+    return typeof message === "string"
+      ? new TextEncoder().encode(message).byteLength
+      : message.byteLength;
+  }
+
+  private deletePendingFrames(connectionId: string): void {
+    this.pendingFrames.delete(connectionId);
+    const bytes = this.pendingFrameBytes.get(connectionId) ?? 0;
+    this.pendingFrameBytes.delete(connectionId);
+    this.pendingBytesTotal -= bytes;
+  }
+
+  private bufferFrame(connectionId: string, message: string | ArrayBuffer): boolean {
+    const messageBytes = this.frameBytes(message);
+    const existing = this.pendingFrames.get(connectionId);
+    const existingBytes = this.pendingFrameBytes.get(connectionId) ?? 0;
+    if (
+      messageBytes > MAX_RELAY_FRAME_BYTES ||
+      (existing?.length ?? 0) >= MAX_PENDING_FRAMES_PER_CONNECTION ||
+      existingBytes + messageBytes > MAX_PENDING_BYTES_PER_CONNECTION ||
+      (!existing && this.pendingFrames.size >= MAX_PENDING_CONNECTIONS) ||
+      this.pendingBytesTotal + messageBytes > MAX_PENDING_BYTES_TOTAL
+    ) {
+      return false;
     }
-    this.pendingFrames.set(connectionId, existing);
+
+    const frames = existing ?? [];
+    frames.push(message);
+    this.pendingFrames.set(connectionId, frames);
+    this.pendingFrameBytes.set(connectionId, existingBytes + messageBytes);
+    this.pendingBytesTotal += messageBytes;
+    return true;
   }
 
   private flushFrames(connectionId: string, serverWs: WebSocket): void {
     const frames = this.pendingFrames.get(connectionId);
     if (!frames || frames.length === 0) return;
-    this.pendingFrames.delete(connectionId);
-    for (const frame of frames) {
+    this.deletePendingFrames(connectionId);
+    for (let index = 0; index < frames.length; index++) {
       try {
-        serverWs.send(frame);
+        serverWs.send(frames[index]!);
       } catch {
-        // If we can't flush, re-buffer and let the daemon re-establish.
-        this.bufferFrame(connectionId, frame);
+        // If we can't flush, re-buffer the unsent suffix and let the daemon re-establish.
+        for (const frame of frames.slice(index)) {
+          if (!this.bufferFrame(connectionId, frame)) break;
+        }
         break;
       }
     }
@@ -344,20 +370,24 @@ export class RelayDurableObject {
     const upgradeError = this.requireWebSocketUpgrade(request);
     if (upgradeError) return upgradeError;
 
-    // If a client didn't provide a connectionId, the relay assigns one for routing.
+    // Relay v2 connection IDs are always assigned by the Relay. Accepting a
+    // client-selected ID would let one client interfere with another socket.
     const resolvedConnectionId =
-      role === "client" && !connectionId
+      role === "client"
         ? `conn_${crypto.randomUUID().replace(/-/g, "").slice(0, 16)}`
         : connectionId;
 
     const isServerControl = role === "server" && !resolvedConnectionId;
     const isServerData = role === "server" && !!resolvedConnectionId;
 
-    // Close any existing server-side connection with the same identity.
-    // - server-control: single per serverId
-    // - server-data: single per connectionId
-    // - client: many sockets per connectionId are allowed
-    this.closeExistingServerSockets({ isServerControl, isServerData, resolvedConnectionId });
+    // Capture replacements before accepting the new socket. Closing an old
+    // server-data socket only after registration lets its close callback see
+    // the replacement and preserve the paired client.
+    const replacedServerSockets = isServerControl
+      ? this.state.getWebSockets("server-control")
+      : isServerData
+        ? this.state.getWebSockets(`server:${resolvedConnectionId}`)
+        : [];
 
     const [client, server] = this.createWebSocketPair();
 
@@ -371,6 +401,9 @@ export class RelayDurableObject {
     }
 
     this.state.acceptWebSocket(server, tags);
+    for (const replaced of replacedServerSockets) {
+      replaced.close(1008, "Replaced by new connection");
+    }
 
     const attachment: RelaySessionAttachment = {
       serverId,
@@ -420,7 +453,7 @@ export class RelayDurableObject {
     const role = roleRaw === "server" || roleRaw === "client" ? roleRaw : null;
     const serverId = url.searchParams.get("serverId");
     const connectionIdRaw = url.searchParams.get("connectionId");
-    const connectionId = typeof connectionIdRaw === "string" ? connectionIdRaw.trim() : "";
+    const connectionId = connectionIdRaw ?? "";
     const version = resolveRelayVersion(url.searchParams.get("v"));
 
     if (!role || (role !== "server" && role !== "client")) {
@@ -439,6 +472,22 @@ export class RelayDurableObject {
       return this.fetchV1(request, role, serverId);
     }
 
+    if (role === "client" && connectionIdRaw !== null) {
+      return new Response("Relay v2 client connectionId must be assigned by the Relay", {
+        status: 400,
+      });
+    }
+    if (role === "client" && this.state.getWebSockets("client").length >= MAX_CLIENT_SOCKETS) {
+      return new Response("Relay client capacity reached", { status: 503 });
+    }
+    if (
+      role === "server" &&
+      connectionIdRaw !== null &&
+      !RELAY_CONNECTION_ID_PATTERN.test(connectionId)
+    ) {
+      return new Response("Invalid connectionId parameter", { status: 400 });
+    }
+
     return this.fetchV2(request, role, serverId, connectionId);
   }
 
@@ -446,6 +495,11 @@ export class RelayDurableObject {
    * Called when a WebSocket message is received (wakes from hibernation).
    */
   webSocketMessage(ws: WebSocket, message: string | ArrayBuffer): void {
+    if (this.frameBytes(message) > MAX_RELAY_FRAME_BYTES) {
+      ws.close(1009, "Relay frame exceeds size limit");
+      return;
+    }
+
     const attachmentRaw = deserializeAttachment(ws);
     if (!isRecord(attachmentRaw)) {
       console.error("[Relay DO] Message from WebSocket without attachment");
@@ -481,7 +535,10 @@ export class RelayDurableObject {
     if (role === "client") {
       const servers = this.state.getWebSockets(`server:${connectionId}`);
       if (servers.length === 0) {
-        this.bufferFrame(connectionId, message);
+        if (!this.bufferFrame(connectionId, message)) {
+          this.deletePendingFrames(connectionId);
+          ws.close(1009, "Pending Relay buffer limit exceeded");
+        }
         return;
       }
       for (const target of servers) {
@@ -533,7 +590,7 @@ export class RelayDurableObject {
         return;
       }
 
-      this.pendingFrames.delete(connectionId);
+      this.deletePendingFrames(connectionId);
       // Last socket for this session closed: now clean up matching server-data socket.
       for (const serverWs of this.state.getWebSockets(`server:${connectionId}`)) {
         try {
@@ -547,6 +604,11 @@ export class RelayDurableObject {
     }
 
     if (role === "server" && connectionId) {
+      const replacementExists = this.state
+        .getWebSockets(`server:${connectionId}`)
+        .some((socket) => socket !== ws);
+      if (replacementExists) return;
+
       // Force the client to reconnect and re-handshake when the daemon side drops.
       for (const clientWs of this.state.getWebSockets(`client:${connectionId}`)) {
         try {
@@ -589,6 +651,14 @@ export default {
 
     // Relay endpoint
     if (url.pathname === "/ws") {
+      const role = url.searchParams.get("role");
+      if (role !== "server" && role !== "client") {
+        return new Response("Missing or invalid role parameter", { status: 400 });
+      }
+      if (request.headers.get("Upgrade")?.toLowerCase() !== "websocket") {
+        return new Response("Expected WebSocket upgrade", { status: 426 });
+      }
+
       const serverId = url.searchParams.get("serverId");
       if (!serverId) {
         return new Response("Missing serverId parameter", { status: 400 });
@@ -597,6 +667,23 @@ export default {
       const version = resolveRelayVersion(url.searchParams.get("v"));
       if (!version) {
         return new Response("Invalid v parameter (expected 1 or 2)", { status: 400 });
+      }
+      if (version === CURRENT_RELAY_VERSION && !RELAY_V2_SERVER_ID_PATTERN.test(serverId)) {
+        return new Response("Invalid v2 serverId parameter", { status: 400 });
+      }
+
+      const source = request.headers.get("CF-Connecting-IP")?.trim() || "unknown";
+      let admission: { success: boolean };
+      try {
+        admission = await env.RELAY_RATE_LIMITER.limit({ key: `${role}:${source}` });
+      } catch {
+        return new Response("Relay admission unavailable", { status: 503 });
+      }
+      if (!admission.success) {
+        return new Response("Relay connection rate limit exceeded", {
+          status: 429,
+          headers: { "Retry-After": "60" },
+        });
       }
 
       // Route to a version-isolated Durable Object instance.

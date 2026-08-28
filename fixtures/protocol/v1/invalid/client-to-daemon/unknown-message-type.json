@@ -1,0 +1,7 @@
+{
+  "type": "session",
+  "message": {
+    "type": "future_agent_action_request",
+    "requestId": "req-invalid-1"
+  }
+}

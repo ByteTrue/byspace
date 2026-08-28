@@ -1,0 +1,75 @@
+{
+  "valid": [
+    {
+      "name": "terminal-output",
+      "kind": "terminal",
+      "opcode": "output",
+      "slot": 7,
+      "payloadHex": "68656c6c6f20cf800a",
+      "wireHex": "010768656c6c6f20cf800a"
+    },
+    {
+      "name": "terminal-resize",
+      "kind": "terminal_resize",
+      "slot": 3,
+      "resize": {
+        "rows": 24,
+        "cols": 80,
+        "intent": "claim"
+      },
+      "wireHex": "03037b22726f7773223a32342c22636f6c73223a38302c22696e74656e74223a22636c61696d227d"
+    },
+    {
+      "name": "file-begin",
+      "kind": "file_begin",
+      "requestId": "req-1",
+      "metadata": {
+        "mime": "text/plain",
+        "size": 6,
+        "encoding": "utf-8",
+        "modifiedAt": "2026-08-27T00:00:00.000Z",
+        "fileName": "note.txt"
+      },
+      "wireHex": "10057265712d31006f7b226d696d65223a22746578742f706c61696e222c2273697a65223a362c22656e636f64696e67223a227574662d38222c226d6f6469666965644174223a22323032362d30382d32375430303a30303a30302e3030305a222c2266696c654e616d65223a226e6f74652e747874227d"
+    },
+    {
+      "name": "file-chunk",
+      "kind": "file_chunk",
+      "requestId": "req-1",
+      "payloadHex": "000102fdfeff",
+      "wireHex": "11057265712d31000102fdfeff"
+    },
+    {
+      "name": "file-end",
+      "kind": "file_end",
+      "requestId": "req-1",
+      "wireHex": "12057265712d31"
+    }
+  ],
+  "invalid": [
+    {
+      "name": "empty",
+      "wireHex": ""
+    },
+    {
+      "name": "terminal-missing-slot",
+      "wireHex": "01"
+    },
+    {
+      "name": "unknown-opcode",
+      "wireHex": "ff0001"
+    },
+    {
+      "name": "file-end-empty-request-id",
+      "wireHex": "1200"
+    },
+    {
+      "name": "file-end-trailing-payload",
+      "wireHex": "12057265712d3101"
+    },
+    {
+      "name": "file-begin-truncated-metadata",
+      "wireHex": "10057265712d3100057b7d"
+    }
+  ]
+}

@@ -1,6 +1,7 @@
 import { afterEach, expect, test, vi } from "vitest";
 import { createPaseoApi, createPaseoClient } from "./index.js";
 import { DaemonClient } from "./daemon-client.js";
+import { exportPublicKey, generateKeyPair } from "@byspace/relay";
 import type { PaseoAgent, PaseoClient, PaseoWorkspace } from "./index.js";
 
 type FakeWebSocketHandler = (...args: unknown[]) => void;
@@ -28,6 +29,7 @@ class FakeWebSocket {
 
   close(): void {
     this.readyState = 3;
+    this.onclose?.({ code: 1000, reason: "closed" });
   }
 
   open(): void {
@@ -63,6 +65,7 @@ function parseSentSessionMessage(data: string | ArrayBuffer | Uint8Array | undef
   draftConfig?: unknown;
   filter?: unknown;
   page?: unknown;
+  sync?: unknown;
   text?: string;
 } {
   if (typeof data !== "string") {
@@ -116,6 +119,43 @@ async function connectClient(
 
   return { client, ws };
 }
+
+test("createPaseoClient forwards authenticated Relay E2EE configuration", async () => {
+  vi.stubGlobal("WebSocket", FakeWebSocket);
+  const daemonKeyPair = generateKeyPair();
+  const client = createPaseoClient({
+    url: "ws://relay.test/ws?role=client&serverId=srv_AAAAAAAAAAAA&v=2",
+    reconnect: { enabled: false },
+    e2ee: {
+      enabled: true,
+      daemonPublicKeyB64: exportPublicKey(daemonKeyPair.publicKey),
+      clientAuthTokenB64: Buffer.alloc(32, 7).toString("base64"),
+    },
+  });
+
+  void client.connect().catch(() => undefined);
+  const ws = FakeWebSocket.instances[0]!;
+  ws.open();
+  ws.message(
+    JSON.stringify({
+      type: "e2ee_challenge",
+      challenge: Buffer.alloc(32, 9).toString("base64"),
+      authScheme: "hmac-sha256-v1",
+    }),
+  );
+  await vi.waitFor(() => {
+    const hello = ws.sent.find(
+      (frame): frame is string => typeof frame === "string" && frame.includes("e2ee_hello"),
+    );
+    expect(JSON.parse(hello ?? "null")).toMatchObject({
+      type: "e2ee_hello",
+      capabilities: { binaryCiphertext: true },
+      auth: { scheme: "hmac-sha256-v1", proof: expect.any(String) },
+    });
+  });
+
+  await client.close();
+});
 
 function createWorkspace(input: Partial<PaseoWorkspace> = {}): PaseoWorkspace {
   return {
@@ -224,10 +264,82 @@ test("createPaseoApi borrows daemon capabilities without exposing connection own
 
   const paseo = createPaseoApi(daemonClient);
 
-  expect(Object.keys(paseo).sort()).toEqual(["agents", "config", "providers", "workspaces"]);
+  expect(Object.keys(paseo).sort()).toEqual([
+    "agents",
+    "config",
+    "projects",
+    "providers",
+    "workspaces",
+  ]);
   expect("connect" in paseo).toBe(false);
   expect("close" in paseo).toBe(false);
   expect("skills" in paseo.agents).toBe(false);
+});
+
+test("project actions list registered projects through the existing RPC", async () => {
+  const { client, ws } = await connectClient();
+
+  const listPromise = client.projects.list({
+    requestId: "projects-list-request",
+    sync: { generation: "daemon-generation", afterSeq: 7 },
+  });
+  expect(parseSentSessionMessage(ws.sent.at(-1))).toMatchObject({
+    type: "project.list.request",
+    requestId: "projects-list-request",
+    sync: { generation: "daemon-generation", afterSeq: 7 },
+  });
+
+  ws.message(
+    sessionMessage({
+      type: "project.list.response",
+      payload: {
+        requestId: "projects-list-request",
+        projects: [
+          {
+            projectId: "project_sdk",
+            projectKey: "sdk",
+            projectDisplayName: "SDK",
+            projectCustomName: null,
+            projectCustomIconRevision: null,
+            projectIconRevision: "icon-revision",
+            projectRootPath: "/repo/sdk",
+            projectKind: "git",
+            syncSeq: 8,
+          },
+        ],
+        sync: {
+          generation: "daemon-generation",
+          headSeq: 8,
+          mode: "changes",
+          removals: [],
+        },
+      },
+    }),
+  );
+
+  await expect(listPromise).resolves.toEqual({
+    requestId: "projects-list-request",
+    projects: [
+      {
+        projectId: "project_sdk",
+        projectKey: "sdk",
+        projectDisplayName: "SDK",
+        projectCustomName: null,
+        projectCustomIconRevision: null,
+        projectIconRevision: "icon-revision",
+        projectRootPath: "/repo/sdk",
+        projectKind: "git",
+        syncSeq: 8,
+      },
+    ],
+    sync: {
+      generation: "daemon-generation",
+      headSeq: 8,
+      mode: "changes",
+      removals: [],
+    },
+  });
+  await client.close();
 });
 
 test("agent actions list the daemon directory without exposing the low-level client", async () => {

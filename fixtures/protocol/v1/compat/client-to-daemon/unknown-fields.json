@@ -1,0 +1,13 @@
+{
+  "type": "session",
+  "message": {
+    "type": "send_agent_message_request",
+    "agentId": "agent-1",
+    "text": "Known data survives.",
+    "requestId": "req-compat-1",
+    "futureMessageField": {
+      "enabled": true
+    }
+  },
+  "futureEnvelopeField": "ignored"
+}

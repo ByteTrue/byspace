@@ -34,8 +34,8 @@ import { useForgeSearchQuery } from "@/git/use-forge-search-query";
 import { useCheckoutStatusQuery } from "@/git/use-status-query";
 import { ensureCheckoutStatus } from "@/git/checkout-status-cache";
 import { useDaemonConfig } from "@/hooks/use-daemon-config";
-import { resolveTerminalProfiles } from "@getpaseo/protocol/terminal-profiles";
-import type { TerminalProfile } from "@getpaseo/protocol/messages";
+import { resolveTerminalProfiles } from "@byspace/protocol/terminal-profiles";
+import type { TerminalProfile } from "@byspace/protocol/messages";
 import { LaunchControl } from "@/new-workspace-launch/launch-control";
 import { resolveLaunchTarget, type LaunchTarget } from "@/new-workspace-launch/target";
 import { useTerminalComposerState } from "@/new-workspace-launch/composer-state";
@@ -87,9 +87,9 @@ import type { ComposerAttachment } from "@/attachments/types";
 import { useDraftWorkspaceAttachmentScopeKey } from "@/attachments/workspace-attachments-store";
 import type { MessagePayload } from "@/composer/types";
 import type { UserComposerAttachment } from "@/attachments/types";
-import type { AgentAttachment, ForgeSearchItem } from "@getpaseo/protocol/messages";
-import type { CreatePaseoWorktreeInput } from "@getpaseo/client/internal/daemon-client";
-import type { AgentProvider } from "@getpaseo/protocol/agent-types";
+import type { AgentAttachment, ForgeSearchItem } from "@byspace/protocol/messages";
+import type { CreatePaseoWorktreeInput } from "@byspace/client/internal/daemon-client";
+import type { AgentProvider } from "@byspace/protocol/agent-types";
 import type { WorkspaceDraftTabSetup, WorkspaceTabTarget } from "@/workspace-tabs/model";
 import { isEmptyWorkspaceSubmission, runCreateEmptyWorkspace } from "./new-workspace-empty";
 import {
@@ -1678,11 +1678,11 @@ export function NewWorkspaceScreen({
   );
   const selectedItem = pickerSelection.selectedItem;
 
-  const handleGithubPrDetected = useCallback(() => {
+  const handleForgeChangeRequestDetected = useCallback(() => {
     dispatchPickerSelection({ type: "pr-detected" });
   }, []);
 
-  const handleGithubPrAutoAttach = useCallback((item: ForgeSearchItem) => {
+  const handleForgeChangeRequestAutoAttach = useCallback((item: ForgeSearchItem) => {
     dispatchPickerSelection({
       type: "pr-added",
       item: { kind: "github-pr", item },
@@ -2312,7 +2312,7 @@ export function NewWorkspaceScreen({
               submitButtonTestID="workspace-create-submit"
               submitIcon="return"
               isSubmitLoading={isPending}
-              waitForGithubAutoAttachOnSubmit
+              waitForForgeAutoAttachOnSubmit
               submitBehavior="preserve-and-lock"
               blurOnSubmit={true}
               value={chatDraft.text}
@@ -2321,8 +2321,8 @@ export function NewWorkspaceScreen({
               attachments={chatDraft.attachments}
               attachmentScopeKeys={visibleDraftContextScopeKeys}
               onChangeAttachments={chatDraft.setAttachments}
-              onGithubPrDetected={handleGithubPrDetected}
-              onGithubPrAutoAttach={handleGithubPrAutoAttach}
+              onForgeChangeRequestDetected={handleForgeChangeRequestDetected}
+              onForgeChangeRequestAutoAttach={handleForgeChangeRequestAutoAttach}
               cwd={selectedSourceDirectory ?? ""}
               clearDraft={handleClearDraft}
               autoFocus

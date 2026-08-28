@@ -1,6 +1,6 @@
 {
-  "name": "@getpaseo/highlight",
-  "version": "0.6.1",
+  "name": "@byspace/highlight",
+  "version": "0.1.0",
   "files": [
     "dist",
     "!dist/**/*.map"
