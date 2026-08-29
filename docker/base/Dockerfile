@@ -28,6 +28,7 @@ RUN set -eux; \
     npm pack --workspace=@getpaseo/cli --pack-destination /tmp/paseo-packs
 
 FROM ${NODE_IMAGE}
+LABEL org.opencontainers.image.source="https://github.com/ByteTrue/byspace"
 
 ENV HOME=/home/byspace \
     BYSPACE_HOME=/home/byspace/.byspace \
