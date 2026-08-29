@@ -881,8 +881,8 @@ async function main() {
   try {
     const commonEnv = {
       ...process.env,
-      PASEO_HOME: paseoHome,
-      PASEO_LISTEN: listen,
+      BYSPACE_HOME: paseoHome,
+      BYSPACE_LISTEN: listen,
       PASEO_DAEMON_ENDPOINT: `localhost:${daemonPort}`,
       PASEO_CORS_ORIGINS: "*",
       PASEO_LOCAL_SPEECH_AUTO_DOWNLOAD: "0",

@@ -1439,8 +1439,8 @@ describe("HostRuntimeStore", () => {
     const host = makeHost({ connections: [makeHost().connections[0]!] });
     const revocation = createDeferred<void>();
     const storage = createMemoryHostRuntimeStorage({
-      "@paseo:daemon-registry": JSON.stringify([host]),
-      "@paseo:e2e": "1",
+      "@byspace:daemon-registry": JSON.stringify([host]),
+      "@byspace:e2e": "1",
     });
     const store = new HostRuntimeStore({
       storage,
@@ -1465,8 +1465,8 @@ describe("HostRuntimeStore", () => {
     const host = makeHost({ connections: [makeHost().connections[0]!] });
     const revokedServerIds: string[] = [];
     const storage = createMemoryHostRuntimeStorage({
-      "@paseo:daemon-registry": JSON.stringify([host]),
-      "@paseo:e2e": "1",
+      "@byspace:daemon-registry": JSON.stringify([host]),
+      "@byspace:e2e": "1",
     });
     const store = new HostRuntimeStore({
       storage,
@@ -1495,8 +1495,8 @@ describe("HostRuntimeStore", () => {
         return backingStore.readAll();
       },
     };
-    await storage.setItem("@paseo:daemon-registry", JSON.stringify([host]));
-    await storage.setItem("@paseo:e2e", "1");
+    await storage.setItem("@byspace:daemon-registry", JSON.stringify([host]));
+    await storage.setItem("@byspace:e2e", "1");
     const session = useSessionStore.getState();
 
     const store = new HostRuntimeStore({
@@ -1574,7 +1574,7 @@ describe("HostRuntimeStore", () => {
   it("exposes the default appearance for a host stored before the field existed", async () => {
     const storage = createMemoryHostRuntimeStorage();
     await storage.setItem(
-      "@paseo:daemon-registry",
+      "@byspace:daemon-registry",
       JSON.stringify([
         {
           serverId: "srv_legacy",
@@ -1586,7 +1586,7 @@ describe("HostRuntimeStore", () => {
         },
       ]),
     );
-    await storage.setItem("@paseo:e2e", "1");
+    await storage.setItem("@byspace:e2e", "1");
     const store = createAppearanceStore(storage);
 
     const registryLoaded = onceHostListMatches(store, () => store.isHostRegistryLoaded());
@@ -1601,8 +1601,8 @@ describe("HostRuntimeStore", () => {
   it("records a chosen host color and writes it through to storage", async () => {
     const host = makeHost({ serverId: "srv_appearance", updatedAt: new Date(0).toISOString() });
     const storage = createMemoryHostRuntimeStorage();
-    await storage.setItem("@paseo:daemon-registry", JSON.stringify([host]));
-    await storage.setItem("@paseo:e2e", "1");
+    await storage.setItem("@byspace:daemon-registry", JSON.stringify([host]));
+    await storage.setItem("@byspace:e2e", "1");
     const store = createAppearanceStore(storage);
 
     const registryLoaded = onceHostListMatches(store, () => store.isHostRegistryLoaded());
@@ -1620,7 +1620,7 @@ describe("HostRuntimeStore", () => {
     expect(updated?.appearance).toEqual({ color: "teal", badgeDisplay: null });
     expect(updated?.updatedAt).not.toBe(host.updatedAt);
 
-    const persisted = await storage.getItem("@paseo:daemon-registry");
+    const persisted = await storage.getItem("@byspace:daemon-registry");
     expect(JSON.parse(persisted ?? "[]")[0].appearance).toEqual({
       color: "teal",
       badgeDisplay: null,
@@ -1635,8 +1635,8 @@ describe("HostRuntimeStore", () => {
       appearance: { color: "amber", badgeDisplay: null },
     });
     const storage = createMemoryHostRuntimeStorage();
-    await storage.setItem("@paseo:daemon-registry", JSON.stringify([host]));
-    await storage.setItem("@paseo:e2e", "1");
+    await storage.setItem("@byspace:daemon-registry", JSON.stringify([host]));
+    await storage.setItem("@byspace:e2e", "1");
     const store = createAppearanceStore(storage);
 
     const registryLoaded = onceHostListMatches(store, () => store.isHostRegistryLoaded());
@@ -1652,7 +1652,7 @@ describe("HostRuntimeStore", () => {
 
     expect(store.getHosts()[0]?.appearance).toEqual({ color: "amber", badgeDisplay: "icon" });
 
-    const persisted = await storage.getItem("@paseo:daemon-registry");
+    const persisted = await storage.getItem("@byspace:daemon-registry");
     expect(JSON.parse(persisted ?? "[]")[0].appearance).toEqual({
       color: "amber",
       badgeDisplay: "icon",
@@ -1664,8 +1664,8 @@ describe("HostRuntimeStore", () => {
   it("keeps host appearance unchanged when persistence fails", async () => {
     const host = makeHost({ serverId: "srv_appearance" });
     const storage = createMemoryHostRuntimeStorage();
-    await storage.setItem("@paseo:daemon-registry", JSON.stringify([host]));
-    await storage.setItem("@paseo:e2e", "1");
+    await storage.setItem("@byspace:daemon-registry", JSON.stringify([host]));
+    await storage.setItem("@byspace:e2e", "1");
     const store = createAppearanceStore(storage);
 
     const registryLoaded = onceHostListMatches(store, () => store.isHostRegistryLoaded());
@@ -1685,8 +1685,8 @@ describe("HostRuntimeStore", () => {
   it("serializes overlapping host appearance writes", async () => {
     const host = makeHost({ serverId: "srv_appearance" });
     const storage = createMemoryHostRuntimeStorage();
-    await storage.setItem("@paseo:daemon-registry", JSON.stringify([host]));
-    await storage.setItem("@paseo:e2e", "1");
+    await storage.setItem("@byspace:daemon-registry", JSON.stringify([host]));
+    await storage.setItem("@byspace:e2e", "1");
     const store = createAppearanceStore(storage);
 
     const registryLoaded = onceHostListMatches(store, () => store.isHostRegistryLoaded());
@@ -1711,7 +1711,7 @@ describe("HostRuntimeStore", () => {
     await Promise.all([color, display]);
 
     expect(store.getHosts()[0]?.appearance).toEqual({ color: "teal", badgeDisplay: "icon" });
-    const persistedHosts = JSON.parse((await storage.getItem("@paseo:daemon-registry")) ?? "[]");
+    const persistedHosts = JSON.parse((await storage.getItem("@byspace:daemon-registry")) ?? "[]");
     expect(persistedHosts[0]?.appearance).toEqual({ color: "teal", badgeDisplay: "icon" });
     store.syncHosts([]);
   });
