@@ -114,6 +114,7 @@ test("focused contracts stay inside existing required checks", () => {
   const changes = jobs.get("changes")?.join("\n") ?? "";
   const server = jobs.get("server-tests-ubuntu")?.join("\n") ?? "";
   const desktop = jobs.get("desktop-tests-ubuntu")?.join("\n") ?? "";
+  const releasePackage = jobs.get("release-package")?.join("\n") ?? "";
 
   assert.match(changes, /scripts\/daemon-launch-contract\.test\.mjs/);
   assert.doesNotMatch(changes, /Install dependencies|npm run build/);
@@ -126,6 +127,13 @@ test("focused contracts stay inside existing required checks", () => {
   assert.match(desktop, /test:e2e:browser-tabs/);
   assert.match(desktop, /npm run test --workspace=@getpaseo\/desktop/);
   assert.ok(!jobs.has("desktop-browser-bridge"));
+
+  assert.match(releasePackage, /^    name: release-package$/m);
+  assert.match(releasePackage, /needs\.changes\.outputs\.full != 'false'/);
+  assert.match(releasePackage, /npm run release:pack:bytetrue/);
+  assert.match(releasePackage, /registry\.getpaseo\.invalid/);
+  assert.match(releasePackage, /node_modules\/\.bin\/byspace.*--version/);
+  assert.match(releasePackage, /test ! -e .*node_modules\/\.bin\/paseo/);
   assert.ok(!jobs.has("playwright-desktop"));
 });
 

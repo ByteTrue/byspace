@@ -23,13 +23,13 @@ interface PidFileContent {
 
 export interface RealDaemonState {
   version: string;
-  pid: number | null;
+  pid: number;
   logPath: string;
 }
 
 /**
  * Reads live state from the running E2E test daemon: version from the HTTP
- * status endpoint, PID from the paseo.pid lock file, log path from the
+ * status endpoint, PID from the byspace.pid lock file, log path from the
  * E2E_PASEO_HOME directory. Call this in Node test code (not in the browser).
  */
 export async function loadRealDaemonState(): Promise<RealDaemonState> {
@@ -40,15 +40,12 @@ export async function loadRealDaemonState(): Promise<RealDaemonState> {
   const resp = await fetch(`http://127.0.0.1:${port}/api/status`);
   const data: DaemonApiStatus = await resp.json();
 
-  let pid: number | null = null;
-  try {
-    const raw = readFileSync(`${paseoHome}/paseo.pid`, "utf8");
-    const pidContent: PidFileContent = JSON.parse(raw);
-    pid = pidContent.pid ?? null;
-  } catch (err) {
-    // PID file may not be present yet on a very fresh daemon start
-    console.warn("[desktop-updates] paseo.pid not found:", err);
+  const raw = readFileSync(`${paseoHome}/byspace.pid`, "utf8");
+  const pidContent: PidFileContent = JSON.parse(raw);
+  if (!Number.isInteger(pidContent.pid) || pidContent.pid <= 0) {
+    throw new Error(`Invalid PID in ${paseoHome}/byspace.pid`);
   }
+  const pid = pidContent.pid;
 
   return { version: data.version, pid, logPath: `${paseoHome}/daemon.log` };
 }
@@ -66,7 +63,7 @@ export interface DesktopRuntimeConfig {
   daemonLogPath?: string;
   /** Initial manageBuiltInDaemon setting. Defaults to false. */
   manageBuiltInDaemon?: boolean;
-  /** Daemon listen address reported by desktop_daemon_status. Defaults to 127.0.0.1:6767. */
+  /** Daemon listen address reported by desktop_daemon_status. Defaults to 127.0.0.1:6777. */
   daemonListen?: string;
   /** Keep start_desktop_daemon pending to hold the desktop startup blocker open. */
   hangDaemonStart?: boolean;
@@ -147,7 +144,7 @@ export async function installDesktopRuntime(
       return {
         serverId: cfg.serverId,
         status: daemonRunning ? "running" : "stopped",
-        listen: cfg.daemonListen ?? "127.0.0.1:6767",
+        listen: cfg.daemonListen ?? "127.0.0.1:6777",
         hostname: null,
         pid: currentPid,
         home: "",

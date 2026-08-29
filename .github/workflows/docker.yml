@@ -29,25 +29,9 @@ on:
   workflow_dispatch:
     inputs:
       byspace_version:
-        description: "Expected source version to build. Required when publish is true."
+        description: "Expected source version for a manual dry-run build."
         required: false
         default: ""
-      publish:
-        description: "Publish the image to GHCR. Manual publishes require byspace_version."
-        required: false
-        default: "false"
-        type: choice
-        options:
-          - "false"
-          - "true"
-      publish_latest:
-        description: "Also publish ghcr.io/bytetrue/byspace:latest. Ignored for prereleases."
-        required: false
-        default: "false"
-        type: choice
-        options:
-          - "false"
-          - "true"
 
 concurrency:
   group: docker-${{ github.workflow }}-${{ github.ref }}
@@ -69,15 +53,16 @@ jobs:
       publish: ${{ steps.values.outputs.publish }}
       check_tag: ${{ steps.values.outputs.check_tag }}
       publish_tags: ${{ steps.values.outputs.publish_tags }}
+      release_sha: ${{ steps.values.outputs.release_sha }}
     steps:
       - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
 
       - id: values
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           INPUT_BYSPACE_VERSION: ${{ inputs.byspace_version }}
-          INPUT_PUBLISH: ${{ inputs.publish }}
-          INPUT_PUBLISH_LATEST: ${{ inputs.publish_latest }}
           REPO_OWNER: ${{ github.repository_owner }}
           REF_NAME: ${{ github.ref_name }}
         run: |
@@ -87,48 +72,21 @@ jobs:
           image="ghcr.io/${owner}/byspace"
           package_version="$(node -p "require('./package.json').version")"
           install_version="${INPUT_BYSPACE_VERSION:-${package_version}}"
+          release_sha="$(git rev-parse HEAD)"
           publish=false
           publish_latest=false
-          prerelease=false
 
           if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
             install_version="${REF_NAME#v}"
             publish=true
-            if [[ "${REF_NAME}" == *-* ]]; then
-              prerelease=true
-            else
-              publish_latest=true
-            fi
-          elif [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
-            if [[ "${INPUT_PUBLISH:-false}" == "true" ]]; then
-              if [[ -z "${INPUT_BYSPACE_VERSION}" || "${INPUT_BYSPACE_VERSION}" == "latest" ]]; then
-                echo "::error::byspace_version is required for manual Docker publishes."
-                exit 1
-              fi
-              publish=true
-            fi
-
-            if [[ "${install_version}" == *-* ]]; then
-              prerelease=true
-            fi
-
-            if [[ "${INPUT_PUBLISH_LATEST:-false}" == "true" && "${prerelease}" != "true" ]]; then
-              publish_latest=true
-            fi
-          fi
-
-          if [[ "${publish}" == "true" ]]; then
-            sha="$(git rev-parse HEAD)"
-            if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
-              test "${REF_NAME}" = "v${package_version}"
-              test "$(git rev-list -n 1 "${REF_NAME}")" = "$sha"
-            else
-              test "${GITHUB_EVENT_NAME}" = "workflow_dispatch"
-              test "${INPUT_BYSPACE_VERSION}" = "${package_version}"
-            fi
+            test "${REF_NAME}" = "v${package_version}"
+            test "$(git rev-list -n 1 "${REF_NAME}")" = "$release_sha"
             git fetch origin main --no-tags
-            test "$sha" = "$(git rev-parse origin/main)"
-            test -n "$(gh run list --repo "$GITHUB_REPOSITORY" --workflow CI --commit "$sha" --event push --status success --limit 1 --json databaseId --jq '.[0].databaseId // empty')"
+            test "$release_sha" = "$(git rev-parse origin/main)"
+            test -n "$(gh run list --repo "$GITHUB_REPOSITORY" --workflow CI --commit "$release_sha" --event push --status success --limit 1 --json databaseId --jq '.[0].databaseId // empty')"
+            if [[ "${REF_NAME}" != *-* ]]; then
+              publish_latest=true
+            fi
           fi
 
           check_tag="${image}:check-${GITHUB_SHA::12}"
@@ -142,6 +100,7 @@ jobs:
             echo "install_version=${install_version}"
             echo "publish=${publish}"
             echo "check_tag=${check_tag}"
+            echo "release_sha=${release_sha}"
             echo "publish_tags<<EOF"
             echo "${publish_tags}"
             echo "EOF"
@@ -183,6 +142,9 @@ jobs:
       packages: write
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.setup.outputs.release_sha }}
+          persist-credentials: false
 
       - uses: docker/setup-qemu-action@v4
       - uses: docker/setup-buildx-action@v4
@@ -193,6 +155,15 @@ jobs:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Revalidate remote release tag before image push
+        env:
+          EXPECTED_SHA: ${{ needs.setup.outputs.release_sha }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          git fetch origin "refs/tags/$RELEASE_TAG:refs/tags/$RELEASE_TAG" --force
+          test "$(git rev-list -n 1 "$RELEASE_TAG")" = "$EXPECTED_SHA"
 
       - uses: docker/build-push-action@v7
         with:
@@ -253,7 +224,7 @@ jobs:
           test -n "$digest"
           asset="$RUNNER_TEMP/BySpace-$VERSION-container.txt"
           printf 'image=%s\ndigest=%s\nplatforms=%s\nsource=%s\n' \
-            "$image" "$digest" "$PLATFORMS" "$GITHUB_SHA" > "$asset"
+            "$image" "$digest" "$PLATFORMS" "${{ needs.setup.outputs.release_sha }}" > "$asset"
           node scripts/write-sha256.mjs "$asset"
           notes_file=".github/release/$RELEASE_TAG.md"
           if ! gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
@@ -262,5 +233,5 @@ jobs:
             [[ "$RELEASE_TAG" == *-* ]] && args+=(--prerelease)
             gh "${args[@]}"
           fi
-          scripts/upload-release-asset.sh "$RELEASE_TAG" "$asset"
-          scripts/upload-release-asset.sh "$RELEASE_TAG" "$asset.sha256"
+          scripts/upload-release-asset.sh "$RELEASE_TAG" "$asset" "${{ needs.setup.outputs.release_sha }}"
+          scripts/upload-release-asset.sh "$RELEASE_TAG" "$asset.sha256" "${{ needs.setup.outputs.release_sha }}"

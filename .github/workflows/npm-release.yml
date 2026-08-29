@@ -223,5 +223,5 @@ jobs:
             gh "${args[@]}" || gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null
           fi
           for file in "$asset" "$asset.sha256"; do
-            bash scripts/upload-release-asset.sh "$RELEASE_TAG" "$file"
+            bash scripts/upload-release-asset.sh "$RELEASE_TAG" "$file" "$RELEASE_SHA"
           done

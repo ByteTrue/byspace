@@ -59,6 +59,7 @@ jobs:
 
           WRAPPER_LOG="$BYSPACE_HOME/byspace-server-wrapper.log"
 
+          # shellcheck disable=SC2329
           cleanup() {
             if [[ -n "${DAEMON_PID:-}" ]] && kill -0 "$DAEMON_PID" 2>/dev/null; then
               kill "$DAEMON_PID"

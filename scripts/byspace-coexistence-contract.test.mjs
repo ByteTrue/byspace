@@ -40,6 +40,16 @@ for (const path of mobileIdentityPaths) {
   assert.doesNotMatch(read(path), /sh\.paseo|127\.0\.0\.1:6767|tcp:6767/iu, path);
 }
 
+for (const path of [
+  "packages/server/src/server/pid-lock.test.ts",
+  "packages/cli/tests/22-daemon-stop-supervisor.test.ts",
+  "packages/cli/tests/33-daemon-stop-tree-kill.test.ts",
+  "packages/cli/tests/34-daemon-stop-stale-reachable.test.ts",
+  "packages/desktop/e2e/support/runtime.ts",
+]) {
+  assert.doesNotMatch(read(path), /paseo\.pid|Another Paseo daemon|127\.0\.0\.1:6767/iu, path);
+}
+
 const rootPackage = JSON.parse(read("package.json"));
 const cliPackage = JSON.parse(read("packages/cli/package.json"));
 const packageLock = JSON.parse(read("package-lock.json"));
@@ -68,6 +78,9 @@ const desktopConfig = read("packages/desktop/electron-builder.yml");
 assert.match(desktopConfig, /appId: com\.bytetrue\.byspace\.desktop/u);
 assert.match(desktopConfig, /productName: BySpace/u);
 assert.doesNotMatch(desktopConfig, /paseo:\/\//iu);
+
+const easConfig = JSON.parse(read("packages/app/eas.json"));
+assert.equal(easConfig.submit, undefined, "upstream store submission profiles must stay disabled");
 
 const hostedDefaults = [
   serverConfig,
@@ -105,8 +118,16 @@ assert.doesNotMatch(
 );
 
 const dockerWorkflow = read(".github/workflows/docker.yml");
-assert.match(dockerWorkflow, /if \[\[ "\$\{publish\}" == "true" \]\]; then/u);
+const dockerConfig = loadYaml(dockerWorkflow);
+assert.deepEqual(Object.keys(dockerConfig.on.workflow_dispatch.inputs), ["byspace_version"]);
 assert.match(dockerWorkflow, /GH_TOKEN: \$\{\{ secrets\.GITHUB_TOKEN \}\}/u);
+assert.match(dockerWorkflow, /Revalidate remote release tag before image push/u);
+assert.ok(
+  dockerWorkflow.indexOf("Revalidate remote release tag before image push") <
+    dockerWorkflow.lastIndexOf("docker/build-push-action"),
+  "Docker must refresh the remote release tag before pushing the public image",
+);
+assert.match(dockerWorkflow, /ref: \$\{\{ needs\.setup\.outputs\.release_sha \}\}/u);
 
 for (const path of [
   ".github/workflows/deploy-relay.yml",
@@ -157,18 +178,34 @@ for (const [path, jobNames] of Object.entries(readonlyJobs)) {
   }
 }
 
+const uploadHelper = read("scripts/upload-release-asset.sh");
+assert.match(uploadHelper, /"\$#" -ne 3/u);
+assert.match(
+  uploadHelper,
+  /git fetch origin "refs\/tags\/\$release_tag:refs\/tags\/\$release_tag" --force/u,
+);
+assert.ok(
+  uploadHelper.indexOf("git fetch origin") < uploadHelper.indexOf("gh release view"),
+  "asset helper must revalidate the remote tag before every public asset check or upload",
+);
+
 for (const path of [
+  ".github/workflows/android-apk-release.yml",
   ".github/workflows/ios-unsigned-release.yml",
   ".github/workflows/npm-release.yml",
   ".github/workflows/desktop-release.yml",
+  ".github/workflows/docker.yml",
 ]) {
   const workflow = read(path);
-  assert.match(
-    workflow,
-    /git fetch origin "refs\/tags\/\$[A-Z_]+:refs\/tags\/\$[A-Z_]+" --force/u,
-    `${path} must refresh the remote tag immediately before publishing`,
-  );
-  assert.match(workflow, /scripts\/upload-release-asset\.sh/u, path);
+  const calls = workflow.split("\n").filter((line) => /upload-release-asset\.sh\s+"/u.test(line));
+  assert.ok(calls.length > 0, `${path} must upload through the immutable asset helper`);
+  for (const call of calls) {
+    assert.match(
+      call,
+      /upload-release-asset\.sh\s+"[^"]+"\s+"[^"]+"\s+"[^"]+"\s*$/u,
+      `${path} must pass the expected commit SHA to every public asset upload`,
+    );
+  }
   assert.doesNotMatch(workflow, /--clobber/u, `${path} must not overwrite release assets`);
 }
 
@@ -182,6 +219,20 @@ for (const path of [
   "packages/app/src/screens/settings/metadata-generation-page.tsx",
 ]) {
   assert.doesNotMatch(read(path), /paseo\.sh/iu, path);
+}
+
+for (const path of ["README.md", "README.zh-CN.md", "README.ja.md", "README.ko.md"]) {
+  assert.doesNotMatch(
+    read(path),
+    /paseo\.sh|github\.com\/getpaseo\/paseo\/releases|npm install -g @getpaseo\/cli|^paseo\s|:6767/imu,
+    path,
+  );
+}
+
+for (const path of ["packages/client/README.md", "packages/client/examples/README.md"]) {
+  const source = read(path);
+  assert.doesNotMatch(source, /npm install @getpaseo\/client|paseo\.sh/iu, path);
+  assert.match(source, /not (?:a |a separately )?supported/iu, path);
 }
 
 const releasePackage = JSON.parse(read("package.json"));

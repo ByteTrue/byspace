@@ -122,11 +122,11 @@ A `v*` tag starts these production paths:
 | `ios-unsigned-release.yml` | iOS Simulator `.app.zip` and unsigned device `.ipa`                                        |
 | `docker.yml`               | `ghcr.io/bytetrue/byspace:<version>`; stable releases also move `latest`                   |
 | `deploy-app.yml`           | Web/PWA deployment to `https://app.byspace.cc.cd`                                          |
-| `nix.yml`                  | Nix release artifacts when the runner and cache credentials are available                  |
 
 Marketing website deployment, relay deployment, release-note mutation, desktop manifest
-restamping, EAS store submission, TestFlight, App Store, and Play Store workflows are
-absent from this release line.
+restamping, Nix publication, EAS store submission, TestFlight, App Store, and Play Store
+workflows are absent from this release line. `nix.yml` remains a pull-request source-build
+check only.
 
 ## Dry-run workflows
 

@@ -233,5 +233,5 @@ jobs:
           files=(dist/ios/*)
           ((${#files[@]} > 0))
           for file in "${files[@]}"; do
-            bash scripts/upload-release-asset.sh "$RELEASE_TAG" "$file"
+            bash scripts/upload-release-asset.sh "$RELEASE_TAG" "$file" "$RELEASE_SHA"
           done

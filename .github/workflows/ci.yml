@@ -59,6 +59,7 @@ jobs:
           scripts/daemon-launch-contract.test.mjs
           scripts/push-current-release-tag.test.mjs
           scripts/release-version-utils.test.mjs
+          scripts/upload-release-asset.test.mjs
           scripts/sync-fdroid-changelogs.test.mjs
 
   format:
@@ -138,6 +139,49 @@ jobs:
           npm pack --dry-run --ignore-scripts --workspace=@getpaseo/protocol
           npm pack --dry-run --ignore-scripts --workspace=@getpaseo/client
           npm pack --dry-run --ignore-scripts --workspace=@getpaseo/server
+
+  release-package:
+    name: release-package
+    needs: changes
+    if: ${{ !cancelled() && needs.changes.outputs.full != 'false' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.20.0"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: node scripts/npm-retry.mjs ci
+
+      - name: Build release package
+        run: |
+          npm run build:server
+          npm run build:daemon-web-ui
+          npm run release:pack:bytetrue
+
+      - name: Install and verify consolidated package
+        run: |
+          set -euo pipefail
+          prefix="$(mktemp -d)"
+          userconfig="$RUNNER_TEMP/byspace-invalid-scope.npmrc"
+          printf '%s\n' '@getpaseo:registry=https://registry.getpaseo.invalid/' > "$userconfig"
+          tarball="$(find dist/npm -maxdepth 1 -name '*.tgz' -print -quit)"
+          test -n "$tarball"
+          NPM_CONFIG_USERCONFIG="$userconfig" npm install --prefix "$prefix" --no-audit --no-fund "$tarball"
+          test -x "$prefix/node_modules/.bin/byspace"
+          test ! -e "$prefix/node_modules/.bin/paseo"
+          actual_version="$("$prefix/node_modules/.bin/byspace" --version)"
+          expected_version="$(node -p "require('./package.json').version")"
+          test "$actual_version" = "$expected_version"
 
   server-tests-ubuntu:
     name: server-tests (ubuntu-latest)

@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="packages/website/public/logo.svg" width="64" height="64" alt="Paseo logo">
+  <img src="packages/website/public/logo.svg" width="64" height="64" alt="BySpace logo">
 </p>
 
-<h1 align="center">Paseo</h1>
+<h1 align="center">BySpace</h1>
 
 <p align="center">
   <a href="README.md">English</a> ·
@@ -12,36 +12,23 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/getpaseo/paseo/stargazers">
-    <img src="https://img.shields.io/github/stars/getpaseo/paseo?style=flat&logo=github" alt="GitHub stars">
+  <a href="https://github.com/ByteTrue/byspace/stargazers">
+    <img src="https://img.shields.io/github/stars/ByteTrue/byspace?style=flat&logo=github" alt="GitHub stars">
   </a>
-  <a href="https://github.com/getpaseo/paseo/releases">
-    <img src="https://img.shields.io/github/v/release/getpaseo/paseo?style=flat&logo=github" alt="GitHub release">
-  </a>
-  <a href="https://x.com/moboudra">
-    <img src="https://img.shields.io/badge/%40moboudra-555?logo=x" alt="X">
-  </a>
-  <a href="https://discord.gg/jz8T2uahpH">
-    <img src="https://img.shields.io/badge/Discord-555?logo=discord" alt="Discord">
-  </a>
-  <a href="https://www.reddit.com/r/PaseoAI/">
-    <img src="https://img.shields.io/badge/Reddit-555?logo=reddit" alt="Reddit">
+  <a href="https://github.com/ByteTrue/byspace/releases">
+    <img src="https://img.shields.io/github/v/release/ByteTrue/byspace?style=flat&logo=github" alt="GitHub release">
   </a>
 </p>
 
 <p align="center">Claude Code、Codex、Copilot、OpenCode 和 Pi agents 的统一界面。</p>
 
 <p align="center">
-  <img src="https://paseo.sh/hero-mockup.png" alt="Paseo app screenshot" width="100%">
+  <img src="packages/website/public/hero-mockup.png" alt="BySpace app screenshot" width="100%">
 </p>
 
 <p align="center">
-  <img src="https://paseo.sh/mobile-mockup.png" alt="Paseo mobile app" width="100%">
+  <img src="packages/website/public/mobile-mockup.png" alt="BySpace mobile app" width="100%">
 </p>
-
-> [!NOTE]
-> 我是独立维护者，不一定每天都能及时处理 GitHub Issues。
-> 如果问题很紧急或阻塞了你，[Discord](https://discord.gg/jz8T2uahpH) 是最快联系到我的地方。
 
 ---
 
@@ -51,11 +38,11 @@
 - **多提供商：** 通过同一个界面使用 Claude Code、Codex、Copilot、OpenCode 和 Pi。为每个任务选择合适的模型。
 - **语音控制：** 在语音模式下口述任务或讨论问题。需要免手操作时很方便。
 - **跨设备：** 支持 iOS、Android、桌面端、Web 和 CLI。在桌前开始工作，用手机查看进度，也可以从终端脚本化操作。
-- **隐私优先：** Paseo 没有遥测、追踪，也不会强制登录。
+- **隐私优先：** BySpace 没有遥测、追踪，也不会强制登录。
 
 ## 快速开始
 
-Paseo 会运行一个名为 daemon 的本地服务，用来管理你的 coding agents。桌面 app、移动 app、Web app 和 CLI 等客户端都会连接到它。
+BySpace 会运行一个名为 daemon 的本地服务，用来管理你的 coding agents。桌面 app、移动 app、Web app 和 CLI 等客户端都会连接到它。
 
 ### 前置条件
 
@@ -69,47 +56,48 @@ Paseo 会运行一个名为 daemon 的本地服务，用来管理你的 coding a
 
 ### 桌面 app（推荐）
 
-从 [paseo.sh/download](https://paseo.sh/download) 或 [GitHub releases 页面](https://github.com/getpaseo/paseo/releases)下载。打开 app 后 daemon 会自动启动，不需要再安装其他东西。
+从 [BySpace GitHub Releases](https://github.com/ByteTrue/byspace/releases) 下载。打开 app 后 daemon 会自动启动，不需要再安装其他东西。
 
 如果要从手机连接，在 Settings 中扫描显示的二维码。
 
 ### CLI / 无头模式
 
-安装 CLI 并启动 Paseo：
+安装 CLI 并启动 BySpace：
 
 ```bash
-npm install -g @getpaseo/cli
-paseo
+npm install -g @bytetrue/byspace@beta
+byspace
 ```
 
-终端中会显示一个二维码。你可以从任意客户端连接。这个方式适合服务器和远程机器。
+BySpace 默认在 `127.0.0.1:6777` 启动。终端会询问是否启用端到端加密 relay；也可以通过 TCP、Tailscale 或其他 VPN 直接连接。
 
 完整安装和配置见：
 
-- [文档](https://paseo.sh/docs)
-- [配置参考](https://paseo.sh/docs/configuration)
+- [开发与安装](docs/development.md)
+- [架构](docs/architecture.md)
+- [Server 与 CLI 参考](packages/server/README.md)
 
 ## CLI
 
 你能在 app 中完成的事情，也都可以在终端中完成。
 
 ```bash
-paseo run --provider claude/opus-4.6 "implement user authentication"
-paseo run --provider codex/gpt-5.4 --worktree feature-x "implement feature X"
+byspace run --provider claude/opus-4.6 "implement user authentication"
+byspace run --provider codex/gpt-5.4 --worktree feature-x "implement feature X"
 
-paseo ls                           # 列出正在运行的 agents
-paseo attach abc123                # 实时流式查看输出
-paseo send abc123 "also add tests" # 发送后续任务
+byspace ls                           # 列出正在运行的 agents
+byspace attach abc123                # 实时流式查看输出
+byspace send abc123 "also add tests" # 发送后续任务
 
 # 在远程 daemon 上运行
-paseo --host workstation.local:6767 run "run the full test suite"
+byspace --host workstation.local:6777 run "run the full test suite"
 ```
 
-更多内容见[完整 CLI 参考](https://paseo.sh/docs/cli)。
+更多内容见 [Server 与 CLI 参考](packages/server/README.md)。
 
 ## Skills
 
-Skills 会教你的 agent 使用 Paseo 来编排其他 agents。
+上游 Paseo skills 与 BySpace 保留的内部协议兼容：
 
 ```bash
 npx skills add getpaseo/paseo
@@ -125,12 +113,12 @@ npx skills add getpaseo/paseo
 
 Monorepo 包结构速览：
 
-- `packages/server`：Paseo daemon（agent 进程编排、WebSocket API、MCP server）
+- `packages/server`：BySpace daemon（agent 进程编排、WebSocket API、MCP server）
 - `packages/app`：Expo 客户端（iOS、Android、Web）
-- `packages/cli`：用于 daemon 和 agent 工作流的 `paseo` CLI
+- `packages/cli`：用于 daemon 和 agent 工作流的 `byspace` CLI
 - `packages/desktop`：Electron 桌面 app
 - `packages/relay`：用于远程连接的 relay 包
-- `packages/website`：营销站点和文档（`paseo.sh`）
+- `packages/website`：保留的上游营销站点源码，本发布线不部署
 
 常用命令：
 
@@ -164,7 +152,7 @@ npm run typecheck
 PASEO_RELAY_ENDPOINT=127.0.0.1:8080 \
 PASEO_RELAY_PUBLIC_ENDPOINT=relay.example.com:443 \
 PASEO_RELAY_USE_TLS=true \
-paseo daemon start
+byspace daemon start
 ```
 
 等价配置：

@@ -515,5 +515,5 @@ jobs:
           files=(desktop-release/*)
           ((${#files[@]} > 0))
           for file in "${files[@]}"; do
-            bash scripts/upload-release-asset.sh "$SOURCE_TAG" "$file"
+            bash scripts/upload-release-asset.sh "$SOURCE_TAG" "$file" "$RELEASE_SHA"
           done

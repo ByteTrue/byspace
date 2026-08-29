@@ -94,6 +94,7 @@ jobs:
           persist-credentials: false
           ref: ${{ env.RELEASE_REF }}
       - name: Verify exact current-main CI SHA
+        id: release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -105,6 +106,7 @@ jobs:
           git fetch origin main --no-tags
           test "$sha" = "$(git rev-parse origin/main)"
           test -n "$(gh run list --repo "$GITHUB_REPOSITORY" --workflow CI --commit "$sha" --event push --status success --limit 1 --json databaseId --jq '.[0].databaseId // empty')"
+          echo "release_sha=$sha" >> "$GITHUB_OUTPUT"
       - uses: actions/setup-node@v4
         with:
           node-version: "22.20.0"
@@ -184,7 +186,7 @@ jobs:
         run: |
           set -euo pipefail
           git fetch origin "refs/tags/$RELEASE_REF:refs/tags/$RELEASE_REF" --force
-          test "$(git rev-list -n 1 "$RELEASE_REF")" = "$(git rev-parse HEAD)"
+          test "$(git rev-list -n 1 "$RELEASE_REF")" = "${{ steps.release.outputs.release_sha }}"
           if gh release view "$RELEASE_REF" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then exit 0; fi
           notes_file=".github/release/$RELEASE_REF.md"
           args=(release create "$RELEASE_REF" --repo "$GITHUB_REPOSITORY" --title "BySpace $RELEASE_REF")
@@ -195,8 +197,8 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          scripts/upload-release-asset.sh "$RELEASE_REF" "${{ steps.apk.outputs.path }}"
-          scripts/upload-release-asset.sh "$RELEASE_REF" "${{ steps.apk.outputs.checksum }}"
+          scripts/upload-release-asset.sh "$RELEASE_REF" "${{ steps.apk.outputs.path }}" "${{ steps.release.outputs.release_sha }}"
+          scripts/upload-release-asset.sh "$RELEASE_REF" "${{ steps.apk.outputs.checksum }}" "${{ steps.release.outputs.release_sha }}"
       - uses: actions/upload-artifact@v4
         with:
           name: byspace-android
