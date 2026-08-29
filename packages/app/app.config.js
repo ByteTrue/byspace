@@ -97,7 +97,7 @@ const nativeReleaseVersion = getNativeReleaseVersion(pkg.version);
 export default {
   expo: {
     name: variant.name,
-    slug: "voice-mobile",
+    slug: "byspace",
     version: nativeReleaseVersion.appVersion,
     orientation: "portrait",
     icon: "./assets/images/icon.png",
@@ -184,6 +184,9 @@ export default {
       autolinkingModuleResolution: true,
     },
     extra: {
+      eas: {
+        projectId: "1ef7eff8-5d3f-4139-ae1b-e0a6579c479e",
+      },
       fdroidBuild: isFdroidBuild,
       profileBuild: isProfileBuild,
       router: {},

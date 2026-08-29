@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       ref:
-        description: "Git ref to build"
+        description: "Git ref to build (dry-runs must use current main)"
         required: true
         default: main
         type: string
@@ -22,152 +22,149 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  dry-run:
-    if: ${{ github.event_name == 'workflow_dispatch' && !inputs.publish }}
-    permissions:
-      contents: read
-    runs-on: ubuntu-latest
-    timeout-minutes: 90
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-          ref: ${{ inputs.ref }}
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "22.20.0"
-          cache: npm
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: "21"
-      - uses: android-actions/setup-android@v3
-      - run: npm ci
-      - run: npm run build:app-deps
-      - name: Generate production Android project
-        working-directory: packages/app
-        env:
-          APP_VARIANT: production
-          CI: "1"
-          EXPO_NO_DOTENV: "1"
-          NODE_ENV: production
-        run: npx expo prebuild --platform android --clean --no-install
-      - name: Build dry-run release APK
-        working-directory: packages/app/android
-        run: |
-          chmod +x gradlew
-          ./gradlew :app:assembleRelease --no-daemon -x lint -x lintVitalAnalyzeRelease -x lintVitalRelease -x generateReleaseLintModel -x generateReleaseLintVitalModel
-      - name: Package dry-run APK
-        id: apk
-        run: |
-          set -euo pipefail
-          source_apk="$(find packages/app/android/app/build/outputs/apk/release -maxdepth 1 -type f -name '*.apk' -print -quit)"
-          [[ -n "$source_apk" ]]
-          version="$(node -p 'require("./package.json").version')"
-          asset="$RUNNER_TEMP/BySpace-$version-android-dry-run.apk"
-          cp "$source_apk" "$asset"
-          (cd "$(dirname "$asset")" && sha256sum "$(basename "$asset")" > "$(basename "$asset").sha256")
-          echo "path=$asset" >> "$GITHUB_OUTPUT"
-          echo "checksum=$asset.sha256" >> "$GITHUB_OUTPUT"
-      - uses: actions/upload-artifact@v4
-        with:
-          name: byspace-android-dry-run
-          path: |
-            ${{ steps.apk.outputs.path }}
-            ${{ steps.apk.outputs.checksum }}
-          if-no-files-found: error
-          retention-days: 14
-
-  publish-android-apk:
-    if: ${{ github.event_name == 'push' || inputs.publish }}
+  context:
     permissions:
       actions: read
-      contents: write
+      contents: read
     runs-on: ubuntu-latest
-    timeout-minutes: 90
-    env:
-      RELEASE_REF: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.ref_name }}
+    outputs:
+      artifact_name: ${{ steps.release.outputs.artifact_name }}
+      asset_name: ${{ steps.release.outputs.asset_name }}
+      checksum_name: ${{ steps.release.outputs.checksum_name }}
+      publish: ${{ steps.release.outputs.publish }}
+      release_ref: ${{ steps.release.outputs.release_ref }}
+      release_sha: ${{ steps.release.outputs.release_sha }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
           persist-credentials: false
-          ref: ${{ env.RELEASE_REF }}
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.ref_name }}
       - name: Verify exact current-main CI SHA
         id: release
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_REF: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.ref_name }}
         run: |
           set -euo pipefail
           version="$(node -p 'require("./package.json").version')"
           sha="$(git rev-parse HEAD)"
-          test "$RELEASE_REF" = "v$version"
-          test "$(git rev-list -n 1 "$RELEASE_REF")" = "$sha"
           git fetch origin main --no-tags
           test "$sha" = "$(git rev-parse origin/main)"
+
+          publish=false
+          if [[ "${{ github.event_name }}" == "push" || "${{ inputs.publish }}" == "true" ]]; then
+            publish=true
+            test "$RELEASE_REF" = "v$version"
+            test "$(git rev-list -n 1 "$RELEASE_REF")" = "$sha"
+            asset_name="BySpace-$version-android.apk"
+            artifact_name="byspace-android"
+          else
+            test "$RELEASE_REF" = "main"
+            asset_name="BySpace-$version-android-dry-run.apk"
+            artifact_name="byspace-android-dry-run"
+          fi
+
           test -n "$(gh run list --repo "$GITHUB_REPOSITORY" --workflow CI --commit "$sha" --event push --status success --limit 1 --json databaseId --jq '.[0].databaseId // empty')"
-          echo "release_sha=$sha" >> "$GITHUB_OUTPUT"
+          {
+            echo "artifact_name=$artifact_name"
+            echo "asset_name=$asset_name"
+            echo "checksum_name=$asset_name.sha256"
+            echo "publish=$publish"
+            echo "release_ref=$RELEASE_REF"
+            echo "release_sha=$sha"
+          } >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: context
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          ref: ${{ needs.context.outputs.release_sha }}
       - uses: actions/setup-node@v4
         with:
           node-version: "22.20.0"
           cache: npm
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: "21"
-      - uses: android-actions/setup-android@v3
       - run: npm ci
-      - run: npm run build:app-deps
-      - name: Generate production Android project
+      - name: Materialize ByteTrue signing credentials
         working-directory: packages/app
         env:
-          APP_VARIANT: production
-          CI: "1"
-          EXPO_NO_DOTENV: "1"
-          NODE_ENV: production
-        run: npx expo prebuild --platform android --clean --no-install
-      - name: Build release APK
-        working-directory: packages/app/android
-        run: |
-          chmod +x gradlew
-          ./gradlew :app:assembleRelease --no-daemon -x lint -x lintVitalAnalyzeRelease -x lintVitalRelease -x generateReleaseLintModel -x generateReleaseLintVitalModel
-      - name: Decode ByteTrue signing key
-        env:
           ANDROID_RELEASE_KEYSTORE_BASE64: ${{ secrets.ANDROID_RELEASE_KEYSTORE_BASE64 }}
-        run: |
-          set -euo pipefail
-          [[ -n "$ANDROID_RELEASE_KEYSTORE_BASE64" ]] || { echo "Missing required secret: ANDROID_RELEASE_KEYSTORE_BASE64" >&2; exit 1; }
-          keystore="$RUNNER_TEMP/byspace-android-release.jks"
-          node -e 'require("node:fs").writeFileSync(process.argv[1], Buffer.from(process.env.ANDROID_RELEASE_KEYSTORE_BASE64, "base64"))' "$keystore"
-          chmod 600 "$keystore"
-          echo "ANDROID_RELEASE_KEYSTORE_PATH=$keystore" >> "$GITHUB_ENV"
-      - name: Align, sign, and verify APK
-        id: apk
-        env:
           ANDROID_RELEASE_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_RELEASE_KEYSTORE_PASSWORD }}
           ANDROID_RELEASE_KEY_ALIAS: ${{ secrets.ANDROID_RELEASE_KEY_ALIAS }}
           ANDROID_RELEASE_KEY_PASSWORD: ${{ secrets.ANDROID_RELEASE_KEY_PASSWORD }}
         run: |
           set -euo pipefail
-          for name in ANDROID_RELEASE_KEYSTORE_PASSWORD ANDROID_RELEASE_KEY_ALIAS ANDROID_RELEASE_KEY_PASSWORD; do
+          for name in ANDROID_RELEASE_KEYSTORE_BASE64 ANDROID_RELEASE_KEYSTORE_PASSWORD ANDROID_RELEASE_KEY_ALIAS ANDROID_RELEASE_KEY_PASSWORD; do
             [[ -n "${!name:-}" ]] || { echo "Missing required secret: $name" >&2; exit 1; }
           done
-          unsigned_apk="$(find packages/app/android/app/build/outputs/apk/release -maxdepth 1 -type f -name '*.apk' -print -quit)"
-          [[ -n "$unsigned_apk" ]]
+          node <<'NODE'
+          const fs = require("node:fs");
+          fs.mkdirSync(".eas-secrets", { recursive: true, mode: 0o700 });
+          fs.writeFileSync(
+            ".eas-secrets/byspace-android-release.jks",
+            Buffer.from(process.env.ANDROID_RELEASE_KEYSTORE_BASE64, "base64"),
+            { mode: 0o600 },
+          );
+          fs.writeFileSync(
+            "credentials.json",
+            `${JSON.stringify({
+              android: {
+                keystore: {
+                  keystorePath: ".eas-secrets/byspace-android-release.jks",
+                  keystorePassword: process.env.ANDROID_RELEASE_KEYSTORE_PASSWORD,
+                  keyAlias: process.env.ANDROID_RELEASE_KEY_ALIAS,
+                  keyPassword: process.env.ANDROID_RELEASE_KEY_PASSWORD,
+                },
+              },
+            })}\n`,
+            { mode: 0o600 },
+          );
+          NODE
+      - name: Build Android APK on EAS
+        id: eas
+        working-directory: packages/app
+        env:
+          CI: "1"
+          EXPO_NO_DOTENV: "1"
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          NODE_ENV: production
+        run: |
+          set -euo pipefail
+          [[ -n "$EXPO_TOKEN" ]] || { echo "Missing required secret: EXPO_TOKEN" >&2; exit 1; }
+          build_json="$RUNNER_TEMP/eas-build.json"
+          npx eas build --platform android --profile production-apk --freeze-credentials --non-interactive --wait --json > "$build_json"
+          build_id="$(node -e 'const fs=require("node:fs"); const value=JSON.parse(fs.readFileSync(process.argv[1],"utf8")); const build=Array.isArray(value)?value[0]:value; process.stdout.write(build?.id??"")' "$build_json")"
+          [[ -n "$build_id" ]] || { echo "Failed to determine EAS build ID" >&2; exit 1; }
+          echo "build_id=$build_id" >> "$GITHUB_OUTPUT"
+      - name: Remove local signing credentials
+        if: ${{ always() }}
+        working-directory: packages/app
+        run: rm -rf credentials.json .eas-secrets
+      - name: Download EAS APK
+        working-directory: packages/app
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          set -euo pipefail
+          build_json="$RUNNER_TEMP/eas-build-view.json"
+          npx eas build:view "${{ steps.eas.outputs.build_id }}" --json > "$build_json"
+          artifact_url="$(node -e 'const fs=require("node:fs"); const value=JSON.parse(fs.readFileSync(process.argv[1],"utf8")); process.stdout.write(value?.artifacts?.buildUrl??value?.artifacts?.applicationArchiveUrl??"")' "$build_json")"
+          [[ -n "$artifact_url" ]] || { echo "Failed to determine EAS APK URL" >&2; exit 1; }
+          curl --fail --location --output "$RUNNER_TEMP/${{ needs.context.outputs.asset_name }}" "$artifact_url"
+      - uses: android-actions/setup-android@v3
+      - name: Verify APK identity and signer
+        run: |
+          set -euo pipefail
+          asset="$RUNNER_TEMP/${{ needs.context.outputs.asset_name }}"
           build_tools="$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)"
-          zipalign="$build_tools/zipalign"
           apksigner="$build_tools/apksigner"
-          [[ -x "$zipalign" && -x "$apksigner" ]]
-          version="$(node -p 'require("./package.json").version')"
-          asset="$RUNNER_TEMP/BySpace-$version-android.apk"
-          "$zipalign" -p -f 4 "$unsigned_apk" "$RUNNER_TEMP/byspace-aligned.apk"
-          "$apksigner" sign \
-            --ks "$ANDROID_RELEASE_KEYSTORE_PATH" \
-            --ks-key-alias "$ANDROID_RELEASE_KEY_ALIAS" \
-            --ks-pass env:ANDROID_RELEASE_KEYSTORE_PASSWORD \
-            --key-pass env:ANDROID_RELEASE_KEY_PASSWORD \
-            --out "$asset" \
-            "$RUNNER_TEMP/byspace-aligned.apk"
+          [[ -x "$apksigner" ]]
           "$apksigner" verify --verbose --print-certs "$asset" | tee "$RUNNER_TEMP/apksigner.txt"
           fingerprint="$(node scripts/apksigner-certificate-sha256.mjs "$RUNNER_TEMP/apksigner.txt")"
           expected="$(node -p 'require("./.github/release/android-signing.json").certificateSha256.toLowerCase()')"
@@ -177,16 +174,40 @@ jobs:
           native_version="$(node -p 'require("./packages/app/native-release-version.js").getNativeReleaseVersion(require("./package.json").version).appVersion')"
           test "$package_id" = "com.bytetrue.byspace"
           test "$version_name" = "$native_version"
-          (cd "$(dirname "$asset")" && sha256sum "$(basename "$asset")" > "$(basename "$asset").sha256")
-          echo "path=$asset" >> "$GITHUB_OUTPUT"
-          echo "checksum=$asset.sha256" >> "$GITHUB_OUTPUT"
+          (cd "$RUNNER_TEMP" && sha256sum "${{ needs.context.outputs.asset_name }}" > "${{ needs.context.outputs.checksum_name }}")
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ needs.context.outputs.artifact_name }}
+          path: |
+            ${{ runner.temp }}/${{ needs.context.outputs.asset_name }}
+            ${{ runner.temp }}/${{ needs.context.outputs.checksum_name }}
+          if-no-files-found: error
+          retention-days: 14
+
+  publish-android-apk:
+    if: ${{ needs.context.outputs.publish == 'true' }}
+    needs: [context, build]
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: ${{ needs.context.outputs.release_sha }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: ${{ needs.context.outputs.artifact_name }}
+          path: ${{ runner.temp }}/android-release
       - name: Ensure GitHub release exists
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_REF: ${{ needs.context.outputs.release_ref }}
         run: |
           set -euo pipefail
           git fetch origin "refs/tags/$RELEASE_REF:refs/tags/$RELEASE_REF" --force
-          test "$(git rev-list -n 1 "$RELEASE_REF")" = "${{ steps.release.outputs.release_sha }}"
+          test "$(git rev-list -n 1 "$RELEASE_REF")" = "${{ needs.context.outputs.release_sha }}"
           if gh release view "$RELEASE_REF" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then exit 0; fi
           notes_file=".github/release/$RELEASE_REF.md"
           args=(release create "$RELEASE_REF" --repo "$GITHUB_REPOSITORY" --title "BySpace $RELEASE_REF")
@@ -195,15 +216,8 @@ jobs:
           gh "${args[@]}" || gh release view "$RELEASE_REF" --repo "$GITHUB_REPOSITORY" >/dev/null
       - name: Upload APK to GitHub release
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_REF: ${{ needs.context.outputs.release_ref }}
         run: |
-          scripts/upload-release-asset.sh "$RELEASE_REF" "${{ steps.apk.outputs.path }}" "${{ steps.release.outputs.release_sha }}"
-          scripts/upload-release-asset.sh "$RELEASE_REF" "${{ steps.apk.outputs.checksum }}" "${{ steps.release.outputs.release_sha }}"
-      - uses: actions/upload-artifact@v4
-        with:
-          name: byspace-android
-          path: |
-            ${{ steps.apk.outputs.path }}
-            ${{ steps.apk.outputs.checksum }}
-          if-no-files-found: error
-          retention-days: 14
+          scripts/upload-release-asset.sh "$RELEASE_REF" "$RUNNER_TEMP/android-release/${{ needs.context.outputs.asset_name }}" "${{ needs.context.outputs.release_sha }}"
+          scripts/upload-release-asset.sh "$RELEASE_REF" "$RUNNER_TEMP/android-release/${{ needs.context.outputs.checksum_name }}" "${{ needs.context.outputs.release_sha }}"
