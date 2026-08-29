@@ -213,6 +213,7 @@ jobs:
           VERSION: ${{ needs.setup.outputs.install_version }}
         run: |
           set -euo pipefail
+          # shellcheck disable=SC2153
           image="$IMAGE:$VERSION"
           manifest="$RUNNER_TEMP/manifest.json"
           docker buildx imagetools inspect "$image" --raw > "$manifest"
@@ -246,6 +247,7 @@ jobs:
           VERSION: ${{ needs.setup.outputs.install_version }}
         run: |
           set -euo pipefail
+          # shellcheck disable=SC2153
           image="$IMAGE:$VERSION"
           digest="$(docker buildx imagetools inspect "$image" | awk '/^Digest:/ { print $2; exit }')"
           test -n "$digest"

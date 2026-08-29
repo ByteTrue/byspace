@@ -25,41 +25,54 @@ jobs:
   context:
     runs-on: ubuntu-latest
     permissions:
-      actions: read
       contents: read
     outputs:
-      ref: ${{ steps.release.outputs.ref }}
+      sha: ${{ steps.release.outputs.sha }}
       tag: ${{ steps.release.outputs.tag }}
       version: ${{ steps.release.outputs.version }}
       publish: ${{ steps.release.outputs.publish }}
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          persist-credentials: false
           ref: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.ref }}
       - id: release
-        name: Resolve build context
+        name: Resolve immutable build context
         env:
           BUILD_REF: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.ref_name }}
           SHOULD_PUBLISH: ${{ github.event_name != 'workflow_dispatch' || inputs.publish }}
         run: |
           set -euo pipefail
           {
-            echo "ref=$BUILD_REF"
+            echo "sha=$(git rev-parse HEAD)"
             echo "tag=$BUILD_REF"
-            echo "version=$(node -p 'require(\"./package.json\").version')"
+            echo "version=$(node -p 'require("./package.json").version')"
             echo "publish=$SHOULD_PUBLISH"
           } >> "$GITHUB_OUTPUT"
+
+  gate:
+    needs: context
+    if: needs.context.outputs.publish == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: ${{ needs.context.outputs.sha }}
       - name: Verify exact current-main CI SHA
-        if: steps.release.outputs.publish == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          RELEASE_TAG: ${{ steps.release.outputs.tag }}
+          RELEASE_TAG: ${{ needs.context.outputs.tag }}
         run: |
           set -euo pipefail
           version="$(node -p 'require("./package.json").version')"
           sha="$(git rev-parse HEAD)"
           test "$RELEASE_TAG" = "v$version"
+          git fetch origin "refs/tags/$RELEASE_TAG:refs/tags/$RELEASE_TAG" --force
           test "$(git rev-list -n 1 "$RELEASE_TAG")" = "$sha"
           git fetch origin main --no-tags
           test "$sha" = "$(git rev-parse origin/main)"
@@ -67,11 +80,12 @@ jobs:
 
   build:
     name: iOS ${{ matrix.arch }}
-    needs: context
+    needs: [context, gate]
+    if: ${{ always() && needs.context.result == 'success' && (needs.context.outputs.publish != 'true' || needs.gate.result == 'success') }}
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 90
     permissions:
-      contents: write
+      contents: read
     strategy:
       fail-fast: false
       matrix:
@@ -82,18 +96,17 @@ jobs:
           - arch: x64
             runner: macos-15-intel
             build_device: false
-
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ needs.context.outputs.ref }}
+          persist-credentials: false
+          ref: ${{ needs.context.outputs.sha }}
       - uses: actions/setup-node@v4
         with:
           node-version: "22.20.0"
           cache: npm
       - run: npm ci
       - run: npm run build:app-deps
-
       - name: Generate production iOS project
         working-directory: packages/app
         env:
@@ -102,11 +115,9 @@ jobs:
           EXPO_NO_DOTENV: "1"
           NODE_ENV: production
         run: npx expo prebuild --platform ios --clean --no-install
-
       - name: Install CocoaPods dependencies
         working-directory: packages/app/ios
         run: pod install
-
       - name: Build unsigned iOS Simulator app
         env:
           APP_VARIANT: production
@@ -123,7 +134,6 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             ONLY_ACTIVE_ARCH=YES \
             build
-
       - name: Package and verify iOS Simulator app
         id: simulator
         run: |
@@ -138,7 +148,6 @@ jobs:
           (cd "$(dirname "$asset")" && shasum -a 256 "$(basename "$asset")" > "$(basename "$asset").sha256")
           echo "path=$asset" >> "$GITHUB_OUTPUT"
           echo "checksum=$asset.sha256" >> "$GITHUB_OUTPUT"
-
       - name: Build unsigned iOS device app
         if: matrix.build_device
         env:
@@ -157,7 +166,6 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY= \
             build
-
       - name: Package unsigned IPA
         if: matrix.build_device
         id: device
@@ -174,36 +182,6 @@ jobs:
           (cd "$(dirname "$asset")" && shasum -a 256 "$(basename "$asset")" > "$(basename "$asset").sha256")
           echo "path=$asset" >> "$GITHUB_OUTPUT"
           echo "checksum=$asset.sha256" >> "$GITHUB_OUTPUT"
-
-      - name: Ensure GitHub release exists
-        if: needs.context.outputs.publish == 'true'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          RELEASE_TAG: ${{ needs.context.outputs.tag }}
-        run: |
-          set -euo pipefail
-          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then exit 0; fi
-          notes_file=".github/release/$RELEASE_TAG.md"
-          args=(release create "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --title "BySpace $RELEASE_TAG")
-          [[ -f "$notes_file" ]] && args+=(--notes-file "$notes_file") || args+=(--generate-notes)
-          [[ "$RELEASE_TAG" == *-* ]] && args+=(--prerelease)
-          gh "${args[@]}" || gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null
-
-      - name: Upload iOS artifacts to GitHub release
-        if: needs.context.outputs.publish == 'true'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          RELEASE_TAG: ${{ needs.context.outputs.tag }}
-        run: |
-          set -euo pipefail
-          files=("${{ steps.simulator.outputs.path }}" "${{ steps.simulator.outputs.checksum }}")
-          if [[ "${{ matrix.build_device }}" == "true" ]]; then
-            files+=("${{ steps.device.outputs.path }}" "${{ steps.device.outputs.checksum }}")
-          fi
-          for file in "${files[@]}"; do
-            scripts/upload-release-asset.sh "$RELEASE_TAG" "$file"
-          done
-
       - uses: actions/upload-artifact@v4
         with:
           name: byspace-ios-${{ matrix.arch }}
@@ -214,3 +192,43 @@ jobs:
             ${{ steps.device.outputs.checksum }}
           if-no-files-found: error
           retention-days: 14
+
+  publish:
+    needs: [context, gate, build]
+    if: ${{ always() && needs.context.outputs.publish == 'true' && needs.gate.result == 'success' && needs.build.result == 'success' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: ${{ needs.context.outputs.sha }}
+          sparse-checkout: |
+            .github/release
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: byspace-ios-*
+          path: dist/ios
+          merge-multiple: true
+      - name: Revalidate tag and upload iOS artifacts
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_SHA: ${{ needs.context.outputs.sha }}
+          RELEASE_TAG: ${{ needs.context.outputs.tag }}
+        run: |
+          set -euo pipefail
+          git fetch origin "refs/tags/$RELEASE_TAG:refs/tags/$RELEASE_TAG" --force
+          test "$(git rev-list -n 1 "$RELEASE_TAG")" = "$RELEASE_SHA"
+          if ! gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            notes_file=".github/release/$RELEASE_TAG.md"
+            args=(release create "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --title "BySpace $RELEASE_TAG")
+            [[ -f "$notes_file" ]] && args+=(--notes-file "$notes_file") || args+=(--generate-notes)
+            [[ "$RELEASE_TAG" == *-* ]] && args+=(--prerelease)
+            gh "${args[@]}" || gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null
+          fi
+          shopt -s nullglob
+          files=(dist/ios/*)
+          ((${#files[@]} > 0))
+          gh release upload "$RELEASE_TAG" "${files[@]}" --clobber --repo "$GITHUB_REPOSITORY"

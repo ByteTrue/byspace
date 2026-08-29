@@ -4,7 +4,7 @@
 # For any network-reachable deployment, change PASEO_PASSWORD first.
 services:
   byspace:
-    image: ghcr.io/bytetrue/byspace:latest
+    image: ghcr.io/bytetrue/byspace:0.7.0-beta.2
     container_name: byspace
     restart: unless-stopped
     ports:

@@ -57,21 +57,20 @@ jobs:
       contents: write
       actions: read
     runs-on: ubuntu-latest
+    outputs:
+      source-sha: ${{ steps.verified.outputs.sha }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          persist-credentials: false
           sparse-checkout: |
             package.json
             scripts
             .github/release
           ref: ${{ env.CHECKOUT_REF }}
-
-      - name: Resolve release metadata
-        shell: bash
-        run: node scripts/emit-release-env.mjs --source-tag "$SOURCE_TAG" >> "$GITHUB_ENV"
-
-      - name: Verify exact current-main CI SHA
+      - id: verified
+        name: Verify exact current-main CI SHA
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -79,11 +78,15 @@ jobs:
           version="$(node -p 'require("./package.json").version')"
           sha="$(git rev-parse HEAD)"
           test "$SOURCE_TAG" = "v$version"
+          git fetch origin "refs/tags/$SOURCE_TAG:refs/tags/$SOURCE_TAG" --force
           test "$(git rev-list -n 1 "$SOURCE_TAG")" = "$sha"
           git fetch origin main --no-tags
           test "$sha" = "$(git rev-parse origin/main)"
           test -n "$(gh run list --repo "$GITHUB_REPOSITORY" --workflow CI --commit "$sha" --event push --status success --limit 1 --json databaseId --jq '.[0].databaseId // empty')"
-
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+      - name: Resolve release metadata
+        shell: bash
+        run: node scripts/emit-release-env.mjs --source-tag "$SOURCE_TAG" >> "$GITHUB_ENV"
       - name: Create GitHub release
         if: env.IS_SMOKE_TAG != 'true'
         env:
@@ -119,15 +122,15 @@ jobs:
           - runner: macos-15-intel
             electron_arch: x64
     permissions:
-      contents: write
-      packages: read
+      contents: read
     runs-on: ${{ matrix.runner }}
 
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          ref: ${{ env.CHECKOUT_REF }}
+          persist-credentials: false
+          ref: ${{ needs.create-release.outputs.source-sha || env.CHECKOUT_REF }}
 
       - name: Resolve release metadata
         shell: bash
@@ -139,13 +142,9 @@ jobs:
           node-version: "22.20.0"
           cache: "npm"
           cache-dependency-path: package-lock.json
-          registry-url: "https://npm.pkg.github.com"
-          scope: "@boudra"
 
       - name: Install JS dependencies
         run: node scripts/npm-retry.mjs ci
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Set desktop package version from tag
         shell: bash
@@ -166,13 +165,7 @@ jobs:
       - name: Build desktop release
         shell: bash
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           EP_GH_IGNORE_TIME: true
-          CSC_LINK: ${{ secrets.APPLE_CERTIFICATE }}
-          CSC_KEY_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           PASEO_DESKTOP_SMOKE: "1"
           PASEO_DESKTOP_SMOKE_ARTIFACT_DIR: ${{ runner.temp }}/desktop-smoke
         run: |
@@ -180,10 +173,7 @@ jobs:
           build_args=(-- --publish never --mac --${{ matrix.electron_arch }})
           build_args+=("-c.publish.releaseType=$RELEASE_TYPE")
           build_args+=("-c.publish.channel=$RELEASE_CHANNEL")
-          if [[ -z "${CSC_LINK:-}" ]]; then
-            unset CSC_LINK CSC_KEY_PASSWORD APPLE_ID APPLE_APP_SPECIFIC_PASSWORD APPLE_TEAM_ID
-            build_args+=("-c.mac.identity=null" "-c.mac.hardenedRuntime=false" "-c.mac.notarize=false")
-          fi
+          build_args+=("-c.mac.identity=null" "-c.mac.hardenedRuntime=false" "-c.mac.notarize=false")
           npm run build:desktop "${build_args[@]}"
 
       - name: Upload packaged smoke diagnostics
@@ -195,37 +185,22 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
-      - name: Upload desktop artifacts to release
-        if: env.SHOULD_PUBLISH == 'true' && env.IS_SMOKE_TAG != 'true'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Prepare desktop artifacts
         shell: bash
         run: |
           set -euo pipefail
           release_dir="${DESKTOP_PACKAGE_PATH}/release"
-          files=()
-          while IFS= read -r -d '' f; do
-            files+=("$f")
-          done < <(find "$release_dir" -maxdepth 1 -type f ! -name '*.yml' -print0 | sort -z)
-          if (( ${#files[@]} == 0 )); then
-            echo "::error::No release artifacts found in $release_dir"
-            exit 1
-          fi
-          artifacts=( "${files[@]}" )
-          for file in "${artifacts[@]}"; do
+          while IFS= read -r -d '' file; do
             node scripts/write-sha256.mjs "$file"
-            files+=("$file.sha256")
-          done
-          for file in "${files[@]}"; do
-            scripts/upload-release-asset.sh "$RELEASE_TAG" "$file"
-          done
-
+          done < <(find "$release_dir" -maxdepth 1 -type f ! -name '*.yml' ! -name '*.sha256' -print0)
       - name: Upload desktop artifacts to workflow
-        if: env.SHOULD_PUBLISH != 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: desktop-macos-${{ matrix.electron_arch }}
-          path: ${{ env.DESKTOP_PACKAGE_PATH }}/release/*.dmg
+          name: desktop-release-macos-${{ matrix.electron_arch }}
+          path: |
+            ${{ env.DESKTOP_PACKAGE_PATH }}/release/*
+            !${{ env.DESKTOP_PACKAGE_PATH }}/release/*.yml
+          if-no-files-found: error
           retention-days: 7
 
       - name: Upload manifest artifact
@@ -240,15 +215,15 @@ jobs:
     needs: [create-release]
     if: ${{ always() && (needs.create-release.result == 'success' || needs.create-release.result == 'skipped') && ((github.event_name == 'workflow_dispatch' && (github.event.inputs.platform == 'all' || github.event.inputs.platform == 'linux')) || (github.event_name == 'push' && (startsWith(github.ref_name, 'v') || startsWith(github.ref_name, 'desktop-v') || startsWith(github.ref_name, 'desktop-linux-v')))) }}
     permissions:
-      contents: write
-      packages: read
+      contents: read
     runs-on: ubuntu-22.04
 
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          ref: ${{ env.CHECKOUT_REF }}
+          persist-credentials: false
+          ref: ${{ needs.create-release.outputs.source-sha || env.CHECKOUT_REF }}
 
       - name: Resolve release metadata
         shell: bash
@@ -260,13 +235,9 @@ jobs:
           node-version: "22.20.0"
           cache: "npm"
           cache-dependency-path: package-lock.json
-          registry-url: "https://npm.pkg.github.com"
-          scope: "@boudra"
 
       - name: Install JS dependencies
         run: node scripts/npm-retry.mjs ci
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Set desktop package version from tag
         shell: bash
@@ -290,7 +261,6 @@ jobs:
       - name: Build desktop release
         shell: bash
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           EP_GH_IGNORE_TIME: true
           PASEO_DESKTOP_SMOKE: "1"
           PASEO_DESKTOP_SMOKE_ARTIFACT_DIR: ${{ runner.temp }}/desktop-smoke
@@ -310,37 +280,22 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
-      - name: Upload desktop artifacts to release
-        if: env.SHOULD_PUBLISH == 'true' && env.IS_SMOKE_TAG != 'true'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Prepare desktop artifacts
         shell: bash
         run: |
           set -euo pipefail
           release_dir="${DESKTOP_PACKAGE_PATH}/release"
-          files=()
-          while IFS= read -r -d '' f; do
-            files+=("$f")
-          done < <(find "$release_dir" -maxdepth 1 -type f ! -name '*.yml' -print0 | sort -z)
-          if (( ${#files[@]} == 0 )); then
-            echo "::error::No release artifacts found in $release_dir"
-            exit 1
-          fi
-          artifacts=( "${files[@]}" )
-          for file in "${artifacts[@]}"; do
+          while IFS= read -r -d '' file; do
             node scripts/write-sha256.mjs "$file"
-            files+=("$file.sha256")
-          done
-          for file in "${files[@]}"; do
-            scripts/upload-release-asset.sh "$RELEASE_TAG" "$file"
-          done
-
+          done < <(find "$release_dir" -maxdepth 1 -type f ! -name '*.yml' ! -name '*.sha256' -print0)
       - name: Upload desktop artifacts to workflow
-        if: env.SHOULD_PUBLISH != 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: desktop-linux
-          path: ${{ env.DESKTOP_PACKAGE_PATH }}/release/*
+          name: desktop-release-linux
+          path: |
+            ${{ env.DESKTOP_PACKAGE_PATH }}/release/*
+            !${{ env.DESKTOP_PACKAGE_PATH }}/release/*.yml
+          if-no-files-found: error
           retention-days: 7
 
       - name: Upload manifest artifact
@@ -355,15 +310,15 @@ jobs:
     needs: [create-release]
     if: ${{ always() && (needs.create-release.result == 'success' || needs.create-release.result == 'skipped') && ((github.event_name == 'workflow_dispatch' && (github.event.inputs.platform == 'all' || github.event.inputs.platform == 'windows')) || (github.event_name == 'push' && (startsWith(github.ref_name, 'v') || startsWith(github.ref_name, 'desktop-v') || startsWith(github.ref_name, 'desktop-windows-v')))) }}
     permissions:
-      contents: write
-      packages: read
+      contents: read
     runs-on: windows-latest
 
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          ref: ${{ env.CHECKOUT_REF }}
+          persist-credentials: false
+          ref: ${{ needs.create-release.outputs.source-sha || env.CHECKOUT_REF }}
 
       - name: Resolve release metadata
         shell: bash
@@ -375,13 +330,9 @@ jobs:
           node-version: "22.20.0"
           cache: "npm"
           cache-dependency-path: package-lock.json
-          registry-url: "https://npm.pkg.github.com"
-          scope: "@boudra"
 
       - name: Install JS dependencies
         run: node scripts/npm-retry.mjs ci
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Set desktop package version from tag
         shell: bash
@@ -402,7 +353,6 @@ jobs:
       - name: Build desktop release
         shell: bash
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           EP_GH_IGNORE_TIME: true
           PASEO_DESKTOP_SMOKE: "1"
           PASEO_DESKTOP_SMOKE_ARTIFACT_DIR: ${{ runner.temp }}/desktop-smoke
@@ -422,37 +372,22 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
-      - name: Upload desktop artifacts to release
-        if: env.SHOULD_PUBLISH == 'true' && env.IS_SMOKE_TAG != 'true'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Prepare desktop artifacts
         shell: bash
         run: |
           set -euo pipefail
           release_dir="${DESKTOP_PACKAGE_PATH}/release"
-          files=()
-          while IFS= read -r -d '' f; do
-            files+=("$f")
-          done < <(find "$release_dir" -maxdepth 1 -type f ! -name '*.yml' -print0 | sort -z)
-          if (( ${#files[@]} == 0 )); then
-            echo "::error::No release artifacts found in $release_dir"
-            exit 1
-          fi
-          artifacts=( "${files[@]}" )
-          for file in "${artifacts[@]}"; do
+          while IFS= read -r -d '' file; do
             node scripts/write-sha256.mjs "$file"
-            files+=("$file.sha256")
-          done
-          for file in "${files[@]}"; do
-            scripts/upload-release-asset.sh "$RELEASE_TAG" "$file"
-          done
-
+          done < <(find "$release_dir" -maxdepth 1 -type f ! -name '*.yml' ! -name '*.sha256' -print0)
       - name: Upload desktop artifacts to workflow
-        if: env.SHOULD_PUBLISH != 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: desktop-windows
-          path: ${{ env.DESKTOP_PACKAGE_PATH }}/release/*
+          name: desktop-release-windows
+          path: |
+            ${{ env.DESKTOP_PACKAGE_PATH }}/release/*
+            !${{ env.DESKTOP_PACKAGE_PATH }}/release/*.yml
+          if-no-files-found: error
           retention-days: 7
 
       - name: Upload manifest artifact
@@ -464,74 +399,57 @@ jobs:
           retention-days: 1
 
   finalize-rollout:
-    needs: [publish-macos, publish-linux, publish-windows]
-    if: ${{ always() && (needs.publish-macos.result == 'success' || needs.publish-macos.result == 'skipped') && (needs.publish-linux.result == 'success' || needs.publish-linux.result == 'skipped') && (needs.publish-windows.result == 'success' || needs.publish-windows.result == 'skipped') && (github.event_name != 'workflow_dispatch' || github.event.inputs.publish != 'false') }}
+    needs: [create-release, publish-macos, publish-linux, publish-windows]
+    if: ${{ always() && needs.create-release.result == 'success' && (needs.publish-macos.result == 'success' || needs.publish-macos.result == 'skipped') && (needs.publish-linux.result == 'success' || needs.publish-linux.result == 'skipped') && (needs.publish-windows.result == 'success' || needs.publish-windows.result == 'skipped') }}
     permissions:
-      contents: write
+      contents: read
     runs-on: ubuntu-latest
-    concurrency:
-      group: desktop-rollout-${{ github.event.inputs.tag || github.ref_name }}
-      cancel-in-progress: false
-
     steps:
       - uses: actions/checkout@v4
         with:
+          persist-credentials: false
           sparse-checkout: |
             package.json
             package-lock.json
             scripts
-          ref: ${{ env.CHECKOUT_REF }}
-
+          ref: ${{ needs.create-release.outputs.source-sha }}
       - name: Resolve release tag
         shell: bash
         run: node scripts/emit-release-env.mjs --source-tag "$SOURCE_TAG" >> "$GITHUB_ENV"
-
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: "22.20.0"
-          cache: "npm"
+          cache: npm
           cache-dependency-path: package-lock.json
-          registry-url: "https://npm.pkg.github.com"
-          scope: "@boudra"
-
       - name: Install JS dependencies
         run: node scripts/npm-retry.mjs ci
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
       - name: Download mac manifest artifacts
         if: env.IS_SMOKE_TAG != 'true' && needs.publish-macos.result == 'success'
         uses: actions/download-artifact@v4
         with:
           pattern: mac-manifest-*
           path: release-manifests
-
       - name: Download Linux manifest artifact
         if: env.IS_SMOKE_TAG != 'true' && needs.publish-linux.result == 'success'
         uses: actions/download-artifact@v4
         with:
           name: linux-manifest
           path: release-manifests/linux-manifest
-
       - name: Download Windows manifest artifact
         if: env.IS_SMOKE_TAG != 'true' && needs.publish-windows.result == 'success'
         uses: actions/download-artifact@v4
         with:
           name: windows-manifest
           path: release-manifests/windows-manifest
-
-      - name: Assemble and upload stamped manifests
+      - name: Assemble stamped manifests
         if: env.IS_SMOKE_TAG != 'true'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: bash
         run: |
           set -euo pipefail
           cd release-manifests
           manifests_dir="$PWD/final"
           mkdir -p "$manifests_dir"
-
           if [[ "${{ needs.publish-macos.result }}" == "success" ]]; then
             manifest_name="${RELEASE_CHANNEL}-mac.yml"
             node ../scripts/merge-mac-manifest.mjs \
@@ -539,42 +457,64 @@ jobs:
               "mac-manifest-x64/${manifest_name}" \
               "$manifests_dir/${manifest_name}"
           fi
-
           if [[ "${{ needs.publish-linux.result }}" == "success" ]]; then
             cp "linux-manifest/${RELEASE_CHANNEL}-linux.yml" "$manifests_dir/"
           fi
-
           if [[ "${{ needs.publish-windows.result }}" == "success" ]]; then
             cp "windows-manifest/${RELEASE_CHANNEL}.yml" "$manifests_dir/"
           fi
-
           shopt -s nullglob
           files=( "$manifests_dir"/*.yml )
-          if (( ${#files[@]} == 0 )); then
-            echo "::error::No manifest artifacts were available to publish"
-            exit 1
-          fi
+          ((${#files[@]} > 0))
           timestamp="$(date -u +"%Y-%m-%dT%H:%M:%S.000Z")"
           node ../scripts/stamp-rollout.mjs --release-date "$timestamp" --rollout-hours "$ROLLOUT_HOURS" "${files[@]}"
+          # shellcheck disable=SC2016
           ROLLOUT_HOURS_EXPECTED="$ROLLOUT_HOURS" RELEASE_DATE_EXPECTED="$timestamp" node -e '
             const yaml = require("js-yaml");
             const fs = require("fs");
             const expectedHours = Number(process.env.ROLLOUT_HOURS_EXPECTED);
             const expectedDate = process.env.RELEASE_DATE_EXPECTED;
-            if (!Number.isFinite(expectedHours) || expectedHours < 0) {
-              throw new Error(`expected non-negative rolloutHours, got ${process.env.ROLLOUT_HOURS_EXPECTED}`);
-            }
             for (const f of process.argv.slice(1)) {
               const m = yaml.load(fs.readFileSync(f, "utf8")) ?? {};
-              if (m.rolloutHours !== expectedHours) {
-                throw new Error(`${f}: rolloutHours=${m.rolloutHours}, expected ${expectedHours}`);
-              }
-              if (m.releaseDate !== expectedDate) {
-                throw new Error(`${f}: releaseDate=${m.releaseDate}, expected ${expectedDate}`);
-              }
-              if (typeof m.version !== "string" || m.version.length === 0) {
-                throw new Error(`${f}: missing or invalid version`);
+              if (m.rolloutHours !== expectedHours || m.releaseDate !== expectedDate || typeof m.version !== "string" || m.version.length === 0) {
+                throw new Error(`${f}: invalid stamped rollout manifest`);
               }
             }
           ' "${files[@]}"
-          gh release upload "$RELEASE_TAG" "${files[@]}" --clobber --repo "${{ github.repository }}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop-release-manifests
+          path: release-manifests/final/*.yml
+          if-no-files-found: error
+          retention-days: 1
+
+  publish-desktop:
+    needs: [create-release, publish-macos, publish-linux, publish-windows, finalize-rollout]
+    if: ${{ always() && needs.create-release.result == 'success' && needs.finalize-rollout.result == 'success' }}
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: ${{ needs.create-release.outputs.source-sha }}
+          sparse-checkout: package.json
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: desktop-release-*
+          path: desktop-release
+          merge-multiple: true
+      - name: Revalidate tag and upload desktop artifacts
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_SHA: ${{ needs.create-release.outputs.source-sha }}
+        run: |
+          set -euo pipefail
+          git fetch origin "refs/tags/$SOURCE_TAG:refs/tags/$SOURCE_TAG" --force
+          test "$(git rev-list -n 1 "$SOURCE_TAG")" = "$RELEASE_SHA"
+          shopt -s nullglob
+          files=(desktop-release/*)
+          ((${#files[@]} > 0))
+          gh release upload "$SOURCE_TAG" "${files[@]}" --clobber --repo "${{ github.repository }}"

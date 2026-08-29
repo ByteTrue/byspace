@@ -135,7 +135,7 @@ export function syncReleaseNotes(argv = process.argv.slice(2), deps = {}) {
 
   notes = exposeGitHubContributorMentions(notes);
 
-  const tempDir = mkdtempSync(path.join(tmpdir(), "paseo-release-notes-"));
+  const tempDir = mkdtempSync(path.join(tmpdir(), "byspace-release-notes-"));
   const notesPath = path.join(tempDir, `${targetTag}-notes.md`);
   writeFileSync(notesPath, notes);
 
@@ -146,7 +146,7 @@ export function syncReleaseNotes(argv = process.argv.slice(2), deps = {}) {
     "--repo",
     args.repo,
     "--title",
-    `Paseo ${targetTag}`,
+    `BySpace ${targetTag}`,
     "--notes-file",
     notesPath,
     "--verify-tag",

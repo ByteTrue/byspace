@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
+import { load as loadYaml } from "js-yaml";
 
 const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
 
@@ -78,6 +79,12 @@ assert.doesNotMatch(liveRelayTest, /relay\.paseo\.sh/iu);
 const deployAppWorkflow = read(".github/workflows/deploy-app.yml");
 assert.doesNotMatch(deployAppWorkflow, /workflow_dispatch/u);
 assert.match(deployAppWorkflow, /Verify exact current-main CI SHA/u);
+assert.match(deployAppWorkflow, /persist-credentials: false/u);
+assert.ok(
+  deployAppWorkflow.indexOf("Verify exact current-main CI SHA") <
+    deployAppWorkflow.indexOf("npm-retry.mjs ci"),
+  "Web deployment must pass the release gate before running repository install code",
+);
 assert.equal(
   existsSync(new URL("../.github/workflows/deploy-website.yml", import.meta.url)),
   false,
@@ -96,17 +103,76 @@ const dockerWorkflow = read(".github/workflows/docker.yml");
 assert.match(dockerWorkflow, /if \[\[ "\$\{publish\}" == "true" \]\]; then/u);
 assert.match(dockerWorkflow, /GH_TOKEN: \$\{\{ secrets\.GITHUB_TOKEN \}\}/u);
 
+for (const path of [
+  ".github/workflows/deploy-relay.yml",
+  ".github/workflows/deploy-website.yml",
+  ".github/workflows/release-notes-sync.yml",
+  "packages/app/.eas/workflows/release-ios-beta.yml",
+  "packages/app/.eas/workflows/release-mobile.yml",
+  "packages/app/.eas/workflows/resubmit-ios-review.yml",
+]) {
+  assert.equal(
+    existsSync(new URL(`../${path}`, import.meta.url)),
+    false,
+    `${path} must stay disabled`,
+  );
+}
+
 const dryRunReleaseWorkflows = [
   ".github/workflows/android-apk-release.yml",
   ".github/workflows/ios-unsigned-release.yml",
   ".github/workflows/npm-release.yml",
+  ".github/workflows/desktop-release.yml",
 ];
 for (const path of dryRunReleaseWorkflows) {
   const workflow = read(path);
   assert.match(workflow, /workflow_dispatch/u, path);
   assert.match(workflow, /publish:/u, path);
   assert.match(workflow, /Verify exact current-main CI SHA/u, path);
-  assert.match(workflow, /SHOULD_PUBLISH|outputs\.publish/u, path);
+  assert.match(workflow, /persist-credentials: false/u, path);
+}
+
+const readonlyJobs = {
+  ".github/workflows/android-apk-release.yml": ["dry-run"],
+  ".github/workflows/ios-unsigned-release.yml": ["context", "build"],
+  ".github/workflows/npm-release.yml": ["context", "package"],
+  ".github/workflows/desktop-release.yml": ["publish-macos", "publish-linux", "publish-windows"],
+};
+for (const [path, jobNames] of Object.entries(readonlyJobs)) {
+  const jobs = loadYaml(read(path)).jobs;
+  for (const jobName of jobNames) {
+    const job = jobs[jobName];
+    assert.deepEqual(job.permissions, { contents: "read" }, `${path}:${jobName}`);
+    assert.doesNotMatch(
+      JSON.stringify(job),
+      /\$\{\{\s*secrets\./u,
+      `${path}:${jobName} must not receive secrets`,
+    );
+  }
+}
+
+for (const path of [
+  ".github/workflows/ios-unsigned-release.yml",
+  ".github/workflows/npm-release.yml",
+  ".github/workflows/desktop-release.yml",
+]) {
+  assert.match(
+    read(path),
+    /git fetch origin "refs\/tags\/\$[A-Z_]+:refs\/tags\/\$[A-Z_]+" --force/u,
+    `${path} must refresh the remote tag immediately before publishing`,
+  );
+}
+
+for (const path of [
+  "packages/app/src/agent-skills/index.tsx",
+  "packages/app/src/components/welcome-screen.tsx",
+  "packages/app/src/desktop/components/desktop-updates-section.tsx",
+  "packages/app/src/desktop/components/integrations-section.tsx",
+  "packages/app/src/desktop/components/pair-device-section.tsx",
+  "packages/app/src/desktop/updates/rosetta-callout-source.tsx",
+  "packages/app/src/screens/settings/metadata-generation-page.tsx",
+]) {
+  assert.doesNotMatch(read(path), /paseo\.sh/iu, path);
 }
 
 console.log("BySpace coexistence contract OK");
