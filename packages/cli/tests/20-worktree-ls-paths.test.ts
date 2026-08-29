@@ -7,31 +7,31 @@ import { resolvePaseoHomePath, resolvePaseoWorktreesDir } from "../src/commands/
 
 console.log("=== Worktree LS Path Helper Tests ===\n");
 
-const originalPaseoHome = process.env.PASEO_HOME;
+const originalBySpaceHome = process.env.BYSPACE_HOME;
 
 try {
   {
-    console.log("Test 1: resolves explicit PASEO_HOME when set");
-    process.env.PASEO_HOME = "/tmp/paseo-explicit-home";
+    console.log("Test 1: resolves explicit BYSPACE_HOME when set");
+    process.env.BYSPACE_HOME = "/tmp/byspace-explicit-home";
 
-    assert.strictEqual(resolvePaseoHomePath(), "/tmp/paseo-explicit-home");
-    assert.strictEqual(resolvePaseoWorktreesDir(), "/tmp/paseo-explicit-home/worktrees");
-    console.log("\u2713 explicit PASEO_HOME is respected\n");
+    assert.strictEqual(resolvePaseoHomePath(), "/tmp/byspace-explicit-home");
+    assert.strictEqual(resolvePaseoWorktreesDir(), "/tmp/byspace-explicit-home/worktrees");
+    console.log("\u2713 explicit BYSPACE_HOME is respected\n");
   }
 
   {
-    console.log("Test 2: falls back to homedir/.paseo when PASEO_HOME is unset");
-    delete process.env.PASEO_HOME;
+    console.log("Test 2: falls back to homedir/.byspace when BYSPACE_HOME is unset");
+    delete process.env.BYSPACE_HOME;
 
-    assert.strictEqual(resolvePaseoHomePath(), join(homedir(), ".paseo"));
-    assert.strictEqual(resolvePaseoWorktreesDir(), join(homedir(), ".paseo", "worktrees"));
+    assert.strictEqual(resolvePaseoHomePath(), join(homedir(), ".byspace"));
+    assert.strictEqual(resolvePaseoWorktreesDir(), join(homedir(), ".byspace", "worktrees"));
     console.log("\u2713 fallback home path is derived from os.homedir()\n");
   }
 } finally {
-  if (originalPaseoHome === undefined) {
-    delete process.env.PASEO_HOME;
+  if (originalBySpaceHome === undefined) {
+    delete process.env.BYSPACE_HOME;
   } else {
-    process.env.PASEO_HOME = originalPaseoHome;
+    process.env.BYSPACE_HOME = originalBySpaceHome;
   }
 }
 

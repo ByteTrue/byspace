@@ -46,7 +46,7 @@ class FakeDaemonRuntime implements DaemonLaunchRuntime {
   }
 
   resolveHome(env: NodeJS.ProcessEnv): string {
-    return env.PASEO_HOME ?? "/tmp/paseo";
+    return env.BYSPACE_HOME ?? "/tmp/byspace";
   }
 
   spawnDetached(
@@ -71,9 +71,9 @@ class FakeDaemonRuntime implements DaemonLaunchRuntime {
 const tempRoots: string[] = [];
 
 async function createPaseoHome(config: unknown): Promise<string> {
-  const root = await mkdtemp(path.join(os.tmpdir(), "paseo-local-daemon-"));
+  const root = await mkdtemp(path.join(os.tmpdir(), "byspace-local-daemon-"));
   tempRoots.push(root);
-  const paseoHome = path.join(root, ".paseo");
+  const paseoHome = path.join(root, ".byspace");
   await mkdir(paseoHome, { recursive: true });
   await writeFile(path.join(paseoHome, "config.json"), JSON.stringify(config, null, 2));
   return paseoHome;

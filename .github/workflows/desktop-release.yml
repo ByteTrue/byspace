@@ -4,10 +4,6 @@ on:
   push:
     tags:
       - "v*"
-      - "desktop-v*"
-      - "desktop-macos-v*"
-      - "desktop-linux-v*"
-      - "desktop-windows-v*"
   workflow_dispatch:
     inputs:
       tag:
@@ -56,19 +52,37 @@ env:
 
 jobs:
   create-release:
-    if: ${{ (github.event_name == 'push' && !startsWith(github.ref_name, 'desktop-macos-v') && !startsWith(github.ref_name, 'desktop-linux-v') && !startsWith(github.ref_name, 'desktop-windows-v')) || (github.event_name == 'workflow_dispatch' && github.event.inputs.platform == 'all' && github.event.inputs.publish != 'false') }}
+    if: ${{ github.event_name == 'push' || github.event.inputs.publish != 'false' }}
     permissions:
       contents: write
+      actions: read
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
-          sparse-checkout: scripts
+          fetch-depth: 0
+          sparse-checkout: |
+            package.json
+            scripts
+            .github/release
           ref: ${{ env.CHECKOUT_REF }}
 
       - name: Resolve release metadata
         shell: bash
         run: node scripts/emit-release-env.mjs --source-tag "$SOURCE_TAG" >> "$GITHUB_ENV"
+
+      - name: Verify exact current-main CI SHA
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          version="$(node -p 'require("./package.json").version')"
+          sha="$(git rev-parse HEAD)"
+          test "$SOURCE_TAG" = "v$version"
+          test "$(git rev-list -n 1 "$SOURCE_TAG")" = "$sha"
+          git fetch origin main --no-tags
+          test "$sha" = "$(git rev-parse origin/main)"
+          test -n "$(gh run list --repo "$GITHUB_REPOSITORY" --workflow CI --commit "$sha" --event push --status success --limit 1 --json databaseId --jq '.[0].databaseId // empty')"
 
       - name: Create GitHub release
         if: env.IS_SMOKE_TAG != 'true'
@@ -82,13 +96,15 @@ jobs:
             if [[ "$IS_PRERELEASE" == "true" ]]; then
               prerelease_flag="--prerelease"
             fi
+            notes_file=".github/release/$RELEASE_TAG.md"
+            notes_args=(--generate-notes)
+            [[ -f "$notes_file" ]] && notes_args=(--notes-file "$notes_file")
             gh release create "$RELEASE_TAG" \
               --repo "${{ github.repository }}" \
-              --title "Paseo $RELEASE_TAG" \
-              --notes "" \
-              $prerelease_flag || {
-                echo "Release creation raced with another workflow; continuing."
-              }
+              --title "BySpace $RELEASE_TAG" \
+              "${notes_args[@]}" \
+              $prerelease_flag ||
+              gh release view "$RELEASE_TAG" --repo "${{ github.repository }}" >/dev/null
           fi
 
   publish-macos:
@@ -120,7 +136,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: "22"
+          node-version: "22.20.0"
           cache: "npm"
           cache-dependency-path: package-lock.json
           registry-url: "https://npm.pkg.github.com"
@@ -164,6 +180,10 @@ jobs:
           build_args=(-- --publish never --mac --${{ matrix.electron_arch }})
           build_args+=("-c.publish.releaseType=$RELEASE_TYPE")
           build_args+=("-c.publish.channel=$RELEASE_CHANNEL")
+          if [[ -z "${CSC_LINK:-}" ]]; then
+            unset CSC_LINK CSC_KEY_PASSWORD APPLE_ID APPLE_APP_SPECIFIC_PASSWORD APPLE_TEAM_ID
+            build_args+=("-c.mac.identity=null" "-c.mac.hardenedRuntime=false" "-c.mac.notarize=false")
+          fi
           npm run build:desktop "${build_args[@]}"
 
       - name: Upload packaged smoke diagnostics
@@ -191,7 +211,14 @@ jobs:
             echo "::error::No release artifacts found in $release_dir"
             exit 1
           fi
-          gh release upload "$RELEASE_TAG" "${files[@]}" --clobber --repo "${{ github.repository }}"
+          artifacts=( "${files[@]}" )
+          for file in "${artifacts[@]}"; do
+            node scripts/write-sha256.mjs "$file"
+            files+=("$file.sha256")
+          done
+          for file in "${files[@]}"; do
+            scripts/upload-release-asset.sh "$RELEASE_TAG" "$file"
+          done
 
       - name: Upload desktop artifacts to workflow
         if: env.SHOULD_PUBLISH != 'true'
@@ -230,7 +257,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: "22"
+          node-version: "22.20.0"
           cache: "npm"
           cache-dependency-path: package-lock.json
           registry-url: "https://npm.pkg.github.com"
@@ -299,7 +326,14 @@ jobs:
             echo "::error::No release artifacts found in $release_dir"
             exit 1
           fi
-          gh release upload "$RELEASE_TAG" "${files[@]}" --clobber --repo "${{ github.repository }}"
+          artifacts=( "${files[@]}" )
+          for file in "${artifacts[@]}"; do
+            node scripts/write-sha256.mjs "$file"
+            files+=("$file.sha256")
+          done
+          for file in "${files[@]}"; do
+            scripts/upload-release-asset.sh "$RELEASE_TAG" "$file"
+          done
 
       - name: Upload desktop artifacts to workflow
         if: env.SHOULD_PUBLISH != 'true'
@@ -338,7 +372,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: "22"
+          node-version: "22.20.0"
           cache: "npm"
           cache-dependency-path: package-lock.json
           registry-url: "https://npm.pkg.github.com"
@@ -404,7 +438,14 @@ jobs:
             echo "::error::No release artifacts found in $release_dir"
             exit 1
           fi
-          gh release upload "$RELEASE_TAG" "${files[@]}" --clobber --repo "${{ github.repository }}"
+          artifacts=( "${files[@]}" )
+          for file in "${artifacts[@]}"; do
+            node scripts/write-sha256.mjs "$file"
+            files+=("$file.sha256")
+          done
+          for file in "${files[@]}"; do
+            scripts/upload-release-asset.sh "$RELEASE_TAG" "$file"
+          done
 
       - name: Upload desktop artifacts to workflow
         if: env.SHOULD_PUBLISH != 'true'
@@ -448,7 +489,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: "22"
+          node-version: "22.20.0"
           cache: "npm"
           cache-dependency-path: package-lock.json
           registry-url: "https://npm.pkg.github.com"

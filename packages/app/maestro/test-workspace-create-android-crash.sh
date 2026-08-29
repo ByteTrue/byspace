@@ -14,21 +14,21 @@
 #   bash packages/app/maestro/test-workspace-create-android-crash.sh
 #
 # Optional environment:
-#   PASEO_MAESTRO_APP_ID=sh.paseo.debug
-#   PASEO_MAESTRO_DIRECT_ENDPOINT=127.0.0.1:6767
-#   PASEO_MAESTRO_DAEMON_WS_URL=ws://127.0.0.1:6767/ws
+#   PASEO_MAESTRO_APP_ID=com.bytetrue.byspace.debug
+#   PASEO_MAESTRO_DIRECT_ENDPOINT=127.0.0.1:6777
+#   PASEO_MAESTRO_DAEMON_WS_URL=ws://127.0.0.1:6777/ws
 #   PASEO_MAESTRO_PROJECT_PATH=/path/to/git/repo
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
 FLOW_TEMPLATE="$REPO_ROOT/packages/app/maestro/workspace-create-android-crash.yaml"
 FLOW_TEMPLATE_DIR="$REPO_ROOT/packages/app/maestro"
-OUT_DIR="/tmp/paseo-workspace-create-android-$(date +%s)"
+OUT_DIR="/tmp/byspace-workspace-create-android-$(date +%s)"
 CLIENT_EXPORTS="$REPO_ROOT/packages/client/dist/daemon-client.js"
 
-export PASEO_MAESTRO_APP_ID="${PASEO_MAESTRO_APP_ID:-sh.paseo.debug}"
-export PASEO_MAESTRO_DIRECT_ENDPOINT="${PASEO_MAESTRO_DIRECT_ENDPOINT:-127.0.0.1:6767}"
-export PASEO_MAESTRO_DAEMON_WS_URL="${PASEO_MAESTRO_DAEMON_WS_URL:-ws://127.0.0.1:6767/ws}"
+export PASEO_MAESTRO_APP_ID="${PASEO_MAESTRO_APP_ID:-com.bytetrue.byspace.debug}"
+export PASEO_MAESTRO_DIRECT_ENDPOINT="${PASEO_MAESTRO_DIRECT_ENDPOINT:-127.0.0.1:6777}"
+export PASEO_MAESTRO_DAEMON_WS_URL="${PASEO_MAESTRO_DAEMON_WS_URL:-ws://127.0.0.1:6777/ws}"
 
 require_command() {
   if ! command -v "$1" >/dev/null 2>&1; then
@@ -71,14 +71,14 @@ fi
 mkdir -p "$OUT_DIR"
 
 if [ -z "${PASEO_MAESTRO_PROJECT_PATH:-}" ]; then
-  PROJECT_PARENT="$(mktemp -d /tmp/paseo-maestro-project-XXXXXX)"
+  PROJECT_PARENT="$(mktemp -d /tmp/byspace-maestro-project-XXXXXX)"
   PROJECT_BASENAME="aaa-workspace-create-android-$(basename "$PROJECT_PARENT")"
   export PASEO_MAESTRO_PROJECT_PATH="$PROJECT_PARENT/$PROJECT_BASENAME"
   mkdir -p "$PASEO_MAESTRO_PROJECT_PATH"
   git -C "$PASEO_MAESTRO_PROJECT_PATH" init >/dev/null
   git -C "$PASEO_MAESTRO_PROJECT_PATH" checkout -b main >/dev/null 2>&1 || true
-  git -C "$PASEO_MAESTRO_PROJECT_PATH" config user.name "Paseo Maestro"
-  git -C "$PASEO_MAESTRO_PROJECT_PATH" config user.email "maestro@getpaseo.local"
+  git -C "$PASEO_MAESTRO_PROJECT_PATH" config user.name "BySpace Maestro"
+  git -C "$PASEO_MAESTRO_PROJECT_PATH" config user.email "maestro@byspace.local"
   printf "# Workspace create Android repro\n" > "$PASEO_MAESTRO_PROJECT_PATH/README.md"
   git -C "$PASEO_MAESTRO_PROJECT_PATH" add README.md
   git -C "$PASEO_MAESTRO_PROJECT_PATH" commit -m "Initial commit" >/dev/null
@@ -102,7 +102,7 @@ echo "Rendered flow: $FLOW"
 
 echo ""
 echo "Preparing Android port reverse..."
-adb reverse tcp:6767 tcp:6767 >/dev/null
+adb reverse tcp:6777 tcp:6777 >/dev/null
 
 echo ""
 echo "Opening project in daemon..."

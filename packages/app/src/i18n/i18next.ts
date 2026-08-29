@@ -13,21 +13,36 @@ import { zhCN } from "./resources/zh-CN";
 
 const i18n = createInstance();
 
+function rebrandResource<T>(value: T): T {
+  if (typeof value === "string") {
+    return value.replaceAll("Paseo", "BySpace") as T;
+  }
+  if (Array.isArray(value)) {
+    return value.map(rebrandResource) as T;
+  }
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, entry]) => [key, rebrandResource(entry)]),
+    ) as T;
+  }
+  return value;
+}
+
 observeI18nInit(
   i18n.use(initReactI18next).init({
     compatibilityJSON: "v4",
     fallbackLng: "en",
     lng: "en",
     resources: {
-      ar: { translation: ar },
-      en: { translation: en },
-      es: { translation: es },
-      fr: { translation: fr },
-      ja: { translation: ja },
-      ko: { translation: ko },
-      "pt-BR": { translation: ptBR },
-      ru: { translation: ru },
-      "zh-CN": { translation: zhCN },
+      ar: { translation: rebrandResource(ar) },
+      en: { translation: rebrandResource(en) },
+      es: { translation: rebrandResource(es) },
+      fr: { translation: rebrandResource(fr) },
+      ja: { translation: rebrandResource(ja) },
+      ko: { translation: rebrandResource(ko) },
+      "pt-BR": { translation: rebrandResource(ptBR) },
+      ru: { translation: rebrandResource(ru) },
+      "zh-CN": { translation: rebrandResource(zhCN) },
     },
     interpolation: {
       escapeValue: false,

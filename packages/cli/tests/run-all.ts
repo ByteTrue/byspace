@@ -1,16 +1,16 @@
 #!/usr/bin/env npx zx
 
 /**
- * Test runner for Paseo CLI E2E tests
+ * Test runner for BySpace CLI E2E tests
  *
  * Runs all test phases as separate subprocesses with a bounded worker pool
  * so independent tests run concurrently. Each test file already isolates
- * its own daemon (ephemeral port + tmp PASEO_HOME), so parallelism is safe.
+ * its own daemon (ephemeral port + tmp BYSPACE_HOME), so parallelism is safe.
  */
 
 import { spawn } from "child_process";
 import { $ } from "zx";
-import { mkdtemp, readdir, rm, writeFile } from "fs/promises";
+import { chmod, mkdtemp, readdir, rm, writeFile } from "fs/promises";
 import { tmpdir } from "os";
 import { join, dirname, delimiter } from "path";
 import { fileURLToPath } from "url";
@@ -18,9 +18,21 @@ import { fileURLToPath } from "url";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const repoRoot = join(__dirname, "..", "..", "..");
 
-// npm workspace scripts only add the local node_modules/.bin to PATH; hoisted
-// packages live in the root. Prepend it so `npx paseo` resolves locally.
 const rootNodeModulesBin = join(repoRoot, "node_modules", ".bin");
+const testCompatBin = await mkdtemp(join(tmpdir(), "byspace-cli-test-bin-"));
+const legacyTestCommand = join(testCompatBin, "paseo");
+// ponytail: keep the upstream command fixtures unchanged; this shim is test-only and is never packed.
+await writeFile(
+  legacyTestCommand,
+  [
+    "#!/bin/sh",
+    'if [ -n "${PASEO_HOME:-}" ]; then export BYSPACE_HOME="$PASEO_HOME"; fi',
+    'if [ -n "${PASEO_LISTEN:-}" ]; then export BYSPACE_LISTEN="$PASEO_LISTEN"; fi',
+    'exec "$BYSPACE_TEST_BIN" "$@"',
+    "",
+  ].join("\n"),
+);
+await chmod(legacyTestCommand, 0o755);
 const args = process.argv.slice(2);
 const testEnvDefaults = {
   PASEO_LOCAL_SPEECH_AUTO_DOWNLOAD: process.env.PASEO_LOCAL_SPEECH_AUTO_DOWNLOAD ?? "0",
@@ -122,7 +134,7 @@ async function writeJsonSummary({
   );
 }
 
-console.log("🧪 Paseo CLI E2E Test Runner\n");
+console.log("🧪 BySpace CLI E2E Test Runner\n");
 console.log("=".repeat(50));
 
 // Discover all test files
@@ -202,7 +214,10 @@ async function runSingleTest(testFile: string): Promise<TestOutcome> {
       const proc = spawn("npx", ["tsx", testPath], {
         env: {
           ...process.env,
-          PATH: [rootNodeModulesBin, process.env.PATH].filter(Boolean).join(delimiter),
+          PATH: [testCompatBin, rootNodeModulesBin, process.env.PATH]
+            .filter(Boolean)
+            .join(delimiter),
+          BYSPACE_TEST_BIN: join(rootNodeModulesBin, "byspace"),
           npm_config_cache: npmCache,
           PASEO_LOCAL_SPEECH_AUTO_DOWNLOAD: testEnvDefaults.PASEO_LOCAL_SPEECH_AUTO_DOWNLOAD,
           PASEO_DICTATION_ENABLED: testEnvDefaults.PASEO_DICTATION_ENABLED,
@@ -333,5 +348,6 @@ if (failures.length > 0) {
 console.log();
 
 await writeJsonSummary({ passed, failed, failures });
+await rm(testCompatBin, { recursive: true, force: true });
 
 process.exit(failed > 0 ? 1 : 0);

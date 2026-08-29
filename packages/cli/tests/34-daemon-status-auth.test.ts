@@ -14,7 +14,7 @@ try {
   {
     console.log("Test 1: status reports password requirement without marking daemon unreachable");
     const result = await runLocalPaseo(["daemon", "status", "--json"], {
-      PASEO_HOME: daemon.paseoHome,
+      BYSPACE_HOME: daemon.paseoHome,
       PASEO_HOST: "",
       PASEO_PASSWORD: "",
     });
@@ -34,7 +34,7 @@ try {
   {
     console.log("Test 2: status reports rejected supplied password separately");
     const result = await runLocalPaseo(["daemon", "status", "--json"], {
-      PASEO_HOME: daemon.paseoHome,
+      BYSPACE_HOME: daemon.paseoHome,
       PASEO_HOST: "",
       PASEO_PASSWORD: "wrong-secret",
     });
@@ -52,7 +52,7 @@ try {
   {
     console.log("Test 3: status reaches the same daemon when password is supplied");
     const result = await runLocalPaseo(["daemon", "status", "--json"], {
-      PASEO_HOME: daemon.paseoHome,
+      BYSPACE_HOME: daemon.paseoHome,
       PASEO_HOST: "",
       PASEO_PASSWORD: "shared-secret",
     });

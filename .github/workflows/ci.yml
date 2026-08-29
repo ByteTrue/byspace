@@ -43,7 +43,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "22"
+          node-version: "22.20.0"
 
       - name: Detect affected CI contracts
         id: filter
@@ -52,7 +52,7 @@ jobs:
           filters: .github/ci-paths.yml
 
       - name: Validate CI contracts
-        run: node --test scripts/ci-workflow.test.mjs scripts/daemon-launch-contract.test.mjs scripts/sync-fdroid-changelogs.test.mjs
+        run: node --test scripts/byspace-coexistence-contract.test.mjs scripts/ci-workflow.test.mjs scripts/daemon-launch-contract.test.mjs scripts/sync-fdroid-changelogs.test.mjs
 
   format:
     name: format
@@ -66,7 +66,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "22"
+          node-version: "22.20.0"
           cache: "npm"
 
       - name: Install dependencies
@@ -87,7 +87,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "22"
+          node-version: "22.20.0"
           cache: "npm"
 
       - name: Install dependencies
@@ -114,7 +114,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "22"
+          node-version: "22.20.0"
           cache: "npm"
 
       - name: Install dependencies
@@ -146,7 +146,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "22"
+          node-version: "22.20.0"
           cache: "npm"
 
       - name: Fetch origin/main (worktree tests)
@@ -197,7 +197,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "22"
+          node-version: "22.20.0"
           cache: "npm"
 
       - name: Install dependencies with retry
@@ -275,7 +275,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "22"
+          node-version: "22.20.0"
           cache: "npm"
 
       - name: Install dependencies with retry
@@ -303,7 +303,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "22"
+          node-version: "22.20.0"
           cache: "npm"
 
       - name: Install dependencies
@@ -338,7 +338,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "22"
+          node-version: "22.20.0"
           cache: "npm"
 
       - name: Install dependencies with retry
@@ -417,7 +417,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "22"
+          node-version: "22.20.0"
           cache: "npm"
 
       - name: Install dependencies
@@ -446,7 +446,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "22"
+          node-version: "22.20.0"
           cache: "npm"
 
       - name: Install dependencies

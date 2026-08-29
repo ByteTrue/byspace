@@ -28,12 +28,12 @@ on:
       - "v*"
   workflow_dispatch:
     inputs:
-      paseo_version:
+      byspace_version:
         description: "Expected source version to build. Required when publish is true."
         required: false
         default: ""
       publish:
-        description: "Publish the image to GHCR. Manual publishes require paseo_version."
+        description: "Publish the image to GHCR. Manual publishes require byspace_version."
         required: false
         default: "false"
         type: choice
@@ -41,7 +41,7 @@ on:
           - "false"
           - "true"
       publish_latest:
-        description: "Also publish ghcr.io/getpaseo/paseo:latest. Ignored for prereleases."
+        description: "Also publish ghcr.io/bytetrue/byspace:latest. Ignored for prereleases."
         required: false
         default: "false"
         type: choice
@@ -60,6 +60,9 @@ env:
 jobs:
   setup:
     runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
     outputs:
       image: ${{ steps.values.outputs.image }}
       install_version: ${{ steps.values.outputs.install_version }}
@@ -71,7 +74,8 @@ jobs:
 
       - id: values
         env:
-          INPUT_PASEO_VERSION: ${{ inputs.paseo_version }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          INPUT_BYSPACE_VERSION: ${{ inputs.byspace_version }}
           INPUT_PUBLISH: ${{ inputs.publish }}
           INPUT_PUBLISH_LATEST: ${{ inputs.publish_latest }}
           REPO_OWNER: ${{ github.repository_owner }}
@@ -80,9 +84,9 @@ jobs:
           set -euo pipefail
 
           owner="$(printf '%s' "${REPO_OWNER}" | tr '[:upper:]' '[:lower:]')"
-          image="ghcr.io/${owner}/paseo"
+          image="ghcr.io/${owner}/byspace"
           package_version="$(node -p "require('./package.json').version")"
-          install_version="${INPUT_PASEO_VERSION:-${package_version}}"
+          install_version="${INPUT_BYSPACE_VERSION:-${package_version}}"
           publish=false
           publish_latest=false
           prerelease=false
@@ -97,8 +101,8 @@ jobs:
             fi
           elif [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
             if [[ "${INPUT_PUBLISH:-false}" == "true" ]]; then
-              if [[ -z "${INPUT_PASEO_VERSION}" || "${INPUT_PASEO_VERSION}" == "latest" ]]; then
-                echo "::error::paseo_version is required for manual Docker publishes."
+              if [[ -z "${INPUT_BYSPACE_VERSION}" || "${INPUT_BYSPACE_VERSION}" == "latest" ]]; then
+                echo "::error::byspace_version is required for manual Docker publishes."
                 exit 1
               fi
               publish=true
@@ -111,6 +115,20 @@ jobs:
             if [[ "${INPUT_PUBLISH_LATEST:-false}" == "true" && "${prerelease}" != "true" ]]; then
               publish_latest=true
             fi
+          fi
+
+          if [[ "${publish}" == "true" ]]; then
+            sha="$(git rev-parse HEAD)"
+            if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+              test "${REF_NAME}" = "v${package_version}"
+              test "$(git rev-list -n 1 "${REF_NAME}")" = "$sha"
+            else
+              test "${GITHUB_EVENT_NAME}" = "workflow_dispatch"
+              test "${INPUT_BYSPACE_VERSION}" = "${package_version}"
+            fi
+            git fetch origin main --no-tags
+            test "$sha" = "$(git rev-parse origin/main)"
+            test -n "$(gh run list --repo "$GITHUB_REPOSITORY" --workflow CI --commit "$sha" --event push --status success --limit 1 --json databaseId --jq '.[0].databaseId // empty')"
           fi
 
           check_tag="${image}:check-${GITHUB_SHA::12}"
@@ -153,15 +171,15 @@ jobs:
           tags: ${{ needs.setup.outputs.check_tag }}
           push: false
           provenance: false
-          cache-from: type=gha,scope=paseo
-          cache-to: type=gha,scope=paseo,mode=max
+          cache-from: type=gha,scope=byspace
+          cache-to: type=gha,scope=byspace,mode=max
 
   publish:
     needs: setup
     if: needs.setup.outputs.publish == 'true'
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
       packages: write
     steps:
       - uses: actions/checkout@v6
@@ -186,5 +204,61 @@ jobs:
           tags: ${{ needs.setup.outputs.publish_tags }}
           push: true
           provenance: false
-          cache-from: type=gha,scope=paseo
-          cache-to: type=gha,scope=paseo,mode=max
+          cache-from: type=gha,scope=byspace
+          cache-to: type=gha,scope=byspace,mode=max
+
+      - name: Verify multi-arch manifest and container smoke
+        env:
+          IMAGE: ${{ needs.setup.outputs.image }}
+          VERSION: ${{ needs.setup.outputs.install_version }}
+        run: |
+          set -euo pipefail
+          image="$IMAGE:$VERSION"
+          manifest="$RUNNER_TEMP/manifest.json"
+          docker buildx imagetools inspect "$image" --raw > "$manifest"
+          jq -e '[.manifests[].platform | "\(.os)/\(.architecture)"] | index("linux/amd64") and index("linux/arm64")' "$manifest" >/dev/null
+
+          container="byspace-smoke-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          cleanup() { docker rm -f "$container" >/dev/null 2>&1 || true; }
+          trap cleanup EXIT
+          docker run -d --name "$container" --platform linux/amd64 \
+            -e PASEO_PASSWORD=byspace-ci-smoke \
+            -p 127.0.0.1::6777 "$image" >/dev/null
+          host_port="$(docker port "$container" 6777/tcp | sed 's/.*://')"
+          for attempt in {1..60}; do
+            if curl --fail --silent "http://127.0.0.1:$host_port/" >/dev/null; then
+              break
+            fi
+            if [[ "$attempt" == 60 ]]; then
+              docker logs "$container"
+              exit 1
+            fi
+            sleep 2
+          done
+          docker logs "$container" 2>&1 | grep -F 'starting daemon on 0.0.0.0:6777'
+
+      - name: Attach immutable container digest
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          IMAGE: ${{ needs.setup.outputs.image }}
+          RELEASE_TAG: ${{ github.ref_name }}
+          VERSION: ${{ needs.setup.outputs.install_version }}
+        run: |
+          set -euo pipefail
+          image="$IMAGE:$VERSION"
+          digest="$(docker buildx imagetools inspect "$image" | awk '/^Digest:/ { print $2; exit }')"
+          test -n "$digest"
+          asset="$RUNNER_TEMP/BySpace-$VERSION-container.txt"
+          printf 'image=%s\ndigest=%s\nplatforms=%s\nsource=%s\n' \
+            "$image" "$digest" "$PLATFORMS" "$GITHUB_SHA" > "$asset"
+          node scripts/write-sha256.mjs "$asset"
+          notes_file=".github/release/$RELEASE_TAG.md"
+          if ! gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            args=(release create "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --title "BySpace $RELEASE_TAG")
+            [[ -f "$notes_file" ]] && args+=(--notes-file "$notes_file") || args+=(--generate-notes)
+            [[ "$RELEASE_TAG" == *-* ]] && args+=(--prerelease)
+            gh "${args[@]}"
+          fi
+          scripts/upload-release-asset.sh "$RELEASE_TAG" "$asset"
+          scripts/upload-release-asset.sh "$RELEASE_TAG" "$asset.sha256"

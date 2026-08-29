@@ -39,7 +39,7 @@ export interface HubInitScaffold {
 }
 
 export function hubLoginResumeCommand(step: "connect" | "init", origin: string): string {
-  return step === "connect" ? `paseo hub connect ${origin}` : "paseo hub init";
+  return step === "connect" ? `byspace hub connect ${origin}` : "byspace hub init";
 }
 
 export function planHubInitOpening(input: {
@@ -133,10 +133,10 @@ function providerScaffold(
       workflow: workflow({
         name: "github-help",
         on: "github.issue_comment",
-        filters: { repo, contains: "@paseo", from_users: [user] },
+        filters: { repo, contains: "@byspace", from_users: [user] },
         environment,
       }),
-      testAction: `Comment \`@paseo have a look\` on ${repo}.`,
+      testAction: `Comment \`@byspace have a look\` on ${repo}.`,
     };
   }
 
@@ -151,7 +151,7 @@ function providerScaffold(
         environment,
         reply: "slack.reply",
       }),
-      testAction: "Mention `@Paseo have a look` in Slack.",
+      testAction: "Mention `@BySpace have a look` in Slack.",
     };
   }
 
@@ -164,7 +164,7 @@ function providerScaffold(
       environment,
       reply: "discord.reply",
     }),
-    testAction: "Mention `@Paseo have a look` in Discord.",
+    testAction: "Mention `@BySpace have a look` in Discord.",
   };
 }
 

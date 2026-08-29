@@ -52,7 +52,7 @@ function isPidRunning(pid: number): boolean {
 }
 
 function getPidFilePath(paseoHome: string): string {
-  return join(paseoHome, "paseo.pid");
+  return join(paseoHome, "byspace.pid");
 }
 
 async function isPidLockFresh(pidPath: string): Promise<boolean> {
@@ -105,7 +105,7 @@ function isSamePidLock(left: PidLockInfo, right: PidLockInfo): boolean {
 
 function createLockHeldError(lock: PidLockInfo): PidLockError {
   return new PidLockError(
-    `Another Paseo daemon is already running (PID ${lock.pid}, started ${lock.startedAt})`,
+    `Another BySpace daemon is already running (PID ${lock.pid}, started ${lock.startedAt})`,
     lock,
   );
 }
@@ -156,7 +156,7 @@ async function writeNewPidLock(pidPath: string, lockInfo: PidLockInfo): Promise<
     const raceLock = await readPidLock(pidPath);
     if (raceLock) {
       throw new PidLockError(
-        `Another Paseo daemon is already running (PID ${raceLock.pid})`,
+        `Another BySpace daemon is already running (PID ${raceLock.pid})`,
         raceLock,
       );
     }

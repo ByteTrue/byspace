@@ -86,20 +86,20 @@ console.log("=== CLI IPC Target Helpers ===\n");
   try {
     mkdirSync(paseoHome, { recursive: true });
     writeFileSync(
-      path.join(paseoHome, "paseo.pid"),
-      JSON.stringify({ pid: process.pid, listen: "/tmp/paseo-from-pid.sock" }),
+      path.join(paseoHome, "byspace.pid"),
+      JSON.stringify({ pid: process.pid, listen: "/tmp/byspace-from-pid.sock" }),
     );
-    assert.deepStrictEqual(resolveDefaultDaemonHosts({ PASEO_HOME: paseoHome }), [
-      "unix:///tmp/paseo-from-pid.sock",
-      "localhost:6767",
+    assert.deepStrictEqual(resolveDefaultDaemonHosts({ BYSPACE_HOME: paseoHome }), [
+      "unix:///tmp/byspace-from-pid.sock",
+      "localhost:6777",
     ]);
-    const previousHome = process.env.PASEO_HOME;
+    const previousHome = process.env.BYSPACE_HOME;
     const previousHost = process.env.PASEO_HOST;
-    process.env.PASEO_HOME = paseoHome;
+    process.env.BYSPACE_HOME = paseoHome;
     delete process.env.PASEO_HOST;
-    assert.strictEqual(getDaemonHost(), "unix:///tmp/paseo-from-pid.sock");
-    if (previousHome === undefined) delete process.env.PASEO_HOME;
-    else process.env.PASEO_HOME = previousHome;
+    assert.strictEqual(getDaemonHost(), "unix:///tmp/byspace-from-pid.sock");
+    if (previousHome === undefined) delete process.env.BYSPACE_HOME;
+    else process.env.BYSPACE_HOME = previousHome;
     if (previousHost === undefined) delete process.env.PASEO_HOST;
     else process.env.PASEO_HOST = previousHost;
   } finally {
@@ -114,15 +114,39 @@ console.log("=== CLI IPC Target Helpers ===\n");
   try {
     assert.deepStrictEqual(
       resolveDefaultDaemonHosts({
-        PASEO_HOME: paseoHome,
-        PASEO_LISTEN: "127.0.0.1:7777",
+        BYSPACE_HOME: paseoHome,
+        BYSPACE_LISTEN: "127.0.0.1:7777",
       }),
-      ["127.0.0.1:7777", "localhost:6767"],
+      ["127.0.0.1:7777", "localhost:6777"],
     );
   } finally {
     rmSync(paseoHome, { recursive: true, force: true });
   }
   console.log("✓ configured TCP host is preserved before the localhost fallback\n");
+}
+
+{
+  console.log("Test 7b: legacy Paseo home and listen variables are ignored");
+  const byspaceHome = mkdtempSync(path.join(os.tmpdir(), "byspace-client-targets-legacy-"));
+  const paseoHome = mkdtempSync(path.join(os.tmpdir(), "paseo-client-targets-legacy-"));
+  try {
+    writeFileSync(
+      path.join(paseoHome, "paseo.pid"),
+      JSON.stringify({ pid: process.pid, listen: "127.0.0.1:6767" }),
+    );
+    assert.deepStrictEqual(
+      resolveDefaultDaemonHosts({
+        BYSPACE_HOME: byspaceHome,
+        PASEO_HOME: paseoHome,
+        PASEO_LISTEN: "127.0.0.1:6767",
+      }),
+      ["localhost:6777"],
+    );
+  } finally {
+    rmSync(byspaceHome, { recursive: true, force: true });
+    rmSync(paseoHome, { recursive: true, force: true });
+  }
+  console.log("✓ legacy Paseo home and listen variables are ignored\n");
 }
 
 {
@@ -137,15 +161,15 @@ console.log("=== CLI IPC Target Helpers ===\n");
   try {
     mkdirSync(paseoHome, { recursive: true });
     writeFileSync(
-      path.join(paseoHome, "paseo.pid"),
-      JSON.stringify({ pid: process.pid, listen: "/tmp/paseo-priority.sock" }),
+      path.join(paseoHome, "byspace.pid"),
+      JSON.stringify({ pid: process.pid, listen: "/tmp/byspace-priority.sock" }),
     );
     assert.deepStrictEqual(
       resolveDefaultDaemonHosts({
-        PASEO_HOME: paseoHome,
-        PASEO_LISTEN: "127.0.0.1:7777",
+        BYSPACE_HOME: paseoHome,
+        BYSPACE_LISTEN: "127.0.0.1:7777",
       }),
-      ["unix:///tmp/paseo-priority.sock", "127.0.0.1:7777", "localhost:6767"],
+      ["unix:///tmp/byspace-priority.sock", "127.0.0.1:7777", "localhost:6777"],
     );
   } finally {
     rmSync(paseoHome, { recursive: true, force: true });

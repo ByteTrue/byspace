@@ -155,7 +155,7 @@ async function createRealHarness() {
     const isolatedEnv = {
       ...process.env,
       HOME: home,
-      PASEO_HOME: paseoHome,
+      BYSPACE_HOME: paseoHome,
       XDG_CONFIG_HOME: xdgConfig,
       XDG_DATA_HOME: xdgData,
       XDG_CACHE_HOME: xdgCache,

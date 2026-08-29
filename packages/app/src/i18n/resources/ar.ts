@@ -1095,7 +1095,7 @@ export const ar: TranslationResources = {
       discord: "Discord",
       github: "إنشاء مشكلة على GitHub",
       whatsNew: "ما الجديد",
-      appName: "Paseo",
+      appName: "BySpace",
     },
     sections: {
       sessions: "السجل",
@@ -1241,7 +1241,7 @@ export const ar: TranslationResources = {
       close: "إغلاق النافذة",
     },
     quitting: {
-      title: "جارٍ إنهاء Paseo...",
+      title: "جارٍ إنهاء BySpace...",
       detail: "إيقاف البرنامج الخفي المحلي.",
     },
     daemon: {
@@ -1283,7 +1283,7 @@ export const ar: TranslationResources = {
       fullStatus: {
         title: "الوضع الكامل",
         modalTitle: "حالة Daemon",
-        hint: "يقوم بتشغيل`paseo daemon status`ويظهر الإخراج",
+        hint: "يقوم بتشغيل`byspace daemon status`ويظهر الإخراج",
         view: "عرض الحالة",
         copied: "تم نسخ الحالة إلى الحافظة.",
         fetchFailed: "فشل جلب حالة البرنامج الخفي:{{message}}",
@@ -1377,7 +1377,7 @@ export const ar: TranslationResources = {
         microphone: "لم يتم التحقق من حالة الميكروفون بعد.",
       },
       testNotification: {
-        title: "اختبار الإخطار Paseo",
+        title: "اختبار الإخطار BySpace",
         body: "إذا كان بإمكانك رؤية ذلك، فهذا يعني أن إشعارات سطح المكتب تعمل.",
         notDelivered: "لم يتم تسليم الإخطار. تحقق من إعدادات النظام > الإشعارات.",
         failed: "فشل في إرسال الإخطار.",
@@ -1391,7 +1391,7 @@ export const ar: TranslationResources = {
     },
   },
   rootError: {
-    title: "واجه Paseo مشكلة.",
+    title: "واجه BySpace مشكلة.",
     body: "جرّب مرة أخرى لإعادة تحميل التطبيق. إذا استمر حدوث ذلك، فأرفق التفاصيل أدناه عند الإبلاغ عنه.",
     details: "التفاصيل",
   },
@@ -1485,7 +1485,7 @@ export const ar: TranslationResources = {
     },
   },
   onboarding: {
-    title: "مرحبا بكم في Paseo",
+    title: "مرحبا بكم في BySpace",
     subtitle: "قم بتوصيل جهاز الكمبيوتر الخاص بك للبدء",
     actions: {
       settings: "إعدادات",
@@ -2326,7 +2326,7 @@ export const ar: TranslationResources = {
         title: "التنسيق",
         unavailable: "اتصل بهذا المضيف لإدارة التنسيق",
         enableTools: {
-          title: "تمكين أدوات Paseo",
+          title: "تمكين أدوات BySpace",
           hint: "سيتمكن الوكلاء من إدارة أشجار العمل والوكلاء والجداول الزمنية",
           accessibilityLabel: "حقن أدوات Paseo",
         },

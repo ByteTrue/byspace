@@ -1,0 +1,152 @@
+name: Publish npm
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Git ref to package"
+        required: true
+        default: main
+        type: string
+      publish:
+        description: "Publish to npm and attach to a release (ref must be a release tag)"
+        required: true
+        default: false
+        type: boolean
+
+concurrency:
+  group: npm-release-${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: write
+      id-token: write
+    env:
+      SOURCE_REF: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.ref_name }}
+      SHOULD_PUBLISH: ${{ github.event_name != 'workflow_dispatch' || inputs.publish }}
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          ref: ${{ env.SOURCE_REF }}
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "22.20.0"
+          cache: npm
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Verify exact current-main CI SHA
+        if: env.SHOULD_PUBLISH == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ env.SOURCE_REF }}
+        run: |
+          set -euo pipefail
+          version="$(node -p 'require("./package.json").version')"
+          test "$RELEASE_TAG" = "v$version"
+          git fetch origin main --no-tags
+          sha="$(git rev-parse HEAD)"
+          test "$sha" = "$(git rev-parse origin/main)"
+          ci_run_id="$(gh run list --repo "$GITHUB_REPOSITORY" --workflow CI --commit "$sha" --event push --status success --limit 1 --json databaseId --jq '.[0].databaseId // empty')"
+          test -n "$ci_run_id"
+
+      - run: npm ci
+      - run: npm run build:server
+      - run: npm run build:daemon-web-ui
+      - run: npm run release:pack:bytetrue
+
+      - name: Verify package identity
+        run: |
+          set -euo pipefail
+          tarball="dist/npm/bytetrue-byspace-$(node -p 'require("./package.json").version').tgz"
+          test "$(npm pkg get name --json | tr -d '"')" = "byspace"
+          test "$(tar -xOf "$tarball" package/package.json | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>process.stdout.write(JSON.parse(s).name))')" = "@bytetrue/byspace"
+          tar -xOf "$tarball" package/package.json | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const p=JSON.parse(s);if(p.bin?.byspace!=="bin/byspace"||p.bin?.paseo)process.exit(1)})'
+
+      - name: Install package without registry access to internal workspaces
+        run: |
+          set -euo pipefail
+          tarball="$PWD/dist/npm/bytetrue-byspace-$(node -p 'require("./package.json").version').tgz"
+          prefix="$(mktemp -d)"
+          printf '%s\n' 'registry=https://registry.npmjs.org/' '@getpaseo:registry=http://127.0.0.1:9/' > "$prefix/npmrc"
+          npm install --prefix "$prefix" --userconfig "$prefix/npmrc" --no-audit --no-fund "$tarball"
+          test "$("$prefix/node_modules/.bin/byspace" --version)" = "$(node -p 'require("./package.json").version')"
+          test ! -e "$prefix/node_modules/.bin/paseo"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: byspace-npm
+          path: |
+            dist/npm/*.tgz
+            dist/npm/SHA256SUMS.txt
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upgrade npm for Trusted Publishing
+        if: env.SHOULD_PUBLISH == 'true'
+        run: npm install --global npm@11.5.1
+
+      - name: Check whether version is already published
+        if: env.SHOULD_PUBLISH == 'true'
+        id: registry
+        run: |
+          version="$(node -p 'require("./package.json").version')"
+          status="$(curl -sS -o /dev/null -w '%{http_code}' "https://registry.npmjs.org/@bytetrue%2Fbyspace/$version")"
+          case "$status" in
+            200) echo "published=true" >> "$GITHUB_OUTPUT" ;;
+            404) echo "published=false" >> "$GITHUB_OUTPUT" ;;
+            *) echo "npm registry returned HTTP $status" >&2; exit 1 ;;
+          esac
+
+      - name: Publish beta
+        if: ${{ env.SHOULD_PUBLISH == 'true' && contains(env.SOURCE_REF, '-') && steps.registry.outputs.published != 'true' }}
+        run: npm publish "dist/npm/bytetrue-byspace-$(node -p 'require(\"./package.json\").version').tgz" --access public --tag beta --provenance
+
+      - name: Publish stable
+        if: ${{ env.SHOULD_PUBLISH == 'true' && !contains(env.SOURCE_REF, '-') && steps.registry.outputs.published != 'true' }}
+        run: npm publish "dist/npm/bytetrue-byspace-$(node -p 'require(\"./package.json\").version').tgz" --access public --provenance
+
+      - name: Verify dist-tag
+        if: env.SHOULD_PUBLISH == 'true'
+        run: |
+          set -euo pipefail
+          version="$(node -p 'require("./package.json").version')"
+          if [[ "$version" == *-* ]]; then tag=beta; else tag=latest; fi
+          for _ in {1..60}; do
+            actual="$(npm view "@bytetrue/byspace@$tag" version 2>/dev/null || true)"
+            [[ "$actual" == "$version" ]] && exit 0
+            sleep 5
+          done
+          echo "@bytetrue/byspace@$tag did not resolve to $version" >&2
+          exit 1
+
+      - name: Attach npm tarball to GitHub release
+        if: env.SHOULD_PUBLISH == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ env.SOURCE_REF }}
+        run: |
+          set -euo pipefail
+          version="$(node -p 'require("./package.json").version')"
+          source="dist/npm/bytetrue-byspace-$version.tgz"
+          asset="$RUNNER_TEMP/BySpace-$version-npm.tgz"
+          cp "$source" "$asset"
+          node scripts/write-sha256.mjs "$asset"
+          notes_file=".github/release/$RELEASE_TAG.md"
+          if ! gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            args=(release create "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --title "BySpace $RELEASE_TAG")
+            [[ -f "$notes_file" ]] && args+=(--notes-file "$notes_file") || args+=(--generate-notes)
+            [[ "$RELEASE_TAG" == *-* ]] && args+=(--prerelease)
+            gh "${args[@]}" || gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null
+          fi
+          scripts/upload-release-asset.sh "$RELEASE_TAG" "$asset"
+          scripts/upload-release-asset.sh "$RELEASE_TAG" "$asset.sha256"

@@ -1129,7 +1129,7 @@ export const es: TranslationResources = {
       discord: "Discord",
       github: "Crear incidencia en GitHub",
       whatsNew: "Novedades",
-      appName: "Paseo",
+      appName: "BySpace",
     },
     sections: {
       sessions: "Historial",
@@ -1275,7 +1275,7 @@ export const es: TranslationResources = {
       close: "Cerrar ventana",
     },
     quitting: {
-      title: "Saliendo dePaseo...",
+      title: "Saliendo de BySpace...",
       detail: "Deteniendo el demonio local.",
     },
     daemon: {
@@ -1317,7 +1317,7 @@ export const es: TranslationResources = {
       fullStatus: {
         title: "Estado completo",
         modalTitle: "EstadoDaemon",
-        hint: "Ejecuta`paseo daemon status`y muestra la salida.",
+        hint: "Ejecuta `byspace daemon status` y muestra la salida.",
         view: "Ver estado",
         copied: "Estado copiado al portapapeles.",
         fetchFailed: "No se pudo recuperar el estado del demonio:{{message}}",
@@ -1419,7 +1419,7 @@ export const es: TranslationResources = {
         microphone: "El estado del micrófono aún no se ha comprobado.",
       },
       testNotification: {
-        title: "Prueba de notificaciónPaseo",
+        title: "Prueba de notificación BySpace",
         body: "Si puede ver esto, las notificaciones de escritorio funcionan.",
         notDelivered:
           "La notificación no fue entregada. Verifique Configuración del sistema> Notificaciones.",
@@ -1434,7 +1434,7 @@ export const es: TranslationResources = {
     },
   },
   rootError: {
-    title: "Paseo tuvo un problema.",
+    title: "BySpace tuvo un problema.",
     body: "Vuelve a intentarlo para recargar la app. Si sigue ocurriendo, incluye los detalles de abajo al reportarlo.",
     details: "Detalles",
   },
@@ -1529,7 +1529,7 @@ export const es: TranslationResources = {
     },
   },
   onboarding: {
-    title: "Bienvenido aPaseo",
+    title: "Bienvenido a BySpace",
     subtitle: "Conecte su computadora para comenzar",
     actions: {
       settings: "Ajustes",
@@ -2379,7 +2379,7 @@ export const es: TranslationResources = {
         title: "Orquestación",
         unavailable: "Conéctese a este host para administrar la orquestación",
         enableTools: {
-          title: "Habilitar herramientasPaseo",
+          title: "Habilitar herramientas BySpace",
           hint: "Los agentes podrán gestionar árboles de trabajo, agentes y horarios.",
           accessibilityLabel: "Inyectar herramientasPaseo",
         },

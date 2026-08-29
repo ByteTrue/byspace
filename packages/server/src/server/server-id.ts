@@ -27,9 +27,9 @@ function generateServerId(): string {
 }
 
 /**
- * Stable daemon identifier scoped to a given $PASEO_HOME.
+ * Stable daemon identifier scoped to a given $BYSPACE_HOME.
  *
- * - Persisted to `$PASEO_HOME/server-id`
+ * - Persisted to `$BYSPACE_HOME/server-id`
  * - Can be overridden via `PASEO_SERVER_ID` (useful for tests)
  */
 export function getOrCreateServerId(

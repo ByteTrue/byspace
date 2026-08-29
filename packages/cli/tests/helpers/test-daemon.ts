@@ -247,8 +247,8 @@ export async function startTestDaemon(options?: {
       env: {
         ...process.env,
         ...TEST_DAEMON_ENV_DEFAULTS,
-        PASEO_HOME: paseoHome,
-        PASEO_LISTEN: `${TEST_DAEMON_HOST}:${port}`,
+        BYSPACE_HOME: paseoHome,
+        BYSPACE_LISTEN: `${TEST_DAEMON_HOST}:${port}`,
         // Force no TTY to prevent QR code output
         CI: "true",
         ...options?.env,
@@ -361,7 +361,7 @@ export async function runPaseoCli(
         ...process.env,
         ...TEST_DAEMON_ENV_DEFAULTS,
         PASEO_HOST: `${TEST_DAEMON_HOST}:${ctx.port}`,
-        PASEO_HOME: ctx.paseoHome,
+        BYSPACE_HOME: ctx.paseoHome,
         ...options?.env,
       },
       cwd,

@@ -1316,10 +1316,10 @@ export class HostRuntimeController {
   }
 }
 
-const REGISTRY_STORAGE_KEY = "@paseo:daemon-registry";
-const LOCALHOST_FALLBACK_ENDPOINT = "localhost:6767";
+const REGISTRY_STORAGE_KEY = "@byspace:daemon-registry";
+const LOCALHOST_FALLBACK_ENDPOINT = "localhost:6777";
 const DEFAULT_LOCALHOST_BOOTSTRAP_TIMEOUT_MS = 2500;
-const E2E_STORAGE_KEY = "@paseo:e2e";
+const E2E_STORAGE_KEY = "@byspace:e2e";
 const INITIAL_DAEMON_CONNECTION_HINT_GLOBAL_KEY = "__PASEO_INITIAL_DAEMON_CONNECTION__";
 
 export interface InitialDaemonConnectionHint {

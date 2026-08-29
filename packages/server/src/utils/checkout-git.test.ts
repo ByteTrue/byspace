@@ -3769,12 +3769,12 @@ const x = 1;
   });
 
   describe("isPaseoWorktreePath", () => {
-    it("matches Unix .paseo/worktrees/ paths", () => {
-      expect(isPaseoWorktreePath("/home/user/.paseo/worktrees/feature")).toBe(true);
+    it("matches Unix .byspace/worktrees/ paths", () => {
+      expect(isPaseoWorktreePath("/home/user/.byspace/worktrees/feature")).toBe(true);
     });
 
-    it("matches Windows .paseo\\worktrees\\ paths", () => {
-      expect(isPaseoWorktreePath("C:\\Users\\dev\\.paseo\\worktrees\\feature")).toBe(true);
+    it("matches Windows .byspace\\worktrees\\ paths", () => {
+      expect(isPaseoWorktreePath("C:\\Users\\dev\\.byspace\\worktrees\\feature")).toBe(true);
     });
 
     it("matches worktrees under a custom PASEO_HOME", () => {

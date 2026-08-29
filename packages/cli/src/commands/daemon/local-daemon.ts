@@ -97,7 +97,7 @@ export interface DaemonLaunchRuntime {
 const DETACHED_STARTUP_GRACE_MS = 1200;
 const PID_POLL_INTERVAL_MS = 100;
 const DAEMON_LOG_FILENAME = "daemon.log";
-const DAEMON_PID_FILENAME = "paseo.pid";
+const DAEMON_PID_FILENAME = "byspace.pid";
 
 export const DEFAULT_STOP_TIMEOUT_MS = 15_000;
 export const DEFAULT_KILL_TIMEOUT_MS = 3_000;
@@ -123,7 +123,7 @@ function envWithHome(home?: string): NodeJS.ProcessEnv {
     return process.env;
   }
 
-  return { ...process.env, PASEO_HOME: home };
+  return { ...process.env, BYSPACE_HOME: home };
 }
 
 function buildRunnerArgs(options: DaemonStartOptions): string[] {
@@ -157,12 +157,12 @@ function buildRunnerArgs(options: DaemonStartOptions): string[] {
 function buildChildEnv(options: DaemonStartOptions): NodeJS.ProcessEnv {
   const childEnv: NodeJS.ProcessEnv = { ...process.env };
   if (options.home) {
-    childEnv.PASEO_HOME = options.home;
+    childEnv.BYSPACE_HOME = options.home;
   }
   if (options.listen) {
-    childEnv.PASEO_LISTEN = options.listen;
+    childEnv.BYSPACE_LISTEN = options.listen;
   } else if (options.port) {
-    childEnv.PASEO_LISTEN = `127.0.0.1:${options.port}`;
+    childEnv.BYSPACE_LISTEN = `127.0.0.1:${options.port}`;
   }
   if (options.hostnames) {
     childEnv.PASEO_HOSTNAMES = options.hostnames;
@@ -539,7 +539,7 @@ export function resolveLocalDaemonState(options: { home?: string } = {}): LocalD
     ...envWithHome(options.home),
     // Status should reflect local persisted config + pid file, not inherited daemon env overrides.
     // This is CLI-side defensive scrubbing; the daemon RPC is authoritative when available.
-    PASEO_LISTEN: undefined,
+    BYSPACE_LISTEN: undefined,
     PASEO_HOSTNAMES: undefined,
     PASEO_ALLOWED_HOSTS: undefined,
     PASEO_RELAY_ENABLED: undefined,
@@ -560,7 +560,7 @@ export function resolveLocalDaemonState(options: { home?: string } = {}): LocalD
     home,
     listen,
     relayEnabled: config.relayEnabled ?? true,
-    relayEndpoint: config.relayPublicEndpoint ?? config.relayEndpoint ?? "relay.paseo.sh:443",
+    relayEndpoint: config.relayPublicEndpoint ?? config.relayEndpoint ?? "relay.byspace.cc.cd:443",
     relayUseTls: config.relayUseTls ?? false,
     relayPublicUseTls: config.relayPublicUseTls ?? config.relayUseTls ?? false,
     logPath,

@@ -135,8 +135,8 @@ try {
       env: {
         ...process.env,
         ...testEnv,
-        PASEO_HOME: paseoHome,
-        PASEO_LISTEN: host,
+        BYSPACE_HOME: paseoHome,
+        BYSPACE_LISTEN: host,
         PASEO_RELAY_ENABLED: "false",
         CI: "true",
       },

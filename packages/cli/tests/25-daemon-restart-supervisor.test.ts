@@ -127,7 +127,7 @@ let supervisorProcess: ChildProcess | null = null;
 let recentSupervisorLogs = "";
 
 try {
-  console.log("Test 1: start supervisor-entrypoint in dev mode with isolated PASEO_HOME");
+  console.log("Test 1: start supervisor-entrypoint in dev mode with isolated BYSPACE_HOME");
 
   supervisorProcess = spawn(
     process.execPath,
@@ -137,8 +137,8 @@ try {
       env: {
         ...process.env,
         ...testEnv,
-        PASEO_HOME: paseoHome,
-        PASEO_LISTEN: host,
+        BYSPACE_HOME: paseoHome,
+        BYSPACE_LISTEN: host,
         PASEO_RELAY_ENABLED: "false",
         CI: "true",
       },

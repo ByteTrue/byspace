@@ -69,7 +69,7 @@ try {
     {
       env: {
         ...process.env,
-        PASEO_HOME: paseoHome,
+        BYSPACE_HOME: paseoHome,
       },
       stdio: "ignore",
       detached: process.platform !== "win32",

@@ -1120,7 +1120,7 @@ export const ptBR: TranslationResources = {
       discord: "Discord",
       github: "Criar issue no GitHub",
       whatsNew: "Novidades",
-      appName: "Paseo",
+      appName: "BySpace",
     },
     sections: {
       sessions: "Histórico",
@@ -1266,7 +1266,7 @@ export const ptBR: TranslationResources = {
       close: "Fechar janela",
     },
     quitting: {
-      title: "Saindo do Paseo...",
+      title: "Saindo do BySpace...",
       detail: "Parando o daemon local.",
     },
     daemon: {
@@ -1308,7 +1308,7 @@ export const ptBR: TranslationResources = {
       fullStatus: {
         title: "Status completo",
         modalTitle: "Status do daemon",
-        hint: "Executa `paseo daemon status` e mostra a saída",
+        hint: "Executa `byspace daemon status` e mostra a saída",
         view: "Ver status",
         copied: "Status copiado para a área de transferência.",
         fetchFailed: "Falha ao buscar status do daemon: {{message}}",
@@ -1405,7 +1405,7 @@ export const ptBR: TranslationResources = {
         microphone: "O status do microfone ainda não foi verificado.",
       },
       testNotification: {
-        title: "Teste de notificação do Paseo",
+        title: "Teste de notificação do BySpace",
         body: "Se você consegue ver isto, as notificações desktop funcionam.",
         notDelivered:
           "A notificação não foi entregue. Verifique Ajustes do Sistema > Notificações.",
@@ -1420,7 +1420,7 @@ export const ptBR: TranslationResources = {
     },
   },
   rootError: {
-    title: "O Paseo encontrou um problema.",
+    title: "O BySpace encontrou um problema.",
     body: "Tente novamente para recarregar o app. Se isso continuar acontecendo, inclua os detalhes abaixo ao relatar o problema.",
     details: "Detalhes",
   },
@@ -1515,7 +1515,7 @@ export const ptBR: TranslationResources = {
     },
   },
   onboarding: {
-    title: "Bem-vindo ao Paseo",
+    title: "Bem-vindo ao BySpace",
     subtitle: "Conecte seu computador para começar",
     actions: {
       settings: "Configurações",
@@ -2363,7 +2363,7 @@ export const ptBR: TranslationResources = {
         title: "Orquestração",
         unavailable: "Conecte-se a este host para gerenciar a orquestração",
         enableTools: {
-          title: "Ativar ferramentas do Paseo",
+          title: "Ativar ferramentas do BySpace",
           hint: "Agentes poderão gerenciar worktrees, agentes e agendamentos",
           accessibilityLabel: "Injetar ferramentas do Paseo",
         },

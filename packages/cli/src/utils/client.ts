@@ -30,9 +30,9 @@ export interface DaemonConnectionCommandError {
   details: string;
 }
 
-const DEFAULT_HOST = "localhost:6767";
+const DEFAULT_HOST = "localhost:6777";
 const DEFAULT_TIMEOUT = 15000;
-const PID_FILENAME = "paseo.pid";
+const PID_FILENAME = "byspace.pid";
 
 type DaemonTarget =
   | {
@@ -62,8 +62,8 @@ export function buildDaemonConnectionCommandError(options: {
     code: "DAEMON_NOT_RUNNING",
     message: `Cannot connect to daemon at ${host}: ${message}`,
     details: host.trim().startsWith("ssh://")
-      ? "Start the Paseo daemon on the SSH host; SSH transport does not install or start it."
-      : "Start the daemon with: paseo daemon start",
+      ? "Start the BySpace daemon on the SSH host; SSH transport does not install or start it."
+      : "Start the daemon with: byspace daemon start",
   };
 }
 
@@ -150,7 +150,7 @@ function readPidSocketTarget(paseoHome: string): string | null {
 }
 
 function resolveConfiguredIpcDaemonHost(env: NodeJS.ProcessEnv, paseoHome: string): string | null {
-  const directEnvHost = normalizeDaemonHost(env.PASEO_LISTEN ?? "");
+  const directEnvHost = normalizeDaemonHost(env.BYSPACE_LISTEN ?? "");
   if (isIpcDaemonHost(directEnvHost)) {
     return directEnvHost;
   }
@@ -170,7 +170,7 @@ function resolveConfiguredTcpDaemonHost(env: NodeJS.ProcessEnv, paseoHome: strin
   if (!isTcpDaemonHost(configuredHost)) {
     return null;
   }
-  return configuredHost === "127.0.0.1:6767" ? null : configuredHost;
+  return configuredHost === "127.0.0.1:6777" ? null : configuredHost;
 }
 
 export function resolveDefaultDaemonHosts(env: NodeJS.ProcessEnv = process.env): string[] {
@@ -389,7 +389,7 @@ export async function connectToDaemon(options?: ConnectOptions): Promise<DaemonC
   async function tryNext(index: number, lastError: unknown): Promise<DaemonClient> {
     if (index >= hosts.length) {
       if (lastError instanceof Error) throw lastError;
-      throw new Error(`Unable to connect to Paseo daemon via ${hosts.join(", ")}`);
+      throw new Error(`Unable to connect to BySpace daemon via ${hosts.join(", ")}`);
     }
     const host = hosts[index];
     const password = resolveDaemonPassword(host);

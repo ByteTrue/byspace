@@ -41,7 +41,7 @@ export interface PairingOffer {
 }
 
 const PAIRING_DAEMON_RPC_TIMEOUT_MS = 1500;
-const RELAY_DOCS_URL = "https://paseo.sh/docs/security";
+const RELAY_DOCS_URL = "https://github.com/ByteTrue/byspace/blob/main/SECURITY.md";
 
 function createProcessOutput(): PairCommandOutput {
   return {
@@ -63,7 +63,7 @@ function createProcessOutput(): PairCommandOutput {
 
 export function pairCommand(): Command {
   return addJsonOption(new Command("pair").description("Print the daemon pairing QR code and link"))
-    .option("--home <path>", "Paseo home directory (default: ~/.paseo)")
+    .option("--home <path>", "BySpace home directory (default: ~/.byspace)")
     .option("--relay", "Enable relay without prompting")
     .action(async (_options: PairOptions, command: Command) => {
       await runPairCommand(command.optsWithGlobals());
@@ -117,11 +117,11 @@ async function resolveDaemonPairingOffer(
     const serverInfo = client.getLastServerInfoMessage();
     if (serverInfo?.serverId.trim() !== expectedServerId) {
       throw new Error(
-        "The reachable daemon belongs to a different Paseo home. Check --home or the daemon listen configuration.",
+        "The reachable daemon belongs to a different BySpace home. Check --home or the daemon listen configuration.",
       );
     }
     if (serverInfo?.features?.daemonStatusRpc !== true) {
-      throw new Error("Update the Paseo daemon before pairing from this command.");
+      throw new Error("Update the BySpace daemon before pairing from this command.");
     }
 
     let offer = await client.getDaemonPairingOffer({
@@ -129,7 +129,7 @@ async function resolveDaemonPairingOffer(
     });
     if (!offer.relayEnabled && enableRelay) {
       if (serverInfo.features.relayConfig !== true) {
-        throw new Error("Update the Paseo daemon before enabling relay from this command.");
+        throw new Error("Update the BySpace daemon before enabling relay from this command.");
       }
       await client.patchDaemonConfig({ relay: { enabled: true } });
       offer = await client.getDaemonPairingOffer({
@@ -147,7 +147,9 @@ async function resolveDaemonPairingOffer(
 }
 
 export async function confirmRelayPairing(): Promise<boolean> {
-  log.message("Your connection is end-to-end encrypted. Paseo cannot read your code or messages.");
+  log.message(
+    "Your connection is end-to-end encrypted. BySpace cannot read your code or messages.",
+  );
   log.message(`Learn how it works: ${RELAY_DOCS_URL}`);
   const answer = await confirm({
     message: "Enable relay to pair a device?",
@@ -168,7 +170,7 @@ export async function runPairCommand(
   options: PairOptions,
   dependencyOverrides: Partial<PairCommandDependencies> = {},
 ): Promise<void> {
-  if (options.home) process.env.PASEO_HOME = options.home;
+  if (options.home) process.env.BYSPACE_HOME = options.home;
   const dependencies: PairCommandDependencies = {
     resolveOffer: resolveLocalPairingOffer,
     confirmRelay: confirmRelayPairing,
@@ -211,12 +213,12 @@ function outputPairingResult(
         `${JSON.stringify({
           code: "RELAY_DISABLED",
           message: "Relay pairing is disabled for this daemon.",
-          action: "Run paseo daemon pair --relay --json to enable it explicitly.",
+          action: "Run byspace daemon pair --relay --json to enable it explicitly.",
         })}\n`,
       );
     } else {
       output.writeStderr(`${chalk.red("Relay pairing is disabled for this daemon.")}\n`);
-      output.writeStderr(`${chalk.yellow("Run paseo daemon pair --relay to enable it.")}\n`);
+      output.writeStderr(`${chalk.yellow("Run byspace daemon pair --relay to enable it.")}\n`);
     }
     output.setExitCode(1);
     return;

@@ -1111,7 +1111,7 @@ export const ru: TranslationResources = {
       discord: "Discord",
       github: "Создать issue на GitHub",
       whatsNew: "Что нового",
-      appName: "Paseo",
+      appName: "BySpace",
     },
     sections: {
       sessions: "История",
@@ -1258,7 +1258,7 @@ export const ru: TranslationResources = {
       close: "Закрыть окно",
     },
     quitting: {
-      title: "Завершение работы Paseo...",
+      title: "Завершение работы BySpace...",
       detail: "Остановка локального демона.",
     },
     daemon: {
@@ -1300,7 +1300,7 @@ export const ru: TranslationResources = {
       fullStatus: {
         title: "Полный статус",
         modalTitle: "Статус демона",
-        hint: "Выполняет команду `paseo daemon status` и показывает результат",
+        hint: "Выполняет команду `byspace daemon status` и показывает результат",
         view: "Посмотреть статус",
         copied: "Статус скопирован в буфер обмена.",
         fetchFailed: "Не удалось получить статус демона: {{message}}",
@@ -1401,7 +1401,7 @@ export const ru: TranslationResources = {
         microphone: "Состояние микрофона ещё не проверялось.",
       },
       testNotification: {
-        title: "Тест уведомлений Paseo",
+        title: "Тест уведомлений BySpace",
         body: "Если вы это видите, уведомления на рабочем столе работают.",
         notDelivered:
           "Уведомление не доставлено. Проверьте раздел «Уведомления» в системных настройках.",
@@ -1411,12 +1411,12 @@ export const ru: TranslationResources = {
     integrations: {
       cli: {
         statusFailed: "Не удалось проверить состояние установки CLI.",
-        installFailed: "Не удалось установить Paseo CLI.",
+        installFailed: "Не удалось установить BySpace CLI.",
       },
     },
   },
   rootError: {
-    title: "В Paseo возникла проблема.",
+    title: "В BySpace возникла проблема.",
     body: "Попробуйте перезагрузить приложение. Если ошибка повторится, приложите приведённые ниже сведения к отчёту.",
     details: "Подробности",
   },
@@ -1512,7 +1512,7 @@ export const ru: TranslationResources = {
     },
   },
   onboarding: {
-    title: "Добро пожаловать в Paseo",
+    title: "Добро пожаловать в BySpace",
     subtitle: "Подключите компьютер, чтобы начать",
     actions: {
       settings: "Настройки",
@@ -2368,7 +2368,7 @@ export const ru: TranslationResources = {
         title: "Оркестрация",
         unavailable: "Подключитесь к этому хосту, чтобы управлять оркестрацией.",
         enableTools: {
-          title: "Включить инструменты Paseo",
+          title: "Включить инструменты BySpace",
           hint: "Агенты смогут управлять worktree, агентами и расписаниями.",
           accessibilityLabel: "Добавить инструменты Paseo",
         },

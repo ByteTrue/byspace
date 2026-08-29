@@ -5,16 +5,16 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
 FLOW_TEMPLATE="$REPO_ROOT/packages/app/maestro/sidebar-drag-cancellation-regression.yaml"
 FLOW_TEMPLATE_DIR="$REPO_ROOT/packages/app/maestro"
-OUT_DIR="/tmp/paseo-sidebar-drag-cancellation-$(date +%s)"
+OUT_DIR="/tmp/byspace-sidebar-drag-cancellation-$(date +%s)"
 CLIENT_EXPORTS="$REPO_ROOT/packages/client/dist/daemon-client.js"
 RELAY_EXPORTS="$REPO_ROOT/node_modules/@getpaseo/relay/dist/e2ee.js"
 FIXTURE_ROOT=""
 PROJECT_IDS_FILE="$OUT_DIR/project-ids.json"
 
-export PASEO_MAESTRO_APP_ID="${PASEO_MAESTRO_APP_ID:-sh.paseo.debug}"
-export PASEO_MAESTRO_DIRECT_ENDPOINT="${PASEO_MAESTRO_DIRECT_ENDPOINT:-127.0.0.1:6767}"
-export PASEO_MAESTRO_DAEMON_WS_URL="${PASEO_MAESTRO_DAEMON_WS_URL:-ws://127.0.0.1:6767/ws}"
-export PASEO_MAESTRO_DAEMON_HEALTH_URL="${PASEO_MAESTRO_DAEMON_HEALTH_URL:-http://127.0.0.1:6767/api/health}"
+export PASEO_MAESTRO_APP_ID="${PASEO_MAESTRO_APP_ID:-com.bytetrue.byspace.debug}"
+export PASEO_MAESTRO_DIRECT_ENDPOINT="${PASEO_MAESTRO_DIRECT_ENDPOINT:-127.0.0.1:6777}"
+export PASEO_MAESTRO_DAEMON_WS_URL="${PASEO_MAESTRO_DAEMON_WS_URL:-ws://127.0.0.1:6777/ws}"
+export PASEO_MAESTRO_DAEMON_HEALTH_URL="${PASEO_MAESTRO_DAEMON_HEALTH_URL:-http://127.0.0.1:6777/api/health}"
 
 require_command() {
   if ! command -v "$1" >/dev/null 2>&1; then
@@ -37,14 +37,14 @@ if [ ! -f "$CLIENT_EXPORTS" ] || [ ! -f "$RELAY_EXPORTS" ]; then
 fi
 
 if ! curl --fail --silent --show-error --max-time 3 "$PASEO_MAESTRO_DAEMON_HEALTH_URL" >/dev/null; then
-  echo "Paseo daemon is unavailable at $PASEO_MAESTRO_DAEMON_HEALTH_URL" >&2
+  echo "BySpace daemon is unavailable at $PASEO_MAESTRO_DAEMON_HEALTH_URL" >&2
   exit 1
 fi
 
-FIXTURE_ROOT="$(mktemp -d /tmp/paseo-sidebar-drag-fixture-XXXXXX)"
-export PASEO_MAESTRO_DRAG_A_NAME="000-paseo-drag-a-$(basename "$FIXTURE_ROOT")"
-export PASEO_MAESTRO_DRAG_B_NAME="001-paseo-drag-b-$(basename "$FIXTURE_ROOT")"
-export PASEO_MAESTRO_DRAG_Z_NAME="zzz-paseo-drag-z-$(basename "$FIXTURE_ROOT")"
+FIXTURE_ROOT="$(mktemp -d /tmp/byspace-sidebar-drag-fixture-XXXXXX)"
+export PASEO_MAESTRO_DRAG_A_NAME="000-byspace-drag-a-$(basename "$FIXTURE_ROOT")"
+export PASEO_MAESTRO_DRAG_B_NAME="001-byspace-drag-b-$(basename "$FIXTURE_ROOT")"
+export PASEO_MAESTRO_DRAG_Z_NAME="zzz-byspace-drag-z-$(basename "$FIXTURE_ROOT")"
 
 mkdir -p "$OUT_DIR/flows"
 
@@ -70,7 +70,7 @@ render_flow() {
   local source="$1"
   local target="$2"
   perl -0pe '
-    s/^appId: sh\.paseo$/appId: $ENV{PASEO_MAESTRO_APP_ID}/m;
+    s/^appId: com\.bytetrue\.byspace$/appId: $ENV{PASEO_MAESTRO_APP_ID}/m;
     s/\$\{PASEO_MAESTRO_APP_ID\}/$ENV{PASEO_MAESTRO_APP_ID}/g;
     s/\$\{PASEO_MAESTRO_DIRECT_ENDPOINT\}/$ENV{PASEO_MAESTRO_DIRECT_ENDPOINT}/g;
     s/\$\{PASEO_MAESTRO_DRAG_A_NAME\}/$ENV{PASEO_MAESTRO_DRAG_A_NAME}/g;
@@ -87,8 +87,8 @@ for project_name in \
   mkdir -p "$project_path"
   git -C "$project_path" init >/dev/null
   git -C "$project_path" checkout -b main >/dev/null 2>&1 || true
-  git -C "$project_path" config user.name "Paseo Maestro"
-  git -C "$project_path" config user.email "maestro@getpaseo.local"
+  git -C "$project_path" config user.name "BySpace Maestro"
+  git -C "$project_path" config user.email "maestro@byspace.local"
   printf '# Sidebar drag cancellation fixture\n' > "$project_path/README.md"
   git -C "$project_path" add README.md
   git -C "$project_path" commit -m "Initial commit" >/dev/null

@@ -111,7 +111,7 @@ export async function waitForDaemon(port: number, timeout = 30000): Promise<void
 export async function startDaemon(port: number, paseoHome: string): Promise<ProcessPromise> {
   $.verbose = false;
   const daemon =
-    $`PASEO_HOME=${paseoHome} PASEO_LISTEN=127.0.0.1:${port} PASEO_RELAY_ENABLED=false PASEO_LOCAL_SPEECH_AUTO_DOWNLOAD=${TEST_ENV_DEFAULTS.PASEO_LOCAL_SPEECH_AUTO_DOWNLOAD} PASEO_DICTATION_ENABLED=${TEST_ENV_DEFAULTS.PASEO_DICTATION_ENABLED} PASEO_VOICE_MODE_ENABLED=${TEST_ENV_DEFAULTS.PASEO_VOICE_MODE_ENABLED} CI=true paseo daemon start --foreground`.nothrow();
+    $`BYSPACE_HOME=${paseoHome} BYSPACE_LISTEN=127.0.0.1:${port} PASEO_RELAY_ENABLED=false PASEO_LOCAL_SPEECH_AUTO_DOWNLOAD=${TEST_ENV_DEFAULTS.PASEO_LOCAL_SPEECH_AUTO_DOWNLOAD} PASEO_DICTATION_ENABLED=${TEST_ENV_DEFAULTS.PASEO_DICTATION_ENABLED} PASEO_VOICE_MODE_ENABLED=${TEST_ENV_DEFAULTS.PASEO_VOICE_MODE_ENABLED} CI=true byspace daemon start --foreground`.nothrow();
   return daemon;
 }
 

@@ -1104,7 +1104,7 @@ export const en = {
       discord: "Discord",
       github: "Create GitHub issue",
       whatsNew: "What's new",
-      appName: "Paseo",
+      appName: "BySpace",
     },
     sections: {
       sessions: "History",
@@ -1250,7 +1250,7 @@ export const en = {
       close: "Close window",
     },
     quitting: {
-      title: "Quitting Paseo...",
+      title: "Quitting BySpace...",
       detail: "Stopping the local daemon.",
     },
     daemon: {
@@ -1292,7 +1292,7 @@ export const en = {
       fullStatus: {
         title: "Full status",
         modalTitle: "Daemon status",
-        hint: "Runs `paseo daemon status` and shows the output",
+        hint: "Runs `byspace daemon status` and shows the output",
         view: "View status",
         copied: "Status copied to clipboard.",
         fetchFailed: "Failed to fetch daemon status: {{message}}",
@@ -1386,7 +1386,7 @@ export const en = {
         microphone: "Microphone status has not been checked yet.",
       },
       testNotification: {
-        title: "Paseo notification test",
+        title: "BySpace notification test",
         body: "If you can see this, desktop notifications work.",
         notDelivered: "Notification was not delivered. Check System Settings > Notifications.",
         failed: "Failed to send notification.",
@@ -1395,12 +1395,12 @@ export const en = {
     integrations: {
       cli: {
         statusFailed: "Unable to check CLI install status.",
-        installFailed: "Unable to install the Paseo CLI.",
+        installFailed: "Unable to install the BySpace CLI.",
       },
     },
   },
   rootError: {
-    title: "Paseo ran into a problem.",
+    title: "BySpace ran into a problem.",
     body: "Try again to reload the app. If this keeps happening, include the details below when you report it.",
     details: "Details",
   },
@@ -1495,7 +1495,7 @@ export const en = {
     },
   },
   onboarding: {
-    title: "Welcome to Paseo",
+    title: "Welcome to BySpace",
     subtitle: "Connect your computer to get started",
     actions: {
       settings: "Settings",
@@ -2428,7 +2428,7 @@ export const en = {
         title: "Orchestration",
         unavailable: "Connect to this host to manage orchestration",
         enableTools: {
-          title: "Enable Paseo tools",
+          title: "Enable BySpace tools",
           hint: "Agents will be able to manage worktrees, agents and schedules",
           accessibilityLabel: "Inject Paseo tools",
         },

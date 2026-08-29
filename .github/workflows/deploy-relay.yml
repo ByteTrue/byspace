@@ -1,8 +1,8 @@
 name: Deploy Relay
 
 on:
-  # Manual-only while relay.paseo.sh bridges traffic to the Fly deployment.
-  # A release or main push must not redeploy the temporary Cloudflare bridge.
+  # Manual-only because relay.byspace.cc.cd is managed separately from releases.
+  # A release or main push must not replace the production relay.
   workflow_dispatch:
 
 jobs:
@@ -14,7 +14,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "22"
+          node-version: "22.20.0"
           cache: "npm"
 
       - name: Install dependencies

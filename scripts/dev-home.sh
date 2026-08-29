@@ -31,7 +31,7 @@ has_files() {
 }
 
 seed_worktree_paseo_home() {
-  local source_home="${PASEO_DEV_SEED_HOME:-$HOME/.paseo}"
+  local source_home="${PASEO_DEV_SEED_HOME:-$HOME/.byspace}"
   local target_home="$1"
 
   if [ ! -d "$source_home" ]; then
@@ -63,11 +63,11 @@ seed_worktree_paseo_home() {
 }
 
 configure_dev_daemon_config() {
-  if [ -z "${PASEO_LISTEN:-}" ]; then
+  if [ -z "${BYSPACE_LISTEN:-}" ]; then
     return
   fi
 
-  mkdir -p "$PASEO_HOME"
+  mkdir -p "$BYSPACE_HOME"
   node -e '
 const fs = require("fs");
 const [path, listen] = [process.argv[1], process.argv[2]];
@@ -79,7 +79,7 @@ cfg.daemon.listen = listen;
 cfg.daemon.cors = cfg.daemon.cors || {};
 cfg.daemon.cors.allowedOrigins = ["*"];
 fs.writeFileSync(path, JSON.stringify(cfg, null, 2));
-' "$PASEO_HOME/config.json" "$PASEO_LISTEN"
+' "$BYSPACE_HOME/config.json" "$BYSPACE_LISTEN"
 }
 
 resolve_dev_daemon_endpoint() {
@@ -88,46 +88,46 @@ resolve_dev_daemon_endpoint() {
     return
   fi
 
-  case "${PASEO_LISTEN:-127.0.0.1:6768}" in
-    0.0.0.0:*) echo "localhost:${PASEO_LISTEN#0.0.0.0:}" ;;
-    127.0.0.1:*) echo "localhost:${PASEO_LISTEN#127.0.0.1:}" ;;
-    *) echo "$PASEO_LISTEN" ;;
+  case "${BYSPACE_LISTEN:-127.0.0.1:6778}" in
+    0.0.0.0:*) echo "localhost:${BYSPACE_LISTEN#0.0.0.0:}" ;;
+    127.0.0.1:*) echo "localhost:${BYSPACE_LISTEN#127.0.0.1:}" ;;
+    *) echo "$BYSPACE_LISTEN" ;;
   esac
 }
 
 configure_dev_paseo_home() {
-  if [ -n "${PASEO_HOME:-}" ]; then
-    export PASEO_HOME
+  if [ -n "${BYSPACE_HOME:-}" ]; then
+    export BYSPACE_HOME
     if [ -n "${PASEO_DEV_SEED_HOME:-}" ]; then
-      seed_worktree_paseo_home "$PASEO_HOME"
+      seed_worktree_paseo_home "$BYSPACE_HOME"
     fi
-    mkdir -p "$PASEO_HOME"
+    mkdir -p "$BYSPACE_HOME"
     if [ "${PASEO_DEV_MANAGED_HOME:-0}" = "1" ] || [ -n "${PASEO_DEV_SEED_HOME:-}" ]; then
       configure_dev_daemon_config
     fi
     return
   fi
 
-  export PASEO_HOME
+  export BYSPACE_HOME
   local dev_root
   dev_root="${PASEO_DEV_ROOT:-$(default_dev_paseo_root)}"
-  PASEO_HOME="$dev_root/.dev/paseo-home"
+  BYSPACE_HOME="$dev_root/.dev/byspace-home"
   export PASEO_DEV_MANAGED_HOME=1
 
   if [ -n "${PASEO_DEV_SEED_HOME:-}" ]; then
-    seed_worktree_paseo_home "$PASEO_HOME"
+    seed_worktree_paseo_home "$BYSPACE_HOME"
   fi
 
-  mkdir -p "$PASEO_HOME"
+  mkdir -p "$BYSPACE_HOME"
   configure_dev_daemon_config
 }
 
 configure_dev_command_env() {
-  if [ -z "${PASEO_LISTEN:-}" ]; then
+  if [ -z "${BYSPACE_LISTEN:-}" ]; then
     if [ -n "${PASEO_SERVICE_DAEMON_PORT:-}" ]; then
-      export PASEO_LISTEN="0.0.0.0:${PASEO_SERVICE_DAEMON_PORT}"
+      export BYSPACE_LISTEN="0.0.0.0:${PASEO_SERVICE_DAEMON_PORT}"
     else
-      export PASEO_LISTEN="127.0.0.1:6768"
+      export BYSPACE_LISTEN="127.0.0.1:6778"
     fi
   fi
 

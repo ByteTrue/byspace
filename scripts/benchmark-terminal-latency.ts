@@ -1,8 +1,8 @@
 /**
  * Reproducible terminal latency benchmark (Node-only, isolated daemon).
  *
- * Boots its OWN isolated daemon subprocess (fresh mkdtemp PASEO_HOME, random
- * port) — it NEVER touches the developer daemon on port 6767 — and measures:
+ * Boots its OWN isolated daemon subprocess (fresh mkdtemp BYSPACE_HOME, random
+ * port) — it NEVER touches the Paseo or BySpace default daemon ports — and measures:
  *   A) terminal echo latency  (single-byte input -> first echoed output frame)
  *   B) terminal output jitter (inter-frame gaps while a command drains ~2MB)
  *   C) RPC ping RTT at 10Hz (proxy for daemon main-loop delay)
@@ -176,19 +176,19 @@ interface BootedDaemon {
 
 async function bootDaemon(): Promise<BootedDaemon> {
   const port = await getFreePort();
-  if (port === 6767) {
-    throw new Error("Refusing to use port 6767 (the developer daemon)");
+  if (port === 6767 || port === 6777) {
+    throw new Error(`Refusing to use a reserved daemon port: ${port}`);
   }
-  const paseoHome = await mkdtemp(path.join(os.tmpdir(), "paseo-bench-home-"));
+  const paseoHome = await mkdtemp(path.join(os.tmpdir(), "byspace-bench-home-"));
   const tsxBin = execSync("which tsx").toString().trim();
 
   const child = spawn(tsxBin, ["scripts/supervisor-entrypoint.ts", "--dev"], {
     cwd: SERVER_DIR,
     env: {
       ...process.env,
-      PASEO_HOME: paseoHome,
+      BYSPACE_HOME: paseoHome,
       PASEO_SERVER_ID: "srv_terminal_bench",
-      PASEO_LISTEN: `127.0.0.1:${port}`,
+      BYSPACE_LISTEN: `127.0.0.1:${port}`,
       PASEO_NODE_ENV: "development",
       NODE_ENV: "development",
     },
@@ -667,7 +667,7 @@ function getCommitHash(): string {
 async function main(): Promise<void> {
   const commit = getCommitHash();
   console.log(`Terminal latency benchmark — commit ${commit}`);
-  console.log("Booting isolated daemon (random port, fresh PASEO_HOME)...");
+  console.log("Booting isolated daemon (random port, fresh BYSPACE_HOME)...");
 
   let daemon: BootedDaemon | null = null;
   let client: DaemonClientLike | null = null;
@@ -681,7 +681,7 @@ async function main(): Promise<void> {
     const ctor = await loadDaemonClientCtor();
     client = await connectClient(ctor, daemon.port);
 
-    workspaceDir = await mkdtemp(path.join(os.tmpdir(), "paseo-bench-ws-"));
+    workspaceDir = await mkdtemp(path.join(os.tmpdir(), "byspace-bench-ws-"));
     const opened = await client.openProject(workspaceDir);
     if (!opened.workspace) {
       throw new Error(`Failed to open project: ${opened.error}`);
