@@ -65,6 +65,21 @@ assert.doesNotMatch(
   /node_modules\/\.bin\/paseo/u,
 );
 
+const userFacingSkillDocs = [
+  "skills/paseo-help/SKILL.md",
+  "skills/paseo-plugin/SKILL.md",
+  "skills/paseo-advisor/SKILL.md",
+  "skills/paseo-handoff/SKILL.md",
+  "skills/paseo-committee/SKILL.md",
+]
+  .map(read)
+  .join("\n");
+assert.doesNotMatch(userFacingSkillDocs, /paseo\.sh|github\.com\/getpaseo/iu);
+assert.doesNotMatch(
+  userFacingSkillDocs,
+  /(?:^|`)paseo (?:daemon|plugin|run|ls|project|workspace|schedule|script|heartbeat)/imu,
+);
+
 const serverConfig = read("packages/server/src/server/config.ts");
 assert.match(serverConfig, /DEFAULT_PORT = 6777/u);
 assert.match(serverConfig, /env\.BYSPACE_LISTEN/u);
