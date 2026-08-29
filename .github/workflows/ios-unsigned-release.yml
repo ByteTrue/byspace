@@ -91,7 +91,7 @@ jobs:
       matrix:
         include:
           - arch: arm64
-            runner: macos-14
+            runner: macos-15
             build_device: true
           - arch: x64
             runner: macos-15-intel
