@@ -118,31 +118,47 @@ A `v*` tag starts these production paths:
 | -------------------------- | ------------------------------------------------------------------------------------------ |
 | `npm-release.yml`          | `@bytetrue/byspace`, plus the identical npm tarball and SHA-256 file on the GitHub Release |
 | `desktop-release.yml`      | unsigned/unnotarized macOS, Windows, and Linux assets plus updater manifests               |
-| `android-apk-release.yml`  | EAS-built, ByteTrue-signed Android APK and signer metadata                                 |
-| `ios-unsigned-release.yml` | iOS Simulator `.app.zip` and unsigned device `.ipa`                                        |
+| `ios-unsigned-release.yml` | unsigned iOS device `.ipa` that requires user re-signing                                   |
 | `docker.yml`               | `ghcr.io/bytetrue/byspace:<version>`; stable releases also move `latest`                   |
 | `deploy-app.yml`           | Web/PWA deployment to `https://app.byspace.cc.cd`                                          |
 
+Build the Android APK on the release development machine before creating the tag. Upload its
+verified bytes after a tag workflow creates the GitHub Release.
+
 Marketing website deployment, relay deployment, release-note mutation, desktop manifest
-restamping, Nix publication, EAS store submission, TestFlight, App Store, and Play Store
-workflows are absent from this release line. `nix.yml` remains a pull-request source-build
-check only.
+restamping, Nix publication, EAS cloud builds, store submission, TestFlight, App Store, and
+Play Store workflows are absent from this release line. `nix.yml` remains a pull-request
+source-build check only.
 
 ## Dry-run workflows
 
-Android, iOS, npm, and Desktop accept `workflow_dispatch` with `publish=false`. Dry-run
-jobs use read-only source permissions, checkout with `persist-credentials: false`, and
-upload only private workflow artifacts.
+iOS, npm, and Desktop accept `workflow_dispatch` with `publish=false`. Dry-run jobs use
+read-only source permissions, checkout with `persist-credentials: false`, and upload only
+private workflow artifacts. They receive no OIDC, signing, or production upload credentials.
 
-The Android context job first proves that the requested ref is exact current `main` with
-green CI. Its build job then receives the Expo robot token and ByteTrue signing secrets,
-but no repository write permission. EAS uses `credentialsSource: local`, so the production
-keystore is uploaded only for that isolated build and is not saved as an EAS-managed
-remote credential. iOS, npm, and Desktop dry-runs receive no OIDC, signing, or production
-upload credentials.
+## Local Android APK
 
-`production-apk` pins the Free-plan `medium` Android worker. Do not switch to a paid
-resource class during a release.
+From a clean checkout whose `HEAD` equals green `origin/main`, run:
+
+```bash
+npm run release:android:local
+```
+
+The script uses `eas build --local`; Expo orchestrates the build on the development machine
+without entering the EAS cloud queue. It reads the ByteTrue keystore and password variables
+from `$BYSPACE_RELEASE_SECRETS_DIR`, defaulting to
+`~/.config/byspace/release-secrets`. It writes the verified APK and checksum under
+`dist/android/`.
+
+After the tag workflows create the GitHub Release, upload those exact bytes:
+
+```bash
+version=$(node -p 'require("./package.json").version')
+sha=$(git rev-parse HEAD)
+asset="dist/android/BySpace-$version-android.apk"
+GITHUB_REPOSITORY=ByteTrue/byspace scripts/upload-release-asset.sh "v$version" "$asset" "$sha"
+GITHUB_REPOSITORY=ByteTrue/byspace scripts/upload-release-asset.sh "v$version" "$asset.sha256" "$sha"
+```
 
 ## npm package
 
@@ -175,15 +191,13 @@ passes the exact-SHA gate.
 
 ## Signing
 
-- Android release artifacts use EAS Build with the ByteTrue keystore configured in GitHub
-  secrets. EAS receives it as a local credential for one isolated build instead of saving
-  it as a remote credential, and the workflow verifies the sole signer certificate before
-  upload.
+- Android release artifacts use local EAS Build with the ByteTrue keystore. The local script
+  verifies the exact source SHA, sole signer certificate, package ID, version, four native
+  ABIs, and SHA-256 checksum before publication.
 - macOS and Windows artifacts are unsigned. macOS builds disable signing, hardened
   runtime, and notarization.
-- The iOS Simulator archive runs only in the simulator.
 - The unsigned device IPA requires the user to re-sign and sideload it. A free Apple
-  account cannot produce a generally distributable IPA.
+  account cannot produce a generally distributable IPA. Simulator artifacts are not published.
 
 State these limitations in `.github/release/<tag>.md`.
 
@@ -257,7 +271,7 @@ A release is shipped only after every applicable item passes:
 - [ ] the GitHub Release contains the npm tarball and SHA-256 file
 - [ ] macOS, Windows, and Linux assets and channel manifests are present
 - [ ] the Android APK signer certificate matches the approved ByteTrue certificate
-- [ ] the iOS Simulator archive and unsigned IPA are present
+- [ ] the unsigned iOS IPA and checksum are present
 - [ ] the versioned GHCR image resolves and passes its isolated smoke check
 - [ ] `https://app.byspace.cc.cd` serves the released Web/PWA
 - [ ] published release assets match their recorded checksums

@@ -155,6 +155,7 @@ assert.ok(
 assert.match(dockerWorkflow, /ref: \$\{\{ needs\.setup\.outputs\.release_sha \}\}/u);
 
 for (const path of [
+  ".github/workflows/android-apk-release.yml",
   ".github/workflows/deploy-relay.yml",
   ".github/workflows/deploy-website.yml",
   ".github/workflows/release-notes-sync.yml",
@@ -171,7 +172,6 @@ for (const path of [
 }
 
 const dryRunReleaseWorkflows = [
-  ".github/workflows/android-apk-release.yml",
   ".github/workflows/ios-unsigned-release.yml",
   ".github/workflows/npm-release.yml",
   ".github/workflows/desktop-release.yml",
@@ -183,6 +183,17 @@ for (const path of dryRunReleaseWorkflows) {
   assert.match(workflow, /Verify exact current-main CI SHA/u, path);
   assert.match(workflow, /persist-credentials: false/u, path);
 }
+
+const iosUnsignedWorkflow = read(".github/workflows/ios-unsigned-release.yml");
+assert.match(iosUnsignedWorkflow, /name: iOS unsigned IPA/u);
+assert.match(iosUnsignedWorkflow, /-sdk iphoneos/u);
+assert.match(iosUnsignedWorkflow, /test ! -e "\$app\/_CodeSignature"/u);
+assert.match(iosUnsignedWorkflow, /name: byspace-ios-unsigned/u);
+assert.doesNotMatch(
+  iosUnsignedWorkflow,
+  /iphonesimulator|ios-simulator|macos-15-intel|matrix\./u,
+  "iOS releases must publish only the unsigned device IPA",
+);
 
 const readonlyJobs = {
   ".github/workflows/ios-unsigned-release.yml": ["context", "build"],
@@ -202,19 +213,21 @@ for (const [path, jobNames] of Object.entries(readonlyJobs)) {
   }
 }
 
-const androidWorkflow = read(".github/workflows/android-apk-release.yml");
-const androidJobs = loadYaml(androidWorkflow).jobs;
-assert.deepEqual(androidJobs.context.permissions, { actions: "read", contents: "read" });
-assert.deepEqual(androidJobs.build.permissions, { contents: "read" });
-assert.match(androidWorkflow, /test "\$RELEASE_REF" = "main"/u);
-assert.match(androidWorkflow, /EXPO_TOKEN: \$\{\{ secrets\.EXPO_TOKEN \}\}/u);
-assert.equal(easConfig.build["production-apk"].credentialsSource, "local");
-assert.equal(easConfig.build["production-apk"].android.resourceClass, "medium");
-assert.doesNotMatch(
-  JSON.stringify(androidJobs["publish-android-apk"]),
-  /EXPO_TOKEN|ANDROID_RELEASE_KEY/u,
-  "Android publish job must not receive Expo or signing credentials",
+assert.equal(
+  existsSync(new URL("../.github/workflows/android-apk-release.yml", import.meta.url)),
+  false,
+  "Android release builds must stay on the development machine",
 );
+const androidLocalBuild = read("scripts/build-android-apk-local.sh");
+assert.equal(rootPackage.scripts["release:android:local"], "scripts/build-android-apk-local.sh");
+assert.equal(easConfig.build["production-apk"].credentialsSource, "local");
+assert.match(androidLocalBuild, /git fetch origin main --no-tags/u);
+assert.match(androidLocalBuild, /gh run list .*--event push --status success/u);
+assert.match(androidLocalBuild, /eas build --local --platform android/u);
+assert.match(androidLocalBuild, /apksigner.*verify --verbose --print-certs/u);
+assert.match(androidLocalBuild, /com\.bytetrue\.byspace/u);
+assert.match(androidLocalBuild, /for abi in armeabi-v7a arm64-v8a x86 x86_64/u);
+assert.doesNotMatch(androidLocalBuild, /EXPO_TOKEN/u);
 
 const uploadHelper = read("scripts/upload-release-asset.sh");
 assert.match(uploadHelper, /"\$#" -ne 3/u);
@@ -228,7 +241,6 @@ assert.ok(
 );
 
 for (const path of [
-  ".github/workflows/android-apk-release.yml",
   ".github/workflows/ios-unsigned-release.yml",
   ".github/workflows/npm-release.yml",
   ".github/workflows/desktop-release.yml",
