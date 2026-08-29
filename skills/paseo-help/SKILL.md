@@ -65,21 +65,21 @@ For a missing provider or `command not found`, run `paseo provider diagnostic <p
 
 Use these defaults on the machine where the daemon or Desktop app actually runs. Do not look for a remote daemon's files on the client device.
 
-- Daemon config: `~/.paseo/config.json`
-- Daemon log: `~/.paseo/daemon.log`
-- Agent state directory: `~/.paseo/agents/`
-- Default managed worktree root: `~/.paseo/worktrees/`
-- macOS desktop log: `~/Library/Logs/Paseo/main.log`
-- Linux desktop log: `~/.config/Paseo/logs/main.log`
-- Windows desktop log: `%APPDATA%\Paseo\logs\main.log`
+- Daemon config: `~/.byspace/config.json`
+- Daemon log: `~/.byspace/daemon.log`
+- Agent state directory: `~/.byspace/agents/`
+- Default managed worktree root: `~/.byspace/worktrees/`
+- macOS desktop log: `~/Library/Logs/BySpace/main.log`
+- Linux desktop log: `~/.config/BySpace/logs/main.log`
+- Windows desktop log: `%APPDATA%\BySpace\logs\main.log`
 
-Substitute the status-reported `PASEO_HOME` for `~/.paseo`. In the official Docker image, the default is `/home/paseo/.paseo`; its host path depends on the volume mount, and container stdout is available through Docker. Desktop app logs describe the Desktop process; daemon logs describe the selected daemon. Read the narrowest useful slice and redact credentials, pairing offers, tokens, passwords, and user code before sharing logs.
+Substitute the status-reported `BYSPACE_HOME` for `~/.byspace`. In the official Docker image, the default is `/home/byspace/.byspace`; its host path depends on the volume mount, and container stdout is available through Docker. Desktop app logs describe the Desktop process; daemon logs describe the selected daemon. Read the narrowest useful slice and redact credentials, pairing offers, tokens, passwords, and user code before sharing logs.
 
-If diagnosing the bundled daemon on a computer with Paseo Desktop installed, but `paseo` is not on `PATH`, the bundled CLI is at:
+If diagnosing the bundled daemon on a computer with BySpace Desktop installed, but `byspace` is not on `PATH`, the bundled CLI is at:
 
-- macOS: `/Applications/Paseo.app/Contents/Resources/bin/paseo`
-- Linux: `<install-dir>/resources/bin/paseo`
-- Windows: `C:\Program Files\Paseo\resources\bin\paseo.cmd`
+- macOS: `/Applications/BySpace.app/Contents/Resources/bin/byspace`
+- Linux: `<install-dir>/resources/bin/byspace`
+- Windows: `C:\Program Files\BySpace\resources\bin\byspace.cmd`
 
 Offer to fix the PATH or symlink; do not change shell configuration silently.
 

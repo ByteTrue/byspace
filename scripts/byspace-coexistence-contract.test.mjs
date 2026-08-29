@@ -57,6 +57,14 @@ assert.equal(rootPackage.name, "byspace");
 assert.deepEqual(cliPackage.bin, { byspace: "bin/byspace" });
 assert.deepEqual(packageLock.packages["packages/cli"].bin, { byspace: "bin/byspace" });
 
+const daemonTrace = read("scripts/trace-daemon.mjs");
+assert.match(daemonTrace, /packages\/cli\/bin\/byspace/u);
+assert.doesNotMatch(daemonTrace, /packages\/cli\/bin\/paseo/u);
+assert.doesNotMatch(
+  read("packages/app/e2e/support/helpers/packaged-web-daemon.ts"),
+  /node_modules\/\.bin\/paseo/u,
+);
+
 const serverConfig = read("packages/server/src/server/config.ts");
 assert.match(serverConfig, /DEFAULT_PORT = 6777/u);
 assert.match(serverConfig, /env\.BYSPACE_LISTEN/u);
