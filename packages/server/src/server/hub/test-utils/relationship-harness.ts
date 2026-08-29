@@ -1339,8 +1339,8 @@ export class HubRelationshipHarness {
       },
       agentStoragePath: path.join(this.paseoHome, "agents"),
       relayEnabled: false,
-      relayEndpoint: "relay.paseo.sh:443",
-      appBaseUrl: "https://app.paseo.sh",
+      relayEndpoint: "relay.byspace.cc.cd:443",
+      appBaseUrl: "https://app.byspace.cc.cd",
     };
   }
 

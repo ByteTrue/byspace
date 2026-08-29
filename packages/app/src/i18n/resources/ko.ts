@@ -1102,7 +1102,7 @@ export const ko: TranslationResources = {
       discord: "Discord",
       github: "GitHub 이슈 만들기",
       whatsNew: "새로운 소식",
-      appName: "Paseo",
+      appName: "BySpace",
     },
     sections: {
       sessions: "기록",
@@ -1248,7 +1248,7 @@ export const ko: TranslationResources = {
       close: "창 닫기",
     },
     quitting: {
-      title: "Paseo 종료 중...",
+      title: "BySpace 종료 중...",
       detail: "로컬 데몬을 중지하는 중입니다.",
     },
     daemon: {
@@ -1289,7 +1289,7 @@ export const ko: TranslationResources = {
       fullStatus: {
         title: "전체 상태",
         modalTitle: "데몬 상태",
-        hint: "`paseo daemon status`를 실행하고 출력을 표시합니다",
+        hint: "`byspace daemon status`를 실행하고 출력을 표시합니다",
         view: "상태 보기",
         copied: "상태가 클립보드에 복사되었습니다.",
         fetchFailed: "데몬 상태를 가져오지 못했습니다: {{message}}",
@@ -1386,7 +1386,7 @@ export const ko: TranslationResources = {
         microphone: "마이크 상태를 아직 확인하지 않았습니다.",
       },
       testNotification: {
-        title: "Paseo 알림 테스트",
+        title: "BySpace 알림 테스트",
         body: "이 메시지가 보이면 데스크톱 알림이 작동하는 것입니다.",
         notDelivered: "알림이 전달되지 않았습니다. 시스템 설정 > 알림을 확인하세요.",
         failed: "알림을 보내지 못했습니다.",
@@ -1395,12 +1395,12 @@ export const ko: TranslationResources = {
     integrations: {
       cli: {
         statusFailed: "CLI 설치 상태를 확인할 수 없습니다.",
-        installFailed: "Paseo CLI를 설치할 수 없습니다.",
+        installFailed: "BySpace CLI를 설치할 수 없습니다.",
       },
     },
   },
   rootError: {
-    title: "Paseo에 문제가 발생했습니다.",
+    title: "BySpace에 문제가 발생했습니다.",
     body: "앱을 다시 로드해 보세요. 이런 일이 계속 발생하면 신고할 때 아래 세부정보를 포함하세요.",
     details: "세부",
   },
@@ -1495,7 +1495,7 @@ export const ko: TranslationResources = {
     },
   },
   onboarding: {
-    title: "Paseo에 오신 것을 환영합니다",
+    title: "BySpace에 오신 것을 환영합니다",
     subtitle: "시작하려면 컴퓨터를 연결하세요",
     actions: {
       settings: "설정",
@@ -2337,7 +2337,7 @@ export const ko: TranslationResources = {
         title: "오케스트레이션",
         unavailable: "오케스트레이션을 관리하려면 이 호스트에 연결하세요",
         enableTools: {
-          title: "Paseo 도구 활성화",
+          title: "BySpace 도구 활성화",
           hint: "에이전트가 워크트리, 에이전트, 일정을 관리할 수 있습니다",
           accessibilityLabel: "Paseo 도구 주입",
         },

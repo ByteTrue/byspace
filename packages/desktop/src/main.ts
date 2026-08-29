@@ -107,10 +107,10 @@ import {
 import { AgentNavigationInbox, parseAgentDeepLinkFromArgv } from "./agent-navigation.js";
 
 const DEV_SERVER_URL = process.env.EXPO_DEV_URL ?? "http://localhost:8081";
-const APP_SCHEME = "paseo";
+const APP_SCHEME = "byspace";
 const PASEO_DEBUG = process.env.PASEO_DEBUG === "1";
 const DISABLE_SINGLE_INSTANCE_LOCK = process.env.PASEO_DISABLE_SINGLE_INSTANCE_LOCK === "1";
-const APP_NAME = process.env.PASEO_TEST_APP_NAME?.trim() || "Paseo";
+const APP_NAME = process.env.PASEO_TEST_APP_NAME?.trim() || "BySpace";
 const DESKTOP_WINDOW_CHROME_MODE = resolveDesktopWindowChromeMode({
   platform: process.platform,
   override: process.env.PASEO_DESKTOP_WINDOW_CONTROLS,
@@ -301,7 +301,7 @@ if (forcedUserDataDir) {
       windowsHide: true,
     }).trim();
     devWorktreeName = path.basename(topLevel);
-    // Main checkout (e.g. "paseo") gets default userData — only worktrees diverge.
+    // Main checkout gets default userData — only worktrees diverge.
     const commonDir = path.resolve(
       topLevel,
       execFileSync("git", ["rev-parse", "--git-common-dir"], {
@@ -313,7 +313,7 @@ if (forcedUserDataDir) {
     );
     const isWorktree = path.resolve(topLevel, ".git") !== commonDir;
     if (isWorktree) {
-      app.setPath("userData", path.join(app.getPath("appData"), `Paseo-${devWorktreeName}`));
+      app.setPath("userData", path.join(app.getPath("appData"), `BySpace-${devWorktreeName}`));
       log.info("[worktree] isolated userData for worktree:", devWorktreeName);
     } else {
       devWorktreeName = null;
@@ -864,7 +864,7 @@ function setupSingleInstanceLock(): boolean {
       isDefaultApp: false,
     });
     log.info("[open-project] second-instance openProjectPath:", openProjectPath);
-    // Relaunching the app (CLI `paseo [path]`, double-click, etc.) opens a new
+    // Relaunching the app (CLI `byspace [path]`, double-click, etc.) opens a new
     // window rather than focusing the existing one. Wait for bootstrap (not just
     // app.whenReady) so the protocol + IPC handlers exist before the window loads.
     void bootstrapComplete

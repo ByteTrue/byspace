@@ -4,21 +4,21 @@ import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { copyAttachmentFileToManagedStorage } from "./attachments";
 
-const originalPaseoHome = process.env.PASEO_HOME;
+const originalBySpaceHome = process.env.BYSPACE_HOME;
 let testHome: string | null = null;
 
 async function useTempPaseoHome(): Promise<string> {
-  testHome = await mkdtemp(path.join(os.tmpdir(), "paseo-desktop-attachments-"));
-  process.env.PASEO_HOME = testHome;
+  testHome = await mkdtemp(path.join(os.tmpdir(), "byspace-desktop-attachments-"));
+  process.env.BYSPACE_HOME = testHome;
   return testHome;
 }
 
 describe("desktop attachment files", () => {
   afterEach(async () => {
-    if (originalPaseoHome === undefined) {
-      delete process.env.PASEO_HOME;
+    if (originalBySpaceHome === undefined) {
+      delete process.env.BYSPACE_HOME;
     } else {
-      process.env.PASEO_HOME = originalPaseoHome;
+      process.env.BYSPACE_HOME = originalBySpaceHome;
     }
 
     if (testHome) {

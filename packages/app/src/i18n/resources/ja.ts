@@ -1107,7 +1107,7 @@ export const ja: TranslationResources = {
       discord: "Discord",
       github: "GitHub Issueを作成",
       whatsNew: "新着情報",
-      appName: "Paseo",
+      appName: "BySpace",
     },
     sections: {
       sessions: "履歴",
@@ -1253,7 +1253,7 @@ export const ja: TranslationResources = {
       close: "ウィンドウを閉じる",
     },
     quitting: {
-      title: "Paseoを終了中...",
+      title: "BySpaceを終了中...",
       detail: "ローカルデーモンを停止中。",
     },
     daemon: {
@@ -1295,7 +1295,7 @@ export const ja: TranslationResources = {
       fullStatus: {
         title: "詳細ステータス",
         modalTitle: "デーモンのステータス",
-        hint: "`paseo daemon status`を実行して出力を表示します",
+        hint: "`byspace daemon status`を実行して出力を表示します",
         view: "ステータスを表示",
         copied: "ステータスをクリップボードにコピーしました。",
         fetchFailed: "デーモンのステータスの取得に失敗しました: {{message}}",
@@ -1391,7 +1391,7 @@ export const ja: TranslationResources = {
         microphone: "マイクのステータスはまだ確認されていません。",
       },
       testNotification: {
-        title: "Paseo通知テスト",
+        title: "BySpace通知テスト",
         body: "これが見えれば、デスクトップ通知は機能しています。",
         notDelivered: "通知が届きませんでした。システム設定 > 通知を確認してください。",
         failed: "通知の送信に失敗しました。",
@@ -1400,12 +1400,12 @@ export const ja: TranslationResources = {
     integrations: {
       cli: {
         statusFailed: "CLIのインストール状態を確認できません。",
-        installFailed: "Paseo CLIをインストールできません。",
+        installFailed: "BySpace CLIをインストールできません。",
       },
     },
   },
   rootError: {
-    title: "Paseo で問題が発生しました。",
+    title: "BySpace で問題が発生しました。",
     body: "アプリを再読み込みするにはもう一度お試しください。繰り返し発生する場合は、以下の詳細を添えて報告してください。",
     details: "詳細",
   },
@@ -1500,7 +1500,7 @@ export const ja: TranslationResources = {
     },
   },
   onboarding: {
-    title: "Paseoへようこそ",
+    title: "BySpaceへようこそ",
     subtitle: "始めるにはコンピューターに接続してください",
     actions: {
       settings: "設定",
@@ -2347,7 +2347,7 @@ export const ja: TranslationResources = {
         title: "オーケストレーション",
         unavailable: "オーケストレーションを管理するにはこのホストに接続してください",
         enableTools: {
-          title: "Paseoツールを有効にする",
+          title: "BySpaceツールを有効にする",
           hint: "エージェントがワークツリー、エージェント、スケジュールを管理できるようになります",
           accessibilityLabel: "Paseoツールを有効にする",
         },

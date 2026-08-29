@@ -14,8 +14,8 @@ import {
 
 console.log("=== Daemon Set Password Command ===\n");
 
-const root = await mkdtemp(join(tmpdir(), "paseo-set-password-"));
-const paseoHome = join(root, ".paseo");
+const root = await mkdtemp(join(tmpdir(), "byspace-set-password-"));
+const paseoHome = join(root, ".byspace");
 
 function promptSequence(values: string[]): PromptPassword {
   return async () => {
@@ -40,7 +40,7 @@ try {
             listen: "127.0.0.1:9999",
             relay: { enabled: false },
           },
-          app: { baseUrl: "https://app.paseo.sh" },
+          app: { baseUrl: "https://app.byspace.cc.cd" },
         },
         null,
         2,
@@ -51,7 +51,7 @@ try {
     const config = JSON.parse(await readFile(join(paseoHome, "config.json"), "utf-8"));
 
     assert.strictEqual(result.configPath, join(paseoHome, "config.json"));
-    assert.strictEqual(result.restartCommand, "paseo daemon restart");
+    assert.strictEqual(result.restartCommand, "byspace daemon restart");
     assert.strictEqual(config.daemon.listen, "127.0.0.1:9999");
     assert.strictEqual(config.daemon.relay.enabled, false);
     assert.notStrictEqual(config.daemon.auth.password, "shared-secret");

@@ -111,10 +111,10 @@ function daemonConnectionFailure(host: string, cause: unknown): CommandError {
     code: "DAEMON_NOT_RUNNING",
     message: `Cannot reach the daemon at ${host}: ${reason}`,
     details: isSsh
-      ? "Start the Paseo daemon on the SSH host; SSH transport does not install or start it."
+      ? "Start the BySpace daemon on the SSH host; SSH transport does not install or start it."
       : [
-          "Start a local daemon with: paseo daemon start",
-          "To use another daemon, pass --host <host:port> or set PASEO_HOST.",
+          "Start a local daemon with: byspace daemon start",
+          "To use another daemon, pass --host <host:port> or set BYSPACE_HOST.",
         ].join("\n"),
   };
 }
@@ -176,10 +176,10 @@ export function buildAgentLsFetchOptions(
 
 /**
  * Agent ls command semantics:
- * - `paseo agent ls`    → active non-archived agents
- * - `paseo agent ls -g` → global non-archived agents
- * - `paseo agent ls -a` → active agents, including archived
- * - `paseo agent ls -ag` → global agents, including archived
+ * - `byspace agent ls`    → active non-archived agents
+ * - `byspace agent ls -g` → global non-archived agents
+ * - `byspace agent ls -a` → active agents, including archived
+ * - `byspace agent ls -ag` → global agents, including archived
  */
 export async function runLsCommand(
   options: AgentLsOptions,

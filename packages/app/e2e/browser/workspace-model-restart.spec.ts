@@ -233,7 +233,7 @@ async function startRestartDaemon(input: {
   origin: string;
 }): Promise<StartedDaemon> {
   const port = await getAvailablePort();
-  if (port === 6767 || String(port) === process.env.E2E_DAEMON_PORT) {
+  if (port === 6767 || port === 6777 || String(port) === process.env.E2E_DAEMON_PORT) {
     return startRestartDaemon(input);
   }
 
@@ -242,9 +242,9 @@ async function startRestartDaemon(input: {
     cwd: serverDir,
     env: withDisabledE2ESpeechEnv({
       ...process.env,
-      PASEO_HOME: input.paseoHome,
+      BYSPACE_HOME: input.paseoHome,
       PASEO_SERVER_ID: SERVER_ID,
-      PASEO_LISTEN: `127.0.0.1:${port}`,
+      BYSPACE_LISTEN: `127.0.0.1:${port}`,
       PASEO_CORS_ORIGINS: input.origin,
       PASEO_RELAY_ENABLED: "0",
       PASEO_NODE_ENV: "development",

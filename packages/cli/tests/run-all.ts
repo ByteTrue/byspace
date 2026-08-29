@@ -1,11 +1,11 @@
 #!/usr/bin/env npx zx
 
 /**
- * Test runner for Paseo CLI E2E tests
+ * Test runner for BySpace CLI E2E tests
  *
  * Runs all test phases as separate subprocesses with a bounded worker pool
  * so independent tests run concurrently. Each test file already isolates
- * its own daemon (ephemeral port + tmp PASEO_HOME), so parallelism is safe.
+ * its own daemon (ephemeral port + tmp BYSPACE_HOME), so parallelism is safe.
  */
 
 import { spawn } from "child_process";
@@ -19,7 +19,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const repoRoot = join(__dirname, "..", "..", "..");
 
 // npm workspace scripts only add the local node_modules/.bin to PATH; hoisted
-// packages live in the root. Prepend it so `npx paseo` resolves locally.
+// packages live in the root. Prepend it so `npx byspace` resolves locally.
 const rootNodeModulesBin = join(repoRoot, "node_modules", ".bin");
 const args = process.argv.slice(2);
 const testEnvDefaults = {
@@ -122,7 +122,7 @@ async function writeJsonSummary({
   );
 }
 
-console.log("🧪 Paseo CLI E2E Test Runner\n");
+console.log("🧪 BySpace CLI E2E Test Runner\n");
 console.log("=".repeat(50));
 
 // Discover all test files

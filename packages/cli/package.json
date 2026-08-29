@@ -1,9 +1,9 @@
 {
   "name": "@getpaseo/cli",
   "version": "0.7.0-beta.2",
-  "description": "Paseo CLI - control your AI coding agents from the command line",
+  "description": "BySpace CLI - control your AI coding agents from the command line",
   "bin": {
-    "paseo": "bin/paseo"
+    "byspace": "bin/byspace"
   },
   "files": [
     "bin",

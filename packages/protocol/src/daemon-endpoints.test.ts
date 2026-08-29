@@ -191,8 +191,8 @@ describe("relay websocket URLs", () => {
 });
 
 describe("shouldUseTlsForDefaultHostedRelay", () => {
-  test("returns true for the hosted Paseo relay on port 443", () => {
-    expect(shouldUseTlsForDefaultHostedRelay("relay.paseo.sh:443")).toBe(true);
+  test("returns true for the hosted BySpace relay on port 443", () => {
+    expect(shouldUseTlsForDefaultHostedRelay("relay.byspace.cc.cd:443")).toBe(true);
   });
 
   test("returns true for any self-hosted relay on port 443", () => {

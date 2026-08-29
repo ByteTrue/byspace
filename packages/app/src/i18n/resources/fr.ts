@@ -1129,7 +1129,7 @@ export const fr: TranslationResources = {
       discord: "Discord",
       github: "Créer un ticket GitHub",
       whatsNew: "Nouveautés",
-      appName: "Paseo",
+      appName: "BySpace",
     },
     sections: {
       sessions: "Historique",
@@ -1275,7 +1275,7 @@ export const fr: TranslationResources = {
       close: "Fermer la fenêtre",
     },
     quitting: {
-      title: "QuitterPaseo...",
+      title: "Quitter BySpace...",
       detail: "Arrêt du démon local.",
     },
     daemon: {
@@ -1317,7 +1317,7 @@ export const fr: TranslationResources = {
       fullStatus: {
         title: "Statut complet",
         modalTitle: "StatutDaemon",
-        hint: "Exécute`paseo daemon status`et affiche la sortie",
+        hint: "Exécute `byspace daemon status` et affiche la sortie",
         view: "Afficher l'état",
         copied: "Statut copié dans le presse-papiers.",
         fetchFailed: "Échec de la récupération de l'état du démon:{{message}}",
@@ -1422,7 +1422,7 @@ export const fr: TranslationResources = {
         microphone: "L'état du microphone n'a pas encore été vérifié.",
       },
       testNotification: {
-        title: "Test de notificationPaseo",
+        title: "Test de notification BySpace",
         body: "Si vous pouvez voir cela, les notifications sur le bureau fonctionnent.",
         notDelivered:
           "La notification n'a pas été délivrée. Vérifiez Paramètres système > Notifications.",
@@ -1437,7 +1437,7 @@ export const fr: TranslationResources = {
     },
   },
   rootError: {
-    title: "Paseo a rencontré un problème.",
+    title: "BySpace a rencontré un problème.",
     body: "Réessayez pour recharger l'application. Si cela continue, joignez les détails ci-dessous au signalement.",
     details: "Détails",
   },
@@ -1533,7 +1533,7 @@ export const fr: TranslationResources = {
     },
   },
   onboarding: {
-    title: "Bienvenue surPaseo",
+    title: "Bienvenue sur BySpace",
     subtitle: "Connectez votre ordinateur pour commencer",
     actions: {
       settings: "Paramètres",
@@ -2385,7 +2385,7 @@ export const fr: TranslationResources = {
         title: "Orchestration",
         unavailable: "Connectez-vous à cet hôte pour gérer l'orchestration",
         enableTools: {
-          title: "Activer les outilsPaseo",
+          title: "Activer les outils BySpace",
           hint: "Les agents pourront gérer les arbres de travail, les agents et les horaires",
           accessibilityLabel: "Injecter les outilsPaseo",
         },

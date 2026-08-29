@@ -38,10 +38,10 @@ describe("pid-lock ownership", () => {
           patch: { listen: string },
           options: { ownerPid: number },
         ) => Promise<void>
-      )(paseoHome, { listen: "127.0.0.1:6767" }, { ownerPid });
+      )(paseoHome, { listen: "127.0.0.1:6777" }, { ownerPid });
 
       const updatedLock = await getPidLockInfo(paseoHome);
-      expect(updatedLock?.listen).toBe("127.0.0.1:6767");
+      expect(updatedLock?.listen).toBe("127.0.0.1:6777");
 
       await (
         releasePidLock as unknown as (home: string, options: { ownerPid: number }) => Promise<void>
@@ -64,7 +64,7 @@ describe("pid-lock ownership", () => {
     const replacementOwnerPid = process.pid + 10_000;
 
     try {
-      const pidPath = join(paseoHome, "paseo.pid");
+      const pidPath = join(paseoHome, "byspace.pid");
       await writeFile(
         pidPath,
         JSON.stringify({
@@ -72,7 +72,7 @@ describe("pid-lock ownership", () => {
           startedAt: "2026-01-01T00:00:00.000Z",
           hostname: "old-host",
           uid: process.getuid?.() ?? 0,
-          listen: "127.0.0.1:6767",
+          listen: "127.0.0.1:6777",
           desktopManaged: true,
           heartbeat: true,
         }),
@@ -83,7 +83,7 @@ describe("pid-lock ownership", () => {
       await expect(isLocked(paseoHome)).resolves.toMatchObject({ locked: true });
       await expect(
         acquirePidLock(paseoHome, null, { ownerPid: replacementOwnerPid }),
-      ).rejects.toThrow("Another Paseo daemon is already running");
+      ).rejects.toThrow("Another BySpace daemon is already running");
 
       const lock = await getPidLockInfo(paseoHome);
       expect(lock?.pid).toBe(process.pid);
@@ -97,7 +97,7 @@ describe("pid-lock ownership", () => {
     const replacementOwnerPid = process.pid + 10_000;
 
     try {
-      const pidPath = join(paseoHome, "paseo.pid");
+      const pidPath = join(paseoHome, "byspace.pid");
       await writeFile(
         pidPath,
         JSON.stringify({
@@ -105,7 +105,7 @@ describe("pid-lock ownership", () => {
           startedAt: "2026-01-01T00:00:00.000Z",
           hostname: "old-host",
           uid: process.getuid?.() ?? 0,
-          listen: "127.0.0.1:6767",
+          listen: "127.0.0.1:6777",
           desktopManaged: true,
           heartbeat: true,
         }),
@@ -128,7 +128,7 @@ describe("pid-lock ownership", () => {
 
   test("keeps a stale live lock written by a pre-heartbeat daemon", async () => {
     const paseoHome = await mkdtemp(join(tmpdir(), "paseo-pid-lock-legacy-live-"));
-    const pidPath = join(paseoHome, "paseo.pid");
+    const pidPath = join(paseoHome, "byspace.pid");
 
     try {
       await writeFile(
@@ -138,7 +138,7 @@ describe("pid-lock ownership", () => {
           startedAt: "2026-01-01T00:00:00.000Z",
           hostname: "old-host",
           uid: process.getuid?.() ?? 0,
-          listen: "127.0.0.1:6767",
+          listen: "127.0.0.1:6777",
           desktopManaged: true,
         }),
       );
@@ -147,7 +147,7 @@ describe("pid-lock ownership", () => {
 
       await expect(
         acquirePidLock(paseoHome, null, { ownerPid: process.pid + 10_000 }),
-      ).rejects.toThrow("Another Paseo daemon is already running");
+      ).rejects.toThrow("Another BySpace daemon is already running");
 
       const lock = await getPidLockInfo(paseoHome);
       expect(lock?.pid).toBe(process.pid);
@@ -159,7 +159,7 @@ describe("pid-lock ownership", () => {
   test("reclaims a stale legacy desktop lock after desktop confirms the daemon is unreachable", async () => {
     const paseoHome = await mkdtemp(join(tmpdir(), "paseo-pid-lock-legacy-desktop-"));
     const replacementOwnerPid = process.pid + 10_000;
-    const pidPath = join(paseoHome, "paseo.pid");
+    const pidPath = join(paseoHome, "byspace.pid");
 
     try {
       await writeFile(
@@ -169,7 +169,7 @@ describe("pid-lock ownership", () => {
           startedAt: "2026-01-01T00:00:00.000Z",
           hostname: "old-host",
           uid: process.getuid?.() ?? 0,
-          listen: "127.0.0.1:6767",
+          listen: "127.0.0.1:6777",
           desktopManaged: true,
         }),
       );
@@ -205,7 +205,7 @@ describe("pid-lock ownership", () => {
 
   test("retries a heartbeat refresh while its owner is rewriting the lock", async () => {
     const paseoHome = await mkdtemp(join(tmpdir(), "paseo-pid-lock-refresh-rewrite-"));
-    const pidPath = join(paseoHome, "paseo.pid");
+    const pidPath = join(paseoHome, "byspace.pid");
 
     try {
       await acquirePidLock(paseoHome, null, { ownerPid: process.pid });
@@ -231,13 +231,13 @@ describe("pid-lock ownership", () => {
 
     try {
       await writeFile(
-        join(paseoHome, "paseo.pid"),
+        join(paseoHome, "byspace.pid"),
         JSON.stringify({
           pid: process.pid,
           startedAt: new Date().toISOString(),
           hostname: "current-host",
           uid: process.getuid?.() ?? 0,
-          listen: "127.0.0.1:6767",
+          listen: "127.0.0.1:6777",
           desktopManaged: true,
           heartbeat: true,
         }),
@@ -245,11 +245,11 @@ describe("pid-lock ownership", () => {
 
       await expect(
         acquirePidLock(paseoHome, null, { ownerPid: process.pid + 10_000 }),
-      ).rejects.toThrow("Another Paseo daemon is already running");
+      ).rejects.toThrow("Another BySpace daemon is already running");
 
       const lock = await getPidLockInfo(paseoHome);
       expect(lock?.pid).toBe(process.pid);
-      expect(lock?.listen).toBe("127.0.0.1:6767");
+      expect(lock?.listen).toBe("127.0.0.1:6777");
     } finally {
       await rm(paseoHome, { recursive: true, force: true });
     }

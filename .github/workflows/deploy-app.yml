@@ -4,10 +4,9 @@ on:
   push:
     tags:
       - "v*"
-      - "!v*-beta.*"
-      - "app-v*"
-      - "!app-v*-beta.*"
-  workflow_dispatch:
+permissions:
+  actions: read
+  contents: read
 
 jobs:
   deploy:
@@ -15,10 +14,24 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify exact current-main CI SHA
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          version="$(node -p 'require("./package.json").version')"
+          sha="$(git rev-parse HEAD)"
+          test "${{ github.ref_name }}" = "v$version"
+          test "$(git rev-list -n 1 "${{ github.ref_name }}")" = "$sha"
+          git fetch origin main --no-tags
+          test "$sha" = "$(git rev-parse origin/main)"
+          test -n "$(gh run list --repo "$GITHUB_REPOSITORY" --workflow CI --commit "$sha" --event push --status success --limit 1 --json databaseId --jq '.[0].databaseId // empty')"
       - uses: actions/setup-node@v4
         with:
-          node-version: "22"
+          node-version: "22.20.0"
           cache: "npm"
           registry-url: "https://npm.pkg.github.com"
           scope: "@boudra"

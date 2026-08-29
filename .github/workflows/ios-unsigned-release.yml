@@ -1,0 +1,237 @@
+name: iOS Unsigned Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Git ref to build"
+        required: true
+        default: main
+        type: string
+      publish:
+        description: "Upload artifacts to a release (ref must be a release tag)"
+        required: true
+        default: false
+        type: boolean
+
+concurrency:
+  group: ios-unsigned-release-${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  context:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      sha: ${{ steps.release.outputs.sha }}
+      tag: ${{ steps.release.outputs.tag }}
+      version: ${{ steps.release.outputs.version }}
+      publish: ${{ steps.release.outputs.publish }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.ref }}
+      - id: release
+        name: Resolve immutable build context
+        env:
+          BUILD_REF: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.ref_name }}
+          SHOULD_PUBLISH: ${{ github.event_name != 'workflow_dispatch' || inputs.publish }}
+        run: |
+          set -euo pipefail
+          {
+            echo "sha=$(git rev-parse HEAD)"
+            echo "tag=$BUILD_REF"
+            echo "version=$(node -p 'require("./package.json").version')"
+            echo "publish=$SHOULD_PUBLISH"
+          } >> "$GITHUB_OUTPUT"
+
+  gate:
+    needs: context
+    if: needs.context.outputs.publish == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: ${{ needs.context.outputs.sha }}
+      - name: Verify exact current-main CI SHA
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ needs.context.outputs.tag }}
+        run: |
+          set -euo pipefail
+          version="$(node -p 'require("./package.json").version')"
+          sha="$(git rev-parse HEAD)"
+          test "$RELEASE_TAG" = "v$version"
+          git fetch origin "refs/tags/$RELEASE_TAG:refs/tags/$RELEASE_TAG" --force
+          test "$(git rev-list -n 1 "$RELEASE_TAG")" = "$sha"
+          git fetch origin main --no-tags
+          test "$sha" = "$(git rev-parse origin/main)"
+          test -n "$(gh run list --repo "$GITHUB_REPOSITORY" --workflow CI --commit "$sha" --event push --status success --limit 1 --json databaseId --jq '.[0].databaseId // empty')"
+
+  build:
+    name: iOS ${{ matrix.arch }}
+    needs: [context, gate]
+    if: ${{ always() && needs.context.result == 'success' && (needs.context.outputs.publish != 'true' || needs.gate.result == 'success') }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: arm64
+            runner: macos-14
+            build_device: true
+          - arch: x64
+            runner: macos-15-intel
+            build_device: false
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          ref: ${{ needs.context.outputs.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.20.0"
+          cache: npm
+      - run: npm ci
+      - run: npm run build:app-deps
+      - name: Generate production iOS project
+        working-directory: packages/app
+        env:
+          APP_VARIANT: production
+          CI: "1"
+          EXPO_NO_DOTENV: "1"
+          NODE_ENV: production
+        run: npx expo prebuild --platform ios --clean --no-install
+      - name: Install CocoaPods dependencies
+        working-directory: packages/app/ios
+        run: pod install
+      - name: Build unsigned iOS Simulator app
+        env:
+          APP_VARIANT: production
+        run: |
+          set -euo pipefail
+          workspace="$(find packages/app/ios -maxdepth 1 -name '*.xcworkspace' -print -quit)"
+          [[ -n "$workspace" ]]
+          xcodebuild \
+            -workspace "$workspace" \
+            -scheme BySpace \
+            -configuration Release \
+            -sdk iphonesimulator \
+            -derivedDataPath "$RUNNER_TEMP/byspace-simulator" \
+            CODE_SIGNING_ALLOWED=NO \
+            ONLY_ACTIVE_ARCH=YES \
+            build
+      - name: Package and verify iOS Simulator app
+        id: simulator
+        run: |
+          set -euo pipefail
+          app="$(find "$RUNNER_TEMP/byspace-simulator/Build/Products" -maxdepth 2 -type d -name 'BySpace.app' -print -quit)"
+          [[ -n "$app" ]]
+          plist="$app/Info.plist"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$plist")" = "com.bytetrue.byspace"
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleURLTypes:0:CFBundleURLSchemes:0' "$plist" | grep -Fx byspace
+          asset="$RUNNER_TEMP/BySpace-${{ needs.context.outputs.version }}-ios-simulator-${{ matrix.arch }}.app.zip"
+          ditto -c -k --sequesterRsrc --keepParent "$app" "$asset"
+          (cd "$(dirname "$asset")" && shasum -a 256 "$(basename "$asset")" > "$(basename "$asset").sha256")
+          echo "path=$asset" >> "$GITHUB_OUTPUT"
+          echo "checksum=$asset.sha256" >> "$GITHUB_OUTPUT"
+      - name: Build unsigned iOS device app
+        if: matrix.build_device
+        env:
+          APP_VARIANT: production
+        run: |
+          set -euo pipefail
+          workspace="$(find packages/app/ios -maxdepth 1 -name '*.xcworkspace' -print -quit)"
+          xcodebuild \
+            -workspace "$workspace" \
+            -scheme BySpace \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath "$RUNNER_TEMP/byspace-device" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY= \
+            build
+      - name: Package unsigned IPA
+        if: matrix.build_device
+        id: device
+        run: |
+          set -euo pipefail
+          app="$(find "$RUNNER_TEMP/byspace-device/Build/Products" -maxdepth 2 -type d -name 'BySpace.app' -print -quit)"
+          [[ -n "$app" ]]
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$app/Info.plist")" = "com.bytetrue.byspace"
+          payload="$RUNNER_TEMP/unsigned-ipa/Payload"
+          mkdir -p "$payload"
+          ditto "$app" "$payload/BySpace.app"
+          asset="$RUNNER_TEMP/BySpace-${{ needs.context.outputs.version }}-ios-unsigned.ipa"
+          (cd "$RUNNER_TEMP/unsigned-ipa" && zip -qry "$asset" Payload)
+          (cd "$(dirname "$asset")" && shasum -a 256 "$(basename "$asset")" > "$(basename "$asset").sha256")
+          echo "path=$asset" >> "$GITHUB_OUTPUT"
+          echo "checksum=$asset.sha256" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: byspace-ios-${{ matrix.arch }}
+          path: |
+            ${{ steps.simulator.outputs.path }}
+            ${{ steps.simulator.outputs.checksum }}
+            ${{ steps.device.outputs.path }}
+            ${{ steps.device.outputs.checksum }}
+          if-no-files-found: error
+          retention-days: 14
+
+  publish:
+    needs: [context, gate, build]
+    if: ${{ always() && needs.context.outputs.publish == 'true' && needs.gate.result == 'success' && needs.build.result == 'success' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: ${{ needs.context.outputs.sha }}
+          sparse-checkout: |
+            .github/release
+            scripts/upload-release-asset.sh
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: byspace-ios-*
+          path: dist/ios
+          merge-multiple: true
+      - name: Revalidate tag and upload iOS artifacts
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_SHA: ${{ needs.context.outputs.sha }}
+          RELEASE_TAG: ${{ needs.context.outputs.tag }}
+        run: |
+          set -euo pipefail
+          git fetch origin "refs/tags/$RELEASE_TAG:refs/tags/$RELEASE_TAG" --force
+          test "$(git rev-list -n 1 "$RELEASE_TAG")" = "$RELEASE_SHA"
+          if ! gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            notes_file=".github/release/$RELEASE_TAG.md"
+            args=(release create "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --title "BySpace $RELEASE_TAG")
+            [[ -f "$notes_file" ]] && args+=(--notes-file "$notes_file") || args+=(--generate-notes)
+            [[ "$RELEASE_TAG" == *-* ]] && args+=(--prerelease)
+            gh "${args[@]}" || gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null
+          fi
+          shopt -s nullglob
+          files=(dist/ios/*)
+          ((${#files[@]} > 0))
+          for file in "${files[@]}"; do
+            bash scripts/upload-release-asset.sh "$RELEASE_TAG" "$file" "$RELEASE_SHA"
+          done

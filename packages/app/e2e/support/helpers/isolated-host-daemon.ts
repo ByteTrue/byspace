@@ -83,7 +83,7 @@ export async function startIsolatedHostDaemon(
 ): Promise<IsolatedHostDaemon> {
   const primaryPort = Number(process.env.E2E_DAEMON_PORT ?? 0);
   let port = await getAvailablePort();
-  while (port === 6767 || port === primaryPort) port = await getAvailablePort();
+  while (port === 6767 || port === 6777 || port === primaryPort) port = await getAvailablePort();
 
   const metroPort = process.env.E2E_METRO_PORT;
   if (!metroPort) throw new Error("E2E_METRO_PORT is required to start an isolated host daemon");
@@ -153,9 +153,16 @@ export async function startIsolatedHostDaemon(
       env: withDisabledE2ESpeechEnv({
         ...process.env,
         ...options.environment,
-        PASEO_HOME: paseoHome,
+        ...(publishedPackageRoot
+          ? {
+              PASEO_HOME: paseoHome,
+              PASEO_LISTEN: `127.0.0.1:${port}`,
+            }
+          : {
+              BYSPACE_HOME: paseoHome,
+              BYSPACE_LISTEN: `127.0.0.1:${port}`,
+            }),
         PASEO_SERVER_ID: serverId,
-        PASEO_LISTEN: `127.0.0.1:${port}`,
         PASEO_CORS_ORIGINS: `http://localhost:${metroPort}`,
         PASEO_RELAY_ENABLED: options.mutableRelay ? undefined : "0",
         PASEO_NODE_ENV: "development",

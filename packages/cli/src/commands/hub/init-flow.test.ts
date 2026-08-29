@@ -57,7 +57,7 @@ describe("Hub guided setup continuation", () => {
       ["Read only", "Full access (suggested)"],
     ]);
     assert.deepEqual(prompts.messages, [
-      "Hub app connections ready for this workflow:\nSlack — Paseo\n\nOnly configured connections are shown. To add another, open Hub → Apps, then run `paseo hub init` again.",
+      "Hub app connections ready for this workflow:\nSlack — Paseo\n\nOnly configured connections are shown. To add another, open Hub → Apps, then run `byspace hub init` again.",
       "Using Slack — Paseo",
     ]);
     assert.deepEqual(calls, [
@@ -95,7 +95,7 @@ describe("Hub guided setup continuation", () => {
       setupEnvironment(cwd, credentials, daemon, connectDeclined, []),
     );
     assert.deepEqual(connectDeclined.messages, [
-      "Skipped daemon connection. Run: paseo hub connect https://hub.test; then paseo hub init",
+      "Skipped daemon connection. Run: byspace hub connect https://hub.test; then byspace hub init",
     ]);
 
     const initDeclined = new PromptAnswers([true, false], [], []);
@@ -103,7 +103,7 @@ describe("Hub guided setup continuation", () => {
       "https://hub.test",
       setupEnvironment(cwd, credentials, daemon, initDeclined, []),
     );
-    assert.deepEqual(initDeclined.messages, ["Skipped starter workflow. Run: paseo hub init"]);
+    assert.deepEqual(initDeclined.messages, ["Skipped starter workflow. Run: byspace hub init"]);
   });
 
   it("keeps login successful when no Hub app connection can initialize a workflow", async () => {
@@ -132,7 +132,7 @@ describe("Hub guided setup continuation", () => {
     );
 
     assert.deepEqual(prompts.messages, [
-      "No Hub app connection is ready for this workflow.\nConnect GitHub, Slack, or Discord in Hub → Apps, then run `paseo hub init` again.",
+      "No Hub app connection is ready for this workflow.\nConnect GitHub, Slack, or Discord in Hub → Apps, then run `byspace hub init` again.",
     ]);
   });
 

@@ -66,8 +66,8 @@ function resolveSecretFile(params) {
 
 const variants = {
   production: {
-    name: "Paseo",
-    packageId: "sh.paseo",
+    name: "BySpace",
+    packageId: "com.bytetrue.byspace",
     googleServicesFile: resolveSecretFile({
       envKey: "GOOGLE_SERVICES_FILE_PROD",
       fallbackRelativePath: "./.secrets/google-services.prod.json",
@@ -78,8 +78,8 @@ const variants = {
     }),
   },
   development: {
-    name: "Paseo Debug",
-    packageId: "sh.paseo.debug",
+    name: "BySpace Debug",
+    packageId: "com.bytetrue.byspace.debug",
     googleServicesFile: resolveSecretFile({
       envKey: "GOOGLE_SERVICES_FILE_DEBUG",
       fallbackRelativePath: "./.secrets/google-services.debug.json",
@@ -101,7 +101,7 @@ export default {
     version: nativeReleaseVersion.appVersion,
     orientation: "portrait",
     icon: "./assets/images/icon.png",
-    scheme: "paseo",
+    scheme: "byspace",
     userInterfaceStyle: "automatic",
     newArchEnabled: true,
     ios: {
@@ -187,10 +187,7 @@ export default {
       fdroidBuild: isFdroidBuild,
       profileBuild: isProfileBuild,
       router: {},
-      eas: {
-        projectId: "0e7f65ce-0367-46c8-a238-2b65963d235a",
-      },
     },
-    owner: "getpaseo",
+    owner: "bytetrue",
   },
 };

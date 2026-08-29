@@ -14,7 +14,7 @@ export function resolveProjectPath(input: {
       throw {
         code: "MISSING_PATH",
         message: "Project path is required when targeting a daemon explicitly",
-        details: "Usage: paseo project create <path> --host <host>",
+        details: "Usage: byspace project create <path> --host <host>",
       } satisfies CommandError;
     }
     return input.pathArg;
@@ -31,7 +31,7 @@ export async function runCreateCommand(
   const projectPath = resolveProjectPath({
     pathArg,
     cwd: process.cwd(),
-    daemonTarget: options.host ?? process.env.PASEO_HOST,
+    daemonTarget: options.host ?? process.env.BYSPACE_HOST,
   });
   const client = await connectToDaemon({ host: options.host }).catch((error: unknown) => {
     throw buildDaemonConnectionCommandError({ host: options.host, error });

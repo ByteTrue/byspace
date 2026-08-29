@@ -14,7 +14,7 @@ import { runSupervisor } from "./supervisor.js";
 import { resolveSupervisorLogFile } from "./supervisor-log-config.js";
 import { applySherpaLoaderEnv } from "../src/server/speech/providers/local/sherpa/sherpa-runtime-env.js";
 
-process.title = "Paseo Supervisor";
+process.title = "BySpace Supervisor";
 
 interface DaemonRunnerConfig {
   devMode: boolean;
@@ -76,7 +76,7 @@ function resolveWorkerExecArgv(workerEntry: string, devMode: boolean): string[] 
     "--heapsnapshot-near-heap-limit=3",
     "--max-old-space-size=3072",
     "--report-on-fatalerror",
-    "--report-directory=/tmp/paseo-reports",
+    "--report-directory=/tmp/byspace-reports",
   ];
   const inspectArg = process.env.PASEO_NODE_INSPECT ?? "--inspect";
   if (inspectArg !== "0" && inspectArg !== "false" && inspectArg !== "off") {

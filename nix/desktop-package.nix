@@ -13,12 +13,12 @@
   buildVersion,
   # Reuse the daemon's prebuilt npm-deps FOD. Same lockfile, same content —
   # without this, the desktop drv produces a separately-named store path
-  # (`paseo-desktop-<v>-npm-deps`) and refetches the entire registry. Override
-  # the upstream hash via `paseo.override { npmDepsHash = "..."; }`.
-  paseo,
+  # (`byspace-desktop-<v>-npm-deps`) and refetches the entire registry. Override
+  # the upstream hash via `byspace.override { npmDepsHash = "..."; }`.
+  byspace,
 }:
 buildNpmPackage {
-  pname = "paseo-desktop";
+  pname = "byspace-desktop";
   version = (builtins.fromJSON (builtins.readFile ../package.json)).version;
 
   src = lib.cleanSourceWith {
@@ -53,12 +53,13 @@ buildNpmPackage {
       && baseName != "node_modules"
       && baseName != ".git"
       && baseName != ".paseo"
+      && baseName != ".byspace"
       && baseName != ".DS_Store"
       && baseName != "release";
   };
 
   nodejs = nodejs_22;
-  inherit (paseo) npmDeps;
+  inherit (byspace) npmDeps;
 
   # Prevent onnxruntime-node's install script from running during automatic
   # npm rebuild. We manually rebuild only node-pty in buildPhase.
@@ -143,7 +144,7 @@ buildNpmPackage {
     mkdir -p $out/bin
 
     ${lib.optionalString stdenv.hostPlatform.isLinux ''
-      mkdir -p $out/share/paseo-desktop
+      mkdir -p $out/share/byspace-desktop
 
       # Materialize only the desktop and daemon runtime graphs. Copying the
       # complete monorepo used to ship every build-time dependency (including
@@ -153,64 +154,64 @@ buildNpmPackage {
 
       while IFS= read -r path; do
         [ -z "$path" ] && continue
-        mkdir -p "$out/share/paseo-desktop/$(dirname "$path")"
-        cp -a "$path" "$out/share/paseo-desktop/$path"
+        mkdir -p "$out/share/byspace-desktop/$(dirname "$path")"
+        cp -a "$path" "$out/share/byspace-desktop/$path"
       done < desktop-files.txt
 
       # Keep the same unpackaged monorepo layout expected by main.js.
-      cp package.json $out/share/paseo-desktop/
-      mkdir -p $out/share/paseo-desktop/packages/app
-      cp -a packages/app/dist $out/share/paseo-desktop/packages/app/
+      cp package.json $out/share/byspace-desktop/
+      mkdir -p $out/share/byspace-desktop/packages/app
+      cp -a packages/app/dist $out/share/byspace-desktop/packages/app/
 
       for runtime_path in \
         packages/desktop/dist/main.js \
         packages/desktop/dist/preload.js \
         packages/desktop/dist/features/browser-keyboard/guest-preload.js \
         packages/desktop/package.json; do
-        if [ ! -e "$out/share/paseo-desktop/$runtime_path" ]; then
+        if [ ! -e "$out/share/byspace-desktop/$runtime_path" ]; then
           echo "desktop runtime trace omitted $runtime_path" >&2
           exit 1
         fi
       done
 
-      if [ -e $out/share/paseo-desktop/node_modules/electron ]; then
+      if [ -e $out/share/byspace-desktop/node_modules/electron ]; then
         echo "desktop runtime trace included npm Electron" >&2
         exit 1
       fi
 
       # Hicolor icon for desktop environments
       install -Dm644 packages/desktop/assets/icon.png \
-        $out/share/icons/hicolor/512x512/apps/paseo-desktop.png
+        $out/share/icons/hicolor/512x512/apps/byspace-desktop.png
 
       # Electron derives Wayland's toplevel app_id from the package name in the
-      # app root it launches. Point it at a one-file app named "paseo-desktop"
+      # app root it launches. Point it at a one-file app named "byspace-desktop"
       # so shells can match the window to the desktop entry and hicolor icon.
-      mkdir -p $out/share/paseo-desktop/electron-app
-      printf '%s\n' "{ \"name\": \"paseo-desktop\", \"version\": \"$version\", \"main\": \"index.js\" }" \
-        > $out/share/paseo-desktop/electron-app/package.json
+      mkdir -p $out/share/byspace-desktop/electron-app
+      printf '%s\n' "{ \"name\": \"byspace-desktop\", \"version\": \"$version\", \"main\": \"index.js\" }" \
+        > $out/share/byspace-desktop/electron-app/package.json
       printf '%s\n' 'require("../packages/desktop/dist/main.js");' \
-        > $out/share/paseo-desktop/electron-app/index.js
+        > $out/share/byspace-desktop/electron-app/index.js
 
       # Chromium's setuid sandbox cannot live in the immutable Nix store.
-      makeWrapper ${electron}/bin/electron $out/bin/paseo-desktop \
-        --add-flags "$out/share/paseo-desktop/electron-app" \
+      makeWrapper ${electron}/bin/electron $out/bin/byspace-desktop \
+        --add-flags "$out/share/byspace-desktop/electron-app" \
         --add-flags "--no-sandbox" \
-        --add-flags "--class=paseo-desktop" \
-        --set EXPO_DEV_URL "paseo://app/" \
-        --set CHROME_DESKTOP "paseo-desktop.desktop"
+        --add-flags "--class=byspace-desktop" \
+        --set EXPO_DEV_URL "byspace://app/" \
+        --set CHROME_DESKTOP "byspace-desktop.desktop"
 
       copyDesktopItems
     ''}
 
     ${lib.optionalString stdenv.hostPlatform.isDarwin ''
-      app="$(find packages/desktop/release -maxdepth 3 -type d -name Paseo.app -print -quit)"
+      app="$(find packages/desktop/release -maxdepth 3 -type d -name BySpace.app -print -quit)"
       if [ -z "$app" ]; then
-        echo "electron-builder did not produce Paseo.app" >&2
+        echo "electron-builder did not produce BySpace.app" >&2
         exit 1
       fi
       mkdir -p "$out/Applications"
-      cp -R "$app" "$out/Applications/Paseo.app"
-      ln -s ../Applications/Paseo.app/Contents/MacOS/Paseo "$out/bin/paseo-desktop"
+      cp -R "$app" "$out/Applications/BySpace.app"
+      ln -s ../Applications/BySpace.app/Contents/MacOS/BySpace "$out/bin/byspace-desktop"
     ''}
 
     runHook postInstall
@@ -218,38 +219,34 @@ buildNpmPackage {
 
   desktopItems = lib.optionals stdenv.hostPlatform.isLinux [
     (makeDesktopItem {
-      name = "paseo-desktop";
-      desktopName = "Paseo";
+      name = "byspace-desktop";
+      desktopName = "BySpace";
       genericName = "AI Coding Agents";
       comment = "Self-hosted daemon for AI coding agents";
-      exec = "paseo-desktop";
-      icon = "paseo-desktop";
+      exec = "byspace-desktop";
+      icon = "byspace-desktop";
       categories = ["Development"];
-      startupWMClass = "paseo-desktop";
+      startupWMClass = "byspace-desktop";
     })
-    # Hidden alias entry. Which of the two names Electron ends up publishing as
-    # the Wayland app_id depends on the Electron version: 41 uses the app-root
-    # package.json `name` ("paseo-desktop"), 38 uses the runtime app name that
-    # main.ts sets ("Paseo"). Ship a NoDisplay entry for the second spelling so
-    # the icon resolves either way without a duplicate launcher item.
+    # Keep an alias for Electron versions that publish the runtime app name.
     (makeDesktopItem {
-      name = "Paseo";
-      desktopName = "Paseo";
+      name = "BySpace";
+      desktopName = "BySpace";
       genericName = "AI Coding Agents";
       comment = "Self-hosted daemon for AI coding agents";
-      exec = "paseo-desktop";
-      icon = "paseo-desktop";
+      exec = "byspace-desktop";
+      icon = "byspace-desktop";
       categories = [ "Development" ];
-      startupWMClass = "Paseo";
+      startupWMClass = "BySpace";
       noDisplay = true;
     })
   ];
 
   meta = {
-    description = "Paseo desktop app (Electron wrapper)";
-    homepage = "https://github.com/getpaseo/paseo";
+    description = "BySpace desktop app (Electron wrapper)";
+    homepage = "https://github.com/ByteTrue/byspace";
     license = lib.licenses.agpl3Plus;
-    mainProgram = "paseo-desktop";
+    mainProgram = "byspace-desktop";
     platforms = lib.platforms.linux ++ lib.platforms.darwin;
   };
 }

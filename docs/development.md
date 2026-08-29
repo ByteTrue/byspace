@@ -15,7 +15,7 @@ npm run dev:desktop
 
 Root checkout dev is intentionally split across terminals:
 
-- `npm run dev:server` runs the daemon on `127.0.0.1:6768`.
+- `npm run dev:server` runs the daemon on `127.0.0.1:6778`.
 - `npm run dev:app` runs Expo on `http://localhost:8081` and connects to the dev daemon.
 - `npm run dev:desktop` runs its own Electron-flavored Expo server on the first free port from `8082` through `8089`. It never claims port `8081`.
 
@@ -27,7 +27,7 @@ The web and desktop dev launchers pass the current Git branch to Metro as
 `EXPO_PUBLIC_PASEO_DEV_BUILD_LABEL`. The expanded desktop sidebar shows it in
 the titlebar row. Production builds leave the variable unset and show no label.
 
-`npm run dev` is only a shorthand for `npm run dev:server`. Keep `127.0.0.1:6767` for the packaged app and production-style `~/.paseo` state.
+`npm run dev` is only a shorthand for `npm run dev:server`. Keep `127.0.0.1:6777` for the packaged app and production-style `~/.byspace` state.
 
 ## Nix desktop package
 
@@ -37,38 +37,38 @@ The flake exposes `packages.<system>.desktop` on Linux and macOS:
 nix build .#desktop
 ```
 
-Linux produces the `paseo-desktop` launcher and desktop entry. macOS produces
-`Applications/Paseo.app` plus the `paseo-desktop` launcher. Both use the nixpkgs
+Linux produces the `byspace-desktop` launcher and desktop entry. macOS produces
+`Applications/BySpace.app` plus the `byspace-desktop` launcher. Both use the nixpkgs
 Electron runtime and the checkout's built daemon, client, and renderer rather
 than downloading a published desktop release.
 
-### PASEO_HOME
+### BYSPACE_HOME
 
-`PASEO_HOME` is the directory that holds runtime state (agents, worktrees, workspace config, sockets, daemon log). Resolution rules:
+`BYSPACE_HOME` is the directory that holds runtime state (agents, worktrees, workspace config, sockets, daemon log). Resolution rules:
 
-- The **server itself** (e.g. when launched by the desktop app or `npm run start`) defaults to `~/.paseo` (see `packages/server/src/server/paseo-home.ts`).
-- **Repo dev scripts** default to `$ROOT/.dev/paseo-home`, where `$ROOT` is the current checkout or worktree root. This keeps all dev state scoped to the checkout instead of the packaged desktop app.
-- **`npm run cli -- ...`** runs through the same dev-home wrapper as the dev scripts, so the in-repo CLI automatically targets the current checkout's `.dev/paseo-home` and configured dev daemon endpoint.
-- **Paseo-created worktrees** seed `$PASEO_WORKTREE_PATH/.dev/paseo-home` from `$PASEO_SOURCE_CHECKOUT_PATH/.dev/paseo-home` by copying durable JSON metadata. Runtime files like pid files, sockets, and logs are not copied.
+- The **server itself** (e.g. when launched by the desktop app or `npm run start`) defaults to `~/.byspace` (see `packages/server/src/server/paseo-home.ts`).
+- **Repo dev scripts** default to `$ROOT/.dev/byspace-home`, where `$ROOT` is the current checkout or worktree root. This keeps all dev state scoped to the checkout instead of the packaged desktop app.
+- **`npm run cli -- ...`** runs through the same dev-home wrapper as the dev scripts, so the in-repo CLI automatically targets the current checkout's `.dev/byspace-home` and configured dev daemon endpoint.
+- **BySpace-created worktrees** seed `$PASEO_WORKTREE_PATH/.dev/byspace-home` from `$PASEO_SOURCE_CHECKOUT_PATH/.dev/byspace-home` by copying durable JSON metadata. Runtime files like pid files, sockets, and logs are not copied.
 - **This repo's worktree setup** also best-effort seeds `packages/app/ios` and the newest `.dev/ios-build` entry from the source checkout so iOS simulator services can reuse native project and Xcode cache state when it is safe enough to do so.
 
 Override knobs:
 
 ```bash
-PASEO_HOME=~/.paseo-blue npm run dev          # explicit home
+BYSPACE_HOME=~/.byspace-blue npm run dev         # explicit home
 PASEO_DEV_SEED_HOME=/path/to/home npm run dev # seed from a different source home
 PASEO_DEV_RESET_HOME=1 npm run dev            # clear and reseed the derived worktree home
 ```
 
 ### Daemon endpoints
 
-- Stable daemon launched by the desktop app: `localhost:6767`.
-- Root checkout dev daemon: `localhost:6768`.
+- Stable daemon launched by the desktop app: `localhost:6777`.
+- Root checkout dev daemon: `localhost:6778`.
 - Root checkout Expo: `http://localhost:8081`.
 - Root checkout desktop dev Expo: first free port from `8082` through `8089`.
-- `npm run dev` (Windows): `localhost:6767` for the daemon.
+- `npm run dev` (Windows): `localhost:6778` for the daemon.
 
-In Paseo-managed worktree services, use the injected service environment rather than hardcoded root checkout ports.
+In BySpace-managed worktree services, use the injected service environment rather than hardcoded root checkout ports.
 
 ### Expo Router
 
@@ -78,7 +78,7 @@ startup routing, remembered workspace restore, or active workspace selection.
 
 ### iOS simulator preview service
 
-Paseo worktrees expose the native iOS dev app through the `ios-simulator` service in `paseo.json`. The service URL serves the simulator preview at `/.sim`, so the preview link is `${PASEO_URL}/.sim`.
+BySpace worktrees expose the native iOS dev app through the `ios-simulator` service in `paseo.json`. The service URL serves the simulator preview at `/.sim`, so the preview link is `${PASEO_URL}/.sim`.
 
 **Prerequisites (macOS only).** The service shells out to the Apple toolchain, so beyond the `npm ci` that worktree setup runs you must install:
 
@@ -92,7 +92,7 @@ The service is designed for concurrent worktrees: it derives a deterministic sim
 
 Worktree setup best-effort seeds the generated iOS project and newest native build cache from the source checkout before the service runs. The service still validates the native project by running Expo prebuild and Xcode; the seed only avoids paying all setup/build cost from a cold worktree every time.
 
-Starting the service must not create, focus, reveal, or leave behind macOS Simulator.app windows — a guard hides Simulator.app every 250ms, so the native window vanishes if you focus it. The user-visible surface is the interactive `/.sim` preview: a `serve-sim` stream (60 FPS MJPEG + a WebSocket control channel) that Metro mounts at `basePath: "/.sim"` (`packages/app/metro.config.cjs`) and that forwards taps and gestures, so first-launch prompts like "Open in PaseoDebug?" are answered there, not in the native window. Open the `${PASEO_URL}/.sim` link the service prints — not `serve-sim`'s raw stream port (`:3100`), which is view-only. Because the stream sits behind the daemon proxy it is convenient for remote viewing but laggy up close; for fast local dev at the Mac, use the native simulator path below.
+Starting the service must not create, focus, reveal, or leave behind macOS Simulator.app windows — a guard hides Simulator.app every 250ms, so the native window vanishes if you focus it. The user-visible surface is the interactive `/.sim` preview: a `serve-sim` stream (60 FPS MJPEG + a WebSocket control channel) that Metro mounts at `basePath: "/.sim"` (`packages/app/metro.config.cjs`) and that forwards taps and gestures, so first-launch prompts like "Open in BySpaceDebug?" are answered there, not in the native window. Open the `${PASEO_URL}/.sim` link the service prints — not `serve-sim`'s raw stream port (`:3100`), which is view-only. Because the stream sits behind the daemon proxy it is convenient for remote viewing but laggy up close; for fast local dev at the Mac, use the native simulator path below.
 
 **Troubleshooting.** If `xcrun simctl` fails with `unable to find utility "simctl"`, the active developer directory is still the Command Line Tools even though Xcode is installed. Point it at Xcode: `sudo xcode-select -s /Applications/Xcode.app/Contents/Developer`, then confirm with `xcrun --find simctl`.
 
@@ -106,11 +106,11 @@ npm run ios        # → expo run:ios (packages/app): builds and launches the ap
 
 `expo run:ios` starts its own Metro and gives you the normal Simulator.app window (full speed, native touch, no stream).
 
-**Pointing the app at a daemon.** The client resolves its local daemon from `EXPO_PUBLIC_LOCAL_DAEMON` (`packages/app/src/runtime/host-runtime.ts`); when unset it falls back to `localhost:6767`, the production `~/.paseo` daemon. To target a worktree's dev daemon instead, set it on the build command:
+**Pointing the app at a daemon.** The client resolves its local daemon from `EXPO_PUBLIC_LOCAL_DAEMON` (`packages/app/src/runtime/host-runtime.ts`); when unset it falls back to `localhost:6777`, the production `~/.byspace` daemon. To target a worktree's dev daemon instead, set it on the build command:
 
 ```bash
-EXPO_PUBLIC_LOCAL_DAEMON=localhost:${PASEO_SERVICE_DAEMON_PORT} npm run ios   # worktree daemon running as a Paseo service
-EXPO_PUBLIC_LOCAL_DAEMON=localhost:6768 npm run ios                          # standalone `npm run dev:server`
+EXPO_PUBLIC_LOCAL_DAEMON=localhost:${PASEO_SERVICE_DAEMON_PORT} npm run ios   # worktree daemon running as a BySpace service
+EXPO_PUBLIC_LOCAL_DAEMON=localhost:6778 npm run ios                          # standalone `npm run dev:server`
 ```
 
 The iOS simulator shares the Mac's loopback, so `localhost:<port>` reaches the host daemon directly.
@@ -313,19 +313,19 @@ guards already prevent throttling from causing a false stall.
 
 ### Daemon logs
 
-Check `$PASEO_HOME/daemon.log` for daemon logs. The default level is `info`; set
+Check `$BYSPACE_HOME/daemon.log` for daemon logs. The default level is `info`; set
 `PASEO_LOG_LEVEL=trace` before launching the daemon when you need full provider,
 session, and agent-manager traces for stuck-state debugging.
 
 The supervisor rotates `daemon.log`. Persisted `log.file.rotate` settings in
-`$PASEO_HOME/config.json` win first. Without persisted config, the optional
+`$BYSPACE_HOME/config.json` win first. Without persisted config, the optional
 `PASEO_LOG_ROTATE_SIZE` and `PASEO_LOG_ROTATE_COUNT` env vars override the
 defaults. The default rotation is `10m` x `3` files everywhere.
 
 ### Git process pressure
 
 If Git refreshes consume too much CPU, disk, or antivirus capacity, especially on Windows, reduce
-the daemon-global Git process limits in `$PASEO_HOME/config.json`:
+the daemon-global Git process limits in `$BYSPACE_HOME/config.json`:
 
 ```json
 {
@@ -338,14 +338,14 @@ the daemon-global Git process limits in `$PASEO_HOME/config.json`:
 }
 ```
 
-Reload the daemon with `paseo reload`. Environment-variable overrides still require a restart because
+Reload the daemon with `byspace reload`. Environment-variable overrides still require a restart because
 the launch environment remains authoritative. Lower values reduce machine pressure but make Git-backed workspace state and
 Git RPCs wait longer. See [Git process limits](data-model.md#git-process-limits) for defaults,
 semantics, and environment-variable overrides.
 
 ### Agent Tool Catalog Measurement
 
-Measure the MCP `tools/list` payload that Paseo injects into agents with:
+Measure the MCP `tools/list` payload that BySpace injects into agents with:
 
 ```bash
 npm run measure:agent-tools --workspace=@getpaseo/server
@@ -378,7 +378,7 @@ of commands. Both run sequentially.
 
 Lifecycle commands run in the worktree through a stable script shell: `bash`
 resolved from `PATH` on macOS/Linux, and PowerShell with `-NoProfile` on
-Windows. They inherit the daemon environment plus Paseo's lifecycle variables;
+Windows. They inherit the daemon environment plus BySpace's lifecycle variables;
 login and interactive shell startup files are not loaded, and Bash's `BASH_ENV`
 hook is unset. ACP single-string terminal commands use the same non-login Bash
 behavior on macOS/Linux, but preserve their existing `cmd.exe /c` string semantics
@@ -430,12 +430,12 @@ Service proxy hostnames use the double-dash shape: `web--feature-auth--project.l
 ```
 
 Service ports use OS ephemeral allocation by default. Set `worktrees.servicePorts` in
-`$PASEO_HOME/config.json`, or replace it for one project with `worktree.servicePorts` in
+`$BYSPACE_HOME/config.json`, or replace it for one project with `worktree.servicePorts` in
 `paseo.json`. The block accepts an inclusive `range` such as `"3000-4000"` or a `portScript`
 executable. Since `portScript` is executed directly without a shell, it must point to a real executable (e.g., a binary or a script with a proper shebang like `#!/bin/sh`) rather than an inline shell command or shell pipeline. For inline shell commands or pipelines, wrap them in a small script. `portScript` runs in the workspace directory with four arguments: service name,
 workspace ID, branch name, and worktree path. A missing branch is passed as an empty string. The same
 values are available as `PASEO_SCRIPTNAME`, `PASEO_WORKSPACE_ID`, `PASEO_BRANCH_NAME`, and
-`PASEO_WORKTREE_PATH`. The script must print one valid TCP port. Paseo trusts the external allocator,
+`PASEO_WORKTREE_PATH`. The script must print one valid TCP port. BySpace trusts the external allocator,
 so the port may already be bound. `portScript` takes precedence when both values are present.
 
 ## Bundled daemon web UI
@@ -447,13 +447,13 @@ The daemon can optionally serve the browser web client from the same HTTP server
 Enable it for a running daemon with:
 
 ```bash
-paseo daemon start --web-ui
+byspace daemon start --web-ui
 ```
 
 Or set the environment variable:
 
 ```bash
-PASEO_WEB_UI_ENABLED=true paseo daemon start
+PASEO_WEB_UI_ENABLED=true byspace daemon start
 ```
 
 Or persist it in `config.json`:
@@ -468,9 +468,9 @@ Or persist it in `config.json`:
 }
 ```
 
-When enabled, opening the daemon HTTP origin (for example `http://localhost:6767/`) serves the web app. The same HTTP server continues to serve `/api/*`, `/mcp/*`, `/public/*`, the WebSocket upgrade, and service-proxy routes. Static files load without daemon bearer auth; API and WebSocket calls still enforce auth.
+When enabled, opening the daemon HTTP origin (for example `http://localhost:6777/`) serves the web app. The same HTTP server continues to serve `/api/*`, `/mcp/*`, `/public/*`, the WebSocket upgrade, and service-proxy routes. Static files load without daemon bearer auth; API and WebSocket calls still enforce auth.
 
-The served app auto-bootstraps a connection to the same origin, so opening `http://localhost:6767/` directly usually skips the Add Host step.
+The served app auto-bootstraps a connection to the same origin, so opening `http://localhost:6777/` directly usually skips the Add Host step.
 
 Build the artifact for packaging or measurement with:
 
@@ -542,16 +542,16 @@ install.
 
 ## CLI reference
 
-Use `npm run cli` to run the in-repo CLI from source (`npx tsx packages/cli/src/index.ts`). The script wraps the CLI with `scripts/dev-home.sh`, so it automatically uses this checkout's `.dev/paseo-home` and dev daemon endpoint unless you pass an explicit override. The globally installed `paseo` binary on macOS is a symlink into the installed Paseo desktop app, not this checkout — use it to drive the desktop's built-in daemon, but use `npm run cli` when you want to talk to the CLI you are editing.
+Use `npm run cli` to run the in-repo CLI from source (`npx tsx packages/cli/src/index.ts`). The script wraps the CLI with `scripts/dev-home.sh`, so it automatically uses this checkout's `.dev/byspace-home` and dev daemon endpoint unless you pass an explicit override. The globally installed `byspace` binary on macOS is a symlink into the installed BySpace desktop app, not this checkout — use it to drive the desktop's built-in daemon, but use `npm run cli` when you want to talk to the CLI you are editing.
 
-Canonical automation uses `paseo project create/ls/rename/delete`, `paseo workspace create/ls/rename/archive`, `paseo heartbeat create/update/delete`, and the full `paseo schedule` group. MCP heartbeat automation is intentionally smaller: create and delete only. Detach remains an explicit user lifecycle action rather than an agent tool. `paseo run --new-workspace local|worktree` composes workspace creation with agent creation. The old `paseo worktree` and `paseo run --worktree` forms are hidden compatibility aliases.
+Canonical automation uses `byspace project create/ls/rename/delete`, `byspace workspace create/ls/rename/archive`, `byspace heartbeat create/update/delete`, and the full `byspace schedule` group. MCP heartbeat automation is intentionally smaller: create and delete only. Detach remains an explicit user lifecycle action rather than an agent tool. `byspace run --new-workspace local|worktree` composes workspace creation with agent creation. The old `byspace worktree` and `byspace run --worktree` forms are hidden compatibility aliases.
 
 ```bash
 npm run cli -- ls -a -g              # List all agents globally
 npm run cli -- ls -a -g --json       # Same, as JSON
 npm run cli -- inspect <id>          # Show detailed agent info
 npm run cli -- logs <id>             # View agent timeline
-npm run cli -- agent open <id>       # Focus an existing agent in Paseo Desktop
+npm run cli -- agent open <id>       # Focus an existing agent in BySpace Desktop
 npm run cli -- daemon status         # Check daemon status
 npm run cli -- clone owner/repo --dir ~/workspace # Clone GitHub repo and register project
 ```
@@ -563,11 +563,11 @@ npm run cli -- ls -a --host localhost:7777
 npm run cli -- ls -a --host ssh://user@host
 ```
 
-In an SSH URI, the URL port is the SSH server port. The remote daemon defaults to `127.0.0.1:6767`; use `?daemonPort=7777` to override it. The transport runs non-interactively through the local OpenSSH client and never installs, starts, or configures the remote daemon. User-facing setup and troubleshooting live in [public-docs/connectivity.md](../public-docs/connectivity.md#ssh).
+In an SSH URI, the URL port is the SSH server port. The remote daemon defaults to `127.0.0.1:6777`; use `?daemonPort=7777` to override it. The transport runs non-interactively through the local OpenSSH client and never installs, starts, or configures the remote daemon. User-facing setup and troubleshooting live in [public-docs/connectivity.md](../public-docs/connectivity.md#ssh).
 
 Desktop integrations can focus an existing agent without creating one or
-sending a message. Use `paseo://h/<server-id>/agent/<agent-id>`, or run
-`paseo agent open <agent-id>`. The CLI reads the local daemon's server ID by
+sending a message. Use `byspace://h/<server-id>/agent/<agent-id>`, or run
+`byspace agent open <agent-id>`. The CLI reads the local daemon's server ID by
 default; pass `--server <server-id>` when targeting another server.
 
 ## Agent state
@@ -575,19 +575,19 @@ default; pass `--server <server-id>` when targeting another server.
 Agent data lives at:
 
 ```
-$PASEO_HOME/agents/{cwd-with-dashes}/{agent-id}.json
+$BYSPACE_HOME/agents/{cwd-with-dashes}/{agent-id}.json
 ```
 
 Find an agent by ID:
 
 ```bash
-find $PASEO_HOME/agents -name "{agent-id}.json"
+find $BYSPACE_HOME/agents -name "{agent-id}.json"
 ```
 
 Find by content:
 
 ```bash
-rg -l "some title text" $PASEO_HOME/agents/
+rg -l "some title text" $BYSPACE_HOME/agents/
 ```
 
 ## Provider session files
@@ -608,7 +608,7 @@ Get the session ID from the agent JSON (`persistence.sessionId`), then:
 
 ## Testing with Playwright MCP
 
-Point Playwright MCP at the running Expo web target. For root checkout dev, `npm run dev:app` reserves `http://localhost:8081`. For Paseo-managed worktree app services, use the service URL or port shown by Paseo for that worktree.
+Point Playwright MCP at the running Expo web target. For root checkout dev, `npm run dev:app` reserves `http://localhost:8081`. For BySpace-managed worktree app services, use the service URL or port shown by BySpace for that worktree.
 
 Do NOT use browser history (back/forward). Always navigate by clicking UI elements or using `browser_navigate` with the full URL — the app uses client-side routing and browser history breaks state.
 
@@ -621,7 +621,7 @@ PWA install metadata lives in `packages/app/public/manifest.json` and is linked
 from `packages/app/public/index.html`. Keep the install icons in `public/` so
 Cloudflare serves them from stable root URLs after `expo export`.
 
-Do not add service-worker caching casually. Paseo is a live control surface for
+Do not add service-worker caching casually. BySpace is a live control surface for
 agents, and an aggressive service worker can strand installed users on stale web
 code. If offline behavior becomes a product requirement, add it deliberately
 with an update strategy and test the installed-app upgrade path.

@@ -95,7 +95,7 @@ describe("ConnectionOfferV2 (daemon E2E)", () => {
         relayPublicEndpoint: daemon.config.relayPublicEndpoint,
         appBaseUrl: daemon.config.appBaseUrl,
       });
-      expect(offerUrl.startsWith("https://app.paseo.sh/#offer=")).toBe(true);
+      expect(offerUrl.startsWith("https://app.byspace.cc.cd/#offer=")).toBe(true);
 
       const offer = decodeOfferFromFragmentUrl(offerUrl) as {
         v: number;
@@ -108,7 +108,7 @@ describe("ConnectionOfferV2 (daemon E2E)", () => {
       expect(typeof offer.serverId).toBe("string");
       expect(offer.serverId.length).toBeGreaterThan(0);
       expect(offer.serverId.startsWith("srv_")).toBe(true);
-      expect(offer.relay.endpoint).toBe("relay.paseo.sh:443");
+      expect(offer.relay.endpoint).toBe("relay.byspace.cc.cd:443");
       expect(typeof offer.daemonPublicKeyB64).toBe("string");
       expect(offer.daemonPublicKeyB64.length).toBeGreaterThan(0);
       expect(() => Buffer.from(offer.daemonPublicKeyB64, "base64")).not.toThrow();
@@ -207,8 +207,8 @@ describe("ConnectionOfferV2 (daemon E2E)", () => {
 
     const env = {
       ...process.env,
-      PASEO_HOME: tempHome,
-      PASEO_LISTEN: `0.0.0.0:${port}`,
+      BYSPACE_HOME: tempHome,
+      BYSPACE_LISTEN: `0.0.0.0:${port}`,
       OPENAI_API_KEY: "",
       PASEO_DICTATION_ENABLED: "0",
       PASEO_VOICE_MODE_ENABLED: "0",

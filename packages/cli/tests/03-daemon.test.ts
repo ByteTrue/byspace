@@ -28,13 +28,13 @@ import { runLocalPaseo } from "./helpers/local-cli.ts";
 
 console.log("=== Daemon Commands ===\n");
 
-// Keep restart off default 6767 to avoid collisions with any existing daemon.
+// Keep restart off the default ports to avoid collisions with any existing daemon.
 const port = 10000 + Math.floor(Math.random() * 50000);
 const paseoHome = await mkdtemp(join(tmpdir(), "paseo-test-home-"));
 const require = createRequire(import.meta.url);
 
 function daemonCommand(args: string[]) {
-  return runLocalPaseo(["daemon", ...args], { PASEO_HOME: paseoHome });
+  return runLocalPaseo(["daemon", ...args], { BYSPACE_HOME: paseoHome });
 }
 
 async function stopChildProcess(child: ChildProcess): Promise<void> {
@@ -216,7 +216,7 @@ try {
       relay: { ...config.daemon?.relay, enabled: false },
     };
     await writeFile(configPath, `${JSON.stringify(config, null, 2)}\n`, "utf-8");
-    // A supervised daemon owns and heartbeats paseo.pid. Launch the worker
+    // A supervised daemon owns and heartbeats byspace.pid. Launch the worker
     // directly so this fixture naturally has a reachable daemon without a PID file.
     const workerEntry = resolveDaemonWorkerEntry();
     const workerArgs = workerEntry.endsWith(".ts")
@@ -226,8 +226,8 @@ try {
       cwd: join(import.meta.dirname, ".."),
       env: {
         ...process.env,
-        PASEO_HOME: paseoHome,
-        PASEO_LISTEN: listen,
+        BYSPACE_HOME: paseoHome,
+        BYSPACE_LISTEN: listen,
         PASEO_LOCAL_SPEECH_AUTO_DOWNLOAD: "0",
         PASEO_DICTATION_ENABLED: "0",
         PASEO_VOICE_MODE_ENABLED: "0",
@@ -295,7 +295,7 @@ try {
       reloadConfig.daemon.browserTools.enabled = false;
       await writeFile(configPath, `${JSON.stringify(reloadConfig, null, 2)}\n`, "utf-8");
       const aliasReload = await runLocalPaseo(["reload", "--host", listen, "--json"], {
-        PASEO_HOME: paseoHome,
+        BYSPACE_HOME: paseoHome,
       });
       assert.strictEqual(aliasReload.exitCode, 0, aliasReload.stderr);
       assert.deepStrictEqual(JSON.parse(aliasReload.stdout), {
@@ -326,9 +326,9 @@ try {
           worker,
           () =>
             runLocalPaseo(["daemon", "pair", "--home", foreignHome, "--json"], {
-              PASEO_HOME: foreignHome,
+              BYSPACE_HOME: foreignHome,
             }),
-          (result) => result.stderr.includes("different Paseo home"),
+          (result) => result.stderr.includes("different BySpace home"),
           (result) => `Pairing did not report the daemon identity mismatch: ${result.stderr}`,
         );
         assert.notStrictEqual(
@@ -337,7 +337,7 @@ try {
           "pairing should reject a daemon owned by another home",
         );
         assert(
-          foreignPairing.stderr.includes("different Paseo home"),
+          foreignPairing.stderr.includes("different BySpace home"),
           "pairing should explain the daemon identity mismatch",
         );
         assert(

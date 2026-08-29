@@ -1087,7 +1087,7 @@ export const zhCN: TranslationResources = {
       discord: "Discord",
       github: "创建 GitHub Issue",
       whatsNew: "新功能",
-      appName: "Paseo",
+      appName: "BySpace",
     },
     sections: {
       sessions: "历史",
@@ -1230,7 +1230,7 @@ export const zhCN: TranslationResources = {
       close: "关闭窗口",
     },
     quitting: {
-      title: "正在退出 Paseo...",
+      title: "正在退出 BySpace...",
       detail: "正在停止本地 daemon。",
     },
     daemon: {
@@ -1271,7 +1271,7 @@ export const zhCN: TranslationResources = {
       fullStatus: {
         title: "完整状态",
         modalTitle: "Daemon 状态",
-        hint: "运行 `paseo daemon status` 并显示输出",
+        hint: "运行 `byspace daemon status` 并显示输出",
         view: "查看状态",
         copied: "状态已复制到剪贴板。",
         fetchFailed: "获取 daemon 状态失败：{{message}}",
@@ -1361,7 +1361,7 @@ export const zhCN: TranslationResources = {
         microphone: "尚未检查麦克风状态。",
       },
       testNotification: {
-        title: "Paseo 通知测试",
+        title: "BySpace 通知测试",
         body: "如果你能看到这条通知，说明桌面通知可用。",
         notDelivered: "通知未送达。请检查 System Settings > Notifications。",
         failed: "发送通知失败。",
@@ -1370,12 +1370,12 @@ export const zhCN: TranslationResources = {
     integrations: {
       cli: {
         statusFailed: "无法检查 CLI 安装状态。",
-        installFailed: "无法安装 Paseo CLI。",
+        installFailed: "无法安装 BySpace CLI。",
       },
     },
   },
   rootError: {
-    title: "Paseo 遇到了问题。",
+    title: "BySpace 遇到了问题。",
     body: "请重试以重新加载应用。如果问题持续发生，请在报告时附上下面的详细信息。",
     details: "详情",
   },
@@ -1468,7 +1468,7 @@ export const zhCN: TranslationResources = {
     },
   },
   onboarding: {
-    title: "欢迎使用 Paseo",
+    title: "欢迎使用 BySpace",
     subtitle: "连接你的电脑即可开始",
     actions: {
       settings: "设置",
@@ -2300,7 +2300,7 @@ export const zhCN: TranslationResources = {
         title: "编排",
         unavailable: "连接到这个 Host 以管理编排",
         enableTools: {
-          title: "启用 Paseo tools",
+          title: "启用 BySpace tools",
           hint: "Agent 将能够管理 worktree、Agent 和计划",
           accessibilityLabel: "注入 Paseo tools",
         },

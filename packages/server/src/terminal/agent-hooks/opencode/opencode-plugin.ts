@@ -17,7 +17,7 @@ export const OPENCODE_PLUGIN_SOURCE = [
   "function runPaseoHook(event) {",
   "  if (!process.env.PASEO_TERMINAL_ID) return;",
   "  try {",
-  '    const child = Bun.spawn(["paseo", "hooks", "opencode", event], {',
+  '    const child = Bun.spawn(["byspace", "hooks", "opencode", event], {',
   '      stdin: "ignore",',
   '      stdout: "ignore",',
   '      stderr: "ignore",',
@@ -42,7 +42,7 @@ export function createOpenCodePluginInstallStrategy(): AgentHookPluginFileInstal
     configDirBase: "xdg-config",
     configFile: "plugins/paseo-terminal-activity.js",
     configDirEnvOverride: "OPENCODE_CONFIG_DIR",
-    hookMarker: "paseo hooks opencode",
+    hookMarker: "byspace hooks opencode",
     source: OPENCODE_PLUGIN_SOURCE,
   };
 }

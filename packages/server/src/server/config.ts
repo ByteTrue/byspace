@@ -25,9 +25,9 @@ import type { RequestedSpeechProviders } from "./speech/speech-types.js";
 import { mergeHostnames, parseHostnamesEnv, type HostnamesConfig } from "./hostnames.js";
 import { resolveGitProcessPolicy } from "../utils/git-process-scheduler.js";
 
-const DEFAULT_PORT = 6767;
-const DEFAULT_RELAY_ENDPOINT = "relay.paseo.sh:443";
-const DEFAULT_APP_BASE_URL = "https://app.paseo.sh";
+const DEFAULT_PORT = 6777;
+const DEFAULT_RELAY_ENDPOINT = "relay.byspace.cc.cd:443";
+const DEFAULT_APP_BASE_URL = "https://app.byspace.cc.cd";
 const DEFAULT_TRUSTED_PROXIES = ["loopback"];
 
 interface ResolveBundledWebUiDistDirInput {
@@ -453,11 +453,11 @@ function resolveTrustedProxiesConfig(
   );
 }
 
-// PASEO_LISTEN can be:
+// BYSPACE_LISTEN can be:
 // - host:port (TCP)
 // - /path/to/socket (Unix socket)
 // - unix:///path/to/socket (Unix socket)
-// Default is TCP at 127.0.0.1:6767
+// Default is TCP at 127.0.0.1:6777
 function resolveListenAddress(
   env: NodeJS.ProcessEnv,
   cli: CliConfigOverrides | undefined,
@@ -465,7 +465,7 @@ function resolveListenAddress(
 ): string {
   return (
     cli?.listen ??
-    env.PASEO_LISTEN ??
+    env.BYSPACE_LISTEN ??
     persisted.daemon?.listen ??
     `127.0.0.1:${env.PORT ?? DEFAULT_PORT}`
   );
@@ -695,7 +695,7 @@ function resolveCoreDaemonOverridePaths(
   cli: CliConfigOverrides | undefined,
 ): string[] {
   const paths: string[] = [];
-  if (cli?.listen !== undefined || env.PASEO_LISTEN !== undefined) {
+  if (cli?.listen !== undefined || env.BYSPACE_LISTEN !== undefined) {
     paths.push("daemon.listen");
   }
   if (cli?.mcpEnabled !== undefined) paths.push("daemon.mcp.enabled");

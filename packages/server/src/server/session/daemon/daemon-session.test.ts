@@ -345,7 +345,7 @@ describe("DaemonSession", () => {
       serverId: "srv-1",
       daemonVersion: "1.2.3",
       daemonRuntimeConfig: {
-        listen: "127.0.0.1:6767",
+        listen: "127.0.0.1:6777",
         getRelayConfig: () => ({
           enabled: true,
           endpoint: "relay.secret.test:443",
@@ -357,7 +357,7 @@ describe("DaemonSession", () => {
     });
     writeFileSync(
       join(paseoHome, "daemon.log"),
-      "first line\nrelay.secret.test:443 token=super-secret paseo://pairing-secret\n",
+      "first line\nrelay.secret.test:443 token=super-secret byspace://pairing-secret\n",
     );
 
     await subsystem.handleDiagnosticsRequest({ type: "diagnostics.request", requestId: "d-1" });

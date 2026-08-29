@@ -13,7 +13,7 @@ interface ResolveHubInput {
   credentials: HubCredentialStore;
 }
 
-export const DEFAULT_HUB_ORIGIN = "https://hub.paseo.sh";
+export const DEFAULT_HUB_ORIGIN = "https://hub.byspace.cc.cd";
 
 export function resolveHubOrigin(input: ResolveHubInput): string {
   const configuredOrigin = input.options.origin ?? input.env.PASEO_HUB_URL;
@@ -29,6 +29,6 @@ export function resolveHubCredential(input: ResolveHubInput & { origin: string }
   if (stored !== null) return stored.credential;
   throw new HubCommandError(
     "HUB_API_KEY_REQUIRED",
-    `No stored Hub login matches ${input.origin}. Run \`paseo hub login ${input.origin}\`, pass --api-key <secret>, or set PASEO_HUB_API_KEY.`,
+    `No stored Hub login matches ${input.origin}. Run \`byspace hub login ${input.origin}\`, pass --api-key <secret>, or set PASEO_HUB_API_KEY.`,
   );
 }

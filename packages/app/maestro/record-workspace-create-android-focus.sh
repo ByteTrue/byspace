@@ -11,15 +11,15 @@ REPO_ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
 FLOW_TEMPLATE_DIR="$REPO_ROOT/packages/app/maestro"
 SETUP_TEMPLATE="$REPO_ROOT/packages/app/maestro/workspace-create-android-ready-sidebar.yaml"
 FOCUS_TEMPLATE="$REPO_ROOT/packages/app/maestro/workspace-create-android-create-focused.yaml"
-OUT_DIR="/tmp/paseo-workspace-create-android-focus-$(date +%s)"
-VIDEO_DIR="/tmp/paseo-maestro-videos"
-DEVICE_VIDEO="/sdcard/paseo-maestro-workspace-create-focused.mp4"
-LOCAL_VIDEO="$VIDEO_DIR/paseo-maestro-workspace-create-focused.mp4"
+OUT_DIR="/tmp/byspace-workspace-create-android-focus-$(date +%s)"
+VIDEO_DIR="/tmp/byspace-maestro-videos"
+DEVICE_VIDEO="/sdcard/byspace-maestro-workspace-create-focused.mp4"
+LOCAL_VIDEO="$VIDEO_DIR/byspace-maestro-workspace-create-focused.mp4"
 CLIENT_EXPORTS="$REPO_ROOT/packages/client/dist/daemon-client.js"
 
-export PASEO_MAESTRO_APP_ID="${PASEO_MAESTRO_APP_ID:-sh.paseo.debug}"
-export PASEO_MAESTRO_DIRECT_ENDPOINT="${PASEO_MAESTRO_DIRECT_ENDPOINT:-127.0.0.1:6767}"
-export PASEO_MAESTRO_DAEMON_WS_URL="${PASEO_MAESTRO_DAEMON_WS_URL:-ws://127.0.0.1:6767/ws}"
+export PASEO_MAESTRO_APP_ID="${PASEO_MAESTRO_APP_ID:-com.bytetrue.byspace.debug}"
+export PASEO_MAESTRO_DIRECT_ENDPOINT="${PASEO_MAESTRO_DIRECT_ENDPOINT:-127.0.0.1:6777}"
+export PASEO_MAESTRO_DAEMON_WS_URL="${PASEO_MAESTRO_DAEMON_WS_URL:-ws://127.0.0.1:6777/ws}"
 
 require_command() {
   if ! command -v "$1" >/dev/null 2>&1; then
@@ -63,14 +63,14 @@ if [ ! -f "$CLIENT_EXPORTS" ]; then
 fi
 
 if [ -z "${PASEO_MAESTRO_PROJECT_PATH:-}" ]; then
-  PROJECT_PARENT="$(mktemp -d /tmp/paseo-maestro-project-XXXXXX)"
+  PROJECT_PARENT="$(mktemp -d /tmp/byspace-maestro-project-XXXXXX)"
   PROJECT_BASENAME="aaa-workspace-create-android-$(basename "$PROJECT_PARENT")"
   export PASEO_MAESTRO_PROJECT_PATH="$PROJECT_PARENT/$PROJECT_BASENAME"
   mkdir -p "$PASEO_MAESTRO_PROJECT_PATH"
   git -C "$PASEO_MAESTRO_PROJECT_PATH" init >/dev/null
   git -C "$PASEO_MAESTRO_PROJECT_PATH" checkout -b main >/dev/null 2>&1 || true
-  git -C "$PASEO_MAESTRO_PROJECT_PATH" config user.name "Paseo Maestro"
-  git -C "$PASEO_MAESTRO_PROJECT_PATH" config user.email "maestro@getpaseo.local"
+  git -C "$PASEO_MAESTRO_PROJECT_PATH" config user.name "BySpace Maestro"
+  git -C "$PASEO_MAESTRO_PROJECT_PATH" config user.email "maestro@byspace.local"
   printf "# Workspace create Android focused recording\n" > "$PASEO_MAESTRO_PROJECT_PATH/README.md"
   git -C "$PASEO_MAESTRO_PROJECT_PATH" add README.md
   git -C "$PASEO_MAESTRO_PROJECT_PATH" commit -m "Initial commit" >/dev/null
@@ -88,7 +88,7 @@ echo "Video: $LOCAL_VIDEO"
 echo "Project: $PASEO_MAESTRO_PROJECT_PATH"
 echo "Project name: $PASEO_MAESTRO_PROJECT_NAME"
 
-adb reverse tcp:6767 tcp:6767 >/dev/null
+adb reverse tcp:6777 tcp:6777 >/dev/null
 
 echo ""
 echo "Opening project in daemon..."

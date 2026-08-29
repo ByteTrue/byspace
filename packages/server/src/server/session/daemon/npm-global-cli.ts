@@ -2,7 +2,7 @@ import { getErrorMessage } from "@getpaseo/protocol/error-utils";
 import { z } from "zod";
 import { execCommand } from "../../../utils/spawn.js";
 
-export const PASEO_CLI_PACKAGE = "@getpaseo/cli";
+export const PASEO_CLI_PACKAGE = "@bytetrue/byspace";
 
 const NPM_PROBE_TIMEOUT_MS = 10_000;
 const NPM_INSTALL_TIMEOUT_MS = 300_000;
@@ -137,7 +137,7 @@ export class DefaultNpmGlobalPaseoCli implements NpmGlobalPaseoCli {
   }
 
   installLatest(): Promise<CommandResult> {
-    return this.runCommand("npm", ["install", "-g", `${PASEO_CLI_PACKAGE}@latest`], {
+    return this.runCommand("npm", ["install", "-g", `${PASEO_CLI_PACKAGE}@beta`], {
       timeout: NPM_INSTALL_TIMEOUT_MS,
       maxBuffer: NPM_MAX_BUFFER_BYTES,
     });

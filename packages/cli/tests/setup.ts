@@ -81,11 +81,11 @@ export async function createTempDirs(): Promise<{ paseoHome: string; workDir: st
 
 /**
  * Wait for daemon to be ready by testing WebSocket connection
- * Uses `paseo agent ls` which connects via WebSocket
+ * Uses `byspace agent ls` which connects via WebSocket
  */
 async function probeDaemon(port: number): Promise<boolean> {
   try {
-    const result = await $`PASEO_HOST=localhost:${port} paseo agent ls`.nothrow();
+    const result = await $`BYSPACE_HOST=localhost:${port} byspace agent ls`.nothrow();
     return result.exitCode === 0;
   } catch {
     return false;
@@ -111,7 +111,7 @@ export async function waitForDaemon(port: number, timeout = 30000): Promise<void
 export async function startDaemon(port: number, paseoHome: string): Promise<ProcessPromise> {
   $.verbose = false;
   const daemon =
-    $`PASEO_HOME=${paseoHome} PASEO_LISTEN=127.0.0.1:${port} PASEO_RELAY_ENABLED=false PASEO_LOCAL_SPEECH_AUTO_DOWNLOAD=${TEST_ENV_DEFAULTS.PASEO_LOCAL_SPEECH_AUTO_DOWNLOAD} PASEO_DICTATION_ENABLED=${TEST_ENV_DEFAULTS.PASEO_DICTATION_ENABLED} PASEO_VOICE_MODE_ENABLED=${TEST_ENV_DEFAULTS.PASEO_VOICE_MODE_ENABLED} CI=true paseo daemon start --foreground`.nothrow();
+    $`BYSPACE_HOME=${paseoHome} BYSPACE_LISTEN=127.0.0.1:${port} PASEO_RELAY_ENABLED=false PASEO_LOCAL_SPEECH_AUTO_DOWNLOAD=${TEST_ENV_DEFAULTS.PASEO_LOCAL_SPEECH_AUTO_DOWNLOAD} PASEO_DICTATION_ENABLED=${TEST_ENV_DEFAULTS.PASEO_DICTATION_ENABLED} PASEO_VOICE_MODE_ENABLED=${TEST_ENV_DEFAULTS.PASEO_VOICE_MODE_ENABLED} CI=true byspace daemon start --foreground`.nothrow();
   return daemon;
 }
 
@@ -125,7 +125,7 @@ export async function createTestContext(): Promise<TestContext> {
   // Helper to run CLI commands against test daemon
   const paseo = (args: string[]): ProcessPromise => {
     $.verbose = false;
-    return $`PASEO_HOST=localhost:${port} PASEO_LOCAL_SPEECH_AUTO_DOWNLOAD=${TEST_ENV_DEFAULTS.PASEO_LOCAL_SPEECH_AUTO_DOWNLOAD} PASEO_DICTATION_ENABLED=${TEST_ENV_DEFAULTS.PASEO_DICTATION_ENABLED} PASEO_VOICE_MODE_ENABLED=${TEST_ENV_DEFAULTS.PASEO_VOICE_MODE_ENABLED} paseo ${args}`.nothrow();
+    return $`BYSPACE_HOST=localhost:${port} PASEO_LOCAL_SPEECH_AUTO_DOWNLOAD=${TEST_ENV_DEFAULTS.PASEO_LOCAL_SPEECH_AUTO_DOWNLOAD} PASEO_DICTATION_ENABLED=${TEST_ENV_DEFAULTS.PASEO_DICTATION_ENABLED} PASEO_VOICE_MODE_ENABLED=${TEST_ENV_DEFAULTS.PASEO_VOICE_MODE_ENABLED} byspace ${args}`.nothrow();
   };
 
   // Cleanup function

@@ -18,8 +18,8 @@ seedPaseoHome();
 copyServerEnv();
 
 function seedPaseoHome() {
-  const source = process.env.PASEO_DEV_SEED_HOME || join(sourceRoot, ".dev/paseo-home");
-  const target = join(targetRoot, ".dev/paseo-home");
+  const source = process.env.PASEO_DEV_SEED_HOME || join(sourceRoot, ".dev/byspace-home");
+  const target = join(targetRoot, ".dev/byspace-home");
 
   if (!existsSync(source)) {
     console.log(`  Seed:    skipped (${source} missing)`);

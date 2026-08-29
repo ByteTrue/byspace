@@ -29,9 +29,9 @@ afterEach(async () => {
 describe("Hub init planning", () => {
   it("prints direct resumable commands for declined login continuations", () => {
     expect(hubLoginResumeCommand("connect", "https://hub.test")).toBe(
-      "paseo hub connect https://hub.test",
+      "byspace hub connect https://hub.test",
     );
-    expect(hubLoginResumeCommand("init", "https://hub.test")).toBe("paseo hub init");
+    expect(hubLoginResumeCommand("init", "https://hub.test")).toBe("byspace hub init");
   });
   it("includes login only when there is no active login", () => {
     expect(planHubInitOpening({ loggedIn: false, paseoDirectoryExists: false })).toEqual({

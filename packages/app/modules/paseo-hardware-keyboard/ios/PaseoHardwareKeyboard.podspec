@@ -3,11 +3,11 @@ require 'json'
 Pod::Spec.new do |s|
   s.name           = 'PaseoHardwareKeyboard'
   s.version        = '0.1.0'
-  s.summary        = 'Hardware keyboard shortcuts for Paseo'
-  s.description    = 'Hardware keyboard shortcuts for Paseo'
+  s.summary        = 'Hardware keyboard shortcuts for BySpace'
+  s.description    = 'Hardware keyboard shortcuts for BySpace'
   s.license        = 'Apache-2.0'
-  s.author         = 'Paseo'
-  s.homepage       = 'https://paseo.sh'
+  s.author         = 'ByteTrue'
+  s.homepage       = 'https://github.com/ByteTrue/byspace'
   s.platforms      = { :ios => '13.4' }
   s.swift_version  = '5.4'
   s.source         = { :path => '.' }

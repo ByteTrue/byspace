@@ -14,7 +14,7 @@ describe("server config", () => {
     await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
   });
 
-  test("records when the daemon is managed by Paseo Desktop", async () => {
+  test("records when the daemon is managed by BySpace Desktop", async () => {
     const paseoHome = await mkdtemp(path.join(os.tmpdir(), "paseo-config-desktop-managed-"));
     roots.push(paseoHome);
 
@@ -63,7 +63,7 @@ describe("server config", () => {
     roots.push(paseoHome);
     const config = loadConfig(paseoHome, {
       env: {
-        PASEO_LISTEN: "127.0.0.1:7000",
+        BYSPACE_LISTEN: "127.0.0.1:7000",
         PASEO_PASSWORD: "secret",
         PASEO_RELAY_ENDPOINT: "relay.example.test:443",
         PASEO_TRUSTED_PROXIES: "true",
@@ -88,6 +88,17 @@ describe("server config", () => {
     expect(config.trustedProxies).toBe(true);
     expect(config.log?.file?.path).toBe("custom.log");
     expect(config.voiceLlmProvider).toBe("codex");
+  });
+
+  test("uses the BySpace port and ignores the legacy Paseo listen override", async () => {
+    const paseoHome = await mkdtemp(path.join(os.tmpdir(), "byspace-config-defaults-"));
+    roots.push(paseoHome);
+
+    const config = loadConfig(paseoHome, {
+      env: { PASEO_LISTEN: "127.0.0.1:6767" },
+    });
+
+    expect(config.listen).toBe("127.0.0.1:6777");
   });
 
   test.each([
