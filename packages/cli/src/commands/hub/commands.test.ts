@@ -39,7 +39,7 @@ describe("Hub commands", () => {
       },
     });
     connect?.outputHelp();
-    assert.match(help, /active stored login.*https:\/\/hub\.byspace\.cc\.cd/u);
+    assert.match(help, /active stored login.*https:\/\/hub\.paseo\.sh/u);
   });
 
   it("login stores the durable credential and marks its normalized origin active", async () => {
@@ -85,11 +85,11 @@ describe("Hub commands", () => {
     );
 
     assert.deepEqual(events, [
-      "progress:Logging in to https://hub.byspace.cc.cd",
-      "authorize:https://hub.byspace.cc.cd",
+      "progress:Logging in to https://hub.paseo.sh",
+      "authorize:https://hub.paseo.sh",
       "progress:Logged in",
     ]);
-    assert.equal(result.data.origin, "https://hub.byspace.cc.cd");
+    assert.equal(result.data.origin, "https://hub.paseo.sh");
   });
 
   it("interactive login continues through the injected guided setup coordinator without invoking a CLI command", async () => {
@@ -239,7 +239,7 @@ describe("Hub commands", () => {
   it("connect without authority reports the hosted destination and contacts nothing", async () => {
     const progress: string[] = [];
     const credentials = new MemoryCredentials();
-    const daemon = new FakeDaemonConnection(new FakeDaemon("https://hub.byspace.cc.cd"));
+    const daemon = new FakeDaemonConnection(new FakeDaemon("https://hub.paseo.sh"));
     let hubRequests = 0;
 
     await assert.rejects(
@@ -262,11 +262,11 @@ describe("Hub commands", () => {
       {
         code: "HUB_API_KEY_REQUIRED",
         message:
-          "No stored Hub login matches https://hub.byspace.cc.cd. Run `byspace hub login https://hub.byspace.cc.cd`, pass --api-key <secret>, or set PASEO_HUB_API_KEY.",
+          "No stored Hub login matches https://hub.paseo.sh. Run `byspace hub login https://hub.paseo.sh`, pass --api-key <secret>, or set PASEO_HUB_API_KEY.",
       },
     );
 
-    assert.deepEqual(progress, ["Connecting this daemon to https://hub.byspace.cc.cd"]);
+    assert.deepEqual(progress, ["Connecting this daemon to https://hub.paseo.sh"]);
     assert.equal(hubRequests, 0);
     assert.equal(daemon.connectionCount, 0);
   });
